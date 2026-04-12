@@ -1,121 +1,107 @@
-import React from 'react';
-import Sidebar from '../components/Sidebar';
-import '../styles/layout.css';
-import '../styles/gis.css';
-import mapImg from '../assets/mauban-map.png';
+import { useEffect, useState } from "react";
+import { FiMapPin, FiStar } from "react-icons/fi";
+import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
+import PageHeader from "../components/ui/PageHeader";
+import { useTourismData } from "../context/TourismDataContext";
 
 function GISMap() {
+  const { referenceTables } = useTourismData();
+  const [selectedDestination, setSelectedDestination] = useState(
+    referenceTables.resorts[0] || null
+  );
 
-  const locations = [
-    { name: "Cagbalete Island", type: "Beach", rating: 4.8, visits: 3200 },
-    { name: "Pulong Malaki", type: "Beach", rating: 4.7, visits: 2800 },
-    { name: "Dampalitan Island", type: "Island", rating: 4.6, visits: 2100 },
-    { name: "Kwebang Lampas", type: "Cave", rating: 4.5, visits: 1850 },
-    { name: "Mt. Pinagbanderahan", type: "Mountain", rating: 4.4, visits: 1200 },
-    { name: "Mauban Lighthouse", type: "Landmark", rating: 4.4, visits: 1200 },
-  ];
+  useEffect(() => {
+    if (!selectedDestination && referenceTables.resorts.length) {
+      setSelectedDestination(referenceTables.resorts[0]);
+    }
+  }, [referenceTables.resorts, selectedDestination]);
 
   return (
-    <div className="layout">
-      <Sidebar />
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Tourism Monitoring"
+        title="GIS Map"
+        description=""
+      />
 
-      <div className="content">
-
-        {/* HEADER */}
-        <div className="page-header">
-          <h5 className="section-label">TOURISM MONITORING</h5>
-          <h1>GIS Map</h1>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_290px]">
+        <div className="panel p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-700">Interactive Map</p>
+            <p className="text-[11px] text-slate-500">Mauban, Quezon</p>
+          </div>
+          <MaubanDestinationMap
+            destinations={referenceTables.resorts}
+            selectedDestination={selectedDestination}
+            onSelectDestination={setSelectedDestination}
+          />
         </div>
 
-        <div className="gis-container">
-
-          {/* LEFT - MAP */}
-          <div className="map-section card">
-            <div className="map-header">
-              <h3>Interactive Map</h3>
-              <span>📍 Mauban, Quezon</span>
-            </div>
-
-            <div className="map-box">
-
-              {/* LEGEND */}
-              <div className="legend">
-                <h4>Legend</h4>
-                <p>🟡 Beach</p>
-                <p>🟢 Island</p>
-                <p>🔵 Cave</p>
-                <p>🟩 Mountain</p>
-                <p>🔴 Landmark</p>
-              </div>
-
-              <img src={mapImg} alt="Map" className="map-image" />
-            </div>
+        <div className="space-y-3">
+          <div className="panel p-3">
+            <p className="text-xs font-semibold text-slate-700">Location Details</p>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Click on a marker to view location details.
+            </p>
           </div>
 
-          {/* RIGHT SIDE */}
-          <div className="details-section">
-
-            {/* SMALL CARD */}
-            <div className="card info-card small-card">
-              <h3>Location Details</h3>
-              <p>Click on a marker to view location details</p>
-            </div>
-
-            {/* BIG CARD */}
-            <div className="card info-card big-card">
-              <h3>All Locations</h3>
-
-              <div className="locations-list">
-                {locations.map((loc, index) => (
-                  <div className="location-item" key={index}>
-                    
-                    {/* LEFT */}
-                    <div className="location-left">
-                      <span className="dot"></span>
-                      <div>
-                        <strong>{loc.name}</strong>
-                        <p className="type">{loc.type}</p>
-                      </div>
-                    </div>
-
-                    {/* RIGHT */}
-                    <div className="location-right">
-                      <span className="rating">⭐ {loc.rating}</span>
-                      <span className="visits">👥 {loc.visits}</span>
-                    </div>
-
+          <div className="panel p-3">
+            <p className="text-xs font-semibold text-slate-700">All Locations</p>
+            <div className="mt-3 space-y-3">
+              {referenceTables.resorts.map((destination) => (
+                <button
+                  key={destination.resort_id}
+                  type="button"
+                  onClick={() => setSelectedDestination(destination)}
+                  className={`flex w-full items-start justify-between gap-3 rounded-xl px-2 py-2 text-left ${
+                    selectedDestination?.resort_id === destination.resort_id
+                      ? "bg-[#e0f1f4]"
+                      : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] font-semibold text-slate-800">
+                      {destination.resort_name}
+                    </p>
+                    <p className="text-[10px] text-slate-500">{destination.type}</p>
                   </div>
-                ))}
-              </div>
-
+                  <div className="flex items-center gap-1 text-amber-500">
+                    <FiStar size={10} />
+                    <span className="text-[10px] text-slate-600">{destination.tourism_rating}</span>
+                  </div>
+                </button>
+              ))}
             </div>
-
           </div>
         </div>
+      </div>
 
-        {/* STATS */}
-        <div className="cards stats-row">
-          <div className="card stat-box">
-            <p>Total Locations</p>
-            <h2>6</h2>
-          </div>
-
-          <div className="card stat-box">
-            <p>Beach Destinations</p>
-            <h2>2</h2>
-          </div>
-
-          <div className="card stat-box">
-            <p>Island Destinations</p>
-            <h2>1</h2>
-          </div>
-
-          <div className="card stat-box">
-            <p>Average Rating</p>
-            <h2>4.5</h2>
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="panel px-4 py-3">
+          <p className="text-[11px] text-slate-500">Total Locations</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">{referenceTables.resorts.length}</p>
+        </div>
+        <div className="panel px-4 py-3">
+          <p className="text-[11px] text-slate-500">Beach Destinations</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">
+            {referenceTables.resorts.filter((item) => item.type.includes("Beach")).length}
+          </p>
+        </div>
+        <div className="panel px-4 py-3">
+          <p className="text-[11px] text-slate-500">Island Destinations</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">
+            {referenceTables.resorts.filter((item) => item.type.includes("Island")).length}
+          </p>
+        </div>
+        <div className="panel px-4 py-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[11px] text-slate-500">Average Rating</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">4.5</p>
+            </div>
+            <FiMapPin className="text-sky-500" size={16} />
           </div>
         </div>
-
       </div>
     </div>
   );
