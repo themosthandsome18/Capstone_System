@@ -1,0 +1,1926 @@
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --page-bg: #e6f4ef;
+    --text-main: #163046;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply m-0 min-h-screen font-sans text-slate-800 antialiased;
+    background:
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.06), transparent 30%),
+      radial-gradient(circle at top right, rgba(16, 185, 129, 0.05), transparent 25%),
+      var(--page-bg);
+    color: var(--text-main);
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* GLOBAL COMPONENTS */
+
+  .panel {
+    @apply rounded-[22px] border border-[#cfe5e1] bg-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.15)];
+  }
+
+  .page-title {
+    @apply text-[2rem] font-bold tracking-tight text-slate-900;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-slate-500;
+  }
+
+  .input-base {
+    @apply w-full rounded-2xl border border-[#9fd6cf] bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-100;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-[#2fa34a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#278d3f];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-green-700;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-700;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-700;
+  }
+
+  .badge-danger {
+    @apply bg-red-100 text-red-600;
+  }
+
+  /* LAYOUT */
+
+  .tourism-layout {
+    @apply flex min-h-screen;
+    background: linear-gradient(135deg, #eaf7f1, #d8eee5, #c2ddd4);
+  }
+
+  .tourism-main {
+    @apply min-w-0 flex-1;
+  }
+
+  .tourism-content {
+    @apply p-[30px];
+  }
+
+
+  /* =================================================================== SIDEBAR ======================================================== */
+
+.tourism-sidebar {
+  width: 260px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  background: #eefaf1;
+  border-right: 1px solid #d7ebe0;
+  padding: 58px 22px 0;
+  overflow: hidden;
+}
+
+/* Logo + title */
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 70px;
+}
+
+.sidebar-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.sidebar-brand span {
+  font-size: 15px;
+  font-weight: 800;
+  color: #101815;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Navigation */
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sidebar-nav-link {
+  height: 43px;
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #101815;
+  text-decoration: none;
+  line-height: 1.2;
+  transition: 0.2s ease;
+}
+
+.sidebar-nav-link:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.sidebar-nav-link.active {
+  background: #2fa34a;
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+ /* ============================================================== TOPBAR GLOBAL LAYOUT =============================================== */
+
+.tourism-topbar {
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #eefaf1;
+  border-bottom: 1px solid #d6e6dc;
+  padding: 0 30px;
+}
+
+/* LEFT SIDE */
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.topbar-menu-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #37443e;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 40px;
+  background: #bfcfc5;
+}
+
+.topbar-left h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.topbar-left p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: #3f4f48;
+}
+
+/* RIGHT SIDE */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box {
+  width: 260px;
+  height: 40px;
+  border: 1.5px solid #2fa34a;
+  border-radius: 999px;
+  background: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  color: #6b7280;
+}
+
+.search-box input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+}
+
+.topbar-pill {
+  height: 40px;
+  border-radius: 999px;
+  border: 1.5px solid #2fa34a;
+  background: white;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #000;
+}
+
+.icon-pill {
+  width: 54px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1.5px solid #2fa34a;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+}
+
+.add-entry-btn {
+  height: 40px;
+  border-radius: 999px;
+  border: 1.5px solid #2fa34a;
+  background: #2fa34a;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 800;
+  color: white;
+}
+
+/* ================= SIDEBAR TOGGLE ================= */
+
+.tourism-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-menu-btn {
+  cursor: pointer;
+}
+
+/* ================= BURGER BUTTON ================= */
+
+.topbar-menu-btn {
+  width: 28px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* ================= CUSTOM BURGER ================= */
+
+.custom-burger {
+  width: 20px;
+  height: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.custom-burger span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: #1f2937;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+/* HOVER EFFECT */
+
+.topbar-menu-btn:hover .custom-burger span {
+  background: #2fa34a;
+}
+
+/* =================================================================== DASHBOARD ======================================================== */
+/* Main container of the whole dashboard */
+
+.figma-dashboard {
+  @apply flex flex-col gap-7;
+}
+
+
+/* ================= HEADER (Dashboard Overview + Buttons) ================= */
+
+.dashboard-header {
+  @apply flex items-start justify-between;
+}
+
+.dashboard-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.dashboard-header p {
+  @apply mt-1 text-[16px] text-slate-500;
+}
+
+.dashboard-actions {
+  @apply flex items-center gap-3;
+}
+
+/* Export Button */
+
+.outline-action {
+  @apply flex items-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 py-2 text-sm font-semibold text-black;
+}
+
+/* Generate Report Button */
+
+.primary-action {
+  @apply flex items-center gap-2 rounded-full bg-[#2fa34a] px-5 py-2 text-sm font-semibold text-white;
+}
+
+
+/* ================= METRIC CARDS (Today's, Week, Month, Revenue) ================= */
+
+.metric-grid {
+  @apply grid grid-cols-4 gap-6;
+}
+
+.metric-card {
+  @apply flex items-center justify-between rounded-[24px] bg-white px-6 py-5 shadow-[0_20px_30px_rgba(34,72,55,0.2)];
+}
+
+.metric-card p {
+  @apply text-[12px] font-semibold text-slate-500;
+}
+
+.metric-card h2 {
+  @apply mt-2 text-[30px] font-bold text-black;
+}
+
+.metric-card span {
+  @apply text-[11px] font-semibold text-green-600;
+}
+
+.metric-icon {
+  @apply text-[24px] text-[#32a6b4];
+}
+
+
+/* ================= MAIN GRID LAYOUT ================= */
+/* Controls placement of charts */
+
+.dashboard-row-large {
+  @apply grid gap-6;
+  grid-template-columns: 1.5fr 1fr;
+}
+
+.dashboard-row-medium {
+  @apply grid grid-cols-2 gap-6;
+}
+
+
+/* ================= CARD CONTAINER (All white boxes) ================= */
+
+.dashboard-card {
+  @apply rounded-[28px] bg-white px-6 py-5 shadow-[0_25px_35px_rgba(34,72,55,0.2)];
+}
+
+/* Card titles (Daily Visitor Trends, Tourist Classification, etc.) */
+
+.card-title h3 {
+  @apply text-[14px] font-bold text-black;
+}
+
+.card-title p {
+  @apply text-[12px] text-slate-400;
+}
+
+
+/* ================= CHART AREAS ================= */
+/* Fixes disappearing graphs (VERY IMPORTANT) */
+
+/* Daily Visitor Trends (Line Chart) */
+
+.line-chart-area {
+  height: 280px;
+  margin-top: 10px;
+}
+
+/* Gender Distribution (Bar Chart) */
+
+.bar-chart-area {
+  height: 260px;
+  margin-top: 10px;
+}
+
+/* Tourist Classification (Donut Chart) */
+
+.classification-chart {
+  height: 200px;
+  width: 200px;
+  margin: 20px auto;
+}
+
+/* Stay Type Distribution (Donut) */
+
+.stay-chart {
+  height: 240px;
+}
+
+
+/* ================= STAY TYPE DISTRIBUTION ================= */
+/* Right side boxes: Day Tour & Overnight */
+
+.stay-content {
+  @apply grid gap-6 items-center;
+  grid-template-columns: 1fr 1fr;
+}
+
+.stay-summary {
+  @apply flex flex-col gap-4;
+}
+
+.stay-box {
+  @apply rounded-xl bg-[#f4f6f7] p-4;
+}
+
+.stay-box h3 {
+  @apply text-[26px] font-bold text-black;
+}
+
+.stay-box p {
+  @apply text-[12px] text-slate-500;
+}
+
+
+/* ================= DATA VALIDATION PANEL ================= */
+/* Bottom section with 3 colored boxes */
+
+.validation-panel {
+  @apply rounded-[28px] bg-white px-6 py-6 shadow-[0_25px_35px_rgba(34,72,55,0.2)];
+}
+
+/* Header (Title + Review All button) */
+
+.validation-header {
+  @apply flex items-center justify-between;
+}
+
+/* Grid for 3 boxes */
+
+.validation-grid {
+  @apply mt-5 grid grid-cols-3 gap-5;
+}
+
+/* Individual boxes */
+
+.validation-box {
+  @apply flex items-center gap-4 rounded-[18px] px-5 py-4 shadow-md;
+}
+
+
+/* ================= VALIDATION COLORS ================= */
+/* Matches your Figma colors */
+
+.validation-box.success {
+  background: #bde5bd;
+}
+
+.validation-box.danger {
+  background: #f2c7c3;
+}
+
+.validation-box.warning {
+  background: #efe4c5;
+}
+
+
+/* ================= VALIDATION ICONS ================= */
+
+.validation-icon {
+  font-size: 40px;
+}
+
+.validation-box.success .validation-icon {
+  color: #00b82f;
+}
+
+.validation-box.danger .validation-icon {
+  color: #f04438;
+}
+
+.validation-box.warning .validation-icon {
+  color: #c79013;
+}
+
+
+/* ================= VALIDATION TEXT ================= */
+
+.validation-box p {
+  @apply text-[13px] font-semibold;
+}
+
+.validation-box h3 {
+  @apply text-[26px] font-bold;
+}
+
+.validation-box span {
+  @apply text-[11px] text-slate-600;
+}
+
+
+/* ================= REVIEW ALL BUTTON ================= */
+/* Top right of Data Validation Panel */
+
+.review-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1.5px solid #2fa34a;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: none;
+  white-space: nowrap;
+}
+/* ================================================================ BOOKING MANAGEMENT PAGE ============================================== */
+/* Main container of the whole booking page */
+
+.booking-page {
+  @apply flex flex-col gap-6;
+}
+
+
+/* ================= HEADER ================= */
+/* Booking title + subtitle + buttons */
+
+.booking-header {
+  @apply flex items-start justify-between;
+}
+
+.booking-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.booking-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+.booking-actions {
+  @apply flex items-center gap-3;
+}
+
+
+/* ================= STATUS CARDS ================= */
+/* Verified / Arrived / No-show summary boxes */
+
+.booking-status-grid {
+  @apply grid grid-cols-3 gap-5;
+}
+
+.booking-status-card {
+  @apply min-h-[82px] rounded-[14px] px-6 py-4 shadow-[0_14px_24px_rgba(34,72,55,0.2)];
+}
+
+.booking-status-card p {
+  @apply m-0 text-sm font-bold;
+}
+
+.booking-status-card h2 {
+  @apply mt-1 text-[26px] font-extrabold text-black;
+}
+
+/* Verified */
+
+.booking-status-card.verified {
+  background: #eef3cf;
+}
+
+.booking-status-card.verified p {
+  color: #f0b429;
+}
+
+/* Arrived */
+
+.booking-status-card.arrived {
+  background: #a9e7b7;
+}
+
+.booking-status-card.arrived p {
+  color: #08a336;
+}
+
+/* No-show */
+
+.booking-status-card.noshow {
+  background: #d7c6bb;
+}
+
+.booking-status-card.noshow p {
+  color: #ef4444;
+}
+
+
+/* ================= SEARCH + FILTER ================= */
+/* Search input and filter button */
+
+.booking-toolbar {
+  @apply flex items-center justify-between;
+}
+
+.booking-search {
+  @apply relative w-[420px];
+}
+
+.booking-search svg {
+  @apply absolute left-4 top-1/2 -translate-y-1/2 text-slate-500;
+}
+
+.booking-search input {
+  @apply h-10 w-full rounded-full border border-[#2fa34a] bg-white pl-12 pr-4 text-sm outline-none;
+}
+
+
+/* ================= BOOKING TABLE CONTAINER ================= */
+/* Main white card wrapping the table */
+
+.booking-table-card {
+  overflow: hidden;
+  border-radius: 18px;
+  background: #f7fbf8;
+  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+}
+
+/* ================= TABLE STRUCTURE ================= */
+
+.booking-table-card table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* ================= TABLE HEADER ================= */
+
+.booking-table-card thead {
+  background: #dff1e2;
+}
+
+.booking-table-card th {
+  padding: 20px 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: #37443e;
+}
+
+/* ================= TABLE BODY ================= */
+
+.booking-table-card tbody {
+  background: #f7fbf8;
+}
+
+/* ================= TABLE ROW ================= */
+
+.booking-table-card tbody tr {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.22);
+}
+
+.booking-table-card tbody tr:last-child {
+  border-bottom: none;
+}
+
+.booking-table-card tbody tr:hover {
+  background: #eef8f1;
+}
+
+/* ================= TABLE CELL ================= */
+
+.booking-table-card td {
+  padding: 13px 16px;
+  vertical-align: middle;
+  color: #1f2937;
+}
+
+/* ================= GUEST COLUMN ================= */
+
+.booking-guest-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #050505;
+  line-height: 1.1;
+}
+
+.booking-id {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: #667085;
+  line-height: 1;
+}
+
+/* ================= COUNTRY COLUMN ================= */
+
+.booking-table-card td strong {
+  font-weight: 800;
+  color: #050505;
+}
+
+/* ================= STATUS BADGE ================= */
+
+.booking-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.booking-badge.arrived {
+  border-color: #42d36b;
+  background: #dffbe5;
+  color: #00a52c;
+}
+
+.booking-badge.pending {
+  border-color: #ffd166;
+  background: #fff7df;
+  color: #f5b400;
+}
+
+.booking-badge.noshow {
+  border-color: #ff8c83;
+  background: #fff1ed;
+  color: #ff3b30;
+}
+
+/* ================= ROW ACTION BUTTONS ================= */
+
+.booking-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booking-arrived-btn,
+.booking-noshow-btn {
+  height: 27px;
+  border-radius: 999px;
+  padding: 0 13px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.booking-arrived-btn {
+  border: 1px solid #42d36b;
+  background: #dffbe5;
+  color: #00a52c;
+}
+
+.booking-noshow-btn {
+  border: 1px solid #ff8c83;
+  background: #fff1ed;
+  color: #ff3b30;
+}
+
+/* ================= BOOKING PAGINATION ================= */
+
+.booking-pagination {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 0 22px;
+  font-size: 14px;
+  color: #111827;
+  box-shadow: 0 10px 24px rgba(34, 72, 55, 0.15);
+}
+
+/* LEFT TEXT */
+
+.booking-pagination p {
+  margin: 0;
+}
+
+/* RIGHT BUTTON CONTAINER */
+
+.pagination-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ================= BUTTON BASE ================= */
+
+.booking-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+}
+
+/* ================= COLORS ================= */
+
+.booking-page-btn.prev {
+  background: #8bd39b;
+  color: white;
+}
+
+.booking-page-btn.next {
+  background: #2fa34a;
+  color: white;
+}
+
+/* ================= CLICK EFFECT ================= */
+
+.booking-page-btn:active:not(.disabled) {
+  transform: scale(0.92);
+  background: #1f7f36;
+}
+
+/* ================= HOVER ================= */
+
+.booking-page-btn:hover:not(.disabled) {
+  filter: brightness(0.95);
+}
+
+/* ================= DISABLED ================= */
+
+.booking-page-btn.disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* =============================================================== ARRIVAL MONITORING PAGE ============================================== */
+
+.arrival-page {
+  @apply flex flex-col gap-7;
+}
+
+/* ================= ARRIVAL HEADER ================= */
+
+.arrival-header {
+  @apply flex items-start justify-between;
+}
+
+.arrival-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.arrival-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+.arrival-actions {
+  @apply flex items-center gap-3;
+}
+
+.arrival-date-btn,
+.arrival-export-btn {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-4 text-sm font-bold text-black;
+}
+
+/* ================= ARRIVAL MINI CARDS ================= */
+
+.arrival-stats {
+  @apply grid grid-cols-6 gap-6;
+}
+
+.arrival-stat-card {
+  @apply flex min-h-[106px] items-center justify-between rounded-[22px] bg-white/90 px-5 py-4;
+  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+}
+
+.arrival-stat-card p {
+  @apply m-0 text-xs font-bold text-slate-500;
+}
+
+.arrival-stat-card h2 {
+  @apply mt-6 text-[28px] font-extrabold text-black;
+}
+
+.arrival-stat-icon {
+  @apply text-[24px] text-cyan-400;
+}
+
+.arrival-stat-icon.pink {
+  @apply text-pink-500;
+}
+
+.arrival-stat-icon.dark {
+  @apply text-black;
+}
+
+.arrival-stat-icon.yellow {
+  @apply text-yellow-400;
+}
+
+/* ================= ARRIVAL AUTO-CALCULATED BAR ================= */
+
+.arrival-note {
+  @apply rounded-xl px-5 py-3 text-xs font-medium text-green-700;
+  background: #2fa34a;
+  color: #0f3b1e;
+  box-shadow: 0 12px 22px rgba(34, 72, 55, 0.2);
+}
+
+/* ================= ARRIVAL TABLE CONTAINER ================= */
+
+.arrival-table-card {
+  overflow: hidden;
+  border-radius: 18px;
+  background: #f7fbf8;
+  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+}
+
+/* ================= ARRIVAL TABLE STRUCTURE ================= */
+
+.arrival-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* ================= ARRIVAL TABLE HEADER ================= */
+
+.arrival-table-card thead {
+  background: #dff1e2;
+}
+
+.arrival-table-card th {
+  padding: 20px 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: #37443e;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ================= ARRIVAL TABLE BODY ================= */
+
+.arrival-table-card tbody {
+  background: #f7fbf8;
+}
+
+.arrival-table-card tbody tr {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.22);
+}
+
+.arrival-table-card tbody tr:last-child {
+  border-bottom: none;
+}
+
+.arrival-table-card tbody tr:hover {
+  background: #eef8f1;
+}
+
+/* ================= ARRIVAL TABLE CELL ================= */
+
+.arrival-table-card td {
+  padding: 13px 16px;
+  vertical-align: middle;
+  color: #1f2937;
+}
+
+/* ================= ARRIVAL GUEST + FEE TEXT ================= */
+
+.arrival-table-card .guest-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #050505;
+  line-height: 1.1;
+}
+
+.arrival-table-card .fee {
+  font-size: 13px;
+  font-weight: 800;
+  color: #050505;
+}
+
+/* ================= DAILY TOTAL ROW ================= */
+
+.daily-total {
+  background: #e2f5e7;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.daily-total td {
+  padding: 18px 16px;
+  color: #1f2937;
+  border-top: 1px solid rgba(15, 23, 42, 0.22);
+}
+
+  /* ============================================================== DESTINATION MANAGEMENT PAGE ===================================================== */
+
+.destination-page {
+  @apply flex flex-col gap-7;
+}
+
+/* ================= DESTINATION HEADER ================= */
+
+.destination-header {
+  @apply flex items-start justify-between;
+}
+
+.destination-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.destination-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+.destination-add-btn {
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#2fa34a] px-5 text-sm font-bold text-white;
+}
+
+/* ================= DESTINATION SEARCH ================= */
+
+.destination-search input {
+  @apply h-11 w-[420px] rounded-full border border-[#2fa34a] bg-white px-5 text-sm outline-none;
+}
+
+/* ================= DESTINATION CARD GRID ================= */
+
+.destination-grid {
+  @apply grid gap-7 md:grid-cols-2 xl:grid-cols-3;
+}
+
+/* ================= DESTINATION CARD ================= */
+
+.destination-card {
+  overflow: hidden;
+  border-radius: 22px;
+  background: #f7fbf8;
+  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+}
+
+/* ================= DESTINATION IMAGE ================= */
+
+.destination-image {
+  position: relative;
+  height: 170px;
+}
+
+.destination-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.destination-rating {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  border-radius: 999px;
+  background: white;
+  padding: 0 7px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #374151;
+}
+
+.destination-rating svg {
+  color: #f5b400;
+}
+
+/* ================= DESTINATION BODY ================= */
+
+.destination-body {
+  @apply flex flex-col gap-3 p-4;
+}
+
+.destination-title-row {
+  @apply flex items-start justify-between gap-3;
+}
+
+.destination-title-row h3 {
+  @apply m-0 text-sm font-extrabold text-black;
+}
+
+.destination-title-row p {
+  @apply mt-1 flex items-center gap-1 text-[11px] font-semibold text-slate-500;
+}
+
+.destination-title-row p svg {
+  color: #1687ff;
+}
+
+/* ================= DESTINATION STATUS ================= */
+
+.destination-status {
+  @apply rounded-full px-3 py-1 text-[10px] font-bold;
+}
+
+.destination-status.active {
+  @apply bg-green-100 text-green-700;
+}
+
+.destination-status.maintenance {
+  @apply bg-yellow-100 text-yellow-700;
+}
+
+/* ================= DESTINATION VISITOR + TREND BOXES ================= */
+
+.destination-card-stats {
+  @apply grid grid-cols-2 gap-3;
+}
+
+.destination-card-stats div {
+  @apply rounded-xl border border-[#cfe5d8] bg-[#f4fbf7] px-4 py-3;
+}
+
+.destination-card-stats p {
+  @apply m-0 text-[10px] font-bold text-slate-500;
+}
+
+.destination-card-stats h4 {
+  @apply m-0 mt-1 text-base font-extrabold text-black;
+}
+
+.destination-card-stats h4:not(.negative) {
+  color: #16a34a;
+}
+
+.destination-card-stats h4.negative {
+  color: #ef4444;
+}
+
+.destination-card-stats span {
+  @apply text-[10px] text-slate-500;
+}
+
+/* ================= DESTINATION ACTION BUTTONS ================= */
+
+.destination-action-row {
+  @apply flex items-center gap-3;
+}
+
+.destination-edit-btn {
+  @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-blue-100 text-xs font-bold text-blue-500;
+}
+
+.destination-delete-btn {
+  @apply flex h-8 w-11 items-center justify-center rounded-md bg-red-100 text-red-500;
+}
+
+/* ================= DESTINATION FOOTER ================= */
+
+.destination-footer {
+  @apply flex items-center justify-between rounded-[18px] bg-white/90 px-6 py-5 shadow-[0_14px_28px_rgba(34,72,55,0.2)];
+}
+
+.destination-footer p {
+  @apply m-0 text-base text-slate-700;
+}
+
+.destination-footer strong {
+  @apply font-extrabold text-black;
+}
+
+.destination-footer p:last-child {
+  @apply flex items-center gap-2;
+}
+
+.destination-footer svg {
+  color: #f5b400;
+}
+
+/* ================================================================ FEEDBACK MONITORING PAGE ===================================================== */
+
+.feedback-page {
+  @apply flex flex-col gap-6;
+}
+
+
+/* ================= FEEDBACK HEADER ================= */
+
+.feedback-header {
+  @apply flex items-start justify-between;
+}
+
+.feedback-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.feedback-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+/* ================= FEEDBACK SUMMARY CARDS ================= */
+/* Total Feedback, Positive, Neutral, Negative */
+
+.feedback-stats {
+  @apply grid grid-cols-4 gap-4;
+}
+
+.feedback-stat-card {
+  @apply flex min-h-[96px] items-center justify-between rounded-[22px] bg-white/90 px-6 py-4;
+  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+}
+
+.feedback-stat-card p {
+  @apply m-0 text-xs font-bold text-slate-500;
+}
+
+.feedback-stat-card h2 {
+  @apply mt-2 text-[28px] font-extrabold text-black;
+}
+
+.feedback-stat-card svg {
+  font-size: 28px;
+}
+
+/* ================= FEEDBACK FILTERS ================= */
+
+/* ================= FEEDBACK FILTERS (FIGMA STYLE) ================= */
+
+.feedback-filters {
+  display: flex;
+  gap: 18px;
+}
+
+/* REMOVE DEFAULT SELECT LOOK */
+.feedback-filters select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  height: 52px;
+  min-width: 190px;
+
+  border-radius: 999px;
+  border: none;
+
+  padding: 0 50px 0 22px;
+
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+
+  background: #f3f4f6;
+  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+
+  cursor: pointer;
+  position: relative;
+}
+
+/* CUSTOM DROPDOWN ARROW */
+.feedback-filters select {
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%23111827' height='20' viewBox='0 0 24 24' width='20' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+
+/* HOVER EFFECT */
+.feedback-filters select:hover {
+  background: #e9f3ee;
+}
+
+/* FOCUS */
+.feedback-filters select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #2fa34a33, 0 12px 20px rgba(34, 72, 55, 0.25);
+}
+
+/* ================= FEEDBACK LIST ================= */
+
+.feedback-list {
+  @apply flex flex-col gap-5;
+}
+
+/* ================= FEEDBACK CARD ================= */
+/* Each feedback comment box */
+
+.feedback-card {
+  @apply flex justify-between gap-6 rounded-[18px] bg-white/90 px-7 py-5;
+  min-height: 120px;
+  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.2);
+}
+
+.feedback-left {
+  @apply flex-1;
+}
+
+.feedback-left h3 {
+  @apply m-0 text-[18px] font-bold text-slate-700;
+}
+
+.meta {
+  @apply mt-2 text-xs font-medium text-slate-500;
+}
+
+.stars {
+  @apply mt-3 text-sm text-yellow-400;
+  letter-spacing: 1px;
+}
+
+.stars span {
+  @apply text-slate-300;
+}
+
+.message {
+  @apply mt-2 text-sm leading-5 text-black;
+}
+
+/* ================= FEEDBACK RIGHT ACTIONS ================= */
+/* Status badge + Reply button */
+
+.feedback-right {
+  @apply flex items-start gap-3;
+}
+
+.status {
+  @apply rounded-full px-3 py-1 text-[10px] font-semibold capitalize;
+}
+
+.status.positive {
+  @apply bg-green-100 text-green-700;
+}
+
+.status.neutral {
+  @apply bg-yellow-100 text-yellow-700;
+}
+
+.status.negative {
+  @apply bg-red-100 text-red-600;
+}
+
+.reply-btn {
+  @apply flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-semibold text-black;
+}
+
+/* ============================================================================== REPORTS PAGE ================================================ */
+
+.reports-page {
+  @apply flex flex-col gap-6;
+}
+
+/* ================= REPORTS HEADER ================= */
+
+.reports-header {
+  @apply flex items-start justify-between;
+}
+
+.reports-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.reports-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+.reports-actions {
+  @apply flex items-center gap-3;
+}
+
+.reports-actions button {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 text-sm font-bold text-black;
+}
+
+.reports-actions .green {
+  @apply bg-[#2fa34a] text-white;
+}
+
+/* ================= REPORT TABS ================= */
+
+.report-tabs {
+  @apply flex w-fit gap-2 rounded-xl bg-white/80 p-2;
+}
+
+.report-tabs button {
+  @apply rounded-full px-7 py-3 text-sm font-semibold text-slate-500;
+}
+
+.report-tabs .active {
+  @apply border border-slate-300 bg-white text-black shadow-sm;
+}
+
+/* ================= REPORT FILTER BOX ================= */
+
+.report-filter-card {
+  @apply grid grid-cols-[140px_140px_160px_130px] items-end gap-4 rounded-[24px] bg-white/80 p-5;
+}
+
+.report-filter-card label {
+  @apply flex flex-col gap-2;
+}
+
+.report-filter-card span {
+  @apply text-xs font-extrabold uppercase tracking-wide text-slate-500;
+}
+
+.report-filter-card input,
+.report-filter-card select {
+  @apply h-10 rounded-md border border-slate-300 bg-white px-4 text-sm outline-none;
+}
+
+.report-filter-card button {
+  @apply h-10 rounded-lg bg-[#2fa34a] px-5 text-sm font-bold text-white;
+}
+
+/* ================= REPORT BAR CHART ================= */
+
+.report-chart-card {
+  @apply rounded-[24px] bg-white/80 p-5;
+  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.16);
+}
+
+.report-card-title h3 {
+  @apply m-0 text-sm font-extrabold text-black;
+}
+
+.report-card-title p {
+  @apply m-0 text-xs text-slate-500;
+}
+
+.report-chart-area {
+  @apply mt-4 h-[340px];
+}
+
+/* ================= REPORT TABLE ================= */
+
+.report-table-card {
+  overflow: hidden;
+  border-radius: 14px;
+  background: #f7fbf8;
+  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+}
+
+.report-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.report-table-card thead {
+  background: #dff1e2;
+}
+
+.report-table-card th {
+  padding: 18px 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: #37443e;
+}
+
+.report-table-card td {
+  padding: 18px 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.18);
+  color: #1f2937;
+}
+
+.report-table-card td:first-child {
+  font-weight: 800;
+  color: #050505;
+}
+
+.report-table-card td:nth-child(2),
+.report-table-card td:nth-child(3),
+.report-table-card td:nth-child(4),
+.report-table-card th:nth-child(2),
+.report-table-card th:nth-child(3),
+.report-table-card th:nth-child(4) {
+  text-align: center;
+}
+
+.report-table-card td:nth-child(3),
+.report-table-card td:nth-child(4) {
+  font-weight: 800;
+}
+
+.report-table-card .total-row {
+  background: #dff6e4;
+}
+
+.report-table-card .total-row td {
+  font-weight: 800;
+}
+
+/* ======================================================================= GIS MAP PAGE ================================================== */
+
+.gis-page {
+  @apply flex flex-col gap-8;
+}
+
+/* ================= GIS HEADER ================= */
+
+.gis-header {
+  @apply flex items-start justify-between;
+}
+
+.gis-header h1 {
+  @apply m-0 text-[42px] font-extrabold tracking-[-1px] text-black;
+}
+
+.gis-header p {
+  @apply mt-1 text-[17px] text-slate-500;
+}
+
+.gis-actions {
+  @apply flex items-center gap-3;
+}
+
+.gis-actions button {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 text-sm font-bold text-black;
+}
+
+.gis-actions .active {
+  @apply bg-[#2fa34a] text-white;
+}
+
+/* ================= GIS MAIN GRID ================= */
+
+.gis-main-grid {
+  @apply grid gap-5;
+  grid-template-columns: minmax(0, 1fr) 310px;
+}
+
+/* ================= GIS MAP LAYOUT FIX ================= */
+
+.gis-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 20px;
+  align-items: start;
+}
+
+.gis-map-card {
+  padding: 24px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+}
+
+.mauban-map-frame {
+  position: relative;
+  width: 100%;
+  height: 640px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid #2d9cff;
+}
+
+.gis-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.gis-location-list {
+  min-height: 390px;
+}
+
+.gis-bottom-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 1200px) {
+  .gis-main-grid,
+  .gis-bottom-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .mauban-map-frame {
+    height: 520px;
+  }
+}
+
+/* ================= GIS CARD BASE ================= */
+
+.gis-map-card,
+.gis-info-card,
+.gis-location-list,
+.gis-heatmap-card,
+.gis-stat-box {
+  @apply rounded-[18px] bg-white/85;
+  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+}
+
+/* ================= INTERACTIVE MAP CARD ================= */
+
+.gis-map-card {
+  @apply p-6;
+}
+
+.gis-map-title {
+  @apply mb-4 flex items-center justify-between;
+}
+
+.gis-map-title h3 {
+  @apply m-0 text-base font-extrabold text-black;
+}
+
+.gis-map-title p {
+  @apply m-0 text-sm font-semibold text-slate-700;
+}
+
+/* ================= RIGHT SIDE PANEL ================= */
+
+.gis-side-panel {
+  @apply flex flex-col gap-5;
+}
+
+/* Location Details box */
+
+.gis-info-card {
+  @apply p-5;
+  min-height: 86px;
+}
+
+.gis-info-card h3 {
+  @apply m-0 text-base font-extrabold text-black;
+}
+
+.gis-info-card p {
+  @apply mt-4 text-xs leading-5 text-black;
+}
+
+/* ================= ALL LOCATIONS BOX ================= */
+
+.gis-location-list {
+  @apply p-5;
+  min-height: 400px;
+}
+
+.gis-location-list h3 {
+  @apply m-0 text-base font-extrabold text-black;
+}
+
+.gis-location-items {
+  @apply mt-4 flex flex-col gap-2;
+}
+
+.gis-location-item {
+  @apply flex w-full items-center justify-between border border-[#cbd5d1] bg-white/30 px-3 py-2 text-left transition;
+  min-height: 45px;
+}
+
+.gis-location-item:hover {
+  background: #eef8f1;
+}
+
+.gis-location-item.selected {
+  background: #e4f6ea;
+}
+
+.gis-location-item p {
+  @apply m-0 text-xs font-bold text-slate-700;
+}
+
+.gis-location-item span {
+  @apply text-[10px] font-semibold text-slate-500;
+}
+
+/* Rating + visitors on location rows */
+
+.gis-rating {
+  @apply flex items-center gap-1 text-yellow-500;
+}
+
+.gis-rating span {
+  @apply text-[10px] font-bold text-slate-600;
+}
+
+/* ================= HEATMAP ACTIVE BOX ================= */
+
+.gis-heatmap-card {
+  @apply p-5;
+}
+
+.gis-heatmap-card h3 {
+  @apply m-0 text-base font-extrabold text-black;
+}
+
+.gis-heatmap-card p {
+  @apply mt-4 text-xs leading-5 text-slate-600;
+}
+
+/* ================= BOTTOM STAT BOXES ================= */
+
+.gis-bottom-stats {
+  @apply grid gap-7 md:grid-cols-4;
+}
+
+.gis-stat-box {
+  @apply px-6 py-5;
+}
+
+.gis-stat-box p {
+  @apply m-0 text-sm font-medium text-slate-600;
+}
+
+.gis-stat-box h2 {
+  @apply mt-3 text-[34px] font-extrabold text-black;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 1200px) {
+  .gis-main-grid,
+  .gis-bottom-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================ SETTINGS PAGE =========================================================== */
+
+  .settings-page {
+    display: flex;
+    flex-direction: column;
+    gap: 50px;
+    padding: 0;
+  }
+
+  /* ================= TOP (Breadcrumb only) ================= */
+
+  .settings-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .settings-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    color: #374151;
+  }
+
+  .settings-breadcrumb strong {
+    font-weight: 600;
+    color: #111827;
+  }
+
+  /* ================= TITLE ================= */
+
+  .settings-title {
+    margin: -60px 0 18px 0;   /* moves it higher */
+    font-size: 36px;          /* smaller than before */
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: #000000;
+  }
+
+  /* ================= CONTAINER (MAIN COLUMN) ================= */
+
+  .settings-container {
+    width: 480px;             /* smaller column */
+    margin-left: 12px;
+    margin-top: -40px;        /* moves whole block higher */
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ================= CARD ================= */
+
+  .settings-card {
+    width: 100%;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    padding: 20px 22px;
+    box-shadow: 0 12px 22px rgba(34, 72, 55, 0.18);
+  }
+
+  .settings-card h2 {
+    margin: 0 0 18px;
+    font-size: 20px;          /* smaller */
+    font-weight: 800;
+    color: #000000;
+  }
+
+  /* ================= FORM ================= */
+
+  .settings-field {
+    display: block;
+    margin-bottom: 18px;
+  }
+
+  .settings-field:last-child {
+    margin-bottom: 0;
+  }
+
+  .settings-field span {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 16px;          /* smaller label */
+    font-weight: 500;
+    color: #000000;
+  }
+
+  .settings-field input {
+    width: 100%;
+    height: 44px;             /* smaller input */
+    border: none;
+    border-radius: 10px;
+    background: #d9e5e0;
+    padding: 0 18px;
+    font-size: 15px;          /* smaller text */
+    color: #000000;
+    outline: none;
+  }
+
+  /* ================= API CARD ================= */
+
+  .api-card {
+    margin-top: 0;
+  }
+
+  /* ================= SAVE BUTTON ================= */
+
+  .settings-save-btn {
+    width: 180px;
+    height: 50px;
+    margin-left: 12px;
+    margin-top: -6px;
+    border: none;
+    border-radius: 10px;
+    background: #2fa34a;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .settings-home-link {
+  color: #374151;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.settings-home-link:hover {
+  color: #2fa34a;
+  text-decoration: underline;
+}
+
+
+}
+

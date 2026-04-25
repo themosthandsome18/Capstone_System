@@ -31,7 +31,7 @@ function FitMapToDestinations({ destinations }) {
 
 function MaubanDestinationMap({ destinations, selectedDestination, onSelectDestination }) {
   return (
-    <div className="relative h-[420px] overflow-hidden rounded-[6px] border border-[#2d9cff]">
+    <div className="mauban-map-frame">
       <div className="absolute left-3 top-3 z-[500] rounded-[6px] bg-white/95 px-3 py-3 shadow-md">
         <p className="mb-2 text-xs font-semibold text-slate-700">Legend</p>
         <div className="space-y-2 text-[11px] text-slate-600">
