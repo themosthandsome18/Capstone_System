@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   FiMessageSquare,
+  FiStar,
   FiThumbsDown,
   FiThumbsUp,
 } from "react-icons/fi";
@@ -8,17 +9,20 @@ import PageHeader from "../../components/ui/PageHeader";
 import { useTourismData } from "../../context/TourismDataContext";
 
 function FeedbackMonitoring() {
-  const { feedbackEntries, referenceTables } = useTourismData();
+  const { feedbackEntries, referenceTables, updateFeedbackEntry } =
+    useTourismData();
   const [destinationId, setDestinationId] = useState("");
   const [ratingFilter, setRatingFilter] = useState("");
+  const [replyingId, setReplyingId] = useState(null);
+  const [replyText, setReplyText] = useState("");
+  const [savingReply, setSavingReply] = useState(false);
+  const [replyError, setReplyError] = useState("");
 
   const filteredFeedback = feedbackEntries.filter((entry) => {
     const destinationMatch =
       !destinationId || String(entry.destinationId) === destinationId;
 
-    const ratingMatch =
-      !ratingFilter ||
-      entry.status === ratingFilter;
+    const ratingMatch = !ratingFilter || entry.status === ratingFilter;
 
     return destinationMatch && ratingMatch;
   });
@@ -37,16 +41,35 @@ function FeedbackMonitoring() {
     );
   }
 
+  function openReply(entry) {
+    setReplyingId(entry.id);
+    setReplyText(entry.reply || "");
+    setReplyError("");
+  }
+
+  async function saveReply(entry) {
+    setSavingReply(true);
+    setReplyError("");
+
+    try {
+      await updateFeedbackEntry(entry.id, { reply: replyText });
+      setReplyingId(null);
+      setReplyText("");
+    } catch (error) {
+      setReplyError("Unable to save reply. Please try again.");
+    } finally {
+      setSavingReply(false);
+    }
+  }
+
   return (
     <div className="feedback-page">
-
       <PageHeader
         eyebrow="Tourism Monitoring"
         title="Feedback Monitoring"
         description="Manage resorts and tourist feedback in Mauban, Quezon"
       />
 
-      {/* STATS */}
       <div className="feedback-stats">
         <StatCard title="Total Feedback" value={stats.total} />
         <StatCard title="Positive" value={stats.positive} icon={<FiThumbsUp />} />
@@ -54,7 +77,6 @@ function FeedbackMonitoring() {
         <StatCard title="Negative" value={stats.negative} icon={<FiThumbsDown />} />
       </div>
 
-      {/* FILTERS */}
       <div className="feedback-filters">
         <select
           value={destinationId}
@@ -79,41 +101,82 @@ function FeedbackMonitoring() {
         </select>
       </div>
 
-      {/* FEEDBACK LIST */}
+      {replyError ? <p className="tourist-record-error">{replyError}</p> : null}
+
       <div className="feedback-list">
         {filteredFeedback.map((entry) => (
           <div key={entry.id} className="feedback-card">
-
             <div className="feedback-left">
               <h3>{entry.reviewer}</h3>
 
               <p className="meta">
-                {getDestinationName(entry.destinationId)} • {entry.date}
+                {getDestinationName(entry.destinationId)} | {entry.date}
               </p>
 
-              <div className="stars">
-                {"★".repeat(entry.rating)}
-                <span>{"★".repeat(5 - entry.rating)}</span>
+              <div className="stars" aria-label={`${entry.rating} of 5 stars`}>
+                {Array.from({ length: 5 }, (_, index) => (
+                  <FiStar
+                    key={index}
+                    className={index < entry.rating ? "filled" : "muted"}
+                  />
+                ))}
               </div>
 
+              <p className="feedback-title">{entry.title}</p>
               <p className="message">{entry.message}</p>
+
+              {entry.reply ? (
+                <div className="feedback-reply">
+                  <strong>Office reply</strong>
+                  <p>{entry.reply}</p>
+                </div>
+              ) : null}
+
+              {replyingId === entry.id ? (
+                <div className="feedback-reply-form">
+                  <textarea
+                    value={replyText}
+                    onChange={(event) => setReplyText(event.target.value)}
+                    rows={3}
+                    placeholder="Write an office reply..."
+                  />
+                  <div>
+                    <button
+                      type="button"
+                      className="tourist-record-cancel"
+                      onClick={() => setReplyingId(null)}
+                      disabled={savingReply}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="tourist-record-save"
+                      onClick={() => saveReply(entry)}
+                      disabled={savingReply}
+                    >
+                      {savingReply ? "Saving..." : "Save Reply"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="feedback-right">
-              <span className={`status ${entry.status}`}>
-                {entry.status}
-              </span>
+              <span className={`status ${entry.status}`}>{entry.status}</span>
 
-              <button className="reply-btn">
+              <button
+                type="button"
+                className="reply-btn"
+                onClick={() => openReply(entry)}
+              >
                 <FiMessageSquare size={12} />
                 Reply
               </button>
             </div>
-
           </div>
         ))}
       </div>
-
     </div>
   );
 }

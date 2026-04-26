@@ -20,7 +20,7 @@ import {
   FiXCircle,
 } from "react-icons/fi";
 import { useTourismData } from "../../context/TourismDataContext";
-import { formatNumber } from "../../utils/format";
+import { formatDate, formatNumber } from "../../utils/format";
 
 ChartJS.register(
   CategoryScale,
@@ -34,43 +34,28 @@ ChartJS.register(
 );
 
 function Dashboard() {
-  const { touristRecords, loading } = useTourismData();
+  const { dashboardData, loading } = useTourismData();
+  const metrics = dashboardData.metrics || {};
+  const trends = dashboardData.trends || { labels: [], arrivals: [] };
+  const classification = dashboardData.classification || {};
+  const gender = dashboardData.gender || {};
+  const stayType = dashboardData.stayType || {};
+  const validation = dashboardData.validation || {};
 
-  const totalArrivals = touristRecords.reduce(
-    (total, record) => total + record.total_visitors,
-    0
-  );
-
-  const localTourists = touristRecords.reduce(
-    (total, record) => total + record.filipino_count,
-    0
-  );
-
-  const maubaninTourists = touristRecords.reduce(
-    (total, record) => total + record.maubanin_count,
-    0
-  );
-
-  const foreignTourists = touristRecords.reduce(
-    (total, record) => total + record.foreigner_count,
-    0
-  );
-
-  const maleTourists = touristRecords.reduce(
-    (total, record) => total + record.total_male,
-    0
-  );
-
-  const femaleTourists = touristRecords.reduce(
-    (total, record) => total + record.total_female,
-    0
-  );
+  const localTourists = classification.filipino || 0;
+  const maubaninTourists = classification.maubanin || 0;
+  const foreignTourists = classification.foreign || 0;
+  const maleTourists = gender.male || 0;
+  const femaleTourists = gender.female || 0;
+  const dayTour = stayType.dayTour || 0;
+  const overnight = stayType.overnight || 0;
+  const stayTotal = dayTour + overnight;
 
   const dailyVisitorData = {
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    labels: trends.labels || [],
     datasets: [
       {
-        data: [90, 100, 90, 170, 230, 330, 290],
+        data: trends.arrivals || [],
         borderColor: "#6abdc0",
         backgroundColor: "rgba(106, 189, 192, 0.15)",
         tension: 0.4,
@@ -108,7 +93,7 @@ function Dashboard() {
     labels: ["Day Tour", "Overnight"],
     datasets: [
       {
-        data: [678, 314],
+        data: [dayTour, overnight],
         backgroundColor: ["#359e9b", "#4698f2"],
         borderWidth: 0,
         cutout: "62%",
@@ -125,22 +110,12 @@ function Dashboard() {
     scales: {
       y: {
         beginAtZero: true,
-        max: 400,
-        ticks: {
-          stepSize: 100,
-          color: "#a1aaa6",
-        },
-        grid: {
-          color: "rgba(190, 205, 198, 0.35)",
-        },
+        ticks: { color: "#a1aaa6" },
+        grid: { color: "rgba(190, 205, 198, 0.35)" },
       },
       x: {
-        ticks: {
-          color: "#a1aaa6",
-        },
-        grid: {
-          display: false,
-        },
+        ticks: { color: "#a1aaa6" },
+        grid: { display: false },
       },
     },
   };
@@ -154,30 +129,40 @@ function Dashboard() {
     scales: {
       y: {
         beginAtZero: true,
-        grid: {
-          color: "rgba(150, 180, 175, 0.35)",
-        },
-        ticks: {
-          color: "#6b7470",
-        },
+        grid: { color: "rgba(150, 180, 175, 0.35)" },
+        ticks: { color: "#6b7470" },
       },
       x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          color: "#4f5a55",
-        },
+        grid: { display: false },
+        ticks: { color: "#4f5a55" },
       },
     },
   };
 
   const doughnutOptions = {
     maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-    },
+    plugins: { legend: { display: false } },
   };
+
+  function exportDashboardCsv() {
+    const rows = [
+      ["Metric", "Value"],
+      ["Reporting date", dashboardData.reportingDate || ""],
+      ["Today arrivals", metrics.todayArrivals || 0],
+      ["This week arrivals", metrics.weekArrivals || 0],
+      ["This month arrivals", metrics.monthArrivals || 0],
+      ["Total revenue collected", metrics.totalRevenueCollected || 0],
+      ["Filipino tourists", localTourists],
+      ["Maubanin tourists", maubaninTourists],
+      ["Foreign tourists", foreignTourists],
+      ["Male tourists", maleTourists],
+      ["Female tourists", femaleTourists],
+      ["Day tour", dayTour],
+      ["Overnight", overnight],
+    ];
+
+    downloadCsv("dashboard-overview.csv", rows);
+  }
 
   if (loading) {
     return <div className="dashboard-loading">Loading dashboard data...</div>;
@@ -192,12 +177,12 @@ function Dashboard() {
         </div>
 
         <div className="dashboard-actions">
-          <button type="button" className="outline-action">
+          <button type="button" className="outline-action" onClick={exportDashboardCsv}>
             <FiDownload size={15} />
             Export
           </button>
 
-          <button type="button" className="primary-action">
+          <button type="button" className="primary-action" onClick={() => window.print()}>
             + Generate Report
           </button>
         </div>
@@ -205,30 +190,30 @@ function Dashboard() {
 
       <div className="metric-grid">
         <MetricCard
-          title="Today’s Arrivals"
-          value="248"
-          note="↑ 12% vs yesterday"
+          title="Today's Arrivals"
+          value={formatNumber(metrics.todayArrivals)}
+          note={`For ${formatDate(dashboardData.reportingDate)}`}
           icon={<FiUsers />}
         />
 
         <MetricCard
-          title="This Week’s Arrivals"
-          value="1,504"
-          note="↑ +8.4% vs last week"
+          title="This Week's Arrivals"
+          value={formatNumber(metrics.weekArrivals)}
+          note="Last 7 reporting days"
           icon={<FiCalendar />}
         />
 
         <MetricCard
-          title="This Month’s Arrivals"
-          value={formatNumber(totalArrivals)}
-          note="↑ +18% vs last month"
+          title="This Month's Arrivals"
+          value={formatNumber(metrics.monthArrivals)}
+          note="Month to reporting date"
           icon={<FiCalendar />}
         />
 
         <MetricCard
           title="Total Revenue Collected"
-          value="₱412,580"
-          note="↑ +24% this month"
+          value={formatCurrency(metrics.totalRevenueCollected)}
+          note={`PHP ${formatNumber(dashboardData.feePerVisitor || 300)} per visitor`}
           icon={<FiBriefcase />}
         />
       </div>
@@ -262,7 +247,7 @@ function Dashboard() {
 
       <div className="dashboard-row-medium">
         <section className="dashboard-card gender-card">
-          <CardTitle title="Gender Distribution" subtitle="Active tourists this month" />
+          <CardTitle title="Gender Distribution" subtitle="Arrived tourists" />
 
           <div className="bar-chart-area">
             <Bar data={genderData} options={barOptions} />
@@ -278,8 +263,18 @@ function Dashboard() {
             </div>
 
             <div className="stay-summary">
-              <StayBox color="#359e9b" title="Day Tour" value="678" percentage="68.3%" />
-              <StayBox color="#4698f2" title="Overnight" value="314" percentage="31.7%" />
+              <StayBox
+                color="#359e9b"
+                title="Day Tour"
+                value={dayTour}
+                percentage={getPercentage(dayTour, stayTotal)}
+              />
+              <StayBox
+                color="#4698f2"
+                title="Overnight"
+                value={overnight}
+                percentage={getPercentage(overnight, stayTotal)}
+              />
             </div>
           </div>
         </section>
@@ -302,24 +297,24 @@ function Dashboard() {
             type="success"
             icon={<FiCheckCircle />}
             title="Verified Entries"
-            value="1,428"
-            note="All required fields complete & validated"
+            value={validation.verifiedEntries || 0}
+            note="All stored records passed backend validation"
           />
 
           <ValidationBox
             type="danger"
             icon={<FiXCircle />}
             title="Invalid Entries"
-            value="23"
-            note="Missing required information — needs review"
+            value={validation.invalidEntries || 0}
+            note="Rejected records are not saved to the database"
           />
 
           <ValidationBox
             type="warning"
             icon={<FiFileText />}
             title="Duplicate Entries"
-            value="12"
-            note="Auto-flagged by system, awaiting merge"
+            value={validation.duplicateEntries || 0}
+            note="Flagged by repeated contact number"
           />
         </div>
       </section>
@@ -370,7 +365,7 @@ function StayBox({ color, title, value, percentage }) {
         {title}
       </div>
 
-      <h3>{value}</h3>
+      <h3>{formatNumber(value)}</h3>
       <p>{percentage} of tourists</p>
     </div>
   );
@@ -383,11 +378,40 @@ function ValidationBox({ type, icon, title, value, note }) {
 
       <div>
         <p>{title}</p>
-        <h3>{value}</h3>
+        <h3>{formatNumber(value)}</h3>
         <span>{note}</span>
       </div>
     </div>
   );
+}
+
+function getPercentage(value, total) {
+  if (!total) {
+    return "0.0%";
+  }
+
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
+function formatCurrency(value) {
+  return `PHP ${formatNumber(value)}`;
+}
+
+function downloadCsv(filename, rows) {
+  const csv = rows
+    .map((row) =>
+      row
+        .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export default Dashboard;
