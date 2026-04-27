@@ -1,4 +1,5 @@
 import {
+<<<<<<< HEAD:frontend/src/tourism/pages/ArrivalMonitoring.js
   ArcElement,
   BarElement,
   CategoryScale,
@@ -12,104 +13,89 @@ import {
 import { FiBriefcase, FiCalendar, FiDownload, FiMoon, FiSun, FiUsers } from "react-icons/fi";
 import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
+=======
+  FiBriefcase,
+  FiCalendar,
+  FiDownload,
+  FiMoon,
+  FiSun,
+  FiUsers,
+} from "react-icons/fi";
+import { useTourismData } from "../../context/TourismDataContext";
+import { formatNumber } from "../../utils/format";
+>>>>>>> 387fc3a62ec09fb78fe7a743655191738fd7b267:frontend/src/pages/Tourism_Page/ArrivalMonitoring.js
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Tooltip,
-  Legend
-);
+function formatDate(value) {
+  if (!value) {
+    return "No arrivals";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function escapeCsvValue(value) {
+  const normalized = value ?? "";
+  return `"${String(normalized).replace(/"/g, '""')}"`;
+}
+
+function displayCount(value) {
+  return value ? formatNumber(value) : "--";
+}
 
 function ArrivalMonitoring() {
-  const { touristRecords, loading } = useTourismData();
+  const { arrivalMonitoring, loading } = useTourismData();
 
-  const totalArrivals = touristRecords.reduce(
-    (total, record) => total + record.total_visitors,
-    0
-  );
+  const summary = arrivalMonitoring.summary;
+  const rows = arrivalMonitoring.rows;
+  const dailyTotals = arrivalMonitoring.dailyTotals;
 
-  const totalMale = touristRecords.reduce(
-    (total, record) => total + record.total_male,
-    0
-  );
+  function handleExport() {
+    const headers = [
+      "Date",
+      "Group/Guest",
+      "Male",
+      "Female",
+      "Overnight",
+      "Same Day",
+      "Resort",
+      "Fee Paid",
+    ];
+    const csvRows = rows.map((row) => [
+      row.date,
+      row.group,
+      row.male,
+      row.female,
+      row.overnight,
+      row.sameDay,
+      row.resort,
+      row.feePaid,
+    ]);
+    const csv = [headers, ...csvRows]
+      .map((row) => row.map(escapeCsvValue).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
 
-  const totalFemale = touristRecords.reduce(
-    (total, record) => total + record.total_female,
-    0
-  );
-
-  const sameDay = touristRecords
-    .filter((record) => record.total_visitors >= 5)
-    .reduce((total, record) => total + record.total_visitors, 0);
-
-  const overnight = Math.max(totalArrivals - sameDay, 0);
-
-  const rows = [
-    {
-      date: "Apr 18",
-      group: "Mecantina Family",
-      male: 3,
-      female: 3,
-      overnight: 6,
-      sameDay: "—",
-      resort: "Cagbalete Sands Resort",
-      fee: "₱1,800",
-    },
-    {
-      date: "Apr 18",
-      group: "Trish Tour Group",
-      male: 1,
-      female: 1,
-      overnight: 2,
-      sameDay: "—",
-      resort: "MVT Sto. Nino",
-      fee: "₱600",
-    },
-    {
-      date: "Apr 18",
-      group: "Ralph Barkada",
-      male: 5,
-      female: 4,
-      overnight: "—",
-      sameDay: 9,
-      resort: "Pansacola Beach",
-      fee: "₱2,700",
-    },
-    {
-      date: "Apr 18",
-      group: "Lorenzana Family",
-      male: 1,
-      female: 2,
-      overnight: 3,
-      sameDay: "—",
-      resort: "Cagbalete Sands Resort",
-      fee: "₱900",
-    },
-    {
-      date: "Apr 18",
-      group: "Israel Couple",
-      male: 1,
-      female: 1,
-      overnight: 2,
-      sameDay: "—",
-      resort: "Pansacola Beach",
-      fee: "₱600",
-    },
-    {
-      date: "Apr 18",
-      group: "Dela Cruz Org",
-      male: 8,
-      female: 4,
-      overnight: "—",
-      sameDay: 12,
-      resort: "Villa Cleofas",
-      fee: "₱3,600",
-    },
-  ];
+    link.href = url;
+    link.download = `arrival-monitoring-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (loading) {
     return <div className="panel p-10 text-center">Loading arrival data...</div>;
@@ -120,16 +106,20 @@ function ArrivalMonitoring() {
       <div className="arrival-header">
         <div>
           <h1>Arrival Monitoring</h1>
-          <p>Real-time tourist arrivals — auto calculated totals from booking data</p>
+          <p>Real-time tourist arrivals from backend booking data</p>
         </div>
 
         <div className="arrival-actions">
           <button type="button" className="arrival-date-btn">
             <FiCalendar size={15} />
-            Apr 18, 2026
+            {formatDate(arrivalMonitoring.reportDate)}
           </button>
 
-          <button type="button" className="arrival-export-btn">
+          <button
+            type="button"
+            className="arrival-export-btn"
+            onClick={handleExport}
+          >
             <FiDownload size={15} />
             Export
           </button>
@@ -137,16 +127,39 @@ function ArrivalMonitoring() {
       </div>
 
       <div className="arrival-stats">
-        <StatCard title="Total Arrivals" value={formatNumber(totalArrivals)} icon={<FiUsers />} />
-        <StatCard title="Male" value={formatNumber(totalMale)} icon="♂" />
-        <StatCard title="Female" value={formatNumber(totalFemale)} icon="♀" pink />
-        <StatCard title="Overnight" value={formatNumber(overnight)} icon={<FiMoon />} dark />
-        <StatCard title="Same Day" value={formatNumber(sameDay)} icon={<FiSun />} yellow />
-        <StatCard title="Fees Collected" value="₱10,200" icon={<FiBriefcase />} />
+        <StatCard
+          title="Total Arrivals"
+          value={formatNumber(summary.totalArrivals)}
+          icon={<FiUsers />}
+        />
+        <StatCard title="Male" value={formatNumber(summary.totalMale)} icon="M" />
+        <StatCard
+          title="Female"
+          value={formatNumber(summary.totalFemale)}
+          icon="F"
+          pink
+        />
+        <StatCard
+          title="Overnight"
+          value={formatNumber(summary.overnight)}
+          icon={<FiMoon />}
+          dark
+        />
+        <StatCard
+          title="Same Day"
+          value={formatNumber(summary.sameDay)}
+          icon={<FiSun />}
+          yellow
+        />
+        <StatCard
+          title="Fees Collected"
+          value={formatCurrency(summary.feesCollected)}
+          icon={<FiBriefcase />}
+        />
       </div>
 
       <div className="arrival-note">
-        ✦ All totals are auto-calculated from registered arrivals — no manual encoding required
+        All totals are calculated by the backend from records marked Arrived.
       </div>
 
       <div className="arrival-table-card">
@@ -165,28 +178,36 @@ function ArrivalMonitoring() {
           </thead>
 
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.group}>
-                <td>{row.date}</td>
-                <td className="guest-name">{row.group}</td>
-                <td>{row.male}</td>
-                <td>{row.female}</td>
-                <td>{row.overnight}</td>
-                <td>{row.sameDay}</td>
-                <td>{row.resort}</td>
-                <td className="fee">{row.fee}</td>
+            {rows.length ? (
+              rows.map((row) => (
+                <tr key={row.survey_id}>
+                  <td>{formatDate(row.date)}</td>
+                  <td className="guest-name">{row.group}</td>
+                  <td>{row.male}</td>
+                  <td>{row.female}</td>
+                  <td>{displayCount(row.overnight)}</td>
+                  <td>{displayCount(row.sameDay)}</td>
+                  <td>{row.resort}</td>
+                  <td className="fee">{formatCurrency(row.feePaid)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="8" className="text-center">
+                  No arrived tourist records yet.
+                </td>
               </tr>
-            ))}
+            )}
 
             <tr className="daily-total">
               <td>DAILY TOTAL</td>
               <td />
-              <td>19</td>
-              <td>15</td>
-              <td>13</td>
-              <td>21</td>
+              <td>{dailyTotals.male}</td>
+              <td>{dailyTotals.female}</td>
+              <td>{dailyTotals.overnight}</td>
+              <td>{dailyTotals.sameDay}</td>
               <td />
-              <td className="fee">₱10,200</td>
+              <td className="fee">{formatCurrency(dailyTotals.feesCollected)}</td>
             </tr>
           </tbody>
         </table>
@@ -204,9 +225,9 @@ function StatCard({ title, value, icon, pink, dark, yellow }) {
       </div>
 
       <div
-        className={`arrival-stat-icon ${pink ? "pink" : ""} ${dark ? "dark" : ""} ${
-          yellow ? "yellow" : ""
-        }`}
+        className={`arrival-stat-icon ${pink ? "pink" : ""} ${
+          dark ? "dark" : ""
+        } ${yellow ? "yellow" : ""}`}
       >
         {icon}
       </div>
