@@ -19,8 +19,8 @@ import {
   FiUsers,
   FiXCircle,
 } from "react-icons/fi";
-import { useTourismData } from "../../context/TourismDataContext";
-import { formatNumber } from "../../utils/format";
+import { useTourismData } from "../context/TourismDataContext";
+import { formatNumber } from "../utils/format";
 
 ChartJS.register(
   CategoryScale,

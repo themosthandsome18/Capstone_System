@@ -10,8 +10,8 @@ import {
   Tooltip,
 } from "chart.js";
 import { FiBriefcase, FiCalendar, FiDownload, FiMoon, FiSun, FiUsers } from "react-icons/fi";
-import { useTourismData } from "../../context/TourismDataContext";
-import { formatNumber } from "../../utils/format";
+import { useTourismData } from "../context/TourismDataContext";
+import { formatNumber } from "../utils/format";
 
 ChartJS.register(
   CategoryScale,

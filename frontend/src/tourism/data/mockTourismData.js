@@ -1,11 +1,10 @@
-import Cagbalete from "../assets/Tourism_pics/Cagbalete.jpg";
-import DampalitanIsland from "../assets/Tourism_pics/DampalitanIsland.jpg";
-import KwebangLampas from "../assets/Tourism_pics/Kwebang Lampas.jpg";
-import MaubanMap from "../assets/Tourism_pics/mauban-map.png";
-import MaubanLighthouse from "../assets/Tourism_pics/Maubanlighthouse.jpg";
-import MtPinagbanderahan from "../assets/Tourism_pics/Mt.Pinagbanderahan.jpg";
-import PutingBuhangin from "../assets/Tourism_pics/PutingBuhangin.jpg";
-
+import Cagbalete from "../assets/Cagbalete.jpg";
+import DampalitanIsland from "../assets/DampalitanIsland.jpg";
+import KwebangLampas from "../assets/KwebangLampas.jpg";
+import MaubanMap from "../assets/mauban-map.png";
+import MaubanLighthouse from "../assets/Maubanlighthouse.jpg";
+import MtPinagbanderahan from "../assets/Mt.Pinagbanderahan.jpg";
+import PutingBuhangin from "../assets/PutingBuhangin.jpg";
 export const assetLibrary = {
   map: MaubanMap,
 };

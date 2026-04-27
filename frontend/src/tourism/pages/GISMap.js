@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FiLayers, FiMapPin, FiStar } from "react-icons/fi";
-import MaubanDestinationMap from "../../components/maps/MaubanDestinationMap";
-import { useTourismData } from "../../context/TourismDataContext";
+import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
+import { useTourismData } from "../context/TourismDataContext";
 
 function GISMap() {
   const { referenceTables } = useTourismData();

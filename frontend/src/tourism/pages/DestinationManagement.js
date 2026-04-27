@@ -1,5 +1,5 @@
 import { FiEdit2, FiMapPin, FiPlus, FiStar, FiTrash2 } from "react-icons/fi";
-import { useTourismData } from "../../context/TourismDataContext";
+import { useTourismData } from "../context/TourismDataContext";
 
 function DestinationManagement() {
   const { referenceTables } = useTourismData();

@@ -5,7 +5,7 @@ import {
   FiFilter,
   FiSearch,
 } from "react-icons/fi";
-import { useTourismData } from "../../context/TourismDataContext";
+import { useTourismData } from "../context/TourismDataContext";
 
 const pageSize = 10;
 

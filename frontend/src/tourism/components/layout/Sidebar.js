@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import logo from "../../../assets/Tourism_pics/logoMauban.jpg";
+import logo from "../../assets/Tourismlogo.jpg";
 
 const navigation = [
   { to: "/", label: "Dashboard" },

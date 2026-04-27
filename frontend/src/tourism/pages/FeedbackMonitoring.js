@@ -4,8 +4,8 @@ import {
   FiThumbsDown,
   FiThumbsUp,
 } from "react-icons/fi";
-import PageHeader from "../../components/ui/PageHeader";
-import { useTourismData } from "../../context/TourismDataContext";
+import PageHeader from "../components/ui/PageHeader";
+import { useTourismData } from "../context/TourismDataContext";
 
 function FeedbackMonitoring() {
   const { feedbackEntries, referenceTables } = useTourismData();
