@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { FiBell, FiCalendar, FiMenu, FiSearch } from "react-icons/fi";
+import { FiBell, FiCalendar, FiSearch } from "react-icons/fi";
 import Sidebar from "./Sidebar";
 
 
@@ -52,6 +52,7 @@ function AppShell() {
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [addEntryRequestId, setAddEntryRequestId] = useState(0);
 
   return (
     <div className="tourism-layout">
@@ -97,7 +98,11 @@ function AppShell() {
             </button>
 
             {currentPage.showAdd && (
-              <button type="button" className="add-entry-btn">
+              <button
+                type="button"
+                className="add-entry-btn"
+                onClick={() => setAddEntryRequestId((value) => value + 1)}
+              >
                 + Add Entry
               </button>
             )}
@@ -105,7 +110,7 @@ function AppShell() {
         </header>
 
         <section className="tourism-content">
-          <Outlet />
+          <Outlet context={{ addEntryRequestId }} />
         </section>
       </main>
     </div>

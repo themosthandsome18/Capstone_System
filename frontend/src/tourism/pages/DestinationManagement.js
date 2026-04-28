@@ -1,4 +1,4 @@
-import { FiEdit2, FiMapPin, FiPlus, FiStar, FiTrash2 } from "react-icons/fi";
+import { FiEdit2, FiMapPin, FiStar, FiTrash2 } from "react-icons/fi";
 import { useTourismData } from "../context/TourismDataContext";
 
 function DestinationManagement() {

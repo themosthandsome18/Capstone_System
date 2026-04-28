@@ -1,8 +1,10 @@
 import {
   FiAlertTriangle,
+  FiCalendar,
   FiDownload,
   FiFileText,
   FiPrinter,
+  FiShield,
 } from "react-icons/fi";
 
 const stats = [
@@ -11,6 +13,15 @@ const stats = [
   { label: "For Completion", value: "2", color: "orange" },
   { label: "Upcoming", value: "2", color: "yellow" },
   { label: "Violators", value: "2", color: "red" },
+];
+
+const establishmentBars = [
+  { label: "Water Refili...", total: 2, violators: 0 },
+  { label: "Poultry Farm", total: 2, violators: 1 },
+  { label: "Gasoline Sta...", total: 2, violators: 0 },
+  { label: "Restaurant /...", total: 3, violators: 0 },
+  { label: "Barbershop /...", total: 2, violators: 0 },
+  { label: "Public Marke...", total: 1, violators: 1 },
 ];
 
 function SanitaryReportAnalytics() {
@@ -49,32 +60,27 @@ function SanitaryReportAnalytics() {
       </div>
 
       <div className="sanitary-report-chart-grid">
-        <section className="sanitary-report-card">
+        <section className="sanitary-report-card establishment-chart-card">
           <h3>Establishments per Type</h3>
 
           <div className="bar-chart-mock">
-            {[
-              ["Water Refili...", 2, 0],
-              ["Poultry Farm", 2, 1],
-              ["Gasoline Sta...", 2, 0],
-              ["Restaurant /...", 3, 0],
-              ["Barbershop /...", 2, 0],
-              ["Public Marke...", 1, 1],
-            ].map(([label, total, violator]) => (
-              <div className="bar-group" key={label}>
+            {establishmentBars.map((item) => (
+              <div className="bar-group" key={item.label}>
                 <div className="bar-stack">
                   <span
                     className="bar-total"
-                    style={{ height: `${Number(total) * 58}px` }}
+                    style={{ height: `${item.total * 58}px` }}
                   />
-                  {Number(violator) > 0 && (
+
+                  {item.violators > 0 && (
                     <span
                       className="bar-violator"
-                      style={{ height: `${Number(violator) * 58}px` }}
+                      style={{ height: `${item.violators * 58}px` }}
                     />
                   )}
                 </div>
-                <small>{label}</small>
+
+                <small>{item.label}</small>
               </div>
             ))}
           </div>
@@ -85,11 +91,12 @@ function SanitaryReportAnalytics() {
           </div>
         </section>
 
-        <section className="sanitary-report-card">
+        <section className="sanitary-report-card pie-chart-card">
           <h3>Permit Size Distribution</h3>
 
           <div className="permit-pie-mock">
             <div className="pie-circle" />
+
             <span className="pie-label top">7</span>
             <span className="pie-label bottom">5</span>
           </div>
@@ -105,6 +112,7 @@ function SanitaryReportAnalytics() {
         <div className="summary-report-top">
           <div className="summary-title">
             <FiFileText />
+
             <div>
               <h3>Summary Report</h3>
               <p>Business permit and sanitary compliance snapshot</p>
@@ -127,15 +135,39 @@ function SanitaryReportAnalytics() {
             </div>
 
             <div className="summary-mini-grid">
-              <MiniSummary label="Good Standing" value="6" color="green" />
-              <MiniSummary label="Upcoming" value="2" color="yellow" />
-              <MiniSummary label="For Completion" value="2" color="orange" />
-              <MiniSummary label="Violators" value="2" color="red" />
+              <MiniSummary
+                label="Good Standing"
+                value="6"
+                color="green"
+                icon={<FiShield />}
+              />
+
+              <MiniSummary
+                label="Upcoming"
+                value="2"
+                color="yellow"
+                icon={<FiCalendar />}
+              />
+
+              <MiniSummary
+                label="For Completion"
+                value="2"
+                color="orange"
+                icon={<FiFileText />}
+              />
+
+              <MiniSummary
+                label="Violators"
+                value="2"
+                color="red"
+                icon={<FiAlertTriangle />}
+              />
             </div>
           </div>
 
           <div className="generated-brief-box">
             <h3>Generated Brief</h3>
+
             <p>
               Out of <strong>12</strong> monitored establishments,{" "}
               <span className="green-text">6</span> are in good standing, while{" "}
@@ -160,13 +192,14 @@ function SanitaryReportAnalytics() {
   );
 }
 
-function MiniSummary({ label, value, color }) {
+function MiniSummary({ label, value, color, icon }) {
   return (
-    <div className="mini-summary-card">
+    <div className={`mini-summary-card ${color}`}>
       <p>
         {label}
-        {color === "red" && <FiAlertTriangle />}
+        {icon}
       </p>
+
       <h2>{value}</h2>
     </div>
   );

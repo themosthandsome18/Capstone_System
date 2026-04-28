@@ -22,6 +22,14 @@ const households = [
   ["H-0012", "Emmanuel Aviles", "9", "None", "Level II (Communal Faucet)", "Dumped", "Violation"],
 ];
 
+const riskBarangays = [
+  { name: "Poblacion", value: 4, color: "red" },
+  { name: "San Isidro", value: 4, color: "yellow" },
+  { name: "Malabanan", value: 4, color: "yellow" },
+  { name: "San Roque", value: 4, color: "yellow" },
+  { name: "Bagong Pook", value: 4, color: "yellow" },
+];
+
 function HouseholdRecords() {
   return (
     <div className="household-page">
@@ -53,13 +61,13 @@ function HouseholdRecords() {
           </div>
 
           <div className="risk-bar-list">
-            {["Poblacion", "San Isidro", "Malabanan", "San Roque", "Bagong Pook"].map((name, index) => (
-              <div className="risk-row" key={name}>
-                <span>{name}</span>
-                <div>
-                  <b className={index === 0 ? "red" : "yellow"} style={{ width: "100%" }} />
+            {riskBarangays.map((item) => (
+              <div className="risk-row" key={item.name}>
+                <span>{item.name}</span>
+                <div className="risk-track">
+                  <b className={item.color} style={{ width: `${item.value * 25}%` }} />
                 </div>
-                <strong>4</strong>
+                <strong>{item.value}</strong>
               </div>
             ))}
           </div>
@@ -67,11 +75,13 @@ function HouseholdRecords() {
 
         <section className="household-chart-card">
           <div className="household-chart-title">
-            <h3>Toilet Type Distribution</h3>
-            <p>12 households</p>
+            <div>
+              <h3>Toilet Type Distribution</h3>
+              <p>12 households</p>
+            </div>
           </div>
 
-          <div className="toilet-bars">
+          <div className="household-bar-chart">
             <MockBar label="Water-Sealed" value={3} color="green" />
             <MockBar label="Pour-Flush" value={3} color="dark" />
             <MockBar label="Pit Latrine" value={3} color="yellow" />
@@ -81,11 +91,13 @@ function HouseholdRecords() {
 
         <section className="household-chart-card">
           <div className="household-chart-title">
-            <h3>Waste Disposal Methods</h3>
-            <p>12 households</p>
+            <div>
+              <h3>Waste Disposal Methods</h3>
+              <p>12 households</p>
+            </div>
           </div>
 
-          <div className="toilet-bars">
+          <div className="household-bar-chart">
             <MockBar label="Collected" value={3} color="green" />
             <MockBar label="Composted" value={3} color="dark" />
             <MockBar label="Burned" value={3} color="yellow" />
@@ -97,7 +109,7 @@ function HouseholdRecords() {
           <h3>Water Access Levels</h3>
 
           <div className="water-donut-wrap">
-            <div className="water-donut"></div>
+            <div className="water-donut" />
             <span className="water-label top">4</span>
             <span className="water-label left">4</span>
             <span className="water-label bottom">4</span>
@@ -118,6 +130,8 @@ function HouseholdRecords() {
             <option>Poblacion</option>
             <option>San Isidro</option>
             <option>Malabanan</option>
+            <option>San Roque</option>
+            <option>Bagong Pook</option>
           </select>
 
           <div className="household-right-tools">
@@ -135,39 +149,39 @@ function HouseholdRecords() {
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Household Head</th>
-              <th>Members</th>
-              <th>Toilet Type</th>
-              <th>Water Source</th>
-              <th>Waste Disposal</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {households.map((row) => (
-              <tr key={row[0]}>
-                <td>{row[0]}</td>
-                <td>
-                  <strong>{row[1]}</strong>
-                </td>
-                <td>{row[2]}</td>
-                <td>{row[3]}</td>
-                <td>{row[4]}</td>
-                <td>{row[5]}</td>
-                <td>
-                  <span className={`household-status ${statusClass(row[6])}`}>
-                    ● {row[6]}
-                  </span>
-                </td>
+        <div className="household-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Household Head</th>
+                <th>Members</th>
+                <th>Toilet Type</th>
+                <th>Water Source</th>
+                <th>Waste Disposal</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {households.map((row) => (
+                <tr key={row[0]}>
+                  <td>{row[0]}</td>
+                  <td><strong>{row[1]}</strong></td>
+                  <td>{row[2]}</td>
+                  <td>{row[3]}</td>
+                  <td>{row[4]}</td>
+                  <td>{row[5]}</td>
+                  <td>
+                    <span className={`household-status ${statusClass(row[6])}`}>
+                      ● {row[6]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="household-pagination">
           <span></span>
@@ -189,6 +203,7 @@ function HouseholdStat({ title, value, desc, icon, color }) {
         <h2>{value}</h2>
         {desc && <span>{desc}</span>}
       </div>
+
       <div className={`household-stat-icon ${color}`}>{icon}</div>
     </div>
   );
@@ -196,9 +211,9 @@ function HouseholdStat({ title, value, desc, icon, color }) {
 
 function MockBar({ label, value, color }) {
   return (
-    <div className="toilet-bar-item">
-      <div className="bar-area">
-        <span className={color} style={{ height: `${value * 44}px` }} />
+    <div className="household-bar-item">
+      <div className="household-bar-area">
+        <span className={color} style={{ height: `${value * 50}px` }} />
       </div>
       <small>{label}</small>
     </div>

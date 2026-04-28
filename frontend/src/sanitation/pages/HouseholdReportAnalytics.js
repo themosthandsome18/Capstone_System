@@ -1,6 +1,13 @@
 import { FiDownload, FiFileText, FiMapPin, FiPrinter } from "react-icons/fi";
 
-const barangays = ["Poblacion", "San Isidro", "Malabanan", "San Roque", "Bagong Pook", "Bagong Bayan"];
+const barangaysData = [
+  { name: "Poblacion", hss: 14, toilet: 8, water: 6, waste: 10 },
+  { name: "San Isidro", hss: 12, toilet: 6, water: 4, waste: 7 },
+  { name: "Malabanan", hss: 15, toilet: 9, water: 5, waste: 8 },
+  { name: "San Roque", hss: 11, toilet: 5, water: 3, waste: 6 },
+  { name: "Bagong Pook", hss: 13, toilet: 7, water: 6, waste: 9 },
+  { name: "Bagong Bayan", hss: 10, toilet: 4, water: 2, waste: 5 },
+];
 
 function HouseholdReportAnalytics() {
   return (
@@ -13,10 +20,13 @@ function HouseholdReportAnalytics() {
 
         <div className="household-report-actions">
           <button type="button" className="report-print-btn">
-            <FiPrinter /> Print
+            <FiPrinter />
+            Print
           </button>
+
           <button type="button" className="report-export-btn">
-            <FiDownload /> Export PDF
+            <FiDownload />
+            Export PDF
           </button>
         </div>
       </div>
@@ -25,21 +35,27 @@ function HouseholdReportAnalytics() {
         <StatCard title="Total Households" value="60" color="blue" />
         <StatCard title="Compliant" value="25" color="green" />
         <StatCard title="For Completion" value="10" color="orange" />
-        <StatCard title="At- Risk" value="20" color="red" />
+        <StatCard title="At-Risk" value="20" color="red" />
       </div>
 
       <div className="household-report-chart-grid">
         <section className="household-report-card">
           <h3>Households per Barangay</h3>
 
-          <div className="household-bar-chart">
-            {barangays.slice(0, 5).map((name) => (
-              <div className="household-bar-group" key={name}>
-                <div className="household-bars">
-                  <span className="compliant" />
-                  <span className="atrisk" />
+          <div className="hr-bar-chart">
+            {barangaysData.slice(0, 5).map((item) => (
+              <div className="hr-bar-group" key={item.name}>
+                <div className="hr-bars">
+                  <span
+                    className="compliant"
+                    style={{ height: `${item.toilet * 18}px` }}
+                  />
+                  <span
+                    className="atrisk"
+                    style={{ height: `${(item.hss - item.toilet) * 18}px` }}
+                  />
                 </div>
-                <small>{name}</small>
+                <small>{item.name}</small>
               </div>
             ))}
           </div>
@@ -100,24 +116,47 @@ function HouseholdReportAnalytics() {
           </thead>
 
           <tbody>
-            {barangays.map((name) => (
-              <tr key={name}>
-                <td>{name}</td>
-                <td>12</td>
-                <td>
-                  <Progress color="green" value="6 (50%)" />
-                </td>
-                <td>
-                  <Progress color="orange" value="4 (33%)" />
-                </td>
-                <td>
-                  <Progress color="red" value="6 (50%)" />
-                </td>
-                <td>
-                  <span className="risk-flag">ⓘ 3 no toilet</span>
-                </td>
-              </tr>
-            ))}
+            {barangaysData.map((item) => {
+              const toiletPercent = Math.round((item.toilet / item.hss) * 100);
+              const waterPercent = Math.round((item.water / item.hss) * 100);
+              const wastePercent = Math.round((item.waste / item.hss) * 100);
+              const noToilet = item.hss - item.toilet;
+
+              return (
+                <tr key={item.name}>
+                  <td>{item.name}</td>
+                  <td>{item.hss}</td>
+
+                  <td>
+                    <Progress
+                      color="green"
+                      percent={toiletPercent}
+                      value={`${item.toilet} (${toiletPercent}%)`}
+                    />
+                  </td>
+
+                  <td>
+                    <Progress
+                      color="orange"
+                      percent={waterPercent}
+                      value={`${item.water} (${waterPercent}%)`}
+                    />
+                  </td>
+
+                  <td>
+                    <Progress
+                      color="red"
+                      percent={wastePercent}
+                      value={`${item.waste} (${wastePercent}%)`}
+                    />
+                  </td>
+
+                  <td>
+                    <span className="risk-flag">ⓘ {noToilet} no toilet</span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>
@@ -132,16 +171,17 @@ function StatCard({ title, value, color }) {
         <p>{title}</p>
         <h2>{value}</h2>
       </div>
+
       <FiFileText className={color} />
     </div>
   );
 }
 
-function Progress({ color, value }) {
+function Progress({ color, value, percent }) {
   return (
     <div className="infra-progress-wrap">
       <div className="infra-progress">
-        <span className={color} />
+        <span className={color} style={{ width: `${percent}%` }} />
       </div>
       <strong>{value}</strong>
     </div>

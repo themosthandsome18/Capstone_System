@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FiBell,
   FiCalendar,
@@ -131,40 +131,80 @@ const inspectionRows = [
 ];
 
 const calendarCells = [
-  { day: "20" },
-  { day: "21", title: "Golden Egg Poultry", status: "violation" },
-  { day: "22" },
-  { day: "23", title: "Crystal Springs Water", status: "good" },
-  { day: "24" },
-  { day: "25", title: "Lola Nena’s Eatery", title2: "Manong Pedro’s Carinderia", status: "upcoming" },
-  { day: "26" },
-  { day: "27" },
-  { day: "28" },
-  { day: "29", title: "Shell Junction", status: "upcoming" },
-  { day: "30" },
-  { day: "1" },
-  { day: "2" },
-  { day: "3" },
-  { day: "4" },
-  { day: "5" },
-  { day: "6", title: "Petron Highway", status: "good" },
-  { day: "7" },
-  { day: "8" },
-  { day: "9" },
-  { day: "10" },
-  { day: "11", title: "Happy Hen Farm", status: "completion" },
-  { day: "12" },
-  { day: "13" },
-  { day: "14" },
-  { day: "15" },
-  { day: "16", title: "Style Cuts Salon", status: "good" },
-  { day: "17" },
+  { day: "20", events: [] },
+  {
+    day: "21",
+    events: [{ title: "Golden Egg Poultry", status: "violation" }],
+  },
+  { day: "22", events: [] },
+  {
+    day: "23",
+    events: [{ title: "Crystal Springs Water", status: "good" }],
+  },
+  { day: "24", events: [] },
+  { day: "25", events: [] },
+  {
+    day: "26",
+    events: [
+      { title: "Lola Nena’s Eatery", status: "upcoming" },
+      { title: "Manong Pedro’s Carinderia", status: "good" },
+    ],
+  },
+  { day: "27", events: [] },
+  { day: "28", events: [] },
+  {
+    day: "29",
+    events: [{ title: "Shell Junction", status: "upcoming" }],
+  },
+  { day: "30", events: [] },
+  { day: "1", events: [] },
+  { day: "2", events: [] },
+  { day: "3", events: [] },
+  { day: "4", events: [] },
+  { day: "5", events: [] },
+  {
+    day: "6",
+    events: [{ title: "Petron Highway", status: "good" }],
+  },
+  { day: "7", events: [] },
+  { day: "8", events: [] },
+  { day: "9", events: [] },
+  { day: "10", events: [] },
+  {
+    day: "11",
+    events: [{ title: "Happy Hen Farm", status: "completion" }],
+  },
+  { day: "12", events: [] },
+  { day: "13", events: [] },
+  { day: "14", events: [] },
+  { day: "15", events: [] },
+  {
+    day: "16",
+    events: [{ title: "Style Cuts Salon", status: "good" }],
+  },
+  { day: "17", events: [] },
 ];
 
 function InspectionManagement() {
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState(inspectionRows[0]);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredRows = useMemo(() => {
+    const keyword = searchTerm.toLowerCase().trim();
+
+    if (!keyword) return inspectionRows;
+
+    return inspectionRows.filter((row) => {
+      return (
+        row.name.toLowerCase().includes(keyword) ||
+        row.address.toLowerCase().includes(keyword) ||
+        row.type.toLowerCase().includes(keyword) ||
+        row.status.toLowerCase().includes(keyword)
+      );
+    });
+  }, [searchTerm]);
 
   function openForm(row) {
     setSelectedInspection(row);
@@ -198,6 +238,7 @@ function InspectionManagement() {
           >
             List View
           </button>
+
           <button
             type="button"
             className={view === "calendar" ? "active" : ""}
@@ -217,64 +258,98 @@ function InspectionManagement() {
 
       {view === "list" ? (
         <section className="inspection-table-card">
-          <div className="inspection-search">
-            <FiSearch />
-            <input type="text" placeholder="Search records..." />
+          <div className="inspection-table-tools">
+            <div className="inspection-search">
+              <FiSearch />
+              <input
+                type="text"
+                placeholder="Search records..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </div>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Establishment</th>
-                <th>Type</th>
-                <th>Last Inspection</th>
-                <th>Next Due</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {inspectionRows.map((row) => (
-                <tr key={row.name}>
-                  <td>
-                    <strong>{row.name}</strong>
-                    <small>{row.address}</small>
-                  </td>
-                  <td>{row.type}</td>
-                  <td>{row.last}</td>
-                  <td>
-                    <strong>{row.next}</strong>
-                    <small className={row.due.includes("overdue") ? "overdue" : ""}>
-                      {row.due}
-                    </small>
-                  </td>
-                  <td>
-                    <span className={`inspection-status ${statusClass(row.status)}`}>
-                      ● {row.status}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="conduct-btn"
-                      onClick={() => openForm(row)}
-                    >
-                      <FiClipboard />
-                      Conduct
-                    </button>
-                  </td>
+          <div className="inspection-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Establishment</th>
+                  <th>Type</th>
+                  <th>Last Inspection</th>
+                  <th>Next Due</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr key={row.name}>
+                    <td>
+                      <strong>{row.name}</strong>
+                      <small>{row.address}</small>
+                    </td>
+
+                    <td>{row.type}</td>
+
+                    <td>{row.last}</td>
+
+                    <td>
+                      <strong>{row.next}</strong>
+                      <small
+                        className={
+                          row.due.includes("overdue") ? "overdue" : ""
+                        }
+                      >
+                        {row.due}
+                      </small>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`inspection-status ${statusClass(
+                          row.status
+                        )}`}
+                      >
+                        ● {row.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="conduct-btn"
+                        onClick={() => openForm(row)}
+                      >
+                        <FiClipboard />
+                        Conduct
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {filteredRows.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="inspection-empty">
+                      No inspection records found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <div className="inspection-pagination">
-            <p>Showing 13 of 150</p>
+            <p>
+              Showing {filteredRows.length} of {inspectionRows.length}
+            </p>
+
             <div>
               <button type="button">
                 <FiChevronLeft />
               </button>
+
               <button type="button">
                 <FiChevronRight />
               </button>
@@ -296,10 +371,17 @@ function InspectionManagement() {
 
           <div className="inspection-calendar-grid">
             {calendarCells.map((cell, index) => (
-              <div key={`${cell.day}-${index}`} className={`calendar-cell ${cell.status || ""}`}>
+              <div key={`${cell.day}-${index}`} className="calendar-cell">
                 <span>{cell.day}</span>
-                {cell.title && <strong>{cell.title}</strong>}
-                {cell.title2 && <b>{cell.title2}</b>}
+
+                {cell.events.map((event, eventIndex) => (
+                  <div
+                    key={`${event.title}-${eventIndex}`}
+                    className={`calendar-event ${event.status}`}
+                  >
+                    {event.title}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -317,6 +399,23 @@ function InspectionManagement() {
 }
 
 function InspectionFormModal({ inspection, onClose }) {
+  const [checks, setChecks] = useState({
+    healthCard: true,
+    sanitaryPermit: false,
+    cleanliness: true,
+  });
+
+  const completedCount = Object.values(checks).filter(Boolean).length;
+  const totalCount = Object.values(checks).length;
+  const percentage = Math.round((completedCount / totalCount) * 100);
+
+  function handleCheck(name) {
+    setChecks((current) => ({
+      ...current,
+      [name]: !current[name],
+    }));
+  }
+
   return (
     <div className="inspection-modal-backdrop">
       <div className="inspection-modal">
@@ -328,7 +427,9 @@ function InspectionFormModal({ inspection, onClose }) {
           <h2>
             Inspection Form : <strong>{inspection.name}</strong>
           </h2>
-          <p>Public Market Stall • SP • Monthly Inspection Cycle</p>
+          <p>
+            {inspection.type} • {inspection.address}
+          </p>
         </div>
 
         <div className="inspection-form-grid">
@@ -349,21 +450,35 @@ function InspectionFormModal({ inspection, onClose }) {
         <div className="inspection-checklist-box">
           <div className="inspection-checklist-title">
             <h3>Requirements Checklist</h3>
-            <span>67% complete</span>
+            <span>{percentage}% complete</span>
           </div>
 
-          <label className="check-row checked">
-            <input type="checkbox" defaultChecked />
-            <span>Helath Card</span>
+          <label className={`check-row ${checks.healthCard ? "checked" : ""}`}>
+            <input
+              type="checkbox"
+              checked={checks.healthCard}
+              onChange={() => handleCheck("healthCard")}
+            />
+            <span>Health Card</span>
           </label>
 
-          <label className="check-row">
-            <input type="checkbox" />
+          <label
+            className={`check-row ${checks.sanitaryPermit ? "checked" : ""}`}
+          >
+            <input
+              type="checkbox"
+              checked={checks.sanitaryPermit}
+              onChange={() => handleCheck("sanitaryPermit")}
+            />
             <span>Sanitary Permit</span>
           </label>
 
-          <label className="check-row checked">
-            <input type="checkbox" defaultChecked />
+          <label className={`check-row ${checks.cleanliness ? "checked" : ""}`}>
+            <input
+              type="checkbox"
+              checked={checks.cleanliness}
+              onChange={() => handleCheck("cleanliness")}
+            />
             <span>Stall Cleanliness Inspection</span>
           </label>
         </div>
@@ -391,6 +506,7 @@ function InspectionFormModal({ inspection, onClose }) {
           <button type="button" className="draft-btn">
             Save Draft
           </button>
+
           <button type="button" className="submit-inspection-btn">
             Submit Inspection
           </button>

@@ -7,7 +7,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { FiDownload, FiPrinter } from "react-icons/fi";
-import { useTourismData } from "../../tourism/context/TourismDataContext";
+import { useTourismData } from "../context/TourismDataContext";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiLayers, FiMapPin, FiStar } from "react-icons/fi";
+import { FiLayers, FiStar } from "react-icons/fi";
 import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
 import { useTourismData } from "../context/TourismDataContext";
 

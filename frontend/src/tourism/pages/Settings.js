@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useTourismData } from "../../context/TourismDataContext";
+import { useTourismData } from "../context/TourismDataContext";
 
 function Settings() {
   const { settings, updateSettings } = useTourismData();

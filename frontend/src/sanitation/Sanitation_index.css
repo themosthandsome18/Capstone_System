@@ -1149,8 +1149,10 @@
   color: #444;
 }
 
+/* ===================== ALERT ===================== */
+
 .inspection-alert {
-  min-height: 78px;
+  min-height: 70px;
   border: 1px solid #ffc933;
   border-radius: 10px;
   background: linear-gradient(90deg, #fff8da, #ffe9db);
@@ -1162,20 +1164,20 @@
 }
 
 .inspection-alert svg {
-  font-size: 25px;
+  font-size: 24px;
   color: #ff9f00;
 }
 
 .inspection-alert h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
   color: #111;
 }
 
 .inspection-alert p {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #555;
 }
 
@@ -1188,6 +1190,8 @@
   color: #f04438;
 }
 
+/* ===================== VIEW TOGGLE ===================== */
+
 .inspection-view-row {
   display: flex;
   align-items: center;
@@ -1195,21 +1199,21 @@
 }
 
 .inspection-view-toggle {
-  height: 48px;
+  height: 44px;
   border: 1px solid #999;
   border-radius: 7px;
   background: #e5e7e9;
   padding: 5px;
   display: flex;
-  box-shadow: 0 4px 7px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 7px rgba(0, 0, 0, 0.22);
 }
 
 .inspection-view-toggle button {
   border: 0;
   background: transparent;
   border-radius: 6px;
-  padding: 0 22px;
-  font-size: 14px;
+  padding: 0 20px;
+  font-size: 13px;
   color: #444;
   cursor: pointer;
 }
@@ -1224,6 +1228,7 @@
   display: flex;
   gap: 14px;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .inspection-legend .good {
@@ -1242,7 +1247,7 @@
   color: #ef2222;
 }
 
-/* TABLE */
+/* ===================== TABLE CARD ===================== */
 
 .inspection-table-card {
   background: white;
@@ -1250,6 +1255,11 @@
   border-radius: 12px;
   padding: 18px 28px 0;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.inspection-table-tools {
+  margin-bottom: 18px;
 }
 
 .inspection-search {
@@ -1262,7 +1272,6 @@
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  margin-bottom: 26px;
   color: #6b7280;
 }
 
@@ -1270,41 +1279,91 @@
   width: 100%;
   border: 0;
   background: transparent;
-  outline: 0;
+  outline: none;
   font-size: 12px;
+}
+
+.inspection-table-wrap {
+  width: 100%;
+  overflow: hidden;
 }
 
 .inspection-table-card table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  table-layout: fixed;
+  font-size: 12px;
 }
 
 .inspection-table-card th {
-  padding: 0 8px 10px;
+  padding: 0 8px 9px;
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-  color: #666;
+  color: #555;
   border-bottom: 2px solid #d6d6d6;
 }
 
 .inspection-table-card td {
-  padding: 7px 8px;
+  padding: 5px 8px;
+  height: 31px;
   border-bottom: 1px solid #cfcfcf;
-  color: #666;
+  color: #555;
+  vertical-align: middle;
+}
+
+/* column sizing like Figma */
+
+.inspection-table-card th:nth-child(1),
+.inspection-table-card td:nth-child(1) {
+  width: 19%;
+}
+
+.inspection-table-card th:nth-child(2),
+.inspection-table-card td:nth-child(2) {
+  width: 23%;
+}
+
+.inspection-table-card th:nth-child(3),
+.inspection-table-card td:nth-child(3) {
+  width: 16%;
+}
+
+.inspection-table-card th:nth-child(4),
+.inspection-table-card td:nth-child(4) {
+  width: 15%;
+}
+
+.inspection-table-card th:nth-child(5),
+.inspection-table-card td:nth-child(5) {
+  width: 17%;
+  text-align: center;
+}
+
+.inspection-table-card th:nth-child(6),
+.inspection-table-card td:nth-child(6) {
+  width: 10%;
+  text-align: center;
+}
+
+.inspection-table-card tbody tr:hover {
+  background: #f4faf6;
 }
 
 .inspection-table-card td strong {
   display: block;
   color: #111;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.05;
 }
 
 .inspection-table-card td small {
   display: block;
-  font-size: 9px;
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.05;
   color: #777;
 }
 
@@ -1313,15 +1372,19 @@
   font-weight: 800;
 }
 
+/* ===================== STATUS PILLS ===================== */
+
 .inspection-status {
   display: inline-flex;
   align-items: center;
-  min-width: 112px;
-  height: 22px;
+  justify-content: center;
+  height: 18px;
   border-radius: 999px;
-  padding: 0 10px;
-  font-size: 11px;
+  padding: 0 9px;
+  font-size: 10px;
   font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .inspection-status.good-standing {
@@ -1344,22 +1407,36 @@
   color: #ff8b2b;
 }
 
+/* ===================== BUTTON ===================== */
+
 .conduct-btn {
-  height: 27px;
+  height: 24px;
   border: 1px solid #9ca3af;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #f7faf8;
-  padding: 0 11px;
+  padding: 0 9px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
 }
 
+.conduct-btn svg {
+  font-size: 12px;
+}
+
+.conduct-btn:hover {
+  background: #e7f3ec;
+  border-color: #0c5c3b;
+  color: #0c5c3b;
+}
+
+/* ===================== PAGINATION ===================== */
+
 .inspection-pagination {
-  height: 72px;
+  height: 64px;
   margin: 0 -28px;
   padding: 0 28px;
   border-top: 1px solid #cfcfcf;
@@ -1370,7 +1447,8 @@
 
 .inspection-pagination p {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
+  color: #111;
 }
 
 .inspection-pagination div {
@@ -1383,9 +1461,10 @@
   background: transparent;
   font-size: 18px;
   cursor: pointer;
+  color: #111;
 }
 
-/* CALENDAR */
+/* ===================== CALENDAR ===================== */
 
 .inspection-calendar-card {
   background: white;
@@ -1407,12 +1486,13 @@
 .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  gap: 16px;
   margin-bottom: 10px;
 }
 
 .calendar-weekdays span {
   text-align: center;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #666;
 }
@@ -1420,57 +1500,57 @@
 .inspection-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 
 .calendar-cell {
   height: 98px;
   border: 1px solid #b8b8b8;
   background: white;
-  padding: 8px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
 }
 
 .calendar-cell span {
-  display: block;
   font-size: 14px;
   color: #555;
 }
 
-.calendar-cell strong {
-  display: block;
-  margin-top: 22px;
-  font-size: 12px;
+.calendar-event {
+  font-size: 10px;
   font-weight: 800;
+  padding: 3px 5px;
+  border-radius: 3px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.calendar-cell b {
-  display: block;
-  margin-top: 22px;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.calendar-cell.good {
+.calendar-event.good {
   background: #d5e4dc;
   color: #0f6b3f;
 }
 
-.calendar-cell.upcoming {
+.calendar-event.upcoming {
   background: #fff6ca;
   color: #e5b900;
 }
 
-.calendar-cell.completion {
+.calendar-event.completion {
   background: #ffe4ca;
   color: #ff8b2b;
 }
 
-.calendar-cell.violation {
+.calendar-event.violation {
   background: #ffcaca;
   color: #ef2222;
 }
 
-/* MODAL */
+/* ===================== MODAL ===================== */
 
 .inspection-modal-backdrop {
   position: fixed;
@@ -1480,14 +1560,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
 }
 
 .inspection-modal {
   position: relative;
   width: 950px;
+  max-width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
   border-radius: 8px;
   background: white;
-  padding: 12px 32px 24px;
+  padding: 24px 32px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
@@ -1540,30 +1624,44 @@
 }
 
 .inspection-form-grid input,
-.date-input,
 .inspection-textarea textarea {
   width: 100%;
   border: 1px solid #333;
   border-radius: 8px;
   background: white;
+  box-sizing: border-box;
 }
 
-.inspection-form-grid input,
-.date-input {
+.inspection-form-grid input {
   height: 50px;
   padding: 0 22px;
   font-size: 15px;
 }
 
 .date-input {
+  width: 100%;
+  height: 50px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: white;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
+  padding: 0 18px;
 }
 
 .date-input input {
+  flex: 1;
+  width: auto;
+  height: auto;
   border: 0;
   padding: 0;
   outline: none;
+  font-size: 15px;
+}
+
+.date-input svg {
+  flex-shrink: 0;
 }
 
 .inspection-checklist-box {
@@ -1616,6 +1714,7 @@
   padding: 18px 22px;
   resize: none;
   font-size: 15px;
+  outline: none;
 }
 
 .photo-upload-title {
@@ -1640,7 +1739,7 @@
 
 .inspection-warning {
   margin-top: 22px;
-  height: 52px;
+  min-height: 52px;
   border: 1px solid #ffc933;
   border-radius: 8px;
   background: linear-gradient(90deg, #fff8da, #ffe9db);
@@ -1653,10 +1752,11 @@
 
 .inspection-warning strong {
   color: #ff8b2b;
+  margin: 0 4px;
 }
 
 .inspection-form-actions {
-  margin-top: 44px;
+  margin-top: 38px;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -1688,7 +1788,7 @@
 .permit-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 22px;
   padding: 22px;
 }
 
@@ -1705,12 +1805,12 @@
   color: #444;
 }
 
-/* ================= PERMIT STATUS CARDS ================= */
+/* ===================== PERMIT STATUS CARDS ===================== */
 
 .permit-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 28px;
+  gap: 24px;
 }
 
 .permit-stat-card {
@@ -1742,6 +1842,7 @@
 
 .permit-stat-icon {
   font-size: 25px;
+  line-height: 1;
 }
 
 .permit-stat-icon.green {
@@ -1760,12 +1861,12 @@
   color: #ff3b30;
 }
 
-/* ================= PERMIT ALERTS ================= */
+/* ===================== PERMIT ALERTS ===================== */
 
 .permit-alert-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
 }
 
 .permit-alert-card {
@@ -1785,6 +1886,7 @@
   margin-top: 4px;
   color: #ff2e2e;
   font-size: 17px;
+  flex-shrink: 0;
 }
 
 .permit-alert-card h3 {
@@ -1805,20 +1907,22 @@
   color: #ff2e2e;
 }
 
-/* ================= PERMIT TABLE ================= */
+/* ===================== PERMIT TABLE ===================== */
 
 .permit-table-card {
   border: 1px solid #aeb7b1;
   border-radius: 10px;
   background: #ffffff;
-  padding: 26px 28px 28px;
+  padding: 24px 28px 28px;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
 }
 
 .permit-table-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 18px;
   margin-bottom: 26px;
 }
 
@@ -1838,6 +1942,7 @@
 .permit-tools {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .permit-search {
@@ -1857,23 +1962,30 @@
   width: 100%;
   border: 0;
   background: transparent;
-  outline: 0;
+  outline: none;
   font-size: 11px;
 }
 
 .permit-tools select {
+  width: 86px;
   height: 24px;
   border: 1px solid #b9c3bd;
   border-radius: 5px;
   background: #f3f6f5;
-  padding: 0 12px;
+  padding: 0 8px;
   font-size: 11px;
   color: #555;
+}
+
+.permit-table-wrap {
+  width: 100%;
+  overflow: hidden;
 }
 
 .permit-table-card table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 13px;
 }
 
@@ -1889,35 +2001,70 @@
 }
 
 .permit-table-card td {
-  padding: 13px 12px;
+  padding: 12px;
   border-bottom: 1px solid #d6d6d6;
   color: #666;
+  vertical-align: middle;
+}
+
+.permit-table-card th:nth-child(1),
+.permit-table-card td:nth-child(1) {
+  width: 24%;
+}
+
+.permit-table-card th:nth-child(2),
+.permit-table-card td:nth-child(2) {
+  width: 26%;
+}
+
+.permit-table-card th:nth-child(3),
+.permit-table-card td:nth-child(3) {
+  width: 18%;
+}
+
+.permit-table-card th:nth-child(4),
+.permit-table-card td:nth-child(4) {
+  width: 19%;
+}
+
+.permit-table-card th:nth-child(5),
+.permit-table-card td:nth-child(5) {
+  width: 13%;
+}
+
+.permit-table-card tbody tr:hover {
+  background: #f4faf6;
 }
 
 .permit-table-card td strong {
   display: block;
   font-size: 13px;
   font-weight: 800;
+  line-height: 1.1;
   color: #111;
 }
 
 .permit-table-card td small {
   display: block;
+  margin-top: 2px;
   font-size: 11px;
+  line-height: 1.1;
   color: #777;
 }
 
-/* ================= PERMIT BADGES ================= */
+/* ===================== PERMIT BADGES ===================== */
 
 .permit-status,
 .permit-compliance {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 22px;
   border-radius: 999px;
   padding: 0 11px;
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .permit-status.active,
@@ -1943,6 +2090,49 @@
   background: #ffe2c8;
   color: #ff8b2b;
 }
+
+.permit-empty {
+  height: 80px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
+
+/* ===================== RESPONSIVE ===================== */
+
+@media (max-width: 1100px) {
+  .permit-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .permit-table-top {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 760px) {
+  .permit-alert-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permit-tools {
+    width: 100%;
+  }
+
+  .permit-search {
+    width: 100%;
+  }
+
+  .permit-table-wrap {
+    overflow-x: auto;
+  }
+
+  .permit-table-card table {
+    min-width: 780px;
+  }
+}
+
+
 /* ================================================================ SANITARY SUBMISSION TRACKING ================================================ */
 
 .submission-page {
@@ -1956,6 +2146,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 20px;
 }
 
 .submission-header h1 {
@@ -1976,8 +2167,8 @@
   gap: 14px;
 }
 
-.submission-print-btn,
-.submission-report-btn {
+.btn-light,
+.btn-primary {
   height: 42px;
   border-radius: 9px;
   padding: 0 18px;
@@ -1989,32 +2180,30 @@
   cursor: pointer;
 }
 
-.submission-print-btn {
+.btn-light {
   border: 1px solid #9ca3af;
   background: #f7faf8;
   color: #111;
 }
 
-.submission-report-btn {
+.btn-primary {
   border: 0;
   background: #0c5c3b;
   color: white;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
 }
 
-/* ================= SUBMISSION STATUS CARDS ================= */
-
-.submission-stat-grid {
+.submission-kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 18px;
 }
 
-.submission-stat-card {
+.kpi-card {
   height: 74px;
   border: 1px solid #aeb7b1;
   border-radius: 10px;
-  background: white;
+  background: #fff;
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -2022,9 +2211,14 @@
   text-align: left;
   cursor: pointer;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  transition: all 0.2s ease;
 }
 
-.submission-stat-card p {
+.kpi-card:hover {
+  transform: translateY(-2px);
+}
+
+.kpi-card p {
   margin: 0;
   font-size: 12px;
   font-weight: 800;
@@ -2032,92 +2226,95 @@
   color: #777;
 }
 
-.submission-stat-card h2 {
+.kpi-card h2 {
   margin: 8px 0 0;
   font-size: 22px;
   font-weight: 800;
   color: #111;
 }
 
-.submission-stat-card svg {
+.kpi-card svg {
   font-size: 22px;
 }
 
-.submission-stat-card.blue svg {
+.kpi-card.blue svg {
   color: #38bdf8;
 }
 
-.submission-stat-card.green svg {
+.kpi-card.green svg {
   color: #22c55e;
 }
 
-.submission-stat-card.orange svg {
+.kpi-card.orange svg {
   color: #f59e0b;
 }
 
-.submission-stat-card.yellow svg {
+.kpi-card.yellow svg {
   color: #fbbf24;
 }
 
-.submission-stat-card.red svg {
+.kpi-card.red svg {
   color: #ef4444;
 }
 
-.submission-stat-card.active.green {
-  border: 2px solid #00b82f;
-}
-
-.submission-stat-card.active.orange {
-  border: 2px solid #ff8b2b;
-}
-
-.submission-stat-card.active.yellow {
-  border: 2px solid #e5b900;
-}
-
-.submission-stat-card.active.red {
-  border: 2px solid #ff2e2e;
-}
-
-.submission-stat-card.active.blue {
+.kpi-card.active.blue {
   border: 2px solid #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
 }
 
-/* ================= SUBMISSION TABLE ================= */
+.kpi-card.active.green {
+  border: 2px solid #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.kpi-card.active.orange {
+  border: 2px solid #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+
+.kpi-card.active.yellow {
+  border: 2px solid #eab308;
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.25);
+}
+
+.kpi-card.active.red {
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
 
 .submission-table-card {
   border: 1px solid #aeb7b1;
   border-radius: 10px;
-  background: #ffffff;
+  background: #fff;
   padding: 22px 28px 0;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
 }
 
-.submission-table-top {
+.table-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 26px;
 }
 
-.submission-table-top h2 {
+.table-top h3 {
   margin: 0;
   font-size: 14px;
   font-weight: 800;
   color: #111;
 }
 
-.submission-table-top h2 span {
+.table-top h3 span {
   font-weight: 500;
   color: #777;
 }
 
-.submission-tools {
+.table-tools {
   display: flex;
   gap: 8px;
 }
 
-.submission-search {
+.search-box {
   width: 250px;
   height: 24px;
   border: 1px solid #b9c3bd;
@@ -2130,15 +2327,15 @@
   color: #6b7280;
 }
 
-.submission-search input {
+.search-box input {
   width: 100%;
   border: 0;
   background: transparent;
-  outline: 0;
+  outline: none;
   font-size: 11px;
 }
 
-.submission-tools select {
+.table-tools select {
   height: 24px;
   border: 1px solid #b9c3bd;
   border-radius: 5px;
@@ -2151,6 +2348,7 @@
 .submission-table-card table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 14px;
 }
 
@@ -2170,12 +2368,37 @@
   color: #666;
 }
 
+.submission-table-card th:nth-child(1),
+.submission-table-card td:nth-child(1) {
+  width: 12%;
+}
+
+.submission-table-card th:nth-child(2),
+.submission-table-card td:nth-child(2) {
+  width: 31%;
+}
+
+.submission-table-card th:nth-child(3),
+.submission-table-card td:nth-child(3) {
+  width: 24%;
+}
+
+.submission-table-card th:nth-child(4),
+.submission-table-card td:nth-child(4) {
+  width: 22%;
+}
+
+.submission-table-card th:nth-child(5),
+.submission-table-card td:nth-child(5) {
+  width: 11%;
+}
+
 .submission-table-card td strong {
   color: #111;
   font-weight: 800;
 }
 
-.submission-status {
+.status {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -2183,26 +2406,34 @@
   padding: 0 11px;
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.submission-status.good-standing {
+.status.good-standing {
   background: #cce9dc;
   color: #0f6b3f;
 }
 
-.submission-status.violation {
+.status.violation {
   background: #ffd5d5;
   color: #ff2e2e;
 }
 
-.submission-status.upcoming {
+.status.upcoming {
   background: #fff0bd;
   color: #e5a700;
 }
 
-.submission-status.for-completion {
+.status.for-completion {
   background: #ffe2c8;
   color: #ff8b2b;
+}
+
+.submission-empty {
+  height: 80px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
 }
 
 /* ========================================================= SANITARY REPORT & ANALYTICS =================================================== */
@@ -2264,7 +2495,7 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
 }
 
-/* ================= TOP STATUS CARDS ================= */
+/* TOP CARDS */
 
 .sanitary-report-stat-grid {
   display: grid;
@@ -2323,7 +2554,7 @@
   color: #ef4444;
 }
 
-/* ================= CHART CARDS ================= */
+/* CHART AREA */
 
 .sanitary-report-chart-grid {
   display: grid;
@@ -2347,7 +2578,7 @@
   color: #111;
 }
 
-/* ================= MOCK BAR CHART ================= */
+/* BAR CHART */
 
 .bar-chart-mock {
   height: 230px;
@@ -2400,35 +2631,7 @@
   text-align: center;
 }
 
-/* ================= CHART LEGEND ================= */
-
-.chart-legend {
-  margin-top: 14px;
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.chart-legend .total,
-.chart-legend .large {
-  color: #1f7655;
-}
-
-.chart-legend .violator {
-  color: #ef2222;
-}
-
-.chart-legend .small {
-  color: #36a87a;
-}
-
-.chart-legend.center {
-  justify-content: center;
-}
-
-/* ================= MOCK PIE CHART ================= */
+/* PIE CHART */
 
 .permit-pie-mock {
   position: relative;
@@ -2472,7 +2675,35 @@
   color: #1f7655;
 }
 
-/* ================= SUMMARY REPORT ================= */
+/* LEGEND */
+
+.chart-legend {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-legend .total,
+.chart-legend .large {
+  color: #1f7655;
+}
+
+.chart-legend .violator {
+  color: #ef2222;
+}
+
+.chart-legend .small {
+  color: #36a87a;
+}
+
+.chart-legend.center {
+  justify-content: center;
+}
+
+/* SUMMARY REPORT */
 
 .summary-report-card {
   border: 1px solid #aeb7b1;
@@ -2513,30 +2744,32 @@
 }
 
 .compliance-rate-box {
-  width: 170px;
-  height: 88px;
-  border: 1px solid #aeb7b1;
-  border-radius: 10px;
+  width: 150px;
+  height: 82px;
+  border: 1px solid #bfc6c1;
+  border-radius: 9px;
   background: #f6faf8;
+  padding: 12px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 .compliance-rate-box p {
   margin: 0;
-  text-transform: uppercase;
-  font-size: 16px;
+  text-transform: flex-end;
+  font-size: 15px;
   font-weight: 800;
   color: #777;
 }
 
 .compliance-rate-box h2 {
-  margin: 8px 0 0;
-  font-size: 30px;
+  margin: 0;
+  align-self: flex-end;
+  font-size: 28px;
   font-weight: 800;
   color: #1f7655;
+  line-height: 2;
 }
 
 .summary-report-body {
@@ -2580,11 +2813,11 @@
 }
 
 .mini-summary-card {
-  height: 135px;
+  height: 125px;
   border: 1px solid #bfc6c1;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #f6faf8;
-  padding: 16px;
+  padding: 12px;
 }
 
 .mini-summary-card p {
@@ -2592,15 +2825,35 @@
   display: flex;
   justify-content: space-between;
   color: #777;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
+.mini-summary-card p svg {
+  font-size: 16px;
+}
+
+.mini-summary-card.green p svg {
+  color: #22c55e;
+}
+
+.mini-summary-card.yellow p svg {
+  color: #facc15;
+}
+
+.mini-summary-card.orange p svg {
+  color: #fb923c;
+}
+
+.mini-summary-card.red p svg {
+  color: #ef4444;
+}
+
 .mini-summary-card h2 {
-  margin: 40px 0 0;
+  margin: 48px 0 0;
   font-size: 34px;
   font-weight: 800;
-  color: #111;
+  color: #000;
 }
 
 .generated-brief-box {
@@ -2643,22 +2896,28 @@
 }
 
 .brief-mini-grid div {
-  height: 90px;
+  height: 82px;
   border: 1px solid #bfc6c1;
-  border-radius: 10px;
+  border-radius: 9px;
   background: white;
-  padding: 14px;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .brief-mini-grid p {
+  margin: 0;
   font-size: 12px;
   font-weight: 800;
   color: #777;
+  line-height: 1.2;
 }
 
 .brief-mini-grid h2 {
-  margin: 22px 0 0;
-  font-size: 28px;
+  margin: auto 0 0;
+  font-size: 24px;
+  line-height: 1;
   font-weight: 800;
   color: #f59e0b;
 }
@@ -2685,12 +2944,12 @@
   color: #555;
 }
 
-/* ================= HOUSEHOLD TOP CARDS ================= */
+/* TOP CARDS */
 
 .household-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 28px;
+  gap: 15px;
 }
 
 .household-stat-card {
@@ -2698,9 +2957,10 @@
   border: 1px solid #aeb7b1;
   border-radius: 10px;
   background: #fff;
-  padding: 12px 16px;
+  padding: 10px 16px;
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
 }
@@ -2708,27 +2968,34 @@
 .household-stat-card p {
   margin: 0;
   font-size: 12px;
+  line-height: 1.1;
   font-weight: 800;
   text-transform: uppercase;
   color: #777;
 }
 
 .household-stat-card h2 {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
   font-size: 22px;
+  line-height: 1;
   font-weight: 800;
   color: #111;
 }
 
 .household-stat-card span {
   display: block;
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: .5;
   color: #777;
 }
 
 .household-stat-icon {
-  font-size: 25px;
+  margin-top: 2px;
+  font-size: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .household-stat-icon.green {
@@ -2747,7 +3014,7 @@
   color: #ef4444;
 }
 
-/* ================= HOUSEHOLD CHARTS ================= */
+/* CHART GRID */
 
 .household-chart-grid {
   display: grid;
@@ -2756,11 +3023,13 @@
 }
 
 .household-chart-card {
-  min-height: 255px;
+  height: 330px;
   border: 1px solid #aeb7b1;
   border-radius: 10px;
   background: white;
   padding: 18px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .household-chart-title {
@@ -2783,14 +3052,17 @@
   color: #666;
 }
 
+/* RISK CHART */
+
 .risk-badge {
-  width: 110px;
-  height: 55px;
+  width: 120px;
+  height: 58px;
   border-radius: 12px;
   background: #ffd4d4;
   color: #ef4444;
   text-align: center;
   padding: 7px;
+  box-sizing: border-box;
 }
 
 .risk-badge span {
@@ -2801,17 +3073,18 @@
 
 .risk-badge strong {
   display: block;
+  margin-top: 2px;
   font-size: 10px;
 }
 
 .risk-badge small {
+  display: block;
+  margin-top: 2px;
   font-size: 8px;
 }
 
-/* ================= HIGH RISK BAR ================= */
-
 .risk-bar-list {
-  margin-top: 15px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2824,28 +3097,27 @@
   gap: 10px;
 }
 
-.risk-row span {
+.risk-row > span {
   font-size: 11px;
   color: #666;
   text-align: right;
 }
 
-.risk-row div {
+.risk-track {
   height: 28px;
   background: #eef2f0;
-  position: relative;
 }
 
-.risk-row b {
+.risk-track b {
   display: block;
   height: 100%;
 }
 
-.risk-row b.red {
+.risk-track b.red {
   background: #ef2222;
 }
 
-.risk-row b.yellow {
+.risk-track b.yellow {
   background: #f7c318;
 }
 
@@ -2854,66 +3126,87 @@
   color: #111;
 }
 
-/* ================= MOCK BAR CHARTS ================= */
+/* BAR CHARTS */
 
-.toilet-bars {
-  height: 190px;
-  margin-top: 20px;
+.household-bar-chart {
+  position: relative;
+  height: 220px;
+  margin-top: 18px;
+  margin-left: 8px;
   border-left: 2px solid #c9d2cd;
   border-bottom: 2px solid #c9d2cd;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   align-items: end;
-  gap: 22px;
-  padding: 0 28px;
+  gap: 28px;
+  padding: 0 20px 0 34px;
+  box-sizing: border-box;
   background-image:
     linear-gradient(to right, #e5ece8 1px, transparent 1px),
     linear-gradient(to bottom, #e5ece8 1px, transparent 1px);
-  background-size: 100px 45px;
+  background-size: 120px 55px;
 }
 
-.toilet-bar-item {
+.household-bar-chart::before {
+  content: "4\A 3\A 2\A 1\A 0";
+  white-space: pre;
+  position: absolute;
+  left: -18px;
+  top: -6px;
+  height: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #777;
+  line-height: 1;
+}
+
+.household-bar-item {
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.bar-area {
+.household-bar-area {
   flex: 1;
+  width: 100%;
   display: flex;
   align-items: end;
+  justify-content: center;
 }
 
-.bar-area span {
+.household-bar-area span {
   display: block;
-  width: 58px;
+  width: 100px;
   border-radius: 4px 4px 0 0;
 }
 
-.bar-area .green {
+.household-bar-area .green {
   background: #22a851;
 }
 
-.bar-area .dark {
+.household-bar-area .dark {
   background: #1f7655;
 }
 
-.bar-area .yellow {
+.household-bar-area .yellow {
   background: #f7c318;
 }
 
-.bar-area .red {
+.household-bar-area .red {
   background: #ef2222;
 }
 
-.toilet-bar-item small {
+.household-bar-item small {
   margin-top: 8px;
   font-size: 10px;
   color: #666;
+  text-align: center;
 }
 
-/* ================= WATER DONUT ================= */
+/* WATER DONUT */
 
 .water-donut-wrap {
   height: 205px;
@@ -2924,17 +3217,24 @@
 }
 
 .water-donut {
-  width: 155px;
-  height: 155px;
+  width: 185px;
+  height: 185px;
   border-radius: 50%;
-  background: conic-gradient(#1f7655 0 33%, #f7c318 33% 66%, #27a56a 66% 100%);
+  background: conic-gradient(
+    #1f7655 0deg 118deg,
+    #ffffff 118deg 120deg,
+    #f7c318 120deg 238deg,
+    #ffffff 238deg 240deg,
+    #27a56a 240deg 358deg,
+    #ffffff 358deg 360deg
+  );
   position: relative;
 }
 
 .water-donut::after {
   content: "";
   position: absolute;
-  inset: 45px;
+  inset: 50px;
   background: white;
   border-radius: 50%;
 }
@@ -2942,31 +3242,31 @@
 .water-label {
   position: absolute;
   font-size: 18px;
+  font-weight: 800;
   color: #1f7655;
-  font-weight: 700;
 }
 
 .water-label.top {
-  top: 10px;
-  left: 60%;
+  top: 14px;
+  left: 65%;
 }
 
 .water-label.left {
-  top: 82px;
-  left: 30%;
+  top: 95px;
+  left: 28%;
 }
 
 .water-label.bottom {
-  bottom: 15px;
-  left: 60%;
-  color: #f7c318;
+  bottom: 20px;
+  left: 65%;
 }
 
 .household-legend {
+  margin-top: 25px;
   display: flex;
   justify-content: center;
   gap: 12px;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -2982,7 +3282,7 @@
   color: #1f7655;
 }
 
-/* ================= HOUSEHOLD TABLE ================= */
+/* TABLE */
 
 .household-table-card {
   border: 1px solid #aeb7b1;
@@ -3030,9 +3330,15 @@
   font-size: 11px;
 }
 
+.household-table-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
 .household-table-card table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
 }
 
@@ -3050,6 +3356,42 @@
   padding: 11px 10px;
   border-bottom: 1px solid #d6d6d6;
   color: #555;
+  vertical-align: middle;
+}
+
+.household-table-card th:nth-child(1),
+.household-table-card td:nth-child(1) {
+  width: 10%;
+}
+
+.household-table-card th:nth-child(2),
+.household-table-card td:nth-child(2) {
+  width: 22%;
+}
+
+.household-table-card th:nth-child(3),
+.household-table-card td:nth-child(3) {
+  width: 10%;
+}
+
+.household-table-card th:nth-child(4),
+.household-table-card td:nth-child(4) {
+  width: 15%;
+}
+
+.household-table-card th:nth-child(5),
+.household-table-card td:nth-child(5) {
+  width: 23%;
+}
+
+.household-table-card th:nth-child(6),
+.household-table-card td:nth-child(6) {
+  width: 17%;
+}
+
+.household-table-card th:nth-child(7),
+.household-table-card td:nth-child(7) {
+  width: 13%;
 }
 
 .household-table-card td strong {
@@ -3065,6 +3407,7 @@
   padding: 0 10px;
   font-size: 10px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .household-status.good-standing {
@@ -3101,74 +3444,253 @@
   cursor: pointer;
 }
 
-/* ////////////////////////////////////////////////////////////////HOUSEHOLDS GIS MAP/////////////////////////////////////////////////// */
+/* RESPONSIVE */
+
+@media (max-width: 1100px) {
+  .household-stat-grid,
+  .household-chart-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .household-table-wrap {
+    overflow-x: auto;
+  }
+
+  .household-table-card table {
+    min-width: 980px;
+  }
+}
+
+@media (max-width: 760px) {
+  .household-stat-grid,
+  .household-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .household-table-tools {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .household-right-tools {
+    width: 100%;
+  }
+
+  .household-search {
+    width: 100%;
+  }
+}
+
+/* //////////////////////////////////////////////////////////////// HOUSEHOLDS GIS MAP /////////////////////////////////////////////////// */
 
 .sanitary-gis-page {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
+  padding: 22px;
 }
 
 .sanitary-page-header h2 {
   margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111;
+}
+
+.sanitary-page-header p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #555;
 }
 
 .gis-toolbar {
+  min-height: 72px;
+  border: 1px solid #aeb7b1;
+  border-radius: 9px;
+  background: white;
+  padding: 0 16px;
   display: flex;
-  gap: 10px;
   align-items: center;
   justify-content: space-between;
 }
 
+.gis-left-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.gis-left-controls label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #777;
+}
+
 .gis-toolbar select {
-  padding: 6px 10px;
-  border-radius: 8px;
+  height: 38px;
+  min-width: 170px;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  background: #edf5f1;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #666;
+  outline: none;
+}
+
+.gis-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 
 .gis-legend span {
-  margin-left: 10px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #555;
 }
 
 .gis-legend i {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  margin-right: 5px;
+  display: inline-block;
+}
+
+.gis-legend .low {
+  background: #0f7a45;
+}
+
+.gis-legend .moderate {
+  background: #f5c400;
+}
+
+.gis-legend .high {
+  background: #ef2222;
 }
 
 .gis-layout {
-  display: flex;
-  gap: 15px;
-  height: 600px;
+  display: grid;
+  grid-template-columns: 1fr 270px;
+  gap: 10px;
+  height: 790px;
 }
 
 .gis-map {
-  flex: 3;
-  border-radius: 12px;
+  position: relative;
+  border: 1px solid #9aa19d;
+  border-radius: 7px;
   overflow: hidden;
+  background: #222;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
+}
+
+.gis-map .leaflet-container {
+  filter: grayscale(40%) brightness(95%);
+}
+
+.custom-marker {
+  background: transparent;
+  border: 0;
+}
+
+.gis-layer-btn {
+  position: absolute;
+  right: 14px;
+  top: 398px;
+  z-index: 500;
+  width: 54px;
+  height: 54px;
+  border: 0;
+  border-radius: 4px;
+  background: #21477f;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  cursor: pointer;
 }
 
 .gis-side {
-  flex: 1;
+  border: 1px solid #aeb7b1;
+  border-radius: 9px;
   background: white;
-  padding: 15px;
-  border-radius: 12px;
+  padding: 24px 22px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
   overflow-y: auto;
+}
+
+.gis-side h3 {
+  margin: 0 0 70px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #222;
+}
+
+.gis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 27px;
 }
 
 .gis-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
+  gap: 8px;
+  font-size: 13px;
+  color: #111;
+}
+
+.gis-item strong {
+  font-weight: 800;
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.leaflet-control-zoom {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.leaflet-control-zoom a {
+  width: 54px !important;
+  height: 54px !important;
+  line-height: 52px !important;
+  font-size: 34px !important;
+  color: #0f1f38 !important;
+}
+
+@media (max-width: 1100px) {
+  .gis-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .gis-map {
+    height: 600px;
+  }
+
+  .gis-side {
+    min-height: 260px;
+  }
+
+  .gis-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+  }
 }
 
 /* ===================================================== HOUSEHOLD REPORT & ANALYTICS ============================================================== */
@@ -3176,7 +3698,7 @@
 .household-report-page {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 26px;
   padding: 22px;
 }
 
@@ -3204,37 +3726,66 @@
   gap: 12px;
 }
 
-/* ================= HOUSEHOLD REPORT TOP CARDS ================= */
+.report-print-btn,
+.report-export-btn {
+  height: 38px;
+  border-radius: 9px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.report-print-btn {
+  border: 1px solid #9ca3af;
+  background: #f7faf8;
+  color: #111;
+}
+
+.report-export-btn {
+  border: 0;
+  background: #0c5c3b;
+  color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
+}
+
+/* TOP CARDS */
 
 .household-report-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 28px;
+  gap: 22px;
 }
 
 .household-report-stat-card {
   height: 78px;
   border: 1px solid #aeb7b1;
   border-radius: 10px;
-  background: #fff;
+  background: white;
   padding: 13px 16px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  box-sizing: border-box;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
 }
 
 .household-report-stat-card p {
   margin: 0;
   font-size: 12px;
+  line-height: 1.1;
   font-weight: 800;
   text-transform: uppercase;
   color: #777;
 }
 
 .household-report-stat-card h2 {
-  margin: 8px 0 0;
-  font-size: 23px;
+  margin: 12px 0 0;
+  font-size: 22px;
+  line-height: 1;
   font-weight: 800;
   color: #111;
 }
@@ -3259,88 +3810,110 @@
   color: #ef4444;
 }
 
-/* ================= HOUSEHOLD REPORT CHARTS ================= */
+/* CHARTS */
 
 .household-report-chart-grid {
   display: grid;
   grid-template-columns: 1.55fr 1fr;
-  gap: 22px;
+  gap: 18px;
 }
 
 .household-report-card {
-  min-height: 325px;
+  height: 325px;
   border: 1px solid #aeb7b1;
   border-radius: 10px;
-  background: #fff;
-  padding: 20px;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  background: white;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
 }
 
 .household-report-card h3 {
   margin: 0 0 18px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #111;
 }
 
-.household-bar-chart {
-  height: 230px;
+/* BAR CHART */
+
+.hr-bar-chart {
+  position: relative;
+  height: 225px;
   border-left: 2px solid #c9d2cd;
   border-bottom: 2px solid #c9d2cd;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: end;
-  gap: 28px;
-  padding: 0 22px;
+  gap: 20px;
+  padding: 0 16px 0 28px;
+  box-sizing: border-box;
   background-image:
     linear-gradient(to right, #e5ece8 1px, transparent 1px),
     linear-gradient(to bottom, #e5ece8 1px, transparent 1px);
-  background-size: 120px 58px;
+  background-size: 120px 56px;
 }
 
-.household-bar-group {
+.hr-bar-chart::before {
+  content: "8\A 6\A 4\A 2\A 0";
+  white-space: pre;
+  position: absolute;
+  left: -16px;
+  top: -4px;
+  height: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  line-height: 1;
+  color: #777;
+}
+
+.hr-bar-group {
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.household-bars {
+.hr-bars {
   flex: 1;
   display: flex;
   align-items: end;
   gap: 7px;
 }
 
-.household-bars span {
-  width: 38px;
+.hr-bars span {
+  width: 34px;
   border-radius: 4px 4px 0 0;
   display: block;
 }
 
-.household-bars .compliant {
-  height: 145px;
+.hr-bars .compliant {
+  height: 140px;
   background: #22a851;
 }
 
-.household-bars .atrisk {
-  height: 116px;
+.hr-bars .atrisk {
+  height: 112px;
   background: #ef2222;
 }
 
-.household-bar-group small {
+.hr-bar-group small {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 10px;
   color: #666;
+  text-align: center;
 }
 
 .household-chart-legend {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   justify-content: center;
-  gap: 16px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 14px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .household-chart-legend .red {
@@ -3359,11 +3932,11 @@
   color: #36a87a;
 }
 
-/* ================= WASTE DONUT ================= */
+/* DONUT */
 
 .waste-donut-wrap {
   position: relative;
-  height: 230px;
+  height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3393,44 +3966,45 @@
 .waste-label {
   position: absolute;
   font-size: 18px;
-  color: #36a87a;
   font-weight: 800;
+  color: #36a87a;
 }
 
 .waste-label.top-left {
-  top: 32px;
-  left: 85px;
+  top: 30px;
+  left: 74px;
 }
 
 .waste-label.top-right {
-  top: 32px;
-  right: 85px;
+  top: 30px;
+  right: 74px;
+  color: #22a851;
 }
 
 .waste-label.bottom-left {
-  bottom: 36px;
-  left: 85px;
+  bottom: 34px;
+  left: 74px;
   color: #f7c318;
 }
 
 .waste-label.bottom-right {
-  bottom: 36px;
-  right: 85px;
+  bottom: 34px;
+  right: 74px;
   color: #ef2222;
 }
 
-/* ================= INFRASTRUCTURE TABLE ================= */
+/* INFRA TABLE */
 
 .infra-card {
   border: 1px solid #aeb7b1;
   border-radius: 10px;
-  background: #fff;
+  background: white;
   overflow: hidden;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
 }
 
 .infra-card-header {
-  height: 74px;
+  min-height: 70px;
   padding: 0 20px;
   background: #f7faf8;
   border-bottom: 1px solid #bfc6c1;
@@ -3473,27 +4047,28 @@
 .infra-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  table-layout: fixed;
+  font-size: 13px;
 }
 
 .infra-table th {
-  padding: 15px 14px;
+  padding: 14px;
   text-align: left;
   text-transform: uppercase;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #666;
   border-bottom: 2px solid #111;
 }
 
 .infra-table td {
-  padding: 17px 14px;
+  padding: 16px 14px;
   border-bottom: 1px solid #111;
   color: #333;
 }
 
 .infra-table td:first-child {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #111;
 }
@@ -3545,4 +4120,28 @@
   padding: 5px 12px;
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .household-report-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .household-report-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .household-report-card {
+    height: auto;
+    min-height: 325px;
+  }
+
+  .infra-card {
+    overflow-x: auto;
+  }
+
+  .infra-table {
+    min-width: 980px;
+  }
 }

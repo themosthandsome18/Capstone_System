@@ -1,19 +1,4 @@
 import {
-<<<<<<< HEAD:frontend/src/tourism/pages/ArrivalMonitoring.js
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-} from "chart.js";
-import { FiBriefcase, FiCalendar, FiDownload, FiMoon, FiSun, FiUsers } from "react-icons/fi";
-import { useTourismData } from "../context/TourismDataContext";
-import { formatNumber } from "../utils/format";
-=======
   FiBriefcase,
   FiCalendar,
   FiDownload,
@@ -21,9 +6,8 @@ import { formatNumber } from "../utils/format";
   FiSun,
   FiUsers,
 } from "react-icons/fi";
-import { useTourismData } from "../../context/TourismDataContext";
-import { formatNumber } from "../../utils/format";
->>>>>>> 387fc3a62ec09fb78fe7a743655191738fd7b267:frontend/src/pages/Tourism_Page/ArrivalMonitoring.js
+import { useTourismData } from "../context/TourismDataContext";
+import { formatNumber } from "../utils/format";
 
 function formatDate(value) {
   if (!value) {
