@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     arrival_monitoring_data,
+    booking_management_data,
     bootstrap_data,
     dashboard_data,
     feedback_detail,
@@ -19,6 +20,7 @@ urlpatterns = [
     path('health/', health_check),
     path('bootstrap/', bootstrap_data),
     path('reference-tables/', reference_tables),
+    path('booking-management/', booking_management_data),
     path('arrival-monitoring/', arrival_monitoring_data),
     path('dashboard/', dashboard_data),
     path('reports/', reports_data),

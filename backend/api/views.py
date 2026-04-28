@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -11,6 +11,8 @@ from rest_framework import status
 from .models import (
     BoatType,
     BOOKING_STATUS_ARRIVED,
+    BOOKING_STATUS_NO_SHOW,
+    BOOKING_STATUS_PENDING,
     Country,
     FeedbackEntry,
     Itinerary,
@@ -145,6 +147,7 @@ def bootstrap_data(request):
         {
             "referenceTables": build_reference_tables_payload(),
             "touristRecords": TouristRecordSerializer(records, many=True).data,
+            "bookingManagement": build_booking_management_payload(),
             "feedbackEntries": FeedbackEntrySerializer(
                 FeedbackEntry.objects.select_related("destination").all(),
                 many=True,
@@ -229,6 +232,65 @@ def build_arrival_monitoring_payload():
             "sameDay": totals["sameDay"],
             "feesCollected": totals["feesCollected"],
         },
+    }
+
+
+def build_booking_management_payload(params=None):
+    params = params or {}
+    records = TouristRecord.objects.select_related("country", "resort").all()
+
+    search = (params.get("search") or "").strip()
+    status_filter = (params.get("status") or "").strip()
+    resort_id = (params.get("resort_id") or "").strip()
+
+    if search:
+        records = records.filter(
+            Q(survey_id__icontains=search)
+            | Q(full_name__icontains=search)
+            | Q(contact_number__icontains=search)
+            | Q(country__name__icontains=search)
+            | Q(resort__resort_name__icontains=search)
+        )
+
+    if status_filter:
+        records = records.filter(status=status_filter)
+
+    if resort_id:
+        records = records.filter(resort_id=resort_id)
+
+    rows = []
+    for record in records:
+        rows.append(
+            {
+                "survey_id": record.survey_id,
+                "full_name": record.full_name,
+                "contact_number": record.contact_number,
+                "country_id": record.country_id,
+                "country_name": record.country.name,
+                "total_visitors": record.total_visitors,
+                "arrival_date": record.arrival_date.isoformat(),
+                "resort_id": record.resort_id,
+                "resort_name": record.resort.resort_name,
+                "status": record.status,
+                "status_label": record.get_status_display(),
+            }
+        )
+
+    all_records = TouristRecord.objects.all()
+
+    return {
+        "filters": {
+            "search": search,
+            "status": status_filter,
+            "resort_id": resort_id,
+        },
+        "summary": {
+            "verifiedEntries": all_records.count(),
+            "pending": all_records.filter(status=BOOKING_STATUS_PENDING).count(),
+            "arrived": all_records.filter(status=BOOKING_STATUS_ARRIVED).count(),
+            "noShow": all_records.filter(status=BOOKING_STATUS_NO_SHOW).count(),
+        },
+        "rows": rows,
     }
 
 
@@ -380,6 +442,12 @@ def build_reports_payload(params=None):
 def arrival_monitoring_data(request):
     ensure_initial_data()
     return Response(build_arrival_monitoring_payload())
+
+
+@api_view(["GET"])
+def booking_management_data(request):
+    ensure_initial_data()
+    return Response(build_booking_management_payload(request.query_params))
 
 
 @api_view(["GET", "POST"])
