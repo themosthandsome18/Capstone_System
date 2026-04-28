@@ -2179,7 +2179,34 @@
   color: #2fa34a;
   text-decoration: underline;
 }
+}
 
+@media print {
+  body {
+    background: #ffffff !important;
+  }
 
+  .tourism-sidebar,
+  .tourism-topbar,
+  .reports-actions,
+  .report-tabs,
+  .report-filter-card {
+    display: none !important;
+  }
+
+  .tourism-content {
+    padding: 0 !important;
+  }
+
+  .reports-page {
+    padding: 24px !important;
+    background: #ffffff !important;
+  }
+
+  .report-chart-card,
+  .report-table-card {
+    box-shadow: none !important;
+    border: 1px solid #d1d5db !important;
+  }
 }
 

@@ -427,6 +427,9 @@ export const tourismApi = {
 
   async getReportsData(filters = {}, records, referenceTables) {
     const params = new URLSearchParams();
+    if (filters.type) {
+      params.set("type", filters.type);
+    }
     if (filters.from) {
       params.set("from", filters.from);
     }

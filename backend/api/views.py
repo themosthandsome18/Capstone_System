@@ -381,47 +381,113 @@ def build_dashboard_payload():
 
 def build_reports_payload(params=None):
     params = params or {}
-    records = (
-        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
-        .select_related("resort")
-        .order_by("resort__resort_name")
-    )
 
+    report_type = params.get("type", "resort")
     date_from = params.get("from")
     date_to = params.get("to")
     resort_id = params.get("resort_id")
 
+    records = TouristRecord.objects.filter(
+        status=BOOKING_STATUS_ARRIVED
+    ).select_related("resort")
+
     if date_from:
         records = records.filter(arrival_date__gte=date_from)
+
     if date_to:
         records = records.filter(arrival_date__lte=date_to)
+
     if resort_id:
         records = records.filter(resort_id=resort_id)
 
+    totals = {
+        "visitors": 0,
+        "revenue": 0,
+    }
+
     rows = []
-    totals = {"visitors": 0, "revenue": 0}
 
-    for resort in Resort.objects.order_by("resort_name"):
-        resort_records = records.filter(resort=resort)
-        visitors = resort_records.aggregate(total=Sum("total_visitors"))["total"] or 0
-        if not visitors and resort_id and str(resort.resort_id) != str(resort_id):
-            continue
-
-        revenue = visitors * ARRIVAL_FEE_PER_VISITOR
-        totals["visitors"] += visitors
-        totals["revenue"] += revenue
-        rows.append(
-            {
-                "resort_id": resort.resort_id,
-                "name": resort.resort_name,
-                "visitors": visitors,
-                "revenue": revenue,
-                "avg": round(revenue / visitors) if visitors else 0,
-            }
+    if report_type == "daily":
+        grouped = (
+            records.values("arrival_date")
+            .annotate(visitors=Sum("total_visitors"))
+            .order_by("arrival_date")
         )
 
+        for item in grouped:
+            visitors = item["visitors"] or 0
+            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            totals["visitors"] += visitors
+            totals["revenue"] += revenue
+
+            rows.append(
+                {
+                    "id": item["arrival_date"].isoformat(),
+                    "name": item["arrival_date"].strftime("%b %d, %Y"),
+                    "visitors": visitors,
+                    "revenue": revenue,
+                    "avg": round(revenue / visitors) if visitors else 0,
+                }
+            )
+
+    elif report_type == "monthly":
+        monthly_data = {}
+
+        for record in records:
+            key = record.arrival_date.strftime("%Y-%m")
+            label = record.arrival_date.strftime("%B %Y")
+
+            if key not in monthly_data:
+                monthly_data[key] = {
+                    "id": key,
+                    "name": label,
+                    "visitors": 0,
+                    "revenue": 0,
+                    "avg": 0,
+                }
+
+            monthly_data[key]["visitors"] += record.total_visitors
+
+        for key in sorted(monthly_data.keys()):
+            row = monthly_data[key]
+            row["revenue"] = row["visitors"] * ARRIVAL_FEE_PER_VISITOR
+            row["avg"] = (
+                round(row["revenue"] / row["visitors"])
+                if row["visitors"]
+                else 0
+            )
+
+            totals["visitors"] += row["visitors"]
+            totals["revenue"] += row["revenue"]
+            rows.append(row)
+
+    else:
+        for resort in Resort.objects.order_by("resort_name"):
+            if resort_id and str(resort.resort_id) != str(resort_id):
+                continue
+
+            resort_records = records.filter(resort=resort)
+            visitors = resort_records.aggregate(total=Sum("total_visitors"))["total"] or 0
+            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+
+            totals["visitors"] += visitors
+            totals["revenue"] += revenue
+
+            rows.append(
+                {
+                    "id": resort.resort_id,
+                    "resort_id": resort.resort_id,
+                    "name": resort.resort_name,
+                    "visitors": visitors,
+                    "revenue": revenue,
+                    "avg": round(revenue / visitors) if visitors else 0,
+                }
+            )
+
     return {
+        "type": report_type,
         "filters": {
+            "type": report_type,
             "from": date_from or "",
             "to": date_to or "",
             "resort_id": resort_id or "",
@@ -436,7 +502,6 @@ def build_reports_payload(params=None):
             else 0,
         },
     }
-
 
 @api_view(["GET"])
 def arrival_monitoring_data(request):

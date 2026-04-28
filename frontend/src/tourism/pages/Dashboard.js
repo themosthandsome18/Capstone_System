@@ -33,44 +33,27 @@ ChartJS.register(
   Legend
 );
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
 function Dashboard() {
-  const { touristRecords, loading } = useTourismData();
-
-  const totalArrivals = touristRecords.reduce(
-    (total, record) => total + record.total_visitors,
-    0
-  );
-
-  const localTourists = touristRecords.reduce(
-    (total, record) => total + record.filipino_count,
-    0
-  );
-
-  const maubaninTourists = touristRecords.reduce(
-    (total, record) => total + record.maubanin_count,
-    0
-  );
-
-  const foreignTourists = touristRecords.reduce(
-    (total, record) => total + record.foreigner_count,
-    0
-  );
-
-  const maleTourists = touristRecords.reduce(
-    (total, record) => total + record.total_male,
-    0
-  );
-
-  const femaleTourists = touristRecords.reduce(
-    (total, record) => total + record.total_female,
-    0
-  );
+  const { dashboardData, loading } = useTourismData();
+  const metrics = dashboardData.metrics;
+  const classification = dashboardData.classification;
+  const gender = dashboardData.gender;
+  const stayType = dashboardData.stayType;
+  const validation = dashboardData.validation;
 
   const dailyVisitorData = {
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    labels: dashboardData.trends.labels,
     datasets: [
       {
-        data: [90, 100, 90, 170, 230, 330, 290],
+        data: dashboardData.trends.arrivals,
         borderColor: "#6abdc0",
         backgroundColor: "rgba(106, 189, 192, 0.15)",
         tension: 0.4,
@@ -84,7 +67,11 @@ function Dashboard() {
     labels: ["Filipino", "Maubanin", "Foreign"],
     datasets: [
       {
-        data: [localTourists, maubaninTourists, foreignTourists],
+        data: [
+          classification.filipino,
+          classification.maubanin,
+          classification.foreign,
+        ],
         backgroundColor: ["#60b8b5", "#8fdcda", "#ffc978"],
         borderWidth: 0,
         cutout: "62%",
@@ -96,7 +83,7 @@ function Dashboard() {
     labels: ["Male", "Female"],
     datasets: [
       {
-        data: [maleTourists, femaleTourists],
+        data: [gender.male, gender.female],
         backgroundColor: ["#147c79", "#21b8c3"],
         borderRadius: 8,
         barThickness: 80,
@@ -108,7 +95,7 @@ function Dashboard() {
     labels: ["Day Tour", "Overnight"],
     datasets: [
       {
-        data: [678, 314],
+        data: [stayType.dayTour, stayType.overnight],
         backgroundColor: ["#359e9b", "#4698f2"],
         borderWidth: 0,
         cutout: "62%",
@@ -206,29 +193,25 @@ function Dashboard() {
       <div className="metric-grid">
         <MetricCard
           title="Today’s Arrivals"
-          value="248"
-          note="↑ 12% vs yesterday"
+          value={formatNumber(metrics.todayArrivals)}
           icon={<FiUsers />}
         />
 
         <MetricCard
           title="This Week’s Arrivals"
-          value="1,504"
-          note="↑ +8.4% vs last week"
+          value={formatNumber(metrics.weekArrivals)}
           icon={<FiCalendar />}
         />
 
         <MetricCard
           title="This Month’s Arrivals"
-          value={formatNumber(totalArrivals)}
-          note="↑ +18% vs last month"
+          value={formatNumber(metrics.monthArrivals)}
           icon={<FiCalendar />}
         />
 
         <MetricCard
           title="Total Revenue Collected"
-          value="₱412,580"
-          note="↑ +24% this month"
+          value={formatCurrency(metrics.totalRevenueCollected)}
           icon={<FiBriefcase />}
         />
       </div>
@@ -253,9 +236,9 @@ function Dashboard() {
               />
             </div>
 
-            <LegendRow color="#60b8b5" label="Filipino" value={localTourists} />
-            <LegendRow color="#8fdcda" label="Maubanin" value={maubaninTourists} />
-            <LegendRow color="#ffc978" label="Foreign" value={foreignTourists} />
+            <LegendRow color="#60b8b5" label="Filipino" value={classification.filipino} />
+            <LegendRow color="#8fdcda" label="Maubanin" value={classification.maubanin} />
+            <LegendRow color="#ffc978" label="Foreign" value={classification.foreign} />
           </div>
         </section>
       </div>
@@ -278,8 +261,18 @@ function Dashboard() {
             </div>
 
             <div className="stay-summary">
-              <StayBox color="#359e9b" title="Day Tour" value="678" percentage="68.3%" />
-              <StayBox color="#4698f2" title="Overnight" value="314" percentage="31.7%" />
+              <StayBox
+                color="#359e9b"
+                title="Day Tour"
+                value={formatNumber(stayType.dayTour)}
+                percentage="Backend computed"
+              />
+              <StayBox
+                color="#4698f2"
+                title="Overnight"
+                value={formatNumber(stayType.overnight)}
+                percentage="Backend computed"
+              />
             </div>
           </div>
         </section>
@@ -302,24 +295,24 @@ function Dashboard() {
             type="success"
             icon={<FiCheckCircle />}
             title="Verified Entries"
-            value="1,428"
-            note="All required fields complete & validated"
+            value={formatNumber(validation.verifiedEntries)}
+            note="All records stored in the system"
           />
 
           <ValidationBox
             type="danger"
             icon={<FiXCircle />}
             title="Invalid Entries"
-            value="23"
-            note="Missing required information — needs review"
+            value={formatNumber(validation.invalidEntries)}
+            note="Records with validation issues"
           />
 
           <ValidationBox
             type="warning"
             icon={<FiFileText />}
             title="Duplicate Entries"
-            value="12"
-            note="Auto-flagged by system, awaiting merge"
+            value={formatNumber(validation.duplicateEntries)}
+            note="Detected by repeated contact numbers"
           />
         </div>
       </section>
