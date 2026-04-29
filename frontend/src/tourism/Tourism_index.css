@@ -2210,3 +2210,63 @@
   }
 }
 
+.compact-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.booking-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+}
+
+.booking-icon-btn svg {
+  font-size: 16px;
+}
+
+.booking-icon-btn.edit {
+  color: #2563eb;
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.booking-icon-btn.delete {
+  color: #ef4444;
+  border-color: #f5b5b5;
+  background: #fef2f2;
+}
+
+.booking-icon-btn.arrived {
+  color: #16a34a;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.booking-icon-btn.noshow {
+  color: #ef4444;
+  border-color: #fca5a5;
+  background: #fff1f2;
+}
+
+.booking-icon-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.booking-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
