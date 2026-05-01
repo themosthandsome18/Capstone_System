@@ -1503,7 +1503,9 @@
 
 .feedback-filters {
   display: flex;
+  align-items: center;
   gap: 18px;
+  flex-wrap: wrap;
 }
 
 /* REMOVE DEFAULT SELECT LOOK */
@@ -1540,13 +1542,56 @@
 
 /* HOVER EFFECT */
 .feedback-filters select:hover {
-  background: #e9f3ee;
+  background-color: #e9f3ee;
 }
 
 /* FOCUS */
 .feedback-filters select:focus {
   outline: none;
   box-shadow: 0 0 0 2px #2fa34a33, 0 12px 20px rgba(34, 72, 55, 0.25);
+}
+
+.feedback-search {
+  min-width: 340px;
+  height: 52px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+}
+
+.feedback-search svg {
+  color: #4b5563;
+  font-size: 18px;
+}
+
+.feedback-search input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.feedback-search input::placeholder {
+  color: #6b7280;
+}
+
+.feedback-empty {
+  background: #ffffff;
+  border: 1px solid #d7e5e1;
+  border-radius: 18px;
+  padding: 32px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.16);
 }
 
 /* ================= FEEDBACK LIST ================= */
