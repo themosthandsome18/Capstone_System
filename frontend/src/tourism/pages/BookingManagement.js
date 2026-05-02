@@ -378,10 +378,6 @@ function BookingManagement() {
           <button type="button" className="outline-action" onClick={handleExport}>
             Export
           </button>
-
-          <button type="button" className="primary-action" onClick={openAddRecord}>
-            + Add Record
-          </button>
         </div>
       </div>
 
