@@ -23,12 +23,23 @@ from .models import (
     TouristRecord,
     TravelMode,
     VisitPurpose,
+    SanitaryBusinessType,
+    SanitaryRequirement,
+    SanitaryEstablishment,
+    SanitaryInspection,
+    SanitaryInspectionChecklistItem,
+    HouseholdSanitationRecord,
 )
 from .seed_data import (
     INITIAL_FEEDBACK_ENTRIES,
     INITIAL_TOURISM_SETTINGS,
     INITIAL_TOURIST_RECORDS,
     REFERENCE_TABLES,
+    SANITARY_BUSINESS_TYPES,
+    SANITARY_REQUIREMENTS,
+    SANITARY_ESTABLISHMENTS,
+    SANITARY_INSPECTIONS,
+    HOUSEHOLD_SANITATION_RECORDS,
 )
 from .serializers import (
     BoatTypeSerializer,
@@ -42,6 +53,11 @@ from .serializers import (
     TouristRecordSerializer,
     TravelModeSerializer,
     VisitPurposeSerializer,
+    SanitaryBusinessTypeSerializer,
+    SanitaryEstablishmentSerializer,
+    SanitaryInspectionSerializer,
+    SanitaryInspectionCreateSerializer,
+    HouseholdSanitationRecordSerializer,
 )
 
 ARRIVAL_FEE_PER_VISITOR = 300
@@ -96,13 +112,83 @@ def ensure_default_settings():
     )
     return settings
 
-
 def ensure_initial_data():
     ensure_initial_reference_data()
     ensure_initial_tourist_records()
     ensure_initial_feedback_entries()
     ensure_default_settings()
+    ensure_initial_sanitation_data()
+    ensure_initial_household_data()
 
+def ensure_initial_sanitation_data():
+    if SanitaryBusinessType.objects.exists():
+        return
+
+    business_type_lookup = {}
+
+    for row in SANITARY_BUSINESS_TYPES:
+        business_type = SanitaryBusinessType.objects.create(**row)
+        business_type_lookup[business_type.name] = business_type
+
+    for group in SANITARY_REQUIREMENTS:
+        business_type = business_type_lookup.get(group["business_type"])
+
+        if not business_type:
+            continue
+
+        for requirement_name in group["requirements"]:
+            SanitaryRequirement.objects.create(
+                business_type=business_type,
+                permit_size=group["permit_size"],
+                requirement_name=requirement_name,
+                is_required=True,
+            )
+
+    establishment_lookup = {}
+
+    for row in SANITARY_ESTABLISHMENTS:
+        data = row.copy()
+        business_type_name = data.pop("business_type")
+        business_type = business_type_lookup.get(business_type_name)
+
+        if not business_type:
+            continue
+
+        establishment = SanitaryEstablishment.objects.create(
+            business_type=business_type,
+            **data,
+        )
+        establishment_lookup[establishment.business_name] = establishment
+
+    for row in SANITARY_INSPECTIONS:
+        data = row.copy()
+        business_name = data.pop("business_name")
+        checklist = data.pop("checklist", [])
+
+        establishment = establishment_lookup.get(business_name)
+
+        if not establishment:
+            continue
+
+        inspection = SanitaryInspection.objects.create(
+            establishment=establishment,
+            **data,
+        )
+
+        for item in checklist:
+            SanitaryInspectionChecklistItem.objects.create(
+                inspection=inspection,
+                **item,
+            )
+
+def ensure_initial_household_data():
+    if HouseholdSanitationRecord.objects.exists():
+        return
+
+    HouseholdSanitationRecord.objects.bulk_create(
+        HouseholdSanitationRecord(**record)
+        for record in HOUSEHOLD_SANITATION_RECORDS
+    )
 
 def generate_survey_id():
     year = timezone.localdate().year
@@ -668,4 +754,570 @@ def settings_data(request):
     )
     serializer.is_valid(raise_exception=True)
     serializer.save()
+    return Response(serializer.data)
+
+
+# ============================================================
+# SANITATION MODULE API
+# Business / Permit Side
+# ============================================================
+
+def get_status_label_map():
+    return {
+        "good_standing": "Good Standing",
+        "upcoming": "Upcoming",
+        "for_completion": "For Completion",
+        "violation": "Violation",
+        "no_permit": "No Permit",
+    }
+
+
+def build_sanitation_dashboard_payload():
+    ensure_initial_sanitation_data()
+
+    establishments = SanitaryEstablishment.objects.select_related("business_type").all()
+
+    total = establishments.count()
+    good = establishments.filter(compliance_status="good_standing").count()
+    upcoming = establishments.filter(compliance_status="upcoming").count()
+    for_completion = establishments.filter(compliance_status="for_completion").count()
+    violation = establishments.filter(compliance_status="violation").count()
+    no_permit = establishments.filter(compliance_status="no_permit").count()
+
+    by_type = []
+    for business_type in SanitaryBusinessType.objects.order_by("name"):
+        type_establishments = establishments.filter(business_type=business_type)
+
+        by_type.append(
+            {
+                "id": business_type.id,
+                "name": business_type.name,
+                "inspection_frequency": business_type.inspection_frequency,
+                "total": type_establishments.count(),
+                "sp": type_establishments.filter(permit_size="sp").count(),
+                "large": type_establishments.filter(permit_size="large").count(),
+                "good_standing": type_establishments.filter(
+                    compliance_status="good_standing"
+                ).count(),
+                "for_completion": type_establishments.filter(
+                    compliance_status="for_completion"
+                ).count(),
+                "upcoming": type_establishments.filter(
+                    compliance_status="upcoming"
+                ).count(),
+                "violation": type_establishments.filter(
+                    compliance_status="violation"
+                ).count(),
+                "no_permit": type_establishments.filter(
+                    compliance_status="no_permit"
+                ).count(),
+            }
+        )
+
+    recent = establishments.order_by("-updated_at")[:6]
+
+    return {
+        "summary": {
+            "totalEstablishments": total,
+            "goodStanding": good,
+            "upcoming": upcoming,
+            "forCompletion": for_completion,
+            "violators": violation,
+            "noPermit": no_permit,
+            "complianceRate": round((good / total) * 100) if total else 0,
+        },
+        "distribution": {
+            "goodStanding": good,
+            "upcoming": upcoming,
+            "forCompletion": for_completion,
+            "violation": violation,
+            "noPermit": no_permit,
+        },
+        "byType": by_type,
+        "recentActivity": SanitaryEstablishmentSerializer(recent, many=True).data,
+    }
+
+
+def build_sanitation_submissions_payload(params=None):
+    ensure_initial_sanitation_data()
+
+    params = params or {}
+    search = (params.get("search") or "").strip()
+    status_filter = (params.get("status") or "").strip()
+
+    establishments = SanitaryEstablishment.objects.select_related("business_type").all()
+
+    if search:
+        establishments = establishments.filter(
+            Q(business_name__icontains=search)
+            | Q(owner_name__icontains=search)
+            | Q(business_type__name__icontains=search)
+            | Q(barangay__icontains=search)
+            | Q(permit_number__icontains=search)
+        )
+
+    if status_filter and status_filter != "all":
+        establishments = establishments.filter(compliance_status=status_filter)
+
+    rows = []
+    status_label_map = get_status_label_map()
+
+    for establishment in establishments:
+        rows.append(
+            {
+                "id": establishment.id,
+                "business_name": establishment.business_name,
+                "owner_name": establishment.owner_name,
+                "business_type": establishment.business_type.name,
+                "permit_size": establishment.permit_size,
+                "permit_size_label": establishment.get_permit_size_display(),
+                "barangay": establishment.barangay,
+                "date_submitted": (
+                    establishment.permit_issued_date.isoformat()
+                    if establishment.permit_issued_date
+                    else ""
+                ),
+                "compliance_status": establishment.compliance_status,
+                "compliance_status_label": status_label_map.get(
+                    establishment.compliance_status,
+                    establishment.compliance_status,
+                ),
+                "permit_status": establishment.permit_status,
+                "permit_status_label": establishment.get_permit_status_display(),
+            }
+        )
+
+    all_establishments = SanitaryEstablishment.objects.all()
+
+    return {
+        "filters": {
+            "search": search,
+            "status": status_filter or "all",
+        },
+        "summary": {
+            "all": all_establishments.count(),
+            "goodStanding": all_establishments.filter(
+                compliance_status="good_standing"
+            ).count(),
+            "forCompletion": all_establishments.filter(
+                compliance_status="for_completion"
+            ).count(),
+            "upcoming": all_establishments.filter(
+                compliance_status="upcoming"
+            ).count(),
+            "violators": all_establishments.filter(
+                compliance_status="violation"
+            ).count(),
+            "noPermit": all_establishments.filter(
+                compliance_status="no_permit"
+            ).count(),
+        },
+        "rows": rows,
+    }
+
+
+def build_sanitation_reports_payload(params=None):
+    ensure_initial_sanitation_data()
+
+    params = params or {}
+    business_type_id = params.get("business_type_id")
+    barangay = params.get("barangay")
+
+    establishments = SanitaryEstablishment.objects.select_related("business_type").all()
+
+    if business_type_id:
+        establishments = establishments.filter(business_type_id=business_type_id)
+
+    if barangay:
+        establishments = establishments.filter(barangay=barangay)
+
+    total = establishments.count()
+    good = establishments.filter(compliance_status="good_standing").count()
+    upcoming = establishments.filter(compliance_status="upcoming").count()
+    for_completion = establishments.filter(compliance_status="for_completion").count()
+    violators = establishments.filter(compliance_status="violation").count()
+    no_permit = establishments.filter(compliance_status="no_permit").count()
+
+    by_type = []
+
+    for business_type in SanitaryBusinessType.objects.order_by("name"):
+        type_establishments = establishments.filter(business_type=business_type)
+        type_total = type_establishments.count()
+
+        if not type_total:
+            continue
+
+        by_type.append(
+            {
+                "id": business_type.id,
+                "name": business_type.name,
+                "inspection_frequency": business_type.inspection_frequency,
+                "total": type_total,
+                "withPermit": type_establishments.filter(has_permit=True).count(),
+                "withoutPermit": type_establishments.filter(has_permit=False).count(),
+                "sp": type_establishments.filter(permit_size="sp").count(),
+                "large": type_establishments.filter(permit_size="large").count(),
+                "goodStanding": type_establishments.filter(
+                    compliance_status="good_standing"
+                ).count(),
+                "forCompletion": type_establishments.filter(
+                    compliance_status="for_completion"
+                ).count(),
+                "upcoming": type_establishments.filter(
+                    compliance_status="upcoming"
+                ).count(),
+                "violators": type_establishments.filter(
+                    compliance_status="violation"
+                ).count(),
+                "noPermit": type_establishments.filter(
+                    compliance_status="no_permit"
+                ).count(),
+            }
+        )
+
+    return {
+        "filters": {
+            "business_type_id": business_type_id or "",
+            "barangay": barangay or "",
+        },
+        "summary": {
+            "totalEstablishments": total,
+            "goodStanding": good,
+            "upcoming": upcoming,
+            "forCompletion": for_completion,
+            "violators": violators,
+            "noPermit": no_permit,
+            "complianceRate": round((good / total) * 100) if total else 0,
+        },
+        "byType": by_type,
+    }
+
+
+def build_sanitation_permits_payload(params=None):
+    ensure_initial_sanitation_data()
+
+    params = params or {}
+    search = (params.get("search") or "").strip()
+    permit_status = (params.get("permit_status") or "").strip()
+
+    establishments = SanitaryEstablishment.objects.select_related("business_type").all()
+
+    if search:
+        establishments = establishments.filter(
+            Q(business_name__icontains=search)
+            | Q(owner_name__icontains=search)
+            | Q(business_type__name__icontains=search)
+            | Q(barangay__icontains=search)
+        )
+
+    if permit_status and permit_status != "all":
+        establishments = establishments.filter(permit_status=permit_status)
+
+    all_establishments = SanitaryEstablishment.objects.all()
+
+    return {
+        "summary": {
+            "active": all_establishments.filter(permit_status="active").count(),
+            "renewalDue": all_establishments.filter(
+                permit_status="renewal_due"
+            ).count(),
+            "conditional": all_establishments.filter(
+                permit_status="conditional"
+            ).count(),
+            "suspended": all_establishments.filter(
+                permit_status="suspended"
+            ).count(),
+            "noPermit": all_establishments.filter(
+                permit_status="no_permit"
+            ).count(),
+        },
+        "rows": SanitaryEstablishmentSerializer(establishments, many=True).data,
+    }
+
+
+@api_view(["GET"])
+def sanitation_bootstrap_data(request):
+    ensure_initial_sanitation_data()
+
+    return Response(
+        {
+            "businessTypes": SanitaryBusinessTypeSerializer(
+                SanitaryBusinessType.objects.prefetch_related("requirements").all(),
+                many=True,
+            ).data,
+            "establishments": SanitaryEstablishmentSerializer(
+                SanitaryEstablishment.objects.select_related("business_type").all(),
+                many=True,
+            ).data,
+            "inspections": SanitaryInspectionSerializer(
+                SanitaryInspection.objects.select_related(
+                    "establishment",
+                    "establishment__business_type",
+                ).prefetch_related("checklist_items"),
+                many=True,
+            ).data,
+            "dashboardData": build_sanitation_dashboard_payload(),
+            "permitData": build_sanitation_permits_payload(),
+            "submissionData": build_sanitation_submissions_payload(),
+            "reportData": build_sanitation_reports_payload(),
+        }
+    )
+
+
+@api_view(["GET"])
+def sanitation_dashboard_data(request):
+    return Response(build_sanitation_dashboard_payload())
+
+
+@api_view(["GET"])
+def sanitation_business_type_list(request):
+    ensure_initial_sanitation_data()
+
+    business_types = SanitaryBusinessType.objects.prefetch_related("requirements").all()
+    return Response(SanitaryBusinessTypeSerializer(business_types, many=True).data)
+
+
+@api_view(["GET", "POST"])
+def sanitation_establishment_list(request):
+    ensure_initial_sanitation_data()
+
+    if request.method == "GET":
+        establishments = SanitaryEstablishment.objects.select_related(
+            "business_type"
+        ).all()
+        return Response(SanitaryEstablishmentSerializer(establishments, many=True).data)
+
+    serializer = SanitaryEstablishmentSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def sanitation_establishment_detail(request, establishment_id):
+    establishment = get_object_or_404(SanitaryEstablishment, pk=establishment_id)
+
+    if request.method == "GET":
+        return Response(SanitaryEstablishmentSerializer(establishment).data)
+
+    if request.method == "DELETE":
+        establishment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = SanitaryEstablishmentSerializer(
+        establishment,
+        data=request.data,
+        partial=request.method == "PATCH",
+    )
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
+
+
+@api_view(["GET", "POST"])
+def sanitation_inspection_list(request):
+    ensure_initial_sanitation_data()
+
+    if request.method == "GET":
+        inspections = SanitaryInspection.objects.select_related(
+            "establishment",
+            "establishment__business_type",
+        ).prefetch_related("checklist_items")
+        return Response(SanitaryInspectionSerializer(inspections, many=True).data)
+
+    serializer = SanitaryInspectionCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    inspection = serializer.save()
+
+    establishment = inspection.establishment
+    establishment.compliance_status = inspection.status_after_inspection
+
+    if inspection.status_after_inspection == "good_standing":
+        establishment.permit_status = "active"
+    elif inspection.status_after_inspection == "upcoming":
+        establishment.permit_status = "renewal_due"
+    elif inspection.status_after_inspection == "for_completion":
+        establishment.permit_status = "conditional"
+    elif inspection.status_after_inspection == "violation":
+        establishment.permit_status = "suspended"
+
+    establishment.save()
+
+    return Response(
+        SanitaryInspectionSerializer(inspection).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def sanitation_inspection_detail(request, inspection_id):
+    inspection = get_object_or_404(SanitaryInspection, pk=inspection_id)
+
+    if request.method == "GET":
+        return Response(SanitaryInspectionSerializer(inspection).data)
+
+    if request.method == "DELETE":
+        inspection.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = SanitaryInspectionCreateSerializer(
+        inspection,
+        data=request.data,
+        partial=request.method == "PATCH",
+    )
+    serializer.is_valid(raise_exception=True)
+    inspection = serializer.save()
+
+    return Response(SanitaryInspectionSerializer(inspection).data)
+
+
+@api_view(["GET"])
+def sanitation_permit_data(request):
+    return Response(build_sanitation_permits_payload(request.query_params))
+
+
+@api_view(["GET"])
+def sanitation_submission_data(request):
+    return Response(build_sanitation_submissions_payload(request.query_params))
+
+
+@api_view(["GET"])
+def sanitation_report_data(request):
+    return Response(build_sanitation_reports_payload(request.query_params))
+
+# ============================================================
+# HOUSEHOLD SANITATION API
+# ============================================================
+
+def build_household_dashboard_payload():
+    ensure_initial_household_data()
+
+    records = HouseholdSanitationRecord.objects.all()
+    total = records.count()
+
+    with_sanitary_facility = records.exclude(toilet_type="none").count()
+    with_water_access = records.filter(
+        water_level__in=["level_2", "level_3"]
+    ).count()
+    at_risk = records.filter(status="violation").count()
+
+    risk_by_barangay = []
+    for barangay in records.values_list("barangay", flat=True).distinct():
+        barangay_records = records.filter(barangay=barangay)
+        violation_count = barangay_records.filter(status="violation").count()
+
+        risk_by_barangay.append(
+            {
+                "barangay": barangay,
+                "total": barangay_records.count(),
+                "atRisk": violation_count,
+                "forCompletion": barangay_records.filter(
+                    status="for_completion"
+                ).count(),
+                "goodStanding": barangay_records.filter(
+                    status="good_standing"
+                ).count(),
+            }
+        )
+
+    toilet_distribution = {
+        "waterSealed": records.filter(toilet_type="water_sealed").count(),
+        "pourFlush": records.filter(toilet_type="pour_flush").count(),
+        "pitLatrine": records.filter(toilet_type="pit_latrine").count(),
+        "none": records.filter(toilet_type="none").count(),
+    }
+
+    waste_distribution = {
+        "collected": records.filter(waste_disposal="collected").count(),
+        "composted": records.filter(waste_disposal="composted").count(),
+        "burned": records.filter(waste_disposal="burned").count(),
+        "dumped": records.filter(waste_disposal="dumped").count(),
+    }
+
+    water_distribution = {
+        "level1": records.filter(water_level="level_1").count(),
+        "level2": records.filter(water_level="level_2").count(),
+        "level3": records.filter(water_level="level_3").count(),
+    }
+
+    return {
+        "summary": {
+            "totalHouseholds": total,
+            "withSanitaryFacility": with_sanitary_facility,
+            "sanitaryFacilityCoverage": round(
+                (with_sanitary_facility / total) * 100
+            )
+            if total
+            else 0,
+            "withWaterAccess": with_water_access,
+            "waterAccessCoverage": round((with_water_access / total) * 100)
+            if total
+            else 0,
+            "atRiskHouseholds": at_risk,
+        },
+        "riskByBarangay": risk_by_barangay,
+        "toiletDistribution": toilet_distribution,
+        "wasteDistribution": waste_distribution,
+        "waterDistribution": water_distribution,
+    }
+
+
+@api_view(["GET"])
+def household_bootstrap_data(request):
+    ensure_initial_household_data()
+
+    records = HouseholdSanitationRecord.objects.all()
+
+    return Response(
+        {
+            "householdRecords": HouseholdSanitationRecordSerializer(
+                records,
+                many=True,
+            ).data,
+            "householdDashboardData": build_household_dashboard_payload(),
+        }
+    )
+
+
+@api_view(["GET"])
+def household_dashboard_data(request):
+    return Response(build_household_dashboard_payload())
+
+
+@api_view(["GET", "POST"])
+def household_record_list(request):
+    ensure_initial_household_data()
+
+    if request.method == "GET":
+        records = HouseholdSanitationRecord.objects.all()
+        return Response(
+            HouseholdSanitationRecordSerializer(records, many=True).data
+        )
+
+    serializer = HouseholdSanitationRecordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def household_record_detail(request, household_id):
+    record = get_object_or_404(HouseholdSanitationRecord, pk=household_id)
+
+    if request.method == "GET":
+        return Response(HouseholdSanitationRecordSerializer(record).data)
+
+    if request.method == "DELETE":
+        record.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = HouseholdSanitationRecordSerializer(
+        record,
+        data=request.data,
+        partial=request.method == "PATCH",
+    )
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
     return Response(serializer.data)

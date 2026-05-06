@@ -15,6 +15,12 @@ from .models import (
     TOURIST_RECORD_COUNT_FIELDS,
     TOURIST_RECORD_REQUIRED_FIELDS,
     validate_tourist_record_values,
+    SanitaryBusinessType,
+    SanitaryRequirement,
+    SanitaryEstablishment,
+    SanitaryInspection,
+    SanitaryInspectionChecklistItem,
+    HouseholdSanitationRecord,
 )
 
 
@@ -247,4 +253,277 @@ class TouristRecordSerializer(serializers.ModelSerializer):
         return {
             RELATED_FIELD_API_NAMES.get(field, field): messages
             for field, messages in errors.items()
+        }
+
+
+# ============================================================
+# SANITATION MODULE SERIALIZERS
+# Business / Permit Side
+# ============================================================
+
+class SanitaryRequirementSerializer(serializers.ModelSerializer):
+    business_type_name = serializers.CharField(
+        source="business_type.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SanitaryRequirement
+        fields = [
+            "id",
+            "business_type",
+            "business_type_name",
+            "permit_size",
+            "requirement_name",
+            "is_required",
+        ]
+
+
+class SanitaryBusinessTypeSerializer(serializers.ModelSerializer):
+    requirements = SanitaryRequirementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SanitaryBusinessType
+        fields = [
+            "id",
+            "name",
+            "inspection_frequency",
+            "description",
+            "requirements",
+        ]
+
+
+class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
+    business_type_name = serializers.CharField(
+        source="business_type.name",
+        read_only=True,
+    )
+    inspection_frequency = serializers.CharField(read_only=True)
+    compliance_status_label = serializers.CharField(
+        source="get_compliance_status_display",
+        read_only=True,
+    )
+    permit_status_label = serializers.CharField(
+        source="get_permit_status_display",
+        read_only=True,
+    )
+    permit_size_label = serializers.CharField(
+        source="get_permit_size_display",
+        read_only=True,
+    )
+    coordinates = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SanitaryEstablishment
+        fields = [
+            "id",
+            "business_name",
+            "owner_name",
+            "business_type",
+            "business_type_name",
+            "inspection_frequency",
+            "permit_size",
+            "permit_size_label",
+            "barangay",
+            "address",
+            "contact_number",
+            "has_permit",
+            "permit_number",
+            "permit_issued_date",
+            "permit_expiry_date",
+            "compliance_status",
+            "compliance_status_label",
+            "permit_status",
+            "permit_status_label",
+            "latitude",
+            "longitude",
+            "coordinates",
+            "remarks",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_coordinates(self, obj):
+        return {
+            "lat": obj.latitude,
+            "lng": obj.longitude,
+        }
+
+
+class SanitaryInspectionChecklistItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SanitaryInspectionChecklistItem
+        fields = [
+            "id",
+            "requirement_name",
+            "is_complied",
+            "notes",
+        ]
+
+
+class SanitaryInspectionSerializer(serializers.ModelSerializer):
+    establishment_name = serializers.CharField(
+        source="establishment.business_name",
+        read_only=True,
+    )
+    establishment_address = serializers.CharField(
+        source="establishment.address",
+        read_only=True,
+    )
+    business_type_name = serializers.CharField(
+        source="establishment.business_type.name",
+        read_only=True,
+    )
+    permit_size = serializers.CharField(
+        source="establishment.permit_size",
+        read_only=True,
+    )
+    barangay = serializers.CharField(
+        source="establishment.barangay",
+        read_only=True,
+    )
+    status_after_inspection_label = serializers.CharField(
+        source="get_status_after_inspection_display",
+        read_only=True,
+    )
+    checklist_items = SanitaryInspectionChecklistItemSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = SanitaryInspection
+        fields = [
+            "id",
+            "establishment",
+            "establishment_name",
+            "establishment_address",
+            "business_type_name",
+            "permit_size",
+            "barangay",
+            "inspector_name",
+            "inspection_date",
+            "next_due_date",
+            "findings",
+            "remarks",
+            "status_after_inspection",
+            "status_after_inspection_label",
+            "photo_documentation",
+            "is_draft",
+            "checklist_items",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
+    checklist_items = SanitaryInspectionChecklistItemSerializer(
+        many=True,
+        required=False,
+    )
+
+    class Meta:
+        model = SanitaryInspection
+        fields = [
+            "id",
+            "establishment",
+            "inspector_name",
+            "inspection_date",
+            "next_due_date",
+            "findings",
+            "remarks",
+            "status_after_inspection",
+            "photo_documentation",
+            "is_draft",
+            "checklist_items",
+        ]
+
+    def create(self, validated_data):
+        checklist_items = validated_data.pop("checklist_items", [])
+        inspection = SanitaryInspection.objects.create(**validated_data)
+
+        for item in checklist_items:
+            SanitaryInspectionChecklistItem.objects.create(
+                inspection=inspection,
+                **item,
+            )
+
+        return inspection
+
+    def update(self, instance, validated_data):
+        checklist_items = validated_data.pop("checklist_items", None)
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        instance.save()
+
+        if checklist_items is not None:
+            instance.checklist_items.all().delete()
+
+            for item in checklist_items:
+                SanitaryInspectionChecklistItem.objects.create(
+                    inspection=instance,
+                    **item,
+                )
+
+        return instance
+    
+# ============================================================
+# HOUSEHOLD SANITATION SERIALIZER
+# ============================================================
+
+class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
+    toilet_type_label = serializers.CharField(
+        source="get_toilet_type_display",
+        read_only=True,
+    )
+    water_level_label = serializers.CharField(
+        source="get_water_level_display",
+        read_only=True,
+    )
+    waste_disposal_label = serializers.CharField(
+        source="get_waste_disposal_display",
+        read_only=True,
+    )
+    status_label = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+    total_members = serializers.IntegerField(read_only=True)
+    coordinates = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HouseholdSanitationRecord
+        fields = [
+            "id",
+            "household_code",
+            "household_head",
+            "barangay",
+            "address",
+            "male_count",
+            "female_count",
+            "total_members",
+            "toilet_type",
+            "toilet_type_label",
+            "water_level",
+            "water_level_label",
+            "water_source",
+            "waste_disposal",
+            "waste_disposal_label",
+            "status",
+            "status_label",
+            "latitude",
+            "longitude",
+            "coordinates",
+            "remarks",
+            "last_survey_date",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_coordinates(self, obj):
+        return {
+            "lat": obj.latitude,
+            "lng": obj.longitude,
         }

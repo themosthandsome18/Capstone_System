@@ -1,124 +1,84 @@
 import { useMemo, useState } from "react";
 import { FiAlertTriangle, FiClock, FiFileText, FiSearch } from "react-icons/fi";
+import { useSanitationData } from "../context/SanitationDataContext";
 
-const permitRows = [
-  {
-    business: "AquaPure Refilling",
-    owner: "Maria Santos",
-    type: "Water Refilling Station • SP",
-    lastInspection: "2026-04-24",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
-  {
-    business: "Golden Egg Poultry",
-    owner: "Jose Ramirez",
-    type: "Poultry Farm • Large",
-    lastInspection: "2026-04-20",
-    permitStatus: "Suspended",
-    compliance: "Violation",
-  },
-  {
-    business: "Petron Highway",
-    owner: "PMC Corp.",
-    type: "Gasoline Station • Large",
-    lastInspection: "2026-02-05",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
-  {
-    business: "Lola Nena’s Eatery",
-    owner: "Helena Cruz",
-    type: "Restaurant / Food Service • SP",
-    lastInspection: "2026-02-18",
-    permitStatus: "Active (Renewal Due)",
-    compliance: "Upcoming",
-  },
-  {
-    business: "Sunrise Bistro",
-    owner: "Carlos Tan",
-    type: "Restaurant / Food Service • Large",
-    lastInspection: "2026-03-02",
-    permitStatus: "Conditional",
-    compliance: "For Completion",
-  },
-  {
-    business: "Style Cuts Salon",
-    owner: "Anne Reyes",
-    type: "Barbershop / Salon • SP",
-    lastInspection: "2026-02-15",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
-  {
-    business: "Crystal Springs Water",
-    owner: "B. Aquino",
-    type: "Water Refilling Station • Large",
-    lastInspection: "2026-03-22",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
-  {
-    business: "Shell Junction",
-    owner: "Shell Phils.",
-    type: "Gasoline Station • Large",
-    lastInspection: "2026-01-30",
-    permitStatus: "Active (Renewal Due)",
-    compliance: "Upcoming",
-  },
-  {
-    business: "Happy Hen Farm",
-    owner: "R. Delgado",
-    type: "Poultry Farm • SP",
-    lastInspection: "2026-02-10",
-    permitStatus: "Conditional",
-    compliance: "For Completion",
-  },
-  {
-    business: "Market Stall #14",
-    owner: "L. Mendoza",
-    type: "Public Market Stall • SP",
-    lastInspection: "2026-02-28",
-    permitStatus: "Suspended",
-    compliance: "Violation",
-  },
-  {
-    business: "Manong Pedro’s Carinderia",
-    owner: "P. Villanueva",
-    type: "Restaurant / Food Service • SP",
-    lastInspection: "2026-03-25",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
-  {
-    business: "FreshCut Barber",
-    owner: "M. Bautista",
-    type: "Barbershop / Salon • SP",
-    lastInspection: "2026-02-22",
-    permitStatus: "Active",
-    compliance: "Good Standing",
-  },
+const permitStatusOptions = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "renewal_due", label: "Renewal Due" },
+  { value: "conditional", label: "Conditional" },
+  { value: "suspended", label: "Suspended" },
+  { value: "no_permit", label: "No Permit" },
 ];
 
 function PermitMonitoring() {
+  const { establishments, inspections, permitData, loading, error } =
+    useSanitationData();
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const rows = useMemo(() => {
+    return establishments.map((establishment) => {
+      const relatedInspections = inspections
+        .filter((inspection) => inspection.establishment === establishment.id)
+        .sort(
+          (a, b) =>
+            new Date(b.inspection_date || 0) - new Date(a.inspection_date || 0)
+        );
+
+      const latestInspection = relatedInspections[0] || null;
+
+      return {
+        ...establishment,
+        lastInspection: latestInspection?.inspection_date || "",
+      };
+    });
+  }, [establishments, inspections]);
 
   const filteredRows = useMemo(() => {
     const keyword = searchTerm.toLowerCase().trim();
 
-    return permitRows.filter((row) => {
-      const matchesSearch =
-        row.business.toLowerCase().includes(keyword) ||
-        row.owner.toLowerCase().includes(keyword) ||
-        row.type.toLowerCase().includes(keyword);
+    return rows.filter((row) => {
+      const searchText = [
+        row.business_name,
+        row.owner_name,
+        row.business_type_name,
+        row.permit_size_label,
+        row.permit_number,
+        row.barangay,
+        row.permit_status_label,
+        row.compliance_status_label,
+      ]
+        .join(" ")
+        .toLowerCase();
 
+      const matchesSearch = searchText.includes(keyword);
       const matchesStatus =
-        statusFilter === "All" || row.permitStatus.includes(statusFilter);
+        statusFilter === "all" || row.permit_status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter]);
+  }, [rows, searchTerm, statusFilter]);
+
+  const summary = permitData?.summary || {
+    active: rows.filter((row) => row.permit_status === "active").length,
+    renewalDue: rows.filter((row) => row.permit_status === "renewal_due").length,
+    conditional: rows.filter((row) => row.permit_status === "conditional").length,
+    suspended: rows.filter((row) => row.permit_status === "suspended").length,
+    noPermit: rows.filter((row) => row.permit_status === "no_permit").length,
+  };
+
+  const alertRows = rows.filter(
+    (row) =>
+      row.permit_status === "suspended" ||
+      row.permit_status === "conditional" ||
+      row.permit_status === "no_permit"
+  );
+
+  if (loading) {
+    return <div className="permit-page">Loading permit records...</div>;
+  }
 
   return (
     <div className="permit-page">
@@ -127,42 +87,55 @@ function PermitMonitoring() {
         <p>Track and manage sanitary permits for all registered establishments</p>
       </div>
 
+      {error ? <p className="sanitation-error-text">{error}</p> : null}
+
       <div className="permit-stat-grid">
         <PermitStat
           title="Active Permits"
-          value="6"
+          value={summary.active || 0}
           icon={<FiFileText />}
           color="green"
         />
         <PermitStat
           title="Renewal Due"
-          value="2"
+          value={summary.renewalDue || 0}
           icon={<FiClock />}
           color="yellow"
         />
         <PermitStat
           title="Conditional"
-          value="2"
+          value={summary.conditional || 0}
           icon={<FiFileText />}
           color="orange"
         />
         <PermitStat
           title="Suspended"
-          value="2"
+          value={summary.suspended || 0}
           icon={<FiFileText />}
           color="red"
         />
       </div>
 
       <div className="permit-alert-grid">
-        <PermitAlert
-          title="Golden Egg Poultry"
-          desc="Poultry Farm • Large"
-        />
-        <PermitAlert
-          title="Market Stall #14"
-          desc="Public Market Stall • SP"
-        />
+        {alertRows.length ? (
+          alertRows.slice(0, 4).map((row) => (
+            <PermitAlert
+              key={row.id}
+              title={row.business_name}
+              desc={`${row.business_type_name} • ${row.permit_size_label}`}
+              status={row.permit_status_label}
+            />
+          ))
+        ) : (
+          <div className="permit-alert-card permit-alert-good">
+            <FiFileText />
+            <div>
+              <h3>No critical permit alerts</h3>
+              <p>All monitored permits are currently in acceptable condition.</p>
+              <strong>Good standing</strong>
+            </div>
+          </div>
+        )}
       </div>
 
       <section className="permit-table-card">
@@ -177,7 +150,7 @@ function PermitMonitoring() {
               <FiSearch />
               <input
                 type="text"
-                placeholder="Search by name or owner..."
+                placeholder="Search by name, owner, type..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
@@ -187,10 +160,11 @@ function PermitMonitoring() {
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
             >
-              <option>All</option>
-              <option>Active</option>
-              <option>Suspended</option>
-              <option>Conditional</option>
+              {permitStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -208,32 +182,42 @@ function PermitMonitoring() {
             </thead>
 
             <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.business}>
-                  <td>
-                    <strong>{row.business}</strong>
-                    <small>{row.owner}</small>
-                  </td>
+              {filteredRows.length ? (
+                filteredRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <strong>{row.business_name}</strong>
+                      <small>{row.owner_name}</small>
+                    </td>
 
-                  <td>{row.type}</td>
+                    <td>
+                      {row.business_type_name} • {row.permit_size_label}
+                    </td>
 
-                  <td>{row.lastInspection}</td>
+                    <td>{formatDate(row.lastInspection) || "No inspection"}</td>
 
-                  <td>
-                    <span className={`permit-status ${permitClass(row.permitStatus)}`}>
-                      {row.permitStatus}
-                    </span>
-                  </td>
+                    <td>
+                      <span
+                        className={`permit-status ${permitClass(
+                          row.permit_status_label
+                        )}`}
+                      >
+                        {row.permit_status_label}
+                      </span>
+                    </td>
 
-                  <td>
-                    <span className={`permit-compliance ${complianceClass(row.compliance)}`}>
-                      ● {row.compliance}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-
-              {filteredRows.length === 0 && (
+                    <td>
+                      <span
+                        className={`permit-compliance ${complianceClass(
+                          row.compliance_status_label
+                        )}`}
+                      >
+                        ● {row.compliance_status_label}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan="5" className="permit-empty">
                     No permit records found.
@@ -261,7 +245,7 @@ function PermitStat({ title, value, icon, color }) {
   );
 }
 
-function PermitAlert({ title, desc }) {
+function PermitAlert({ title, desc, status }) {
   return (
     <div className="permit-alert-card">
       <FiAlertTriangle />
@@ -269,18 +253,31 @@ function PermitAlert({ title, desc }) {
       <div>
         <h3>{title}</h3>
         <p>{desc}</p>
-        <strong>Requires immediate renewal</strong>
+        <strong>{status}</strong>
       </div>
     </div>
   );
 }
 
-function permitClass(status) {
-  return status.toLowerCase().replaceAll(" ", "-").replace(/[()]/g, "");
+function permitClass(status = "") {
+  return status
+    .toLowerCase()
+    .replaceAll(" ", "-")
+    .replace(/[()]/g, "");
 }
 
-function complianceClass(status) {
+function complianceClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
+}
+
+function formatDate(value) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 export default PermitMonitoring;

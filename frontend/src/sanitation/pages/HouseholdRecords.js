@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import {
   FiAlertTriangle,
   FiChevronLeft,
@@ -6,31 +7,137 @@ import {
   FiHome,
   FiSearch,
 } from "react-icons/fi";
+import { useSanitationData } from "../context/SanitationDataContext";
 
-const households = [
-  ["H-0001", "Dela Cruz, Coedy", "2", "Water-Sealed", "Level III (LGU Waterworks)", "Collected by LGU", "Good Standing"],
-  ["H-0002", "Santos, Juan", "7", "Pour-Flush", "Level I (Deep Well)", "Composed", "Violation"],
-  ["H-0003", "Trish-Anne Huidem", "3", "Pit Latrine", "Level II (Communal Faucet)", "Burned", "For Completion"],
-  ["H-0004", "Julia Santos", "3", "None", "Level III (LGU Waterworks)", "Dumped", "Violation"],
-  ["H-0005", "Beca Mitchel", "8", "Water-Sealed", "Level I (LGU Waterworks)", "Collected by LGU", "Good Standing"],
-  ["H-0006", "Dela Cruz, Juan", "6", "Pour-Flush", "Level II (Communal Faucet)", "Composed", "Good Standing"],
-  ["H-0007", "Nerjie Mecantina", "4", "Pit Latrine", "Level III (LGU Waterworks)", "Burned", "Good Standing"],
-  ["H-0008", "Wennielyn Lorenzana", "2", "None", "Level I (Deep Well)", "Dumped", "Violation"],
-  ["H-0009", "Ralph Richmond Amarillo", "4", "Water-Sealed", "Level II (Communal Faucet)", "Collected by LGU", "For Completion"],
-  ["H-0010", "Quert Russel Lalisan", "7", "Pour-Flush", "Level III (LGU Waterworks)", "Composed", "For Completion"],
-  ["H-0011", "John Joseph Israel", "6", "Pit Latrine", "Level I (Deep Well)", "Burned", "Good Standing"],
-  ["H-0012", "Emmanuel Aviles", "9", "None", "Level II (Communal Faucet)", "Dumped", "Violation"],
-];
-
-const riskBarangays = [
-  { name: "Poblacion", value: 4, color: "red" },
-  { name: "San Isidro", value: 4, color: "yellow" },
-  { name: "Malabanan", value: 4, color: "yellow" },
-  { name: "San Roque", value: 4, color: "yellow" },
-  { name: "Bagong Pook", value: 4, color: "yellow" },
+const statusOptions = [
+  { value: "all", label: "All" },
+  { value: "good_standing", label: "Good Standing" },
+  { value: "for_completion", label: "For Completion" },
+  { value: "violation", label: "Violation" },
 ];
 
 function HouseholdRecords() {
+  const { householdRecords, householdDashboardData, loading, error } =
+    useSanitationData();
+
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const summary = householdDashboardData?.summary || {
+    totalHouseholds: householdRecords.length,
+    withSanitaryFacility: householdRecords.filter(
+      (item) => item.toilet_type !== "none"
+    ).length,
+    sanitaryFacilityCoverage: householdRecords.length
+      ? Math.round(
+          (householdRecords.filter((item) => item.toilet_type !== "none")
+            .length /
+            householdRecords.length) *
+            100
+        )
+      : 0,
+    withWaterAccess: householdRecords.filter((item) =>
+      ["level_2", "level_3"].includes(item.water_level)
+    ).length,
+    waterAccessCoverage: householdRecords.length
+      ? Math.round(
+          (householdRecords.filter((item) =>
+            ["level_2", "level_3"].includes(item.water_level)
+          ).length /
+            householdRecords.length) *
+            100
+        )
+      : 0,
+    atRiskHouseholds: householdRecords.filter(
+      (item) => item.status === "violation"
+    ).length,
+  };
+
+  const riskByBarangay = useMemo(() => {
+    return householdDashboardData?.riskByBarangay || [];
+  }, [householdDashboardData]);
+  const toiletDistribution = useMemo(() => {
+    return householdDashboardData?.toiletDistribution || {};
+  }, [householdDashboardData]);
+
+  const wasteDistribution = useMemo(() => {
+    return householdDashboardData?.wasteDistribution || {};
+  }, [householdDashboardData]);
+
+  const waterDistribution = useMemo(() => {
+    return householdDashboardData?.waterDistribution || {};
+  }, [householdDashboardData]);
+
+  const barangays = useMemo(() => {
+    const uniqueBarangays = new Set(
+      householdRecords.map((item) => item.barangay).filter(Boolean)
+    );
+
+    return ["all", ...Array.from(uniqueBarangays).sort()];
+  }, [householdRecords]);
+
+  const filteredHouseholds = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    return householdRecords.filter((item) => {
+      const searchText = [
+        item.household_code,
+        item.household_head,
+        item.barangay,
+        item.address,
+        item.toilet_type_label,
+        item.water_level_label,
+        item.water_source,
+        item.waste_disposal_label,
+        item.status_label,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch = searchText.includes(keyword);
+      const matchesBarangay =
+        barangayFilter === "all" || item.barangay === barangayFilter;
+      const matchesStatus =
+        statusFilter === "all" || item.status === statusFilter;
+
+      return matchesSearch && matchesBarangay && matchesStatus;
+    });
+  }, [householdRecords, search, barangayFilter, statusFilter]);
+
+  const highestRiskBarangay = useMemo(() => {
+    if (!riskByBarangay.length) {
+      return null;
+    }
+
+    return [...riskByBarangay].sort((a, b) => b.atRisk - a.atRisk)[0];
+  }, [riskByBarangay]);
+
+  const maxRiskValue = Math.max(
+    ...riskByBarangay.map((item) => item.atRisk || 0),
+    1
+  );
+
+  const maxToiletValue = Math.max(
+    toiletDistribution.waterSealed || 0,
+    toiletDistribution.pourFlush || 0,
+    toiletDistribution.pitLatrine || 0,
+    toiletDistribution.none || 0,
+    1
+  );
+
+  const maxWasteValue = Math.max(
+    wasteDistribution.collected || 0,
+    wasteDistribution.composted || 0,
+    wasteDistribution.burned || 0,
+    wasteDistribution.dumped || 0,
+    1
+  );
+
+  if (loading) {
+    return <div className="household-page">Loading household records...</div>;
+  }
+
   return (
     <div className="household-page">
       <div className="household-header">
@@ -38,38 +145,83 @@ function HouseholdRecords() {
         <p>Monitor household sanitation profiles and risk indicators</p>
       </div>
 
+      {error ? <p className="sanitation-error-text">{error}</p> : null}
+
       <div className="household-stat-grid">
-        <HouseholdStat title="Total Households" value="12" icon={<FiHome />} color="green" />
-        <HouseholdStat title="With Sanitary Facility" value="6" desc="50% coverage" icon={<FiHome />} color="dark" />
-        <HouseholdStat title="With Water Access" value="8" desc="level II & III" icon={<FiDroplet />} color="blue" />
-        <HouseholdStat title="At-Risk Households" value="4" icon={<FiAlertTriangle />} color="red" />
+        <HouseholdStat
+          title="Total Households"
+          value={summary.totalHouseholds || 0}
+          icon={<FiHome />}
+          color="green"
+        />
+
+        <HouseholdStat
+          title="With Sanitary Facility"
+          value={summary.withSanitaryFacility || 0}
+          desc={`${summary.sanitaryFacilityCoverage || 0}% coverage`}
+          icon={<FiHome />}
+          color="dark"
+        />
+
+        <HouseholdStat
+          title="With Water Access"
+          value={summary.withWaterAccess || 0}
+          desc={`${summary.waterAccessCoverage || 0}% level II & III`}
+          icon={<FiDroplet />}
+          color="blue"
+        />
+
+        <HouseholdStat
+          title="At-Risk Households"
+          value={summary.atRiskHouseholds || 0}
+          icon={<FiAlertTriangle />}
+          color="red"
+        />
       </div>
 
       <div className="household-chart-grid">
         <section className="household-chart-card">
           <div className="household-chart-title">
             <div>
-              <h3>At- High Risk Households by Barangay</h3>
+              <h3>High Risk Households by Barangay</h3>
               <p>Across all barangays - violation status</p>
             </div>
 
-            <div className="risk-badge">
-              <span>Highest Risk</span>
-              <strong>Brgy. Poblacion</strong>
-              <small>4 of 12 (33%)</small>
-            </div>
+            {highestRiskBarangay ? (
+              <div className="risk-badge">
+                <span>Highest Risk</span>
+                <strong>Brgy. {highestRiskBarangay.barangay}</strong>
+                <small>
+                  {highestRiskBarangay.atRisk} of {summary.totalHouseholds || 0}
+                </small>
+              </div>
+            ) : null}
           </div>
 
           <div className="risk-bar-list">
-            {riskBarangays.map((item) => (
-              <div className="risk-row" key={item.name}>
-                <span>{item.name}</span>
-                <div className="risk-track">
-                  <b className={item.color} style={{ width: `${item.value * 25}%` }} />
+            {riskByBarangay.length ? (
+              riskByBarangay.map((item) => (
+                <div className="risk-row" key={item.barangay}>
+                  <span>{item.barangay}</span>
+
+                  <div className="risk-track">
+                    <b
+                      className={item.atRisk > 0 ? "red" : "yellow"}
+                      style={{
+                        width: `${Math.max(
+                          8,
+                          Math.round((item.atRisk / maxRiskValue) * 100)
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <strong>{item.atRisk}</strong>
                 </div>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="household-empty-text">No barangay risk data found.</p>
+            )}
           </div>
         </section>
 
@@ -77,15 +229,35 @@ function HouseholdRecords() {
           <div className="household-chart-title">
             <div>
               <h3>Toilet Type Distribution</h3>
-              <p>12 households</p>
+              <p>{summary.totalHouseholds || 0} households</p>
             </div>
           </div>
 
           <div className="household-bar-chart">
-            <MockBar label="Water-Sealed" value={3} color="green" />
-            <MockBar label="Pour-Flush" value={3} color="dark" />
-            <MockBar label="Pit Latrine" value={3} color="yellow" />
-            <MockBar label="None" value={3} color="red" />
+            <MockBar
+              label="Water-Sealed"
+              value={toiletDistribution.waterSealed || 0}
+              maxValue={maxToiletValue}
+              color="green"
+            />
+            <MockBar
+              label="Pour-Flush"
+              value={toiletDistribution.pourFlush || 0}
+              maxValue={maxToiletValue}
+              color="dark"
+            />
+            <MockBar
+              label="Pit Latrine"
+              value={toiletDistribution.pitLatrine || 0}
+              maxValue={maxToiletValue}
+              color="yellow"
+            />
+            <MockBar
+              label="None"
+              value={toiletDistribution.none || 0}
+              maxValue={maxToiletValue}
+              color="red"
+            />
           </div>
         </section>
 
@@ -93,15 +265,35 @@ function HouseholdRecords() {
           <div className="household-chart-title">
             <div>
               <h3>Waste Disposal Methods</h3>
-              <p>12 households</p>
+              <p>{summary.totalHouseholds || 0} households</p>
             </div>
           </div>
 
           <div className="household-bar-chart">
-            <MockBar label="Collected" value={3} color="green" />
-            <MockBar label="Composted" value={3} color="dark" />
-            <MockBar label="Burned" value={3} color="yellow" />
-            <MockBar label="Dumped" value={3} color="red" />
+            <MockBar
+              label="Collected"
+              value={wasteDistribution.collected || 0}
+              maxValue={maxWasteValue}
+              color="green"
+            />
+            <MockBar
+              label="Composted"
+              value={wasteDistribution.composted || 0}
+              maxValue={maxWasteValue}
+              color="dark"
+            />
+            <MockBar
+              label="Burned"
+              value={wasteDistribution.burned || 0}
+              maxValue={maxWasteValue}
+              color="yellow"
+            />
+            <MockBar
+              label="Dumped"
+              value={wasteDistribution.dumped || 0}
+              maxValue={maxWasteValue}
+              color="red"
+            />
           </div>
         </section>
 
@@ -109,10 +301,21 @@ function HouseholdRecords() {
           <h3>Water Access Levels</h3>
 
           <div className="water-donut-wrap">
-            <div className="water-donut" />
-            <span className="water-label top">4</span>
-            <span className="water-label left">4</span>
-            <span className="water-label bottom">4</span>
+            <div
+              className="water-donut"
+              style={{
+                background: buildWaterGradient(waterDistribution),
+              }}
+            />
+            <span className="water-label top">
+              {waterDistribution.level3 || 0}
+            </span>
+            <span className="water-label left">
+              {waterDistribution.level1 || 0}
+            </span>
+            <span className="water-label bottom">
+              {waterDistribution.level2 || 0}
+            </span>
           </div>
 
           <div className="household-legend">
@@ -125,26 +328,36 @@ function HouseholdRecords() {
 
       <section className="household-table-card">
         <div className="household-table-tools">
-          <select>
-            <option>All Barangays</option>
-            <option>Poblacion</option>
-            <option>San Isidro</option>
-            <option>Malabanan</option>
-            <option>San Roque</option>
-            <option>Bagong Pook</option>
+          <select
+            value={barangayFilter}
+            onChange={(event) => setBarangayFilter(event.target.value)}
+          >
+            {barangays.map((barangay) => (
+              <option key={barangay} value={barangay}>
+                {barangay === "all" ? "All Barangays" : barangay}
+              </option>
+            ))}
           </select>
 
           <div className="household-right-tools">
             <div className="household-search">
               <FiSearch />
-              <input placeholder="Search households..." />
+              <input
+                placeholder="Search households..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
 
-            <select>
-              <option>All</option>
-              <option>Good Standing</option>
-              <option>Violation</option>
-              <option>For Completion</option>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              {statusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -164,30 +377,57 @@ function HouseholdRecords() {
             </thead>
 
             <tbody>
-              {households.map((row) => (
-                <tr key={row[0]}>
-                  <td>{row[0]}</td>
-                  <td><strong>{row[1]}</strong></td>
-                  <td>{row[2]}</td>
-                  <td>{row[3]}</td>
-                  <td>{row[4]}</td>
-                  <td>{row[5]}</td>
-                  <td>
-                    <span className={`household-status ${statusClass(row[6])}`}>
-                      ● {row[6]}
-                    </span>
+              {filteredHouseholds.length ? (
+                filteredHouseholds.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.household_code}</td>
+
+                    <td>
+                      <strong>{row.household_head}</strong>
+                      <small>{row.barangay}</small>
+                    </td>
+
+                    <td>{row.total_members}</td>
+                    <td>{row.toilet_type_label}</td>
+                    <td>
+                      {row.water_level_label}
+                      {row.water_source ? ` (${row.water_source})` : ""}
+                    </td>
+                    <td>{row.waste_disposal_label}</td>
+                    <td>
+                      <span
+                        className={`household-status ${statusClass(
+                          row.status_label
+                        )}`}
+                      >
+                        ● {row.status_label}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="household-empty">
+                    No household records found.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
 
         <div className="household-pagination">
-          <span></span>
+          <span>
+            Showing {filteredHouseholds.length} of {householdRecords.length}
+          </span>
+
           <div>
-            <button type="button"><FiChevronLeft /></button>
-            <button type="button"><FiChevronRight /></button>
+            <button type="button">
+              <FiChevronLeft />
+            </button>
+            <button type="button">
+              <FiChevronRight />
+            </button>
           </div>
         </div>
       </section>
@@ -201,7 +441,7 @@ function HouseholdStat({ title, value, desc, icon, color }) {
       <div>
         <p>{title}</p>
         <h2>{value}</h2>
-        {desc && <span>{desc}</span>}
+        {desc ? <span>{desc}</span> : null}
       </div>
 
       <div className={`household-stat-icon ${color}`}>{icon}</div>
@@ -209,18 +449,41 @@ function HouseholdStat({ title, value, desc, icon, color }) {
   );
 }
 
-function MockBar({ label, value, color }) {
+function MockBar({ label, value, maxValue, color }) {
+  const height = value ? Math.max(24, Math.round((value / maxValue) * 165)) : 0;
+
   return (
     <div className="household-bar-item">
       <div className="household-bar-area">
-        <span className={color} style={{ height: `${value * 50}px` }} />
+        <span className={color} style={{ height: `${height}px` }} />
       </div>
+
       <small>{label}</small>
     </div>
   );
 }
 
-function statusClass(status) {
+function buildWaterGradient(distribution) {
+  const level1 = distribution.level1 || 0;
+  const level2 = distribution.level2 || 0;
+  const level3 = distribution.level3 || 0;
+  const total = level1 + level2 + level3;
+
+  if (!total) {
+    return "conic-gradient(#d1d5db 0 100%)";
+  }
+
+  const level1End = (level1 / total) * 100;
+  const level2End = level1End + (level2 / total) * 100;
+
+  return `conic-gradient(
+    #f7c318 0 ${level1End}%,
+    #27a56a ${level1End}% ${level2End}%,
+    #1f7655 ${level2End}% 100%
+  )`;
+}
+
+function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
 }
 

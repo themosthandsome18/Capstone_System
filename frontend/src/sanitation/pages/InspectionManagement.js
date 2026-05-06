@@ -9,206 +9,94 @@ import {
   FiSearch,
   FiX,
 } from "react-icons/fi";
+import { useSanitationData } from "../context/SanitationDataContext";
 
-const inspectionRows = [
-  {
-    name: "Market Stall #14",
-    address: "Brgy. Poblacion",
-    type: "Public Market Stall (Monthly)",
-    last: "2026-02-28",
-    next: "2026-03-28",
-    due: "26d overdue",
-    status: "Violation",
-  },
-  {
-    name: "Sunrise Bistro",
-    address: "Brgy. San Roque",
-    type: "Restaurant / Food Service (Monthly)",
-    last: "2026-03-02",
-    next: "2026-04-02",
-    due: "21d overdue",
-    status: "For Completion",
-  },
-  {
-    name: "AquaPure Refilling",
-    address: "Brgy. San Isidro",
-    type: "Water Refilling Station (Monthly)",
-    last: "2026-03-12",
-    next: "2026-04-12",
-    due: "11d overdue",
-    status: "Good Standing",
-  },
-  {
-    name: "Golden Egg Poultry",
-    address: "Brgy. Malabanan",
-    type: "Poultry Farm (Quarterly)",
-    last: "2026-01-20",
-    next: "2026-04-20",
-    due: "3d overdue",
-    status: "Violation",
-  },
-  {
-    name: "Crystal Springs Water",
-    address: "Brgy. San Isidro",
-    type: "Water Refilling Station (Monthly)",
-    last: "2026-03-22",
-    next: "2026-04-22",
-    due: "1d overdue",
-    status: "Good Standing",
-  },
-  {
-    name: "Lola Nena’s Eatery",
-    address: "Brgy. Poblacion",
-    type: "Restaurant / Food Service (Monthly)",
-    last: "2026-03-18",
-    next: "2026-04-25",
-    due: "in 2d",
-    status: "Upcoming",
-  },
-  {
-    name: "Manong Pedro’s Carinderia",
-    address: "Brgy. San Roque",
-    type: "Restaurant / Food Service (Monthly)",
-    last: "2026-03-25",
-    next: "2026-04-25",
-    due: "in 2d",
-    status: "Good Standing",
-  },
-  {
-    name: "Shell Junction",
-    address: "Brgy. Poblacion",
-    type: "Gasoline Station (Quarterly)",
-    last: "2026-01-30",
-    next: "2026-04-28",
-    due: "in 5d",
-    status: "Upcoming",
-  },
-  {
-    name: "Petron Highway",
-    address: "Brgy. Poblacion",
-    type: "Gasoline Station (Quarterly)",
-    last: "2026-02-05",
-    next: "2026-05-05",
-    due: "in 12d",
-    status: "Good Standing",
-  },
-  {
-    name: "Happy Hen Farm",
-    address: "Brgy. Malabanan",
-    type: "Poultry Farm (Monthly)",
-    last: "2026-02-10",
-    next: "2026-05-10",
-    due: "in 17d",
-    status: "For Completion",
-  },
-  {
-    name: "Style Cuts Salon",
-    address: "Brgy. Bagong Pook",
-    type: "Barbershop / Salon (Quarterly)",
-    last: "2026-02-15",
-    next: "2026-05-15",
-    due: "in 22d",
-    status: "Good Standing",
-  },
-  {
-    name: "FreshCut Barber",
-    address: "Brgy. Bagong Pook",
-    type: "Barbershop / Salon (Quarterly)",
-    last: "2026-02-22",
-    next: "2026-05-22",
-    due: "in 29d",
-    status: "Good Standing",
-  },
-  {
-    name: "Iot Moto",
-    address: "Brgy. Bagong Bayan",
-    type: "MotorShop (Quarterly)",
-    last: "2026-02-24",
-    next: "2026-05-24",
-    due: "in 30d",
-    status: "Good Standing",
-  },
-];
-
-const calendarCells = [
-  { day: "20", events: [] },
-  {
-    day: "21",
-    events: [{ title: "Golden Egg Poultry", status: "violation" }],
-  },
-  { day: "22", events: [] },
-  {
-    day: "23",
-    events: [{ title: "Crystal Springs Water", status: "good" }],
-  },
-  { day: "24", events: [] },
-  { day: "25", events: [] },
-  {
-    day: "26",
-    events: [
-      { title: "Lola Nena’s Eatery", status: "upcoming" },
-      { title: "Manong Pedro’s Carinderia", status: "good" },
-    ],
-  },
-  { day: "27", events: [] },
-  { day: "28", events: [] },
-  {
-    day: "29",
-    events: [{ title: "Shell Junction", status: "upcoming" }],
-  },
-  { day: "30", events: [] },
-  { day: "1", events: [] },
-  { day: "2", events: [] },
-  { day: "3", events: [] },
-  { day: "4", events: [] },
-  { day: "5", events: [] },
-  {
-    day: "6",
-    events: [{ title: "Petron Highway", status: "good" }],
-  },
-  { day: "7", events: [] },
-  { day: "8", events: [] },
-  { day: "9", events: [] },
-  { day: "10", events: [] },
-  {
-    day: "11",
-    events: [{ title: "Happy Hen Farm", status: "completion" }],
-  },
-  { day: "12", events: [] },
-  { day: "13", events: [] },
-  { day: "14", events: [] },
-  { day: "15", events: [] },
-  {
-    day: "16",
-    events: [{ title: "Style Cuts Salon", status: "good" }],
-  },
-  { day: "17", events: [] },
+const statusOptions = [
+  { value: "good_standing", label: "Good Standing" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "for_completion", label: "For Completion" },
+  { value: "violation", label: "Violation" },
 ];
 
 function InspectionManagement() {
+  const {
+    establishments,
+    inspections,
+    businessTypes,
+    loading,
+    error,
+    createInspection,
+  } = useSanitationData();
+
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
-  const [selectedInspection, setSelectedInspection] = useState(inspectionRows[0]);
+  const [selectedEstablishment, setSelectedEstablishment] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const rows = useMemo(() => {
+    return establishments.map((establishment) => {
+      const relatedInspections = inspections
+        .filter((inspection) => inspection.establishment === establishment.id)
+        .sort(
+          (a, b) =>
+            new Date(b.inspection_date || 0) - new Date(a.inspection_date || 0)
+        );
+
+      const latestInspection = relatedInspections[0] || null;
+      const nextDueDate = latestInspection?.next_due_date || "";
+      const lastInspectionDate = latestInspection?.inspection_date || "";
+
+      return {
+        ...establishment,
+        latestInspection,
+        lastInspectionDate,
+        nextDueDate,
+        dueText: getDueText(nextDueDate),
+      };
+    });
+  }, [establishments, inspections]);
 
   const filteredRows = useMemo(() => {
     const keyword = searchTerm.toLowerCase().trim();
 
-    if (!keyword) return inspectionRows;
+    if (!keyword) {
+      return rows;
+    }
 
-    return inspectionRows.filter((row) => {
+    return rows.filter((row) => {
       return (
-        row.name.toLowerCase().includes(keyword) ||
-        row.address.toLowerCase().includes(keyword) ||
-        row.type.toLowerCase().includes(keyword) ||
-        row.status.toLowerCase().includes(keyword)
+        row.business_name?.toLowerCase().includes(keyword) ||
+        row.address?.toLowerCase().includes(keyword) ||
+        row.barangay?.toLowerCase().includes(keyword) ||
+        row.business_type_name?.toLowerCase().includes(keyword) ||
+        row.compliance_status_label?.toLowerCase().includes(keyword)
       );
     });
-  }, [searchTerm]);
+  }, [rows, searchTerm]);
+
+  const dueWithinSevenDays = rows.filter((row) => {
+    if (!row.nextDueDate) return false;
+
+    const diff = getDayDifference(row.nextDueDate);
+    return diff >= 0 && diff <= 7;
+  }).length;
+
+  const overdueCount = rows.filter((row) => {
+    if (!row.nextDueDate) return false;
+    return getDayDifference(row.nextDueDate) < 0;
+  }).length;
+
+  const calendarCells = useMemo(() => {
+    return buildCalendarCells(rows);
+  }, [rows]);
 
   function openForm(row) {
-    setSelectedInspection(row);
+    setSelectedEstablishment(row);
     setShowForm(true);
+  }
+
+  if (loading) {
+    return <div className="inspection-page">Loading inspection records...</div>;
   }
 
   return (
@@ -218,13 +106,15 @@ function InspectionManagement() {
         <p>Track and manage sanitary inspections</p>
       </div>
 
+      {error ? <p className="sanitation-error-text">{error}</p> : null}
+
       <div className="inspection-alert">
         <FiBell />
         <div>
           <h3>Inspection Alerts</h3>
           <p>
-            <span>3</span> establishment(s) due within 7 days •{" "}
-            <strong>5</strong> overdue
+            <span>{dueWithinSevenDays}</span> establishment(s) due within 7 days
+            • <strong>{overdueCount}</strong> overdue
           </p>
         </div>
       </div>
@@ -284,52 +174,55 @@ function InspectionManagement() {
               </thead>
 
               <tbody>
-                {filteredRows.map((row) => (
-                  <tr key={row.name}>
-                    <td>
-                      <strong>{row.name}</strong>
-                      <small>{row.address}</small>
-                    </td>
+                {filteredRows.length ? (
+                  filteredRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <strong>{row.business_name}</strong>
+                        <small>{row.barangay || row.address}</small>
+                      </td>
 
-                    <td>{row.type}</td>
+                      <td>
+                        {row.business_type_name} (
+                        {formatFrequency(row.inspection_frequency)})
+                      </td>
 
-                    <td>{row.last}</td>
+                      <td>{formatDate(row.lastInspectionDate) || "No record"}</td>
 
-                    <td>
-                      <strong>{row.next}</strong>
-                      <small
-                        className={
-                          row.due.includes("overdue") ? "overdue" : ""
-                        }
-                      >
-                        {row.due}
-                      </small>
-                    </td>
+                      <td>
+                        <strong>{formatDate(row.nextDueDate) || "Not set"}</strong>
+                        <small
+                          className={
+                            row.dueText.includes("overdue") ? "overdue" : ""
+                          }
+                        >
+                          {row.dueText}
+                        </small>
+                      </td>
 
-                    <td>
-                      <span
-                        className={`inspection-status ${statusClass(
-                          row.status
-                        )}`}
-                      >
-                        ● {row.status}
-                      </span>
-                    </td>
+                      <td>
+                        <span
+                          className={`inspection-status ${statusClass(
+                            row.compliance_status_label
+                          )}`}
+                        >
+                          ● {row.compliance_status_label}
+                        </span>
+                      </td>
 
-                    <td>
-                      <button
-                        type="button"
-                        className="conduct-btn"
-                        onClick={() => openForm(row)}
-                      >
-                        <FiClipboard />
-                        Conduct
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {filteredRows.length === 0 && (
+                      <td>
+                        <button
+                          type="button"
+                          className="conduct-btn"
+                          onClick={() => openForm(row)}
+                        >
+                          <FiClipboard />
+                          Conduct
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
                   <tr>
                     <td colSpan="6" className="inspection-empty">
                       No inspection records found.
@@ -342,7 +235,7 @@ function InspectionManagement() {
 
           <div className="inspection-pagination">
             <p>
-              Showing {filteredRows.length} of {inspectionRows.length}
+              Showing {filteredRows.length} of {rows.length}
             </p>
 
             <div>
@@ -388,32 +281,129 @@ function InspectionManagement() {
         </section>
       )}
 
-      {showForm && (
+      {showForm && selectedEstablishment ? (
         <InspectionFormModal
-          inspection={selectedInspection}
+          establishment={selectedEstablishment}
+          businessTypes={businessTypes}
+          createInspection={createInspection}
           onClose={() => setShowForm(false)}
         />
-      )}
+      ) : null}
     </div>
   );
 }
 
-function InspectionFormModal({ inspection, onClose }) {
-  const [checks, setChecks] = useState({
-    healthCard: true,
-    sanitaryPermit: false,
-    cleanliness: true,
-  });
+function InspectionFormModal({
+  establishment,
+  businessTypes,
+  createInspection,
+  onClose,
+}) {
+  const selectedType = businessTypes.find(
+    (type) => String(type.id) === String(establishment.business_type)
+  );
 
-  const completedCount = Object.values(checks).filter(Boolean).length;
-  const totalCount = Object.values(checks).length;
+  const defaultRequirements = (selectedType?.requirements || []).filter(
+    (requirement) => requirement.permit_size === establishment.permit_size
+  );
+
+  const [inspectorName, setInspectorName] = useState("Insp. J. Cruz");
+  const [inspectionDate, setInspectionDate] = useState(getTodayDate());
+  const [nextDueDate, setNextDueDate] = useState(
+    getSuggestedNextDueDate(
+      getTodayDate(),
+      establishment.inspection_frequency || "monthly"
+    )
+  );
+  const [findings, setFindings] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [statusAfterInspection, setStatusAfterInspection] =
+    useState("good_standing");
+  const [checks, setChecks] = useState(() =>
+    defaultRequirements.map((requirement) => ({
+      requirement_name: requirement.requirement_name,
+      is_complied: true,
+      notes: "",
+    }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const completedCount = checks.filter((item) => item.is_complied).length;
+  const totalCount = checks.length || 1;
   const percentage = Math.round((completedCount / totalCount) * 100);
 
-  function handleCheck(name) {
-    setChecks((current) => ({
-      ...current,
-      [name]: !current[name],
-    }));
+  function handleCheck(index) {
+    setChecks((current) => {
+      const updated = current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, is_complied: !item.is_complied }
+          : item
+      );
+
+      const hasMissing = updated.some((item) => !item.is_complied);
+
+      if (hasMissing) {
+        setStatusAfterInspection("for_completion");
+      } else {
+        setStatusAfterInspection("good_standing");
+      }
+
+      return updated;
+    });
+  }
+
+  function getErrorMessage(requestError) {
+    if (requestError?.details?.detail) {
+      return requestError.details.detail;
+    }
+
+    if (requestError?.details && typeof requestError.details === "object") {
+      return Object.entries(requestError.details)
+        .map(([field, messages]) => {
+          const text = Array.isArray(messages) ? messages.join(" ") : messages;
+          return `${field}: ${text}`;
+        })
+        .join(" ");
+    }
+
+    return requestError?.message || "Unable to submit inspection.";
+  }
+
+  async function handleSubmit(isDraft = false) {
+    if (!inspectorName.trim()) {
+      setFormError("Inspector name is required.");
+      return;
+    }
+
+    if (!inspectionDate) {
+      setFormError("Inspection date is required.");
+      return;
+    }
+
+    setSaving(true);
+    setFormError("");
+
+    try {
+      await createInspection({
+        establishment: establishment.id,
+        inspector_name: inspectorName.trim(),
+        inspection_date: inspectionDate,
+        next_due_date: nextDueDate || null,
+        findings: findings.trim(),
+        remarks: remarks.trim(),
+        status_after_inspection: isDraft ? "upcoming" : statusAfterInspection,
+        photo_documentation: "",
+        is_draft: isDraft,
+        checklist_items: checks,
+      });
+
+      onClose();
+    } catch (requestError) {
+      setFormError(getErrorMessage(requestError));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -425,25 +415,70 @@ function InspectionFormModal({ inspection, onClose }) {
 
         <div className="inspection-form-title">
           <h2>
-            Inspection Form : <strong>{inspection.name}</strong>
+            Inspection Form : <strong>{establishment.business_name}</strong>
           </h2>
           <p>
-            {inspection.type} • {inspection.address}
+            {establishment.business_type_name} (
+            {formatFrequency(establishment.inspection_frequency)}) •{" "}
+            {establishment.barangay || establishment.address}
           </p>
         </div>
 
         <div className="inspection-form-grid">
           <label>
             <span>Inspector Name</span>
-            <input type="text" placeholder="Insp. J. Cruz" />
+            <input
+              type="text"
+              placeholder="Insp. J. Cruz"
+              value={inspectorName}
+              onChange={(event) => setInspectorName(event.target.value)}
+            />
           </label>
 
           <label>
             <span>Date of Inspection</span>
             <div className="date-input">
-              <input type="text" defaultValue="04/24/2026" />
+              <input
+                type="date"
+                value={inspectionDate}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setInspectionDate(value);
+                  setNextDueDate(
+                    getSuggestedNextDueDate(
+                      value,
+                      establishment.inspection_frequency || "monthly"
+                    )
+                  );
+                }}
+              />
               <FiCalendar />
             </div>
+          </label>
+        </div>
+
+        <div className="inspection-form-grid inspection-second-grid">
+          <label>
+            <span>Next Due Date</span>
+            <input
+              type="date"
+              value={nextDueDate}
+              onChange={(event) => setNextDueDate(event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>Status After Inspection</span>
+            <select
+              value={statusAfterInspection}
+              onChange={(event) => setStatusAfterInspection(event.target.value)}
+            >
+              {statusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -453,39 +488,43 @@ function InspectionFormModal({ inspection, onClose }) {
             <span>{percentage}% complete</span>
           </div>
 
-          <label className={`check-row ${checks.healthCard ? "checked" : ""}`}>
-            <input
-              type="checkbox"
-              checked={checks.healthCard}
-              onChange={() => handleCheck("healthCard")}
-            />
-            <span>Health Card</span>
-          </label>
-
-          <label
-            className={`check-row ${checks.sanitaryPermit ? "checked" : ""}`}
-          >
-            <input
-              type="checkbox"
-              checked={checks.sanitaryPermit}
-              onChange={() => handleCheck("sanitaryPermit")}
-            />
-            <span>Sanitary Permit</span>
-          </label>
-
-          <label className={`check-row ${checks.cleanliness ? "checked" : ""}`}>
-            <input
-              type="checkbox"
-              checked={checks.cleanliness}
-              onChange={() => handleCheck("cleanliness")}
-            />
-            <span>Stall Cleanliness Inspection</span>
-          </label>
+          {checks.length ? (
+            checks.map((item, index) => (
+              <label
+                key={`${item.requirement_name}-${index}`}
+                className={`check-row ${item.is_complied ? "checked" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={item.is_complied}
+                  onChange={() => handleCheck(index)}
+                />
+                <span>{item.requirement_name}</span>
+              </label>
+            ))
+          ) : (
+            <p className="inspection-empty">
+              No requirements found for this establishment type.
+            </p>
+          )}
         </div>
 
         <label className="inspection-textarea">
           <span>Remarks / Findings</span>
-          <textarea placeholder="Notes on observed conditions, violations, or follow-up actions..." />
+          <textarea
+            placeholder="Notes on observed conditions, violations, or follow-up actions..."
+            value={findings}
+            onChange={(event) => setFindings(event.target.value)}
+          />
+        </label>
+
+        <label className="inspection-textarea inspection-remarks-field">
+          <span>Follow-up Remarks</span>
+          <textarea
+            placeholder="Optional follow-up remarks..."
+            value={remarks}
+            onChange={(event) => setRemarks(event.target.value)}
+          />
         </label>
 
         <div className="photo-upload-title">
@@ -499,16 +538,29 @@ function InspectionFormModal({ inspection, onClose }) {
 
         <div className="inspection-warning">
           ⚠ Status will be auto-set to <strong>For Completion</strong> if any
-          requirement is unchecked.
+          requirement is unchecked. You may manually change the final status
+          before submitting.
         </div>
 
+        {formError ? <p className="sanitation-error-text">{formError}</p> : null}
+
         <div className="inspection-form-actions">
-          <button type="button" className="draft-btn">
+          <button
+            type="button"
+            className="draft-btn"
+            disabled={saving}
+            onClick={() => handleSubmit(true)}
+          >
             Save Draft
           </button>
 
-          <button type="button" className="submit-inspection-btn">
-            Submit Inspection
+          <button
+            type="button"
+            className="submit-inspection-btn"
+            disabled={saving}
+            onClick={() => handleSubmit(false)}
+          >
+            {saving ? "Submitting..." : "Submit Inspection"}
           </button>
         </div>
       </div>
@@ -516,8 +568,107 @@ function InspectionFormModal({ inspection, onClose }) {
   );
 }
 
-function statusClass(status) {
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getSuggestedNextDueDate(dateValue, frequency) {
+  if (!dateValue) return "";
+
+  const date = new Date(dateValue);
+
+  if (frequency === "quarterly") {
+    date.setMonth(date.getMonth() + 3);
+  } else {
+    date.setMonth(date.getMonth() + 1);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getDayDifference(dateValue) {
+  const today = new Date();
+  const target = new Date(dateValue);
+
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function getDueText(dateValue) {
+  if (!dateValue) {
+    return "No schedule";
+  }
+
+  const diff = getDayDifference(dateValue);
+
+  if (diff < 0) {
+    return `${Math.abs(diff)}d overdue`;
+  }
+
+  if (diff === 0) {
+    return "Due today";
+  }
+
+  return `in ${diff}d`;
+}
+
+function buildCalendarCells(rows) {
+  const today = new Date();
+  const cells = [];
+
+  for (let index = 0; index < 28; index += 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+
+    const isoDate = date.toISOString().slice(0, 10);
+
+    const events = rows
+      .filter((row) => row.nextDueDate === isoDate)
+      .map((row) => ({
+        title: row.business_name,
+        status: calendarStatusClass(row.compliance_status_label),
+      }));
+
+    cells.push({
+      day: String(date.getDate()),
+      events,
+    });
+  }
+
+  return cells;
+}
+
+function calendarStatusClass(status = "") {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("good")) return "good";
+  if (normalized.includes("upcoming")) return "upcoming";
+  if (normalized.includes("completion")) return "completion";
+  if (normalized.includes("violation")) return "violation";
+
+  return "upcoming";
+}
+
+function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
+}
+
+function formatFrequency(value = "") {
+  if (value === "monthly") return "Monthly";
+  if (value === "quarterly") return "Quarterly";
+  return value || "Not Set";
+}
+
+function formatDate(value) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 export default InspectionManagement;

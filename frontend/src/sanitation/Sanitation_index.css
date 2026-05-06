@@ -404,14 +404,16 @@
 /* ESTABLISHMENT BAR CHART MOCK */
 
 .establishment-bar-chart {
-  height: 270px;
+  height: 250px;
   border-left: 2px solid #c9d2cd;
   border-bottom: 2px solid #c9d2cd;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
   align-items: end;
-  gap: 18px;
-  padding: 0 22px;
+  gap: 14px;
+  padding: 20px 18px 36px;
+  box-sizing: border-box;
+  overflow: hidden;
   background-image:
     linear-gradient(to right, #e5ece8 1px, transparent 1px),
     linear-gradient(to bottom, #e5ece8 1px, transparent 1px);
@@ -427,10 +429,12 @@
 
 .establishment-bar-stack {
   flex: 1;
+  max-height: 175px;
   display: flex;
   flex-direction: column-reverse;
   justify-content: flex-start;
   align-items: center;
+  overflow: hidden;
 }
 
 .establishment-bar-stack span {
@@ -452,8 +456,43 @@
 
 .establishment-bar-item small {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 10px;
   color: #666;
+  text-align: center;
+  max-width: 70px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.establishment-chart-legend {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.establishment-chart-legend .large {
+  color: #1f7655;
+}
+
+.establishment-chart-legend .sp {
+  color: #36a87a;
+}
+
+.sanitation-empty-chart {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #777;
+}
+
+.activity-status.no-permit {
+  background: #e5e7eb;
+  color: #4b5563;
 }
 
 /* RECENT ACTIVITY */
@@ -694,6 +733,12 @@
   color: #ffffff;
   border-color: #ffffff;
 }
+.requirements-empty {
+  margin: 18px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #777;
+}
 
 /* RIGHT CARD */
 
@@ -913,6 +958,76 @@
   font-weight: 700;
   color: #111;
 }
+.establishment-empty {
+  height: 80px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
+
+.sanitation-error-text {
+  margin: 10px 0;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.modal-field input:disabled,
+.modal-field select:disabled {
+  background: #f3f4f6;
+  color: #777;
+  cursor: not-allowed;
+}
+
+.save-btn:disabled,
+.cancel-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.establishment-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.establishment-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7faf8;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.establishment-icon-btn.edit {
+  color: #2563eb;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.establishment-icon-btn.delete {
+  color: #ef4444;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.establishment-icon-btn:hover {
+  transform: translateY(-1px);
+}
+
+.status-pill.no-permit {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.status-pill.no-permit::before {
+  background: #4b5563;
+}
 
 /* PERMIT */
 
@@ -926,6 +1041,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.permit-status.no-permit,
+.permit-compliance.no-permit {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.permit-alert-good {
+  border-left-color: #22c55e;
+}
+
+.permit-alert-good svg {
+  color: #22c55e;
+}
+
+.permit-alert-good strong {
+  color: #22c55e;
 }
 
 /* ================= STATUS PILL ================= */
@@ -1016,7 +1148,9 @@
 .establishment-modal {
   position: relative;
   width: 960px;
-  min-height: 590px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
   background: #ffffff;
   border-radius: 7px;
   padding: 28px 32px;
@@ -1127,6 +1261,32 @@
   font-weight: 700;
 }
 
+.establishment-empty {
+  height: 80px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
+
+.sanitation-error-text {
+  margin: 10px 0;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.modal-field input:disabled,
+.modal-field select:disabled {
+  background: #f3f4f6;
+  color: #777;
+  cursor: not-allowed;
+}
+
+.save-btn:disabled,
+.cancel-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 /* ================================================================================= INSPECTION MANAGEMENT =========================================== */
 
 .inspection-page {
@@ -1148,7 +1308,38 @@
   font-size: 12px;
   color: #444;
 }
+.inspection-empty {
+  height: 70px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
 
+.inspection-second-grid {
+  margin-top: 16px;
+}
+
+.inspection-form-grid select {
+  width: 100%;
+  height: 50px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: white;
+  box-sizing: border-box;
+  padding: 0 22px;
+  font-size: 15px;
+  outline: none;
+}
+
+.inspection-remarks-field {
+  margin-top: 18px;
+}
+
+.draft-btn:disabled,
+.submit-inspection-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 /* ===================== ALERT ===================== */
 
 .inspection-alert {
@@ -2435,6 +2626,26 @@
   font-weight: 700;
   color: #777;
 }
+.kpi-card.gray svg {
+  color: #6b7280;
+}
+
+.kpi-card.active.gray {
+  border: 2px solid #6b7280;
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.25);
+}
+
+.status.no-permit {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.submission-table-card td small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #777;
+}
 
 /* ========================================================= SANITARY REPORT & ANALYTICS =================================================== */
 
@@ -3443,6 +3654,20 @@
   font-size: 18px;
   cursor: pointer;
 }
+.household-empty,
+.household-empty-text {
+  height: 70px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
+
+.household-table-card td small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: #777;
+}
 
 /* RESPONSIVE */
 
@@ -3669,6 +3894,99 @@
   line-height: 52px !important;
   font-size: 34px !important;
   color: #0f1f38 !important;
+}
+
+.gis-legend .completion {
+  background: #ff8b21;
+}
+
+.gis-legend .no-permit {
+  background: #6b7280;
+}
+
+.gis-selected-card {
+  margin: -48px 0 24px;
+  border: 1px solid #d7e0dc;
+  border-radius: 9px;
+  background: #f7faf8;
+  padding: 14px;
+}
+
+.gis-selected-card strong {
+  display: block;
+  font-size: 14px;
+  color: #111;
+}
+
+.gis-selected-card p {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+.gis-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.gis-item.active {
+  background: #edf5f1;
+}
+
+.gis-item div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gis-item small {
+  font-size: 11px;
+  color: #666;
+}
+
+.gis-empty {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #777;
+}
+
+.gis-popup {
+  min-width: 180px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.gis-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 16px;
+  padding: 5px;
+  border-radius: 999px;
+  background: #edf5f1;
+  border: 1px solid #d7e0dc;
+}
+
+.gis-mode-toggle button {
+  border: none;
+  background: transparent;
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  color: #315346;
+}
+
+.gis-mode-toggle button.active {
+  background: #0f7a45;
+  color: white;
+  box-shadow: 0 6px 14px rgba(15, 122, 69, 0.18);
 }
 
 @media (max-width: 1100px) {
@@ -4121,6 +4439,29 @@
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
+}
+.household-empty {
+  height: 70px;
+  text-align: center;
+  font-weight: 700;
+  color: #777;
+}
+
+.household-empty-text {
+  align-self: center;
+  justify-self: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #777;
+}
+
+.hr-bar-chart {
+  overflow: hidden;
+}
+
+.hr-bars {
+  max-height: 175px;
+  overflow: hidden;
 }
 
 @media (max-width: 1100px) {

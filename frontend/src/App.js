@@ -8,7 +8,7 @@ import SanitationAppShell from "./sanitation/components/layout/SanitationAppShel
 
 /* ================= CONTEXT ================= */
 import { TourismDataProvider } from "./tourism/context/TourismDataContext";
-// import { SanitaryDataProvider } from "./sanitation/context/SanitaryDataContext";
+import { SanitationDataProvider } from "./sanitation/context/SanitationDataContext";
 
 /* ================= TOURISM PAGES ================= */
 import Dashboard from "./tourism/pages/Dashboard";
@@ -33,10 +33,10 @@ import SanitaryGISMap from "./sanitation/pages/SanitaryGISMap";
 import HouseholdReportAnalytics from "./sanitation/pages/HouseholdReportAnalytics";
 
 
+
 function App() {
   return (
     <TourismDataProvider>
-      {/* later you can wrap with SanitaryDataProvider */}
       <BrowserRouter>
         <Routes>
 
@@ -53,7 +53,7 @@ function App() {
           </Route>
 
           {/* ================= SANITATION SYSTEM ================= */}
-          <Route path="/sanitation" element={<SanitationAppShell />}>
+          <Route path="/sanitation" element={<SanitationDataProvider><SanitationAppShell /></SanitationDataProvider>}>
             <Route index element={<SanitationDashboard />} />
             <Route path="requirements" element={<TypesAndRequirements />} />
             <Route path="establishments" element={<EstablishmentRecords />} />
