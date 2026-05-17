@@ -1,30 +1,56 @@
-import { FiBell } from "react-icons/fi";
+import { FiBell, FiLogOut } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../../../auth/AuthContext";
 
 function SanitationTopbar() {
+  const navigate = useNavigate();
+  const { logout, role, user } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="sanitation-topbar">
-      
-      {/* LEFT TITLE */}
       <h3 className="topbar-title">
         Mauban Health Office - Sanitary Section Monitoring
       </h3>
 
-      {/* RIGHT SIDE */}
       <div className="sanitation-top-actions">
-        
-        {/* NOTIFICATION */}
         <FiBell className="topbar-icon" />
 
-        {/* ADMIN */}
+        {role === "admin" ? (
+          <button
+            type="button"
+            className="sanitation-module-switch"
+            onClick={() => navigate("/")}
+          >
+            Tourism
+          </button>
+        ) : null}
+
         <div className="admin">
-          <div className="admin-avatar">A</div>
+          <div className="admin-avatar">
+            {(user?.display_name || user?.username || "A").charAt(0)}
+          </div>
 
           <div className="admin-text">
-            <span>Admin</span>
-            <small>Sanitary Inspector</small>
+            <span>{user?.display_name || user?.username}</span>
+            <small>{user?.profile?.role_label}</small>
           </div>
         </div>
 
+        <button
+          type="button"
+          className="sanitation-logout-btn"
+          title="Logout"
+          aria-label="Logout"
+          onClick={handleLogout}
+        >
+          <FiLogOut />
+        </button>
       </div>
     </div>
   );

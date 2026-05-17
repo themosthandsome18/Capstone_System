@@ -15,49 +15,90 @@ export const countries = [
   { id: 3, name: "South Korea", type: "foreign" },
   { id: 4, name: "Australia", type: "foreign" },
   { id: 5, name: "Japan", type: "foreign" },
+  { id: 6, name: "International", type: "foreign" },
 ];
 
 export const regions = [
-  { id: 1, name: "CALABARZON" },
-  { id: 2, name: "NCR" },
-  { id: 3, name: "Central Luzon" },
-  { id: 4, name: "Bicol Region" },
+  { id: 1, name: "Region I - Ilocos Region", code: "01" },
+  { id: 2, name: "Region II - Cagayan Valley", code: "02" },
+  { id: 3, name: "Region III - Central Luzon", code: "03" },
+  { id: 4, name: "CALABARZON Region", code: "04" },
+  { id: 5, name: "MIMAROPA Region", code: "17" },
+  { id: 6, name: "Region V - Bicol Region", code: "05" },
+  { id: 7, name: "NCR - National Capital Region", code: "13" },
+  { id: 8, name: "CAR - Cordillera Administrative Region", code: "14" },
+  { id: 9, name: "Region VI - Western Visayas", code: "06" },
+  { id: 10, name: "Region VII - Central Visayas", code: "07" },
+  { id: 11, name: "Region VIII - Eastern Visayas", code: "08" },
+  { id: 12, name: "Region IX - Zamboanga Peninsula", code: "09" },
+  { id: 13, name: "Region X - Northern Mindanao", code: "10" },
+  { id: 14, name: "Region XI - Davao Region", code: "11" },
+  { id: 15, name: "Region XII - SOCCSKSARGEN", code: "12" },
+  { id: 16, name: "Region XIII - Caraga", code: "16" },
+  { id: 17, name: "Autonomous Region in Muslim Mindanao (ARMM)", code: "15" },
 ];
 
 export const provinces = [
-  { id: 1, name: "Quezon" },
-  { id: 2, name: "Laguna" },
-  { id: 3, name: "Batangas" },
-  { id: 4, name: "Metro Manila" },
-  { id: 5, name: "Cavite" },
+  { id: 1, name: "Ilocos Norte", region_id: 1, code: "0128" },
+  { id: 2, name: "Ilocos Sur", region_id: 1, code: "0129" },
+  { id: 3, name: "La Union", region_id: 1, code: "0133" },
+  { id: 4, name: "Pangasinan", region_id: 1, code: "0155" },
+  { id: 5, name: "Batanes", region_id: 2, code: "0209" },
+  { id: 6, name: "Cagayan", region_id: 2, code: "0215" },
+  { id: 7, name: "Isabela", region_id: 2, code: "0231" },
+  { id: 8, name: "Nueva Vizcaya", region_id: 2, code: "0250" },
+  { id: 9, name: "Quirino", region_id: 2, code: "0257" },
+  { id: 10, name: "Bataan", region_id: 3, code: "0308" },
+  { id: 11, name: "Bulacan", region_id: 3, code: "0314" },
+  { id: 12, name: "Nueva Ecija", region_id: 3, code: "0349" },
+  { id: 13, name: "Pampanga", region_id: 3, code: "0354" },
+  { id: 14, name: "Tarlac", region_id: 3, code: "0369" },
+  { id: 15, name: "Zambales", region_id: 3, code: "0371" },
+  { id: 16, name: "Aurora", region_id: 3, code: "0377" },
+  { id: 17, name: "Batangas", region_id: 4, code: "0410" },
+  { id: 18, name: "Cavite", region_id: 4, code: "0421" },
+  { id: 19, name: "Laguna", region_id: 4, code: "0434" },
+  { id: 20, name: "Quezon", region_id: 4, code: "0456" },
+  { id: 21, name: "Rizal", region_id: 4, code: "0458" },
+  { id: 22, name: "Metro Manila", region_id: 7, code: "1300" },
 ];
 
 export const itineraries = [
-  { id: 1, name: "Island Hopping Circuit" },
-  { id: 2, name: "Beach and Resort Day Tour" },
-  { id: 3, name: "Eco Adventure Trail" },
-  { id: 4, name: "Heritage and Lighthouse Stop" },
+  { id: 1, name: "Overnight" },
+  { id: 2, name: "Day Tour" },
+  { id: 3, name: "2 Nights" },
+  { id: 4, name: "3 Nights" },
+  { id: 5, name: "4 Nights" },
+  { id: 6, name: "5 Nights and above" },
 ];
 
 export const travelModes = [
   { id: 1, name: "Private Vehicle" },
-  { id: 2, name: "Tourist Van" },
+  { id: 2, name: "Public Utility Vehicle" },
   { id: 3, name: "Public Bus" },
   { id: 4, name: "Ferry / Port Transfer" },
 ];
 
 export const boatTypes = [
-  { id: 1, name: "Motorized Banca" },
-  { id: 2, name: "Speedboat" },
-  { id: 3, name: "Passenger Boat" },
+  { id: 1, name: "Public Boat (P100/ride/head) Sabang Port Only" },
+  { id: 2, name: "Private Boat (Rates depend on the capacity)" },
+  {
+    id: 3,
+    name: "Boat Provided by Resort (As confirmed by both guests and resort)",
+  },
 ];
 
 export const visitPurposes = [
   { id: 1, name: "Leisure" },
-  { id: 2, name: "Family Visit" },
-  { id: 3, name: "Educational Tour" },
-  { id: 4, name: "Business / Event" },
-  { id: 5, name: "Pilgrimage / Cultural Visit" },
+  { id: 2, name: "Vacation" },
+  { id: 3, name: "Business" },
+  { id: 4, name: "Visit" },
+  { id: 5, name: "Outing" },
+  { id: 6, name: "Tour" },
+  { id: 7, name: "Team Building" },
+  { id: 8, name: "Travel" },
+  { id: 9, name: "Swimming" },
+  { id: 10, name: "Unwind" },
 ];
 
 export const resorts = [

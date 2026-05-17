@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FiBell, FiCalendar, FiSearch } from "react-icons/fi";
+import { FiBell, FiCalendar, FiLogOut, FiSearch } from "react-icons/fi";
+import { useAuth } from "../../../auth/AuthContext";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -39,9 +40,9 @@ const pageInfo = {
     searchPlaceholder: "Search locations...",
     showAdd: false,
   },
-  "/settings": {
-    title: "Settings",
-    searchPlaceholder: "Search settings...",
+  "/activity-logs": {
+    title: "Activity Logs",
+    searchPlaceholder: "Search activity...",
     showAdd: false,
   },
 };
@@ -58,6 +59,7 @@ function formatToday() {
 function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout, role, user } = useAuth();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
 
@@ -71,6 +73,11 @@ function AppShell() {
     }
 
     setAddEntryRequestId((value) => value + 1);
+  }
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
   }
 
   return (
@@ -140,6 +147,31 @@ function AppShell() {
                 + Add Entry
               </button>
             ) : null}
+
+            {role === "admin" ? (
+              <button
+                type="button"
+                className="module-switch-btn"
+                onClick={() => navigate("/sanitation")}
+              >
+                Sanitation
+              </button>
+            ) : null}
+
+            <div className="topbar-user">
+              <span>{user?.display_name || user?.username}</span>
+              <small>{user?.profile?.role_label}</small>
+            </div>
+
+            <button
+              type="button"
+              className="icon-pill"
+              title="Logout"
+              aria-label="Logout"
+              onClick={handleLogout}
+            >
+              <FiLogOut />
+            </button>
           </div>
         </header>
 

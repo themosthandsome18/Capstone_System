@@ -6,9 +6,11 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiClipboard,
+  FiDownload,
   FiSearch,
   FiX,
 } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const statusOptions = [
@@ -95,15 +97,58 @@ function InspectionManagement() {
     setShowForm(true);
   }
 
+  function handleExport() {
+    const headers = [
+      "Establishment",
+      "Business Type",
+      "Barangay",
+      "Address",
+      "Inspection Frequency",
+      "Last Inspection",
+      "Next Due",
+      "Due Status",
+      "Compliance Status",
+      "Latest Inspector",
+      "Latest Findings",
+      "Latest Remarks",
+    ];
+    const exportRows = filteredRows.map((row) => [
+      row.business_name,
+      row.business_type_name,
+      row.barangay,
+      row.address,
+      formatFrequency(row.inspection_frequency),
+      row.lastInspectionDate,
+      row.nextDueDate,
+      row.dueText,
+      row.compliance_status_label,
+      row.latestInspection?.inspector_name || "",
+      row.latestInspection?.findings || "",
+      row.latestInspection?.remarks || "",
+    ]);
+
+    exportCsv(datedCsvFilename("sanitary-inspections"), headers, exportRows);
+  }
+
   if (loading) {
     return <div className="inspection-page">Loading inspection records...</div>;
   }
 
   return (
     <div className="inspection-page">
-      <div className="inspection-header">
-        <h1>Inspection Management</h1>
-        <p>Track and manage sanitary inspections</p>
+      <div className="inspection-header sanitation-split-header">
+        <div>
+          <h1>Inspection Management</h1>
+          <p>Track and manage sanitary inspections</p>
+        </div>
+
+        <button
+          type="button"
+          className="sanitation-export-btn"
+          onClick={handleExport}
+        >
+          <FiDownload /> Export CSV
+        </button>
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}

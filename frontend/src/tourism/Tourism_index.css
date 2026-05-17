@@ -275,6 +275,25 @@
   color: #000;
 }
 
+.topbar-user {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 116px;
+}
+
+.topbar-user span {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.topbar-user small {
+  color: #66746d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .add-entry-btn {
   height: 40px;
   border-radius: 999px;
@@ -284,6 +303,22 @@
   font-size: 14px;
   font-weight: 800;
   color: white;
+}
+
+.module-switch-btn {
+  height: 40px;
+  border-radius: 999px;
+  border: 1.5px solid #0f6b42;
+  background: #0f6b42;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.module-switch-btn:hover {
+  background: #0b5836;
 }
 
 /* ================= SIDEBAR TOGGLE ================= */
@@ -367,6 +402,10 @@
   @apply flex items-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 py-2 text-sm font-semibold text-black;
 }
 
+.booking-import-btn {
+  cursor: pointer;
+}
+
 /* Generate Report Button */
 
 .primary-action {
@@ -390,6 +429,8 @@
 
 .metric-card h2 {
   @apply mt-2 text-[30px] font-bold text-black;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .metric-card span {
@@ -678,6 +719,26 @@
 
 .booking-search input {
   @apply h-10 w-full rounded-full border border-[#2fa34a] bg-white pl-12 pr-4 text-sm outline-none;
+}
+
+.booking-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: -18px;
+}
+
+.booking-filter-grid select,
+.booking-filter-grid input {
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #b7d7c7;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #111827;
+  outline: none;
 }
 
 
@@ -1009,12 +1070,132 @@
   color: #166534;
 }
 
+.tourist-total-check {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.total-check-item {
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+}
+
+.total-check-item span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4b5563;
+}
+
+.total-check-item strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: #111827;
+}
+
+.total-check-item.ok {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.total-check-item.error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+}
+
+.import-preview-modal {
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 24px;
+}
+
+.import-preview-modal h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.import-preview-modal > p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.import-status {
+  font-weight: 700;
+  color: #146c43 !important;
+}
+
+.import-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.import-summary-grid div {
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 12px;
+}
+
+.import-summary-grid span,
+.import-sample-grid h3 {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #374151;
+}
+
+.import-summary-grid strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+  color: #111827;
+}
+
+.import-sample-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.import-sample-grid section {
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.import-sample-grid p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
 @media (max-width: 760px) {
   .tourist-record-form {
     padding: 18px;
   }
 
   .tourist-record-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tourist-total-check,
+  .import-summary-grid,
+  .import-sample-grid,
+  .booking-filter-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1728,7 +1909,8 @@
 /* ================= REPORT TABS ================= */
 
 .report-tabs {
-  @apply flex w-fit gap-2 rounded-xl bg-white/80 p-2;
+  @apply flex w-fit flex-wrap gap-2 rounded-xl bg-white/80 p-2;
+  max-width: 100%;
 }
 
 .report-tabs button {
@@ -1844,6 +2026,10 @@
 
 .report-table-card .total-row td {
   font-weight: 800;
+}
+
+.report-print-heading {
+  display: none;
 }
 
 /* ======================================================================= GIS MAP PAGE ================================================== */
@@ -2074,158 +2260,6 @@
   }
 }
 
-/* ============================================================ SETTINGS PAGE =========================================================== */
-
-  .settings-page {
-    display: flex;
-    flex-direction: column;
-    gap: 50px;
-    padding: 0;
-  }
-
-  /* ================= TOP (Breadcrumb only) ================= */
-
-  .settings-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .settings-breadcrumb {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 16px;
-    color: #374151;
-  }
-
-  .settings-breadcrumb strong {
-    font-weight: 600;
-    color: #111827;
-  }
-
-  /* ================= TITLE ================= */
-
-  .settings-title {
-    margin: -60px 0 18px 0;   /* moves it higher */
-    font-size: 36px;          /* smaller than before */
-    font-weight: 800;
-    letter-spacing: -1px;
-    color: #000000;
-  }
-
-  /* ================= CONTAINER (MAIN COLUMN) ================= */
-
-  .settings-container {
-    width: 480px;             /* smaller column */
-    margin-left: 12px;
-    margin-top: -40px;        /* moves whole block higher */
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  /* ================= CARD ================= */
-
-  .settings-card {
-    width: 100%;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.75);
-    padding: 20px 22px;
-    box-shadow: 0 12px 22px rgba(34, 72, 55, 0.18);
-  }
-
-  .settings-card h2 {
-    margin: 0 0 18px;
-    font-size: 20px;          /* smaller */
-    font-weight: 800;
-    color: #000000;
-  }
-
-  /* ================= FORM ================= */
-
-  .settings-field {
-    display: block;
-    margin-bottom: 18px;
-  }
-
-  .settings-field:last-child {
-    margin-bottom: 0;
-  }
-
-  .settings-field span {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 16px;          /* smaller label */
-    font-weight: 500;
-    color: #000000;
-  }
-
-  .settings-field input {
-    width: 100%;
-    height: 44px;             /* smaller input */
-    border: none;
-    border-radius: 10px;
-    background: #d9e5e0;
-    padding: 0 18px;
-    font-size: 15px;          /* smaller text */
-    color: #000000;
-    outline: none;
-  }
-
-  /* ================= API CARD ================= */
-
-  .api-card {
-    margin-top: 0;
-  }
-
-  /* ================= SAVE BUTTON ================= */
-
-  .settings-save-btn {
-    width: 180px;
-    height: 50px;
-    margin-left: 12px;
-    margin-top: -6px;
-    border: none;
-    border-radius: 10px;
-    background: #2fa34a;
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .settings-save-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.65;
-  }
-
-  .settings-message {
-    margin: -4px 0 0 12px;
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .settings-message.success {
-    color: #166534;
-  }
-
-  .settings-message.error {
-    color: #b91c1c;
-  }
-
-  .settings-home-link {
-  color: #374151;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.settings-home-link:hover {
-  color: #2fa34a;
-  text-decoration: underline;
-}
-}
-
 @media print {
   body {
     background: #ffffff !important;
@@ -2246,6 +2280,31 @@
   .reports-page {
     padding: 24px !important;
     background: #ffffff !important;
+  }
+
+  .report-print-heading {
+    display: block !important;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #111827;
+    padding-bottom: 12px;
+    text-align: center;
+  }
+
+  .report-print-heading strong {
+    display: block;
+    font-size: 14px;
+    text-transform: uppercase;
+  }
+
+  .report-print-heading h2 {
+    margin: 4px 0;
+    font-size: 22px;
+    font-weight: 800;
+  }
+
+  .report-print-heading p {
+    margin: 0;
+    font-size: 12px;
   }
 
   .report-chart-card,
@@ -2286,6 +2345,12 @@
   background: #eff6ff;
 }
 
+.booking-icon-btn.view {
+  color: #0f766e;
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
 .booking-icon-btn.delete {
   color: #ef4444;
   border-color: #f5b5b5;
@@ -2314,4 +2379,90 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.tourist-auto-fill-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tourist-auto-fill-row button {
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #94d3bd;
+  background: #ffffff;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.booking-detail-modal {
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 22px;
+}
+
+.booking-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #dbe8e1;
+  padding-bottom: 14px;
+}
+
+.booking-detail-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.booking-detail-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.booking-detail-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.booking-detail-item {
+  min-width: 0;
+  border-radius: 8px;
+  background: #f4faf7;
+  padding: 10px 12px;
+}
+
+.booking-detail-item span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.booking-detail-item strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .booking-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 }

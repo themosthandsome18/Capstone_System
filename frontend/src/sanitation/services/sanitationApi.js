@@ -1,139 +1,147 @@
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import { apiRequest, buildQueryString } from "../../shared/apiClient";
 
-async function request(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+
+const SANITATION_API_ERROR = "Sanitation API request failed.";
+
+const sanitationPath = (path) => `/sanitation${path}`;
+const householdPath = (path) => `/households${path}`;
+
+
+function request(endpoint, options = {}) {
+  return apiRequest(endpoint, {
+    errorMessage: SANITATION_API_ERROR,
     ...options,
   });
-
-  if (!response.ok) {
-    let details = null;
-
-    try {
-      details = await response.json();
-    } catch {
-      details = null;
-    }
-
-    const error = new Error("Sanitation API request failed.");
-    error.status = response.status;
-    error.details = details;
-    throw error;
-  }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
 }
+
+
+function save(endpoint, method, payload) {
+  return request(endpoint, {
+    method,
+    body: JSON.stringify(payload),
+  });
+}
+
+
+function remove(endpoint) {
+  return request(endpoint, {
+    method: "DELETE",
+  });
+}
+
+
+function withQuery(endpoint, params = {}) {
+  return `${endpoint}${buildQueryString(params)}`;
+}
+
 
 export function fetchSanitationBootstrap() {
-  return request("/sanitation/bootstrap/");
+  return request(sanitationPath("/bootstrap/"));
 }
+
 
 export function fetchSanitationDashboard() {
-  return request("/sanitation/dashboard/");
+  return request(sanitationPath("/dashboard/"));
 }
+
 
 export function fetchSanitationBusinessTypes() {
-  return request("/sanitation/business-types/");
+  return request(sanitationPath("/business-types/"));
 }
+
 
 export function fetchSanitationEstablishments() {
-  return request("/sanitation/establishments/");
+  return request(sanitationPath("/establishments/"));
 }
+
 
 export function createSanitationEstablishment(payload) {
-  return request("/sanitation/establishments/", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return save(sanitationPath("/establishments/"), "POST", payload);
 }
+
 
 export function updateSanitationEstablishment(id, payload) {
-  return request(`/sanitation/establishments/${id}/`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return save(
+    sanitationPath(`/establishments/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
 }
+
 
 export function deleteSanitationEstablishment(id) {
-  return request(`/sanitation/establishments/${id}/`, {
-    method: "DELETE",
-  });
+  return remove(sanitationPath(`/establishments/${encodeURIComponent(id)}/`));
 }
+
 
 export function fetchSanitationInspections() {
-  return request("/sanitation/inspections/");
+  return request(sanitationPath("/inspections/"));
 }
+
 
 export function createSanitationInspection(payload) {
-  return request("/sanitation/inspections/", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return save(sanitationPath("/inspections/"), "POST", payload);
 }
+
 
 export function updateSanitationInspection(id, payload) {
-  return request(`/sanitation/inspections/${id}/`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return save(
+    sanitationPath(`/inspections/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
 }
+
 
 export function deleteSanitationInspection(id) {
-  return request(`/sanitation/inspections/${id}/`, {
-    method: "DELETE",
-  });
+  return remove(sanitationPath(`/inspections/${encodeURIComponent(id)}/`));
 }
+
 
 export function fetchSanitationPermits(params = {}) {
-  const query = new URLSearchParams(params).toString();
-  return request(`/sanitation/permits/${query ? `?${query}` : ""}`);
+  return request(withQuery(sanitationPath("/permits/"), params));
 }
+
 
 export function fetchSanitationSubmissions(params = {}) {
-  const query = new URLSearchParams(params).toString();
-  return request(`/sanitation/submissions/${query ? `?${query}` : ""}`);
+  return request(withQuery(sanitationPath("/submissions/"), params));
 }
+
 
 export function fetchSanitationReports(params = {}) {
-  const query = new URLSearchParams(params).toString();
-  return request(`/sanitation/reports/${query ? `?${query}` : ""}`);
+  return request(withQuery(sanitationPath("/reports/"), params));
 }
+
 
 export function fetchHouseholdBootstrap() {
-  return request("/households/bootstrap/");
+  return request(householdPath("/bootstrap/"));
 }
+
 
 export function fetchHouseholdDashboard() {
-  return request("/households/dashboard/");
+  return request(householdPath("/dashboard/"));
 }
+
 
 export function fetchHouseholdRecords() {
-  return request("/households/records/");
+  return request(householdPath("/records/"));
 }
+
 
 export function createHouseholdRecord(payload) {
-  return request("/households/records/", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return save(householdPath("/records/"), "POST", payload);
 }
+
 
 export function updateHouseholdRecord(id, payload) {
-  return request(`/households/records/${id}/`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return save(
+    householdPath(`/records/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
 }
 
+
 export function deleteHouseholdRecord(id) {
-  return request(`/households/records/${id}/`, {
-    method: "DELETE",
-  });
+  return remove(householdPath(`/records/${encodeURIComponent(id)}/`));
 }

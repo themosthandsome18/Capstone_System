@@ -16,6 +16,8 @@ import {
   FiCheckCircle,
   FiDownload,
   FiFileText,
+  FiMapPin,
+  FiTrendingUp,
   FiUsers,
   FiXCircle,
 } from "react-icons/fi";
@@ -213,6 +215,32 @@ function Dashboard() {
           title="Total Revenue Collected"
           value={formatCurrency(metrics.totalRevenueCollected)}
           icon={<FiBriefcase />}
+        />
+
+        <MetricCard
+          title="Pending on Report Date"
+          value={formatNumber(metrics.pendingForReportingDate)}
+          note={dashboardData.reportingDate}
+          icon={<FiFileText />}
+        />
+
+        <MetricCard
+          title="No-show Rate"
+          value={`${metrics.noShowRate || 0}%`}
+          note="All booking records"
+          icon={<FiXCircle />}
+        />
+
+        <MetricCard
+          title="Top Resort This Month"
+          value={metrics.topResortThisMonth}
+          icon={<FiTrendingUp />}
+        />
+
+        <MetricCard
+          title="Top Origin This Month"
+          value={metrics.topOriginThisMonth}
+          icon={<FiMapPin />}
         />
       </div>
 

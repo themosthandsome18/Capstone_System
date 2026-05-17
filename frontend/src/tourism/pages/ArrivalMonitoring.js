@@ -6,6 +6,7 @@ import {
   FiSun,
   FiUsers,
 } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
 
@@ -29,11 +30,6 @@ function formatCurrency(value) {
   }).format(value || 0);
 }
 
-function escapeCsvValue(value) {
-  const normalized = value ?? "";
-  return `"${String(normalized).replace(/"/g, '""')}"`;
-}
-
 function displayCount(value) {
   return value ? formatNumber(value) : "--";
 }
@@ -51,6 +47,7 @@ function ArrivalMonitoring() {
       "Group/Guest",
       "Male",
       "Female",
+      "Travel Itinerary",
       "Overnight",
       "Same Day",
       "Resort",
@@ -61,24 +58,14 @@ function ArrivalMonitoring() {
       row.group,
       row.male,
       row.female,
+      row.itinerary,
       row.overnight,
       row.sameDay,
       row.resort,
       row.feePaid,
     ]);
-    const csv = [headers, ...csvRows]
-      .map((row) => row.map(escapeCsvValue).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
 
-    link.href = url;
-    link.download = `arrival-monitoring-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportCsv(datedCsvFilename("arrival-monitoring"), headers, csvRows);
   }
 
   if (loading) {
@@ -105,7 +92,7 @@ function ArrivalMonitoring() {
             onClick={handleExport}
           >
             <FiDownload size={15} />
-            Export
+            Export CSV
           </button>
         </div>
       </div>
@@ -154,6 +141,7 @@ function ArrivalMonitoring() {
               <th>Group/Guest</th>
               <th>Male</th>
               <th>Female</th>
+              <th>Travel Itinerary</th>
               <th>Overnight</th>
               <th>Sameday</th>
               <th>Resort</th>
@@ -169,6 +157,7 @@ function ArrivalMonitoring() {
                   <td className="guest-name">{row.group}</td>
                   <td>{row.male}</td>
                   <td>{row.female}</td>
+                  <td>{row.itinerary || "--"}</td>
                   <td>{displayCount(row.overnight)}</td>
                   <td>{displayCount(row.sameDay)}</td>
                   <td>{row.resort}</td>
@@ -177,7 +166,7 @@ function ArrivalMonitoring() {
               ))
             ) : (
               <tr>
-                <td colSpan="8" className="text-center">
+                <td colSpan="9" className="text-center">
                   No arrived tourist records yet.
                 </td>
               </tr>
@@ -188,6 +177,7 @@ function ArrivalMonitoring() {
               <td />
               <td>{dailyTotals.male}</td>
               <td>{dailyTotals.female}</td>
+              <td />
               <td>{dailyTotals.overnight}</td>
               <td>{dailyTotals.sameDay}</td>
               <td />

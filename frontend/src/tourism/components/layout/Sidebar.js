@@ -9,7 +9,7 @@ const navigation = [
   { to: "/feedback", label: "Feedback Monitoring" },
   { to: "/analytics-reports", label: "Reports" },
   { to: "/gis-map", label: "GIS Map" },
-  { to: "/settings", label: "Settings" },
+  { to: "/activity-logs", label: "Activity Logs" },
 ];
 
 function Sidebar() {

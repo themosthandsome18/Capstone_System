@@ -15,6 +15,7 @@ const householdLinks = [
   { to: "/sanitation/households", label: "Households Records" },
   { to: "/sanitation/gis-map", label: "GIS Map" },
   { to: "/sanitation/household-reports", label: "Report and Analytics" },
+  { to: "/sanitation/activity-logs", label: "Activity Logs" },
 ];
 
 function SanitationSidebar() {

@@ -8,6 +8,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { FiDownload, FiPrinter } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -29,6 +30,22 @@ function getReportTitle(type) {
     return "Monthly Tourist Arrival Report";
   }
 
+  if (type === "origin") {
+    return "Visitor Origin Report";
+  }
+
+  if (type === "purpose") {
+    return "Purpose of Travel Report";
+  }
+
+  if (type === "transport") {
+    return "Vehicle Classification Report";
+  }
+
+  if (type === "no_show") {
+    return "No-show Booking Report";
+  }
+
   return "Visitors by Resorts";
 }
 
@@ -41,6 +58,22 @@ function getReportSubtitle(type) {
     return "Monthly visitor totals based on arrived tourist records";
   }
 
+  if (type === "origin") {
+    return "Visitor totals grouped by province of residence";
+  }
+
+  if (type === "purpose") {
+    return "Visitor totals grouped by declared purpose of travel";
+  }
+
+  if (type === "transport") {
+    return "Visitor totals grouped by vehicle classification";
+  }
+
+  if (type === "no_show") {
+    return "No-show bookings grouped by resort";
+  }
+
   return "Top performing destination based on arrived tourist records";
 }
 
@@ -51,6 +84,22 @@ function getFirstColumnLabel(type) {
 
   if (type === "monthly") {
     return "Month";
+  }
+
+  if (type === "origin") {
+    return "Province";
+  }
+
+  if (type === "purpose") {
+    return "Purpose";
+  }
+
+  if (type === "transport") {
+    return "Vehicle";
+  }
+
+  if (type === "no_show") {
+    return "Resort Name";
   }
 
   return "Resort Name";
@@ -109,6 +158,45 @@ function AnalyticsAndReport() {
     window.print();
   }
 
+  function handleExportCsv() {
+    const selectedResort =
+      referenceTables.resorts.find(
+        (resort) => String(resort.resort_id) === String(filters.resort_id)
+      )?.resort_name || "All Resorts";
+    const headers = [
+      "Report Type",
+      "Date From",
+      "Date To",
+      "Resort Filter",
+      getFirstColumnLabel(reportType),
+      "Total Visitors",
+      "Total Revenue",
+      "Average Per Visitor",
+    ];
+    const csvRows = rows.map((row) => [
+      getReportTitle(reportType),
+      filters.from || "All",
+      filters.to || "All",
+      selectedResort,
+      row.name,
+      row.visitors,
+      row.revenue,
+      row.avg,
+    ]);
+
+    csvRows.push([
+      getReportTitle(reportType),
+      filters.from || "All",
+      filters.to || "All",
+      selectedResort,
+      "Total",
+      totalVisitors,
+      totalRevenue,
+      "",
+    ]);
+    exportCsv(datedCsvFilename(`tourism-${reportType}-report`), headers, csvRows);
+  }
+
   function handleExportPDF() {
     window.print();
   }
@@ -127,11 +215,25 @@ function AnalyticsAndReport() {
             Print
           </button>
 
+          <button type="button" onClick={handleExportCsv}>
+            <FiDownload />
+            Export CSV
+          </button>
+
           <button type="button" className="green" onClick={handleExportPDF}>
             <FiDownload />
             Export PDF
           </button>
         </div>
+      </div>
+
+      <div className="report-print-heading">
+        <strong>Municipality of Mauban</strong>
+        <h2>Tourism Office Report</h2>
+        <p>
+          {getReportTitle(reportType)} | {filters.from || "All dates"} to{" "}
+          {filters.to || "All dates"}
+        </p>
       </div>
 
       <div className="report-tabs">
@@ -157,6 +259,38 @@ function AnalyticsAndReport() {
           onClick={() => changeReportType("resort")}
         >
           Resort Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "origin" ? "active" : ""}
+          onClick={() => changeReportType("origin")}
+        >
+          Origin Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "purpose" ? "active" : ""}
+          onClick={() => changeReportType("purpose")}
+        >
+          Purpose Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "transport" ? "active" : ""}
+          onClick={() => changeReportType("transport")}
+        >
+          Vehicle Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "no_show" ? "active" : ""}
+          onClick={() => changeReportType("no_show")}
+        >
+          No-show Report
         </button>
       </div>
 

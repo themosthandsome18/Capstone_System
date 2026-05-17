@@ -1,6 +1,8 @@
 from rest_framework import serializers
+from django.contrib.auth.models import User
 
 from .models import (
+    ActivityLog,
     BoatType,
     Country,
     FeedbackEntry,
@@ -8,7 +10,6 @@ from .models import (
     Province,
     Region,
     Resort,
-    TourismSettings,
     TouristRecord,
     TravelMode,
     VisitPurpose,
@@ -21,6 +22,7 @@ from .models import (
     SanitaryInspection,
     SanitaryInspectionChecklistItem,
     HouseholdSanitationRecord,
+    UserProfile,
 )
 
 
@@ -34,6 +36,64 @@ RELATED_FIELD_API_NAMES = {
     "boat_type": "boat_type_id",
     "visit_purpose": "visit_purpose_id",
 }
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    role_label = serializers.CharField(source="get_role_display", read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ["role", "role_label"]
+
+
+class AuthUserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "display_name",
+            "is_superuser",
+            "profile",
+        ]
+
+    def get_display_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    action_label = serializers.CharField(source="get_action_display", read_only=True)
+    module_label = serializers.CharField(source="get_module_display", read_only=True)
+    user_display = serializers.SerializerMethodField()
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = [
+            "id",
+            "username",
+            "user_display",
+            "module",
+            "module_label",
+            "action",
+            "action_label",
+            "record_type",
+            "record_id",
+            "record_label",
+            "created_at",
+        ]
+
+    def get_user_display(self, obj):
+        if not obj.user_id:
+            return "Deleted user"
+
+        return obj.user.get_full_name() or obj.user.username
 
 
 class CountrySerializer(serializers.ModelSerializer):
@@ -50,11 +110,13 @@ class NamedReferenceSerializer(serializers.ModelSerializer):
 class RegionSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = Region
+        fields = ["id", "name", "code"]
 
 
 class ProvinceSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = Province
+        fields = ["id", "name", "region_id", "code"]
 
 
 class ItinerarySerializer(NamedReferenceSerializer):
@@ -127,18 +189,6 @@ class FeedbackEntrySerializer(serializers.ModelSerializer):
         ]
 
 
-class TourismSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TourismSettings
-        fields = [
-            "municipality_name",
-            "province",
-            "tourism_office_contact",
-            "tourism_office_email",
-            "api_base_url",
-        ]
-
-
 class TouristRecordSerializer(serializers.ModelSerializer):
     survey_id = serializers.CharField(max_length=30, required=False)
     country_id = serializers.PrimaryKeyRelatedField(
@@ -178,12 +228,15 @@ class TouristRecordSerializer(serializers.ModelSerializer):
         model = TouristRecord
         fields = [
             "survey_id",
+            "submitted_at",
             "email",
+            "consent_confirmed",
             "full_name",
             "contact_number",
             "country_id",
             "region_id",
             "province_id",
+            "country_of_origin",
             "foreigner_count",
             "filipino_count",
             "maubanin_count",
@@ -199,6 +252,8 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             "resort_id",
             "travel_mode_id",
             "boat_type_id",
+            "boat_capacity_fare",
+            "parking_space",
             "visit_purpose_id",
             "status",
         ]
@@ -260,6 +315,7 @@ class TouristRecordSerializer(serializers.ModelSerializer):
 # SANITATION MODULE SERIALIZERS
 # Business / Permit Side
 # ============================================================
+
 
 class SanitaryRequirementSerializer(serializers.ModelSerializer):
     business_type_name = serializers.CharField(
@@ -468,10 +524,12 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
                 )
 
         return instance
-    
+
+
 # ============================================================
 # HOUSEHOLD SANITATION SERIALIZER
 # ============================================================
+
 
 class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
     toilet_type_label = serializers.CharField(

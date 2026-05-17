@@ -1,22 +1,24 @@
 from django.urls import path
-from django.urls import path
 
+from .auth_views import current_user_view, login_view, logout_view
 from .views import (
-    health_check,
-    bootstrap_data,
-    reference_tables,
+    activity_log_list,
     arrival_monitoring_data,
+    bootstrap_data,
     booking_management_data,
-    tourist_record_list,
-    tourist_record_detail,
     dashboard_data,
-    reports_data,
-    resort_list,
-    resort_detail,
-    feedback_list,
     feedback_detail,
-    settings_data,
-
+    feedback_list,
+    health_check,
+    household_bootstrap_data,
+    household_dashboard_data,
+    household_record_detail,
+    household_record_list,
+    reference_tables,
+    online_booking_import,
+    reports_data,
+    resort_detail,
+    resort_list,
     sanitation_bootstrap_data,
     sanitation_business_type_list,
     sanitation_dashboard_data,
@@ -27,32 +29,33 @@ from .views import (
     sanitation_permit_data,
     sanitation_report_data,
     sanitation_submission_data,
-
-    household_bootstrap_data,
-    household_dashboard_data,
-    household_record_detail,
-    household_record_list,
+    tourist_record_detail,
+    tourist_record_list,
 )
 
 urlpatterns = [
-    path('health/', health_check),
-    path('bootstrap/', bootstrap_data),
-    
-    #Tourism Routes
-    path('reference-tables/', reference_tables),
-    path('booking-management/', booking_management_data),
-    path('arrival-monitoring/', arrival_monitoring_data),
-    path('dashboard/', dashboard_data),
-    path('reports/', reports_data),
-    path('resorts/', resort_list),
-    path('resorts/<int:resort_id>/', resort_detail),
-    path('feedback/', feedback_list),
-    path('feedback/<int:feedback_id>/', feedback_detail),
-    path('settings/', settings_data),
-    path('tourist-records/', tourist_record_list),
-    path('tourist-records/<str:survey_id>/', tourist_record_detail),
+    path("health/", health_check),
+    path("auth/login/", login_view),
+    path("auth/me/", current_user_view),
+    path("auth/logout/", logout_view),
+    path("activity-logs/", activity_log_list),
+    path("bootstrap/", bootstrap_data),
 
-    #Sanitations Routes
+    # Tourism routes
+    path("reference-tables/", reference_tables),
+    path("booking-management/", booking_management_data),
+    path("online-booking-import/", online_booking_import),
+    path("arrival-monitoring/", arrival_monitoring_data),
+    path("dashboard/", dashboard_data),
+    path("reports/", reports_data),
+    path("resorts/", resort_list),
+    path("resorts/<int:resort_id>/", resort_detail),
+    path("feedback/", feedback_list),
+    path("feedback/<int:feedback_id>/", feedback_detail),
+    path("tourist-records/", tourist_record_list),
+    path("tourist-records/<str:survey_id>/", tourist_record_detail),
+
+    # Sanitation routes
     path("sanitation/bootstrap/", sanitation_bootstrap_data),
     path("sanitation/dashboard/", sanitation_dashboard_data),
     path("sanitation/business-types/", sanitation_business_type_list),
@@ -70,4 +73,3 @@ urlpatterns = [
     path("households/records/", household_record_list),
     path("households/records/<int:household_id>/", household_record_detail),
 ]
-        

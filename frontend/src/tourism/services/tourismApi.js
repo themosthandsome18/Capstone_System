@@ -17,12 +17,11 @@ import {
   trendSeries,
   visitPurposes,
 } from "../data/mockTourismData";
-
-const API_BASE_URL =
-  (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000/api").replace(
-    /\/$/,
-    ""
-  );
+import {
+  API_BASE_URL,
+  apiRequest,
+  buildQueryString,
+} from "../../shared/apiClient";
 
 const delay = (payload) =>
   new Promise((resolve) => {
@@ -53,13 +52,6 @@ const mockBootstrapData = () => ({
   dashboardAlerts,
   dashboardData: buildDashboardData(touristRecords),
   reportData: buildReportData(touristRecords, { resorts }),
-  settings: {
-    municipality_name: "Municipality of Mauban",
-    province: "Quezon",
-    tourism_office_contact: "+63 42 XXX XXXX",
-    tourism_office_email: "tourism@mauban.gov.ph",
-    api_base_url: "https://api.mauban-tourism.gov.ph/v1",
-  },
   apiBaseUrl: API_BASE_URL,
 });
 
@@ -72,13 +64,22 @@ function buildArrivalMonitoringData(records = touristRecords, referenceTables = 
     },
     {}
   );
+  const itinerariesById = (referenceTables.itineraries || itineraries).reduce(
+    (lookup, itinerary) => {
+      lookup[itinerary.id] = itinerary.name;
+      return lookup;
+    },
+    {}
+  );
   const arrivedRecords = records.filter(
     (record) => !record.status || record.status === "arrived"
   );
   const rows = arrivedRecords
     .map((record) => {
-      const sameDay = record.total_visitors >= 5 ? record.total_visitors : 0;
-      const overnight = sameDay ? 0 : record.total_visitors;
+      const { overnight, sameDay } = getStayCounts(
+        record,
+        itinerariesById[record.itinerary_id]
+      );
       const feePaid = record.total_visitors * feePerVisitor;
 
       return {
@@ -87,6 +88,7 @@ function buildArrivalMonitoringData(records = touristRecords, referenceTables = 
         group: record.full_name,
         male: record.total_male,
         female: record.total_female,
+        itinerary: itinerariesById[record.itinerary_id] || "--",
         overnight,
         sameDay,
         resort: resortsById[record.resort_id] || "--",
@@ -212,15 +214,19 @@ function buildDashboardData(records = touristRecords) {
     );
   }
 
-  const dayTour = arrived.reduce(
-    (total, record) =>
-      total + (Number(record.total_visitors || 0) >= 5 ? record.total_visitors : 0),
-    0
-  );
-  const overnight = arrived.reduce(
-    (total, record) =>
-      total + (Number(record.total_visitors || 0) < 5 ? record.total_visitors : 0),
-    0
+  const itinerariesById = itineraries.reduce((lookup, itinerary) => {
+    lookup[itinerary.id] = itinerary.name;
+    return lookup;
+  }, {});
+  const stayTotals = arrived.reduce(
+    (totals, record) => {
+      const stayCounts = getStayCounts(record, itinerariesById[record.itinerary_id]);
+      return {
+        dayTour: totals.dayTour + stayCounts.sameDay,
+        overnight: totals.overnight + stayCounts.overnight,
+      };
+    },
+    { dayTour: 0, overnight: 0 }
   );
   const contacts = records
     .map((record) => record.contact_number)
@@ -250,8 +256,8 @@ function buildDashboardData(records = touristRecords) {
       female: sumField(arrived, "total_female"),
     },
     stayType: {
-      dayTour,
-      overnight,
+      dayTour: stayTotals.dayTour,
+      overnight: stayTotals.overnight,
     },
     validation: {
       verifiedEntries: records.length,
@@ -259,6 +265,17 @@ function buildDashboardData(records = touristRecords) {
       duplicateEntries: Object.values(contacts).filter((count) => count > 1).length,
     },
   };
+}
+
+function getStayCounts(record, itineraryName = "") {
+  const totalVisitors = Number(record.total_visitors || 0);
+  const normalizedName = String(itineraryName).toLowerCase();
+
+  if (normalizedName.includes("day") || normalizedName.includes("same")) {
+    return { overnight: 0, sameDay: totalVisitors };
+  }
+
+  return { overnight: totalVisitors, sameDay: 0 };
 }
 
 function buildReportData(records = touristRecords, referenceTables = {}, filters = {}) {
@@ -317,38 +334,6 @@ function buildReportData(records = touristRecords, referenceTables = {}, filters
   };
 }
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    let details = null;
-    const message = await response.text();
-
-    try {
-      details = message ? JSON.parse(message) : null;
-    } catch (error) {
-      details = message;
-    }
-
-    const error = new Error(message || `Request failed with ${response.status}`);
-    error.status = response.status;
-    error.details = details;
-    throw error;
-  }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
-}
-
 function mergeBootstrapData(remote = {}) {
   const mock = mockBootstrapData();
   const remoteReferenceTables = remote.referenceTables || {};
@@ -377,7 +362,6 @@ function mergeBootstrapData(remote = {}) {
     dashboardAlerts: remote.dashboardAlerts || mock.dashboardAlerts,
     dashboardData: remote.dashboardData || buildDashboardData(records),
     reportData: remote.reportData || buildReportData(records, referenceTables),
-    settings: remote.settings || mock.settings,
     arrivalMonitoring:
       remote.arrivalMonitoring ||
       buildArrivalMonitoringData(
@@ -399,7 +383,7 @@ function isBackendValidationError(error) {
 export const tourismApi = {
   async getBootstrapData() {
     try {
-      const remote = await request("/bootstrap/");
+      const remote = await apiRequest("/bootstrap/");
       return mergeBootstrapData(remote);
     } catch (error) {
       warnBackendFailure("load bootstrap data", error);
@@ -409,7 +393,7 @@ export const tourismApi = {
 
   async getArrivalMonitoringData(records, referenceTables) {
     try {
-      return await request("/arrival-monitoring/");
+      return await apiRequest("/arrival-monitoring/");
     } catch (error) {
       warnBackendFailure("load arrival monitoring data", error);
       return delay(buildArrivalMonitoringData(records, referenceTables));
@@ -418,7 +402,7 @@ export const tourismApi = {
 
   async getDashboardData(records) {
     try {
-      return await request("/dashboard/");
+      return await apiRequest("/dashboard/");
     } catch (error) {
       warnBackendFailure("load dashboard data", error);
       return delay(buildDashboardData(records));
@@ -426,23 +410,15 @@ export const tourismApi = {
   },
 
   async getReportsData(filters = {}, records, referenceTables) {
-    const params = new URLSearchParams();
-    if (filters.type) {
-      params.set("type", filters.type);
-    }
-    if (filters.from) {
-      params.set("from", filters.from);
-    }
-    if (filters.to) {
-      params.set("to", filters.to);
-    }
-    if (filters.resortId || filters.resort_id) {
-      params.set("resort_id", filters.resortId || filters.resort_id);
-    }
+    const query = buildQueryString({
+      type: filters.type,
+      from: filters.from,
+      to: filters.to,
+      resort_id: filters.resortId || filters.resort_id,
+    });
 
     try {
-      const query = params.toString();
-      return await request(`/reports/${query ? `?${query}` : ""}`);
+      return await apiRequest(`/reports/${query}`);
     } catch (error) {
       warnBackendFailure("load report data", error);
       return delay(buildReportData(records, referenceTables, filters));
@@ -451,7 +427,7 @@ export const tourismApi = {
 
   async createTouristRecord(payload) {
     try {
-      return await request("/tourist-records/", {
+      return await apiRequest("/tourist-records/", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -467,7 +443,7 @@ export const tourismApi = {
 
   async updateTouristRecord(id, payload) {
     try {
-      return await request(`/tourist-records/${encodeURIComponent(id)}/`, {
+      return await apiRequest(`/tourist-records/${encodeURIComponent(id)}/`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
@@ -483,7 +459,7 @@ export const tourismApi = {
 
   async deleteTouristRecord(id) {
     try {
-      await request(`/tourist-records/${encodeURIComponent(id)}/`, {
+      await apiRequest(`/tourist-records/${encodeURIComponent(id)}/`, {
         method: "DELETE",
       });
       return { id };
@@ -497,9 +473,25 @@ export const tourismApi = {
     }
   },
 
+  async previewOnlineBookingImport(file, options = {}) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("action", options.action || "preview");
+    formData.append("status", options.status || "pending");
+
+    if (options.limit) {
+      formData.append("limit", String(options.limit));
+    }
+
+    return apiRequest("/online-booking-import/", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   async getFeedbackEntries() {
     try {
-      return await request("/feedback/");
+      return await apiRequest("/feedback/");
     } catch (error) {
       warnBackendFailure("load feedback entries", error);
       return delay(feedbackEntries);
@@ -508,7 +500,7 @@ export const tourismApi = {
 
   async updateFeedbackEntry(id, payload) {
     try {
-      return await request(`/feedback/${encodeURIComponent(id)}/`, {
+      return await apiRequest(`/feedback/${encodeURIComponent(id)}/`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
@@ -522,34 +514,9 @@ export const tourismApi = {
     }
   },
 
-  async getSettings() {
-    try {
-      return await request("/settings/");
-    } catch (error) {
-      warnBackendFailure("load settings", error);
-      return delay(mockBootstrapData().settings);
-    }
-  },
-
-  async updateSettings(payload) {
-    try {
-      return await request("/settings/", {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      if (isBackendValidationError(error)) {
-        throw error;
-      }
-
-      warnBackendFailure("update settings", error);
-      return delay(payload);
-    }
-  },
-
   async createResort(payload) {
     try {
-      const created = await request("/resorts/", {
+      const created = await apiRequest("/resorts/", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -569,7 +536,7 @@ export const tourismApi = {
 
   async updateResort(id, payload) {
     try {
-      const updated = await request(`/resorts/${encodeURIComponent(id)}/`, {
+      const updated = await apiRequest(`/resorts/${encodeURIComponent(id)}/`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
@@ -586,7 +553,7 @@ export const tourismApi = {
 
   async deleteResort(id) {
     try {
-      await request(`/resorts/${encodeURIComponent(id)}/`, {
+      await apiRequest(`/resorts/${encodeURIComponent(id)}/`, {
         method: "DELETE",
       });
       return { id };

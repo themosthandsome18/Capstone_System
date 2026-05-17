@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import {
   FiChevronLeft,
   FiChevronRight,
+  FiDownload,
   FiEdit2,
   FiPlus,
   FiSearch,
   FiTrash2,
   FiX,
 } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const initialForm = {
@@ -264,6 +266,37 @@ function EstablishmentRecords() {
     }
   }
 
+  function handleExport() {
+    const headers = [
+      "Business Name",
+      "Owner",
+      "Business Type",
+      "Permit Size",
+      "Permit Number",
+      "Barangay",
+      "Address",
+      "Contact Number",
+      "Permit Status",
+      "Compliance Status",
+      "Remarks",
+    ];
+    const rows = filteredEstablishments.map((item) => [
+      item.business_name,
+      item.owner_name,
+      item.business_type_name,
+      item.permit_size_label || item.permit_size?.toUpperCase(),
+      item.permit_number,
+      item.barangay,
+      item.address,
+      item.contact_number,
+      item.permit_status_label,
+      item.compliance_status_label,
+      item.remarks,
+    ]);
+
+    exportCsv(datedCsvFilename("sanitary-establishments"), headers, rows);
+  }
+
   if (loading) {
     return <div className="establishment-page">Loading establishments...</div>;
   }
@@ -276,13 +309,23 @@ function EstablishmentRecords() {
           <p>Manage and monitor all registered establishments</p>
         </div>
 
-        <button
-          type="button"
-          className="add-establishment-btn"
-          onClick={openModal}
-        >
-          <FiPlus /> Add Establishment
-        </button>
+        <div className="sanitation-header-actions">
+          <button
+            type="button"
+            className="sanitation-export-btn"
+            onClick={handleExport}
+          >
+            <FiDownload /> Export CSV
+          </button>
+
+          <button
+            type="button"
+            className="add-establishment-btn"
+            onClick={openModal}
+          >
+            <FiPlus /> Add Establishment
+          </button>
+        </div>
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}

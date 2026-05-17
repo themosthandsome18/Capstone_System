@@ -1,5 +1,77 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+
+
+ROLE_ADMIN = "admin"
+ROLE_TOURISM = "tourism"
+ROLE_SANITATION = "sanitation"
+
+USER_ROLE_CHOICES = [
+    (ROLE_ADMIN, "System Admin"),
+    (ROLE_TOURISM, "Tourism Office"),
+    (ROLE_SANITATION, "Sanitary Section"),
+]
+
+MODULE_TOURISM = "tourism"
+MODULE_SANITATION = "sanitation"
+
+MODULE_CHOICES = [
+    (MODULE_TOURISM, "Tourism"),
+    (MODULE_SANITATION, "Sanitation"),
+]
+
+ACTION_CREATE = "create"
+ACTION_UPDATE = "update"
+ACTION_DELETE = "delete"
+
+ACTIVITY_ACTION_CHOICES = [
+    (ACTION_CREATE, "Create"),
+    (ACTION_UPDATE, "Update"),
+    (ACTION_DELETE, "Delete"),
+]
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=USER_ROLE_CHOICES,
+        default=ROLE_TOURISM,
+    )
+
+    class Meta:
+        ordering = ["user__username"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_role_display()}"
+
+
+class ActivityLog(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activity_logs",
+    )
+    module = models.CharField(max_length=20, choices=MODULE_CHOICES)
+    action = models.CharField(max_length=20, choices=ACTIVITY_ACTION_CHOICES)
+    record_type = models.CharField(max_length=80)
+    record_id = models.CharField(max_length=80, blank=True)
+    record_label = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        actor = self.user.username if self.user_id else "Deleted user"
+        return f"{actor} {self.action} {self.record_label}"
 
 
 # Tourism models
@@ -124,11 +196,18 @@ class Country(NamedReference):
 
 
 class Region(NamedReference):
-    pass
+    code = models.CharField(max_length=10, blank=True)
 
 
 class Province(NamedReference):
-    pass
+    region = models.ForeignKey(
+        Region,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="provinces",
+    )
+    code = models.CharField(max_length=10, blank=True)
 
 
 class Itinerary(NamedReference):
@@ -205,21 +284,6 @@ class FeedbackEntry(models.Model):
         return f"{self.reviewer} - {self.destination}"
 
 
-class TourismSettings(models.Model):
-    municipality_name = models.CharField(max_length=120, default="Municipality of Mauban")
-    province = models.CharField(max_length=120, default="Quezon")
-    tourism_office_contact = models.CharField(max_length=80, default="+63 42 XXX XXXX")
-    tourism_office_email = models.EmailField(default="tourism@mauban.gov.ph")
-    api_base_url = models.URLField(default="https://api.mauban-tourism.gov.ph/v1")
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name_plural = "tourism settings"
-
-    def __str__(self):
-        return self.municipality_name
-
-
 class TouristStat(models.Model):
     total_arrivals = models.IntegerField()
     monthly_visits = models.IntegerField()
@@ -229,7 +293,9 @@ class TouristStat(models.Model):
 
 class TouristRecord(models.Model):
     survey_id = models.CharField(max_length=30, primary_key=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
     email = models.EmailField(blank=True)
+    consent_confirmed = models.BooleanField(default=True)
     full_name = models.CharField(max_length=120)
     contact_number = models.CharField(max_length=40, blank=True)
     country = models.ForeignKey(
@@ -247,6 +313,7 @@ class TouristRecord(models.Model):
         on_delete=models.PROTECT,
         related_name="tourist_records",
     )
+    country_of_origin = models.CharField(max_length=120, blank=True)
     foreigner_count = models.PositiveIntegerField(default=0)
     filipino_count = models.PositiveIntegerField(default=0)
     maubanin_count = models.PositiveIntegerField(default=0)
@@ -278,6 +345,8 @@ class TouristRecord(models.Model):
         on_delete=models.PROTECT,
         related_name="tourist_records",
     )
+    boat_capacity_fare = models.CharField(max_length=160, blank=True)
+    parking_space = models.CharField(max_length=220, blank=True)
     visit_purpose = models.ForeignKey(
         VisitPurpose,
         on_delete=models.PROTECT,
@@ -319,6 +388,26 @@ class TouristRecord(models.Model):
         if errors:
             raise ValidationError(errors)
 
+
+class ResortMonthlyArrival(models.Model):
+    resort = models.ForeignKey(
+        Resort,
+        on_delete=models.CASCADE,
+        related_name="historical_monthly_arrivals",
+    )
+    year = models.PositiveIntegerField(default=2025)
+    month = models.PositiveIntegerField()
+    total_arrivals = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("resort", "year", "month")
+        ordering = ["year", "month", "resort__resort_name"]
+
+    def __str__(self):
+        return (
+            f"{self.resort.resort_name} - "
+            f"{self.month}/{self.year}: {self.total_arrivals}"
+        )
 
 
 # ============================================================
@@ -405,7 +494,11 @@ class SanitaryRequirement(models.Model):
         unique_together = ("business_type", "permit_size", "requirement_name")
 
     def __str__(self):
-        return f"{self.business_type} - {self.get_permit_size_display()} - {self.requirement_name}"
+        return (
+            f"{self.business_type} - "
+            f"{self.get_permit_size_display()} - "
+            f"{self.requirement_name}"
+        )
 
 
 class SanitaryEstablishment(models.Model):

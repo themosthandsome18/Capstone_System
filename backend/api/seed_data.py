@@ -320,12 +320,26 @@ REFERENCE_TABLES = {
         {"id": 3, "name": "South Korea", "type": "foreign"},
         {"id": 4, "name": "Australia", "type": "foreign"},
         {"id": 5, "name": "Japan", "type": "foreign"},
+        {"id": 6, "name": "International", "type": "foreign"},
     ],
     "regions": [
-        {"id": 1, "name": "CALABARZON"},
-        {"id": 2, "name": "NCR"},
-        {"id": 3, "name": "Central Luzon"},
-        {"id": 4, "name": "Bicol Region"},
+        {"id": 1, "name": "Region I - Ilocos Region", "code": "01"},
+        {"id": 2, "name": "Region II - Cagayan Valley", "code": "02"},
+        {"id": 3, "name": "Region III - Central Luzon", "code": "03"},
+        {"id": 4, "name": "CALABARZON Region", "code": "04"},
+        {"id": 5, "name": "MIMAROPA Region", "code": "17"},
+        {"id": 6, "name": "Region V - Bicol Region", "code": "05"},
+        {"id": 7, "name": "NCR - National Capital Region", "code": "13"},
+        {"id": 8, "name": "CAR - Cordillera Administrative Region", "code": "14"},
+        {"id": 9, "name": "Region VI - Western Visayas", "code": "06"},
+        {"id": 10, "name": "Region VII - Central Visayas", "code": "07"},
+        {"id": 11, "name": "Region VIII - Eastern Visayas", "code": "08"},
+        {"id": 12, "name": "Region IX - Zamboanga Peninsula", "code": "09"},
+        {"id": 13, "name": "Region X - Northern Mindanao", "code": "10"},
+        {"id": 14, "name": "Region XI - Davao Region", "code": "11"},
+        {"id": 15, "name": "Region XII - SOCCSKSARGEN", "code": "12"},
+        {"id": 16, "name": "Region XIII - Caraga", "code": "16"},
+        {"id": 17, "name": "Autonomous Region in Muslim Mindanao (ARMM)", "code": "15"},
     ],
     "provinces": [
         {"id": 1, "name": "Quezon"},
@@ -335,28 +349,35 @@ REFERENCE_TABLES = {
         {"id": 5, "name": "Cavite"},
     ],
     "itineraries": [
-        {"id": 1, "name": "Island Hopping Circuit"},
-        {"id": 2, "name": "Beach and Resort Day Tour"},
-        {"id": 3, "name": "Eco Adventure Trail"},
-        {"id": 4, "name": "Heritage and Lighthouse Stop"},
+        {"id": 1, "name": "Overnight"},
+        {"id": 2, "name": "Day Tour"},
+        {"id": 3, "name": "2 Nights"},
+        {"id": 4, "name": "3 Nights"},
+        {"id": 5, "name": "4 Nights"},
+        {"id": 6, "name": "5 Nights and above"},
     ],
     "travel_modes": [
         {"id": 1, "name": "Private Vehicle"},
-        {"id": 2, "name": "Tourist Van"},
+        {"id": 2, "name": "Public Utility Vehicle"},
         {"id": 3, "name": "Public Bus"},
         {"id": 4, "name": "Ferry / Port Transfer"},
     ],
     "boat_types": [
-        {"id": 1, "name": "Motorized Banca"},
-        {"id": 2, "name": "Speedboat"},
-        {"id": 3, "name": "Passenger Boat"},
+        {"id": 1, "name": "Public Boat (P100/ride/head) Sabang Port Only"},
+        {"id": 2, "name": "Private Boat (Rates depend on the capacity)"},
+        {"id": 3, "name": "Boat Provided by Resort (As confirmed by both guests and resort)"},
     ],
     "visit_purposes": [
         {"id": 1, "name": "Leisure"},
-        {"id": 2, "name": "Family Visit"},
-        {"id": 3, "name": "Educational Tour"},
-        {"id": 4, "name": "Business / Event"},
-        {"id": 5, "name": "Pilgrimage / Cultural Visit"},
+        {"id": 2, "name": "Vacation"},
+        {"id": 3, "name": "Business"},
+        {"id": 4, "name": "Visit"},
+        {"id": 5, "name": "Outing"},
+        {"id": 6, "name": "Tour"},
+        {"id": 7, "name": "Team Building"},
+        {"id": 8, "name": "Travel"},
+        {"id": 9, "name": "Swimming"},
+        {"id": 10, "name": "Unwind"},
     ],
     "resorts": [
         {
@@ -504,14 +525,6 @@ INITIAL_FEEDBACK_ENTRIES = [
         "message": "Trail markers were visible and staff were helpful in guiding our group through the safer route.",
     },
 ]
-
-INITIAL_TOURISM_SETTINGS = {
-    "municipality_name": "Municipality of Mauban",
-    "province": "Quezon",
-    "tourism_office_contact": "+63 42 XXX XXXX",
-    "tourism_office_email": "tourism@mauban.gov.ph",
-    "api_base_url": "https://api.mauban-tourism.gov.ph/v1",
-}
 
 # ============================================================
 # SANITATION MODULE SEED DATA

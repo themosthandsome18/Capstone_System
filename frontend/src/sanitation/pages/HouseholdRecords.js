@@ -3,10 +3,12 @@ import {
   FiAlertTriangle,
   FiChevronLeft,
   FiChevronRight,
+  FiDownload,
   FiDroplet,
   FiHome,
   FiSearch,
 } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const statusOptions = [
@@ -134,15 +136,62 @@ function HouseholdRecords() {
     1
   );
 
+  function handleExport() {
+    const headers = [
+      "Household Code",
+      "Household Head",
+      "Barangay",
+      "Address",
+      "Male Count",
+      "Female Count",
+      "Total Members",
+      "Toilet Type",
+      "Water Level",
+      "Water Source",
+      "Waste Disposal",
+      "Status",
+      "Last Survey Date",
+      "Remarks",
+    ];
+    const rows = filteredHouseholds.map((item) => [
+      item.household_code,
+      item.household_head,
+      item.barangay,
+      item.address,
+      item.male_count,
+      item.female_count,
+      item.total_members,
+      item.toilet_type_label,
+      item.water_level_label,
+      item.water_source,
+      item.waste_disposal_label,
+      item.status_label,
+      item.last_survey_date,
+      item.remarks,
+    ]);
+
+    exportCsv(datedCsvFilename("household-records"), headers, rows);
+  }
+
   if (loading) {
     return <div className="household-page">Loading household records...</div>;
   }
 
   return (
     <div className="household-page">
-      <div className="household-header">
-        <h1>Household Records</h1>
-        <p>Monitor household sanitation profiles and risk indicators</p>
+      <div className="household-header sanitation-split-header">
+        <div>
+          <h1>Household Records</h1>
+          <p>Monitor household sanitation profiles and risk indicators</p>
+        </div>
+
+        <button
+          type="button"
+          className="sanitation-export-btn"
+          onClick={handleExport}
+        >
+          <FiDownload /> Export CSV
+        </button>
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}

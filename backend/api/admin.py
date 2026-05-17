@@ -1,24 +1,26 @@
 from django.contrib import admin
 
 from .models import (
+    ActivityLog,
     BoatType,
     Country,
-    Itinerary,
     FeedbackEntry,
+    HouseholdSanitationRecord,
+    Itinerary,
     Province,
     Region,
     Resort,
-    TourismSettings,
-    TouristRecord,
-    TouristStat,
-    TravelMode,
-    VisitPurpose,
+    ResortMonthlyArrival,
     SanitaryBusinessType,
-    SanitaryRequirement,
     SanitaryEstablishment,
     SanitaryInspection,
     SanitaryInspectionChecklistItem,
-    HouseholdSanitationRecord,
+    SanitaryRequirement,
+    TouristRecord,
+    TouristStat,
+    TravelMode,
+    UserProfile,
+    VisitPurpose,
 )
 
 
@@ -49,17 +51,6 @@ class FeedbackEntryAdmin(admin.ModelAdmin):
     list_filter = ("status", "rating", "destination", "date")
 
 
-@admin.register(TourismSettings)
-class TourismSettingsAdmin(admin.ModelAdmin):
-    list_display = (
-        "municipality_name",
-        "province",
-        "tourism_office_contact",
-        "tourism_office_email",
-        "updated_at",
-    )
-
-
 @admin.register(TouristRecord)
 class TouristRecordAdmin(admin.ModelAdmin):
     list_display = (
@@ -69,14 +60,68 @@ class TouristRecordAdmin(admin.ModelAdmin):
         "total_visitors",
         "resort",
         "country",
+        "region",
+        "province",
         "status",
     )
-    search_fields = ("survey_id", "full_name", "email", "contact_number")
-    list_filter = ("arrival_date", "country", "resort", "status")
+    search_fields = (
+        "survey_id",
+        "full_name",
+        "email",
+        "contact_number",
+        "country_of_origin",
+        "parking_space",
+    )
+    list_filter = (
+        "arrival_date",
+        "country",
+        "region",
+        "province",
+        "resort",
+        "status",
+        "consent_confirmed",
+    )
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "role")
+    search_fields = ("user__username", "user__first_name", "user__last_name")
+    list_filter = ("role",)
+
+
+@admin.register(ActivityLog)
+class ActivityLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "user",
+        "module",
+        "action",
+        "record_type",
+        "record_label",
+    )
+    search_fields = (
+        "user__username",
+        "record_type",
+        "record_id",
+        "record_label",
+    )
+    list_filter = ("module", "action", "created_at")
+    readonly_fields = (
+        "user",
+        "module",
+        "action",
+        "record_type",
+        "record_id",
+        "record_label",
+        "created_at",
+    )
+
 
 # =======================================================
-#  Sanitations
+# Sanitation
 # =======================================================
+
 
 @admin.register(SanitaryBusinessType)
 class SanitaryBusinessTypeAdmin(admin.ModelAdmin):
@@ -131,7 +176,12 @@ class SanitaryInspectionAdmin(admin.ModelAdmin):
         "is_draft",
     )
     search_fields = ("establishment__business_name", "inspector_name", "findings")
-    list_filter = ("status_after_inspection", "inspection_date", "next_due_date", "is_draft")
+    list_filter = (
+        "status_after_inspection",
+        "inspection_date",
+        "next_due_date",
+        "is_draft",
+    )
     inlines = [SanitaryInspectionChecklistItemInline]
 
 
@@ -140,6 +190,7 @@ class SanitaryInspectionChecklistItemAdmin(admin.ModelAdmin):
     list_display = ("inspection", "requirement_name", "is_complied")
     search_fields = ("requirement_name", "inspection__establishment__business_name")
     list_filter = ("is_complied",)
+
 
 @admin.register(HouseholdSanitationRecord)
 class HouseholdSanitationRecordAdmin(admin.ModelAdmin):
@@ -167,5 +218,13 @@ class HouseholdSanitationRecordAdmin(admin.ModelAdmin):
         "waste_disposal",
         "status",
     )
-    
+
+
+@admin.register(ResortMonthlyArrival)
+class ResortMonthlyArrivalAdmin(admin.ModelAdmin):
+    list_display = ("resort", "year", "month", "total_arrivals")
+    search_fields = ("resort__resort_name",)
+    list_filter = ("year", "month", "resort")
+
+
 admin.site.register(TouristStat)

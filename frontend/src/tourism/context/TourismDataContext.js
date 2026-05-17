@@ -41,13 +41,6 @@ const emptyBootstrap = {
     rows: [],
     totals: { visitors: 0, revenue: 0, avg: 0 },
   },
-  settings: {
-    municipality_name: "",
-    province: "",
-    tourism_office_contact: "",
-    tourism_office_email: "",
-    api_base_url: "",
-  },
   analytics: {
     monthlyArrivals: [],
     trendSeries: { daily: [], weekly: [], monthly: [], yearly: [] },
@@ -195,6 +188,30 @@ export function TourismDataProvider({ children }) {
     await refreshComputedData();
   }
 
+  async function previewOnlineBookingImport(file, options = {}) {
+    return tourismApi.previewOnlineBookingImport(file, {
+      ...options,
+      action: "preview",
+    });
+  }
+
+  async function importOnlineBookingFile(file, options = {}) {
+    const result = await tourismApi.previewOnlineBookingImport(file, {
+      ...options,
+      action: "import",
+    });
+    const response = await tourismApi.getBootstrapData();
+    const arrivalMonitoring = await tourismApi.getArrivalMonitoringData(
+      response.touristRecords,
+      response.referenceTables
+    );
+    setBootstrap({
+      ...response,
+      arrivalMonitoring,
+    });
+    return result;
+  }
+
   async function createResort(payload) {
     const createdResort = await tourismApi.createResort(payload);
     setBootstrap((current) => ({
@@ -251,15 +268,6 @@ export function TourismDataProvider({ children }) {
     return updatedFeedback;
   }
 
-  async function updateSettings(payload) {
-    const updatedSettings = await tourismApi.updateSettings(payload);
-    setBootstrap((current) => ({
-      ...current,
-      settings: updatedSettings,
-    }));
-    return updatedSettings;
-  }
-
   return (
     <TourismDataContext.Provider
       value={{
@@ -268,6 +276,8 @@ export function TourismDataProvider({ children }) {
         createRecord,
         updateRecord,
         deleteRecord,
+        previewOnlineBookingImport,
+        importOnlineBookingFile,
         refreshArrivalMonitoring,
         refreshDashboardData,
         refreshReportData,
@@ -275,7 +285,6 @@ export function TourismDataProvider({ children }) {
         updateResort,
         deleteResort,
         updateFeedbackEntry,
-        updateSettings,
       }}
     >
       {children}
