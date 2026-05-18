@@ -19,8 +19,10 @@ from .models import (
     ROLE_ADMIN,
     Resort,
     SanitaryBusinessType,
+    SanitaryComplaint,
     SanitaryEstablishment,
     SanitaryInspection,
+    SanitaryPermitRenewal,
     TouristRecord,
 )
 from .permissions import get_user_role, module_required
@@ -38,9 +40,11 @@ from .serializers import (
     HouseholdSanitationRecordSerializer,
     ResortSerializer,
     SanitaryBusinessTypeSerializer,
+    SanitaryComplaintSerializer,
     SanitaryEstablishmentSerializer,
     SanitaryInspectionCreateSerializer,
     SanitaryInspectionSerializer,
+    SanitaryPermitRenewalSerializer,
     TouristRecordSerializer,
 )
 from .services.activity import log_activity
@@ -51,10 +55,16 @@ from .services.online_booking import (
 )
 from .services.sanitation import (
     build_sanitation_dashboard_payload,
+    build_sanitation_complaints_payload,
     build_sanitation_permits_payload,
     build_sanitation_reports_payload,
+    build_sanitation_renewals_payload,
     build_sanitation_submissions_payload,
+    advance_renewal_stage,
+    generate_renewal_id,
+    generate_complaint_id,
     sync_establishment_after_inspection,
+    sync_renewal_progress,
 )
 from .services.tourism import (
     build_arrival_monitoring_payload,
@@ -444,6 +454,8 @@ def sanitation_bootstrap_data(request):
             ).data,
             "dashboardData": build_sanitation_dashboard_payload(),
             "permitData": build_sanitation_permits_payload(),
+            "renewalData": build_sanitation_renewals_payload(),
+            "complaintData": build_sanitation_complaints_payload(),
             "submissionData": build_sanitation_submissions_payload(),
             "reportData": build_sanitation_reports_payload(),
         }
@@ -606,6 +618,156 @@ def sanitation_inspection_detail(request, inspection_id):
 @module_required("sanitation")
 def sanitation_permit_data(request):
     return Response(build_sanitation_permits_payload(request.query_params))
+
+
+@api_view(["GET", "POST"])
+@module_required("sanitation")
+def sanitation_renewal_list(request):
+    ensure_initial_sanitation_data()
+
+    if request.method == "GET":
+        return Response(build_sanitation_renewals_payload(request.query_params))
+
+    data = request.data.copy()
+    if not data.get("renewal_id"):
+        data["renewal_id"] = generate_renewal_id()
+
+    serializer = SanitaryPermitRenewalSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    renewal = serializer.save()
+    sync_renewal_progress(renewal)
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        renewal,
+        label=renewal.establishment.business_name,
+        record_id=renewal.renewal_id,
+    )
+
+    return Response(
+        SanitaryPermitRenewalSerializer(renewal).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@module_required("sanitation")
+def sanitation_renewal_detail(request, renewal_id):
+    renewal = get_object_or_404(SanitaryPermitRenewal, pk=renewal_id)
+
+    if request.method == "GET":
+        return Response(SanitaryPermitRenewalSerializer(renewal).data)
+
+    if request.method == "DELETE":
+        label = renewal.establishment.business_name
+        record_id = renewal.renewal_id
+        renewal.delete()
+        log_activity(
+            request,
+            MODULE_SANITATION,
+            ACTION_DELETE,
+            renewal,
+            label=label,
+            record_id=record_id,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    action = request.data.get("action")
+    if action == "advance_stage":
+        renewal = advance_renewal_stage(renewal)
+    elif action == "mark_released":
+        renewal.stage = "released"
+        renewal = sync_renewal_progress(renewal)
+    else:
+        serializer = SanitaryPermitRenewalSerializer(
+            renewal,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        renewal = serializer.save()
+        sync_renewal_progress(renewal)
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_UPDATE,
+        renewal,
+        label=renewal.establishment.business_name,
+        record_id=renewal.renewal_id,
+    )
+    return Response(SanitaryPermitRenewalSerializer(renewal).data)
+
+
+@api_view(["GET", "POST"])
+@module_required("sanitation")
+def sanitation_complaint_list(request):
+    ensure_initial_sanitation_data()
+
+    if request.method == "GET":
+        return Response(build_sanitation_complaints_payload(request.query_params))
+
+    data = request.data.copy()
+    if not data.get("complaint_id"):
+        data["complaint_id"] = generate_complaint_id()
+
+    serializer = SanitaryComplaintSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    complaint = serializer.save()
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        complaint,
+        label=complaint.category,
+        record_id=complaint.complaint_id,
+    )
+
+    return Response(
+        SanitaryComplaintSerializer(complaint).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@module_required("sanitation")
+def sanitation_complaint_detail(request, complaint_id):
+    complaint = get_object_or_404(SanitaryComplaint, pk=complaint_id)
+
+    if request.method == "GET":
+        return Response(SanitaryComplaintSerializer(complaint).data)
+
+    if request.method == "DELETE":
+        label = complaint.category
+        record_id = complaint.complaint_id
+        complaint.delete()
+        log_activity(
+            request,
+            MODULE_SANITATION,
+            ACTION_DELETE,
+            complaint,
+            label=label,
+            record_id=record_id,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = SanitaryComplaintSerializer(
+        complaint,
+        data=request.data,
+        partial=True,
+    )
+    serializer.is_valid(raise_exception=True)
+    complaint = serializer.save()
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_UPDATE,
+        complaint,
+        label=complaint.category,
+        record_id=complaint.complaint_id,
+    )
+    return Response(SanitaryComplaintSerializer(complaint).data)
 
 
 @api_view(["GET"])

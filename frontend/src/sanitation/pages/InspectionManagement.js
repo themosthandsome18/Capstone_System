@@ -7,6 +7,7 @@ import {
   FiChevronRight,
   FiClipboard,
   FiDownload,
+  FiPrinter,
   FiSearch,
   FiX,
 } from "react-icons/fi";
@@ -128,6 +129,31 @@ function InspectionManagement() {
     ]);
 
     exportCsv(datedCsvFilename("sanitary-inspections"), headers, exportRows);
+  }
+
+  function printInspectionReport(row) {
+    const report = [
+      "SANITARY INSPECTION REPORT",
+      "",
+      `Establishment: ${row.business_name}`,
+      `Business Type: ${row.business_type_name}`,
+      `Barangay: ${row.barangay}`,
+      `Compliance Status: ${row.compliance_status_label}`,
+      `Last Inspection: ${formatDate(row.lastInspectionDate) || "No record"}`,
+      `Next Due: ${formatDate(row.nextDueDate) || "Not set"}`,
+      `Inspector: ${row.latestInspection?.inspector_name || "Not assigned"}`,
+      "",
+      "Findings:",
+      row.latestInspection?.findings || "No findings recorded.",
+      "",
+      "Remarks:",
+      row.latestInspection?.remarks || "No remarks recorded.",
+    ].join("\n");
+
+    const printWindow = window.open("", "_blank", "width=720,height=820");
+    printWindow.document.write(`<pre style="font:14px Arial;white-space:pre-wrap;line-height:1.6">${report}</pre>`);
+    printWindow.document.close();
+    printWindow.print();
   }
 
   if (loading) {
@@ -256,6 +282,14 @@ function InspectionManagement() {
                       </td>
 
                       <td>
+                        <button
+                          type="button"
+                          className="conduct-btn secondary"
+                          onClick={() => printInspectionReport(row)}
+                        >
+                          <FiPrinter />
+                          Print
+                        </button>
                         <button
                           type="button"
                           className="conduct-btn"

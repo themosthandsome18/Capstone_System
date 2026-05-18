@@ -6,11 +6,13 @@ import ModuleSelectionPage from "./auth/ModuleSelectionPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import SanitationAppShell from "./sanitation/components/layout/SanitationAppShell";
 import { SanitationDataProvider } from "./sanitation/context/SanitationDataContext";
+import ComplaintsManagement from "./sanitation/pages/ComplaintsManagement";
 import EstablishmentRecords from "./sanitation/pages/EstablishmentRecords";
 import HouseholdRecords from "./sanitation/pages/HouseholdRecords";
 import HouseholdReportAnalytics from "./sanitation/pages/HouseholdReportAnalytics";
 import InspectionManagement from "./sanitation/pages/InspectionManagement";
 import PermitMonitoring from "./sanitation/pages/PermitMonitoring";
+import PermitRenewal from "./sanitation/pages/PermitRenewal";
 import SanitaryGISMap from "./sanitation/pages/SanitaryGISMap";
 import SanitaryReportAnalytics from "./sanitation/pages/SanitaryReportAnalytics";
 import SanitationDashboard from "./sanitation/pages/SanitationDashboard";
@@ -44,7 +46,9 @@ const sanitationRoutes = [
   { path: "requirements", element: <TypesAndRequirements /> },
   { path: "establishments", element: <EstablishmentRecords /> },
   { path: "inspections", element: <InspectionManagement /> },
+  { path: "complaints", element: <ComplaintsManagement /> },
   { path: "permits", element: <PermitMonitoring /> },
+  { path: "renewals", element: <PermitRenewal /> },
   { path: "submissions", element: <SubmissionTracking /> },
   { path: "reports", element: <SanitaryReportAnalytics /> },
   { path: "households", element: <HouseholdRecords /> },

@@ -163,28 +163,16 @@ function SanitaryGISMap() {
 
         <div className="gis-legend">
           <span>
-            <i className="low" /> Good Standing
-          </span>
-
-          {!isHouseholdMode ? (
-            <span>
-              <i className="moderate" /> Upcoming
-            </span>
-          ) : null}
-
-          <span>
-            <i className="completion" /> For Completion
+            <i className="low" /> Low Risk
           </span>
 
           <span>
-            <i className="high" /> Violation
+            <i className="moderate" /> Medium Risk
           </span>
 
-          {!isHouseholdMode ? (
-            <span>
-              <i className="no-permit" /> No Permit
-            </span>
-          ) : null}
+          <span>
+            <i className="high" /> High Risk
+          </span>
         </div>
       </div>
 
@@ -204,15 +192,13 @@ function SanitaryGISMap() {
             <FitMapToItems items={filteredItems} />
 
             {filteredItems.map((item) => {
-              const statusValue = isHouseholdMode
-                ? item.status
-                : item.compliance_status;
+              const markerColor = getRiskColor(item);
 
               return (
                 <Marker
                   key={`${mapMode}-${item.id}`}
                   position={item.position}
-                  icon={createIcon(getColor(statusValue))}
+                  icon={createIcon(markerColor)}
                   eventHandlers={{
                     click: () => setSelectedItemId(item.id),
                   }}
@@ -270,9 +256,7 @@ function SanitaryGISMap() {
           <div className="gis-list">
             {filteredItems.length ? (
               filteredItems.map((item) => {
-                const statusValue = isHouseholdMode
-                  ? item.status
-                  : item.compliance_status;
+                const markerColor = getRiskColor(item);
 
                 return (
                   <button
@@ -285,7 +269,7 @@ function SanitaryGISMap() {
                   >
                     <span
                       className="dot"
-                      style={{ background: getColor(statusValue) }}
+                      style={{ background: markerColor }}
                     />
 
                     <div>
@@ -329,6 +313,8 @@ function EstablishmentPopup({ item }) {
       Barangay: {item.barangay}
       <br />
       Status: {item.compliance_status_label}
+      <br />
+      Risk: {item.risk_level} ({item.risk_score})
     </div>
   );
 }
@@ -347,6 +333,8 @@ function HouseholdPopup({ item }) {
       Water: {item.water_level_label}
       <br />
       Status: {item.status_label}
+      <br />
+      Risk: {item.risk_level} ({item.risk_score})
     </div>
   );
 }
@@ -372,14 +360,12 @@ function FitMapToItems({ items }) {
   return null;
 }
 
-function getColor(status) {
-  if (status === "good_standing") return "#0f7a45";
-  if (status === "upcoming") return "#f5c400";
-  if (status === "for_completion") return "#ff8b21";
-  if (status === "violation") return "#ef2222";
-  if (status === "no_permit") return "#6b7280";
+function getRiskColor(item) {
+  const score = item.risk_score || 0;
 
-  return "#999";
+  if (score >= 70) return "#ef2222";
+  if (score >= 35) return "#f5c400";
+  return "#0f7a45";
 }
 
 function createIcon(color) {

@@ -21,6 +21,8 @@ from .models import (
     SanitaryEstablishment,
     SanitaryInspection,
     SanitaryInspectionChecklistItem,
+    SanitaryPermitRenewal,
+    SanitaryComplaint,
     HouseholdSanitationRecord,
     UserProfile,
 )
@@ -368,6 +370,9 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     coordinates = serializers.SerializerMethodField()
+    risk_score = serializers.SerializerMethodField()
+    risk_level = serializers.SerializerMethodField()
+    open_complaints = serializers.SerializerMethodField()
 
     class Meta:
         model = SanitaryEstablishment
@@ -394,6 +399,9 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "coordinates",
+            "risk_score",
+            "risk_level",
+            "open_complaints",
             "remarks",
             "created_at",
             "updated_at",
@@ -404,6 +412,39 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "lat": obj.latitude,
             "lng": obj.longitude,
         }
+
+    def get_open_complaints(self, obj):
+        return obj.complaints.exclude(status__in=["resolved", "rejected"]).count()
+
+    def get_risk_score(self, obj):
+        score = 0
+
+        if obj.compliance_status == "violation":
+            score += 40
+        elif obj.compliance_status == "for_completion":
+            score += 25
+        elif obj.compliance_status == "upcoming":
+            score += 10
+
+        if obj.permit_status in ["suspended", "no_permit"]:
+            score += 30
+        elif obj.permit_status == "renewal_due":
+            score += 15
+
+        if not obj.has_permit:
+            score += 25
+
+        score += min(self.get_open_complaints(obj) * 15, 45)
+        return min(score, 100)
+
+    def get_risk_level(self, obj):
+        score = self.get_risk_score(obj)
+
+        if score >= 70:
+            return "High Risk"
+        if score >= 35:
+            return "Medium Risk"
+        return "Low Risk"
 
 
 class SanitaryInspectionChecklistItemSerializer(serializers.ModelSerializer):
@@ -467,6 +508,95 @@ class SanitaryInspectionSerializer(serializers.ModelSerializer):
             "photo_documentation",
             "is_draft",
             "checklist_items",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
+    establishment_name = serializers.CharField(
+        source="establishment.business_name",
+        read_only=True,
+    )
+    owner_name = serializers.CharField(
+        source="establishment.owner_name",
+        read_only=True,
+    )
+    business_type_name = serializers.CharField(
+        source="establishment.business_type.name",
+        read_only=True,
+    )
+    barangay = serializers.CharField(source="establishment.barangay", read_only=True)
+    stage_label = serializers.CharField(source="get_stage_display", read_only=True)
+    payment_status_label = serializers.CharField(
+        source="get_payment_status_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SanitaryPermitRenewal
+        fields = [
+            "id",
+            "renewal_id",
+            "establishment",
+            "establishment_name",
+            "owner_name",
+            "business_type_name",
+            "barangay",
+            "permit_number",
+            "permit_type",
+            "expiration_date",
+            "stage",
+            "stage_label",
+            "progress",
+            "renewal_fee",
+            "payment_status",
+            "payment_status_label",
+            "submitted_requirements",
+            "inspection_status",
+            "photo_documentation",
+            "remarks",
+            "released_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SanitaryComplaintSerializer(serializers.ModelSerializer):
+    establishment_name = serializers.CharField(
+        source="establishment.business_name",
+        read_only=True,
+    )
+    business_type_name = serializers.CharField(
+        source="establishment.business_type.name",
+        read_only=True,
+    )
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    priority_label = serializers.CharField(
+        source="get_priority_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SanitaryComplaint
+        fields = [
+            "id",
+            "complaint_id",
+            "establishment",
+            "establishment_name",
+            "business_type_name",
+            "complainant_name",
+            "contact_number",
+            "category",
+            "barangay",
+            "reported_date",
+            "status",
+            "status_label",
+            "priority",
+            "priority_label",
+            "description",
+            "action_taken",
+            "resolved_date",
             "created_at",
             "updated_at",
         ]
@@ -550,6 +680,8 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
     )
     total_members = serializers.IntegerField(read_only=True)
     coordinates = serializers.SerializerMethodField()
+    risk_score = serializers.SerializerMethodField()
+    risk_level = serializers.SerializerMethodField()
 
     class Meta:
         model = HouseholdSanitationRecord
@@ -574,6 +706,8 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "coordinates",
+            "risk_score",
+            "risk_level",
             "remarks",
             "last_survey_date",
             "created_at",
@@ -585,3 +719,33 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "lat": obj.latitude,
             "lng": obj.longitude,
         }
+
+    def get_risk_score(self, obj):
+        score = 0
+
+        if obj.status == "violation":
+            score += 35
+        elif obj.status == "for_completion":
+            score += 20
+
+        if obj.toilet_type == "none":
+            score += 30
+        elif obj.toilet_type == "pit_latrine":
+            score += 15
+
+        if obj.water_level == "level_1":
+            score += 20
+
+        if obj.waste_disposal in ["burned", "dumped"]:
+            score += 20
+
+        return min(score, 100)
+
+    def get_risk_level(self, obj):
+        score = self.get_risk_score(obj)
+
+        if score >= 70:
+            return "High Risk"
+        if score >= 35:
+            return "Medium Risk"
+        return "Low Risk"

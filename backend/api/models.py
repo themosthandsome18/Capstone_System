@@ -459,6 +459,58 @@ PERMIT_STATUS_CHOICES = [
     (PERMIT_STATUS_NO_PERMIT, "No Permit"),
 ]
 
+RENEWAL_STAGE_NOTICE_SENT = "notice_sent"
+RENEWAL_STAGE_APPLICATION_FILED = "application_filed"
+RENEWAL_STAGE_REQUIREMENTS_REVIEW = "requirements_review"
+RENEWAL_STAGE_INSPECTION_SCHEDULED = "inspection_scheduled"
+RENEWAL_STAGE_PAYMENT_PENDING = "payment_pending"
+RENEWAL_STAGE_APPROVED = "approved"
+RENEWAL_STAGE_RELEASED = "released"
+RENEWAL_STAGE_LAPSED = "lapsed"
+
+RENEWAL_STAGE_CHOICES = [
+    (RENEWAL_STAGE_NOTICE_SENT, "Notice Sent"),
+    (RENEWAL_STAGE_APPLICATION_FILED, "Application Filed"),
+    (RENEWAL_STAGE_REQUIREMENTS_REVIEW, "Requirements Review"),
+    (RENEWAL_STAGE_INSPECTION_SCHEDULED, "Inspection Scheduled"),
+    (RENEWAL_STAGE_PAYMENT_PENDING, "Payment Pending"),
+    (RENEWAL_STAGE_APPROVED, "Approved"),
+    (RENEWAL_STAGE_RELEASED, "Released"),
+    (RENEWAL_STAGE_LAPSED, "Lapsed"),
+]
+
+RENEWAL_PAYMENT_PAID = "paid"
+RENEWAL_PAYMENT_UNPAID = "unpaid"
+RENEWAL_PAYMENT_PARTIAL = "partial"
+
+RENEWAL_PAYMENT_CHOICES = [
+    (RENEWAL_PAYMENT_PAID, "Paid"),
+    (RENEWAL_PAYMENT_UNPAID, "Unpaid"),
+    (RENEWAL_PAYMENT_PARTIAL, "Partial"),
+]
+
+COMPLAINT_STATUS_PENDING = "pending"
+COMPLAINT_STATUS_INVESTIGATING = "investigating"
+COMPLAINT_STATUS_RESOLVED = "resolved"
+COMPLAINT_STATUS_REJECTED = "rejected"
+
+COMPLAINT_STATUS_CHOICES = [
+    (COMPLAINT_STATUS_PENDING, "Pending"),
+    (COMPLAINT_STATUS_INVESTIGATING, "Under Investigation"),
+    (COMPLAINT_STATUS_RESOLVED, "Resolved"),
+    (COMPLAINT_STATUS_REJECTED, "Rejected"),
+]
+
+COMPLAINT_PRIORITY_LOW = "low"
+COMPLAINT_PRIORITY_MEDIUM = "medium"
+COMPLAINT_PRIORITY_HIGH = "high"
+
+COMPLAINT_PRIORITY_CHOICES = [
+    (COMPLAINT_PRIORITY_LOW, "Low"),
+    (COMPLAINT_PRIORITY_MEDIUM, "Medium"),
+    (COMPLAINT_PRIORITY_HIGH, "High"),
+]
+
 
 class SanitaryBusinessType(models.Model):
     name = models.CharField(max_length=160, unique=True)
@@ -550,6 +602,81 @@ class SanitaryEstablishment(models.Model):
     @property
     def inspection_frequency(self):
         return self.business_type.inspection_frequency
+
+
+class SanitaryPermitRenewal(models.Model):
+    renewal_id = models.CharField(max_length=40, unique=True)
+    establishment = models.ForeignKey(
+        SanitaryEstablishment,
+        on_delete=models.CASCADE,
+        related_name="permit_renewals",
+    )
+    permit_number = models.CharField(max_length=80)
+    permit_type = models.CharField(max_length=80, default="Sanitary Permit")
+    expiration_date = models.DateField()
+    stage = models.CharField(
+        max_length=40,
+        choices=RENEWAL_STAGE_CHOICES,
+        default=RENEWAL_STAGE_NOTICE_SENT,
+    )
+    progress = models.PositiveIntegerField(default=14)
+    renewal_fee = models.DecimalField(max_digits=10, decimal_places=2, default=500)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=RENEWAL_PAYMENT_CHOICES,
+        default=RENEWAL_PAYMENT_UNPAID,
+    )
+    submitted_requirements = models.JSONField(default=list, blank=True)
+    inspection_status = models.CharField(max_length=160, blank=True)
+    photo_documentation = models.CharField(max_length=255, blank=True)
+    remarks = models.TextField(blank=True)
+    released_at = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["expiration_date", "renewal_id"]
+
+    def __str__(self):
+        return f"{self.renewal_id} - {self.establishment.business_name}"
+
+
+class SanitaryComplaint(models.Model):
+    complaint_id = models.CharField(max_length=40, unique=True)
+    establishment = models.ForeignKey(
+        SanitaryEstablishment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="complaints",
+    )
+    complainant_name = models.CharField(max_length=160, blank=True)
+    contact_number = models.CharField(max_length=60, blank=True)
+    category = models.CharField(max_length=120)
+    barangay = models.CharField(max_length=120)
+    reported_date = models.DateField()
+    status = models.CharField(
+        max_length=30,
+        choices=COMPLAINT_STATUS_CHOICES,
+        default=COMPLAINT_STATUS_PENDING,
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=COMPLAINT_PRIORITY_CHOICES,
+        default=COMPLAINT_PRIORITY_MEDIUM,
+    )
+    description = models.TextField()
+    action_taken = models.TextField(blank=True)
+    resolved_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-reported_date", "-id"]
+
+    def __str__(self):
+        target = self.establishment.business_name if self.establishment_id else self.barangay
+        return f"{self.complaint_id} - {target}"
 
 
 class SanitaryInspection(models.Model):

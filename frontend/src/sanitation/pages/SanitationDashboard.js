@@ -14,13 +14,15 @@ function SanitationDashboard() {
   const distribution =
     dashboardData?.distribution || buildLocalDistribution(establishments);
   const byType = dashboardData?.byType || buildLocalByType(establishments);
+  const chartTypes = buildDashboardTypeChart(byType);
 
   const recentActivity =
     dashboardData?.recentActivity?.length
       ? dashboardData.recentActivity
       : establishments.slice(0, 6);
+  const alerts = dashboardData?.alerts || {};
 
-  const maxTypeTotal = Math.max(...byType.map((item) => item.total || 0), 1);
+  const maxTypeTotal = Math.max(...chartTypes.map((item) => item.total || 0), 1);
 
   if (loading) {
     return (
@@ -106,8 +108,8 @@ function SanitationDashboard() {
           </div>
 
           <div className="establishment-bar-chart">
-            {byType.length ? (
-              byType.map((item) => (
+            {chartTypes.length ? (
+              chartTypes.map((item) => (
                 <Bar
                   key={item.id || item.name}
                   label={shortenTypeLabel(item.name)}
@@ -128,6 +130,44 @@ function SanitationDashboard() {
             <span className="sp">■ SP</span>
           </div>
         </section>
+      </div>
+
+      <div className="sanitation-alert-grid">
+        <AlertPanel
+          title="Renewal Alerts"
+          link="/sanitation/renewals"
+          items={(alerts.renewals || []).map((item) => ({
+            id: item.id,
+            title: item.establishment_name,
+            meta: `${item.stage_label} • expires ${item.expiration_date}`,
+            tone: item.stage === "lapsed" ? "danger" : "warning",
+          }))}
+          empty="No urgent renewal alerts."
+        />
+
+        <AlertPanel
+          title="Complaint Follow-ups"
+          link="/sanitation/complaints"
+          items={(alerts.complaints || []).map((item) => ({
+            id: item.id,
+            title: item.establishment_name || item.barangay,
+            meta: `${item.category} • ${item.status_label}`,
+            tone: item.priority === "high" ? "danger" : "warning",
+          }))}
+          empty="No open complaints."
+        />
+
+        <AlertPanel
+          title="Inspection Schedule"
+          link="/sanitation/inspections"
+          items={(alerts.upcomingInspections || []).map((item) => ({
+            id: item.id,
+            title: item.establishment_name,
+            meta: `${item.inspector_name} • due ${item.next_due_date}`,
+            tone: "good",
+          }))}
+          empty="No upcoming inspection schedule."
+        />
       </div>
 
       <section className="recent-activity-card">
@@ -295,6 +335,56 @@ function buildLocalByType(establishments) {
   });
 
   return Object.values(grouped);
+}
+
+function AlertPanel({ title, link, items, empty }) {
+  return (
+    <section className="sanitation-alert-panel">
+      <div className="sanitation-alert-title">
+        <h3>{title}</h3>
+        <Link to={link}>View all</Link>
+      </div>
+
+      {items.length ? (
+        items.slice(0, 4).map((item) => (
+          <div className={`sanitation-alert-row ${item.tone}`} key={item.id}>
+            <strong>{item.title}</strong>
+            <span>{item.meta}</span>
+          </div>
+        ))
+      ) : (
+        <p>{empty}</p>
+      )}
+    </section>
+  );
+}
+
+function buildDashboardTypeChart(types) {
+  const sorted = [...types].sort((a, b) => (b.total || 0) - (a.total || 0));
+  const visible = sorted.slice(0, 8);
+  const remaining = sorted.slice(8);
+
+  if (!remaining.length) {
+    return visible;
+  }
+
+  const others = remaining.reduce(
+    (summary, item) => ({
+      ...summary,
+      total: summary.total + (item.total || 0),
+      sp: summary.sp + (item.sp || 0),
+      large: summary.large + (item.large || 0),
+    }),
+    {
+      id: "others",
+      name: "Others",
+      total: 0,
+      sp: 0,
+      large: 0,
+    }
+  );
+
+  return [...visible, others];
 }
 
 function buildComplianceGradient(distribution) {

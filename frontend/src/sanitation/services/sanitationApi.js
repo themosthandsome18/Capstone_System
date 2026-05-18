@@ -103,6 +103,54 @@ export function fetchSanitationPermits(params = {}) {
 }
 
 
+export function fetchSanitationRenewals(params = {}) {
+  return request(withQuery(sanitationPath("/renewals/"), params));
+}
+
+
+export function createSanitationRenewal(payload) {
+  return save(sanitationPath("/renewals/"), "POST", payload);
+}
+
+
+export function updateSanitationRenewal(id, payload) {
+  return save(
+    sanitationPath(`/renewals/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
+}
+
+
+export function deleteSanitationRenewal(id) {
+  return remove(sanitationPath(`/renewals/${encodeURIComponent(id)}/`));
+}
+
+
+export function fetchSanitationComplaints(params = {}) {
+  return request(withQuery(sanitationPath("/complaints/"), params));
+}
+
+
+export function createSanitationComplaint(payload) {
+  return save(sanitationPath("/complaints/"), "POST", payload);
+}
+
+
+export function updateSanitationComplaint(id, payload) {
+  return save(
+    sanitationPath(`/complaints/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
+}
+
+
+export function deleteSanitationComplaint(id) {
+  return remove(sanitationPath(`/complaints/${encodeURIComponent(id)}/`));
+}
+
+
 export function fetchSanitationSubmissions(params = {}) {
   return request(withQuery(sanitationPath("/submissions/"), params));
 }

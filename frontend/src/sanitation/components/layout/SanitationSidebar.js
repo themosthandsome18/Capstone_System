@@ -6,7 +6,9 @@ const businessLinks = [
   { to: "/sanitation/requirements", label: "Types & Requirements" },
   { to: "/sanitation/establishments", label: "Establishment Records" },
   { to: "/sanitation/inspections", label: "Inspection Management" },
+  { to: "/sanitation/complaints", label: "Complaint Management" },
   { to: "/sanitation/permits", label: "Permit Monitoring" },
+  { to: "/sanitation/renewals", label: "Permit Renewal" },
   { to: "/sanitation/submissions", label: "Submission Tracking" },
   { to: "/sanitation/reports", label: "Report and Analytics" },
 ];

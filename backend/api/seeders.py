@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 
 from django.db.models import Max
@@ -14,9 +15,11 @@ from .models import (
     Region,
     Resort,
     SanitaryBusinessType,
+    SanitaryComplaint,
     SanitaryEstablishment,
     SanitaryInspection,
     SanitaryInspectionChecklistItem,
+    SanitaryPermitRenewal,
     SanitaryRequirement,
     TouristRecord,
     TravelMode,
@@ -264,13 +267,16 @@ def ensure_initial_data():
 
 
 def ensure_initial_sanitation_data():
-    if SanitaryBusinessType.objects.exists():
-        return
-
     business_type_lookup = {}
 
     for row in SANITARY_BUSINESS_TYPES:
-        business_type = SanitaryBusinessType.objects.create(**row)
+        business_type, _ = SanitaryBusinessType.objects.update_or_create(
+            name=row["name"],
+            defaults={
+                "inspection_frequency": row["inspection_frequency"],
+                "description": row.get("description", ""),
+            },
+        )
         business_type_lookup[business_type.name] = business_type
 
     for group in SANITARY_REQUIREMENTS:
@@ -280,11 +286,11 @@ def ensure_initial_sanitation_data():
             continue
 
         for requirement_name in group["requirements"]:
-            SanitaryRequirement.objects.create(
+            SanitaryRequirement.objects.update_or_create(
                 business_type=business_type,
                 permit_size=group["permit_size"],
                 requirement_name=requirement_name,
-                is_required=True,
+                defaults={"is_required": True},
             )
 
     establishment_lookup = {}
@@ -297,9 +303,12 @@ def ensure_initial_sanitation_data():
         if not business_type:
             continue
 
-        establishment = SanitaryEstablishment.objects.create(
-            business_type=business_type,
-            **data,
+        establishment, _ = SanitaryEstablishment.objects.update_or_create(
+            business_name=data["business_name"],
+            defaults={
+                **data,
+                "business_type": business_type,
+            },
         )
         establishment_lookup[establishment.business_name] = establishment
 
@@ -313,16 +322,119 @@ def ensure_initial_sanitation_data():
         if not establishment:
             continue
 
-        inspection = SanitaryInspection.objects.create(
+        inspection, _ = SanitaryInspection.objects.update_or_create(
             establishment=establishment,
-            **data,
+            inspection_date=data["inspection_date"],
+            defaults={
+                **data,
+                "establishment": establishment,
+            },
         )
 
         for item in checklist:
-            SanitaryInspectionChecklistItem.objects.create(
+            SanitaryInspectionChecklistItem.objects.update_or_create(
                 inspection=inspection,
-                **item,
+                requirement_name=item["requirement_name"],
+                defaults={
+                    "is_complied": item.get("is_complied", False),
+                    "notes": item.get("notes", ""),
+                },
             )
+
+    ensure_initial_permit_renewals()
+    ensure_initial_sanitary_complaints()
+
+
+def ensure_initial_permit_renewals():
+    if SanitaryPermitRenewal.objects.exists():
+        return
+
+    stages = [
+        ("notice_sent", "unpaid", 14),
+        ("application_filed", "unpaid", 29),
+        ("requirements_review", "unpaid", 43),
+        ("inspection_scheduled", "partial", 57),
+        ("payment_pending", "partial", 71),
+        ("approved", "paid", 86),
+        ("released", "paid", 100),
+        ("lapsed", "unpaid", 8),
+    ]
+    requirements = [
+        "Previous permit copy",
+        "Updated health certificates",
+        "Water potability test",
+        "Pest Control Certificate",
+        "Recent Inspection Report",
+    ]
+
+    establishments = list(SanitaryEstablishment.objects.order_by("id")[:10])
+    for index, establishment in enumerate(establishments, start=1):
+        stage, payment_status, progress = stages[(index - 1) % len(stages)]
+        expiration_date = timezone.localdate() + timedelta(days=(index * 8) - 18)
+        submitted_count = min(len(requirements), 2 + (index % len(requirements)))
+
+        SanitaryPermitRenewal.objects.create(
+            renewal_id=f"RNW-2026-{index:04d}",
+            establishment=establishment,
+            permit_number=establishment.permit_number or f"SP-2026-{index:04d}",
+            permit_type="Sanitary Permit",
+            expiration_date=expiration_date,
+            stage=stage,
+            progress=progress,
+            renewal_fee=500 + (index * 300),
+            payment_status=payment_status,
+            submitted_requirements=requirements[:submitted_count],
+            inspection_status=(
+                "Inspection Completed - Passed"
+                if stage in {"approved", "released"}
+                else "For inspection scheduling"
+            ),
+            remarks="Routine annual sanitary permit renewal.",
+            released_at=timezone.localdate() if stage == "released" else None,
+        )
+
+
+def ensure_initial_sanitary_complaints():
+    if SanitaryComplaint.objects.exists():
+        return
+
+    establishments = list(
+        SanitaryEstablishment.objects.select_related("business_type").order_by("id")[:12]
+    )
+    categories = [
+        "Food handling concern",
+        "Improper waste disposal",
+        "Expired sanitary permit",
+        "Water potability concern",
+        "Unclean preparation area",
+        "Pest control concern",
+    ]
+    statuses = ["pending", "investigating", "resolved", "pending", "resolved", "rejected"]
+    priorities = ["high", "medium", "high", "medium", "low", "medium"]
+
+    for index, establishment in enumerate(establishments, start=1):
+        SanitaryComplaint.objects.create(
+            complaint_id=f"CMP-2026-{index:04d}",
+            establishment=establishment,
+            complainant_name=f"Resident {index}",
+            contact_number=f"09{index:09d}"[:11],
+            category=categories[(index - 1) % len(categories)],
+            barangay=establishment.barangay,
+            reported_date=timezone.localdate() - timedelta(days=index * 3),
+            status=statuses[(index - 1) % len(statuses)],
+            priority=priorities[(index - 1) % len(priorities)],
+            description="Complaint recorded for sanitary monitoring follow-up.",
+            action_taken=(
+                "Verified by sanitary inspector and advised correction."
+                if statuses[(index - 1) % len(statuses)] == "resolved"
+                else "For validation and inspection scheduling."
+            ),
+            resolved_date=(
+                timezone.localdate() - timedelta(days=index)
+                if statuses[(index - 1) % len(statuses)] == "resolved"
+                else None
+            ),
+        )
 
 
 def ensure_initial_household_data():

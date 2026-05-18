@@ -116,6 +116,10 @@ function AnalyticsAndReport() {
   });
 
   const rows = reportData.rows || [];
+  const questionAnswers = (reportData.questionAnswers || []).map((item) => ({
+    ...item,
+    visual: item.visual || buildFallbackVisual(item),
+  }));
   const totalVisitors = reportData.totals?.visitors || 0;
   const totalRevenue = reportData.totals?.revenue || 0;
 
@@ -333,6 +337,34 @@ function AnalyticsAndReport() {
         </button>
       </div>
 
+      <section className="analytics-question-card">
+        <div className="report-card-title">
+          <h3>Questions Answered by the System</h3>
+          <p>Computed from tourist records, selected filters, and arrival status</p>
+        </div>
+
+        <div className="analytics-question-grid">
+          {questionAnswers.length ? (
+            questionAnswers.map((item, index) => (
+              <article
+                key={item.id || item.question}
+                className="analytics-question-item"
+              >
+                <div className="analytics-question-top">
+                  <span>Q{index + 1}</span>
+                  <small>{getVisualLabel(item.visual?.type)}</small>
+                </div>
+                <h4>{item.question}</h4>
+                <VisualAnswer visual={item.visual} />
+                <p>{item.answer}</p>
+              </article>
+            ))
+          ) : (
+            <p className="analytics-question-empty">No question answers available.</p>
+          )}
+        </div>
+      </section>
+
       <div className="report-print-area">
         <div className="report-chart-card">
           <div className="report-card-title">
@@ -415,6 +447,195 @@ function AnalyticsAndReport() {
       </div>
     </div>
   );
+}
+
+function VisualAnswer({ visual }) {
+  if (!visual) {
+    return null;
+  }
+
+  if (visual.type === "share") {
+    return (
+      <div className="insight-share">
+        <div className="insight-share-main">
+          <strong>{Number(visual.value || 0).toLocaleString()}</strong>
+          <span>{visual.label}</span>
+        </div>
+        <div className="insight-track">
+          <b style={{ width: `${clampPercent(visual.percentage)}%` }} />
+        </div>
+        <small>
+          {visual.percentage || 0}% of {Number(visual.total || 0).toLocaleString()} visitors
+        </small>
+      </div>
+    );
+  }
+
+  if (visual.type === "comparison") {
+    const max = Math.max(...(visual.items || []).map((item) => item.value || 0), 1);
+
+    return (
+      <div className="insight-bars">
+        {(visual.items || []).map((item) => (
+          <div className="insight-bar-row" key={item.label}>
+            <span>{item.label}</span>
+            <div>
+              <b style={{ width: `${clampPercent(((item.value || 0) / max) * 100)}%` }} />
+            </div>
+            <strong>{Number(item.value || 0).toLocaleString()}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (visual.type === "stack" || visual.type === "split") {
+    const total = (visual.items || []).reduce(
+      (sum, item) => sum + Number(item.value || 0),
+      0
+    );
+
+    return (
+      <div className="insight-stack-wrap">
+        <div className={`insight-stack ${visual.type}`}>
+          {(visual.items || []).map((item, index) => (
+            <span
+              key={item.label}
+              className={`tone-${index + 1}`}
+              style={{
+                width: `${total ? ((item.value || 0) / total) * 100 : 0}%`,
+              }}
+              title={`${item.label}: ${item.value}`}
+            />
+          ))}
+        </div>
+        <div className="insight-legend">
+          {(visual.items || []).map((item, index) => (
+            <span key={item.label}>
+              <i className={`tone-${index + 1}`} />
+              {item.label}: {Number(item.value || 0).toLocaleString()}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (visual.type === "metric") {
+    return (
+      <div className="insight-metric">
+        <strong>{visual.value}</strong>
+        <span>{visual.unit}</span>
+        <small>{visual.label}</small>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function buildFallbackVisual(item) {
+  const answer = item.answer || "";
+  const numbers = [...answer.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
+    Number(match[0])
+  );
+
+  if (item.id === "month_compare" || item.id === "high_demand") {
+    const currentMatch = answer.match(/has\s+(\d+(?:\.\d+)?)\s+visitors/i);
+    const previousMatch = answer.match(/\((\d+(?:\.\d+)?)\)/);
+    const current = currentMatch ? Number(currentMatch[1]) : numbers[0] || 0;
+    const previous = previousMatch ? Number(previousMatch[1]) : numbers[numbers.length - 1] || 0;
+
+    return {
+      type: "comparison",
+      items: [
+        { label: "Previous", value: Math.max(previous, 0) },
+        { label: "Current", value: Math.max(current, 0) },
+      ],
+    };
+  }
+
+  if (item.id === "classification") {
+    return {
+      type: "stack",
+      items: [
+        { label: "Filipino", value: numbers[0] || 0 },
+        { label: "Foreigner", value: numbers[1] || 0 },
+        { label: "Maubanin", value: numbers[2] || 0 },
+      ],
+    };
+  }
+
+  if (item.id === "stay_type") {
+    return {
+      type: "split",
+      items: [
+        { label: "Same-day", value: numbers[0] || 0 },
+        { label: "Overnight / multi-day", value: numbers[1] || 0 },
+      ],
+    };
+  }
+
+  if (item.id === "validation") {
+    return {
+      type: "stack",
+      items: [
+        { label: "Pending", value: numbers[0] || 0 },
+        { label: "No-show", value: numbers[1] || 0 },
+        { label: "Duplicates", value: numbers[2] || 0 },
+        { label: "Incomplete", value: numbers[3] || 0 },
+      ],
+    };
+  }
+
+  if (item.id === "average_stay") {
+    return {
+      type: "metric",
+      label: "Average stay",
+      value: numbers[0] || 0,
+      unit: "night(s)",
+    };
+  }
+
+  const value = numbers[0] || 0;
+  const percentage =
+    [...numbers].reverse().find((number) => number >= 0 && number <= 100) || 0;
+  const total = percentage ? Math.round(value / (percentage / 100)) : value;
+
+  return {
+    type: "share",
+    label: getFallbackLabel(answer),
+    value,
+    total,
+    percentage,
+  };
+}
+
+function getFallbackLabel(answer) {
+  const leadText = answer.split(" leads with ")[0];
+  const demandText = answer.split(" has the highest ")[0];
+
+  if (leadText && leadText !== answer) {
+    return leadText;
+  }
+
+  if (demandText && demandText !== answer) {
+    return demandText;
+  }
+
+  return "Result";
+}
+
+function getVisualLabel(type) {
+  if (type === "comparison") return "Comparison";
+  if (type === "stack") return "Distribution";
+  if (type === "split") return "Split";
+  if (type === "metric") return "Metric";
+  return "Share";
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number(value || 0)));
 }
 
 export default AnalyticsAndReport;

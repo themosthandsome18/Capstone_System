@@ -13,6 +13,13 @@ function SanitaryReportAnalytics() {
 
   const summary = reportData?.summary || buildLocalSummary(establishments);
   const byType = reportData?.byType || buildLocalByType(establishments);
+  const questionAnswers = reportData?.questionAnswers || [];
+  const complaintSummary = reportData?.complaints?.summary || {};
+  const complaintCategories = reportData?.complaints?.byCategory || [];
+  const requirementTracker = reportData?.requirementTracker || [];
+  const riskHotspots = reportData?.riskHotspots || [];
+  const renewalAlerts = reportData?.renewalAlerts || {};
+  const needsAttention = reportData?.needsAttention || [];
 
   const totalSp = byType.reduce((total, item) => total + (item.sp || 0), 0);
   const totalLarge = byType.reduce((total, item) => total + (item.large || 0), 0);
@@ -192,6 +199,106 @@ function SanitaryReportAnalytics() {
         </section>
       </div>
 
+      <section className="sanitary-question-card">
+        <div className="summary-title">
+          <FiFileText />
+
+          <div>
+            <h3>Questions Answered by the System</h3>
+            <p>Computed from establishment status, permits, and inspection records</p>
+          </div>
+        </div>
+
+        <div className="sanitary-question-grid">
+          {questionAnswers.length ? (
+            questionAnswers.map((item, index) => (
+              <article key={item.id || item.question} className="sanitary-question-item">
+                <span>Q{index + 1}</span>
+                <h4>{item.question}</h4>
+                <p>{item.answer}</p>
+              </article>
+            ))
+          ) : (
+            <p className="submission-empty">No question answers available.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="sanitary-insight-card">
+        <h3>Top Establishments Needing Attention</h3>
+        <div className="attention-ranking">
+          {needsAttention.length ? (
+            needsAttention.map((item, index) => (
+              <div className="attention-row" key={item.id}>
+                <strong>{index + 1}</strong>
+                <div>
+                  <h4>{item.business_name}</h4>
+                  <p>
+                    {item.business_type_name} • {item.barangay}
+                  </p>
+                  <span>{(item.reasons || []).join(", ")}</span>
+                </div>
+                <b className={riskClass(item.riskLevel)}>{item.riskScore}</b>
+              </div>
+            ))
+          ) : (
+            <p className="submission-empty">No priority establishments found.</p>
+          )}
+        </div>
+      </section>
+
+      <div className="sanitary-insight-grid">
+        <section className="sanitary-insight-card">
+          <h3>Requirement Compliance Tracker</h3>
+          <InsightBars rows={requirementTracker} />
+        </section>
+
+        <section className="sanitary-insight-card">
+          <h3>Complaint Status</h3>
+          <div className="complaint-mini-status">
+            <MiniSummary label="Pending" value={complaintSummary.pending || 0} color="yellow" icon={<FiAlertTriangle />} />
+            <MiniSummary label="Investigating" value={complaintSummary.investigating || 0} color="orange" icon={<FiFileText />} />
+            <MiniSummary label="Resolved" value={complaintSummary.resolved || 0} color="green" icon={<FiShield />} />
+            <MiniSummary label="High Priority" value={complaintSummary.highPriority || 0} color="red" icon={<FiAlertTriangle />} />
+          </div>
+        </section>
+      </div>
+
+      <div className="sanitary-insight-grid">
+        <section className="sanitary-insight-card">
+          <h3>Common Complaint Categories</h3>
+          <InsightBars rows={complaintCategories} />
+        </section>
+
+        <section className="sanitary-insight-card">
+          <h3>Barangay Hotspots</h3>
+          <div className="hotspot-list">
+            {riskHotspots.length ? (
+              riskHotspots.map((item) => (
+                <div className="hotspot-row" key={item.barangay}>
+                  <span>{item.barangay}</span>
+                  <strong>{item.riskScore}</strong>
+                  <small>
+                    {item.sanitationConcerns} concerns, {item.complaints} complaints
+                  </small>
+                </div>
+              ))
+            ) : (
+              <p className="submission-empty">No hotspot data yet.</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="sanitary-insight-card">
+        <h3>Renewal Alerts</h3>
+        <div className="renewal-alert-columns">
+          <RenewalAlertList title="Expiring Soon" rows={renewalAlerts.expiringSoon || []} />
+          <RenewalAlertList title="Expired" rows={renewalAlerts.expired || []} />
+          <RenewalAlertList title="Payment Pending" rows={renewalAlerts.paymentPending || []} />
+        </div>
+      </section>
+
       <section className="summary-report-card">
         <div className="summary-report-top">
           <div className="summary-title">
@@ -369,6 +476,46 @@ function MiniSummary({ label, value, color, icon }) {
   );
 }
 
+function InsightBars({ rows }) {
+  const max = Math.max(...rows.map((item) => item.total || 0), 1);
+
+  return (
+    <div className="insight-bars">
+      {rows.length ? (
+        rows.slice(0, 8).map((item) => (
+          <div className="insight-bar-row" key={item.name}>
+            <span>{formatStatusName(item.name)}</span>
+            <div>
+              <b style={{ width: `${Math.max(8, ((item.total || 0) / max) * 100)}%` }} />
+            </div>
+            <strong>{item.total || 0}</strong>
+          </div>
+        ))
+      ) : (
+        <p className="submission-empty">No data available.</p>
+      )}
+    </div>
+  );
+}
+
+function RenewalAlertList({ title, rows }) {
+  return (
+    <div className="renewal-alert-list">
+      <h4>{title}</h4>
+      {rows.length ? (
+        rows.slice(0, 5).map((item) => (
+          <div key={item.id}>
+            <strong>{item.establishment_name}</strong>
+            <span>{item.stage_label} • {item.expiration_date}</span>
+          </div>
+        ))
+      ) : (
+        <p>No records.</p>
+      )}
+    </div>
+  );
+}
+
 function buildLocalSummary(establishments) {
   const total = establishments.length;
   const goodStanding = establishments.filter(
@@ -499,6 +646,18 @@ function formatFrequency(value = "") {
   if (value === "monthly") return "Monthly";
   if (value === "quarterly") return "Quarterly";
   return value || "Not Set";
+}
+
+function formatStatusName(value = "") {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function riskClass(value = "") {
+  if (value.toLowerCase().includes("high")) return "high";
+  if (value.toLowerCase().includes("medium")) return "medium";
+  return "low";
 }
 
 export default SanitaryReportAnalytics;

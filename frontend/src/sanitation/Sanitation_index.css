@@ -365,6 +365,73 @@
   gap: 18px;
 }
 
+.sanitation-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.sanitation-alert-panel {
+  min-height: 190px;
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.16);
+}
+
+.sanitation-alert-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sanitation-alert-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.sanitation-alert-title a {
+  color: #0f6b3f;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.sanitation-alert-row {
+  border-left: 4px solid #22c55e;
+  background: #f7faf8;
+  padding: 10px 12px;
+  margin-bottom: 9px;
+}
+
+.sanitation-alert-row.warning {
+  border-left-color: #f59e0b;
+}
+
+.sanitation-alert-row.danger {
+  border-left-color: #ef4444;
+}
+
+.sanitation-alert-row strong,
+.sanitation-alert-row span {
+  display: block;
+}
+
+.sanitation-alert-row strong {
+  font-size: 12px;
+  color: #111;
+}
+
+.sanitation-alert-row span,
+.sanitation-alert-panel p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #666;
+}
+
 .sanitation-card {
   border: 1px solid #aeb7b1;
   border-radius: 10px;
@@ -2990,6 +3057,643 @@
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
 }
 
+/* ========================================================= PERMIT RENEWAL PAGE ========================================================= */
+
+.renewal-page {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.renewal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.renewal-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #111;
+}
+
+.renewal-header p {
+  margin: 5px 0 0;
+  max-width: 720px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.renewal-new-btn,
+.renewal-submit {
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: #075f3b;
+  color: #ffffff;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.22);
+}
+
+.renewal-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.renewal-stat-card {
+  min-height: 82px;
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.2);
+}
+
+.renewal-stat-card p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #777;
+}
+
+.renewal-stat-card h2 {
+  margin: 17px 0 0;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 800;
+  color: #111;
+}
+
+.renewal-stat-card svg {
+  color: #16a34a;
+  font-size: 24px;
+}
+
+.renewal-stat-card.danger svg {
+  color: #ef4444;
+}
+
+.renewal-filter-card {
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: 2fr repeat(4, minmax(135px, 1fr));
+  gap: 10px;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.16);
+}
+
+.renewal-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 0 10px;
+}
+
+.renewal-search input,
+.renewal-filter-card select,
+.renewal-field input,
+.renewal-field select,
+.renewal-field textarea,
+.renewal-upload input {
+  width: 100%;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  font-size: 13px;
+}
+
+.renewal-search input {
+  border: 0;
+}
+
+.renewal-filter-card select {
+  height: 34px;
+  padding: 0 10px;
+}
+
+.renewal-pipeline-card,
+.renewal-table-card,
+.renewal-form-modal,
+.renewal-detail-modal {
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
+}
+
+.renewal-pipeline-card {
+  padding: 12px;
+}
+
+.renewal-pipeline-card h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.renewal-pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.renewal-stage-tile {
+  min-height: 70px;
+  border: 1px solid #bfc6c1;
+  border-radius: 8px;
+  background: #fbfdfc;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.renewal-stage-tile.active {
+  border-color: #0ea5e9;
+  box-shadow: inset 0 0 0 1px #0ea5e9;
+}
+
+.renewal-stage-tile span {
+  display: inline-block;
+  border-radius: 999px;
+  background: #dff5e8;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #166534;
+}
+
+.renewal-stage-tile strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 20px;
+  color: #111827;
+}
+
+.renewal-stage-tile small {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.renewal-table-card {
+  overflow-x: auto;
+}
+
+.renewal-table-card table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.renewal-table-card th {
+  padding: 14px 12px;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: #64748b;
+  text-align: left;
+  border-bottom: 1px solid #d7e0dc;
+}
+
+.renewal-table-card td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf2ef;
+  vertical-align: middle;
+}
+
+.renewal-table-card td strong,
+.renewal-table-card td small {
+  display: block;
+}
+
+.days-late {
+  color: #ef4444;
+  font-weight: 800;
+}
+
+.renewal-stage-pill,
+.renewal-payment {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.renewal-stage-pill {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.renewal-stage-pill.payment_pending,
+.renewal-payment.partial {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.renewal-stage-pill.approved,
+.renewal-payment.paid,
+.renewal-stage-pill.released {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.renewal-stage-pill.inspection_scheduled {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.renewal-stage-pill.lapsed,
+.renewal-payment.unpaid {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.renewal-progress {
+  width: 74px;
+  height: 7px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.renewal-progress b {
+  display: block;
+  height: 100%;
+  background: #16a34a;
+}
+
+.renewal-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.renewal-actions button,
+.renewal-detail-title button,
+.renewal-modal-title button {
+  border: 0;
+  background: #f7faf8;
+  color: #111827;
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.renewal-empty {
+  height: 80px;
+  text-align: center;
+  font-weight: 800;
+  color: #64748b;
+}
+
+.renewal-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.58);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.renewal-form-modal {
+  width: min(760px, 100%);
+  padding: 22px;
+}
+
+.renewal-detail-modal {
+  width: min(460px, 100%);
+  padding: 18px;
+}
+
+.renewal-modal-title,
+.renewal-detail-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.renewal-modal-title h2,
+.renewal-detail-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.renewal-modal-title p,
+.renewal-detail-title p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.renewal-form-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.renewal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.renewal-field.full {
+  grid-column: 1 / -1;
+}
+
+.renewal-field span,
+.renewal-checklist > span,
+.renewal-upload span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.renewal-field input,
+.renewal-field select {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.renewal-field textarea {
+  min-height: 78px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.renewal-checklist {
+  margin-top: 16px;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.renewal-checklist div {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.renewal-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.renewal-upload {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.renewal-upload input {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.renewal-modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.renewal-cancel {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.renewal-detail-info {
+  margin-top: 16px;
+  border: 1px solid #b9c3bd;
+  border-radius: 10px;
+  background: #f7faf8;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.renewal-detail-info span {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.renewal-detail-info strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #111827;
+}
+
+.renewal-detail-modal h3 {
+  margin: 17px 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.renewal-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.renewal-timeline li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+
+.renewal-timeline span {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.renewal-timeline li.done span {
+  background: #2f7d32;
+  color: #ffffff;
+}
+
+.renewal-detail-requirements {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.renewal-detail-requirements span {
+  min-height: 28px;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.renewal-detail-requirements .done svg {
+  color: #16a34a;
+}
+
+.renewal-detail-bottom {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.renewal-detail-bottom div {
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  background: #f7faf8;
+  padding: 10px;
+}
+
+.renewal-detail-bottom strong {
+  font-size: 11px;
+}
+
+.renewal-detail-bottom p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: #4b5563;
+}
+
+@media (max-width: 1200px) {
+  .renewal-stat-grid,
+  .renewal-filter-card,
+  .renewal-pipeline-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .renewal-header,
+  .renewal-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .renewal-stat-grid,
+  .renewal-filter-card,
+  .renewal-pipeline-grid,
+  .renewal-form-grid,
+  .renewal-checklist div,
+  .renewal-detail-info,
+  .renewal-detail-requirements,
+  .renewal-detail-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sanitary-question-card {
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 22px 24px;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+}
+
+.sanitary-question-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sanitary-question-item {
+  min-width: 0;
+  border: 1px solid #d7e0dc;
+  border-radius: 9px;
+  background: #f7faf8;
+  padding: 14px;
+}
+
+.sanitary-question-item span {
+  display: inline-flex;
+  min-width: 34px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #0c5c3b;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sanitary-question-item h4 {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+  color: #111827;
+}
+
+.sanitary-question-item p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
 .summary-report-top {
   display: flex;
   justify-content: space-between;
@@ -4027,6 +4731,454 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* ===================================================== COMPLAINT MANAGEMENT ===================================================== */
+
+.complaints-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px;
+}
+
+.complaints-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.complaints-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #111;
+}
+
+.complaints-header p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.complaint-primary-btn,
+.complaint-modal-actions button:last-child {
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: #064f34;
+  color: white;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.complaint-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+.complaint-stat-card {
+  min-height: 90px;
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.16);
+}
+
+.complaint-stat-card p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.complaint-stat-card h2 {
+  margin: 16px 0 0;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.complaint-stat-card svg {
+  font-size: 22px;
+}
+
+.complaint-stat-card.green svg {
+  color: #22a851;
+}
+
+.complaint-stat-card.orange svg {
+  color: #f59e0b;
+}
+
+.complaint-stat-card.blue svg {
+  color: #2563eb;
+}
+
+.complaint-stat-card.red svg {
+  color: #ef4444;
+}
+
+.complaints-visual-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 18px;
+}
+
+.complaints-panel,
+.complaints-table-card {
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.16);
+}
+
+.complaints-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.complaint-category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.complaint-bar-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+}
+
+.complaint-bar-row span,
+.complaint-bar-row strong {
+  font-size: 12px;
+  color: #444;
+}
+
+.complaint-bar-row div {
+  height: 24px;
+  background: #edf5f1;
+}
+
+.complaint-bar-row b {
+  display: block;
+  height: 100%;
+  background: #1f7655;
+}
+
+.complaint-status-flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.complaint-status-step {
+  min-height: 105px;
+  border: 1px solid #d7e0dc;
+  border-radius: 8px;
+  background: #f7faf8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.complaint-status-step strong {
+  font-size: 28px;
+  color: #064f34;
+}
+
+.complaint-status-step span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #555;
+  text-align: center;
+}
+
+.complaints-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(3, 170px);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.complaint-search,
+.complaints-toolbar select {
+  height: 38px;
+  border: 1px solid #b9c3bd;
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 0 12px;
+}
+
+.complaint-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.complaint-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.complaints-table-wrap {
+  overflow-x: auto;
+}
+
+.complaints-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.complaints-table th {
+  text-align: left;
+  padding: 12px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #666;
+  border-bottom: 2px solid #d6d6d6;
+}
+
+.complaints-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #333;
+}
+
+.complaints-table td strong,
+.complaints-table td small {
+  display: block;
+}
+
+.complaints-table td small {
+  margin-top: 3px;
+  color: #777;
+}
+
+.complaint-pill,
+.complaint-priority {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.complaint-pill.pending,
+.complaint-priority.medium {
+  background: #fff0bd;
+  color: #b77900;
+}
+
+.complaint-pill.investigating {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.complaint-pill.resolved,
+.complaint-priority.low {
+  background: #cce9dc;
+  color: #0f6b3f;
+}
+
+.complaint-pill.rejected,
+.complaint-priority.high {
+  background: #ffd5d5;
+  color: #dc2626;
+}
+
+.complaint-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.complaint-row-actions button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d7e0dc;
+  border-radius: 999px;
+  background: #f7faf8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.complaint-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.complaint-modal {
+  width: min(850px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: #fff;
+  padding: 22px;
+}
+
+.complaint-modal-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.complaint-modal-title h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.complaint-modal-title p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.complaint-modal-title button {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.complaint-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.complaint-form-grid label,
+.complaint-wide-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #333;
+}
+
+.complaint-form-grid input,
+.complaint-form-grid select,
+.complaint-wide-field textarea {
+  width: 100%;
+  border: 1px solid #b9c3bd;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.complaint-form-grid input,
+.complaint-form-grid select {
+  height: 40px;
+}
+
+.complaint-wide-field {
+  margin-top: 14px;
+}
+
+.complaint-wide-field textarea {
+  min-height: 90px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.complaint-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.complaint-modal-actions button:first-child {
+  height: 38px;
+  border: 1px solid #b9c3bd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.complaint-print-report {
+  display: none;
+}
+
+.complaint-report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+}
+
+.complaint-timeline {
+  padding-left: 20px;
+}
+
+.complaint-timeline li {
+  margin-bottom: 10px;
+}
+
+.complaint-timeline strong,
+.complaint-timeline span {
+  display: block;
+}
+
+@media print {
+  .sanitation-sidebar,
+  .sanitation-topbar,
+  .complaints-page > :not(.complaint-print-report) {
+    display: none !important;
+  }
+
+  .sanitation-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .complaint-print-report {
+    display: block;
+    padding: 24px;
+    color: #111;
+  }
+}
+
+@media (max-width: 1100px) {
+  .complaint-stat-grid,
+  .complaints-visual-grid,
+  .complaints-toolbar,
+  .complaint-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .gis-mode-toggle {
   display: inline-flex;
   align-items: center;
@@ -4506,6 +5658,205 @@
   font-weight: 800;
   white-space: nowrap;
 }
+
+.sanitary-insight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.sanitary-insight-card {
+  border: 1px solid #aeb7b1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px 20px;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
+}
+
+.sanitary-insight-card h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #111;
+}
+
+.insight-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.insight-bar-row {
+  display: grid;
+  grid-template-columns: 155px 1fr 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.insight-bar-row span,
+.insight-bar-row strong {
+  font-size: 12px;
+  color: #444;
+}
+
+.insight-bar-row div {
+  height: 24px;
+  background: #edf5f1;
+}
+
+.insight-bar-row b {
+  display: block;
+  height: 100%;
+  background: #1f7655;
+}
+
+.complaint-mini-status {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.hotspot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hotspot-row {
+  display: grid;
+  grid-template-columns: 1fr 42px 190px;
+  align-items: center;
+  border: 1px solid #d7e0dc;
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 10px 12px;
+}
+
+.hotspot-row span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #111;
+}
+
+.hotspot-row strong {
+  color: #ef4444;
+}
+
+.hotspot-row small {
+  color: #666;
+  text-align: right;
+}
+
+.renewal-alert-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.renewal-alert-list {
+  border: 1px solid #d7e0dc;
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 14px;
+}
+
+.renewal-alert-list h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.renewal-alert-list div {
+  border-bottom: 1px solid #d7e0dc;
+  padding: 8px 0;
+}
+
+.renewal-alert-list div:last-child {
+  border-bottom: 0;
+}
+
+.renewal-alert-list strong,
+.renewal-alert-list span,
+.renewal-alert-list p {
+  display: block;
+  font-size: 12px;
+}
+
+.renewal-alert-list span,
+.renewal-alert-list p {
+  margin: 3px 0 0;
+  color: #666;
+}
+
+.attention-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attention-row {
+  display: grid;
+  grid-template-columns: 34px 1fr 54px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #d7e0dc;
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 12px;
+}
+
+.attention-row > strong {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #064f34;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.attention-row h4,
+.attention-row p,
+.attention-row span {
+  margin: 0;
+}
+
+.attention-row h4 {
+  font-size: 13px;
+  color: #111;
+}
+
+.attention-row p,
+.attention-row span {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #666;
+}
+
+.attention-row b {
+  border-radius: 999px;
+  padding: 7px 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.attention-row b.high {
+  background: #ffd5d5;
+  color: #dc2626;
+}
+
+.attention-row b.medium {
+  background: #fff0bd;
+  color: #b77900;
+}
+
+.attention-row b.low {
+  background: #cce9dc;
+  color: #0f6b3f;
+}
 .household-empty {
   height: 70px;
   text-align: center;
@@ -4531,6 +5882,10 @@
 }
 
 @media (max-width: 1100px) {
+  .sanitary-question-grid {
+    grid-template-columns: 1fr;
+  }
+
   .household-report-stat-grid {
     grid-template-columns: repeat(2, 1fr);
   }

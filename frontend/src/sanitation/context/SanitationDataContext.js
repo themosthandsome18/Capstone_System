@@ -2,17 +2,25 @@ import { createContext, useContext, useEffect, useState } from "react";
 import {
   createSanitationEstablishment,
   createSanitationInspection,
+  createSanitationComplaint,
+  createSanitationRenewal,
   deleteSanitationEstablishment,
   deleteSanitationInspection,
+  deleteSanitationComplaint,
+  deleteSanitationRenewal,
   fetchSanitationBootstrap,
   fetchSanitationDashboard,
   fetchSanitationEstablishments,
   fetchSanitationInspections,
+  fetchSanitationComplaints,
   fetchSanitationPermits,
+  fetchSanitationRenewals,
   fetchSanitationReports,
   fetchSanitationSubmissions,
   updateSanitationEstablishment,
   updateSanitationInspection,
+  updateSanitationComplaint,
+  updateSanitationRenewal,
   fetchHouseholdBootstrap,
   fetchHouseholdDashboard,
   fetchHouseholdRecords,
@@ -29,6 +37,8 @@ const initialState = {
   inspections: [],
   dashboardData: null,
   permitData: null,
+  renewalData: null,
+  complaintData: null,
   submissionData: null,
   reportData: null,
   householdRecords: [],
@@ -54,6 +64,8 @@ export function SanitationDataProvider({ children }) {
         inspections: data.inspections || [],
         dashboardData: data.dashboardData || null,
         permitData: data.permitData || null,
+        renewalData: data.renewalData || null,
+        complaintData: data.complaintData || null,
         submissionData: data.submissionData || null,
         reportData: data.reportData || null,
         householdRecords: householdData.householdRecords || [],
@@ -112,6 +124,28 @@ export function SanitationDataProvider({ children }) {
     }));
 
     return permitData;
+  }
+
+  async function refreshRenewalData(params = {}) {
+    const renewalData = await fetchSanitationRenewals(params);
+
+    setState((current) => ({
+      ...current,
+      renewalData,
+    }));
+
+    return renewalData;
+  }
+
+  async function refreshComplaintData(params = {}) {
+    const complaintData = await fetchSanitationComplaints(params);
+
+    setState((current) => ({
+      ...current,
+      complaintData,
+    }));
+
+    return complaintData;
   }
 
   async function refreshSubmissionData(params = {}) {
@@ -192,6 +226,40 @@ export function SanitationDataProvider({ children }) {
     await loadSanitationData();
   }
 
+  async function createRenewal(payload) {
+    const created = await createSanitationRenewal(payload);
+    await loadSanitationData();
+    return created;
+  }
+
+  async function updateRenewal(id, payload) {
+    const updated = await updateSanitationRenewal(id, payload);
+    await loadSanitationData();
+    return updated;
+  }
+
+  async function deleteRenewal(id) {
+    await deleteSanitationRenewal(id);
+    await loadSanitationData();
+  }
+
+  async function createComplaint(payload) {
+    const created = await createSanitationComplaint(payload);
+    await loadSanitationData();
+    return created;
+  }
+
+  async function updateComplaint(id, payload) {
+    const updated = await updateSanitationComplaint(id, payload);
+    await loadSanitationData();
+    return updated;
+  }
+
+  async function deleteComplaint(id) {
+    await deleteSanitationComplaint(id);
+    await loadSanitationData();
+  }
+
   async function createHousehold(payload) {
     const created = await createHouseholdRecord(payload);
     await loadSanitationData();
@@ -219,6 +287,8 @@ export function SanitationDataProvider({ children }) {
     refreshEstablishments,
     refreshInspections,
     refreshPermitData,
+    refreshRenewalData,
+    refreshComplaintData,
     refreshSubmissionData,
     refreshReportData,
 
@@ -232,6 +302,14 @@ export function SanitationDataProvider({ children }) {
     createInspection,
     updateInspection,
     deleteInspection,
+
+    createRenewal,
+    updateRenewal,
+    deleteRenewal,
+
+    createComplaint,
+    updateComplaint,
+    deleteComplaint,
 
     createHousehold,
     updateHousehold,
