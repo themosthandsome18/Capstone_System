@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     ActivityLog,
+    Barangay,
     BoatType,
     Country,
     FeedbackEntry,
@@ -116,6 +117,13 @@ class ActivityLogAdmin(admin.ModelAdmin):
         "record_label",
         "created_at",
     )
+
+
+@admin.register(Barangay)
+class BarangayAdmin(admin.ModelAdmin):
+    list_display = ("name", "municipality", "province", "display_order", "is_active")
+    search_fields = ("name", "municipality", "province")
+    list_filter = ("is_active", "municipality", "province")
 
 
 # =======================================================

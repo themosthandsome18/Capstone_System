@@ -10,6 +10,8 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
   FiCalendar,
@@ -21,6 +23,7 @@ import {
   FiUsers,
   FiXCircle,
 } from "react-icons/fi";
+import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
 
@@ -43,8 +46,22 @@ function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
+const reportingYearOptions = [
+  { value: "2025", label: "2025" },
+  { value: "2024", label: "2024" },
+  { value: "2026", label: "2026" },
+  { value: "all", label: "All Years" },
+];
+
 function Dashboard() {
-  const { dashboardData, loading } = useTourismData();
+  const navigate = useNavigate();
+  const { dashboardData, loading, error, refreshDashboardData } =
+    useTourismData();
+  const [selectedYear, setSelectedYear] = useState(
+    dashboardData.filters?.year || "2025"
+  );
+  const [dashboardError, setDashboardError] = useState("");
+  const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
   const metrics = dashboardData.metrics;
   const classification = dashboardData.classification;
   const gender = dashboardData.gender;
@@ -172,6 +189,53 @@ function Dashboard() {
     return <div className="dashboard-loading">Loading dashboard data...</div>;
   }
 
+  if (error) {
+    return <div className="dashboard-loading">{error}</div>;
+  }
+
+  async function handleYearChange(event) {
+    const year = event.target.value;
+    setSelectedYear(year);
+    setDashboardError("");
+    setDashboardRefreshing(true);
+
+    try {
+      await refreshDashboardData({ year });
+    } catch (requestError) {
+      setDashboardError(
+        requestError.message || "Unable to load dashboard data."
+      );
+    } finally {
+      setDashboardRefreshing(false);
+    }
+  }
+
+  function handleExportDashboard() {
+    const rows = [
+      ["Reporting Year", selectedYear === "all" ? "All Years" : selectedYear],
+      ["Report Date", dashboardData.reportingDate || ""],
+      ["Today's Arrivals", metrics.todayArrivals],
+      ["This Week's Arrivals", metrics.weekArrivals],
+      ["This Month's Arrivals", metrics.monthArrivals],
+      ["Total Revenue Collected", metrics.totalRevenueCollected],
+      ["Pending on Report Date", metrics.pendingForReportingDate],
+      ["No-show Rate", `${metrics.noShowRate || 0}%`],
+      ["Top Resort This Month", metrics.topResortThisMonth],
+      ["Top Origin This Month", metrics.topOriginThisMonth],
+      ["Filipino", classification.filipino],
+      ["Maubanin", classification.maubanin],
+      ["Foreign", classification.foreign],
+      ["Male", gender.male],
+      ["Female", gender.female],
+      ["Day Tour", stayType.dayTour],
+      ["Overnight", stayType.overnight],
+      ["Verified Entries", validation.verifiedEntries],
+      ["Duplicate Entries", validation.duplicateEntries],
+    ];
+
+    exportCsv(datedCsvFilename("tourism-dashboard"), ["Metric", "Value"], rows);
+  }
+
   return (
     <div className="figma-dashboard">
       <div className="dashboard-header">
@@ -181,32 +245,58 @@ function Dashboard() {
         </div>
 
         <div className="dashboard-actions">
-          <button type="button" className="outline-action">
+          <select
+            className="dashboard-year-select"
+            aria-label="Reporting year"
+            value={selectedYear}
+            disabled={dashboardRefreshing}
+            onChange={handleYearChange}
+          >
+            {reportingYearOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            className="outline-action"
+            onClick={handleExportDashboard}
+          >
             <FiDownload size={15} />
             Export
           </button>
 
-          <button type="button" className="primary-action">
+          <button
+            type="button"
+            className="primary-action"
+            onClick={() => navigate("/analytics-reports")}
+          >
             + Generate Report
           </button>
         </div>
       </div>
 
+      {dashboardError ? (
+        <p className="tourist-record-error">{dashboardError}</p>
+      ) : null}
+
       <div className="metric-grid">
         <MetricCard
-          title="Today’s Arrivals"
+          title="Today's Arrivals"
           value={formatNumber(metrics.todayArrivals)}
           icon={<FiUsers />}
         />
 
         <MetricCard
-          title="This Week’s Arrivals"
+          title="This Week's Arrivals"
           value={formatNumber(metrics.weekArrivals)}
           icon={<FiCalendar />}
         />
 
         <MetricCard
-          title="This Month’s Arrivals"
+          title="This Month's Arrivals"
           value={formatNumber(metrics.monthArrivals)}
           icon={<FiCalendar />}
         />
@@ -227,7 +317,7 @@ function Dashboard() {
         <MetricCard
           title="No-show Rate"
           value={`${metrics.noShowRate || 0}%`}
-          note="All booking records"
+          note="Selected year"
           icon={<FiXCircle />}
         />
 

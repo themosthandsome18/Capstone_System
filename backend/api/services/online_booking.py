@@ -1,24 +1,29 @@
 from datetime import datetime
 import re
 
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
+from django.db import IntegrityError
 from django.db.models import Max
 from django.utils import timezone
 from openpyxl import load_workbook
 
 from ..models import (
+    BOOKING_STATUS_CHOICES,
     BoatType,
     Country,
     Itinerary,
     Province,
     Region,
     Resort,
+    TOURIST_RECORD_COUNT_FIELDS,
+    TOURIST_RECORD_REQUIRED_FIELDS,
     TouristRecord,
     TravelMode,
     VisitPurpose,
+    validate_tourist_record_values,
 )
 from ..seeders import ensure_initial_reference_data
-from ..serializers import TouristRecordSerializer
 
 
 COLUMNS = {
@@ -72,6 +77,53 @@ RESORT_ALIASES = {
     "residence": "Residence",
 }
 
+RELATED_FIELD_API_NAMES = {
+    "country": "country_id",
+    "region": "region_id",
+    "province": "province_id",
+    "itinerary": "itinerary_id",
+    "resort": "resort_id",
+    "travel_mode": "travel_mode_id",
+    "boat_type": "boat_type_id",
+    "visit_purpose": "visit_purpose_id",
+}
+
+BOOKING_STATUS_VALUES = {status for status, _label in BOOKING_STATUS_CHOICES}
+BULK_BATCH_SIZE = 500
+CREATE_RETRY_LIMIT = 5
+ONLINE_BOOKING_ARRIVAL_YEARS = {2024, 2025, 2026}
+TOURIST_RECORD_UPSERT_FIELDS = [
+    "submitted_at",
+    "email",
+    "consent_confirmed",
+    "full_name",
+    "contact_number",
+    "country",
+    "region",
+    "province",
+    "country_of_origin",
+    "foreigner_count",
+    "filipino_count",
+    "maubanin_count",
+    "total_visitors",
+    "total_male",
+    "total_female",
+    "special_group_count",
+    "age_0_7",
+    "age_8_59",
+    "age_60_above",
+    "arrival_date",
+    "itinerary",
+    "resort",
+    "travel_mode",
+    "boat_type",
+    "boat_capacity_fare",
+    "parking_space",
+    "visit_purpose",
+    "status",
+    "updated_at",
+]
+
 
 def preview_online_booking_workbook(file_obj, status="pending", limit=0):
     return process_online_booking_workbook(
@@ -92,7 +144,7 @@ def import_online_booking_workbook(file_obj, status="pending", limit=0):
 
 
 def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=False):
-    ensure_initial_reference_data()
+    ensure_reference_data_ready()
     workbook = load_workbook(file_obj, data_only=True)
     sheet_name = "Form Responses 1"
 
@@ -116,9 +168,12 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
         }
 
     sheet = workbook[sheet_name]
-    resolver = ReferenceResolver()
-    existing_duplicate_keys = build_existing_duplicate_keys()
+    resolver = ReferenceResolver(commit=commit)
+    existing_duplicate_keys, existing_survey_duplicate_keys = (
+        build_existing_duplicate_keys()
+    )
     workbook_duplicate_keys = set()
+    valid_payloads = []
     valid_count = 0
     imported_count = 0
     updated_count = 0
@@ -132,75 +187,68 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
     if limit:
         max_row = min(max_row, limit + 2)
 
-    with transaction.atomic():
-        for row_number in range(3, max_row + 1):
-            payload = build_payload(sheet, row_number, status, resolver)
+    for row_number in range(3, max_row + 1):
+        payload = build_payload(sheet, row_number, status, resolver)
 
-            if not payload:
-                skipped_count += 1
-                continue
+        if not payload:
+            skipped_count += 1
+            continue
 
-            duplicate_key = build_duplicate_key(payload, resolver)
-            if duplicate_key in existing_duplicate_keys or duplicate_key in workbook_duplicate_keys:
-                duplicate_count += 1
-                skipped_count += 1
-                if len(duplicate_samples) < 20:
-                    duplicate_samples.append(
-                        {
-                            "row": row_number,
-                            "survey_id": payload["survey_id"],
-                            "guest": payload["full_name"],
-                            "contact": payload["contact_number"],
-                            "arrival_date": payload["arrival_date"].isoformat(),
-                            "resort": resolver.resort_name_by_id[payload["resort_id"]],
-                            "message": "Possible duplicate booking with the same guest, contact, arrival date, and resort.",
-                        }
-                    )
-                continue
-
-            workbook_duplicate_keys.add(duplicate_key)
-
-            instance = TouristRecord.objects.filter(
-                survey_id=payload["survey_id"]
-            ).first()
-            serializer = TouristRecordSerializer(instance, data=payload)
-
-            if not serializer.is_valid():
-                skipped_count += 1
-                if len(error_samples) < 10:
-                    error_samples.append(
-                        {
-                            "row": row_number,
-                            "guest": payload.get("full_name", ""),
-                            "message": flatten_errors(serializer.errors),
-                        }
-                    )
-                continue
-
-            valid_count += 1
-            if len(valid_samples) < 10:
-                valid_samples.append(
+        duplicate_key = build_duplicate_key(payload, resolver)
+        existing_survey_key = existing_survey_duplicate_keys.get(payload["survey_id"])
+        is_duplicate_existing_record = (
+            duplicate_key in existing_duplicate_keys
+            and existing_survey_key != duplicate_key
+        )
+        is_duplicate_workbook_record = duplicate_key in workbook_duplicate_keys
+        if is_duplicate_existing_record or is_duplicate_workbook_record:
+            duplicate_count += 1
+            skipped_count += 1
+            if len(duplicate_samples) < 20:
+                duplicate_samples.append(
                     {
                         "row": row_number,
                         "survey_id": payload["survey_id"],
                         "guest": payload["full_name"],
+                        "contact": payload["contact_number"],
                         "arrival_date": payload["arrival_date"].isoformat(),
                         "resort": resolver.resort_name_by_id[payload["resort_id"]],
-                        "total_visitors": payload["total_visitors"],
+                        "message": "Possible duplicate booking with the same guest, contact, arrival date, and resort.",
                     }
                 )
+            continue
 
-            if commit:
-                serializer.save()
-                if instance:
-                    updated_count += 1
-                else:
-                    imported_count += 1
-            else:
-                serializer.save()
+        workbook_duplicate_keys.add(duplicate_key)
 
-        if not commit:
-            transaction.set_rollback(True)
+        errors = validate_payload(payload)
+        if errors:
+            skipped_count += 1
+            if len(error_samples) < 10:
+                error_samples.append(
+                    {
+                        "row": row_number,
+                        "guest": payload.get("full_name", ""),
+                        "message": flatten_errors(errors),
+                    }
+                )
+            continue
+
+        valid_count += 1
+        valid_payloads.append(payload)
+        if len(valid_samples) < 10:
+            valid_samples.append(
+                {
+                    "row": row_number,
+                    "survey_id": payload["survey_id"],
+                    "guest": payload["full_name"],
+                    "arrival_date": payload["arrival_date"].isoformat(),
+                    "resort": resolver.resort_name_by_id[payload["resort_id"]],
+                    "total_visitors": payload["total_visitors"],
+                }
+            )
+
+    if commit:
+        imported_count, updated_count = persist_valid_records(valid_payloads)
 
     return {
         "valid_count": valid_count,
@@ -214,6 +262,90 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
         "duplicate_samples": duplicate_samples,
         "new_resort_samples": sorted(resolver.new_resort_names)[:20],
     }
+
+
+def validate_payload(payload):
+    values = {}
+
+    for field in TOURIST_RECORD_REQUIRED_FIELDS:
+        api_field = RELATED_FIELD_API_NAMES.get(field)
+        values[field] = payload.get(api_field or field)
+
+    for field in TOURIST_RECORD_COUNT_FIELDS:
+        values[field] = payload.get(field, 0)
+
+    errors = validate_tourist_record_values(values)
+    email = payload.get("email")
+    if email:
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            errors.setdefault("email", []).append("Enter a valid email address.")
+
+    if payload.get("status") not in BOOKING_STATUS_VALUES:
+        errors.setdefault("status", []).append("Invalid booking status.")
+
+    arrival_date = payload.get("arrival_date")
+    if (
+        arrival_date
+        and arrival_date.year not in ONLINE_BOOKING_ARRIVAL_YEARS
+    ):
+        errors.setdefault("arrival_date", []).append(
+            "Must be a 2024, 2025, or 2026 online booking arrival date."
+        )
+
+    return {
+        RELATED_FIELD_API_NAMES.get(field, field): messages
+        for field, messages in errors.items()
+    }
+
+
+def persist_valid_records(valid_payloads):
+    if not valid_payloads:
+        return 0, 0
+
+    survey_ids = [payload["survey_id"] for payload in valid_payloads]
+    existing_survey_ids = set(
+        TouristRecord.objects.filter(survey_id__in=survey_ids).values_list(
+            "survey_id",
+            flat=True,
+        )
+    )
+    now = timezone.now()
+    records = [
+        TouristRecord(**payload, updated_at=now)
+        for payload in valid_payloads
+    ]
+
+    TouristRecord.objects.bulk_create(
+        records,
+        batch_size=BULK_BATCH_SIZE,
+        update_conflicts=True,
+        update_fields=TOURIST_RECORD_UPSERT_FIELDS,
+        unique_fields=["survey_id"],
+    )
+
+    updated_count = len(existing_survey_ids)
+    imported_count = len(valid_payloads) - updated_count
+    return imported_count, updated_count
+
+
+def ensure_reference_data_ready():
+    reference_models = [
+        Country,
+        Region,
+        Province,
+        Itinerary,
+        TravelMode,
+        BoatType,
+        VisitPurpose,
+        Resort,
+    ]
+
+    if all(model.objects.exists() for model in reference_models):
+        return
+
+    ensure_initial_reference_data()
 
 
 def build_payload(sheet, row_number, status, resolver):
@@ -292,6 +424,10 @@ def build_payload(sheet, row_number, status, resolver):
     }
 
     classification_total = foreigner_count + filipino_count + maubanin_count
+    if not total_visitors and classification_total:
+        payload["total_visitors"] = classification_total
+        total_visitors = classification_total
+
     if classification_total != total_visitors:
         payload["filipino_count"] = max(
             total_visitors - foreigner_count - maubanin_count,
@@ -302,16 +438,18 @@ def build_payload(sheet, row_number, status, resolver):
 
 
 class ReferenceResolver:
-    def __init__(self):
+    def __init__(self, commit=False):
+        self.commit = commit
         self.named_cache = {}
         self.next_ids = {}
         self.new_resort_names = set()
+        resorts = list(Resort.objects.all())
         self.resort_cache = {
             normalize_key(normalize_resort_name(resort.resort_name)): resort
-            for resort in Resort.objects.all()
+            for resort in resorts
         }
         self.resort_name_by_id = {
-            resort.resort_id: resort.resort_name for resort in Resort.objects.all()
+            resort.resort_id: resort.resort_name for resort in resorts
         }
         self.next_resort_id = (
             Resort.objects.aggregate(max_id=Max("resort_id"))["max_id"] or 0
@@ -320,10 +458,11 @@ class ReferenceResolver:
     def named(self, model, name, defaults=None):
         defaults = defaults or {}
         name = clean_text(name) or "Unspecified"
-        cache = self.named_cache.setdefault(
-            model,
-            {normalize_key(item.name): item for item in model.objects.all()},
-        )
+        if model not in self.named_cache:
+            self.named_cache[model] = {
+                normalize_key(item.name): item for item in model.objects.all()
+            }
+        cache = self.named_cache[model]
         key = normalize_key(name)
 
         if key in cache:
@@ -333,10 +472,23 @@ class ReferenceResolver:
         if next_id is None:
             next_id = (model.objects.aggregate(max_id=Max("id"))["max_id"] or 0) + 1
 
-        item = model.objects.create(id=next_id, name=name, **defaults)
-        self.next_ids[model] = next_id + 1
+        if self.commit:
+            item = self.create_named_reference(model, next_id, name, defaults)
+        else:
+            item = model(id=next_id, name=name, **defaults)
+
+        self.next_ids[model] = item.id + 1
         cache[key] = item
         return item
+
+    def create_named_reference(self, model, next_id, name, defaults):
+        for _attempt in range(CREATE_RETRY_LIMIT):
+            try:
+                return model.objects.create(id=next_id, name=name, **defaults)
+            except IntegrityError:
+                next_id = next_primary_key(model, "id")
+
+        return model.objects.create(id=next_id, name=name, **defaults)
 
     def resort(self, resort_name):
         resort_name = normalize_resort_name(resort_name) or "Unspecified Resort"
@@ -347,43 +499,65 @@ class ReferenceResolver:
             self.resort_name_by_id[resort.resort_id] = resort.resort_name
             return resort
 
-        resort = Resort.objects.create(
-            resort_id=self.next_resort_id,
-            resort_name=resort_name,
-            with_mayors_permit=False,
-            type="Registered Resort",
-            location="Mauban, Quezon",
-            short_description="Imported from Tourism Office online booking responses.",
-            tourism_rating=0,
-            access="N/A",
-            itinerary_ids=[],
-            image_key="",
-            monthly_arrivals=0,
-            latitude=14.185,
-            longitude=121.731,
-        )
-        self.next_resort_id += 1
+        resort_data = {
+            "resort_id": self.next_resort_id,
+            "resort_name": resort_name,
+            "with_mayors_permit": False,
+            "type": "Registered Resort",
+            "location": "Mauban, Quezon",
+            "short_description": "Imported from Tourism Office online booking responses.",
+            "tourism_rating": 0,
+            "access": "N/A",
+            "itinerary_ids": [],
+            "image_key": "",
+            "monthly_arrivals": 0,
+            "latitude": 14.185,
+            "longitude": 121.731,
+        }
+        if self.commit:
+            resort = self.create_resort(resort_data)
+        else:
+            resort = Resort(**resort_data)
+
+        self.next_resort_id = resort.resort_id + 1
         self.resort_cache[key] = resort
         self.resort_name_by_id[resort.resort_id] = resort.resort_name
         self.new_resort_names.add(resort.resort_name)
         return resort
 
+    def create_resort(self, resort_data):
+        for _attempt in range(CREATE_RETRY_LIMIT):
+            try:
+                return Resort.objects.create(**resort_data)
+            except IntegrityError:
+                resort_data["resort_id"] = next_primary_key(
+                    Resort,
+                    "resort_id",
+                )
+
+        return Resort.objects.create(**resort_data)
+
+
+def next_primary_key(model, field_name):
+    return (model.objects.aggregate(max_id=Max(field_name))["max_id"] or 0) + 1
+
 
 def build_existing_duplicate_keys():
-    keys = set()
+    duplicate_keys = set()
+    survey_duplicate_keys = {}
     records = TouristRecord.objects.select_related("resort").all()
 
     for record in records:
-        keys.add(
-            (
-                normalize_key(record.full_name),
-                normalize_contact(record.contact_number),
-                record.arrival_date.isoformat(),
-                normalize_key(record.resort.resort_name if record.resort_id else ""),
-            )
+        key = (
+            normalize_key(record.full_name),
+            normalize_contact(record.contact_number),
+            record.arrival_date.isoformat(),
+            normalize_key(record.resort.resort_name if record.resort_id else ""),
         )
+        duplicate_keys.add(key)
+        survey_duplicate_keys[record.survey_id] = key
 
-    return keys
+    return duplicate_keys, survey_duplicate_keys
 
 
 def build_duplicate_key(payload, resolver):
@@ -525,16 +699,32 @@ def parse_int(value):
 
 def parse_date(value):
     if isinstance(value, datetime):
-        return value.date()
+        return normalize_arrival_date_year(value.date())
     text = clean_text(value)
     if not text:
         return None
     for date_format in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
         try:
-            return datetime.strptime(text, date_format).date()
+            return normalize_arrival_date_year(
+                datetime.strptime(text, date_format).date()
+            )
         except ValueError:
             continue
     return None
+
+
+def normalize_arrival_date_year(value):
+    year = value.year
+
+    if 1 <= year < 1000:
+        year = 2000 + (year % 100)
+    elif 2900 <= year <= 2999:
+        year -= 900
+
+    if year != value.year:
+        return value.replace(year=year)
+
+    return value
 
 
 def parse_datetime(value):

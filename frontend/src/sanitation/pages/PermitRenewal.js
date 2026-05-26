@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FiAlertTriangle,
   FiCalendar,
@@ -55,6 +55,7 @@ function PermitRenewal() {
     renewalData,
     loading,
     error,
+    refreshRenewalData,
     createRenewal,
     updateRenewal,
   } = useSanitationData();
@@ -76,6 +77,12 @@ function PermitRenewal() {
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    if (!renewalData) {
+      refreshRenewalData(filters);
+    }
+  }, [filters, refreshRenewalData, renewalData]);
 
   const filteredRows = useMemo(() => {
     const keyword = filters.search.trim().toLowerCase();

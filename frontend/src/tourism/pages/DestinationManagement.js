@@ -18,6 +18,15 @@ const initialForm = {
 };
 
 const emptyDestinations = [];
+const OFFICIAL_DESTINATION_LIMIT = 6;
+
+function isOfficialDestination(destination) {
+  return (
+    Boolean(destination.image_key) ||
+    Boolean(destination.with_mayors_permit) ||
+    Number(destination.resort_id || 0) <= OFFICIAL_DESTINATION_LIMIT
+  );
+}
 
 function DestinationManagement() {
   const {
@@ -37,15 +46,29 @@ function DestinationManagement() {
   const [formError, setFormError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState("");
+  const [viewMode, setViewMode] = useState("official");
 
   const filteredDestinations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
+    const scopedDestinations = destinations.filter((destination) => {
+      const official = isOfficialDestination(destination);
+
+      if (viewMode === "official") {
+        return official;
+      }
+
+      if (viewMode === "imported") {
+        return !official;
+      }
+
+      return true;
+    });
 
     if (!keyword) {
-      return destinations;
+      return scopedDestinations;
     }
 
-    return destinations.filter((destination) => {
+    return scopedDestinations.filter((destination) => {
       return [
         destination.resort_name,
         destination.type,
@@ -56,13 +79,13 @@ function DestinationManagement() {
         .toLowerCase()
         .includes(keyword);
     });
-  }, [destinations, search]);
+  }, [destinations, search, viewMode]);
 
   const averageRating = (
-    destinations.reduce(
+    filteredDestinations.reduce(
       (sum, item) => sum + Number(item.tourism_rating || 0),
       0
-    ) / Math.max(destinations.length, 1)
+    ) / Math.max(filteredDestinations.length, 1)
   ).toFixed(1);
 
   function updateField(field, value) {
@@ -250,6 +273,30 @@ function DestinationManagement() {
         />
       </div>
 
+      <div className="destination-filter-tabs">
+        <button
+          type="button"
+          className={viewMode === "official" ? "active" : ""}
+          onClick={() => setViewMode("official")}
+        >
+          Official Destinations
+        </button>
+        <button
+          type="button"
+          className={viewMode === "imported" ? "active" : ""}
+          onClick={() => setViewMode("imported")}
+        >
+          Imported Resort Names
+        </button>
+        <button
+          type="button"
+          className={viewMode === "all" ? "active" : ""}
+          onClick={() => setViewMode("all")}
+        >
+          All
+        </button>
+      </div>
+
       <div className="destination-grid">
         {filteredDestinations.map((destination) => (
           <div key={destination.resort_id} className="destination-card">
@@ -329,7 +376,8 @@ function DestinationManagement() {
 
       <div className="destination-footer">
         <p>
-          TOTAL DESTINATION: <strong>{destinations.length}</strong>
+          SHOWING: <strong>{filteredDestinations.length}</strong> /{" "}
+          <strong>{destinations.length}</strong>
         </p>
 
         <p>

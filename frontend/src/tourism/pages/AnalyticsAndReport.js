@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BarElement,
   CategoryScale,
@@ -105,15 +105,25 @@ function getFirstColumnLabel(type) {
   return "Resort Name";
 }
 
+const reportingYearOptions = [
+  { value: "2025", label: "2025" },
+  { value: "2024", label: "2024" },
+  { value: "2026", label: "2026" },
+  { value: "all", label: "All Years" },
+];
+
 function AnalyticsAndReport() {
   const { referenceTables, reportData, refreshReportData } = useTourismData();
 
   const [reportType, setReportType] = useState("resort");
   const [filters, setFilters] = useState({
+    year: "2025",
     from: "",
     to: "",
     resort_id: "",
   });
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   const rows = reportData.rows || [];
   const questionAnswers = (reportData.questionAnswers || []).map((item) => ({
@@ -135,6 +145,39 @@ function AnalyticsAndReport() {
     ],
   };
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadReportInsights() {
+      setLoadingReport(true);
+      setReportError("");
+
+      try {
+        await refreshReportData({
+          ...filters,
+          type: reportType,
+          include_questions: true,
+        });
+      } catch (error) {
+        if (active) {
+          setReportError(error.message || "Unable to load reports.");
+        }
+      } finally {
+        if (active) {
+          setLoadingReport(false);
+        }
+      }
+    }
+
+    loadReportInsights();
+
+    return () => {
+      active = false;
+    };
+    // Load once on page entry; explicit filter controls handle later refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function updateFilter(field, value) {
     setFilters((current) => ({
       ...current,
@@ -144,18 +187,37 @@ function AnalyticsAndReport() {
 
   async function changeReportType(type) {
     setReportType(type);
+    setLoadingReport(true);
+    setReportError("");
 
-    await refreshReportData({
-      ...filters,
-      type,
-    });
+    try {
+      await refreshReportData({
+        ...filters,
+        type,
+        include_questions: true,
+      });
+    } catch (error) {
+      setReportError(error.message || "Unable to load reports.");
+    } finally {
+      setLoadingReport(false);
+    }
   }
 
   async function handleApplyFilters() {
-    await refreshReportData({
-      ...filters,
-      type: reportType,
-    });
+    setLoadingReport(true);
+    setReportError("");
+
+    try {
+      await refreshReportData({
+        ...filters,
+        type: reportType,
+        include_questions: true,
+      });
+    } catch (error) {
+      setReportError(error.message || "Unable to load reports.");
+    } finally {
+      setLoadingReport(false);
+    }
   }
 
   function handlePrint() {
@@ -169,6 +231,7 @@ function AnalyticsAndReport() {
       )?.resort_name || "All Resorts";
     const headers = [
       "Report Type",
+      "Reporting Year",
       "Date From",
       "Date To",
       "Resort Filter",
@@ -179,6 +242,7 @@ function AnalyticsAndReport() {
     ];
     const csvRows = rows.map((row) => [
       getReportTitle(reportType),
+      filters.year === "all" ? "All Years" : filters.year,
       filters.from || "All",
       filters.to || "All",
       selectedResort,
@@ -190,6 +254,7 @@ function AnalyticsAndReport() {
 
     csvRows.push([
       getReportTitle(reportType),
+      filters.year === "all" ? "All Years" : filters.year,
       filters.from || "All",
       filters.to || "All",
       selectedResort,
@@ -236,7 +301,8 @@ function AnalyticsAndReport() {
         <h2>Tourism Office Report</h2>
         <p>
           {getReportTitle(reportType)} | {filters.from || "All dates"} to{" "}
-          {filters.to || "All dates"}
+          {filters.to || "All dates"} | Year:{" "}
+          {filters.year === "all" ? "All Years" : filters.year}
         </p>
       </div>
 
@@ -300,6 +366,20 @@ function AnalyticsAndReport() {
 
       <div className="report-filter-card">
         <label>
+          <span>YEAR</span>
+          <select
+            value={filters.year}
+            onChange={(event) => updateFilter("year", event.target.value)}
+          >
+            {reportingYearOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
           <span>FROM</span>
           <input
             type="date"
@@ -332,10 +412,12 @@ function AnalyticsAndReport() {
           </select>
         </label>
 
-        <button type="button" onClick={handleApplyFilters}>
-          Apply Filters
+        <button type="button" disabled={loadingReport} onClick={handleApplyFilters}>
+          {loadingReport ? "Loading..." : "Apply Filters"}
         </button>
       </div>
+
+      {reportError ? <p className="tourist-record-error">{reportError}</p> : null}
 
       <section className="analytics-question-card">
         <div className="report-card-title">

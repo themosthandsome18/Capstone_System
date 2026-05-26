@@ -166,13 +166,18 @@ export function fetchHouseholdBootstrap() {
 }
 
 
+export function fetchHouseholdBarangays() {
+  return request(householdPath("/barangays/"));
+}
+
+
 export function fetchHouseholdDashboard() {
   return request(householdPath("/dashboard/"));
 }
 
 
-export function fetchHouseholdRecords() {
-  return request(householdPath("/records/"));
+export function fetchHouseholdRecords(params = {}) {
+  return request(withQuery(householdPath("/records/"), params));
 }
 
 

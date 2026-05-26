@@ -122,7 +122,7 @@ function PermitMonitoring() {
             <PermitAlert
               key={row.id}
               title={row.business_name}
-              desc={`${row.business_type_name} • ${row.permit_size_label}`}
+              desc={`${row.business_type_name} | ${row.permit_size_label}`}
               status={row.permit_status_label}
             />
           ))
@@ -141,7 +141,7 @@ function PermitMonitoring() {
       <section className="permit-table-card">
         <div className="permit-table-top">
           <div>
-            <h2>Permit Status — Auto-generated from Inspection Results</h2>
+            <h2>Permit Status - Auto-generated from Inspection Results</h2>
             <p>Violations are integrated; no separate violations module needed.</p>
           </div>
 
@@ -191,7 +191,7 @@ function PermitMonitoring() {
                     </td>
 
                     <td>
-                      {row.business_type_name} • {row.permit_size_label}
+                      {row.business_type_name} | {row.permit_size_label}
                     </td>
 
                     <td>{formatDate(row.lastInspection) || "No inspection"}</td>
@@ -212,7 +212,7 @@ function PermitMonitoring() {
                           row.compliance_status_label
                         )}`}
                       >
-                        ● {row.compliance_status_label}
+                        {row.compliance_status_label}
                       </span>
                     </td>
                   </tr>

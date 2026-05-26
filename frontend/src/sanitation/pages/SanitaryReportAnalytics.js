@@ -1,19 +1,109 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from "chart.js";
+import { Bar, Doughnut } from "react-chartjs-2";
 import {
   FiAlertTriangle,
   FiCalendar,
   FiDownload,
   FiFileText,
+  FiFilter,
+  FiMapPin,
   FiPrinter,
+  FiRefreshCw,
   FiShield,
+  FiTrendingUp,
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
-function SanitaryReportAnalytics() {
-  const { reportData, establishments, loading, error } = useSanitationData();
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
-  const summary = reportData?.summary || buildLocalSummary(establishments);
-  const byType = reportData?.byType || buildLocalByType(establishments);
-  const questionAnswers = reportData?.questionAnswers || [];
+const defaultFilters = {
+  barangay: "all",
+  business_type_id: "all",
+  permit_status: "all",
+  compliance_status: "all",
+};
+
+const permitStatusOptions = [
+  { value: "active", label: "Active" },
+  { value: "renewal_due", label: "Renewal Due" },
+  { value: "conditional", label: "Conditional" },
+  { value: "suspended", label: "Suspended" },
+  { value: "no_permit", label: "No Permit" },
+];
+
+const complianceStatusOptions = [
+  { value: "good_standing", label: "Good Standing" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "for_completion", label: "For Completion" },
+  { value: "violation", label: "Violation" },
+  { value: "no_permit", label: "No Permit" },
+];
+
+function SanitaryReportAnalytics() {
+  const {
+    reportData,
+    establishments,
+    businessTypes,
+    barangays,
+    loading,
+    error,
+    refreshReportData,
+  } = useSanitationData();
+  const [filters, setFilters] = useState(defaultFilters);
+  const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [filterError, setFilterError] = useState("");
+  const [activeQuestionGroup, setActiveQuestionGroup] = useState("establishment");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialReport() {
+      setReportLoading(true);
+      setFilterError("");
+
+      try {
+        await refreshReportData(cleanReportFilters(defaultFilters));
+      } catch (requestError) {
+        if (isMounted) {
+          setFilterError(requestError.message || "Unable to load sanitation report.");
+        }
+      } finally {
+        if (isMounted) {
+          setReportLoading(false);
+        }
+      }
+    }
+
+    loadInitialReport();
+
+    return () => {
+      isMounted = false;
+    };
+    // The context refresh function is recreated when data changes, so this
+    // initial report load intentionally runs once on page entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const localEstablishments = useMemo(
+    () => filterEstablishments(establishments, appliedFilters),
+    [appliedFilters, establishments]
+  );
+  const summary = reportData?.summary || buildLocalSummary(localEstablishments);
+  const byType = reportData?.byType || buildLocalByType(localEstablishments);
+  const questionAnswers = useMemo(
+    () => reportData?.questionAnswers || [],
+    [reportData?.questionAnswers]
+  );
   const complaintSummary = reportData?.complaints?.summary || {};
   const complaintCategories = reportData?.complaints?.byCategory || [];
   const requirementTracker = reportData?.requirementTracker || [];
@@ -21,10 +111,67 @@ function SanitaryReportAnalytics() {
   const renewalAlerts = reportData?.renewalAlerts || {};
   const needsAttention = reportData?.needsAttention || [];
 
+  const barangayOptions = useMemo(
+    () => buildBarangayOptions(barangays, establishments),
+    [barangays, establishments]
+  );
+  const businessTypeOptions = useMemo(
+    () => buildBusinessTypeOptions(businessTypes, byType),
+    [businessTypes, byType]
+  );
   const totalSp = byType.reduce((total, item) => total + (item.sp || 0), 0);
   const totalLarge = byType.reduce((total, item) => total + (item.large || 0), 0);
+  const permitTotal = totalSp + totalLarge;
+  const lastUpdated = reportData?.generatedAt
+    ? formatDateTime(reportData.generatedAt)
+    : "Waiting for report data";
+  const questionGroups = useMemo(
+    () => groupQuestionAnswers(questionAnswers),
+    [questionAnswers]
+  );
+  const activeQuestionSection =
+    questionGroups.find((group) => group.id === activeQuestionGroup) ||
+    questionGroups[0];
+  const priorityActions = buildPriorityActions(
+    summary,
+    needsAttention,
+    riskHotspots,
+    renewalAlerts
+  );
+  const typeChartData = buildTypeChartData(byType);
+  const permitChartData = buildPermitChartData(totalLarge, totalSp);
 
-  const maxTotal = Math.max(...byType.map((item) => item.total || 0), 1);
+  async function loadReport(nextFilters) {
+    setReportLoading(true);
+    setFilterError("");
+
+    try {
+      await refreshReportData(cleanReportFilters(nextFilters));
+    } catch (requestError) {
+      setFilterError(requestError.message || "Unable to load sanitation report.");
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
+  async function handleApplyFilters(event) {
+    event.preventDefault();
+    setAppliedFilters(filters);
+    await loadReport(filters);
+  }
+
+  async function handleResetFilters() {
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    await loadReport(defaultFilters);
+  }
+
+  function handleFilterChange(field, value) {
+    setFilters((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
   function handlePrint() {
     window.print();
@@ -72,7 +219,6 @@ function SanitaryReportAnalytics() {
     const blob = new Blob([csvContent], {
       type: "text/csv;charset=utf-8;",
     });
-
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
@@ -83,16 +229,27 @@ function SanitaryReportAnalytics() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading) {
+  if (loading || (reportLoading && !reportData)) {
     return <div className="sanitary-report-page">Loading sanitation reports...</div>;
   }
 
   return (
     <div className="sanitary-report-page">
+      <section className="report-print-header">
+        <div className="report-print-seal">MHO</div>
+        <div>
+          <p>Republic of the Philippines</p>
+          <h1>Mauban Municipality Health Office</h1>
+          <strong>Sanitary Section Monitoring Report</strong>
+          <span>Generated: {lastUpdated}</span>
+        </div>
+      </section>
+
       <div className="sanitary-report-header">
         <div>
           <h1>Business Report & Analytics</h1>
           <p>Business permit and sanitary compliance analytics</p>
+          <span className="report-last-updated">Last updated: {lastUpdated}</span>
         </div>
 
         <div className="sanitary-report-actions">
@@ -109,6 +266,86 @@ function SanitaryReportAnalytics() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {filterError ? <p className="sanitation-error-text">{filterError}</p> : null}
+
+      <form className="sanitary-report-filter-card" onSubmit={handleApplyFilters}>
+        <label>
+          <span>Barangay</span>
+          <select
+            value={filters.barangay}
+            onChange={(event) => handleFilterChange("barangay", event.target.value)}
+          >
+            <option value="all">All Barangays</option>
+            {barangayOptions.map((barangay) => (
+              <option key={barangay} value={barangay}>
+                {barangay}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Business Type</span>
+          <select
+            value={filters.business_type_id}
+            onChange={(event) =>
+              handleFilterChange("business_type_id", event.target.value)
+            }
+          >
+            <option value="all">All Types</option>
+            {businessTypeOptions.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Permit Status</span>
+          <select
+            value={filters.permit_status}
+            onChange={(event) =>
+              handleFilterChange("permit_status", event.target.value)
+            }
+          >
+            <option value="all">All Permit Statuses</option>
+            {permitStatusOptions.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Compliance Status</span>
+          <select
+            value={filters.compliance_status}
+            onChange={(event) =>
+              handleFilterChange("compliance_status", event.target.value)
+            }
+          >
+            <option value="all">All Compliance Statuses</option>
+            {complianceStatusOptions.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="report-filter-actions">
+          <button type="submit" disabled={reportLoading}>
+            <FiFilter />
+            {reportLoading ? "Applying..." : "Apply"}
+          </button>
+          <button type="button" onClick={handleResetFilters} disabled={reportLoading}>
+            <FiRefreshCw />
+            Reset
+          </button>
+        </div>
+      </form>
 
       <div className="sanitary-report-stat-grid">
         <ReportStat
@@ -138,63 +375,59 @@ function SanitaryReportAnalytics() {
         />
       </div>
 
+      <section className="priority-action-summary">
+        {priorityActions.map((item) => (
+          <article key={item.label} className={`priority-action-card ${item.tone}`}>
+            {item.icon}
+            <div>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <p>{item.note}</p>
+            </div>
+          </article>
+        ))}
+      </section>
+
       <div className="sanitary-report-chart-grid">
         <section className="sanitary-report-card establishment-chart-card">
           <h3>Establishments per Type</h3>
-
-          <div className="bar-chart-mock">
-            {byType.map((item) => {
-              const totalHeight = getBarHeight(item.total, maxTotal);
-              const violatorHeight = getBarHeight(item.violators, maxTotal);
-
-              return (
-                <div className="bar-group" key={item.id || item.name}>
-                  <div className="bar-stack">
-                    <span
-                      className="bar-total"
-                      style={{ height: `${totalHeight}px` }}
-                      title={`Total: ${item.total}`}
-                    />
-
-                    {(item.violators || 0) > 0 ? (
-                      <span
-                        className="bar-violator"
-                        style={{ height: `${violatorHeight}px` }}
-                        title={`Violators: ${item.violators}`}
-                      />
-                    ) : null}
-                  </div>
-
-                  <small>{shortenLabel(item.name)}</small>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="chart-legend">
-            <span className="total">■ Total</span>
-            <span className="violator">■ Violators</span>
+          <div
+            className="chart-canvas-wrap type-chart"
+            style={{ height: `${Math.max(290, byType.length * 36)}px` }}
+          >
+            {byType.length ? (
+              <Bar data={typeChartData} options={typeChartOptions} />
+            ) : (
+              <p className="submission-empty">No chart data available.</p>
+            )}
           </div>
         </section>
 
         <section className="sanitary-report-card pie-chart-card">
           <h3>Permit Size Distribution</h3>
+          <div className="permit-distribution-visual">
+            <div className="chart-canvas-wrap doughnut-chart">
+              {permitTotal ? (
+                <Doughnut data={permitChartData} options={permitChartOptions} />
+              ) : (
+                <p className="submission-empty">No permit size data.</p>
+              )}
+            </div>
 
-          <div className="permit-pie-mock">
-            <div
-              className="pie-circle"
-              style={{
-                background: buildPermitPieGradient(totalSp, totalLarge),
-              }}
-            />
-
-            <span className="pie-label top">{totalLarge}</span>
-            <span className="pie-label bottom">{totalSp}</span>
-          </div>
-
-          <div className="chart-legend center">
-            <span className="large">■ Large</span>
-            <span className="small">■ SP</span>
+            <div className="permit-distribution-list">
+              <PermitSizeRow
+                label="Large"
+                value={totalLarge}
+                total={permitTotal}
+                tone="large"
+              />
+              <PermitSizeRow
+                label="SP"
+                value={totalSp}
+                total={permitTotal}
+                tone="small"
+              />
+            </div>
           </div>
         </section>
       </div>
@@ -205,18 +438,38 @@ function SanitaryReportAnalytics() {
 
           <div>
             <h3>Questions Answered by the System</h3>
-            <p>Computed from establishment status, permits, and inspection records</p>
+            <p>Grouped decision support from permits, inspections, complaints, and household data</p>
           </div>
         </div>
 
-        <div className="sanitary-question-grid">
-          {questionAnswers.length ? (
-            questionAnswers.map((item, index) => (
-              <article key={item.id || item.question} className="sanitary-question-item">
-                <span>Q{index + 1}</span>
-                <h4>{item.question}</h4>
+        <div className="question-tabs">
+          {questionGroups.map((group) => (
+            <button
+              type="button"
+              key={group.id}
+              className={activeQuestionSection?.id === group.id ? "active" : ""}
+              onClick={() => setActiveQuestionGroup(group.id)}
+            >
+              {group.label}
+              <span>{group.items.length}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="sanitary-question-list">
+          {activeQuestionSection?.items.length ? (
+            activeQuestionSection.items.map((item, index) => (
+              <details
+                key={item.id || item.question}
+                className="sanitary-question-item"
+                open={index === 0}
+              >
+                <summary>
+                  <span>Q{index + 1}</span>
+                  <strong>{item.question}</strong>
+                </summary>
                 <p>{item.answer}</p>
-              </article>
+              </details>
             ))
           ) : (
             <p className="submission-empty">No question answers available.</p>
@@ -234,7 +487,7 @@ function SanitaryReportAnalytics() {
                 <div>
                   <h4>{item.business_name}</h4>
                   <p>
-                    {item.business_type_name} • {item.barangay}
+                    {item.business_type_name} | {item.barangay}
                   </p>
                   <span>{(item.reasons || []).join(", ")}</span>
                 </div>
@@ -463,6 +716,21 @@ function ReportStat({ label, value, color }) {
   );
 }
 
+function PermitSizeRow({ label, value, total, tone }) {
+  const percent = total ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div className={`permit-size-row ${tone}`}>
+      <span>
+        <i />
+        {label}
+      </span>
+      <strong>{value}</strong>
+      <em>{percent}%</em>
+    </div>
+  );
+}
+
 function MiniSummary({ label, value, color, icon }) {
   return (
     <div className={`mini-summary-card ${color}`}>
@@ -506,7 +774,7 @@ function RenewalAlertList({ title, rows }) {
         rows.slice(0, 5).map((item) => (
           <div key={item.id}>
             <strong>{item.establishment_name}</strong>
-            <span>{item.stage_label} • {item.expiration_date}</span>
+            <span>{item.stage_label} | {item.expiration_date}</span>
           </div>
         ))
       ) : (
@@ -514,6 +782,231 @@ function RenewalAlertList({ title, rows }) {
       )}
     </div>
   );
+}
+
+function cleanReportFilters(filters) {
+  return Object.entries(filters).reduce(
+    (params, [key, value]) => {
+      if (value && value !== "all") {
+        params[key] = value;
+      }
+
+      return params;
+    },
+    { include_questions: true }
+  );
+}
+
+function filterEstablishments(establishments, filters) {
+  return establishments.filter((item) => {
+    return (
+      (filters.barangay === "all" || item.barangay === filters.barangay) &&
+      (filters.business_type_id === "all" ||
+        String(item.business_type) === String(filters.business_type_id)) &&
+      (filters.permit_status === "all" ||
+        item.permit_status === filters.permit_status) &&
+      (filters.compliance_status === "all" ||
+        item.compliance_status === filters.compliance_status)
+    );
+  });
+}
+
+function buildBarangayOptions(barangays, establishments) {
+  const names = new Set();
+
+  barangays.forEach((item) => {
+    if (item.name) {
+      names.add(item.name);
+    }
+  });
+
+  establishments.forEach((item) => {
+    if (item.barangay) {
+      names.add(item.barangay);
+    }
+  });
+
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function buildBusinessTypeOptions(businessTypes, byType) {
+  if (businessTypes.length) {
+    return businessTypes
+      .map((item) => ({ value: String(item.id), label: item.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  return byType
+    .map((item) => ({ value: String(item.id || item.name), label: item.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function buildTypeChartData(byType) {
+  return {
+    labels: byType.map((item) => item.name),
+    datasets: [
+      {
+        label: "Total",
+        data: byType.map((item) => item.total || 0),
+        backgroundColor: "#1f7655",
+        borderRadius: 6,
+        barThickness: 16,
+      },
+      {
+        label: "Violators",
+        data: byType.map((item) => item.violators || 0),
+        backgroundColor: "#ef2222",
+        borderRadius: 6,
+        barThickness: 16,
+      },
+    ],
+  };
+}
+
+function buildPermitChartData(totalLarge, totalSp) {
+  return {
+    labels: ["Large", "SP"],
+    datasets: [
+      {
+        data: [totalLarge, totalSp],
+        backgroundColor: ["#1f7655", "#36a87a"],
+        borderColor: "#ffffff",
+        borderWidth: 3,
+        hoverOffset: 4,
+      },
+    ],
+  };
+}
+
+const typeChartOptions = {
+  indexAxis: "y",
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: "bottom",
+      labels: {
+        boxWidth: 12,
+        color: "#0f172a",
+        font: { size: 11, weight: "bold" },
+      },
+    },
+    tooltip: {
+      callbacks: {
+        title: (items) => items[0]?.label || "",
+      },
+    },
+  },
+  scales: {
+    x: {
+      beginAtZero: true,
+      ticks: { precision: 0 },
+      grid: { color: "#e5ece8" },
+    },
+    y: {
+      ticks: {
+        autoSkip: false,
+        color: "#334155",
+        font: { size: 11, weight: "bold" },
+      },
+      grid: { display: false },
+    },
+  },
+};
+
+const permitChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: "62%",
+  plugins: {
+    legend: {
+      position: "bottom",
+      labels: {
+        boxWidth: 12,
+        color: "#0f172a",
+        font: { size: 11, weight: "bold" },
+      },
+    },
+  },
+};
+
+function buildPriorityActions(summary, needsAttention, riskHotspots, renewalAlerts) {
+  const expiredCount = renewalAlerts.expired?.length || 0;
+  const topRisk = riskHotspots[0];
+
+  return [
+    {
+      label: "Immediate Follow-up",
+      value: needsAttention.length,
+      note: "Establishments ranked by sanitation risk",
+      tone: "red",
+      icon: <FiAlertTriangle />,
+    },
+    {
+      label: "Inspection Queue",
+      value: summary.upcoming || 0,
+      note: "Upcoming or due inspection records",
+      tone: "yellow",
+      icon: <FiCalendar />,
+    },
+    {
+      label: "Renewal Watch",
+      value: expiredCount,
+      note: "Expired renewal records in alert list",
+      tone: "orange",
+      icon: <FiTrendingUp />,
+    },
+    {
+      label: "Top Risk Area",
+      value: topRisk?.barangay || "None",
+      note: topRisk ? `${topRisk.riskScore} combined risk score` : "No hotspot data",
+      tone: "green",
+      icon: <FiMapPin />,
+    },
+  ];
+}
+
+function groupQuestionAnswers(questionAnswers) {
+  const groups = [
+    {
+      id: "establishment",
+      label: "Establishments",
+      visuals: [
+        "permit_status",
+        "needs_attention",
+        "inspection_status",
+        "recurring",
+        "resolution_time",
+        "compliance_prediction",
+      ],
+      items: [],
+    },
+    {
+      id: "household",
+      label: "Households",
+      visuals: [
+        "household_risk_barangay",
+        "household_profile",
+        "priority_households",
+        "risk_factor",
+      ],
+      items: [],
+    },
+    {
+      id: "geographic",
+      label: "Risk Areas",
+      visuals: ["risk_map", "barangay_risk"],
+      items: [],
+    },
+  ];
+
+  questionAnswers.forEach((item) => {
+    const group =
+      groups.find((entry) => entry.visuals.includes(item.visual)) || groups[0];
+    group.items.push(item);
+  });
+
+  return groups;
 }
 
 function buildLocalSummary(establishments) {
@@ -605,23 +1098,6 @@ function buildLocalByType(establishments) {
   return Object.values(grouped);
 }
 
-function getBarHeight(value, maxTotal) {
-  if (!value) return 0;
-  return Math.max(18, Math.round((value / maxTotal) * 210));
-}
-
-function buildPermitPieGradient(sp, large) {
-  const total = sp + large;
-
-  if (!total) {
-    return "conic-gradient(#36a87a 0 50%, #1f7655 50% 100%)";
-  }
-
-  const largePercent = Math.round((large / total) * 100);
-
-  return `conic-gradient(#1f7655 0 ${largePercent}%, #36a87a ${largePercent}% 100%)`;
-}
-
 function buildProgressColumns(summary) {
   const total = summary.totalEstablishments || 0;
 
@@ -637,11 +1113,6 @@ function buildProgressColumns(summary) {
   return `${good}fr ${upcoming}fr ${completion}fr ${violators}fr`;
 }
 
-function shortenLabel(label = "") {
-  if (label.length <= 14) return label;
-  return `${label.slice(0, 12)}...`;
-}
-
 function formatFrequency(value = "") {
   if (value === "monthly") return "Monthly";
   if (value === "quarterly") return "Quarterly";
@@ -652,6 +1123,18 @@ function formatStatusName(value = "") {
   return value
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function riskClass(value = "") {

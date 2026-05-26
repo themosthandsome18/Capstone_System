@@ -1,8 +1,10 @@
+from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import parser_classes
@@ -12,11 +14,19 @@ from .models import (
     ACTION_DELETE,
     ACTION_UPDATE,
     ActivityLog,
+    Barangay,
+    BoatType,
+    COMPLAINT_PRIORITY_MEDIUM,
+    COMPLAINT_STATUS_PENDING,
+    Country,
     FeedbackEntry,
     HouseholdSanitationRecord,
+    Itinerary,
     MODULE_SANITATION,
     MODULE_TOURISM,
+    Province,
     ROLE_ADMIN,
+    Region,
     Resort,
     SanitaryBusinessType,
     SanitaryComplaint,
@@ -24,18 +34,23 @@ from .models import (
     SanitaryInspection,
     SanitaryPermitRenewal,
     TouristRecord,
+    TravelMode,
+    VisitPurpose,
 )
 from .permissions import get_user_role, module_required
 from .seeders import (
+    ensure_initial_barangays,
     ensure_initial_data,
     ensure_initial_household_data,
     ensure_initial_reference_data,
     ensure_initial_sanitation_data,
+    ensure_initial_tourism_data,
     generate_resort_id,
     generate_survey_id,
 )
 from .serializers import (
     ActivityLogSerializer,
+    BarangaySerializer,
     FeedbackEntrySerializer,
     HouseholdSanitationRecordSerializer,
     ResortSerializer,
@@ -65,6 +80,7 @@ from .services.sanitation import (
     generate_complaint_id,
     sync_establishment_after_inspection,
     sync_renewal_progress,
+    with_establishment_rollups,
 )
 from .services.tourism import (
     build_arrival_monitoring_payload,
@@ -72,6 +88,7 @@ from .services.tourism import (
     build_dashboard_payload,
     build_reference_tables_payload,
     build_reports_payload,
+    build_tourist_records_payload,
 )
 
 
@@ -79,6 +96,357 @@ from .services.tourism import (
 @permission_classes([AllowAny])
 def health_check(request):
     return Response({"status": "ok"})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_tourism_bootstrap(request):
+    ensure_mobile_reference_data(include_barangays=True)
+
+    destinations = Resort.objects.all()
+
+    return Response(
+        {
+            "referenceTables": build_reference_tables_payload(),
+            "destinations": ResortSerializer(destinations, many=True).data,
+            "featuredDestinations": ResortSerializer(
+                destinations.order_by("-tourism_rating", "-monthly_arrivals")[:6],
+                many=True,
+            ).data,
+            "barangays": BarangaySerializer(Barangay.objects.filter(is_active=True), many=True).data,
+            "notifications": build_mobile_notifications(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_destination_list(request):
+    ensure_mobile_reference_data()
+
+    destinations = Resort.objects.all()
+    search = request.query_params.get("search", "").strip()
+    destination_type = request.query_params.get("type", "").strip()
+
+    if search:
+        destinations = destinations.filter(
+            Q(resort_name__icontains=search)
+            | Q(location__icontains=search)
+            | Q(short_description__icontains=search)
+            | Q(type__icontains=search)
+        )
+
+    if destination_type:
+        destinations = destinations.filter(type__iexact=destination_type)
+
+    return Response(ResortSerializer(destinations, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_destination_detail(request, resort_id):
+    ensure_mobile_reference_data()
+    resort = get_object_or_404(Resort, resort_id=resort_id)
+    feedback = FeedbackEntry.objects.filter(destination=resort).order_by("-date", "-id")[:5]
+
+    return Response(
+        {
+            "destination": ResortSerializer(resort).data,
+            "recentFeedback": FeedbackEntrySerializer(feedback, many=True).data,
+        }
+    )
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_tourist_registration(request):
+    ensure_mobile_reference_data()
+
+    data = normalize_mobile_visit_payload(request.data.copy())
+    serializer = TouristRecordSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    record = serializer.save()
+
+    log_activity(
+        request,
+        MODULE_TOURISM,
+        ACTION_CREATE,
+        record,
+        label=record.full_name,
+        record_id=record.survey_id,
+    )
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_feedback_submit(request):
+    ensure_mobile_reference_data()
+
+    data = request.data.copy()
+    destination_id = (
+        data.get("destinationId")
+        or data.get("destination_id")
+        or data.get("resort_id")
+    )
+    data["destinationId"] = destination_id
+    data["reviewer"] = data.get("reviewer") or data.get("full_name") or "Mobile User"
+    data["date"] = data.get("date") or timezone.localdate().isoformat()
+    data["title"] = data.get("title") or "Mobile tourism feedback"
+    data["rating"] = parse_mobile_int(data.get("rating"), 5)
+    data["status"] = data.get("status") or feedback_status_from_rating(data["rating"])
+    data["message"] = append_sanitation_feedback(
+        data.get("message") or data.get("comment") or "",
+        data,
+    )
+
+    serializer = FeedbackEntrySerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    entry = serializer.save()
+
+    log_activity(
+        request,
+        MODULE_TOURISM,
+        ACTION_CREATE,
+        entry,
+        label=entry.title,
+        record_id=entry.pk,
+    )
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_sanitation_report_submit(request):
+    ensure_mobile_barangays()
+
+    data = request.data.copy()
+    upload = request.FILES.get("photo") or request.FILES.get("image")
+
+    data["complaint_id"] = generate_complaint_id()
+    data["complainant_name"] = (
+        data.get("complainant_name") or data.get("full_name") or data.get("name") or ""
+    )
+    data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
+    data["status"] = COMPLAINT_STATUS_PENDING
+    data["priority"] = data.get("priority") or COMPLAINT_PRIORITY_MEDIUM
+    data["category"] = data.get("category") or "Community sanitation concern"
+    data["barangay"] = data.get("barangay") or "Unspecified"
+    data["description"] = data.get("description") or data.get("message") or ""
+
+    if upload and not data.get("photo_documentation"):
+        data["photo_documentation"] = upload.name
+
+    for field in ["latitude", "longitude"]:
+        if data.get(field) in ("", None):
+            data.pop(field, None)
+
+    serializer = SanitaryComplaintSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    complaint = serializer.save()
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        complaint,
+        label=complaint.category,
+        record_id=complaint.complaint_id,
+    )
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+def build_mobile_notifications():
+    top_destination = (
+        Resort.objects.order_by("-monthly_arrivals", "-tourism_rating").first()
+    )
+
+    notifications = [
+        {
+            "id": "welcome",
+            "type": "info",
+            "title": "Welcome to Mauban",
+            "message": "Start exploring local destinations, maps, and travel guides.",
+        },
+        {
+            "id": "sanitation-reporting",
+            "type": "sanitation",
+            "title": "Community Reporting Available",
+            "message": "Residents may submit sanitation concerns with location details.",
+        },
+    ]
+
+    if top_destination:
+        notifications.append(
+            {
+                "id": f"featured-{top_destination.resort_id}",
+                "type": "tourism",
+                "title": f"{top_destination.resort_name} is trending",
+                "message": (
+                    f"{top_destination.monthly_arrivals} recorded monthly arrivals "
+                    "in the tourism guide data."
+                ),
+            }
+        )
+
+    return notifications
+
+
+def ensure_mobile_reference_data(include_barangays=False):
+    if not Resort.objects.exists() or not Country.objects.exists():
+        ensure_initial_reference_data()
+
+    if include_barangays:
+        ensure_mobile_barangays()
+
+
+def ensure_mobile_barangays():
+    if not Barangay.objects.exists():
+        ensure_initial_barangays()
+
+
+def normalize_mobile_visit_payload(data):
+    data["survey_id"] = data.get("survey_id") or generate_survey_id()
+    data["submitted_at"] = data.get("submitted_at") or timezone.now().isoformat()
+    data["email"] = data.get("email") or ""
+    data["consent_confirmed"] = data.get("consent_confirmed", True)
+    data["full_name"] = data.get("full_name") or data.get("name") or ""
+    data["contact_number"] = data.get("contact_number") or data.get("contact") or ""
+    data["arrival_date"] = (
+        data.get("arrival_date")
+        or data.get("date")
+        or timezone.localdate().isoformat()
+    )
+    data["country_id"] = data.get("country_id") or default_reference_id(
+        Country,
+        name__iexact="Philippines",
+    )
+    data["region_id"] = data.get("region_id") or default_reference_id(
+        Region,
+        name__icontains="CALABARZON",
+    )
+    data["province_id"] = data.get("province_id") or default_reference_id(
+        Province,
+        name__iexact="Quezon",
+    )
+    data["country_of_origin"] = data.get("country_of_origin") or "Philippines"
+    data["itinerary_id"] = data.get("itinerary_id") or default_reference_id(Itinerary)
+    data["resort_id"] = (
+        data.get("resort_id")
+        or data.get("destination_id")
+        or default_reference_id(Resort)
+    )
+    data["travel_mode_id"] = data.get("travel_mode_id") or default_reference_id(
+        TravelMode
+    )
+    data["boat_type_id"] = data.get("boat_type_id") or default_reference_id(BoatType)
+    data["visit_purpose_id"] = data.get("visit_purpose_id") or default_reference_id(
+        VisitPurpose
+    )
+    data["boat_capacity_fare"] = data.get("boat_capacity_fare") or ""
+    data["parking_space"] = data.get("parking_space") or ""
+    data["status"] = data.get("status") or "pending"
+
+    normalize_mobile_counts(data)
+    return data
+
+
+def normalize_mobile_counts(data):
+    foreigner_count = parse_mobile_int(data.get("foreigner_count"), 0)
+    filipino_count = parse_mobile_int(data.get("filipino_count"), 0)
+    maubanin_count = parse_mobile_int(data.get("maubanin_count"), 0)
+    classification_total = foreigner_count + filipino_count + maubanin_count
+    total_visitors = parse_mobile_int(data.get("total_visitors"), classification_total)
+
+    if total_visitors <= 0:
+        total_visitors = classification_total or 1
+
+    if classification_total <= 0:
+        filipino_count = total_visitors
+        foreigner_count = 0
+        maubanin_count = 0
+    elif not data.get("total_visitors"):
+        total_visitors = classification_total
+
+    total_male = parse_mobile_int(data.get("total_male"), 0)
+    total_female = parse_mobile_int(data.get("total_female"), 0)
+
+    if total_male + total_female <= 0:
+        total_female = total_visitors
+    elif total_male + total_female != total_visitors:
+        total_female = max(0, total_visitors - total_male)
+
+    age_0_7 = parse_mobile_int(data.get("age_0_7"), 0)
+    age_8_59 = parse_mobile_int(data.get("age_8_59"), 0)
+    age_60_above = parse_mobile_int(data.get("age_60_above"), 0)
+
+    if age_0_7 + age_8_59 + age_60_above <= 0:
+        age_8_59 = total_visitors
+    elif age_0_7 + age_8_59 + age_60_above != total_visitors:
+        age_8_59 = max(0, total_visitors - age_0_7 - age_60_above)
+
+    data["foreigner_count"] = foreigner_count
+    data["filipino_count"] = filipino_count
+    data["maubanin_count"] = maubanin_count
+    data["total_visitors"] = total_visitors
+    data["total_male"] = total_male
+    data["total_female"] = total_female
+    data["special_group_count"] = parse_mobile_int(data.get("special_group_count"), 0)
+    data["age_0_7"] = age_0_7
+    data["age_8_59"] = age_8_59
+    data["age_60_above"] = age_60_above
+
+
+def default_reference_id(model, **filters):
+    item = model.objects.filter(**filters).first() if filters else None
+    item = item or model.objects.first()
+    return item.pk if item else None
+
+
+def parse_mobile_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def feedback_status_from_rating(rating):
+    rating = parse_mobile_int(rating, 5)
+
+    if rating >= 4:
+        return FeedbackEntry.STATUS_POSITIVE
+    if rating <= 2:
+        return FeedbackEntry.STATUS_NEGATIVE
+    return FeedbackEntry.STATUS_NEUTRAL
+
+
+def append_sanitation_feedback(message, data):
+    notes = []
+    cleanliness_rating = data.get("cleanliness_rating")
+    safety_rating = data.get("safety_rating")
+    sanitation_comment = data.get("sanitation_comment")
+
+    if cleanliness_rating:
+        notes.append(f"cleanliness rating {cleanliness_rating}/5")
+
+    if safety_rating:
+        notes.append(f"safety/comfort rating {safety_rating}/5")
+
+    if sanitation_comment:
+        notes.append(f"sanitation note: {sanitation_comment}")
+
+    base_message = message.strip() or "No written comment."
+
+    if not notes:
+        return base_message
+
+    return f"{base_message}\n\nSanitation feedback: {'; '.join(notes)}"
 
 
 @api_view(["GET"])
@@ -111,15 +479,12 @@ def activity_log_list(request):
 @api_view(["GET"])
 @module_required("tourism")
 def bootstrap_data(request):
-    ensure_initial_data()
+    ensure_initial_tourism_data()
 
     return Response(
         {
             "referenceTables": build_reference_tables_payload(),
-            "touristRecords": TouristRecordSerializer(
-                TouristRecord.objects.all(),
-                many=True,
-            ).data,
+            "touristRecords": [],
             "bookingManagement": build_booking_management_payload(),
             "feedbackEntries": FeedbackEntrySerializer(
                 FeedbackEntry.objects.select_related("destination").all(),
@@ -127,7 +492,7 @@ def bootstrap_data(request):
             ).data,
             "arrivalMonitoring": build_arrival_monitoring_payload(),
             "dashboardData": build_dashboard_payload(),
-            "reportData": build_reports_payload(),
+            "reportData": build_reports_payload({"include_questions": False}),
         }
     )
 
@@ -142,14 +507,14 @@ def reference_tables(request):
 @api_view(["GET"])
 @module_required("tourism")
 def arrival_monitoring_data(request):
-    ensure_initial_data()
-    return Response(build_arrival_monitoring_payload())
+    ensure_initial_tourism_data()
+    return Response(build_arrival_monitoring_payload(request.query_params))
 
 
 @api_view(["GET"])
 @module_required("tourism")
 def booking_management_data(request):
-    ensure_initial_data()
+    ensure_initial_tourism_data()
     return Response(build_booking_management_payload(request.query_params))
 
 
@@ -198,15 +563,10 @@ def online_booking_import(request):
 @api_view(["GET", "POST"])
 @module_required("tourism")
 def tourist_record_list(request):
-    ensure_initial_data()
+    ensure_initial_tourism_data()
 
     if request.method == "GET":
-        return Response(
-            TouristRecordSerializer(
-                TouristRecord.objects.all(),
-                many=True,
-            ).data
-        )
+        return Response(build_tourist_records_payload())
 
     data = request.data.copy()
     if not data.get("survey_id"):
@@ -277,14 +637,14 @@ def tourist_record_detail(request, survey_id):
 @api_view(["GET"])
 @module_required("tourism")
 def dashboard_data(request):
-    ensure_initial_data()
-    return Response(build_dashboard_payload())
+    ensure_initial_tourism_data()
+    return Response(build_dashboard_payload(request.query_params))
 
 
 @api_view(["GET"])
 @module_required("tourism")
 def reports_data(request):
-    ensure_initial_data()
+    ensure_initial_tourism_data()
     return Response(build_reports_payload(request.query_params))
 
 
@@ -370,7 +730,7 @@ def resort_detail(request, resort_id):
 @api_view(["GET", "POST"])
 @module_required("tourism")
 def feedback_list(request):
-    ensure_initial_data()
+    ensure_initial_tourism_data()
 
     if request.method == "GET":
         feedback = FeedbackEntry.objects.select_related("destination").all()
@@ -442,7 +802,9 @@ def sanitation_bootstrap_data(request):
                 many=True,
             ).data,
             "establishments": SanitaryEstablishmentSerializer(
-                SanitaryEstablishment.objects.select_related("business_type").all(),
+                with_establishment_rollups(
+                    SanitaryEstablishment.objects.select_related("business_type").all()
+                ),
                 many=True,
             ).data,
             "inspections": SanitaryInspectionSerializer(
@@ -453,11 +815,11 @@ def sanitation_bootstrap_data(request):
                 many=True,
             ).data,
             "dashboardData": build_sanitation_dashboard_payload(),
-            "permitData": build_sanitation_permits_payload(),
-            "renewalData": build_sanitation_renewals_payload(),
-            "complaintData": build_sanitation_complaints_payload(),
-            "submissionData": build_sanitation_submissions_payload(),
-            "reportData": build_sanitation_reports_payload(),
+            "permitData": None,
+            "renewalData": None,
+            "complaintData": None,
+            "submissionData": None,
+            "reportData": None,
         }
     )
 
@@ -483,9 +845,9 @@ def sanitation_establishment_list(request):
     ensure_initial_sanitation_data()
 
     if request.method == "GET":
-        establishments = SanitaryEstablishment.objects.select_related(
-            "business_type"
-        ).all()
+        establishments = with_establishment_rollups(
+            SanitaryEstablishment.objects.select_related("business_type").all()
+        )
         return Response(SanitaryEstablishmentSerializer(establishments, many=True).data)
 
     serializer = SanitaryEstablishmentSerializer(data=request.data)
@@ -602,6 +964,7 @@ def sanitation_inspection_detail(request, inspection_id):
     )
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    sync_establishment_after_inspection(inspection)
     log_activity(
         request,
         MODULE_SANITATION,
@@ -752,9 +1115,13 @@ def sanitation_complaint_detail(request, complaint_id):
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    data = request.data.copy()
+    if data.get("status") == "resolved" and not data.get("resolved_date"):
+        data["resolved_date"] = timezone.localdate().isoformat()
+
     serializer = SanitaryComplaintSerializer(
         complaint,
-        data=request.data,
+        data=data,
         partial=True,
     )
     serializer.is_valid(raise_exception=True)
@@ -782,15 +1149,51 @@ def sanitation_report_data(request):
     return Response(build_sanitation_reports_payload(request.query_params))
 
 
+def get_household_records_queryset(params=None):
+    params = params or {}
+    records = HouseholdSanitationRecord.objects.all()
+    barangay = (params.get("barangay") or "").strip()
+    status_filter = (params.get("status") or "").strip()
+    search = (params.get("search") or "").strip()
+
+    if barangay and barangay != "all":
+        records = records.filter(barangay__iexact=barangay)
+
+    if status_filter and status_filter != "all":
+        records = records.filter(status=status_filter)
+
+    if search:
+        records = records.filter(
+            Q(household_code__icontains=search)
+            | Q(household_head__icontains=search)
+            | Q(barangay__icontains=search)
+            | Q(address__icontains=search)
+            | Q(water_source__icontains=search)
+            | Q(remarks__icontains=search)
+        )
+
+    return records
+
+
+@api_view(["GET"])
+@module_required("sanitation")
+def household_barangay_list(request):
+    ensure_initial_barangays()
+    barangays = Barangay.objects.filter(is_active=True)
+    return Response(BarangaySerializer(barangays, many=True).data)
+
+
 @api_view(["GET"])
 @module_required("sanitation")
 def household_bootstrap_data(request):
     ensure_initial_household_data()
 
-    records = HouseholdSanitationRecord.objects.all()
+    records = get_household_records_queryset(request.query_params)
+    barangays = Barangay.objects.filter(is_active=True)
 
     return Response(
         {
+            "barangays": BarangaySerializer(barangays, many=True).data,
             "householdRecords": HouseholdSanitationRecordSerializer(
                 records,
                 many=True,
@@ -812,7 +1215,7 @@ def household_record_list(request):
     ensure_initial_household_data()
 
     if request.method == "GET":
-        records = HouseholdSanitationRecord.objects.all()
+        records = get_household_records_queryset(request.query_params)
         return Response(HouseholdSanitationRecordSerializer(records, many=True).data)
 
     serializer = HouseholdSanitationRecordSerializer(data=request.data)

@@ -153,8 +153,8 @@ function HouseholdReportAnalytics() {
           </div>
 
           <div className="household-chart-legend">
-            <span className="red">■ At Risk</span>
-            <span className="green">■ Good Standing</span>
+            <span className="red">At Risk</span>
+            <span className="green">Good Standing</span>
           </div>
         </section>
 
@@ -183,10 +183,10 @@ function HouseholdReportAnalytics() {
           </div>
 
           <div className="household-chart-legend">
-            <span className="yellow">■ Burned</span>
-            <span className="green">■ Collected</span>
-            <span className="teal">■ Composted</span>
-            <span className="red">■ Dumped</span>
+            <span className="yellow">Burned</span>
+            <span className="green">Collected</span>
+            <span className="teal">Composted</span>
+            <span className="red">Dumped</span>
           </div>
         </section>
       </div>
@@ -202,9 +202,9 @@ function HouseholdReportAnalytics() {
           </div>
 
           <div className="infra-legend">
-            <span>🚽 Safe Toilet</span>
-            <span>💧 Piped Water</span>
-            <span>🗑️ Proper Waste</span>
+            <span>Safe Toilet</span>
+            <span>Piped Water</span>
+            <span>Proper Waste</span>
           </div>
         </div>
 
@@ -213,9 +213,9 @@ function HouseholdReportAnalytics() {
             <tr>
               <th>Barangay</th>
               <th>HSS</th>
-              <th>🚽 Safe Toilet</th>
-              <th>💧 Piped Water</th>
-              <th>🗑️ Proper Waste</th>
+              <th>Safe Toilet</th>
+              <th>Piped Water</th>
+              <th>Proper Waste</th>
               <th>Risk Flags</th>
             </tr>
           </thead>
@@ -268,7 +268,7 @@ function HouseholdReportAnalytics() {
 
                     <td>
                       <span className="risk-flag">
-                        ⓘ {noToilet} no toilet • {item.atRisk} at-risk
+                        Info: {noToilet} no toilet | {item.atRisk} at-risk
                       </span>
                     </td>
                   </tr>

@@ -22,6 +22,7 @@ import {
   updateSanitationComplaint,
   updateSanitationRenewal,
   fetchHouseholdBootstrap,
+  fetchHouseholdBarangays,
   fetchHouseholdDashboard,
   fetchHouseholdRecords,
   createHouseholdRecord,
@@ -42,6 +43,7 @@ const initialState = {
   submissionData: null,
   reportData: null,
   householdRecords: [],
+  barangays: [],
   householdDashboardData: null,
 };
 
@@ -50,15 +52,19 @@ export function SanitationDataProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadSanitationData() {
+  async function loadSanitationData(options = {}) {
+    const { includeHouseholds = true } = options;
     setLoading(true);
     setError("");
 
     try {
-      const data = await fetchSanitationBootstrap();
-      const householdData = await fetchHouseholdBootstrap();
+      const [data, householdData] = await Promise.all([
+        fetchSanitationBootstrap(),
+        includeHouseholds ? fetchHouseholdBootstrap() : Promise.resolve(null),
+      ]);
 
-      setState({
+      setState((current) => ({
+        ...current,
         businessTypes: data.businessTypes || [],
         establishments: data.establishments || [],
         inspections: data.inspections || [],
@@ -68,9 +74,15 @@ export function SanitationDataProvider({ children }) {
         complaintData: data.complaintData || null,
         submissionData: data.submissionData || null,
         reportData: data.reportData || null,
-        householdRecords: householdData.householdRecords || [],
-        householdDashboardData: householdData.householdDashboardData || null,
-      });
+        ...(householdData
+          ? {
+              barangays: householdData.barangays || [],
+              householdRecords: householdData.householdRecords || [],
+              householdDashboardData:
+                householdData.householdDashboardData || null,
+            }
+          : {}),
+      }));
     } catch (requestError) {
       setError(requestError.message || "Unable to load sanitation data.");
     } finally {
@@ -81,6 +93,30 @@ export function SanitationDataProvider({ children }) {
   useEffect(() => {
     loadSanitationData();
   }, []);
+
+  async function loadHouseholdData() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [householdData, reportData] = await Promise.all([
+        fetchHouseholdBootstrap(),
+        fetchSanitationReports(),
+      ]);
+
+      setState((current) => ({
+        ...current,
+        barangays: householdData.barangays || [],
+        householdRecords: householdData.householdRecords || [],
+        householdDashboardData: householdData.householdDashboardData || null,
+        reportData,
+      }));
+    } catch (requestError) {
+      setError(requestError.message || "Unable to load household data.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function refreshDashboardData() {
     const dashboardData = await fetchSanitationDashboard();
@@ -181,8 +217,19 @@ export function SanitationDataProvider({ children }) {
     return householdDashboardData;
   }
 
-  async function refreshHouseholdRecords() {
-    const householdRecords = await fetchHouseholdRecords();
+  async function refreshHouseholdBarangays() {
+    const barangays = await fetchHouseholdBarangays();
+
+    setState((current) => ({
+      ...current,
+      barangays,
+    }));
+
+    return barangays;
+  }
+
+  async function refreshHouseholdRecords(params = {}) {
+    const householdRecords = await fetchHouseholdRecords(params);
 
     setState((current) => ({
       ...current,
@@ -194,87 +241,87 @@ export function SanitationDataProvider({ children }) {
 
   async function createEstablishment(payload) {
     const created = await createSanitationEstablishment(payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return created;
   }
 
   async function updateEstablishment(id, payload) {
     const updated = await updateSanitationEstablishment(id, payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return updated;
   }
 
   async function deleteEstablishment(id) {
     await deleteSanitationEstablishment(id);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
   }
 
   async function createInspection(payload) {
     const created = await createSanitationInspection(payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return created;
   }
 
   async function updateInspection(id, payload) {
     const updated = await updateSanitationInspection(id, payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return updated;
   }
 
   async function deleteInspection(id) {
     await deleteSanitationInspection(id);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
   }
 
   async function createRenewal(payload) {
     const created = await createSanitationRenewal(payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return created;
   }
 
   async function updateRenewal(id, payload) {
     const updated = await updateSanitationRenewal(id, payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return updated;
   }
 
   async function deleteRenewal(id) {
     await deleteSanitationRenewal(id);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
   }
 
   async function createComplaint(payload) {
     const created = await createSanitationComplaint(payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return created;
   }
 
   async function updateComplaint(id, payload) {
     const updated = await updateSanitationComplaint(id, payload);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
     return updated;
   }
 
   async function deleteComplaint(id) {
     await deleteSanitationComplaint(id);
-    await loadSanitationData();
+    await loadSanitationData({ includeHouseholds: false });
   }
 
   async function createHousehold(payload) {
     const created = await createHouseholdRecord(payload);
-    await loadSanitationData();
+    await loadHouseholdData();
     return created;
   }
 
   async function updateHousehold(id, payload) {
     const updated = await updateHouseholdRecord(id, payload);
-    await loadSanitationData();
+    await loadHouseholdData();
     return updated;
   }
 
   async function deleteHousehold(id) {
     await deleteHouseholdRecord(id);
-    await loadSanitationData();
+    await loadHouseholdData();
   }
 
   const value = {
@@ -293,6 +340,7 @@ export function SanitationDataProvider({ children }) {
     refreshReportData,
 
     refreshHouseholdDashboardData,
+    refreshHouseholdBarangays,
     refreshHouseholdRecords,
 
     createEstablishment,

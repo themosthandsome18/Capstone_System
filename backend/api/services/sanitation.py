@@ -90,51 +90,178 @@ RENEWAL_STAGE_PROGRESS = {
 }
 
 
+def with_establishment_rollups(queryset):
+    return queryset.annotate(
+        open_complaints_count=Count(
+            "complaints",
+            filter=~Q(
+                complaints__status__in=[
+                    COMPLAINT_STATUS_RESOLVED,
+                    COMPLAINT_STATUS_REJECTED,
+                ]
+            ),
+            distinct=True,
+        ),
+    )
+
+
+def attach_establishment_rollups(establishments):
+    rows = list(establishments)
+    establishment_ids = [row.id for row in rows]
+
+    if not establishment_ids:
+        return rows
+
+    open_complaint_counts = {
+        item["establishment_id"]: item["total"]
+        for item in SanitaryComplaint.objects.filter(
+            establishment_id__in=establishment_ids
+        )
+        .exclude(status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED])
+        .values("establishment_id")
+        .annotate(total=Count("id"))
+    }
+    latest_inspections = {}
+
+    for item in (
+        SanitaryInspection.objects.filter(establishment_id__in=establishment_ids)
+        .order_by("establishment_id", "-inspection_date", "-id")
+        .values("establishment_id", "inspection_date", "next_due_date")
+    ):
+        latest_inspections.setdefault(item["establishment_id"], item)
+
+    for row in rows:
+        latest_inspection = latest_inspections.get(row.id, {})
+        row.open_complaints_count = open_complaint_counts.get(row.id, 0)
+        row.latest_inspection_date = latest_inspection.get("inspection_date")
+        row.latest_inspection_next_due_date = latest_inspection.get("next_due_date")
+        row._establishment_rollups_attached = True
+
+    return rows
+
+
+def get_establishment_status_counts(establishments):
+    return establishments.aggregate(
+        total=Count("id"),
+        good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
+        upcoming=Count("id", filter=Q(compliance_status=SANITARY_STATUS_UPCOMING)),
+        for_completion=Count(
+            "id",
+            filter=Q(compliance_status=SANITARY_STATUS_FOR_COMPLETION),
+        ),
+        violation=Count("id", filter=Q(compliance_status=SANITARY_STATUS_VIOLATION)),
+        no_permit=Count("id", filter=Q(compliance_status=SANITARY_STATUS_NO_PERMIT)),
+    )
+
+
+def get_permit_status_counts(establishments):
+    return establishments.aggregate(
+        active=Count("id", filter=Q(permit_status=PERMIT_STATUS_ACTIVE)),
+        renewal_due=Count("id", filter=Q(permit_status=PERMIT_STATUS_RENEWAL_DUE)),
+        conditional=Count("id", filter=Q(permit_status=PERMIT_STATUS_CONDITIONAL)),
+        suspended=Count("id", filter=Q(permit_status=PERMIT_STATUS_SUSPENDED)),
+        no_permit=Count("id", filter=Q(permit_status=PERMIT_STATUS_NO_PERMIT)),
+    )
+
+
+def get_business_type_counts(establishments):
+    return {
+        item["business_type_id"]: item
+        for item in establishments.values("business_type_id").annotate(
+            total=Count("id"),
+            with_permit=Count("id", filter=Q(has_permit=True)),
+            without_permit=Count("id", filter=Q(has_permit=False)),
+            sp=Count("id", filter=Q(permit_size="sp")),
+            large=Count("id", filter=Q(permit_size="large")),
+            good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
+            for_completion=Count(
+                "id",
+                filter=Q(compliance_status=SANITARY_STATUS_FOR_COMPLETION),
+            ),
+            upcoming=Count("id", filter=Q(compliance_status=SANITARY_STATUS_UPCOMING)),
+            violation=Count(
+                "id",
+                filter=Q(compliance_status=SANITARY_STATUS_VIOLATION),
+            ),
+            no_permit=Count(
+                "id",
+                filter=Q(compliance_status=SANITARY_STATUS_NO_PERMIT),
+            ),
+        )
+    }
+
+
+def build_dashboard_business_type_rows(establishments):
+    counts_by_type = get_business_type_counts(establishments)
+    rows = []
+
+    for business_type in SanitaryBusinessType.objects.order_by("name"):
+        counts = counts_by_type.get(business_type.id, {})
+        rows.append(
+            {
+                "id": business_type.id,
+                "name": business_type.name,
+                "inspection_frequency": business_type.inspection_frequency,
+                "total": counts.get("total", 0),
+                "sp": counts.get("sp", 0),
+                "large": counts.get("large", 0),
+                "good_standing": counts.get("good", 0),
+                "for_completion": counts.get("for_completion", 0),
+                "upcoming": counts.get("upcoming", 0),
+                "violation": counts.get("violation", 0),
+                "no_permit": counts.get("no_permit", 0),
+            }
+        )
+
+    return rows
+
+
+def build_report_business_type_rows(establishments):
+    counts_by_type = get_business_type_counts(establishments)
+    rows = []
+
+    for business_type in SanitaryBusinessType.objects.order_by("name"):
+        counts = counts_by_type.get(business_type.id, {})
+
+        if not counts.get("total", 0):
+            continue
+
+        rows.append(
+            {
+                "id": business_type.id,
+                "name": business_type.name,
+                "inspection_frequency": business_type.inspection_frequency,
+                "total": counts.get("total", 0),
+                "withPermit": counts.get("with_permit", 0),
+                "withoutPermit": counts.get("without_permit", 0),
+                "sp": counts.get("sp", 0),
+                "large": counts.get("large", 0),
+                "goodStanding": counts.get("good", 0),
+                "forCompletion": counts.get("for_completion", 0),
+                "upcoming": counts.get("upcoming", 0),
+                "violators": counts.get("violation", 0),
+                "noPermit": counts.get("no_permit", 0),
+            }
+        )
+
+    return rows
+
+
 def build_sanitation_dashboard_payload():
     ensure_initial_sanitation_data()
 
     establishments = SanitaryEstablishment.objects.select_related("business_type").all()
 
-    total = establishments.count()
-    good = establishments.filter(compliance_status=SANITARY_STATUS_GOOD).count()
-    upcoming = establishments.filter(compliance_status=SANITARY_STATUS_UPCOMING).count()
-    for_completion = establishments.filter(
-        compliance_status=SANITARY_STATUS_FOR_COMPLETION
-    ).count()
-    violation = establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION).count()
-    no_permit = establishments.filter(compliance_status=SANITARY_STATUS_NO_PERMIT).count()
+    counts = get_establishment_status_counts(establishments)
+    total = counts["total"]
+    good = counts["good"]
+    upcoming = counts["upcoming"]
+    for_completion = counts["for_completion"]
+    violation = counts["violation"]
+    no_permit = counts["no_permit"]
+    by_type = build_dashboard_business_type_rows(establishments)
 
-    by_type = []
-    for business_type in SanitaryBusinessType.objects.order_by("name"):
-        type_establishments = establishments.filter(business_type=business_type)
-
-        by_type.append(
-            {
-                "id": business_type.id,
-                "name": business_type.name,
-                "inspection_frequency": business_type.inspection_frequency,
-                "total": type_establishments.count(),
-                "sp": type_establishments.filter(permit_size="sp").count(),
-                "large": type_establishments.filter(permit_size="large").count(),
-                "good_standing": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_GOOD
-                ).count(),
-                "for_completion": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_FOR_COMPLETION
-                ).count(),
-                "upcoming": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_UPCOMING
-                ).count(),
-                "violation": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_VIOLATION
-                ).count(),
-                "no_permit": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_NO_PERMIT
-                ).count(),
-            }
-        )
-
-    recent = establishments.order_by("-updated_at")[:6]
+    recent = with_establishment_rollups(establishments).order_by("-updated_at")[:6]
     today = timezone.localdate()
     renewal_alerts = (
         SanitaryPermitRenewal.objects.select_related(
@@ -166,6 +293,7 @@ def build_sanitation_dashboard_payload():
     )
 
     return {
+        "generatedAt": timezone.now().isoformat(),
         "summary": {
             "totalEstablishments": total,
             "goodStanding": good,
@@ -243,6 +371,7 @@ def build_sanitation_submissions_payload(params=None):
         )
 
     all_establishments = SanitaryEstablishment.objects.all()
+    counts = get_establishment_status_counts(all_establishments)
 
     return {
         "filters": {
@@ -250,22 +379,12 @@ def build_sanitation_submissions_payload(params=None):
             "status": status_filter or "all",
         },
         "summary": {
-            "all": all_establishments.count(),
-            "goodStanding": all_establishments.filter(
-                compliance_status=SANITARY_STATUS_GOOD
-            ).count(),
-            "forCompletion": all_establishments.filter(
-                compliance_status=SANITARY_STATUS_FOR_COMPLETION
-            ).count(),
-            "upcoming": all_establishments.filter(
-                compliance_status=SANITARY_STATUS_UPCOMING
-            ).count(),
-            "violators": all_establishments.filter(
-                compliance_status=SANITARY_STATUS_VIOLATION
-            ).count(),
-            "noPermit": all_establishments.filter(
-                compliance_status=SANITARY_STATUS_NO_PERMIT
-            ).count(),
+            "all": counts["total"],
+            "goodStanding": counts["good"],
+            "forCompletion": counts["for_completion"],
+            "upcoming": counts["upcoming"],
+            "violators": counts["violation"],
+            "noPermit": counts["no_permit"],
         },
         "rows": rows,
     }
@@ -277,6 +396,13 @@ def build_sanitation_reports_payload(params=None):
     params = params or {}
     business_type_id = params.get("business_type_id")
     barangay = params.get("barangay")
+    permit_status = params.get("permit_status")
+    compliance_status = params.get("compliance_status")
+    include_questions = str(params.get("include_questions", "true")).lower() not in {
+        "0",
+        "false",
+        "no",
+    }
 
     establishments = SanitaryEstablishment.objects.select_related("business_type").all()
 
@@ -286,57 +412,39 @@ def build_sanitation_reports_payload(params=None):
     if barangay:
         establishments = establishments.filter(barangay=barangay)
 
-    total = establishments.count()
-    good = establishments.filter(compliance_status=SANITARY_STATUS_GOOD).count()
-    upcoming = establishments.filter(compliance_status=SANITARY_STATUS_UPCOMING).count()
-    for_completion = establishments.filter(
-        compliance_status=SANITARY_STATUS_FOR_COMPLETION
-    ).count()
-    violators = establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION).count()
-    no_permit = establishments.filter(compliance_status=SANITARY_STATUS_NO_PERMIT).count()
+    if permit_status:
+        establishments = establishments.filter(permit_status=permit_status)
 
-    by_type = []
+    if compliance_status:
+        establishments = establishments.filter(compliance_status=compliance_status)
 
-    for business_type in SanitaryBusinessType.objects.order_by("name"):
-        type_establishments = establishments.filter(business_type=business_type)
-        type_total = type_establishments.count()
+    counts = get_establishment_status_counts(establishments)
+    total = counts["total"]
+    good = counts["good"]
+    upcoming = counts["upcoming"]
+    for_completion = counts["for_completion"]
+    violators = counts["violation"]
+    no_permit = counts["no_permit"]
+    by_type = build_report_business_type_rows(establishments)
+    needs_attention = build_needs_attention_list(establishments)
 
-        if not type_total:
-            continue
-
-        by_type.append(
-            {
-                "id": business_type.id,
-                "name": business_type.name,
-                "inspection_frequency": business_type.inspection_frequency,
-                "total": type_total,
-                "withPermit": type_establishments.filter(has_permit=True).count(),
-                "withoutPermit": type_establishments.filter(has_permit=False).count(),
-                "sp": type_establishments.filter(permit_size="sp").count(),
-                "large": type_establishments.filter(permit_size="large").count(),
-                "goodStanding": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_GOOD
-                ).count(),
-                "forCompletion": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_FOR_COMPLETION
-                ).count(),
-                "upcoming": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_UPCOMING
-                ).count(),
-                "violators": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_VIOLATION
-                ).count(),
-                "noPermit": type_establishments.filter(
-                    compliance_status=SANITARY_STATUS_NO_PERMIT
-                ).count(),
-            }
+    question_answers = (
+        build_adviser_sanitation_questions(
+            establishments,
+            needs_attention,
         )
+        if include_questions
+        else []
+    )
 
     return {
         "filters": {
             "business_type_id": business_type_id or "",
             "barangay": barangay or "",
+            "permit_status": permit_status or "",
+            "compliance_status": compliance_status or "",
         },
+        "generatedAt": timezone.now().isoformat(),
         "summary": {
             "totalEstablishments": total,
             "goodStanding": good,
@@ -347,13 +455,13 @@ def build_sanitation_reports_payload(params=None):
             "complianceRate": round((good / total) * 100) if total else 0,
         },
         "byType": by_type,
-        "complaints": build_complaint_summary(),
+        "complaints": build_complaint_summary(establishments),
         "requirementTracker": build_requirement_tracker(establishments),
-        "inspectionSchedule": build_inspection_schedule(),
+        "inspectionSchedule": build_inspection_schedule(establishments),
         "riskHotspots": build_barangay_hotspots(establishments),
-        "renewalAlerts": build_renewal_alert_summary(),
-        "needsAttention": build_needs_attention_list(establishments),
-        "questionAnswers": build_adviser_sanitation_questions(establishments),
+        "renewalAlerts": build_renewal_alert_summary(establishments),
+        "needsAttention": needs_attention,
+        "questionAnswers": question_answers,
     }
 
 
@@ -437,21 +545,20 @@ def build_sanitation_permits_payload(params=None):
     if permit_status and permit_status != "all":
         establishments = establishments.filter(permit_status=permit_status)
 
-    all_establishments = SanitaryEstablishment.objects.all()
+    permit_counts = get_permit_status_counts(SanitaryEstablishment.objects.all())
 
     return {
         "summary": {
-            "active": all_establishments.filter(permit_status="active").count(),
-            "renewalDue": all_establishments.filter(
-                permit_status="renewal_due"
-            ).count(),
-            "conditional": all_establishments.filter(
-                permit_status="conditional"
-            ).count(),
-            "suspended": all_establishments.filter(permit_status="suspended").count(),
-            "noPermit": all_establishments.filter(permit_status="no_permit").count(),
+            "active": permit_counts["active"],
+            "renewalDue": permit_counts["renewal_due"],
+            "conditional": permit_counts["conditional"],
+            "suspended": permit_counts["suspended"],
+            "noPermit": permit_counts["no_permit"],
         },
-        "rows": SanitaryEstablishmentSerializer(establishments, many=True).data,
+        "rows": SanitaryEstablishmentSerializer(
+            with_establishment_rollups(establishments),
+            many=True,
+        ).data,
     }
 
 
@@ -592,16 +699,28 @@ def grouped_counts(queryset, field):
     ]
 
 
-def build_complaint_summary():
+def build_complaint_summary(establishments=None):
     complaints = SanitaryComplaint.objects.all()
+
+    if establishments is not None:
+        complaints = complaints.filter(establishment_id__in=establishments.values("id"))
+
+    counts = complaints.aggregate(
+        total=Count("id"),
+        pending=Count("id", filter=Q(status=COMPLAINT_STATUS_PENDING)),
+        investigating=Count("id", filter=Q(status=COMPLAINT_STATUS_INVESTIGATING)),
+        resolved=Count("id", filter=Q(status=COMPLAINT_STATUS_RESOLVED)),
+        rejected=Count("id", filter=Q(status=COMPLAINT_STATUS_REJECTED)),
+        high_priority=Count("id", filter=Q(priority=COMPLAINT_PRIORITY_HIGH)),
+    )
     return {
         "summary": {
-            "total": complaints.count(),
-            "pending": complaints.filter(status=COMPLAINT_STATUS_PENDING).count(),
-            "investigating": complaints.filter(status=COMPLAINT_STATUS_INVESTIGATING).count(),
-            "resolved": complaints.filter(status=COMPLAINT_STATUS_RESOLVED).count(),
-            "rejected": complaints.filter(status=COMPLAINT_STATUS_REJECTED).count(),
-            "highPriority": complaints.filter(priority=COMPLAINT_PRIORITY_HIGH).count(),
+            "total": counts["total"],
+            "pending": counts["pending"],
+            "investigating": counts["investigating"],
+            "resolved": counts["resolved"],
+            "rejected": counts["rejected"],
+            "highPriority": counts["high_priority"],
         },
         "byCategory": grouped_counts(complaints, "category")[:8],
         "byStatus": grouped_counts(complaints, "status"),
@@ -609,32 +728,49 @@ def build_complaint_summary():
 
 
 def build_requirement_tracker(establishments):
+    counts = establishments.aggregate(
+        no_permit=Count(
+            "id",
+            filter=Q(has_permit=False) | Q(permit_status=PERMIT_STATUS_NO_PERMIT),
+        ),
+        for_completion=Count(
+            "id",
+            filter=Q(compliance_status=SANITARY_STATUS_FOR_COMPLETION),
+        ),
+        violation=Count("id", filter=Q(compliance_status=SANITARY_STATUS_VIOLATION)),
+        upcoming=Count("id", filter=Q(compliance_status=SANITARY_STATUS_UPCOMING)),
+    )
+
     return [
         {
             "name": "No permit record",
-            "total": establishments.filter(Q(has_permit=False) | Q(permit_status=PERMIT_STATUS_NO_PERMIT)).count(),
+            "total": counts["no_permit"],
         },
         {
             "name": "For completion",
-            "total": establishments.filter(compliance_status=SANITARY_STATUS_FOR_COMPLETION).count(),
+            "total": counts["for_completion"],
         },
         {
             "name": "Failed / violation",
-            "total": establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION).count(),
+            "total": counts["violation"],
         },
         {
             "name": "Upcoming inspection",
-            "total": establishments.filter(compliance_status=SANITARY_STATUS_UPCOMING).count(),
+            "total": counts["upcoming"],
         },
     ]
 
 
-def build_inspection_schedule():
+def build_inspection_schedule(establishments=None):
     today = timezone.localdate()
     inspections = SanitaryInspection.objects.select_related(
         "establishment",
         "establishment__business_type",
     )
+
+    if establishments is not None:
+        inspections = inspections.filter(establishment_id__in=establishments.values("id"))
+
     return {
         "today": SanitaryInspectionSerializer(
             inspections.filter(next_due_date=today)[:6],
@@ -665,7 +801,11 @@ def build_barangay_hotspots(establishments):
     )
     complaint_counts = {
         item["barangay"]: item["total"]
-        for item in SanitaryComplaint.objects.values("barangay").annotate(total=Count("id"))
+        for item in SanitaryComplaint.objects.filter(
+            establishment_id__in=establishments.values("id")
+        )
+        .values("barangay")
+        .annotate(total=Count("id"))
     }
 
     return [
@@ -679,10 +819,17 @@ def build_barangay_hotspots(establishments):
     ]
 
 
-def build_renewal_alert_summary():
+def build_renewal_alert_summary(establishments=None):
     today = timezone.localdate()
     due_limit = today + timedelta(days=30)
-    renewals = SanitaryPermitRenewal.objects.select_related("establishment")
+    renewals = SanitaryPermitRenewal.objects.select_related(
+        "establishment",
+        "establishment__business_type",
+    )
+
+    if establishments is not None:
+        renewals = renewals.filter(establishment_id__in=establishments.values("id"))
+
     return {
         "expiringSoon": SanitaryPermitRenewalSerializer(
             renewals.filter(
@@ -708,12 +855,33 @@ def build_renewal_alert_summary():
 
 def build_needs_attention_list(establishments):
     rows = []
+    establishments = attach_establishment_rollups(establishments)
 
     for establishment in establishments:
-        open_complaints = establishment.complaints.exclude(
-            status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
-        ).count()
-        latest_inspection = establishment.inspections.order_by("-inspection_date").first()
+        open_complaints = getattr(establishment, "open_complaints_count", None)
+        if open_complaints is None:
+            open_complaints = establishment.complaints.exclude(
+                status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
+            ).count()
+
+        latest_inspection_date = getattr(establishment, "latest_inspection_date", None)
+        latest_inspection_next_due_date = getattr(
+            establishment,
+            "latest_inspection_next_due_date",
+            None,
+        )
+        if (
+            not getattr(establishment, "_establishment_rollups_attached", False)
+            and latest_inspection_date is None
+            and latest_inspection_next_due_date is None
+        ):
+            latest_inspection = establishment.inspections.order_by(
+                "-inspection_date"
+            ).first()
+            if latest_inspection:
+                latest_inspection_date = latest_inspection.inspection_date
+                latest_inspection_next_due_date = latest_inspection.next_due_date
+
         score = 0
         reasons = []
 
@@ -739,9 +907,9 @@ def build_needs_attention_list(establishments):
             score += min(open_complaints * 15, 45)
             reasons.append(f"{open_complaints} open complaint(s)")
 
-        if latest_inspection and latest_inspection.next_due_date:
+        if latest_inspection_next_due_date:
             today = timezone.localdate()
-            if latest_inspection.next_due_date < today:
+            if latest_inspection_next_due_date < today:
                 score += 20
                 reasons.append("Inspection overdue")
 
@@ -757,11 +925,11 @@ def build_needs_attention_list(establishments):
                     "riskScore": score,
                     "riskLevel": "High Risk" if score >= 70 else "Medium Risk" if score >= 35 else "Low Risk",
                     "reasons": reasons,
-                    "latestInspection": latest_inspection.inspection_date.isoformat()
-                    if latest_inspection
+                    "latestInspection": latest_inspection_date.isoformat()
+                    if latest_inspection_date
                     else "",
-                    "nextDueDate": latest_inspection.next_due_date.isoformat()
-                    if latest_inspection and latest_inspection.next_due_date
+                    "nextDueDate": latest_inspection_next_due_date.isoformat()
+                    if latest_inspection_next_due_date
                     else "",
                 }
             )
@@ -769,11 +937,19 @@ def build_needs_attention_list(establishments):
     return sorted(rows, key=lambda item: item["riskScore"], reverse=True)[:10]
 
 
-def build_adviser_sanitation_questions(establishments):
+def build_adviser_sanitation_questions(establishments, needs_attention=None):
     households = HouseholdSanitationRecord.objects.all()
-    inspections = SanitaryInspection.objects.select_related("establishment")
-    complaints = SanitaryComplaint.objects.select_related("establishment")
-    needs_attention = build_needs_attention_list(establishments)
+    establishment_ids = establishments.values("id")
+    inspections = SanitaryInspection.objects.select_related("establishment").filter(
+        establishment_id__in=establishment_ids
+    )
+    complaints = SanitaryComplaint.objects.select_related("establishment").filter(
+        establishment_id__in=establishment_ids
+    )
+    if needs_attention is None:
+        needs_attention = build_needs_attention_list(
+            with_establishment_rollups(establishments)
+        )
 
     permit_status_text = ", ".join(
         f"{format_permit_status(item['permit_status'])}: {item['total']}"
@@ -914,14 +1090,25 @@ def build_adviser_sanitation_questions(establishments):
 def build_household_barangay_profile(households):
     rows = []
 
-    for barangay in households.values_list("barangay", flat=True).distinct():
-        records = households.filter(barangay=barangay)
-        total = records.count()
-        safe_toilet = records.exclude(toilet_type=HOUSEHOLD_TOILET_NONE).count()
-        water_access = records.exclude(water_level=HOUSEHOLD_WATER_LEVEL_1).count()
-        proper_waste = records.exclude(
-            waste_disposal__in=[HOUSEHOLD_WASTE_BURNED, HOUSEHOLD_WASTE_DUMPED]
-        ).count()
+    for item in households.values("barangay").annotate(
+        total=Count("id"),
+        safe_toilet=Count("id", filter=~Q(toilet_type=HOUSEHOLD_TOILET_NONE)),
+        water_access=Count("id", filter=~Q(water_level=HOUSEHOLD_WATER_LEVEL_1)),
+        proper_waste=Count(
+            "id",
+            filter=~Q(
+                waste_disposal__in=[
+                    HOUSEHOLD_WASTE_BURNED,
+                    HOUSEHOLD_WASTE_DUMPED,
+                ]
+            ),
+        ),
+    ):
+        barangay = item["barangay"] or "Unspecified"
+        total = item["total"]
+        safe_toilet = item["safe_toilet"]
+        water_access = item["water_access"]
+        proper_waste = item["proper_waste"]
 
         rows.append(
             {
@@ -986,7 +1173,40 @@ def sync_renewal_progress(renewal):
         renewal.released_at = renewal.released_at or timezone.localdate()
 
     renewal.save()
+
+    if renewal.stage == RENEWAL_STAGE_RELEASED:
+        sync_establishment_after_renewal_release(renewal)
+
     return renewal
+
+
+def sync_establishment_after_renewal_release(renewal):
+    establishment = renewal.establishment
+    released_at = renewal.released_at or timezone.localdate()
+
+    establishment.has_permit = True
+    establishment.permit_number = renewal.permit_number
+    establishment.permit_issued_date = released_at
+    establishment.permit_expiry_date = add_one_year(
+        max(renewal.expiration_date, released_at)
+    )
+    establishment.permit_status = PERMIT_STATUS_ACTIVE
+
+    if establishment.compliance_status in [
+        SANITARY_STATUS_UPCOMING,
+        SANITARY_STATUS_FOR_COMPLETION,
+        SANITARY_STATUS_NO_PERMIT,
+    ]:
+        establishment.compliance_status = SANITARY_STATUS_GOOD
+
+    establishment.save()
+
+
+def add_one_year(value):
+    try:
+        return value.replace(year=value.year + 1)
+    except ValueError:
+        return value + timedelta(days=365)
 
 
 def sync_establishment_after_inspection(inspection):

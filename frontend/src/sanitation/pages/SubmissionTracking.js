@@ -194,7 +194,7 @@ function SubmissionTracking() {
       <section className="submission-table-card">
         <div className="table-top">
           <h3>
-            {activeCard} <span>• {rows.length} record(s)</span>
+            {activeCard} <span>| {rows.length} record(s)</span>
           </h3>
 
           <div className="table-tools">
@@ -245,7 +245,7 @@ function SubmissionTracking() {
 
                   <td>
                     {row.business_type}
-                    {row.permit_size_label ? ` • ${row.permit_size_label}` : ""}
+                    {row.permit_size_label ? ` | ${row.permit_size_label}` : ""}
                   </td>
 
                   <td>{formatDate(row.date_submitted) || "No date"}</td>
@@ -256,7 +256,7 @@ function SubmissionTracking() {
                         row.compliance_status_label
                       )}`}
                     >
-                      ● {row.compliance_status_label}
+                      {row.compliance_status_label}
                     </span>
                   </td>
                 </tr>

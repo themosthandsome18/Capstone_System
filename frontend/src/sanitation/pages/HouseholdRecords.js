@@ -19,70 +19,88 @@ const statusOptions = [
 ];
 
 function HouseholdRecords() {
-  const { householdRecords, householdDashboardData, loading, error } =
+  const { barangays, householdRecords, loading, error } =
     useSanitationData();
 
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
 
-  const summary = householdDashboardData?.summary || {
-    totalHouseholds: householdRecords.length,
-    withSanitaryFacility: householdRecords.filter(
-      (item) => item.toilet_type !== "none"
-    ).length,
-    sanitaryFacilityCoverage: householdRecords.length
-      ? Math.round(
-          (householdRecords.filter((item) => item.toilet_type !== "none")
-            .length /
-            householdRecords.length) *
-            100
-        )
-      : 0,
-    withWaterAccess: householdRecords.filter((item) =>
-      ["level_2", "level_3"].includes(item.water_level)
-    ).length,
-    waterAccessCoverage: householdRecords.length
-      ? Math.round(
-          (householdRecords.filter((item) =>
-            ["level_2", "level_3"].includes(item.water_level)
-          ).length /
-            householdRecords.length) *
-            100
-        )
-      : 0,
-    atRiskHouseholds: householdRecords.filter(
-      (item) => item.status === "violation"
-    ).length,
-  };
+  const barangayOptions = useMemo(() => {
+    const officialBarangays = (barangays || [])
+      .map((item) => item.name || item)
+      .filter(Boolean);
+    const recordBarangays = Array.from(
+      new Set(
+        householdRecords.map((item) => item.barangay).filter(Boolean)
+      )
+    ).sort();
+    const combined = [...officialBarangays];
+
+    recordBarangays.forEach((barangay) => {
+      if (!combined.includes(barangay)) {
+        combined.push(barangay);
+      }
+    });
+
+    return ["all", ...combined];
+  }, [barangays, householdRecords]);
+
+  const barangayRecords = useMemo(() => {
+    if (barangayFilter === "all") {
+      return householdRecords;
+    }
+
+    return householdRecords.filter((item) => item.barangay === barangayFilter);
+  }, [householdRecords, barangayFilter]);
+
+  const summary = useMemo(
+    () => buildHouseholdSummary(barangayRecords),
+    [barangayRecords]
+  );
 
   const riskByBarangay = useMemo(() => {
-    return householdDashboardData?.riskByBarangay || [];
-  }, [householdDashboardData]);
-  const toiletDistribution = useMemo(() => {
-    return householdDashboardData?.toiletDistribution || {};
-  }, [householdDashboardData]);
+    const names =
+      barangayFilter === "all"
+        ? barangayOptions.filter((barangay) => barangay !== "all")
+        : [barangayFilter];
 
-  const wasteDistribution = useMemo(() => {
-    return householdDashboardData?.wasteDistribution || {};
-  }, [householdDashboardData]);
+    return buildRiskRows(householdRecords, names);
+  }, [householdRecords, barangayOptions, barangayFilter]);
 
-  const waterDistribution = useMemo(() => {
-    return householdDashboardData?.waterDistribution || {};
-  }, [householdDashboardData]);
+  const toiletDistribution = useMemo(
+    () => ({
+      waterSealed: countBy(barangayRecords, "toilet_type", "water_sealed"),
+      pourFlush: countBy(barangayRecords, "toilet_type", "pour_flush"),
+      pitLatrine: countBy(barangayRecords, "toilet_type", "pit_latrine"),
+      none: countBy(barangayRecords, "toilet_type", "none"),
+    }),
+    [barangayRecords]
+  );
 
-  const barangays = useMemo(() => {
-    const uniqueBarangays = new Set(
-      householdRecords.map((item) => item.barangay).filter(Boolean)
-    );
+  const wasteDistribution = useMemo(
+    () => ({
+      collected: countBy(barangayRecords, "waste_disposal", "collected"),
+      composted: countBy(barangayRecords, "waste_disposal", "composted"),
+      burned: countBy(barangayRecords, "waste_disposal", "burned"),
+      dumped: countBy(barangayRecords, "waste_disposal", "dumped"),
+    }),
+    [barangayRecords]
+  );
 
-    return ["all", ...Array.from(uniqueBarangays).sort()];
-  }, [householdRecords]);
+  const waterDistribution = useMemo(
+    () => ({
+      level1: countBy(barangayRecords, "water_level", "level_1"),
+      level2: countBy(barangayRecords, "water_level", "level_2"),
+      level3: countBy(barangayRecords, "water_level", "level_3"),
+    }),
+    [barangayRecords]
+  );
 
   const filteredHouseholds = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return householdRecords.filter((item) => {
+    return barangayRecords.filter((item) => {
       const searchText = [
         item.household_code,
         item.household_head,
@@ -98,21 +116,21 @@ function HouseholdRecords() {
         .toLowerCase();
 
       const matchesSearch = searchText.includes(keyword);
-      const matchesBarangay =
-        barangayFilter === "all" || item.barangay === barangayFilter;
       const matchesStatus =
         statusFilter === "all" || item.status === statusFilter;
 
-      return matchesSearch && matchesBarangay && matchesStatus;
+      return matchesSearch && matchesStatus;
     });
-  }, [householdRecords, search, barangayFilter, statusFilter]);
+  }, [barangayRecords, search, statusFilter]);
 
   const highestRiskBarangay = useMemo(() => {
-    if (!riskByBarangay.length) {
+    const rowsWithRisk = riskByBarangay.filter((item) => item.atRisk > 0);
+
+    if (!rowsWithRisk.length) {
       return null;
     }
 
-    return [...riskByBarangay].sort((a, b) => b.atRisk - a.atRisk)[0];
+    return [...rowsWithRisk].sort((a, b) => b.atRisk - a.atRisk)[0];
   }, [riskByBarangay]);
 
   const maxRiskValue = Math.max(
@@ -368,9 +386,9 @@ function HouseholdRecords() {
           </div>
 
           <div className="household-legend">
-            <span className="yellow">■ Level I</span>
-            <span className="green">■ Level II</span>
-            <span className="dark">■ Level III</span>
+            <span className="yellow">Level I</span>
+            <span className="green">Level II</span>
+            <span className="dark">Level III</span>
           </div>
         </section>
       </div>
@@ -381,9 +399,9 @@ function HouseholdRecords() {
             value={barangayFilter}
             onChange={(event) => setBarangayFilter(event.target.value)}
           >
-            {barangays.map((barangay) => (
+            {barangayOptions.map((barangay) => (
               <option key={barangay} value={barangay}>
-                {barangay === "all" ? "All Barangays" : barangay}
+                {barangay === "all" ? "All Mauban Barangays" : barangay}
               </option>
             ))}
           </select>
@@ -449,7 +467,7 @@ function HouseholdRecords() {
                           row.status_label
                         )}`}
                       >
-                        ● {row.status_label}
+                        {row.status_label}
                       </span>
                     </td>
                   </tr>
@@ -467,7 +485,7 @@ function HouseholdRecords() {
 
         <div className="household-pagination">
           <span>
-            Showing {filteredHouseholds.length} of {householdRecords.length}
+            Showing {filteredHouseholds.length} of {barangayRecords.length}
           </span>
 
           <div>
@@ -482,6 +500,53 @@ function HouseholdRecords() {
       </section>
     </div>
   );
+}
+
+function buildHouseholdSummary(records) {
+  const total = records.length;
+  const withSanitaryFacility = records.filter(
+    (item) => item.toilet_type !== "none"
+  ).length;
+  const withWaterAccess = records.filter((item) =>
+    ["level_2", "level_3"].includes(item.water_level)
+  ).length;
+
+  return {
+    totalHouseholds: total,
+    withSanitaryFacility,
+    sanitaryFacilityCoverage: total
+      ? Math.round((withSanitaryFacility / total) * 100)
+      : 0,
+    withWaterAccess,
+    waterAccessCoverage: total
+      ? Math.round((withWaterAccess / total) * 100)
+      : 0,
+    atRiskHouseholds: records.filter((item) => item.status === "violation")
+      .length,
+  };
+}
+
+function buildRiskRows(records, barangayNames) {
+  return barangayNames.map((barangay) => {
+    const barangayRecords = records.filter((item) => item.barangay === barangay);
+
+    return {
+      barangay,
+      total: barangayRecords.length,
+      atRisk: barangayRecords.filter((item) => item.status === "violation")
+        .length,
+      forCompletion: barangayRecords.filter(
+        (item) => item.status === "for_completion"
+      ).length,
+      goodStanding: barangayRecords.filter(
+        (item) => item.status === "good_standing"
+      ).length,
+    };
+  });
+}
+
+function countBy(records, field, value) {
+  return records.filter((item) => item[field] === value).length;
 }
 
 function HouseholdStat({ title, value, desc, icon, color }) {

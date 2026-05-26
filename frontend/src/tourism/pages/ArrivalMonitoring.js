@@ -9,6 +9,14 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
+import { useState } from "react";
+
+const reportingYearOptions = [
+  { value: "2025", label: "2025" },
+  { value: "2024", label: "2024" },
+  { value: "2026", label: "2026" },
+  { value: "all", label: "All Years" },
+];
 
 function formatDate(value) {
   if (!value) {
@@ -35,11 +43,32 @@ function displayCount(value) {
 }
 
 function ArrivalMonitoring() {
-  const { arrivalMonitoring, loading } = useTourismData();
+  const { arrivalMonitoring, loading, error, refreshArrivalMonitoring } =
+    useTourismData();
+  const [selectedYear, setSelectedYear] = useState(
+    arrivalMonitoring.filters?.year || "2025"
+  );
+  const [arrivalError, setArrivalError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const summary = arrivalMonitoring.summary;
   const rows = arrivalMonitoring.rows;
   const dailyTotals = arrivalMonitoring.dailyTotals;
+
+  async function handleYearChange(event) {
+    const year = event.target.value;
+    setSelectedYear(year);
+    setArrivalError("");
+    setRefreshing(true);
+
+    try {
+      await refreshArrivalMonitoring({ year });
+    } catch (requestError) {
+      setArrivalError(requestError.message || "Unable to load arrival data.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   function handleExport() {
     const headers = [
@@ -72,6 +101,10 @@ function ArrivalMonitoring() {
     return <div className="panel p-10 text-center">Loading arrival data...</div>;
   }
 
+  if (error) {
+    return <div className="panel p-10 text-center">{error}</div>;
+  }
+
   return (
     <div className="arrival-page">
       <div className="arrival-header">
@@ -81,6 +114,20 @@ function ArrivalMonitoring() {
         </div>
 
         <div className="arrival-actions">
+          <select
+            className="dashboard-year-select"
+            aria-label="Arrival reporting year"
+            value={selectedYear}
+            disabled={refreshing}
+            onChange={handleYearChange}
+          >
+            {reportingYearOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
           <button type="button" className="arrival-date-btn">
             <FiCalendar size={15} />
             {formatDate(arrivalMonitoring.reportDate)}
@@ -96,6 +143,10 @@ function ArrivalMonitoring() {
           </button>
         </div>
       </div>
+
+      {arrivalError ? (
+        <p className="tourist-record-error">{arrivalError}</p>
+      ) : null}
 
       <div className="arrival-stats">
         <StatCard

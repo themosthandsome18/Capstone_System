@@ -75,19 +75,27 @@ const statusClassNames = {
   no_show: "noshow",
 };
 
+const reportingYearOptions = [
+  { value: "2025", label: "2025" },
+  { value: "2024", label: "2024" },
+  { value: "2026", label: "2026" },
+  { value: "all", label: "All Years" },
+];
+
 function BookingManagement() {
   const {
-    touristRecords,
+    bookingManagement,
     referenceTables,
     createRecord,
     updateRecord,
     deleteRecord,
     previewOnlineBookingImport,
     importOnlineBookingFile,
+    refreshBookingManagement,
   } = useTourismData();
 
   const { role } = useAuth();
-  const { addEntryRequestId } = useOutletContext() || {};
+  const { addEntryRequestId, globalSearch } = useOutletContext() || {};
   const isAdmin = role === "admin";
 
   const [search, setSearch] = useState("");
@@ -101,8 +109,10 @@ function BookingManagement() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [tableError, setTableError] = useState("");
+  const [loadingRows, setLoadingRows] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState("");
   const [filters, setFilters] = useState({
+    year: "2025",
     status: "",
     resort_id: "",
     region_id: "",
@@ -121,6 +131,47 @@ function BookingManagement() {
     }
   }, [addEntryRequestId]);
 
+  useEffect(() => {
+    if (globalSearch !== undefined) {
+      setSearch(globalSearch);
+      setPage(1);
+    }
+  }, [globalSearch]);
+
+  useEffect(() => {
+    let active = true;
+    const timeout = window.setTimeout(async () => {
+      setLoadingRows(true);
+      setTableError("");
+
+      try {
+        const response = await refreshBookingManagement({
+          ...filters,
+          search,
+          page,
+          pageSize,
+        });
+
+        if (active && response.pagination.page !== page) {
+          setPage(response.pagination.page);
+        }
+      } catch (error) {
+        if (active) {
+          setTableError(getErrorMessage(error));
+        }
+      } finally {
+        if (active) {
+          setLoadingRows(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [filters, page, refreshBookingManagement, search]);
+
   function resolveLabel(collection = [], id, key = "id", valueKey = "name") {
     return (
       collection.find((item) => String(item[key]) === String(id))?.[valueKey] ||
@@ -128,65 +179,16 @@ function BookingManagement() {
     );
   }
 
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return touristRecords.filter((record) => {
-      const matchesStatus = !filters.status || record.status === filters.status;
-      const matchesResort =
-        !filters.resort_id || String(record.resort_id) === String(filters.resort_id);
-      const matchesRegion =
-        !filters.region_id || String(record.region_id) === String(filters.region_id);
-      const matchesProvince =
-        !filters.province_id ||
-        String(record.province_id) === String(filters.province_id);
-      const matchesFrom =
-        !filters.from || String(record.arrival_date || "") >= filters.from;
-      const matchesTo = !filters.to || String(record.arrival_date || "") <= filters.to;
-      const searchText = [
-        record.survey_id,
-        record.full_name,
-        record.contact_number,
-        resolveLabel(referenceTables.countries, record.country_id),
-        resolveLabel(
-          referenceTables.resorts,
-          record.resort_id,
-          "resort_id",
-          "resort_name"
-        ),
-        statusLabels[record.status],
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return (
-        matchesStatus &&
-        matchesResort &&
-        matchesRegion &&
-        matchesProvince &&
-        matchesFrom &&
-        matchesTo &&
-        searchText.includes(normalizedSearch)
-      );
-    });
-  }, [filters, referenceTables, search, touristRecords]);
-
-  const summary = useMemo(() => {
-    return touristRecords.reduce(
-      (totals, record) => ({
-        verifiedEntries: totals.verifiedEntries + 1,
-        arrived: totals.arrived + (record.status === "arrived" ? 1 : 0),
-        noShow: totals.noShow + (record.status === "no_show" ? 1 : 0),
-      }),
-      { verifiedEntries: 0, arrived: 0, noShow: 0 }
-    );
-  }, [touristRecords]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const paginatedRows = filteredRows.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  const bookingRows = bookingManagement.rows || [];
+  const bookingSummary = bookingManagement.summary || {};
+  const bookingPagination = bookingManagement.pagination || {};
+  const summary = {
+    verifiedEntries: bookingSummary.verifiedEntries || 0,
+    arrived: bookingSummary.arrived || 0,
+    noShow: bookingSummary.noShow || 0,
+  };
+  const totalPages = bookingPagination.totalPages || 1;
+  const paginatedRows = bookingRows;
   const provinceOptions = useMemo(() => {
     if (!form.region_id) {
       return referenceTables.provinces;
@@ -389,6 +391,32 @@ function BookingManagement() {
     return error?.message || "Unable to save tourist record.";
   }
 
+  async function loadBookingRows(overrides = {}) {
+    setLoadingRows(true);
+    setTableError("");
+
+    try {
+      const response = await refreshBookingManagement({
+        ...filters,
+        search,
+        page,
+        pageSize,
+        ...overrides,
+      });
+
+      if (response.pagination.page !== page) {
+        setPage(response.pagination.page);
+      }
+
+      return response;
+    } catch (error) {
+      setTableError(getErrorMessage(error));
+      return null;
+    } finally {
+      setLoadingRows(false);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -412,6 +440,7 @@ function BookingManagement() {
 
       closeForm();
       setPage(1);
+      await loadBookingRows({ page: 1 });
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {
@@ -424,10 +453,15 @@ function BookingManagement() {
     setUpdatingStatus(`${record.survey_id}:${nextStatus}`);
 
     try {
-      await updateRecord(record.survey_id, { status: nextStatus });
+      await updateRecord(
+        record.survey_id,
+        { status: nextStatus },
+        { refreshComputed: false }
+      );
+      setUpdatingStatus("");
+      loadBookingRows();
     } catch (error) {
       setTableError(getErrorMessage(error));
-    } finally {
       setUpdatingStatus("");
     }
   }
@@ -444,6 +478,7 @@ function BookingManagement() {
       await deleteRecord(deleteTarget.survey_id);
       setDeleteTarget(null);
       setPage(1);
+      await loadBookingRows({ page: 1 });
     } catch (error) {
       setDeleteError(getErrorMessage(error));
     } finally {
@@ -515,6 +550,7 @@ function BookingManagement() {
       setImportPreview(result);
       setImportFile(null);
       setPage(1);
+      await loadBookingRows({ page: 1 });
     } catch (error) {
       setImportError(getErrorMessage(error));
     } finally {
@@ -549,22 +585,23 @@ function BookingManagement() {
       "Status",
     ];
 
-    const rows = filteredRows.map((record) => [
+    const rows = bookingRows.map((record) => [
       record.survey_id,
       record.full_name,
       record.contact_number,
-      resolveLabel(referenceTables.countries, record.country_id),
-      resolveLabel(referenceTables.regions, record.region_id),
-      resolveLabel(referenceTables.provinces, record.province_id),
+      record.country_name || resolveLabel(referenceTables.countries, record.country_id),
+      record.region_name || resolveLabel(referenceTables.regions, record.region_id),
+      record.province_name || resolveLabel(referenceTables.provinces, record.province_id),
       record.total_visitors,
       record.arrival_date,
-      resolveLabel(referenceTables.itineraries, record.itinerary_id),
-      resolveLabel(
-        referenceTables.resorts,
-        record.resort_id,
-        "resort_id",
-        "resort_name"
-      ),
+      record.itinerary_name || resolveLabel(referenceTables.itineraries, record.itinerary_id),
+      record.resort_name ||
+        resolveLabel(
+          referenceTables.resorts,
+          record.resort_id,
+          "resort_id",
+          "resort_name"
+        ),
       statusLabels[record.status] || "Pending",
     ]);
 
@@ -669,6 +706,17 @@ function BookingManagement() {
 
       <div className="booking-filter-grid">
         <select
+          value={filters.year}
+          onChange={(event) => updateFilter("year", event.target.value)}
+        >
+          {reportingYearOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={filters.status}
           onChange={(event) => updateFilter("status", event.target.value)}
         >
@@ -765,21 +813,26 @@ function BookingManagement() {
 
                       <td>
                         <strong>
-                          {resolveLabel(referenceTables.countries, row.country_id)}
+                          {row.country_name ||
+                            resolveLabel(referenceTables.countries, row.country_id)}
                         </strong>
                       </td>
 
                       <td>{row.total_visitors}</td>
                       <td>{formatDate(row.arrival_date)}</td>
-                      <td>{resolveLabel(referenceTables.itineraries, row.itinerary_id)}</td>
+                      <td>
+                        {row.itinerary_name ||
+                          resolveLabel(referenceTables.itineraries, row.itinerary_id)}
+                      </td>
 
                       <td>
-                        {resolveLabel(
-                          referenceTables.resorts,
-                          row.resort_id,
-                          "resort_id",
-                          "resort_name"
-                        )}
+                        {row.resort_name ||
+                          resolveLabel(
+                            referenceTables.resorts,
+                            row.resort_id,
+                            "resort_id",
+                            "resort_name"
+                          )}
                       </td>
 
                       <td>
@@ -861,7 +914,7 @@ function BookingManagement() {
               ) : (
                 <tr>
                   <td colSpan="9" style={{ textAlign: "center" }}>
-                    No booking records found.
+                    {loadingRows ? "Loading booking records..." : "No booking records found."}
                   </td>
                 </tr>
               )}
@@ -872,8 +925,11 @@ function BookingManagement() {
 
       <div className="booking-pagination">
         <p>
-          Showing <strong>{paginatedRows.length}</strong> of{" "}
-          <strong>{filteredRows.length}</strong> total records
+          Showing{" "}
+          <strong>
+            {bookingPagination.showingStart || 0}-{bookingPagination.showingEnd || 0}
+          </strong>{" "}
+          of <strong>{bookingPagination.total || 0}</strong> filtered records
         </p>
 
         <div className="pagination-actions">

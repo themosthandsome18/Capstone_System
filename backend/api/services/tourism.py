@@ -30,6 +30,9 @@ from ..serializers import (
 
 
 ARRIVAL_FEE_PER_VISITOR = 300
+DEFAULT_TOURISM_REPORTING_YEAR = "2025"
+TOURISM_REPORTING_YEAR_CHOICES = ("2024", "2025", "2026")
+ALL_TOURISM_REPORTING_YEARS = "all"
 
 
 REFERENCE_TABLE_SERIALIZERS = {
@@ -44,6 +47,39 @@ REFERENCE_TABLE_SERIALIZERS = {
 }
 
 
+TOURIST_RECORD_PAYLOAD_FIELDS = [
+    "survey_id",
+    "submitted_at",
+    "email",
+    "consent_confirmed",
+    "full_name",
+    "contact_number",
+    "country_id",
+    "region_id",
+    "province_id",
+    "country_of_origin",
+    "foreigner_count",
+    "filipino_count",
+    "maubanin_count",
+    "total_visitors",
+    "total_male",
+    "total_female",
+    "special_group_count",
+    "age_0_7",
+    "age_8_59",
+    "age_60_above",
+    "arrival_date",
+    "itinerary_id",
+    "resort_id",
+    "travel_mode_id",
+    "boat_type_id",
+    "boat_capacity_fare",
+    "parking_space",
+    "visit_purpose_id",
+    "status",
+]
+
+
 def build_reference_tables_payload():
     payload = {}
 
@@ -53,12 +89,73 @@ def build_reference_tables_payload():
     return payload
 
 
-def build_arrival_monitoring_payload():
-    records = (
-        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
-        .select_related("itinerary", "resort")
-        .order_by("-arrival_date", "survey_id")
-    )
+def build_tourist_records_payload(queryset=None):
+    queryset = queryset or TouristRecord.objects.all()
+    rows = []
+
+    for record in queryset.values(*TOURIST_RECORD_PAYLOAD_FIELDS):
+        submitted_at = record["submitted_at"]
+        arrival_date = record["arrival_date"]
+        rows.append(
+            {
+                **record,
+                "submitted_at": submitted_at.isoformat() if submitted_at else None,
+                "arrival_date": arrival_date.isoformat() if arrival_date else None,
+            }
+        )
+
+    return rows
+
+
+def parse_positive_int(value, default):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+
+    return parsed if parsed > 0 else default
+
+
+def get_reporting_year(params=None):
+    params = params or {}
+    raw_year = str(
+        params.get("year", DEFAULT_TOURISM_REPORTING_YEAR) or ""
+    ).strip()
+
+    if raw_year.lower() == ALL_TOURISM_REPORTING_YEARS:
+        return ALL_TOURISM_REPORTING_YEARS
+
+    if raw_year in TOURISM_REPORTING_YEAR_CHOICES:
+        return raw_year
+
+    return DEFAULT_TOURISM_REPORTING_YEAR
+
+
+def apply_reporting_year(queryset, reporting_year):
+    if reporting_year == ALL_TOURISM_REPORTING_YEARS:
+        return queryset
+
+    return queryset.filter(arrival_date__year=int(reporting_year))
+
+
+def build_arrival_monitoring_payload(params=None):
+    params = params or {}
+    reporting_year = get_reporting_year(params)
+    date_from = (params.get("from") or "").strip()
+    date_to = (params.get("to") or "").strip()
+
+    records = apply_reporting_year(
+        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
+        reporting_year,
+    ).select_related("itinerary", "resort")
+
+    if date_from:
+        records = records.filter(arrival_date__gte=date_from)
+
+    if date_to:
+        records = records.filter(arrival_date__lte=date_to)
+
+    records = records.order_by("-arrival_date", "survey_id")
 
     rows = []
     totals = {
@@ -99,6 +196,11 @@ def build_arrival_monitoring_payload():
     latest_arrival = records.first()
 
     return {
+        "filters": {
+            "year": reporting_year,
+            "from": date_from,
+            "to": date_to,
+        },
         "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
         "reportDate": latest_arrival.arrival_date.isoformat() if latest_arrival else None,
         "summary": totals,
@@ -115,16 +217,18 @@ def build_arrival_monitoring_payload():
 
 def build_booking_management_payload(params=None):
     params = params or {}
-    records = TouristRecord.objects.select_related(
-        "country",
-        "region",
-        "province",
-        "resort",
-    ).all()
+    reporting_year = get_reporting_year(params)
+    records = apply_reporting_year(TouristRecord.objects.all(), reporting_year)
 
     search = (params.get("search") or "").strip()
     status_filter = (params.get("status") or "").strip()
     resort_id = (params.get("resort_id") or "").strip()
+    region_id = (params.get("region_id") or "").strip()
+    province_id = (params.get("province_id") or "").strip()
+    date_from = (params.get("from") or "").strip()
+    date_to = (params.get("to") or "").strip()
+    page = parse_positive_int(params.get("page"), 1)
+    page_size = min(parse_positive_int(params.get("page_size"), 10), 100)
 
     if search:
         records = records.filter(
@@ -141,90 +245,229 @@ def build_booking_management_payload(params=None):
     if resort_id:
         records = records.filter(resort_id=resort_id)
 
-    rows = []
-    for record in records:
-        rows.append(
-            {
-                "survey_id": record.survey_id,
-                "full_name": record.full_name,
-                "contact_number": record.contact_number,
-                "country_id": record.country_id,
-                "country_name": record.country.name,
-                "region_id": record.region_id,
-                "region_name": record.region.name,
-                "province_id": record.province_id,
-                "province_name": record.province.name,
-                "country_of_origin": record.country_of_origin,
-                "total_visitors": record.total_visitors,
-                "arrival_date": record.arrival_date.isoformat(),
-                "resort_id": record.resort_id,
-                "resort_name": record.resort.resort_name,
-                "parking_space": record.parking_space,
-                "status": record.status,
-                "status_label": record.get_status_display(),
-            }
-        )
+    if region_id:
+        records = records.filter(region_id=region_id)
 
-    all_records = TouristRecord.objects.all()
+    if province_id:
+        records = records.filter(province_id=province_id)
+
+    if date_from:
+        records = records.filter(arrival_date__gte=date_from)
+
+    if date_to:
+        records = records.filter(arrival_date__lte=date_to)
+
+    filtered_count = records.count()
+    total_pages = max(1, (filtered_count + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    offset = (page - 1) * page_size
+    records = records.order_by("-arrival_date", "survey_id")
+    page_records = records[offset : offset + page_size]
+
+    status_labels = dict(TouristRecord._meta.get_field("status").choices)
+    rows = [
+        {
+            "survey_id": record["survey_id"],
+            "submitted_at": (
+                record["submitted_at"].isoformat()
+                if record["submitted_at"]
+                else None
+            ),
+            "email": record["email"],
+            "consent_confirmed": record["consent_confirmed"],
+            "full_name": record["full_name"],
+            "contact_number": record["contact_number"],
+            "country_id": record["country_id"],
+            "country_name": record["country__name"],
+            "region_id": record["region_id"],
+            "region_name": record["region__name"],
+            "province_id": record["province_id"],
+            "province_name": record["province__name"],
+            "country_of_origin": record["country_of_origin"],
+            "foreigner_count": record["foreigner_count"],
+            "filipino_count": record["filipino_count"],
+            "maubanin_count": record["maubanin_count"],
+            "total_visitors": record["total_visitors"],
+            "total_male": record["total_male"],
+            "total_female": record["total_female"],
+            "special_group_count": record["special_group_count"],
+            "age_0_7": record["age_0_7"],
+            "age_8_59": record["age_8_59"],
+            "age_60_above": record["age_60_above"],
+            "arrival_date": record["arrival_date"].isoformat(),
+            "itinerary_id": record["itinerary_id"],
+            "itinerary_name": record["itinerary__name"],
+            "resort_id": record["resort_id"],
+            "resort_name": record["resort__resort_name"],
+            "travel_mode_id": record["travel_mode_id"],
+            "travel_mode_name": record["travel_mode__name"],
+            "boat_type_id": record["boat_type_id"],
+            "boat_type_name": record["boat_type__name"],
+            "boat_capacity_fare": record["boat_capacity_fare"],
+            "parking_space": record["parking_space"],
+            "visit_purpose_id": record["visit_purpose_id"],
+            "visit_purpose_name": record["visit_purpose__name"],
+            "status": record["status"],
+            "status_label": status_labels.get(record["status"], record["status"]),
+        }
+        for record in page_records.values(
+            "survey_id",
+            "submitted_at",
+            "email",
+            "consent_confirmed",
+            "full_name",
+            "contact_number",
+            "country_id",
+            "country__name",
+            "region_id",
+            "region__name",
+            "province_id",
+            "province__name",
+            "country_of_origin",
+            "foreigner_count",
+            "filipino_count",
+            "maubanin_count",
+            "total_visitors",
+            "total_male",
+            "total_female",
+            "special_group_count",
+            "age_0_7",
+            "age_8_59",
+            "age_60_above",
+            "arrival_date",
+            "itinerary_id",
+            "itinerary__name",
+            "resort_id",
+            "resort__resort_name",
+            "travel_mode_id",
+            "travel_mode__name",
+            "boat_type_id",
+            "boat_type__name",
+            "boat_capacity_fare",
+            "parking_space",
+            "visit_purpose_id",
+            "visit_purpose__name",
+            "status",
+        )
+    ]
+
+    summary_records = apply_reporting_year(
+        TouristRecord.objects.all(),
+        reporting_year,
+    )
+    summary = summary_records.aggregate(
+        verifiedEntries=Count("survey_id"),
+        pending=Count("survey_id", filter=Q(status=BOOKING_STATUS_PENDING)),
+        arrived=Count("survey_id", filter=Q(status=BOOKING_STATUS_ARRIVED)),
+        noShow=Count("survey_id", filter=Q(status=BOOKING_STATUS_NO_SHOW)),
+    )
 
     return {
         "filters": {
+            "year": reporting_year,
             "search": search,
             "status": status_filter,
             "resort_id": resort_id,
+            "region_id": region_id,
+            "province_id": province_id,
+            "from": date_from,
+            "to": date_to,
         },
         "summary": {
-            "verifiedEntries": all_records.count(),
-            "pending": all_records.filter(status=BOOKING_STATUS_PENDING).count(),
-            "arrived": all_records.filter(status=BOOKING_STATUS_ARRIVED).count(),
-            "noShow": all_records.filter(status=BOOKING_STATUS_NO_SHOW).count(),
+            "verifiedEntries": summary["verifiedEntries"],
+            "pending": summary["pending"],
+            "arrived": summary["arrived"],
+            "noShow": summary["noShow"],
+        },
+        "pagination": {
+            "page": page,
+            "pageSize": page_size,
+            "total": filtered_count,
+            "totalPages": total_pages,
+            "hasPrevious": page > 1,
+            "hasNext": page < total_pages,
+            "showingStart": offset + 1 if filtered_count else 0,
+            "showingEnd": min(offset + page_size, filtered_count),
         },
         "rows": rows,
     }
 
 
-def build_dashboard_payload():
-    all_records = TouristRecord.objects.all()
-    arrived_records = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED
-    ).select_related("itinerary", "province", "resort")
+def build_dashboard_payload(params=None):
+    reporting_year = get_reporting_year(params)
+    all_records = apply_reporting_year(TouristRecord.objects.all(), reporting_year)
+    arrived_records = apply_reporting_year(
+        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
+        reporting_year,
+    )
     latest_date = all_records.aggregate(latest=Max("arrival_date"))["latest"]
     reporting_date = latest_date or timezone.localdate()
     week_start = reporting_date - timedelta(days=6)
     month_start = reporting_date.replace(day=1)
 
-    today_records = arrived_records.filter(arrival_date=reporting_date)
-    week_records = arrived_records.filter(arrival_date__range=(week_start, reporting_date))
     month_records = arrived_records.filter(arrival_date__gte=month_start)
-    pending_for_date = all_records.filter(
-        status=BOOKING_STATUS_PENDING,
-        arrival_date=reporting_date,
-    ).count()
-    no_show_count = all_records.filter(status=BOOKING_STATUS_NO_SHOW).count()
 
-    trend_labels = []
-    trend_values = []
-    for offset in range(6, -1, -1):
-        day = reporting_date - timedelta(days=offset)
-        trend_labels.append(day.strftime("%b %d"))
-        trend_values.append(sum_visitors(arrived_records.filter(arrival_date=day)))
-
-    classification = arrived_records.aggregate(
+    record_summary = all_records.aggregate(
+        total_bookings=Count("survey_id"),
+        pending_for_date=Count(
+            "survey_id",
+            filter=Q(
+                status=BOOKING_STATUS_PENDING,
+                arrival_date=reporting_date,
+            ),
+        ),
+        no_show_count=Count(
+            "survey_id",
+            filter=Q(status=BOOKING_STATUS_NO_SHOW),
+        ),
+    )
+    arrived_summary = arrived_records.aggregate(
+        today_arrivals=Sum(
+            "total_visitors",
+            filter=Q(arrival_date=reporting_date),
+        ),
+        week_arrivals=Sum(
+            "total_visitors",
+            filter=Q(arrival_date__range=(week_start, reporting_date)),
+        ),
+        month_arrivals=Sum(
+            "total_visitors",
+            filter=Q(arrival_date__gte=month_start),
+        ),
+        total_arrivals=Sum("total_visitors"),
         filipino=Sum("filipino_count"),
         maubanin=Sum("maubanin_count"),
         foreign=Sum("foreigner_count"),
-    )
-    gender = arrived_records.aggregate(
         male=Sum("total_male"),
         female=Sum("total_female"),
     )
 
+    trend_labels = []
+    trend_values = []
+    trend_values_by_date = {
+        item["arrival_date"]: item["total"] or 0
+        for item in arrived_records.filter(
+            arrival_date__range=(week_start, reporting_date),
+        )
+        .values("arrival_date")
+        .annotate(total=Sum("total_visitors"))
+    }
+    for offset in range(6, -1, -1):
+        day = reporting_date - timedelta(days=offset)
+        trend_labels.append(day.strftime("%b %d"))
+        trend_values.append(trend_values_by_date.get(day, 0))
+
     day_tour = 0
     overnight = 0
-    for record in arrived_records:
-        record_overnight, record_same_day = get_stay_counts(record)
-        day_tour += record_same_day
-        overnight += record_overnight
+    for item in (
+        arrived_records.values("itinerary__name")
+        .annotate(total=Sum("total_visitors"))
+    ):
+        itinerary_name = (item["itinerary__name"] or "").lower()
+        if "day" in itinerary_name or "same" in itinerary_name:
+            day_tour += item["total"] or 0
+        else:
+            overnight += item["total"] or 0
 
     duplicate_contacts = (
         all_records.exclude(contact_number="")
@@ -233,9 +476,9 @@ def build_dashboard_payload():
         .filter(total__gt=1)
         .count()
     )
-    verified_entries = all_records.count()
 
-    total_revenue = sum_visitors(arrived_records) * ARRIVAL_FEE_PER_VISITOR
+    total_arrivals = arrived_summary["total_arrivals"] or 0
+    total_revenue = total_arrivals * ARRIVAL_FEE_PER_VISITOR
     top_resort = (
         month_records.values("resort__resort_name")
         .annotate(visitors=Sum("total_visitors"))
@@ -248,17 +491,21 @@ def build_dashboard_payload():
         .order_by("-visitors", "province__name")
         .first()
     )
-    total_bookings = all_records.count()
+    total_bookings = record_summary["total_bookings"] or 0
+    no_show_count = record_summary["no_show_count"] or 0
 
     return {
+        "filters": {
+            "year": reporting_year,
+        },
         "reportingDate": reporting_date.isoformat(),
         "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
         "metrics": {
-            "todayArrivals": sum_visitors(today_records),
-            "weekArrivals": sum_visitors(week_records),
-            "monthArrivals": sum_visitors(month_records),
+            "todayArrivals": arrived_summary["today_arrivals"] or 0,
+            "weekArrivals": arrived_summary["week_arrivals"] or 0,
+            "monthArrivals": arrived_summary["month_arrivals"] or 0,
             "totalRevenueCollected": total_revenue,
-            "pendingForReportingDate": pending_for_date,
+            "pendingForReportingDate": record_summary["pending_for_date"] or 0,
             "noShowRate": round((no_show_count / total_bookings) * 100, 1)
             if total_bookings
             else 0,
@@ -274,20 +521,20 @@ def build_dashboard_payload():
             "arrivals": trend_values,
         },
         "classification": {
-            "filipino": classification["filipino"] or 0,
-            "maubanin": classification["maubanin"] or 0,
-            "foreign": classification["foreign"] or 0,
+            "filipino": arrived_summary["filipino"] or 0,
+            "maubanin": arrived_summary["maubanin"] or 0,
+            "foreign": arrived_summary["foreign"] or 0,
         },
         "gender": {
-            "male": gender["male"] or 0,
-            "female": gender["female"] or 0,
+            "male": arrived_summary["male"] or 0,
+            "female": arrived_summary["female"] or 0,
         },
         "stayType": {
             "dayTour": day_tour,
             "overnight": overnight,
         },
         "validation": {
-            "verifiedEntries": verified_entries,
+            "verifiedEntries": total_bookings,
             "invalidEntries": 0,
             "duplicateEntries": duplicate_contacts,
         },
@@ -298,17 +545,23 @@ def build_reports_payload(params=None):
     params = params or {}
 
     report_type = params.get("type", "resort")
+    reporting_year = get_reporting_year(params)
     date_from = params.get("from")
     date_to = params.get("to")
     resort_id = params.get("resort_id")
+    include_questions = params.get("include_questions", True)
+    if isinstance(include_questions, str):
+        include_questions = include_questions.lower() not in {"0", "false", "no"}
 
-    records = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED
+    records = apply_reporting_year(
+        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
+        reporting_year,
     ).select_related("province", "resort", "travel_mode", "visit_purpose")
 
     if report_type == "no_show":
-        records = TouristRecord.objects.filter(
-            status=BOOKING_STATUS_NO_SHOW
+        records = apply_reporting_year(
+            TouristRecord.objects.filter(status=BOOKING_STATUS_NO_SHOW),
+            reporting_year,
         ).select_related("province", "resort", "travel_mode", "visit_purpose")
 
     if date_from:
@@ -466,12 +719,21 @@ def build_reports_payload(params=None):
             )
 
     else:
-        for resort in Resort.objects.order_by("resort_name"):
-            if resort_id and str(resort.resort_id) != str(resort_id):
-                continue
+        resort_queryset = Resort.objects.order_by("resort_name")
+        resort_totals = {
+            item["resort_id"]: item["visitors"] or 0
+            for item in records.values("resort_id")
+            .annotate(visitors=Sum("total_visitors"))
+        }
 
-            resort_records = records.filter(resort=resort)
-            visitors = resort_records.aggregate(total=Sum("total_visitors"))["total"] or 0
+        if resort_id:
+            resort_queryset = resort_queryset.filter(resort_id=resort_id)
+        else:
+            resort_queryset = resort_queryset.filter(resort_id__in=resort_totals.keys())
+
+        for resort in resort_queryset:
+            visitors = resort_totals.get(resort.resort_id, 0)
+
             revenue = visitors * ARRIVAL_FEE_PER_VISITOR
 
             totals["visitors"] += visitors
@@ -488,9 +750,13 @@ def build_reports_payload(params=None):
                 }
             )
 
+        if not resort_id:
+            rows.sort(key=lambda row: (-row["visitors"], row["name"]))
+
     return {
         "type": report_type,
         "filters": {
+            "year": reporting_year,
             "type": report_type,
             "from": date_from or "",
             "to": date_to or "",
@@ -498,7 +764,9 @@ def build_reports_payload(params=None):
         },
         "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
         "rows": rows,
-        "questionAnswers": build_tourism_question_answers(params),
+        "questionAnswers": build_tourism_question_answers(params)
+        if include_questions
+        else [],
         "totals": {
             "visitors": totals["visitors"],
             "revenue": totals["revenue"],
@@ -511,13 +779,18 @@ def build_reports_payload(params=None):
 
 def build_tourism_question_answers(params=None):
     params = params or {}
+    reporting_year = get_reporting_year(params)
     date_from = params.get("from")
     date_to = params.get("to")
 
-    arrived = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED
+    arrived = apply_reporting_year(
+        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
+        reporting_year,
     ).select_related("itinerary", "province", "region", "country", "resort", "visit_purpose")
-    all_records = TouristRecord.objects.select_related("itinerary", "resort")
+    all_records = apply_reporting_year(
+        TouristRecord.objects.select_related("itinerary", "resort"),
+        reporting_year,
+    )
 
     if date_from:
         arrived = arrived.filter(arrival_date__gte=date_from)
@@ -529,8 +802,8 @@ def build_tourism_question_answers(params=None):
 
     total_visitors = sum_visitors(arrived)
     top_resort = top_group(arrived, "resort__resort_name")
-    previous_month, current_month = get_month_comparison()
-    peak_month = get_peak_month()
+    previous_month, current_month = get_month_comparison(arrived)
+    peak_month = get_peak_month(arrived)
     classification = arrived.aggregate(
         filipino=Sum("filipino_count"),
         maubanin=Sum("maubanin_count"),
@@ -567,7 +840,7 @@ def build_tourism_question_answers(params=None):
         ]
     )
     top_purpose = top_group(arrived, "visit_purpose__name")
-    demand = get_recent_demand_signal()
+    demand = get_recent_demand_signal(arrived)
     validation = get_validation_summary(all_records)
     average_stay = round(stay_nights_total / total_visitors, 1) if total_visitors else 0
 
@@ -663,7 +936,7 @@ def build_tourism_question_answers(params=None):
             "id": "high_demand",
             "question": "Which resorts or destinations may experience high visitor demand based on recent arrival trends?",
             "answer": demand,
-            "visual": get_recent_demand_visual(),
+            "visual": get_recent_demand_visual(arrived),
         },
         {
             "id": "validation",
@@ -737,8 +1010,10 @@ def format_top_answer(item, denominator, unit):
     return f"{item['name']} leads with {item['total']} {unit}, equal to {percentage}% of the selected total."
 
 
-def get_month_comparison():
-    latest_date = TouristRecord.objects.aggregate(latest=Max("arrival_date"))["latest"]
+def get_month_comparison(arrived_records=None):
+    if arrived_records is None:
+        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return {"label": "Previous month", "total": 0}, {"label": "Current month", "total": 0}
 
@@ -746,13 +1021,11 @@ def get_month_comparison():
     previous_end = current_start - timedelta(days=1)
     previous_start = previous_end.replace(day=1)
 
-    current = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED,
+    current = arrived_records.filter(
         arrival_date__gte=current_start,
         arrival_date__lte=latest_date,
     )
-    previous = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED,
+    previous = arrived_records.filter(
         arrival_date__gte=previous_start,
         arrival_date__lte=previous_end,
     )
@@ -772,9 +1045,13 @@ def format_month_comparison(previous, current):
     )
 
 
-def get_peak_month():
+def get_peak_month(arrived_records=None):
     monthly_data = {}
-    records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    records = (
+        arrived_records
+        if arrived_records is not None
+        else TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    )
 
     for record in records:
         key = record.arrival_date.strftime("%Y-%m")
@@ -790,20 +1067,20 @@ def get_peak_month():
     return max(monthly_data.values(), key=lambda item: item["total"])
 
 
-def get_recent_demand_signal():
-    latest_date = TouristRecord.objects.aggregate(latest=Max("arrival_date"))["latest"]
+def get_recent_demand_signal(arrived_records=None):
+    if arrived_records is None:
+        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return "No recent arrival trend is available yet."
 
     recent_start = latest_date - timedelta(days=29)
     previous_start = recent_start - timedelta(days=30)
     previous_end = recent_start - timedelta(days=1)
-    recent = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED,
+    recent = arrived_records.filter(
         arrival_date__range=(recent_start, latest_date),
     )
-    previous = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED,
+    previous = arrived_records.filter(
         arrival_date__range=(previous_start, previous_end),
     )
     recent_top = top_group(recent, "resort__resort_name")
@@ -820,22 +1097,22 @@ def get_recent_demand_signal():
     )
 
 
-def get_recent_demand_visual():
-    latest_date = TouristRecord.objects.aggregate(latest=Max("arrival_date"))["latest"]
+def get_recent_demand_visual(arrived_records=None):
+    if arrived_records is None:
+        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return {"type": "comparison", "items": []}
 
     recent_start = latest_date - timedelta(days=29)
     previous_start = recent_start - timedelta(days=30)
     previous_end = recent_start - timedelta(days=1)
-    recent = TouristRecord.objects.filter(
-        status=BOOKING_STATUS_ARRIVED,
+    recent = arrived_records.filter(
         arrival_date__range=(recent_start, latest_date),
     )
     recent_top = top_group(recent, "resort__resort_name")
     previous_total = sum_visitors(
-        TouristRecord.objects.filter(
-            status=BOOKING_STATUS_ARRIVED,
+        arrived_records.filter(
             arrival_date__range=(previous_start, previous_end),
             resort__resort_name=recent_top["name"],
         )

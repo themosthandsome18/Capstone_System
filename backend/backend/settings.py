@@ -117,6 +117,12 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 
 # Database
+DATABASE_OPTIONS = {}
+DB_SSLMODE = config("DB_SSLMODE", default="")
+
+if DB_SSLMODE:
+    DATABASE_OPTIONS["sslmode"] = DB_SSLMODE
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -125,6 +131,7 @@ DATABASES = {
         "PASSWORD": config("DB_PASSWORD"),
         "HOST": config("DB_HOST", default="localhost"),
         "PORT": config("DB_PORT", default="5433"),
+        "OPTIONS": DATABASE_OPTIONS,
     }
 }
 

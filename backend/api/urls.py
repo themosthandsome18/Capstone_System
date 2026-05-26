@@ -10,11 +10,18 @@ from .views import (
     feedback_detail,
     feedback_list,
     health_check,
+    household_barangay_list,
     household_bootstrap_data,
     household_dashboard_data,
     household_record_detail,
     household_record_list,
     reference_tables,
+    mobile_destination_detail,
+    mobile_destination_list,
+    mobile_feedback_submit,
+    mobile_sanitation_report_submit,
+    mobile_tourism_bootstrap,
+    mobile_tourist_registration,
     online_booking_import,
     reports_data,
     resort_detail,
@@ -44,6 +51,14 @@ urlpatterns = [
     path("auth/logout/", logout_view),
     path("activity-logs/", activity_log_list),
     path("bootstrap/", bootstrap_data),
+
+    # Public mobile app routes
+    path("mobile/tourism/bootstrap/", mobile_tourism_bootstrap),
+    path("mobile/tourism/destinations/", mobile_destination_list),
+    path("mobile/tourism/destinations/<int:resort_id>/", mobile_destination_detail),
+    path("mobile/tourism/register-visit/", mobile_tourist_registration),
+    path("mobile/tourism/feedback/", mobile_feedback_submit),
+    path("mobile/sanitation/reports/", mobile_sanitation_report_submit),
 
     # Tourism routes
     path("reference-tables/", reference_tables),
@@ -77,6 +92,7 @@ urlpatterns = [
 
     #Household Routes
     path("households/bootstrap/", household_bootstrap_data),
+    path("households/barangays/", household_barangay_list),
     path("households/dashboard/", household_dashboard_data),
     path("households/records/", household_record_list),
     path("households/records/<int:household_id>/", household_record_detail),

@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 
 from .models import (
     ActivityLog,
+    Barangay,
     BoatType,
     Country,
     FeedbackEntry,
@@ -96,6 +97,19 @@ class ActivityLogSerializer(serializers.ModelSerializer):
             return "Deleted user"
 
         return obj.user.get_full_name() or obj.user.username
+
+
+class BarangaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Barangay
+        fields = [
+            "id",
+            "name",
+            "municipality",
+            "province",
+            "display_order",
+            "is_active",
+        ]
 
 
 class CountrySerializer(serializers.ModelSerializer):
@@ -414,7 +428,30 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
         }
 
     def get_open_complaints(self, obj):
-        return obj.complaints.exclude(status__in=["resolved", "rejected"]).count()
+        cached_count = getattr(obj, "_serializer_open_complaints_count", None)
+        if cached_count is not None:
+            return cached_count
+
+        annotated_count = getattr(obj, "open_complaints_count", None)
+        if annotated_count is not None:
+            count = annotated_count
+        else:
+            prefetched_complaints = getattr(obj, "_prefetched_objects_cache", {}).get(
+                "complaints"
+            )
+            if prefetched_complaints is not None:
+                count = sum(
+                    1
+                    for complaint in prefetched_complaints
+                    if complaint.status not in ["resolved", "rejected"]
+                )
+            else:
+                count = obj.complaints.exclude(
+                    status__in=["resolved", "rejected"]
+                ).count()
+
+        obj._serializer_open_complaints_count = count
+        return count
 
     def get_risk_score(self, obj):
         score = 0
@@ -595,6 +632,9 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             "priority",
             "priority_label",
             "description",
+            "photo_documentation",
+            "latitude",
+            "longitude",
             "action_taken",
             "resolved_date",
             "created_at",

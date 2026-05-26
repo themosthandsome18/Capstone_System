@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FiAlertTriangle,
   FiCheckCircle,
@@ -53,6 +53,12 @@ function ComplaintsManagement() {
   const barangays = complaintData?.barangays || buildBarangays(establishments);
   const byCategory = complaintData?.byCategory || [];
   const maxCategory = Math.max(...byCategory.map((item) => item.total || 0), 1);
+
+  useEffect(() => {
+    if (!complaintData) {
+      refreshComplaintData(filters);
+    }
+  }, [complaintData, filters, refreshComplaintData]);
 
   const establishmentOptions = useMemo(
     () =>

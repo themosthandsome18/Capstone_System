@@ -35,6 +35,8 @@ function InspectionManagement() {
   const [showForm, setShowForm] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dueFilter, setDueFilter] = useState("all");
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -62,20 +64,20 @@ function InspectionManagement() {
   const filteredRows = useMemo(() => {
     const keyword = searchTerm.toLowerCase().trim();
 
-    if (!keyword) {
-      return rows;
-    }
-
     return rows.filter((row) => {
-      return (
+      const matchesSearch =
         row.business_name?.toLowerCase().includes(keyword) ||
         row.address?.toLowerCase().includes(keyword) ||
         row.barangay?.toLowerCase().includes(keyword) ||
         row.business_type_name?.toLowerCase().includes(keyword) ||
-        row.compliance_status_label?.toLowerCase().includes(keyword)
-      );
+        row.compliance_status_label?.toLowerCase().includes(keyword);
+      const matchesStatus =
+        statusFilter === "all" || row.compliance_status === statusFilter;
+      const matchesDue = matchesDueFilter(row.nextDueDate, dueFilter);
+
+      return matchesSearch && matchesStatus && matchesDue;
     });
-  }, [rows, searchTerm]);
+  }, [dueFilter, rows, searchTerm, statusFilter]);
 
   const dueWithinSevenDays = rows.filter((row) => {
     if (!row.nextDueDate) return false;
@@ -132,27 +134,124 @@ function InspectionManagement() {
   }
 
   function printInspectionReport(row) {
-    const report = [
-      "SANITARY INSPECTION REPORT",
-      "",
-      `Establishment: ${row.business_name}`,
-      `Business Type: ${row.business_type_name}`,
-      `Barangay: ${row.barangay}`,
-      `Compliance Status: ${row.compliance_status_label}`,
-      `Last Inspection: ${formatDate(row.lastInspectionDate) || "No record"}`,
-      `Next Due: ${formatDate(row.nextDueDate) || "Not set"}`,
-      `Inspector: ${row.latestInspection?.inspector_name || "Not assigned"}`,
-      "",
-      "Findings:",
-      row.latestInspection?.findings || "No findings recorded.",
-      "",
-      "Remarks:",
-      row.latestInspection?.remarks || "No remarks recorded.",
-    ].join("\n");
+    const inspection = row.latestInspection || {};
+    const printedAt = new Intl.DateTimeFormat("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "2-digit",
+    }).format(new Date());
+    const checklistRows = inspection.checklist_items?.length
+      ? inspection.checklist_items
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.requirement_name)}</td>
+                <td>${item.is_complied ? "Complied" : "Needs action"}</td>
+                <td>${escapeHtml(item.notes || "")}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="3">No checklist items recorded.</td></tr>`;
 
     const printWindow = window.open("", "_blank", "width=720,height=820");
-    printWindow.document.write(`<pre style="font:14px Arial;white-space:pre-wrap;line-height:1.6">${report}</pre>`);
+
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Sanitary Inspection Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; color: #111827; }
+            .office { text-align: center; border-bottom: 2px solid #0f6b3f; padding-bottom: 14px; margin-bottom: 22px; }
+            .office h1 { margin: 6px 0 2px; font-size: 20px; text-transform: uppercase; }
+            .office p { margin: 2px 0; font-size: 12px; }
+            h2 { margin: 0 0 14px; font-size: 18px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+            .box { border: 1px solid #cbd5d1; padding: 10px; min-height: 48px; }
+            .box span { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+            .box strong { display: block; margin-top: 5px; font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+            th, td { border: 1px solid #cbd5d1; padding: 9px 10px; font-size: 12px; vertical-align: top; }
+            th { background: #edf7f1; text-align: left; }
+            .narrative { border: 1px solid #cbd5d1; padding: 12px; margin-top: 12px; }
+            .narrative h3 { margin: 0 0 6px; font-size: 13px; }
+            .narrative p { margin: 0; font-size: 12px; line-height: 1.5; }
+            .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 58px; }
+            .line { border-top: 1px solid #111827; text-align: center; padding-top: 7px; font-size: 12px; }
+            @media print { body { margin: 24px; } }
+          </style>
+        </head>
+        <body>
+          <div class="office">
+            <p>Republic of the Philippines</p>
+            <p>Province of Quezon</p>
+            <h1>Mauban Municipal Health Office</h1>
+            <p>Sanitary Section</p>
+            <p>Generated on ${escapeHtml(printedAt)}</p>
+          </div>
+
+          <h2>Sanitary Inspection Report</h2>
+
+          <div class="grid">
+            <div class="box"><span>Establishment</span><strong>${escapeHtml(
+              row.business_name
+            )}</strong></div>
+            <div class="box"><span>Business Type</span><strong>${escapeHtml(
+              row.business_type_name
+            )}</strong></div>
+            <div class="box"><span>Barangay</span><strong>${escapeHtml(
+              row.barangay || "Not recorded"
+            )}</strong></div>
+            <div class="box"><span>Compliance Status</span><strong>${escapeHtml(
+              row.compliance_status_label
+            )}</strong></div>
+            <div class="box"><span>Last Inspection</span><strong>${escapeHtml(
+              formatDate(row.lastInspectionDate) || "No record"
+            )}</strong></div>
+            <div class="box"><span>Next Due</span><strong>${escapeHtml(
+              formatDate(row.nextDueDate) || "Not set"
+            )}</strong></div>
+            <div class="box"><span>Inspector</span><strong>${escapeHtml(
+              inspection.inspector_name || "Not assigned"
+            )}</strong></div>
+            <div class="box"><span>Inspection Frequency</span><strong>${escapeHtml(
+              formatFrequency(row.inspection_frequency)
+            )}</strong></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>${checklistRows}</tbody>
+          </table>
+
+          <div class="narrative">
+            <h3>Findings</h3>
+            <p>${escapeHtml(inspection.findings || "No findings recorded.")}</p>
+          </div>
+          <div class="narrative">
+            <h3>Remarks / Action Taken</h3>
+            <p>${escapeHtml(inspection.remarks || "No remarks recorded.")}</p>
+          </div>
+
+          <div class="signatures">
+            <div class="line">Prepared by</div>
+            <div class="line">Municipal Health Officer / Sanitary Inspector</div>
+          </div>
+        </body>
+      </html>
+    `);
     printWindow.document.close();
+    printWindow.focus();
     printWindow.print();
   }
 
@@ -185,7 +284,8 @@ function InspectionManagement() {
           <h3>Inspection Alerts</h3>
           <p>
             <span>{dueWithinSevenDays}</span> establishment(s) due within 7 days
-            • <strong>{overdueCount}</strong> overdue
+            {" | "}
+            <strong>{overdueCount}</strong> overdue
           </p>
         </div>
       </div>
@@ -210,10 +310,10 @@ function InspectionManagement() {
         </div>
 
         <div className="inspection-legend">
-          <span className="good">● Good Standing</span>
-          <span className="upcoming">● Upcoming</span>
-          <span className="completion">● For Completion</span>
-          <span className="violation">● Violation</span>
+          <span className="good">Good Standing</span>
+          <span className="upcoming">Upcoming</span>
+          <span className="completion">For Completion</span>
+          <span className="violation">Violation</span>
         </div>
       </div>
 
@@ -229,6 +329,29 @@ function InspectionManagement() {
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
             </div>
+
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              <option value="all">All Statuses</option>
+              {statusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={dueFilter}
+              onChange={(event) => setDueFilter(event.target.value)}
+            >
+              <option value="all">All Due Dates</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due Today</option>
+              <option value="week">Due Within 7 Days</option>
+              <option value="unscheduled">No Schedule</option>
+            </select>
           </div>
 
           <div className="inspection-table-wrap">
@@ -276,28 +399,35 @@ function InspectionManagement() {
                           className={`inspection-status ${statusClass(
                             row.compliance_status_label
                           )}`}
+                          data-label={row.compliance_status_label}
                         >
-                          ● {row.compliance_status_label}
+                          {row.compliance_status_label}
                         </span>
                       </td>
 
-                      <td>
-                        <button
-                          type="button"
-                          className="conduct-btn secondary"
-                          onClick={() => printInspectionReport(row)}
-                        >
-                          <FiPrinter />
-                          Print
-                        </button>
-                        <button
-                          type="button"
-                          className="conduct-btn"
-                          onClick={() => openForm(row)}
-                        >
-                          <FiClipboard />
-                          Conduct
-                        </button>
+                      <td className="inspection-action-cell">
+                        <div className="inspection-row-actions">
+                          <button
+                            type="button"
+                            className="inspection-icon-action print"
+                            onClick={() => printInspectionReport(row)}
+                            aria-label={`Print inspection report for ${row.business_name}`}
+                            title="Print report"
+                            data-tooltip="Print report"
+                          >
+                            <FiPrinter />
+                          </button>
+                          <button
+                            type="button"
+                            className="inspection-icon-action conduct"
+                            onClick={() => openForm(row)}
+                            aria-label={`Conduct inspection for ${row.business_name}`}
+                            title="Conduct inspection"
+                            data-tooltip="Conduct inspection"
+                          >
+                            <FiClipboard />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -498,7 +628,7 @@ function InspectionFormModal({
           </h2>
           <p>
             {establishment.business_type_name} (
-            {formatFrequency(establishment.inspection_frequency)}) •{" "}
+            {formatFrequency(establishment.inspection_frequency)}) |{" "}
             {establishment.barangay || establishment.address}
           </p>
         </div>
@@ -616,7 +746,7 @@ function InspectionFormModal({
         </div>
 
         <div className="inspection-warning">
-          ⚠ Status will be auto-set to <strong>For Completion</strong> if any
+          Warning: Status will be auto-set to <strong>For Completion</strong> if any
           requirement is unchecked. You may manually change the final status
           before submitting.
         </div>
@@ -693,6 +823,32 @@ function getDueText(dateValue) {
   return `in ${diff}d`;
 }
 
+function matchesDueFilter(dateValue, filter) {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (!dateValue) {
+    return filter === "unscheduled";
+  }
+
+  const diff = getDayDifference(dateValue);
+
+  if (filter === "overdue") {
+    return diff < 0;
+  }
+
+  if (filter === "today") {
+    return diff === 0;
+  }
+
+  if (filter === "week") {
+    return diff >= 0 && diff <= 7;
+  }
+
+  return true;
+}
+
 function buildCalendarCells(rows) {
   const today = new Date();
   const cells = [];
@@ -747,6 +903,20 @@ function formatDate(value) {
     month: "short",
     day: "2-digit",
     year: "numeric",
+  });
+}
+
+function escapeHtml(value = "") {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+
+    return entities[character];
   });
 }
 

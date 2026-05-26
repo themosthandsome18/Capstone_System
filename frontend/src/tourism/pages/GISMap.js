@@ -1,27 +1,53 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiLayers, FiStar } from "react-icons/fi";
 import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
 import { useTourismData } from "../context/TourismDataContext";
 
+const OFFICIAL_DESTINATION_LIMIT = 6;
+
+function isOfficialMapDestination(destination) {
+  return (
+    Boolean(destination.image_key) ||
+    Boolean(destination.with_mayors_permit) ||
+    Number(destination.resort_id || 0) <= OFFICIAL_DESTINATION_LIMIT
+  );
+}
+
 function GISMap() {
   const { referenceTables } = useTourismData();
+  const mapDestinations = useMemo(
+    () => referenceTables.resorts.filter(isOfficialMapDestination),
+    [referenceTables.resorts]
+  );
   const [selectedDestination, setSelectedDestination] = useState(
-    referenceTables.resorts[0] || null
+    mapDestinations[0] || null
   );
 
   useEffect(() => {
-    if (!selectedDestination && referenceTables.resorts.length) {
-      setSelectedDestination(referenceTables.resorts[0]);
-    }
-  }, [referenceTables.resorts, selectedDestination]);
+    const selectedStillVisible = mapDestinations.some(
+      (destination) => destination.resort_id === selectedDestination?.resort_id
+    );
 
-  const totalLocations = referenceTables.resorts.length;
-  const beachCount = referenceTables.resorts.filter((item) =>
+    if ((!selectedDestination || !selectedStillVisible) && mapDestinations.length) {
+      setSelectedDestination(mapDestinations[0]);
+    }
+  }, [mapDestinations, selectedDestination]);
+
+  const totalLocations = mapDestinations.length;
+  const beachCount = mapDestinations.filter((item) =>
     item.type.includes("Beach")
   ).length;
-  const islandCount = referenceTables.resorts.filter((item) =>
+  const islandCount = mapDestinations.filter((item) =>
     item.type.includes("Island")
   ).length;
+  const averageRating = totalLocations
+    ? (
+        mapDestinations.reduce(
+          (sum, item) => sum + Number(item.tourism_rating || 0),
+          0
+        ) / totalLocations
+      ).toFixed(1)
+    : "0.0";
 
   return (
     <div className="gis-page">
@@ -51,7 +77,7 @@ function GISMap() {
           </div>
 
           <MaubanDestinationMap
-            destinations={referenceTables.resorts}
+            destinations={mapDestinations}
             selectedDestination={selectedDestination}
             onSelectDestination={setSelectedDestination}
           />
@@ -67,7 +93,7 @@ function GISMap() {
             <h3>All Locations</h3>
 
             <div className="gis-location-items">
-              {referenceTables.resorts.map((destination) => (
+              {mapDestinations.map((destination) => (
                 <button
                   key={destination.resort_id}
                   type="button"
@@ -106,7 +132,7 @@ function GISMap() {
         <StatBox title="Total Locations" value={totalLocations} />
         <StatBox title="Beach Destinations" value={beachCount} />
         <StatBox title="Island Destinations" value={islandCount} />
-        <StatBox title="Average Rating" value="4.5" />
+        <StatBox title="Average Rating" value={averageRating} />
       </div>
     </div>
   );

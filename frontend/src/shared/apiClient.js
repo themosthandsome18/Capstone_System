@@ -1,5 +1,10 @@
+function getDefaultApiBaseUrl() {
+  const hostname = window.location.hostname || "127.0.0.1";
+  return `${window.location.protocol}//${hostname}:8000/api`;
+}
+
 export const API_BASE_URL = (
-  process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000/api"
+  process.env.REACT_APP_API_BASE_URL || getDefaultApiBaseUrl()
 ).replace(/\/$/, "");
 
 export const AUTH_TOKEN_KEY = "capstone_auth_token";
@@ -39,14 +44,23 @@ export async function apiRequest(endpoint, options = {}) {
   const token = auth ? getStoredAuthToken() : "";
   const isFormData = fetchOptions.body instanceof FormData;
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(token ? { Authorization: `Token ${token}` } : {}),
-      ...(fetchOptions.headers || {}),
-    },
-    ...fetchOptions,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Token ${token}` } : {}),
+        ...(fetchOptions.headers || {}),
+      },
+      ...fetchOptions,
+    });
+  } catch (requestError) {
+    const error = new Error(
+      `Cannot connect to the backend at ${API_BASE_URL}. Check if Django is running.`
+    );
+    error.details = { detail: error.message };
+    throw error;
+  }
 
   if (!response.ok) {
     const responseText = await response.text();

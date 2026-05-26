@@ -6,6 +6,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from .models import (
+    Barangay,
     BoatType,
     Country,
     FeedbackEntry,
@@ -29,6 +30,7 @@ from .seed_data import (
     HOUSEHOLD_SANITATION_RECORDS,
     INITIAL_FEEDBACK_ENTRIES,
     INITIAL_TOURIST_RECORDS,
+    MAUBAN_BARANGAYS,
     REFERENCE_TABLES,
     SANITARY_BUSINESS_TYPES,
     SANITARY_ESTABLISHMENTS,
@@ -47,6 +49,10 @@ REFERENCE_SEED_CONFIG = (
     (VisitPurpose, REFERENCE_TABLES["visit_purposes"]),
     (Resort, REFERENCE_TABLES["resorts"]),
 )
+
+_REFERENCE_DATA_READY = False
+_TOURISM_DATA_READY = False
+_SANITATION_DATA_READY = False
 
 PH_LOCATION_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "ph_locations"
 
@@ -92,6 +98,17 @@ REGION_DISPLAY_ORDER = [
 
 
 def ensure_initial_reference_data():
+    global _REFERENCE_DATA_READY
+
+    if _REFERENCE_DATA_READY:
+        return
+
+    if has_initial_reference_data():
+        _REFERENCE_DATA_READY = True
+        return
+
+    ensure_initial_barangays()
+
     for model, rows in REFERENCE_SEED_CONFIG:
         if model in (Region, Province):
             continue
@@ -113,6 +130,34 @@ def ensure_initial_reference_data():
             )
 
     ensure_ph_location_regions_and_provinces()
+    _REFERENCE_DATA_READY = True
+
+
+def has_initial_reference_data():
+    return (
+        Barangay.objects.exists()
+        and Country.objects.exists()
+        and Region.objects.exists()
+        and Province.objects.exists()
+        and Itinerary.objects.exists()
+        and TravelMode.objects.exists()
+        and BoatType.objects.exists()
+        and VisitPurpose.objects.exists()
+        and Resort.objects.exists()
+    )
+
+
+def ensure_initial_barangays():
+    for index, name in enumerate(MAUBAN_BARANGAYS, start=1):
+        Barangay.objects.update_or_create(
+            name=name,
+            defaults={
+                "municipality": "Mauban",
+                "province": "Quezon",
+                "display_order": index,
+                "is_active": True,
+            },
+        )
 
 
 def ensure_ph_location_regions_and_provinces():
@@ -259,14 +304,48 @@ def ensure_initial_feedback_entries():
 
 
 def ensure_initial_data():
-    ensure_initial_reference_data()
-    ensure_initial_tourist_records()
-    ensure_initial_feedback_entries()
+    ensure_initial_tourism_data()
     ensure_initial_sanitation_data()
     ensure_initial_household_data()
 
 
+def ensure_initial_tourism_data():
+    global _TOURISM_DATA_READY
+
+    if _TOURISM_DATA_READY:
+        return
+
+    if (
+        TouristRecord.objects.exists()
+        and Resort.objects.exists()
+        and Country.objects.exists()
+    ):
+        _TOURISM_DATA_READY = True
+        return
+
+    ensure_initial_reference_data()
+    ensure_initial_tourist_records()
+    ensure_initial_feedback_entries()
+    _TOURISM_DATA_READY = True
+
+
 def ensure_initial_sanitation_data():
+    global _SANITATION_DATA_READY
+
+    if _SANITATION_DATA_READY:
+        return
+
+    if (
+        SanitaryBusinessType.objects.exists()
+        and SanitaryRequirement.objects.exists()
+        and SanitaryEstablishment.objects.exists()
+        and SanitaryInspection.objects.exists()
+        and SanitaryPermitRenewal.objects.exists()
+        and SanitaryComplaint.objects.exists()
+    ):
+        _SANITATION_DATA_READY = True
+        return
+
     business_type_lookup = {}
 
     for row in SANITARY_BUSINESS_TYPES:
@@ -343,12 +422,10 @@ def ensure_initial_sanitation_data():
 
     ensure_initial_permit_renewals()
     ensure_initial_sanitary_complaints()
+    _SANITATION_DATA_READY = True
 
 
 def ensure_initial_permit_renewals():
-    if SanitaryPermitRenewal.objects.exists():
-        return
-
     stages = [
         ("notice_sent", "unpaid", 14),
         ("application_filed", "unpaid", 29),
@@ -373,31 +450,30 @@ def ensure_initial_permit_renewals():
         expiration_date = timezone.localdate() + timedelta(days=(index * 8) - 18)
         submitted_count = min(len(requirements), 2 + (index % len(requirements)))
 
-        SanitaryPermitRenewal.objects.create(
+        SanitaryPermitRenewal.objects.update_or_create(
             renewal_id=f"RNW-2026-{index:04d}",
-            establishment=establishment,
-            permit_number=establishment.permit_number or f"SP-2026-{index:04d}",
-            permit_type="Sanitary Permit",
-            expiration_date=expiration_date,
-            stage=stage,
-            progress=progress,
-            renewal_fee=500 + (index * 300),
-            payment_status=payment_status,
-            submitted_requirements=requirements[:submitted_count],
-            inspection_status=(
-                "Inspection Completed - Passed"
-                if stage in {"approved", "released"}
-                else "For inspection scheduling"
-            ),
-            remarks="Routine annual sanitary permit renewal.",
-            released_at=timezone.localdate() if stage == "released" else None,
+            defaults={
+                "establishment": establishment,
+                "permit_number": establishment.permit_number or f"SP-2026-{index:04d}",
+                "permit_type": "Sanitary Permit",
+                "expiration_date": expiration_date,
+                "stage": stage,
+                "progress": progress,
+                "renewal_fee": 500 + (index * 300),
+                "payment_status": payment_status,
+                "submitted_requirements": requirements[:submitted_count],
+                "inspection_status": (
+                    "Inspection Completed - Passed"
+                    if stage in {"approved", "released"}
+                    else "For inspection scheduling"
+                ),
+                "remarks": "Routine annual sanitary permit renewal.",
+                "released_at": timezone.localdate() if stage == "released" else None,
+            },
         )
 
 
 def ensure_initial_sanitary_complaints():
-    if SanitaryComplaint.objects.exists():
-        return
-
     establishments = list(
         SanitaryEstablishment.objects.select_related("business_type").order_by("id")[:12]
     )
@@ -413,31 +489,36 @@ def ensure_initial_sanitary_complaints():
     priorities = ["high", "medium", "high", "medium", "low", "medium"]
 
     for index, establishment in enumerate(establishments, start=1):
-        SanitaryComplaint.objects.create(
+        status_value = statuses[(index - 1) % len(statuses)]
+        SanitaryComplaint.objects.update_or_create(
             complaint_id=f"CMP-2026-{index:04d}",
-            establishment=establishment,
-            complainant_name=f"Resident {index}",
-            contact_number=f"09{index:09d}"[:11],
-            category=categories[(index - 1) % len(categories)],
-            barangay=establishment.barangay,
-            reported_date=timezone.localdate() - timedelta(days=index * 3),
-            status=statuses[(index - 1) % len(statuses)],
-            priority=priorities[(index - 1) % len(priorities)],
-            description="Complaint recorded for sanitary monitoring follow-up.",
-            action_taken=(
-                "Verified by sanitary inspector and advised correction."
-                if statuses[(index - 1) % len(statuses)] == "resolved"
-                else "For validation and inspection scheduling."
-            ),
-            resolved_date=(
-                timezone.localdate() - timedelta(days=index)
-                if statuses[(index - 1) % len(statuses)] == "resolved"
-                else None
-            ),
+            defaults={
+                "establishment": establishment,
+                "complainant_name": f"Resident {index}",
+                "contact_number": f"09{index:09d}"[:11],
+                "category": categories[(index - 1) % len(categories)],
+                "barangay": establishment.barangay,
+                "reported_date": timezone.localdate() - timedelta(days=index * 3),
+                "status": status_value,
+                "priority": priorities[(index - 1) % len(priorities)],
+                "description": "Complaint recorded for sanitary monitoring follow-up.",
+                "action_taken": (
+                    "Verified by sanitary inspector and advised correction."
+                    if status_value == "resolved"
+                    else "For validation and inspection scheduling."
+                ),
+                "resolved_date": (
+                    timezone.localdate() - timedelta(days=index)
+                    if status_value == "resolved"
+                    else None
+                ),
+            },
         )
 
 
 def ensure_initial_household_data():
+    ensure_initial_barangays()
+
     if HouseholdSanitationRecord.objects.exists():
         return
 

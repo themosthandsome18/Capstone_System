@@ -235,8 +235,8 @@ function SanitaryGISMap() {
 
               <p>
                 {isHouseholdMode
-                  ? `${selectedItem.household_code} • ${selectedItem.barangay}`
-                  : `${selectedItem.business_type_name} • ${selectedItem.barangay}`}
+                  ? `${selectedItem.household_code} | ${selectedItem.barangay}`
+                  : `${selectedItem.business_type_name} | ${selectedItem.barangay}`}
               </p>
 
               <span
@@ -281,8 +281,8 @@ function SanitaryGISMap() {
 
                       <small>
                         {isHouseholdMode
-                          ? `${item.household_code} • ${item.barangay}`
-                          : `${item.business_type_name} • ${item.barangay}`}
+                          ? `${item.household_code} | ${item.barangay}`
+                          : `${item.business_type_name} | ${item.barangay}`}
                       </small>
                     </div>
                   </button>

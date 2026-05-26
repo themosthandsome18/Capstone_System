@@ -4,7 +4,10 @@ import {
   FiChevronRight,
   FiDownload,
   FiEdit2,
+  FiEye,
+  FiFileText,
   FiPlus,
+  FiPrinter,
   FiSearch,
   FiTrash2,
   FiX,
@@ -51,6 +54,9 @@ function EstablishmentRecords() {
   const {
     establishments,
     businessTypes,
+    inspections,
+    complaintData,
+    renewalData,
     loading,
     error,
     createEstablishment,
@@ -62,9 +68,32 @@ function EstablishmentRecords() {
   const [editingEstablishment, setEditingEstablishment] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const [businessTypeFilter, setBusinessTypeFilter] = useState("all");
+  const [permitFilter, setPermitFilter] = useState("all");
+  const [selectedEstablishment, setSelectedEstablishment] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const complaintRows = useMemo(() => complaintData?.rows || [], [complaintData]);
+  const renewalRows = useMemo(() => renewalData?.rows || [], [renewalData]);
+  const barangayOptions = useMemo(
+    () =>
+      [...new Set(establishments.map((item) => item.barangay).filter(Boolean))].sort(),
+    [establishments]
+  );
+  const selectedTimeline = useMemo(() => {
+    if (!selectedEstablishment) {
+      return [];
+    }
+
+    return buildEstablishmentTimeline(
+      selectedEstablishment,
+      inspections,
+      complaintRows,
+      renewalRows
+    );
+  }, [complaintRows, inspections, renewalRows, selectedEstablishment]);
 
   const filteredEstablishments = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -85,10 +114,30 @@ function EstablishmentRecords() {
       const matchesSearch = searchText.includes(keyword);
       const matchesStatus =
         statusFilter === "all" || item.compliance_status === statusFilter;
+      const matchesBarangay =
+        barangayFilter === "all" || item.barangay === barangayFilter;
+      const matchesType =
+        businessTypeFilter === "all" ||
+        String(item.business_type) === String(businessTypeFilter);
+      const matchesPermit =
+        permitFilter === "all" || item.permit_status === permitFilter;
 
-      return matchesSearch && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesBarangay &&
+        matchesType &&
+        matchesPermit
+      );
     });
-  }, [establishments, search, statusFilter]);
+  }, [
+    barangayFilter,
+    businessTypeFilter,
+    establishments,
+    permitFilter,
+    search,
+    statusFilter,
+  ]);
 
   function updateField(field, value) {
     setForm((current) => ({
@@ -128,6 +177,24 @@ function EstablishmentRecords() {
 
     setFormError("");
     setShowModal(true);
+  }
+
+  function openDetailModal(establishment) {
+    setSelectedEstablishment(establishment);
+  }
+
+  function closeDetailModal() {
+    setSelectedEstablishment(null);
+  }
+
+  function editSelectedEstablishment() {
+    const target = selectedEstablishment;
+
+    setSelectedEstablishment(null);
+
+    if (target) {
+      openEditModal(target);
+    }
   }
 
   function closeModal() {
@@ -261,6 +328,9 @@ function EstablishmentRecords() {
 
     try {
       await deleteEstablishment(establishment.id);
+      if (selectedEstablishment?.id === establishment.id) {
+        setSelectedEstablishment(null);
+      }
     } catch (requestError) {
       alert(getErrorMessage(requestError));
     }
@@ -353,6 +423,42 @@ function EstablishmentRecords() {
               </option>
             ))}
           </select>
+
+          <select
+            value={barangayFilter}
+            onChange={(event) => setBarangayFilter(event.target.value)}
+          >
+            <option value="all">All Barangays</option>
+            {barangayOptions.map((barangay) => (
+              <option key={barangay} value={barangay}>
+                {barangay}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={businessTypeFilter}
+            onChange={(event) => setBusinessTypeFilter(event.target.value)}
+          >
+            <option value="all">All Business Types</option>
+            {businessTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={permitFilter}
+            onChange={(event) => setPermitFilter(event.target.value)}
+          >
+            <option value="all">All Permit Statuses</option>
+            {permitStatusOptions.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <table>
@@ -392,6 +498,15 @@ function EstablishmentRecords() {
                   </td>
                   <td>
                     <div className="establishment-action-buttons">
+                      <button
+                        type="button"
+                        className="establishment-icon-btn view"
+                        title="View establishment timeline"
+                        onClick={() => openDetailModal(item)}
+                      >
+                        <FiEye />
+                      </button>
+
                       <button
                         type="button"
                         className="establishment-icon-btn edit"
@@ -444,6 +559,7 @@ function EstablishmentRecords() {
         <RegisterEstablishmentModal
           form={form}
           businessTypes={businessTypes}
+          barangayOptions={barangayOptions}
           saving={saving}
           formError={formError}
           autoRequirements={getAutoRequirements()}
@@ -454,6 +570,134 @@ function EstablishmentRecords() {
           onSubmit={handleSubmit}
         />
       ) : null}
+
+      {selectedEstablishment ? (
+        <EstablishmentDetailModal
+          establishment={selectedEstablishment}
+          timeline={selectedTimeline}
+          onClose={closeDetailModal}
+          onEdit={editSelectedEstablishment}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function EstablishmentDetailModal({
+  establishment,
+  timeline,
+  onClose,
+  onEdit,
+}) {
+  const coordinateText =
+    establishment.latitude && establishment.longitude
+      ? `${establishment.latitude}, ${establishment.longitude}`
+      : "Not encoded";
+
+  return (
+    <div className="establishment-modal-backdrop">
+      <section
+        className="establishment-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${establishment.business_name} establishment details`}
+      >
+        <button type="button" className="modal-close-btn" onClick={onClose}>
+          <FiX />
+        </button>
+
+        <div className="establishment-detail-header">
+          <div>
+            <span>Official Establishment Record</span>
+            <h2>{establishment.business_name}</h2>
+            <p>
+              {establishment.business_type_name} | {establishment.barangay}
+            </p>
+          </div>
+
+          <div className="establishment-detail-actions">
+            <button
+              type="button"
+              className="sanitation-export-btn"
+              onClick={() => printEstablishmentReport(establishment, timeline)}
+            >
+              <FiPrinter /> Print
+            </button>
+            <button type="button" className="add-establishment-btn" onClick={onEdit}>
+              <FiEdit2 /> Edit
+            </button>
+          </div>
+        </div>
+
+        <div className="establishment-detail-grid">
+          <InfoTile label="Owner / Proprietor" value={establishment.owner_name} />
+          <InfoTile label="Contact Number" value={establishment.contact_number} />
+          <InfoTile label="Complete Address" value={establishment.address} />
+          <InfoTile
+            label="Permit Size"
+            value={establishment.permit_size_label || establishment.permit_size}
+          />
+          <InfoTile
+            label="Permit Number"
+            value={establishment.permit_number || "No permit number"}
+          />
+          <InfoTile
+            label="Permit Status"
+            value={establishment.permit_status_label || establishment.permit_status}
+          />
+          <InfoTile
+            label="Compliance Status"
+            value={establishment.compliance_status_label}
+          />
+          <InfoTile label="Map Coordinates" value={coordinateText} />
+        </div>
+
+        <div className="establishment-detail-note">
+          <FiFileText />
+          <div>
+            <strong>Remarks</strong>
+            <p>{establishment.remarks || "No remarks recorded."}</p>
+          </div>
+        </div>
+
+        <div className="establishment-timeline-panel">
+          <div className="establishment-timeline-title">
+            <FiFileText />
+            <h3>Record Timeline</h3>
+          </div>
+
+          {timeline.length ? (
+            <div className="establishment-timeline-list">
+              {timeline.map((item) => (
+                <div
+                  className={`establishment-timeline-row ${item.tone}`}
+                  key={item.id}
+                >
+                  <span className="timeline-dot" />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                    <small>{formatDisplayDate(item.date)}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="establishment-timeline-empty">
+              No inspection, complaint, or renewal activity recorded yet.
+            </p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function InfoTile({ label, value }) {
+  return (
+    <div className="establishment-info-tile">
+      <span>{label}</span>
+      <strong>{value || "Not recorded"}</strong>
     </div>
   );
 }
@@ -461,6 +705,7 @@ function EstablishmentRecords() {
 function RegisterEstablishmentModal({
   form,
   businessTypes,
+  barangayOptions,
   saving,
   formError,
   autoRequirements,
@@ -507,11 +752,17 @@ function RegisterEstablishmentModal({
           <label className="modal-field">
             <span>Barangay</span>
             <input
+              list="establishment-barangay-options"
               type="text"
-              placeholder="Brgy. ..."
+              placeholder="Select or type barangay"
               value={form.barangay}
               onChange={(event) => onChange("barangay", event.target.value)}
             />
+            <datalist id="establishment-barangay-options">
+              {barangayOptions.map((barangay) => (
+                <option key={barangay} value={barangay} />
+              ))}
+            </datalist>
           </label>
         </div>
 
@@ -704,7 +955,7 @@ function RegisterEstablishmentModal({
             {autoRequirements.length ? (
               autoRequirements.map((requirement) => (
                 <span key={requirement.id}>
-                  ✓ {requirement.requirement_name}
+                  OK {requirement.requirement_name}
                 </span>
               ))
             ) : (
@@ -740,6 +991,275 @@ function RegisterEstablishmentModal({
 
 function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
+}
+
+function buildEstablishmentTimeline(
+  establishment,
+  inspections = [],
+  complaints = [],
+  renewals = []
+) {
+  const establishmentId = String(establishment.id);
+  const rows = [
+    {
+      id: `establishment-${establishmentId}`,
+      title: "Establishment record encoded",
+      detail: `${establishment.business_type_name || "Business"} in ${
+        establishment.barangay || "unassigned barangay"
+      }`,
+      date:
+        establishment.updated_at ||
+        establishment.created_at ||
+        establishment.permit_issued_date,
+      tone: "good",
+    },
+  ];
+
+  if (establishment.has_permit && establishment.permit_number) {
+    rows.push({
+      id: `permit-${establishmentId}`,
+      title: "Sanitary permit recorded",
+      detail: `${establishment.permit_number} | expires ${formatDisplayDate(
+        establishment.permit_expiry_date
+      )}`,
+      date: establishment.permit_issued_date || establishment.created_at,
+      tone:
+        establishment.permit_status === "suspended" ||
+        establishment.permit_status === "no_permit"
+          ? "danger"
+          : "good",
+    });
+  }
+
+  inspections
+    .filter((item) => String(item.establishment) === establishmentId)
+    .forEach((item) => {
+      const status =
+        item.status_after_inspection_label || item.status_after_inspection;
+
+      rows.push({
+        id: `inspection-${item.id}`,
+        title: item.is_draft ? "Inspection draft saved" : "Inspection conducted",
+        detail: [
+          item.inspector_name || "Inspector not assigned",
+          status || "No status",
+          item.findings || item.remarks || "No findings recorded",
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        date: item.inspection_date || item.updated_at,
+        tone: timelineTone(status),
+      });
+    });
+
+  complaints
+    .filter((item) => String(item.establishment) === establishmentId)
+    .forEach((item) => {
+      rows.push({
+        id: `complaint-${item.id}`,
+        title: "Complaint follow-up",
+        detail: [
+          item.category,
+          item.status_label || item.status,
+          item.action_taken || item.description,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        date: item.reported_date || item.updated_at,
+        tone: item.priority === "high" ? "danger" : "warning",
+      });
+    });
+
+  renewals
+    .filter((item) => String(item.establishment) === establishmentId)
+    .forEach((item) => {
+      rows.push({
+        id: `renewal-${item.id}`,
+        title: "Permit renewal activity",
+        detail: [
+          item.renewal_id,
+          item.stage_label || item.stage,
+          `payment ${item.payment_status_label || item.payment_status}`,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        date: item.updated_at || item.expiration_date,
+        tone: item.stage === "lapsed" ? "danger" : "warning",
+      });
+    });
+
+  return rows.sort((a, b) => toSortableDate(b.date) - toSortableDate(a.date));
+}
+
+function timelineTone(status = "") {
+  const normalized = String(status).toLowerCase();
+
+  if (normalized.includes("violation") || normalized.includes("suspended")) {
+    return "danger";
+  }
+
+  if (
+    normalized.includes("completion") ||
+    normalized.includes("upcoming") ||
+    normalized.includes("pending") ||
+    normalized.includes("renewal")
+  ) {
+    return "warning";
+  }
+
+  return "good";
+}
+
+function toSortableDate(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function formatDisplayDate(value) {
+  if (!value) {
+    return "No date recorded";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(date);
+}
+
+function printEstablishmentReport(establishment, timeline) {
+  const printedAt = new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+  }).format(new Date());
+
+  const timelineRows = timeline.length
+    ? timeline
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(formatDisplayDate(item.date))}</td>
+              <td>${escapeHtml(item.title)}</td>
+              <td>${escapeHtml(item.detail)}</td>
+            </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="3">No inspection, complaint, or renewal activity recorded yet.</td></tr>`;
+
+  const printWindow = window.open("", "_blank", "width=860,height=900");
+
+  if (!printWindow) {
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Sanitary Establishment Record</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
+          .office { text-align: center; border-bottom: 2px solid #0f6b3f; padding-bottom: 14px; margin-bottom: 22px; }
+          .office h1 { margin: 6px 0 2px; font-size: 20px; text-transform: uppercase; }
+          .office p { margin: 2px 0; font-size: 12px; }
+          h2 { margin: 0 0 14px; font-size: 18px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+          th, td { border: 1px solid #cbd5d1; padding: 9px 10px; font-size: 12px; vertical-align: top; }
+          th { background: #edf7f1; text-align: left; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+          .box { border: 1px solid #cbd5d1; padding: 10px; min-height: 48px; }
+          .box span { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+          .box strong { display: block; margin-top: 5px; font-size: 13px; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 58px; }
+          .line { border-top: 1px solid #111827; text-align: center; padding-top: 7px; font-size: 12px; }
+          @media print { body { margin: 24px; } }
+        </style>
+      </head>
+      <body>
+        <div class="office">
+          <p>Republic of the Philippines</p>
+          <p>Province of Quezon</p>
+          <h1>Mauban Municipal Health Office</h1>
+          <p>Sanitary Section</p>
+          <p>Generated on ${escapeHtml(printedAt)}</p>
+        </div>
+
+        <h2>Sanitary Establishment Record</h2>
+
+        <div class="grid">
+          <div class="box"><span>Business Name</span><strong>${escapeHtml(
+            establishment.business_name
+          )}</strong></div>
+          <div class="box"><span>Owner / Proprietor</span><strong>${escapeHtml(
+            establishment.owner_name
+          )}</strong></div>
+          <div class="box"><span>Business Type</span><strong>${escapeHtml(
+            establishment.business_type_name
+          )}</strong></div>
+          <div class="box"><span>Barangay</span><strong>${escapeHtml(
+            establishment.barangay
+          )}</strong></div>
+          <div class="box"><span>Permit Number</span><strong>${escapeHtml(
+            establishment.permit_number || "No permit number"
+          )}</strong></div>
+          <div class="box"><span>Permit Status</span><strong>${escapeHtml(
+            establishment.permit_status_label || establishment.permit_status
+          )}</strong></div>
+          <div class="box"><span>Compliance Status</span><strong>${escapeHtml(
+            establishment.compliance_status_label
+          )}</strong></div>
+          <div class="box"><span>Contact Number</span><strong>${escapeHtml(
+            establishment.contact_number || "Not recorded"
+          )}</strong></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 24%">Date</th>
+              <th style="width: 28%">Activity</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>${timelineRows}</tbody>
+        </table>
+
+        <p><strong>Address:</strong> ${escapeHtml(establishment.address)}</p>
+        <p><strong>Remarks:</strong> ${escapeHtml(
+          establishment.remarks || "No remarks recorded."
+        )}</p>
+
+        <div class="signatures">
+          <div class="line">Prepared by</div>
+          <div class="line">Municipal Health Officer / Sanitary Inspector</div>
+        </div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
+function escapeHtml(value = "") {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+
+    return entities[character];
+  });
 }
 
 export default EstablishmentRecords;

@@ -74,6 +74,21 @@ class ActivityLog(models.Model):
         return f"{actor} {self.action} {self.record_label}"
 
 
+class Barangay(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    municipality = models.CharField(max_length=120, default="Mauban")
+    province = models.CharField(max_length=120, default="Quezon")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+        verbose_name_plural = "Barangays"
+
+    def __str__(self):
+        return self.name
+
+
 # Tourism models
 TOURIST_RECORD_COUNT_FIELDS = [
     "foreigner_count",
@@ -297,7 +312,7 @@ class TouristRecord(models.Model):
     email = models.EmailField(blank=True)
     consent_confirmed = models.BooleanField(default=True)
     full_name = models.CharField(max_length=120)
-    contact_number = models.CharField(max_length=40, blank=True)
+    contact_number = models.CharField(max_length=120, blank=True)
     country = models.ForeignKey(
         Country,
         on_delete=models.PROTECT,
@@ -362,6 +377,19 @@ class TouristRecord(models.Model):
 
     class Meta:
         ordering = ["-arrival_date", "survey_id"]
+        indexes = [
+            models.Index(
+                fields=["status", "arrival_date"],
+                name="tourist_status_arrival_idx",
+            ),
+            models.Index(fields=["arrival_date"], name="tourist_arrival_idx"),
+            models.Index(
+                fields=["resort", "arrival_date"],
+                name="tourist_resort_arrival_idx",
+            ),
+            models.Index(fields=["region"], name="tourist_region_idx"),
+            models.Index(fields=["province"], name="tourist_province_idx"),
+        ]
 
     def __str__(self):
         return f"{self.survey_id} - {self.full_name}"
@@ -595,6 +623,13 @@ class SanitaryEstablishment(models.Model):
 
     class Meta:
         ordering = ["business_name"]
+        indexes = [
+            models.Index(fields=["barangay"], name="san_est_barangay_idx"),
+            models.Index(fields=["business_type", "compliance_status"], name="san_est_type_status_idx"),
+            models.Index(fields=["permit_status"], name="san_est_permit_idx"),
+            models.Index(fields=["compliance_status"], name="san_est_compliance_idx"),
+            models.Index(fields=["updated_at"], name="san_est_updated_idx"),
+        ]
 
     def __str__(self):
         return self.business_name
@@ -636,6 +671,11 @@ class SanitaryPermitRenewal(models.Model):
 
     class Meta:
         ordering = ["expiration_date", "renewal_id"]
+        indexes = [
+            models.Index(fields=["stage", "expiration_date"], name="san_ren_stage_exp_idx"),
+            models.Index(fields=["payment_status", "expiration_date"], name="san_ren_pay_exp_idx"),
+            models.Index(fields=["establishment", "expiration_date"], name="san_ren_est_exp_idx"),
+        ]
 
     def __str__(self):
         return f"{self.renewal_id} - {self.establishment.business_name}"
@@ -666,6 +706,9 @@ class SanitaryComplaint(models.Model):
         default=COMPLAINT_PRIORITY_MEDIUM,
     )
     description = models.TextField()
+    photo_documentation = models.CharField(max_length=500, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     action_taken = models.TextField(blank=True)
     resolved_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -673,6 +716,12 @@ class SanitaryComplaint(models.Model):
 
     class Meta:
         ordering = ["-reported_date", "-id"]
+        indexes = [
+            models.Index(fields=["status", "priority"], name="san_comp_status_pri_idx"),
+            models.Index(fields=["barangay", "status"], name="san_comp_brgy_status_idx"),
+            models.Index(fields=["establishment", "status"], name="san_comp_est_status_idx"),
+            models.Index(fields=["reported_date"], name="san_comp_reported_idx"),
+        ]
 
     def __str__(self):
         target = self.establishment.business_name if self.establishment_id else self.barangay
@@ -706,6 +755,11 @@ class SanitaryInspection(models.Model):
 
     class Meta:
         ordering = ["-inspection_date", "establishment__business_name"]
+        indexes = [
+            models.Index(fields=["establishment", "inspection_date"], name="san_insp_est_date_idx"),
+            models.Index(fields=["next_due_date"], name="san_insp_due_idx"),
+            models.Index(fields=["status_after_inspection"], name="san_insp_status_idx"),
+        ]
 
     def __str__(self):
         return f"{self.establishment.business_name} - {self.inspection_date}"
@@ -821,6 +875,11 @@ class HouseholdSanitationRecord(models.Model):
 
     class Meta:
         ordering = ["barangay", "household_head"]
+        indexes = [
+            models.Index(fields=["barangay", "status"], name="hh_san_brgy_status_idx"),
+            models.Index(fields=["status"], name="hh_san_status_idx"),
+            models.Index(fields=["last_survey_date"], name="hh_san_survey_idx"),
+        ]
 
     def __str__(self):
         return f"{self.household_code} - {self.household_head}"

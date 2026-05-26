@@ -1,7 +1,13 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { tourismApi } from "../services/tourismApi";
 
 const TourismDataContext = createContext(null);
+
+const bookingSummaryKeysByStatus = {
+  pending: "pending",
+  arrived: "arrived",
+  no_show: "noShow",
+};
 
 const emptyBootstrap = {
   referenceTables: {
@@ -15,8 +21,38 @@ const emptyBootstrap = {
     visitPurposes: [],
   },
   touristRecords: [],
+  bookingManagement: {
+    filters: {
+      year: "2025",
+      search: "",
+      status: "",
+      resort_id: "",
+      region_id: "",
+      province_id: "",
+      from: "",
+      to: "",
+    },
+    summary: {
+      verifiedEntries: 0,
+      pending: 0,
+      arrived: 0,
+      noShow: 0,
+    },
+    pagination: {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 1,
+      hasPrevious: false,
+      hasNext: false,
+      showingStart: 0,
+      showingEnd: 0,
+    },
+    rows: [],
+  },
   feedbackEntries: [],
   dashboardData: {
+    filters: { year: "2025" },
     reportingDate: "",
     feePerVisitor: 300,
     metrics: {
@@ -36,9 +72,10 @@ const emptyBootstrap = {
     },
   },
   reportData: {
-    filters: { from: "", to: "", resort_id: "" },
+    filters: { year: "2025", type: "resort", from: "", to: "", resort_id: "" },
     feePerVisitor: 300,
     rows: [],
+    questionAnswers: [],
     totals: { visitors: 0, revenue: 0, avg: 0 },
   },
   analytics: {
@@ -50,6 +87,7 @@ const emptyBootstrap = {
     executiveSummaryRows: [],
   },
   arrivalMonitoring: {
+    filters: { year: "2025", from: "", to: "" },
     feePerVisitor: 300,
     reportDate: "",
     summary: {
@@ -76,6 +114,7 @@ const emptyBootstrap = {
 export function TourismDataProvider({ children }) {
   const [bootstrap, setBootstrap] = useState(emptyBootstrap);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -83,16 +122,14 @@ export function TourismDataProvider({ children }) {
     async function loadData() {
       try {
         const response = await tourismApi.getBootstrapData();
-        const arrivalMonitoring = await tourismApi.getArrivalMonitoringData(
-          response.touristRecords,
-          response.referenceTables
-        );
 
         if (mounted) {
-          setBootstrap({
-            ...response,
-            arrivalMonitoring,
-          });
+          setBootstrap(response);
+          setError("");
+        }
+      } catch (requestError) {
+        if (mounted) {
+          setError(requestError.message || "Unable to load tourism data.");
         }
       } finally {
         if (mounted) {
@@ -108,18 +145,19 @@ export function TourismDataProvider({ children }) {
     };
   }, []);
 
-  async function refreshArrivalMonitoring() {
-    const arrivalMonitoring = await tourismApi.getArrivalMonitoringData();
+  const refreshArrivalMonitoring = useCallback(async function refreshArrivalMonitoring(
+    params = {}
+  ) {
+    const arrivalMonitoring = await tourismApi.getArrivalMonitoringData(params);
     setBootstrap((current) => ({
       ...current,
       arrivalMonitoring,
     }));
-  }
+    return arrivalMonitoring;
+  }, []);
 
-  async function refreshDashboardData() {
-    const dashboardData = await tourismApi.getDashboardData(
-      bootstrap.touristRecords
-    );
+  async function refreshDashboardData(params = {}) {
+    const dashboardData = await tourismApi.getDashboardData(params);
     setBootstrap((current) => ({
       ...current,
       dashboardData,
@@ -127,26 +165,29 @@ export function TourismDataProvider({ children }) {
   }
 
   async function refreshReportData(filters = {}) {
-    const reportData = await tourismApi.getReportsData(
-      filters,
-      bootstrap.touristRecords,
-      bootstrap.referenceTables
-    );
+    const reportData = await tourismApi.getReportsData(filters);
     setBootstrap((current) => ({
       ...current,
       reportData,
     }));
   }
 
+  const refreshBookingManagement = useCallback(async function refreshBookingManagement(
+    params = {}
+  ) {
+    const bookingManagement = await tourismApi.getBookingManagementData(params);
+    setBootstrap((current) => ({
+      ...current,
+      bookingManagement,
+    }));
+    return bookingManagement;
+  }, []);
+
   async function refreshComputedData() {
     const [arrivalMonitoring, dashboardData, reportData] = await Promise.all([
-      tourismApi.getArrivalMonitoringData(),
-      tourismApi.getDashboardData(bootstrap.touristRecords),
-      tourismApi.getReportsData(
-        bootstrap.reportData.filters,
-        bootstrap.touristRecords,
-        bootstrap.referenceTables
-      ),
+      tourismApi.getArrivalMonitoringData(bootstrap.arrivalMonitoring.filters),
+      tourismApi.getDashboardData(bootstrap.dashboardData.filters),
+      tourismApi.getReportsData(bootstrap.reportData.filters),
     ]);
 
     setBootstrap((current) => ({
@@ -166,15 +207,26 @@ export function TourismDataProvider({ children }) {
     await refreshComputedData();
   }
 
-  async function updateRecord(surveyId, payload) {
+  async function updateRecord(surveyId, payload, options = {}) {
+    const { refreshComputed = true } = options;
     const updatedRecord = await tourismApi.updateTouristRecord(surveyId, payload);
     setBootstrap((current) => ({
       ...current,
       touristRecords: current.touristRecords.map((record) =>
         record.survey_id === surveyId ? { ...record, ...updatedRecord } : record
       ),
+      bookingManagement: updateBookingManagementRecord(
+        current.bookingManagement,
+        surveyId,
+        updatedRecord
+      ),
     }));
-    await refreshComputedData();
+
+    if (refreshComputed) {
+      await refreshComputedData();
+    }
+
+    return updatedRecord;
   }
 
   async function deleteRecord(surveyId) {
@@ -201,14 +253,7 @@ export function TourismDataProvider({ children }) {
       action: "import",
     });
     const response = await tourismApi.getBootstrapData();
-    const arrivalMonitoring = await tourismApi.getArrivalMonitoringData(
-      response.touristRecords,
-      response.referenceTables
-    );
-    setBootstrap({
-      ...response,
-      arrivalMonitoring,
-    });
+    setBootstrap(response);
     return result;
   }
 
@@ -273,12 +318,14 @@ export function TourismDataProvider({ children }) {
       value={{
         ...bootstrap,
         loading,
+        error,
         createRecord,
         updateRecord,
         deleteRecord,
         previewOnlineBookingImport,
         importOnlineBookingFile,
         refreshArrivalMonitoring,
+        refreshBookingManagement,
         refreshDashboardData,
         refreshReportData,
         createResort,
@@ -300,4 +347,61 @@ export function useTourismData() {
   }
 
   return context;
+}
+
+function updateBookingManagementRecord(bookingManagement, surveyId, updatedRecord) {
+  const currentRows = bookingManagement.rows || [];
+  const previousRow = currentRows.find(
+    (record) => record.survey_id === surveyId
+  );
+
+  if (!previousRow) {
+    return bookingManagement;
+  }
+
+  const nextRow = { ...previousRow, ...updatedRecord };
+  const statusFilter = bookingManagement.filters?.status || "";
+  const previousStatus = previousRow.status;
+  const nextStatus = nextRow.status;
+  const rows = currentRows
+    .map((record) => (record.survey_id === surveyId ? nextRow : record))
+    .filter((record) => !statusFilter || record.status === statusFilter);
+  const summary = adjustBookingSummary(
+    bookingManagement.summary,
+    previousStatus,
+    nextStatus
+  );
+  const rowWasRemoved = rows.length < currentRows.length;
+
+  return {
+    ...bookingManagement,
+    rows,
+    summary,
+    pagination: {
+      ...bookingManagement.pagination,
+      total: rowWasRemoved
+        ? Math.max((bookingManagement.pagination.total || 0) - 1, 0)
+        : bookingManagement.pagination.total,
+    },
+  };
+}
+
+function adjustBookingSummary(summary, previousStatus, nextStatus) {
+  if (!previousStatus || !nextStatus || previousStatus === nextStatus) {
+    return summary;
+  }
+
+  const previousKey = bookingSummaryKeysByStatus[previousStatus];
+  const nextKey = bookingSummaryKeysByStatus[nextStatus];
+  const nextSummary = { ...summary };
+
+  if (previousKey) {
+    nextSummary[previousKey] = Math.max((nextSummary[previousKey] || 0) - 1, 0);
+  }
+
+  if (nextKey) {
+    nextSummary[nextKey] = (nextSummary[nextKey] || 0) + 1;
+  }
+
+  return nextSummary;
 }
