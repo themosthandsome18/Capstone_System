@@ -1,5 +1,8 @@
-from django.db.models import Q
+from datetime import timedelta
+
+from django.db.models import Q, Sum
 from django.db.models.deletion import ProtectedError
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -18,6 +21,8 @@ from .models import (
     BoatType,
     COMPLAINT_PRIORITY_MEDIUM,
     COMPLAINT_STATUS_PENDING,
+    COMPLAINT_STATUS_REJECTED,
+    COMPLAINT_STATUS_RESOLVED,
     Country,
     FeedbackEntry,
     HouseholdSanitationRecord,
@@ -103,16 +108,13 @@ def health_check(request):
 def mobile_tourism_bootstrap(request):
     ensure_mobile_reference_data(include_barangays=True)
 
-    destinations = Resort.objects.all()
+    destinations = get_mobile_top_destinations()
 
     return Response(
         {
             "referenceTables": build_reference_tables_payload(),
             "destinations": ResortSerializer(destinations, many=True).data,
-            "featuredDestinations": ResortSerializer(
-                destinations.order_by("-tourism_rating", "-monthly_arrivals")[:6],
-                many=True,
-            ).data,
+            "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": BarangaySerializer(Barangay.objects.filter(is_active=True), many=True).data,
             "notifications": build_mobile_notifications(),
         }
@@ -124,7 +126,7 @@ def mobile_tourism_bootstrap(request):
 def mobile_destination_list(request):
     ensure_mobile_reference_data()
 
-    destinations = Resort.objects.all()
+    destinations = get_mobile_destination_queryset()
     search = request.query_params.get("search", "").strip()
     destination_type = request.query_params.get("type", "").strip()
 
@@ -138,6 +140,9 @@ def mobile_destination_list(request):
 
     if destination_type:
         destinations = destinations.filter(type__iexact=destination_type)
+
+    if not search and not destination_type:
+        destinations = get_mobile_top_destinations()
 
     return Response(ResortSerializer(destinations, many=True).data)
 
@@ -155,6 +160,47 @@ def mobile_destination_detail(request, resort_id):
             "recentFeedback": FeedbackEntrySerializer(feedback, many=True).data,
         }
     )
+
+
+MOBILE_EXCLUDED_DESTINATION_NAMES = {
+    "",
+    ".",
+    "+",
+    "0.0",
+    "A",
+    "Day tour",
+    "No resort",
+    "Private Property",
+    "Residence",
+    "Transient",
+}
+
+
+def get_mobile_destination_queryset():
+    return Resort.objects.exclude(
+        resort_name__in=MOBILE_EXCLUDED_DESTINATION_NAMES,
+    ).exclude(resort_name__icontains="Kwebang")
+
+
+def get_mobile_top_destinations(limit=10):
+    destinations = (
+        get_mobile_destination_queryset()
+        .annotate(visitor_total=Coalesce(Sum("tourist_records__total_visitors"), 0))
+        .filter(visitor_total__gt=0)
+        .order_by("-visitor_total", "resort_name")
+    )
+    top_destinations = list(destinations[:limit])
+
+    if len(top_destinations) < limit:
+        existing_ids = [destination.resort_id for destination in top_destinations]
+        fallback_destinations = (
+            get_mobile_destination_queryset()
+            .exclude(resort_id__in=existing_ids)
+            .order_by("-monthly_arrivals", "-tourism_rating", "resort_name")
+        )
+        top_destinations.extend(fallback_destinations[: limit - len(top_destinations)])
+
+    return top_destinations[:limit]
 
 
 @api_view(["POST"])
@@ -262,10 +308,274 @@ def mobile_sanitation_report_submit(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-def build_mobile_notifications():
-    top_destination = (
-        Resort.objects.order_by("-monthly_arrivals", "-tourism_rating").first()
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_sanitation_bootstrap(request):
+    ensure_initial_sanitation_data()
+    ensure_initial_household_data()
+    ensure_mobile_barangays()
+
+    establishments = with_establishment_rollups(
+        SanitaryEstablishment.objects.select_related("business_type").all()
     )
+    inspections = SanitaryInspection.objects.select_related(
+        "establishment",
+        "establishment__business_type",
+    ).prefetch_related("checklist_items")[:25]
+    household_records = HouseholdSanitationRecord.objects.all()[:50]
+    complaints = SanitaryComplaint.objects.exclude(
+        status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
+    ).order_by("-reported_date", "-id")[:50]
+    all_establishments = SanitaryEstablishment.objects.all()
+    all_complaints = SanitaryComplaint.objects.all()
+
+    return Response(
+        {
+            "businessTypes": SanitaryBusinessTypeSerializer(
+                SanitaryBusinessType.objects.prefetch_related("requirements").all(),
+                many=True,
+            ).data,
+            "establishments": [
+                serialize_mobile_sanitation_establishment(item)
+                for item in establishments
+            ],
+            "inspections": [
+                serialize_mobile_sanitation_inspection(item) for item in inspections
+            ],
+            "dashboardData": {
+                "summary": {
+                    "totalEstablishments": all_establishments.count(),
+                    "goodStanding": all_establishments.filter(
+                        compliance_status="good_standing"
+                    ).count(),
+                    "forCompletion": all_establishments.filter(
+                        compliance_status="for_completion"
+                    ).count(),
+                    "violators": all_establishments.filter(
+                        compliance_status="violation"
+                    ).count(),
+                    "noPermit": all_establishments.filter(
+                        permit_status="no_permit"
+                    ).count(),
+                }
+            },
+            "permitData": {
+                "summary": {
+                    "active": all_establishments.filter(
+                        permit_status="active"
+                    ).count(),
+                    "renewalDue": all_establishments.filter(
+                        permit_status="renewal_due"
+                    ).count(),
+                    "conditional": all_establishments.filter(
+                        permit_status="conditional"
+                    ).count(),
+                    "suspended": all_establishments.filter(
+                        permit_status="suspended"
+                    ).count(),
+                    "noPermit": all_establishments.filter(
+                        permit_status="no_permit"
+                    ).count(),
+                },
+                "rows": [],
+            },
+            "complaintData": {
+                "summary": {
+                    "total": all_complaints.count(),
+                    "pending": all_complaints.filter(
+                        status=COMPLAINT_STATUS_PENDING
+                    ).count(),
+                    "open": all_complaints.exclude(
+                        status__in=[
+                            COMPLAINT_STATUS_RESOLVED,
+                            COMPLAINT_STATUS_REJECTED,
+                        ]
+                    ).count(),
+                },
+                "rows": [
+                    serialize_mobile_sanitation_complaint(item)
+                    for item in complaints
+                ],
+            },
+            "householdRecords": [
+                serialize_mobile_household_record(item) for item in household_records
+            ],
+            "barangays": BarangaySerializer(
+                Barangay.objects.filter(is_active=True),
+                many=True,
+            ).data,
+            "notifications": build_mobile_sanitation_notifications(),
+        }
+    )
+
+
+def serialize_mobile_sanitation_establishment(establishment):
+    return {
+        "id": establishment.id,
+        "business_name": establishment.business_name,
+        "owner_name": establishment.owner_name,
+        "business_type": establishment.business_type_id,
+        "business_type_name": establishment.business_type.name,
+        "inspection_frequency": establishment.inspection_frequency,
+        "permit_size": establishment.permit_size,
+        "barangay": establishment.barangay,
+        "address": establishment.address,
+        "contact_number": establishment.contact_number,
+        "has_permit": establishment.has_permit,
+        "permit_number": establishment.permit_number,
+        "permit_issued_date": date_to_iso(establishment.permit_issued_date),
+        "permit_expiry_date": date_to_iso(establishment.permit_expiry_date),
+        "compliance_status": establishment.compliance_status,
+        "compliance_status_label": establishment.get_compliance_status_display(),
+        "permit_status": establishment.permit_status,
+        "permit_status_label": establishment.get_permit_status_display(),
+        "latitude": establishment.latitude,
+        "longitude": establishment.longitude,
+        "open_complaints": getattr(establishment, "open_complaints_count", 0),
+    }
+
+
+def serialize_mobile_sanitation_inspection(inspection):
+    establishment = inspection.establishment
+    return {
+        "id": inspection.id,
+        "establishment": establishment.id,
+        "establishment_name": establishment.business_name,
+        "establishment_address": establishment.address,
+        "business_type_name": establishment.business_type.name,
+        "barangay": establishment.barangay,
+        "inspector_name": inspection.inspector_name,
+        "inspection_date": date_to_iso(inspection.inspection_date),
+        "next_due_date": date_to_iso(inspection.next_due_date),
+        "status_after_inspection": inspection.status_after_inspection,
+        "status_after_inspection_label": (
+            inspection.get_status_after_inspection_display()
+        ),
+    }
+
+
+def serialize_mobile_sanitation_complaint(complaint):
+    return {
+        "id": complaint.id,
+        "complaint_id": complaint.complaint_id,
+        "category": complaint.category,
+        "barangay": complaint.barangay,
+        "reported_date": date_to_iso(complaint.reported_date),
+        "status": complaint.status,
+        "status_label": complaint.get_status_display(),
+        "priority": complaint.priority,
+        "description": complaint.description,
+        "latitude": complaint.latitude,
+        "longitude": complaint.longitude,
+    }
+
+
+def serialize_mobile_household_record(record):
+    return {
+        "id": record.id,
+        "household_code": record.household_code,
+        "household_head": record.household_head,
+        "barangay": record.barangay,
+        "address": record.address,
+        "male_count": record.male_count,
+        "female_count": record.female_count,
+        "toilet_type": record.toilet_type,
+        "water_level": record.water_level,
+        "water_source": record.water_source,
+        "waste_disposal": record.waste_disposal,
+        "status": record.status,
+        "latitude": record.latitude,
+        "longitude": record.longitude,
+        "last_survey_date": date_to_iso(record.last_survey_date),
+    }
+
+
+def date_to_iso(value):
+    return value.isoformat() if value else ""
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_sanitation_inspection_submit(request):
+    ensure_initial_sanitation_data()
+
+    data = request.data.copy()
+    data["inspector_name"] = data.get("inspector_name") or data.get("inspector") or ""
+    data["inspection_date"] = (
+        data.get("inspection_date") or timezone.localdate().isoformat()
+    )
+    data["status_after_inspection"] = (
+        data.get("status_after_inspection") or "good_standing"
+    )
+    data["is_draft"] = data.get("is_draft", False)
+    upload = request.FILES.get("photo") or request.FILES.get("image")
+
+    if upload and not data.get("photo_documentation"):
+        data["photo_documentation"] = upload.name
+
+    serializer = SanitaryInspectionCreateSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    inspection = serializer.save()
+    sync_establishment_after_inspection(inspection)
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        inspection,
+        label=str(inspection),
+        record_id=inspection.pk,
+    )
+
+    return Response(
+        SanitaryInspectionSerializer(inspection).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_household_survey_submit(request):
+    ensure_mobile_barangays()
+
+    data = request.data.copy()
+    data["household_code"] = data.get("household_code") or generate_household_code()
+    data["household_head"] = (
+        data.get("household_head") or data.get("head") or data.get("full_name") or ""
+    )
+    data["barangay"] = data.get("barangay") or "Unspecified"
+    data["male_count"] = parse_mobile_int(data.get("male_count"), 0)
+    data["female_count"] = parse_mobile_int(data.get("female_count"), 0)
+    data["toilet_type"] = data.get("toilet_type") or "water_sealed"
+    data["water_level"] = data.get("water_level") or "level_3"
+    data["waste_disposal"] = data.get("waste_disposal") or "collected"
+    data["status"] = household_status_from_payload(data)
+    data["last_survey_date"] = data.get("last_survey_date") or timezone.localdate().isoformat()
+
+    for field in ["latitude", "longitude"]:
+        if data.get(field) in ("", None):
+            data.pop(field, None)
+
+    serializer = HouseholdSanitationRecordSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    record = serializer.save()
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        record,
+        label=record.household_code,
+        record_id=record.pk,
+    )
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+def build_mobile_notifications():
+    top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
 
     notifications = [
         {
@@ -283,19 +593,89 @@ def build_mobile_notifications():
     ]
 
     if top_destination:
+        arrivals = getattr(
+            top_destination,
+            "visitor_total",
+            top_destination.monthly_arrivals,
+        )
         notifications.append(
             {
                 "id": f"featured-{top_destination.resort_id}",
                 "type": "tourism",
                 "title": f"{top_destination.resort_name} is trending",
                 "message": (
-                    f"{top_destination.monthly_arrivals} recorded monthly arrivals "
+                    f"{arrivals} recorded visitor arrivals "
                     "in the tourism guide data."
                 ),
             }
         )
 
     return notifications
+
+
+def build_mobile_sanitation_notifications():
+    today = timezone.localdate()
+    expiring_permits = SanitaryEstablishment.objects.filter(
+        permit_expiry_date__gte=today,
+        permit_expiry_date__lte=today + timedelta(days=30),
+    ).order_by("permit_expiry_date")[:3]
+    open_complaints = SanitaryComplaint.objects.exclude(
+        status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
+    ).order_by("-reported_date", "-id")[:3]
+
+    notifications = [
+        {
+            "id": "sanitation-dashboard",
+            "type": "sanitation",
+            "title": "Sanitary monitoring active",
+            "message": "Review establishments, inspections, permits, reports, and household surveys.",
+        }
+    ]
+
+    for complaint in open_complaints:
+        notifications.append(
+            {
+                "id": f"complaint-{complaint.complaint_id}",
+                "type": "warning",
+                "title": complaint.category,
+                "message": f"{complaint.barangay} - {complaint.get_status_display()}",
+            }
+        )
+
+    for establishment in expiring_permits:
+        notifications.append(
+            {
+                "id": f"permit-{establishment.id}",
+                "type": "permit",
+                "title": "Permit expiring soon",
+                "message": f"{establishment.business_name} expires on {establishment.permit_expiry_date}.",
+            }
+        )
+
+    return notifications
+
+
+def generate_household_code():
+    today = timezone.localdate()
+    prefix = f"HH-{today:%Y%m%d}"
+    count = HouseholdSanitationRecord.objects.filter(
+        household_code__startswith=prefix,
+    ).count()
+    return f"{prefix}-{count + 1:04d}"
+
+
+def household_status_from_payload(data):
+    toilet_type = data.get("toilet_type")
+    water_level = data.get("water_level")
+    waste_disposal = data.get("waste_disposal")
+
+    if toilet_type == "none" or waste_disposal in ["burned", "dumped"]:
+        return "violation"
+
+    if toilet_type == "pit_latrine" or water_level == "level_1":
+        return "for_completion"
+
+    return "good_standing"
 
 
 def ensure_mobile_reference_data(include_barangays=False):

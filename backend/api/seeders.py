@@ -100,7 +100,7 @@ REGION_DISPLAY_ORDER = [
 def ensure_initial_reference_data():
     global _REFERENCE_DATA_READY
 
-    if _REFERENCE_DATA_READY:
+    if _REFERENCE_DATA_READY and has_initial_reference_data():
         return
 
     if has_initial_reference_data():
@@ -148,6 +148,12 @@ def has_initial_reference_data():
 
 
 def ensure_initial_barangays():
+    if (
+        Barangay.objects.filter(name__in=MAUBAN_BARANGAYS, is_active=True).count()
+        == len(MAUBAN_BARANGAYS)
+    ):
+        return
+
     for index, name in enumerate(MAUBAN_BARANGAYS, start=1):
         Barangay.objects.update_or_create(
             name=name,
@@ -219,6 +225,7 @@ def ensure_ph_location_provinces(regions_by_code):
     provinces_path = PH_LOCATION_DATA_DIR / "provinces.json"
 
     if not provinces_path.exists():
+        ensure_seed_provinces(regions_by_code)
         return
 
     with provinces_path.open("r", encoding="utf-8") as file:
@@ -266,6 +273,29 @@ def ensure_ph_location_provinces(regions_by_code):
                 "name": "Metro Manila",
                 "region": ncr_region,
                 "code": "1300",
+            },
+        )
+
+
+def ensure_seed_provinces(regions_by_code):
+    calabarzon_region = regions_by_code.get("04") or Region.objects.filter(
+        name__icontains="CALABARZON",
+    ).first()
+    ncr_region = regions_by_code.get("13") or Region.objects.filter(
+        name__icontains="National Capital",
+    ).first()
+
+    for row in REFERENCE_TABLES["provinces"]:
+        region = ncr_region if row["name"] == "Metro Manila" else calabarzon_region
+        if not region:
+            continue
+
+        Province.objects.update_or_create(
+            id=row["id"],
+            defaults={
+                "name": row["name"],
+                "region": region,
+                "code": row.get("code", ""),
             },
         )
 
@@ -332,7 +362,7 @@ def ensure_initial_tourism_data():
 def ensure_initial_sanitation_data():
     global _SANITATION_DATA_READY
 
-    if _SANITATION_DATA_READY:
+    if _SANITATION_DATA_READY and SanitaryEstablishment.objects.exists():
         return
 
     if (

@@ -2,13 +2,33 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://localhost:8000/api',
 );
+
+String conciseError(Object error) {
+  final message = error.toString().replaceFirst('Exception: ', '');
+  return message.length > 160 ? '${message.substring(0, 160)}...' : message;
+}
+
+const boatCapacityFareOptions = [
+  '',
+  '1-2 pax (One-Way P1500, Two-way P2000)',
+  '3-4 pax (One-Way P2000, Two-way P2,500)',
+  '5-6 pax (One-Way P2,500, Two-way P3,000)',
+  '7-8 pax (One-Way P3,000, Two-way P3,500)',
+  '9-10 pax (One-Way P3,500, Two-way P4,000)',
+  '11-12 pax (One-Way P4,000, Two-way P4,500)',
+  '13-14 pax (One-Way P4,500, Two-way P5,000)',
+  '15-17 pax (One-Way P5,000, Two-way P5,500)',
+  '18-20 pax (One-Way P5,500, Two-way P6,000)',
+];
 
 void main() {
   runApp(const MaubanMobileApp());
@@ -104,12 +124,14 @@ class _MobileShellState extends State<MobileShell> {
   final List<MobileVisitReceipt> _visitHistory = [];
   final List<MobileFeedbackReceipt> _feedbackHistory = [];
   final List<MobileSanitationReceipt> _sanitationHistory = [];
+  MobileUserProfile _profile = MobileUserProfile.guest();
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       HomePage(
         bootstrap: widget.bootstrap,
+        profile: _profile,
         onOpenTab: _openTab,
         onOpenDestination: _openDestination,
         onOpenNotifications: _openNotifications,
@@ -130,7 +152,9 @@ class _MobileShellState extends State<MobileShell> {
         onOpenSanitationReport: _openSanitationReport,
       ),
       ProfilePage(
+        profile: _profile,
         onOpenReport: _openSanitationReport,
+        onOpenHouseholdSurvey: _openHouseholdSurvey,
         visits: _visitHistory,
         feedbackHistory: _feedbackHistory,
         sanitationReports: _sanitationHistory,
@@ -222,15 +246,32 @@ class _MobileShellState extends State<MobileShell> {
     }
   }
 
+  Future<void> _openHouseholdSurvey() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => HouseholdSurveyPage(
+          api: widget.api,
+          barangays: widget.bootstrap.barangays,
+        ),
+      ),
+    );
+  }
+
   void _addVisit(MobileVisitReceipt receipt) {
     setState(() {
       _visitHistory.insert(0, receipt);
+      _profile = _profile.copyWith(
+        name: receipt.fullName,
+        email: receipt.email,
+        contactNumber: receipt.contactNumber,
+      );
     });
   }
 
   void _addFeedback(MobileFeedbackReceipt receipt) {
     setState(() {
       _feedbackHistory.insert(0, receipt);
+      _profile = _profile.copyWith(name: receipt.reviewer);
     });
   }
 
@@ -515,6 +556,7 @@ class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
     required this.bootstrap,
+    required this.profile,
     required this.onOpenTab,
     required this.onOpenDestination,
     required this.onOpenNotifications,
@@ -522,6 +564,7 @@ class HomePage extends StatelessWidget {
   });
 
   final MobileBootstrap bootstrap;
+  final MobileUserProfile profile;
   final ValueChanged<int> onOpenTab;
   final ValueChanged<Destination> onOpenDestination;
   final VoidCallback onOpenNotifications;
@@ -531,21 +574,48 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final featured = bootstrap.featuredDestinations.isNotEmpty
         ? bootstrap.featuredDestinations
-        : bootstrap.destinations.take(4).toList();
+        : bootstrap.destinations.take(6).toList();
     final heroDestination =
-        featured.firstOrNull ?? Destination.fallback().first;
+        featured.firstOrNull ?? bootstrap.destinations.firstOrNull;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         AppHeader(onOpenNotifications: onOpenNotifications),
+        Text(
+          profile.isGuest ? 'Welcome to' : 'Welcome back,',
+          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+        Text(
+          profile.displayName,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        DataSourceBanner(
+          icon: bootstrap.isOffline
+              ? Icons.cloud_off_outlined
+              : Icons.cloud_done_outlined,
+          title: bootstrap.isOffline
+              ? 'Cannot reach Tourism Web System'
+              : 'Connected to Tourism Web System',
+          text: bootstrap.isOffline
+              ? 'No fallback destinations are shown. Start the backend API to load the live tourism records.'
+              : 'Showing the Top ${bootstrap.destinations.length} most visited resorts from Booking Management records.',
+          warning: bootstrap.isOffline,
+        ),
         const SizedBox(height: 12),
         SearchBox(hint: 'Search destinations, resorts...'),
         const SizedBox(height: 14),
-        GestureDetector(
-          onTap: () => onOpenDestination(heroDestination),
-          child: HeroCard(destination: heroDestination),
-        ),
+        if (heroDestination == null)
+          const EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'No destinations loaded from the web system',
+          )
+        else
+          GestureDetector(
+            onTap: () => onOpenDestination(heroDestination),
+            child: HeroCard(destination: heroDestination),
+          ),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -571,36 +641,49 @@ class HomePage extends StatelessWidget {
             ),
           ],
         ),
-        SectionHeader(
-          title: 'Featured Destinations',
-          action: 'See all',
-          onTap: () => onOpenTab(1),
-        ),
-        SizedBox(
-          height: 168,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemBuilder: (context, index) => DestinationTile(
-              destination: featured[index],
-              onTap: () => onOpenDestination(featured[index]),
-            ),
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemCount: featured.length,
+        if (featured.isNotEmpty) ...[
+          SectionHeader(
+            title: 'Top 10 Most Visited',
+            action: 'See all',
+            onTap: () => onOpenTab(1),
           ),
-        ),
+          SizedBox(
+            height: 168,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemBuilder: (context, index) => DestinationTile(
+                destination: featured[index],
+                onTap: () => onOpenDestination(featured[index]),
+              ),
+              separatorBuilder: (context, index) => const SizedBox(width: 12),
+              itemCount: featured.length,
+            ),
+          ),
+        ],
+        if (bootstrap.destinations.isNotEmpty)
+          DataSourceBanner(
+            icon: Icons.bar_chart_outlined,
+            title: 'Based on Tourism Records',
+            text:
+                'Ranked by total visitor arrivals submitted through the web system and mobile registration.',
+          ),
         SectionHeader(
-          title: 'Popular Resorts',
+          title: 'Most Visited Resorts',
           action: 'Map',
           onTap: () => onOpenTab(2),
         ),
-        ...bootstrap.destinations
-            .take(4)
-            .map(
-              (destination) => DestinationListCard(
-                destination: destination,
-                onTap: () => onOpenDestination(destination),
-              ),
+        if (bootstrap.destinations.isEmpty)
+          const EmptyState(
+            icon: Icons.travel_explore_outlined,
+            title: 'Start the backend API to load ranked destinations',
+          )
+        else
+          ...bootstrap.destinations.map(
+            (destination) => DestinationListCard(
+              destination: destination,
+              onTap: () => onOpenDestination(destination),
             ),
+          ),
         const InfoBanner(
           icon: Icons.event_available_outlined,
           title: 'Upcoming: Fiesta de Mauban',
@@ -661,10 +744,16 @@ class _DestinationListPageState extends State<DestinationListPage> {
           subtitle: 'Find places to visit',
         ),
         DataSourceBanner(
-          icon: Icons.cloud_done_outlined,
-          title: '${widget.destinations.length} destinations loaded',
-          text:
-              'These records come from the same backend database used by the web admin system.',
+          icon: widget.destinations.isEmpty
+              ? Icons.cloud_off_outlined
+              : Icons.cloud_done_outlined,
+          title: widget.destinations.isEmpty
+              ? 'Cannot reach Tourism Web System'
+              : 'Top ${widget.destinations.length} most visited resorts loaded',
+          text: widget.destinations.isEmpty
+              ? 'The mobile app is not showing fake destination records.'
+              : 'Source: Tourism Booking Management records via $apiBaseUrl',
+          warning: widget.destinations.isEmpty,
         ),
         const SizedBox(height: 12),
         SearchBox(
@@ -848,13 +937,17 @@ class VisitPlannerPage extends StatelessWidget {
 class ProfilePage extends StatelessWidget {
   const ProfilePage({
     super.key,
+    required this.profile,
     required this.onOpenReport,
+    required this.onOpenHouseholdSurvey,
     required this.visits,
     required this.feedbackHistory,
     required this.sanitationReports,
   });
 
+  final MobileUserProfile profile;
   final VoidCallback onOpenReport;
+  final VoidCallback onOpenHouseholdSurvey;
   final List<MobileVisitReceipt> visits;
   final List<MobileFeedbackReceipt> feedbackHistory;
   final List<MobileSanitationReceipt> sanitationReports;
@@ -869,12 +962,12 @@ class ProfilePage extends StatelessWidget {
           subtitle: 'Tourist and resident services',
         ),
         const SizedBox(height: 8),
-        const CircleAvatar(
+        CircleAvatar(
           radius: 42,
-          backgroundColor: Color(0xffd8f5e4),
+          backgroundColor: const Color(0xffd8f5e4),
           child: Text(
-            'TA',
-            style: TextStyle(
+            profile.initials,
+            style: const TextStyle(
               color: AppColors.green,
               fontWeight: FontWeight.w900,
               fontSize: 24,
@@ -882,26 +975,28 @@ class ProfilePage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Trish Anne Huidem',
+        Text(
+          profile.displayName,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
         ),
         const Text(
-          'Tourist - Visitor Profile',
+          'Tourist - Guide Explorer',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.muted),
         ),
         const SizedBox(height: 20),
-        const ProfileTile(
+        ProfileTile(
           icon: Icons.email_outlined,
           label: 'Email',
-          value: 'trish@example.com',
+          value: profile.email.isEmpty ? 'Not provided yet' : profile.email,
         ),
-        const ProfileTile(
+        ProfileTile(
           icon: Icons.phone_outlined,
           label: 'Contact',
-          value: '+63 912 345 6789',
+          value: profile.contactNumber.isEmpty
+              ? 'Not provided yet'
+              : profile.contactNumber,
         ),
         ProfileLink(
           icon: Icons.route_outlined,
@@ -936,6 +1031,11 @@ class ProfilePage extends StatelessWidget {
           icon: Icons.report_outlined,
           label: 'Report Sanitation Concern',
           onTap: onOpenReport,
+        ),
+        ProfileLink(
+          icon: Icons.assignment_outlined,
+          label: 'Household Sanitary Survey',
+          onTap: onOpenHouseholdSurvey,
         ),
         const SizedBox(height: 18),
         OutlinedButton.icon(
@@ -984,21 +1084,28 @@ class DestinationDetailPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       RatingPill(rating: destination.rating),
-                      const SizedBox(width: 8),
-                      Text(
-                        destination.location,
-                        style: const TextStyle(color: AppColors.muted),
-                      ),
+                      StatusPill(text: destination.type),
+                      PermitPill(verified: destination.hasMayorPermit),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    destination.location,
+                    style: const TextStyle(color: AppColors.muted),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     destination.description,
                     style: const TextStyle(height: 1.45),
                   ),
+                  SectionHeader(title: 'Tourism Record'),
+                  DestinationFactsPanel(destination: destination),
                   SectionHeader(title: 'Amenities'),
                   Wrap(
                     spacing: 8,
@@ -1123,6 +1230,11 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 
   Future<void> _submit() async {
+    if (_comment.text.trim().isEmpty) {
+      showAppMessage(context, 'Feedback comment is required.');
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -1151,7 +1263,13 @@ class _FeedbackPageState extends State<FeedbackPage> {
           title: 'Feedback sent',
           referenceLabel: 'Feedback ID',
           referenceValue: receipt.reference,
-          message: 'Your comment is now available to the tourism office.',
+          message:
+              'Your feedback was saved to the Tourism Web System for review by the tourism office.',
+          details: [
+            'Destination: ${receipt.destination.name}',
+            'Rating: ${receipt.rating}/5',
+            'Reviewer: ${receipt.reviewer}',
+          ],
         );
         if (mounted) Navigator.of(context).pop(receipt);
       }
@@ -1160,6 +1278,23 @@ class _FeedbackPageState extends State<FeedbackPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+}
+
+class FormSectionTitle extends StatelessWidget {
+  const FormSectionTitle(this.title, {super.key});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+      ),
+    );
   }
 }
 
@@ -1184,18 +1319,31 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _contact = TextEditingController();
   final TextEditingController _email = TextEditingController();
+  final TextEditingController _countryOfOrigin = TextEditingController(
+    text: 'Philippines',
+  );
+  final TextEditingController _parkingSpace = TextEditingController();
   DateTime _arrivalDate = DateTime.now();
   late Destination _destination;
+  late RefItem _country;
+  late RefItem _region;
+  late RefItem _province;
   late RefItem _itinerary;
   late RefItem _travelMode;
   late RefItem _boatType;
   late RefItem _purpose;
+  String _boatCapacityFare = '';
   int _visitors = 1;
   int _male = 0;
   int _female = 1;
   int _maubanin = 0;
   int _filipino = 1;
   int _foreign = 0;
+  int _specialGroup = 0;
+  int _age0To7 = 0;
+  int _age8To59 = 1;
+  int _age60Above = 0;
+  bool _consentConfirmed = true;
   bool _submitting = false;
 
   @override
@@ -1204,7 +1352,16 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     _destination =
         widget.initialDestination ??
         widget.bootstrap.destinations.firstOrNull ??
-        Destination.fallback().first;
+        Destination.placeholder();
+    _country =
+        widget.bootstrap.countries.firstOrNull ??
+        const RefItem(id: 1, name: 'Philippines');
+    _region = _preferredRefItem(
+      widget.bootstrap.regions,
+      nameContains: 'CALABARZON',
+      fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
+    );
+    _province = _preferredProvinceForRegion(_region, nameContains: 'Quezon');
     _itinerary =
         widget.bootstrap.itineraries.firstOrNull ??
         const RefItem(id: 1, name: 'Day Tour');
@@ -1224,6 +1381,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     _name.dispose();
     _contact.dispose();
     _email.dispose();
+    _countryOfOrigin.dispose();
+    _parkingSpace.dispose();
     super.dispose();
   }
 
@@ -1233,9 +1392,57 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       title: 'Tourist Registration',
       subtitle: 'Help us welcome you',
       children: [
+        const FormSectionTitle('Contact Info'),
         AppTextField(controller: _name, label: 'Full name'),
         AppTextField(controller: _contact, label: 'Contact number'),
         AppTextField(controller: _email, label: 'Email address'),
+        CheckboxListTile(
+          value: _consentConfirmed,
+          onChanged: (value) {
+            setState(() => _consentConfirmed = value ?? false);
+          },
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text(
+            'I consent to submit this visitor record to Mauban LGU Tourism.',
+          ),
+        ),
+        const FormSectionTitle('Origin'),
+        DropdownTile<RefItem>(
+          label: 'Country',
+          value: _country,
+          items: widget.bootstrap.countries,
+          itemLabel: (item) => item.name,
+          onChanged: (item) {
+            setState(() {
+              _country = item;
+              if (item.name.toLowerCase().contains('philippines')) {
+                _countryOfOrigin.text = 'Philippines';
+              }
+            });
+          },
+        ),
+        DropdownTile<RefItem>(
+          label: 'Region',
+          value: _region,
+          items: widget.bootstrap.regions,
+          itemLabel: (item) => item.name,
+          onChanged: (item) {
+            setState(() {
+              _region = item;
+              _province = _preferredProvinceForRegion(item);
+            });
+          },
+        ),
+        DropdownTile<RefItem>(
+          label: 'Province',
+          value: _province,
+          items: _provincesForRegion(_region),
+          itemLabel: (item) => item.name,
+          onChanged: (item) => setState(() => _province = item),
+        ),
+        AppTextField(controller: _countryOfOrigin, label: 'Country of origin'),
+        const FormSectionTitle('Trip Details'),
         PickerTile(
           icon: Icons.calendar_month_outlined,
           label: 'Arrival date',
@@ -1260,11 +1467,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           title: 'Your Group',
           counters: [
             CounterItem('Visitors', _visitors, (value) {
-              setState(() {
-                _visitors = value;
-                _female = _visitors - _male;
-                _filipino = _visitors - _maubanin - _foreign;
-              });
+              setState(() => _setVisitors(value));
             }),
             CounterItem('Male', _male, (value) {
               setState(() {
@@ -1281,41 +1484,66 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
             CounterItem('Maubanin', _maubanin, (value) {
               setState(() {
                 _maubanin = clampInt(value, 0, _visitors);
-                _filipino = clampInt(
-                  _visitors - _maubanin - _foreign,
-                  0,
-                  _visitors,
-                );
+                _syncClassification();
               });
             }),
             CounterItem('Foreign', _foreign, (value) {
               setState(() {
                 _foreign = clampInt(value, 0, _visitors);
-                _filipino = clampInt(
-                  _visitors - _maubanin - _foreign,
-                  0,
-                  _visitors,
-                );
+                _syncClassification();
+              });
+            }),
+          ],
+        ),
+        CounterPanel(
+          title: 'Age and Special Groups',
+          counters: [
+            CounterItem('Senior/PWD/7 below', _specialGroup, (value) {
+              setState(() {
+                _specialGroup = clampInt(value, 0, _visitors);
+              });
+            }),
+            CounterItem('Age 0-7', _age0To7, (value) {
+              setState(() {
+                _age0To7 = clampInt(value, 0, _visitors);
+                _syncAgeGroups();
+              });
+            }),
+            CounterItem('Age 8-59', _age8To59, (value) {
+              setState(() => _setAge8To59(value));
+            }),
+            CounterItem('Age 60+', _age60Above, (value) {
+              setState(() {
+                _age60Above = clampInt(value, 0, _visitors);
+                _syncAgeGroups();
               });
             }),
           ],
         ),
         DropdownTile<RefItem>(
-          label: 'Travel mode',
+          label: 'Vehicle classification',
           value: _travelMode,
           items: widget.bootstrap.travelModes,
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _travelMode = item),
         ),
         DropdownTile<RefItem>(
-          label: 'Boat type',
+          label: 'Boat classification',
           value: _boatType,
           items: widget.bootstrap.boatTypes,
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _boatType = item),
         ),
+        DropdownTile<String>(
+          label: 'Boat capacity and fare',
+          value: _boatCapacityFare,
+          items: boatCapacityFareOptions,
+          itemLabel: boatCapacityFareLabel,
+          onChanged: (item) => setState(() => _boatCapacityFare = item),
+        ),
+        AppTextField(controller: _parkingSpace, label: 'Parking space'),
         DropdownTile<RefItem>(
-          label: 'Purpose of visit',
+          label: 'Purpose of travel',
           value: _purpose,
           items: widget.bootstrap.visitPurposes,
           itemLabel: (item) => item.name,
@@ -1327,6 +1555,39 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           onPressed: _submit,
         ),
       ],
+    );
+  }
+
+  RefItem _preferredRefItem(
+    List<RefItem> items, {
+    String? nameContains,
+    required RefItem fallback,
+  }) {
+    if (items.isEmpty) return fallback;
+    if (nameContains == null) return items.first;
+
+    final needle = nameContains.toLowerCase();
+    for (final item in items) {
+      if (item.name.toLowerCase().contains(needle)) return item;
+    }
+
+    return items.first;
+  }
+
+  List<RefItem> _provincesForRegion(RefItem region) {
+    final provinces = widget.bootstrap.provinces
+        .where((province) => province.regionId == region.id)
+        .toList();
+
+    return provinces.isEmpty ? widget.bootstrap.provinces : provinces;
+  }
+
+  RefItem _preferredProvinceForRegion(RefItem region, {String? nameContains}) {
+    final provinces = _provincesForRegion(region);
+    return _preferredRefItem(
+      provinces,
+      nameContains: nameContains,
+      fallback: const RefItem(id: 1, name: 'Quezon', regionId: 4),
     );
   }
 
@@ -1344,8 +1605,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
 
   Future<void> _submit() async {
-    if (_name.text.trim().isEmpty || _contact.text.trim().isEmpty) {
-      showAppMessage(context, 'Name and contact number are required.');
+    final validationMessage = _validateRegistration();
+    if (validationMessage != null) {
+      showAppMessage(context, validationMessage);
       return;
     }
 
@@ -1356,11 +1618,18 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         fullName: _name.text.trim(),
         contactNumber: _contact.text.trim(),
         email: _email.text.trim(),
+        consentConfirmed: _consentConfirmed,
         arrivalDate: isoDate(_arrivalDate),
+        countryId: _country.id,
+        regionId: _region.id,
+        provinceId: _province.id,
+        countryOfOrigin: _countryOfOrigin.text.trim(),
         resortId: _destination.id,
         itineraryId: _itinerary.id,
         travelModeId: _travelMode.id,
         boatTypeId: _boatType.id,
+        boatCapacityFare: _boatCapacityFare.trim(),
+        parkingSpace: _parkingSpace.text.trim(),
         visitPurposeId: _purpose.id,
         totalVisitors: _visitors,
         totalMale: _male,
@@ -1368,6 +1637,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         filipinoCount: _filipino,
         maubaninCount: _maubanin,
         foreignerCount: _foreign,
+        specialGroupCount: _specialGroup,
+        age0To7: _age0To7,
+        age8To59: _age8To59,
+        age60Above: _age60Above,
       );
 
       if (mounted) {
@@ -1382,7 +1655,14 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           title: 'Visit registered',
           referenceLabel: 'Survey ID',
           referenceValue: receipt.reference,
-          message: 'This record was saved for Tourism Office monitoring.',
+          message:
+              'This record was saved to the Tourism Web System and can be checked in Booking Management.',
+          details: [
+            'Destination: ${receipt.destination.name}',
+            'Visitors: ${receipt.totalVisitors}',
+            'Arrival date: ${shortDate(receipt.arrivalDate)}',
+            'Status: ${receipt.displayStatus}',
+          ],
         );
         if (mounted) Navigator.of(context).pop(receipt);
       }
@@ -1390,6 +1670,294 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       if (mounted) showAppMessage(context, error.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String? _validateRegistration() {
+    final name = _name.text.trim();
+    final contact = _contact.text.trim();
+    final email = _email.text.trim();
+    final countryOfOrigin = _countryOfOrigin.text.trim();
+
+    if (name.isEmpty) return 'Full name is required.';
+    if (contact.isEmpty) return 'Contact number is required.';
+    if (email.isNotEmpty && !email.contains('@')) {
+      return 'Enter a valid email address or leave email blank.';
+    }
+    if (!_consentConfirmed) {
+      return 'Consent is required before submitting.';
+    }
+    if (_destination.id == 0 || widget.bootstrap.destinations.isEmpty) {
+      return 'No destination is loaded from the Tourism Web System yet.';
+    }
+    if (countryOfOrigin.isEmpty) return 'Country of origin is required.';
+    if (_visitors < 1) return 'At least one visitor is required.';
+    if (_male + _female != _visitors) {
+      return 'Male and female counts must equal total visitors.';
+    }
+    if (_filipino + _maubanin + _foreign != _visitors) {
+      return 'Filipino, Maubanin, and foreigner counts must equal total visitors.';
+    }
+    if (_age0To7 + _age8To59 + _age60Above != _visitors) {
+      return 'Age group counts must equal total visitors.';
+    }
+    if (_specialGroup > _visitors) {
+      return 'Special group count cannot exceed total visitors.';
+    }
+
+    return null;
+  }
+
+  void _setVisitors(int value) {
+    _visitors = clampInt(value, 1, 99);
+    _male = clampInt(_male, 0, _visitors);
+    _female = _visitors - _male;
+    _maubanin = clampInt(_maubanin, 0, _visitors);
+    _foreign = clampInt(_foreign, 0, _visitors - _maubanin);
+    _syncClassification();
+    _specialGroup = clampInt(_specialGroup, 0, _visitors);
+    _syncAgeGroups();
+  }
+
+  void _syncClassification() {
+    if (_maubanin + _foreign > _visitors) {
+      _foreign = clampInt(_visitors - _maubanin, 0, _visitors);
+    }
+    _filipino = clampInt(_visitors - _maubanin - _foreign, 0, _visitors);
+  }
+
+  void _syncAgeGroups() {
+    if (_age0To7 + _age60Above > _visitors) {
+      _age60Above = clampInt(_visitors - _age0To7, 0, _visitors);
+    }
+    _age8To59 = clampInt(_visitors - _age0To7 - _age60Above, 0, _visitors);
+  }
+
+  void _setAge8To59(int value) {
+    _age8To59 = clampInt(value, 0, _visitors);
+    if (_age0To7 + _age8To59 > _visitors) {
+      _age0To7 = clampInt(_visitors - _age8To59, 0, _visitors);
+    }
+    _age60Above = clampInt(_visitors - _age0To7 - _age8To59, 0, _visitors);
+  }
+}
+
+class HouseholdSurveyPage extends StatefulWidget {
+  const HouseholdSurveyPage({
+    super.key,
+    required this.api,
+    required this.barangays,
+  });
+
+  final TourismApi api;
+  final List<BarangayItem> barangays;
+
+  @override
+  State<HouseholdSurveyPage> createState() => _HouseholdSurveyPageState();
+}
+
+class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
+  final TextEditingController _head = TextEditingController();
+  final TextEditingController _address = TextEditingController();
+  final TextEditingController _waterSource = TextEditingController();
+  final TextEditingController _remarks = TextEditingController();
+  final TextEditingController _latitude = TextEditingController();
+  final TextEditingController _longitude = TextEditingController();
+  late String _barangay;
+  String _toiletType = 'water_sealed';
+  String _waterLevel = 'level_3';
+  String _wasteDisposal = 'collected';
+  int _male = 1;
+  int _female = 1;
+  bool _submitting = false;
+  bool _locating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _barangay = widget.barangays.firstOrNull?.name ?? 'Poblacion';
+  }
+
+  @override
+  void dispose() {
+    _head.dispose();
+    _address.dispose();
+    _waterSource.dispose();
+    _remarks.dispose();
+    _latitude.dispose();
+    _longitude.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPageScaffold(
+      title: 'Household Survey',
+      subtitle: 'Submit household sanitation profile',
+      children: [
+        AppTextField(controller: _head, label: 'Household head'),
+        DropdownTile<String>(
+          label: 'Barangay',
+          value: _barangay,
+          items: widget.barangays.map((item) => item.name).toList(),
+          itemLabel: (item) => item,
+          onChanged: (item) => setState(() => _barangay = item),
+        ),
+        AppTextField(controller: _address, label: 'Address'),
+        CounterPanel(
+          title: 'Household Members',
+          counters: [
+            CounterItem('Male', _male, (value) {
+              setState(() => _male = clampInt(value, 0, 99));
+            }),
+            CounterItem('Female', _female, (value) {
+              setState(() => _female = clampInt(value, 0, 99));
+            }),
+          ],
+        ),
+        DataSourceBanner(
+          icon: Icons.groups_outlined,
+          title: '${_male + _female} household member(s)',
+          text:
+              'Household survey records are saved separately from establishment inspections.',
+        ),
+        const SizedBox(height: 12),
+        DropdownTile<String>(
+          label: 'Toilet facility',
+          value: _toiletType,
+          items: const ['water_sealed', 'pour_flush', 'pit_latrine', 'none'],
+          itemLabel: householdToiletLabel,
+          onChanged: (item) => setState(() => _toiletType = item),
+        ),
+        DropdownTile<String>(
+          label: 'Water access level',
+          value: _waterLevel,
+          items: const ['level_1', 'level_2', 'level_3'],
+          itemLabel: householdWaterLabel,
+          onChanged: (item) => setState(() => _waterLevel = item),
+        ),
+        AppTextField(controller: _waterSource, label: 'Water source'),
+        DropdownTile<String>(
+          label: 'Waste disposal',
+          value: _wasteDisposal,
+          items: const ['collected', 'composted', 'burned', 'dumped'],
+          itemLabel: householdWasteLabel,
+          onChanged: (item) => setState(() => _wasteDisposal = item),
+        ),
+        AppTextField(controller: _remarks, label: 'Remarks', maxLines: 3),
+        LocationCapturePanel(
+          latitude: _latitude.text,
+          longitude: _longitude.text,
+          locating: _locating,
+          onCapture: _captureLocation,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(controller: _latitude, label: 'Latitude'),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AppTextField(controller: _longitude, label: 'Longitude'),
+            ),
+          ],
+        ),
+        SubmitButton(
+          label: 'Submit Household Survey',
+          loading: _submitting,
+          onPressed: _submit,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_head.text.trim().isEmpty) {
+      showAppMessage(context, 'Household head is required.');
+      return;
+    }
+    if (_barangay.trim().isEmpty) {
+      showAppMessage(context, 'Barangay is required.');
+      return;
+    }
+    if (_male + _female <= 0) {
+      showAppMessage(context, 'Household member count is required.');
+      return;
+    }
+
+    setState(() => _submitting = true);
+
+    try {
+      final response = await widget.api.submitHouseholdSurvey(
+        householdHead: _head.text.trim(),
+        barangay: _barangay,
+        address: _address.text.trim(),
+        maleCount: _male,
+        femaleCount: _female,
+        toiletType: _toiletType,
+        waterLevel: _waterLevel,
+        waterSource: _waterSource.text.trim(),
+        wasteDisposal: _wasteDisposal,
+        remarks: _remarks.text.trim(),
+        latitude: _latitude.text.trim(),
+        longitude: _longitude.text.trim(),
+      );
+
+      if (mounted) {
+        await showSubmissionDialog(
+          context,
+          title: 'Survey submitted',
+          referenceLabel: 'Household Code',
+          referenceValue: '${response['household_code'] ?? 'Saved'}',
+          message: 'Saved to Sanitation Web System.',
+          details: [
+            'Barangay: $_barangay',
+            'Total members: ${_male + _female}',
+            'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
+          ],
+        );
+        if (mounted) Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) showAppMessage(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() => _locating = true);
+
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        throw Exception('Please turn on location services first.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission is required.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      setState(() {
+        _latitude.text = position.latitude.toStringAsFixed(6);
+        _longitude.text = position.longitude.toStringAsFixed(6);
+      });
+    } catch (error) {
+      if (mounted) showAppMessage(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 }
@@ -1412,12 +1980,14 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _contact = TextEditingController();
   final TextEditingController _description = TextEditingController();
-  final TextEditingController _photo = TextEditingController();
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+  XFile? _photo;
   String _category = 'Improper waste disposal';
   late String _barangay;
   bool _submitting = false;
+  bool _locating = false;
 
   @override
   void initState() {
@@ -1430,7 +2000,6 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
     _name.dispose();
     _contact.dispose();
     _description.dispose();
-    _photo.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
@@ -1469,7 +2038,18 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           label: 'Description',
           maxLines: 4,
         ),
-        AppTextField(controller: _photo, label: 'Photo filename / note'),
+        PhotoPickerPanel(
+          photoName: _photo?.name,
+          onCamera: () => _pickPhoto(ImageSource.camera),
+          onGallery: () => _pickPhoto(ImageSource.gallery),
+          onClear: _photo == null ? null : () => setState(() => _photo = null),
+        ),
+        LocationCapturePanel(
+          latitude: _latitude.text,
+          longitude: _longitude.text,
+          locating: _locating,
+          onCapture: _captureLocation,
+        ),
         Row(
           children: [
             Expanded(
@@ -1505,7 +2085,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         category: _category,
         barangay: _barangay,
         description: _description.text.trim(),
-        photoDocumentation: _photo.text.trim(),
+        photo: _photo,
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
       );
@@ -1521,7 +2101,11 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           title: 'Report submitted',
           referenceLabel: 'Complaint ID',
           referenceValue: receipt.reference,
-          message: 'This concern was saved for the Sanitary Section.',
+          message: 'Saved to Sanitation Web System.',
+          details: [
+            'Category: ${receipt.category}',
+            'Barangay: ${receipt.barangay}',
+          ],
         );
         if (mounted) Navigator.of(context).pop(receipt);
       }
@@ -1530,6 +2114,173 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+      if (picked != null) {
+        setState(() => _photo = picked);
+      }
+    } catch (error) {
+      if (mounted) showAppMessage(context, 'Photo capture failed: $error');
+    }
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() => _locating = true);
+
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        throw Exception('Please turn on location services first.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission is required.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      setState(() {
+        _latitude.text = position.latitude.toStringAsFixed(6);
+        _longitude.text = position.longitude.toStringAsFixed(6);
+      });
+    } catch (error) {
+      if (mounted) showAppMessage(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+}
+
+class PhotoPickerPanel extends StatelessWidget {
+  const PhotoPickerPanel({
+    super.key,
+    required this.photoName,
+    required this.onCamera,
+    required this.onGallery,
+    this.onClear,
+  });
+
+  final String? photoName;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Supporting Photo',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              photoName ?? 'No photo selected',
+              style: const TextStyle(color: AppColors.muted),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: onCamera,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('Camera'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onGallery,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Gallery'),
+                ),
+                if (onClear != null)
+                  IconButton.filledTonal(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Remove photo',
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LocationCapturePanel extends StatelessWidget {
+  const LocationCapturePanel({
+    super.key,
+    required this.latitude,
+    required this.longitude,
+    required this.locating,
+    required this.onCapture,
+  });
+
+  final String latitude;
+  final String longitude;
+  final bool locating;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLocation = latitude.isNotEmpty && longitude.isNotEmpty;
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xffe9f8ef),
+          child: Icon(Icons.my_location_outlined, color: AppColors.green),
+        ),
+        title: const Text(
+          'Report Location',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          hasLocation ? '$latitude, $longitude' : 'No location captured yet',
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: FilledButton.tonalIcon(
+          onPressed: locating ? null : onCapture,
+          icon: locating
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.gps_fixed),
+          label: Text(locating ? 'Getting' : 'Use GPS'),
+        ),
+      ),
+    );
   }
 }
 
@@ -1650,7 +2401,7 @@ class VisitReceiptCard extends StatelessWidget {
       lines: [
         '${receipt.totalVisitors} visitor(s)',
         shortDate(receipt.arrivalDate),
-        'Status: ${receipt.status}',
+        'Status: ${receipt.displayStatus}',
       ],
     );
   }
@@ -1795,10 +2546,12 @@ class SanitationMobileShell extends StatefulWidget {
     super.key,
     required this.api,
     required this.bootstrap,
+    required this.onRefresh,
   });
 
   final TourismApi api;
-  final MobileBootstrap bootstrap;
+  final SanitationBootstrap bootstrap;
+  final Future<SanitationBootstrap> Function() onRefresh;
 
   @override
   State<SanitationMobileShell> createState() => _SanitationMobileShellState();
@@ -1806,63 +2559,90 @@ class SanitationMobileShell extends StatefulWidget {
 
 class _SanitationMobileShellState extends State<SanitationMobileShell> {
   final List<MobileSanitationReceipt> _reports = [];
+  final List<MobileSanitationInspectionReceipt> _inspections = [];
+  late SanitationBootstrap _bootstrap;
+  int _index = 0;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap = widget.bootstrap;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      SanitationDashboardPage(
+        bootstrap: _bootstrap,
+        reports: _reports,
+        inspections: _inspections,
+        onOpenInspection: _openInspection,
+        onOpenReport: _openReport,
+        onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onOpenPermits: _openPermits,
+        onOpenTab: (index) => setState(() => _index = index),
+        onRefresh: _refreshBootstrap,
+        refreshing: _refreshing,
+      ),
+      SanitationEstablishmentsPage(
+        establishments: _bootstrap.establishments,
+        onOpenInspection: _openInspection,
+        onRefresh: _refreshBootstrap,
+        refreshing: _refreshing,
+      ),
+      SanitationMapPage(
+        establishments: _bootstrap.establishments,
+        householdRecords: _bootstrap.householdRecords,
+        onRefresh: _refreshBootstrap,
+        refreshing: _refreshing,
+      ),
+      SanitationReportsPage(
+        reports: _reports,
+        complaints: _bootstrap.complaints,
+        onOpenReport: _openReport,
+        onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onRefresh: _refreshBootstrap,
+        refreshing: _refreshing,
+      ),
+      SanitationActionsPage(
+        bootstrap: _bootstrap,
+        inspections: _inspections,
+        onOpenInspection: _openInspection,
+        onOpenPermits: _openPermits,
+        onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onOpenNotifications: _openNotifications,
+        onRefresh: _refreshBootstrap,
+        refreshing: _refreshing,
+      ),
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sanitary Mobile Reporting')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-          children: [
-            const PageTitle(
-              title: 'Sanitary Report',
-              subtitle: 'Community sanitation concern submission',
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: StatCard(
-                    label: 'Submitted',
-                    value: '${_reports.length}',
-                    icon: Icons.assignment_turned_in_outlined,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: StatCard(
-                    label: 'Default Status',
-                    value: 'Pending',
-                    icon: Icons.pending_actions_outlined,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: _openReport,
-              icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Submit New Report'),
-            ),
-            SectionHeader(title: 'Recent Reports'),
-            if (_reports.isEmpty)
-              const EmptyState(
-                icon: Icons.health_and_safety_outlined,
-                title: 'No reports submitted yet',
-              )
-            else
-              ..._reports.map(
-                (report) => SanitationReceiptCard(receipt: report),
-              ),
-            const InfoBanner(
-              icon: Icons.privacy_tip_outlined,
-              title: 'Privacy Reminder',
-              text:
-                  'Only submit accurate location and contact information for official follow-up.',
-              color: Color(0xfffff3bd),
-            ),
-          ],
+        child: RefreshIndicator(
+          onRefresh: _refreshBootstrap,
+          child: pages[_index],
         ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          NavigationDestination(
+            icon: Icon(Icons.apartment_outlined),
+            label: 'Establish',
+          ),
+          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
+          NavigationDestination(
+            icon: Icon(Icons.flag_outlined),
+            label: 'Reports',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }
@@ -1879,7 +2659,1234 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
 
     if (receipt != null) {
       setState(() => _reports.insert(0, receipt));
+      await _refreshBootstrap(silent: true);
     }
+  }
+
+  Future<void> _openInspection([SanitationEstablishment? establishment]) async {
+    final receipt = await Navigator.of(context)
+        .push<MobileSanitationInspectionReceipt>(
+          MaterialPageRoute(
+            builder: (context) => SanitationInspectionPage(
+              api: widget.api,
+              bootstrap: _bootstrap,
+              initialEstablishment: establishment,
+            ),
+          ),
+        );
+
+    if (receipt != null) {
+      setState(() => _inspections.insert(0, receipt));
+      await _refreshBootstrap(silent: true);
+    }
+  }
+
+  Future<void> _openHouseholdSurvey() async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => HouseholdSurveyPage(
+          api: widget.api,
+          barangays: _bootstrap.barangays,
+        ),
+      ),
+    );
+
+    if (submitted == true) {
+      await _refreshBootstrap(silent: true);
+    }
+  }
+
+  Future<void> _openPermits() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) =>
+            SanitationPermitsPage(establishments: _bootstrap.establishments),
+      ),
+    );
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) =>
+            NotificationPage(notifications: _bootstrap.notifications),
+      ),
+    );
+  }
+
+  Future<void> _refreshBootstrap({bool silent = false}) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+
+    final updated = await widget.onRefresh();
+    if (!mounted) return;
+
+    setState(() {
+      _bootstrap = updated;
+      _refreshing = false;
+    });
+
+    if (!silent) {
+      showAppMessage(
+        context,
+        updated.isOffline
+            ? 'Cannot reach Sanitary Web System.'
+            : 'Sanitation records refreshed.',
+      );
+    }
+  }
+}
+
+class SanitationDashboardPage extends StatelessWidget {
+  const SanitationDashboardPage({
+    super.key,
+    required this.bootstrap,
+    required this.reports,
+    required this.inspections,
+    required this.onOpenInspection,
+    required this.onOpenReport,
+    required this.onOpenHouseholdSurvey,
+    required this.onOpenPermits,
+    required this.onOpenTab,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final SanitationBootstrap bootstrap;
+  final List<MobileSanitationReceipt> reports;
+  final List<MobileSanitationInspectionReceipt> inspections;
+  final ValueChanged<SanitationEstablishment?> onOpenInspection;
+  final VoidCallback onOpenReport;
+  final VoidCallback onOpenHouseholdSurvey;
+  final VoidCallback onOpenPermits;
+  final ValueChanged<int> onOpenTab;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    final violationCount = bootstrap.establishments
+        .where((item) => item.complianceStatus == 'violation')
+        .length;
+    final pendingPermitCount = bootstrap.establishments
+        .where((item) => item.permitStatus != 'active')
+        .length;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'Dashboard',
+          onRefresh: onRefresh,
+          refreshing: refreshing,
+          onNotifications: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) =>
+                    NotificationPage(notifications: bootstrap.notifications),
+              ),
+            );
+          },
+        ),
+        Text(
+          'Welcome, Sanitary Inspector',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        Text(
+          shortDate(DateTime.now()),
+          style: const TextStyle(color: AppColors.muted),
+        ),
+        const SizedBox(height: 14),
+        DataSourceBanner(
+          icon: bootstrap.isOffline
+              ? Icons.cloud_off_outlined
+              : Icons.cloud_done_outlined,
+          title: bootstrap.isOffline
+              ? 'Cannot reach Sanitary Web System'
+              : 'Connected to Sanitary Web System',
+          text: bootstrap.isOffline
+              ? bootstrap.offlineMessage
+              : '${bootstrap.establishments.length} establishment records loaded.',
+          warning: bootstrap.isOffline,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: StatCard(
+                label: 'Establishments',
+                value: '${bootstrap.establishments.length}',
+                icon: Icons.apartment_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: StatCard(
+                label: 'Inspections',
+                value: '${bootstrap.inspections.length + inspections.length}',
+                icon: Icons.fact_check_outlined,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: StatCard(
+                label: 'Violations',
+                value: '$violationCount',
+                icon: Icons.warning_amber_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: StatCard(
+                label: 'Permit Follow-up',
+                value: '$pendingPermitCount',
+                icon: Icons.badge_outlined,
+              ),
+            ),
+          ],
+        ),
+        SectionHeader(title: 'Quick Actions'),
+        Row(
+          children: [
+            QuickAction(
+              icon: Icons.add_task_outlined,
+              label: 'Inspection',
+              onTap: () => onOpenInspection(null),
+            ),
+            QuickAction(
+              icon: Icons.flag_outlined,
+              label: 'Report',
+              onTap: onOpenReport,
+            ),
+            QuickAction(
+              icon: Icons.assignment_outlined,
+              label: 'Household',
+              onTap: onOpenHouseholdSurvey,
+            ),
+            QuickAction(
+              icon: Icons.map_outlined,
+              label: 'GIS Map',
+              onTap: () => onOpenTab(2),
+            ),
+          ],
+        ),
+        SectionHeader(title: 'Urgent Alerts'),
+        ...bootstrap.establishments
+            .where(
+              (item) =>
+                  item.complianceStatus == 'violation' ||
+                  item.permitStatus != 'active',
+            )
+            .take(3)
+            .map(
+              (item) => SanitationAlertCard(
+                title: item.businessName,
+                subtitle: '${item.barangay} - ${item.statusLabel}',
+                status: item.complianceStatus,
+              ),
+            ),
+        SectionHeader(title: 'Recent Activity'),
+        if (inspections.isEmpty && reports.isEmpty)
+          const EmptyState(
+            icon: Icons.history_outlined,
+            title: 'No mobile activity yet',
+          )
+        else ...[
+          ...inspections
+              .take(2)
+              .map(
+                (item) => ReceiptCard(
+                  icon: Icons.fact_check_outlined,
+                  title: item.establishmentName,
+                  reference: item.reference,
+                  lines: [
+                    'Inspector: ${item.inspectorName}',
+                    'Status: ${sanitationStatusLabel(item.status)}',
+                  ],
+                ),
+              ),
+          ...reports
+              .take(2)
+              .map((report) => SanitationReceiptCard(receipt: report)),
+        ],
+      ],
+    );
+  }
+}
+
+class SanitationEstablishmentsPage extends StatefulWidget {
+  const SanitationEstablishmentsPage({
+    super.key,
+    required this.establishments,
+    required this.onOpenInspection,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final List<SanitationEstablishment> establishments;
+  final ValueChanged<SanitationEstablishment> onOpenInspection;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  State<SanitationEstablishmentsPage> createState() =>
+      _SanitationEstablishmentsPageState();
+}
+
+class _SanitationEstablishmentsPageState
+    extends State<SanitationEstablishmentsPage> {
+  String _search = '';
+  String _type = 'All Types';
+  String _barangay = 'All Barangays';
+  String _status = 'All Status';
+  String _permit = 'All Permits';
+
+  @override
+  Widget build(BuildContext context) {
+    final types = [
+      'All Types',
+      ...widget.establishments.map((item) => item.businessTypeName).toSet(),
+    ];
+    final barangays = [
+      'All Barangays',
+      ...widget.establishments.map((item) => item.barangay).toSet(),
+    ];
+    final query = _search.toLowerCase().trim();
+    final filtered = widget.establishments.where((item) {
+      final matchesSearch =
+          item.businessName.toLowerCase().contains(query) ||
+          item.barangay.toLowerCase().contains(query) ||
+          item.businessTypeName.toLowerCase().contains(query);
+      final matchesType =
+          _type == 'All Types' || item.businessTypeName == _type;
+      final matchesBarangay =
+          _barangay == 'All Barangays' || item.barangay == _barangay;
+      final matchesStatus =
+          _status == 'All Status' || item.complianceStatus == _status;
+      final matchesPermit =
+          _permit == 'All Permits' || item.permitStatus == _permit;
+      return matchesSearch &&
+          matchesType &&
+          matchesBarangay &&
+          matchesStatus &&
+          matchesPermit;
+    }).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'Establishments',
+          onRefresh: widget.onRefresh,
+          refreshing: widget.refreshing,
+        ),
+        SearchBox(
+          hint: 'Search establishments...',
+          onChanged: (value) => setState(() => _search = value),
+        ),
+        const SizedBox(height: 12),
+        DropdownTile<String>(
+          label: 'Type filter',
+          value: _type,
+          items: types,
+          itemLabel: (item) => item,
+          onChanged: (item) => setState(() => _type = item),
+        ),
+        DropdownTile<String>(
+          label: 'Barangay filter',
+          value: _barangay,
+          items: barangays,
+          itemLabel: (item) => item,
+          onChanged: (item) => setState(() => _barangay = item),
+        ),
+        DropdownTile<String>(
+          label: 'Compliance status',
+          value: _status,
+          items: const [
+            'All Status',
+            'good_standing',
+            'upcoming',
+            'for_completion',
+            'violation',
+            'no_permit',
+          ],
+          itemLabel: (item) =>
+              item == 'All Status' ? item : sanitationStatusLabel(item),
+          onChanged: (item) => setState(() => _status = item),
+        ),
+        DropdownTile<String>(
+          label: 'Permit status',
+          value: _permit,
+          items: const [
+            'All Permits',
+            'active',
+            'renewal_due',
+            'conditional',
+            'suspended',
+            'no_permit',
+          ],
+          itemLabel: (item) =>
+              item == 'All Permits' ? item : permitStatusLabel(item),
+          onChanged: (item) => setState(() => _permit = item),
+        ),
+        Text(
+          '${filtered.length} establishment(s) found',
+          style: const TextStyle(color: AppColors.muted),
+        ),
+        const SizedBox(height: 10),
+        if (filtered.isEmpty)
+          const EmptyState(
+            icon: Icons.apartment_outlined,
+            title: 'No establishments found',
+          )
+        else
+          ...filtered
+              .take(80)
+              .map(
+                (item) => SanitationEstablishmentCard(
+                  establishment: item,
+                  onInspection: () => widget.onOpenInspection(item),
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class SanitationMapPage extends StatefulWidget {
+  const SanitationMapPage({
+    super.key,
+    required this.establishments,
+    required this.householdRecords,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final List<SanitationEstablishment> establishments;
+  final List<HouseholdSanitationItem> householdRecords;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  State<SanitationMapPage> createState() => _SanitationMapPageState();
+}
+
+class _SanitationMapPageState extends State<SanitationMapPage> {
+  bool _showHouseholds = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final establishmentPins = widget.establishments
+        .where((item) => item.hasCoordinates)
+        .toList();
+    final householdPins = widget.householdRecords
+        .where((item) => item.hasCoordinates)
+        .toList();
+    final pinCount = _showHouseholds
+        ? householdPins.length
+        : establishmentPins.length;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'GIS Map',
+          onRefresh: widget.onRefresh,
+          refreshing: widget.refreshing,
+        ),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Establishments')),
+            ButtonSegment(value: true, label: Text('Households')),
+          ],
+          selected: {_showHouseholds},
+          onSelectionChanged: (value) =>
+              setState(() => _showHouseholds = value.first),
+        ),
+        const SizedBox(height: 12),
+        DataSourceBanner(
+          icon: Icons.map_outlined,
+          title: '$pinCount mapped records',
+          text: _showHouseholds
+              ? 'Household survey coordinates are displayed separately from establishments.'
+              : 'Establishment inspection records are displayed separately from household surveys.',
+          warning: pinCount == 0,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 360,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: const LatLng(14.185, 121.731),
+                initialZoom: 12,
+                minZoom: 8,
+                maxZoom: 18,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'mauban_sanitation_mobile',
+                ),
+                MarkerLayer(
+                  markers:
+                      (_showHouseholds
+                              ? householdPins.map(
+                                  (item) => Marker(
+                                    point: LatLng(
+                                      item.latitude,
+                                      item.longitude,
+                                    ),
+                                    width: 42,
+                                    height: 42,
+                                    child: const MapPin(),
+                                  ),
+                                )
+                              : establishmentPins.map(
+                                  (item) => Marker(
+                                    point: LatLng(
+                                      item.latitude,
+                                      item.longitude,
+                                    ),
+                                    width: 42,
+                                    height: 42,
+                                    child: const MapPin(),
+                                  ),
+                                ))
+                          .toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SectionHeader(
+          title: _showHouseholds
+              ? 'Mapped Households'
+              : 'Mapped Establishments',
+        ),
+        if (_showHouseholds)
+          ...widget.householdRecords
+              .take(20)
+              .map(
+                (item) => SimpleInfoCard(
+                  icon: Icons.home_work_outlined,
+                  title: item.householdHead,
+                  subtitle: '${item.householdCode} - ${item.barangay}',
+                  trailing: householdStatusLabel(item.status),
+                ),
+              )
+        else
+          ...widget.establishments
+              .take(20)
+              .map(
+                (item) => SimpleInfoCard(
+                  icon: Icons.apartment_outlined,
+                  title: item.businessName,
+                  subtitle: '${item.businessTypeName} - ${item.barangay}',
+                  trailing: item.statusLabel,
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class SanitationReportsPage extends StatelessWidget {
+  const SanitationReportsPage({
+    super.key,
+    required this.reports,
+    required this.complaints,
+    required this.onOpenReport,
+    required this.onOpenHouseholdSurvey,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final List<MobileSanitationReceipt> reports;
+  final List<SanitationComplaintItem> complaints;
+  final VoidCallback onOpenReport;
+  final VoidCallback onOpenHouseholdSurvey;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'Reports',
+          onRefresh: onRefresh,
+          refreshing: refreshing,
+        ),
+        FilledButton.icon(
+          onPressed: onOpenReport,
+          icon: const Icon(Icons.flag_outlined),
+          label: const Text('Report Issue'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: onOpenHouseholdSurvey,
+          icon: const Icon(Icons.assignment_outlined),
+          label: const Text('Household Survey'),
+        ),
+        SectionHeader(title: 'Mobile Reports'),
+        if (reports.isEmpty)
+          const EmptyState(
+            icon: Icons.flag_outlined,
+            title: 'No mobile reports submitted yet',
+          )
+        else
+          ...reports.map((item) => SanitationReceiptCard(receipt: item)),
+        SectionHeader(title: 'Violations & Alerts'),
+        if (complaints.isEmpty)
+          const EmptyState(
+            icon: Icons.notifications_none_outlined,
+            title: 'No complaint alerts loaded',
+          )
+        else
+          ...complaints
+              .take(20)
+              .map(
+                (item) => SanitationAlertCard(
+                  title: item.category,
+                  subtitle: '${item.barangay} - ${item.description}',
+                  status: item.priority,
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class SanitationActionsPage extends StatelessWidget {
+  const SanitationActionsPage({
+    super.key,
+    required this.bootstrap,
+    required this.inspections,
+    required this.onOpenInspection,
+    required this.onOpenPermits,
+    required this.onOpenHouseholdSurvey,
+    required this.onOpenNotifications,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final SanitationBootstrap bootstrap;
+  final List<MobileSanitationInspectionReceipt> inspections;
+  final ValueChanged<SanitationEstablishment?> onOpenInspection;
+  final VoidCallback onOpenPermits;
+  final VoidCallback onOpenHouseholdSurvey;
+  final VoidCallback onOpenNotifications;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'Sanitary Monitor',
+          onRefresh: onRefresh,
+          refreshing: refreshing,
+        ),
+        ProfileLink(
+          icon: Icons.fact_check_outlined,
+          label: 'New Establishment Inspection',
+          onTap: () => onOpenInspection(null),
+        ),
+        ProfileLink(
+          icon: Icons.badge_outlined,
+          label: 'Sanitary Permits',
+          onTap: onOpenPermits,
+        ),
+        ProfileLink(
+          icon: Icons.assignment_outlined,
+          label: 'Household Survey',
+          onTap: onOpenHouseholdSurvey,
+        ),
+        ProfileLink(
+          icon: Icons.notifications_outlined,
+          label: 'Notifications',
+          onTap: onOpenNotifications,
+        ),
+        SectionHeader(title: 'Submitted Inspections'),
+        if (inspections.isEmpty)
+          const EmptyState(
+            icon: Icons.fact_check_outlined,
+            title: 'No mobile inspections submitted yet',
+          )
+        else
+          ...inspections.map(
+            (item) => ReceiptCard(
+              icon: Icons.fact_check_outlined,
+              title: item.establishmentName,
+              reference: item.reference,
+              lines: [
+                'Inspector: ${item.inspectorName}',
+                'Date: ${item.inspectionDate}',
+                'Status: ${sanitationStatusLabel(item.status)}',
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class SanitationTopBar extends StatelessWidget {
+  const SanitationTopBar({
+    super.key,
+    required this.title,
+    this.onRefresh,
+    this.refreshing = false,
+    this.onNotifications,
+  });
+
+  final String title;
+  final Future<void> Function()? onRefresh;
+  final bool refreshing;
+  final VoidCallback? onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          const Icon(Icons.menu, color: AppColors.deepGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+            ),
+          ),
+          if (onRefresh != null)
+            IconButton.filledTonal(
+              onPressed: refreshing ? null : () => onRefresh?.call(),
+              icon: refreshing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+            ),
+          if (onRefresh != null) const SizedBox(width: 8),
+          IconButton.filledTonal(
+            onPressed: onNotifications,
+            icon: const Icon(Icons.notifications_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SanitationEstablishmentCard extends StatelessWidget {
+  const SanitationEstablishmentCard({
+    super.key,
+    required this.establishment,
+    required this.onInspection,
+  });
+
+  final SanitationEstablishment establishment;
+  final VoidCallback onInspection;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: sanitationStatusColor(
+            establishment.complianceStatus,
+          ).withValues(alpha: 0.14),
+          child: Icon(
+            Icons.apartment_outlined,
+            color: sanitationStatusColor(establishment.complianceStatus),
+          ),
+        ),
+        title: Text(
+          establishment.businessName,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '${establishment.businessTypeName}\n${establishment.barangay} - ${establishment.ownerName}',
+        ),
+        isThreeLine: true,
+        trailing: FilledButton.tonal(
+          onPressed: onInspection,
+          child: const Text('Inspect'),
+        ),
+      ),
+    );
+  }
+}
+
+class SanitationAlertCard extends StatelessWidget {
+  const SanitationAlertCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+  });
+
+  final String title;
+  final String subtitle;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = sanitationStatusColor(status);
+    return Card(
+      elevation: 0,
+      color: color.withValues(alpha: 0.08),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: Icon(Icons.warning_amber_outlined, color: color),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: StatusPill(text: sanitationStatusLabel(status)),
+      ),
+    );
+  }
+}
+
+class SimpleInfoCard extends StatelessWidget {
+  const SimpleInfoCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.green),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(subtitle),
+        trailing: StatusPill(text: trailing),
+      ),
+    );
+  }
+}
+
+class SanitationPermitsPage extends StatelessWidget {
+  const SanitationPermitsPage({super.key, required this.establishments});
+
+  final List<SanitationEstablishment> establishments;
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPageScaffold(
+      title: 'Sanitary Permits',
+      subtitle: 'Permit monitoring for establishments',
+      children: [
+        if (establishments.isEmpty)
+          const EmptyState(
+            icon: Icons.badge_outlined,
+            title: 'No permit records loaded',
+          )
+        else
+          ...establishments
+              .take(80)
+              .map(
+                (item) => Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.badge_outlined,
+                              color: AppColors.green,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.businessName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    [
+                                      item.permitNumber.isEmpty
+                                          ? 'No permit number'
+                                          : item.permitNumber,
+                                      item.permitExpiryDate.isEmpty
+                                          ? 'No expiry date'
+                                          : 'Expires: ${item.permitExpiryDate}',
+                                    ].join('\n'),
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            StatusPill(text: item.permitStatusLabel),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => showSubmissionDialog(
+                              context,
+                              title: 'Permit follow-up noted',
+                              referenceLabel: 'Permit',
+                              referenceValue: item.permitNumber.isEmpty
+                                  ? item.businessName
+                                  : item.permitNumber,
+                              message:
+                                  'Prepared as a mobile follow-up note for permit monitoring.',
+                              details: [
+                                'Establishment: ${item.businessName}',
+                                'Status: ${item.permitStatusLabel}',
+                              ],
+                            ),
+                            icon: const Icon(Icons.event_repeat_outlined),
+                            label: const Text('Follow up permit'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class SanitationInspectionPage extends StatefulWidget {
+  const SanitationInspectionPage({
+    super.key,
+    required this.api,
+    required this.bootstrap,
+    this.initialEstablishment,
+  });
+
+  final TourismApi api;
+  final SanitationBootstrap bootstrap;
+  final SanitationEstablishment? initialEstablishment;
+
+  @override
+  State<SanitationInspectionPage> createState() =>
+      _SanitationInspectionPageState();
+}
+
+class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
+  final TextEditingController _inspector = TextEditingController();
+  final TextEditingController _findings = TextEditingController();
+  final TextEditingController _remarks = TextEditingController();
+  late SanitationEstablishment _establishment;
+  late DateTime _inspectionDate;
+  late DateTime _nextDueDate;
+  String _status = 'good_standing';
+  List<InspectionChecklistDraft> _checks = [];
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _establishment =
+        widget.initialEstablishment ??
+        widget.bootstrap.establishments.firstOrNull ??
+        SanitationEstablishment.placeholder();
+    _inspectionDate = DateTime.now();
+    _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
+    _checks = _defaultChecksFor(_establishment);
+  }
+
+  @override
+  void dispose() {
+    _inspector.dispose();
+    _findings.dispose();
+    _remarks.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPageScaffold(
+      title: 'New Inspection',
+      subtitle: 'Establishment inspection only',
+      children: [
+        DropdownTile<SanitationEstablishment>(
+          label: 'Select Establishment',
+          value: _establishment,
+          items: widget.bootstrap.establishments,
+          itemLabel: (item) => item.businessName,
+          onChanged: (item) {
+            setState(() {
+              _establishment = item;
+              _nextDueDate = _suggestedDueDate(_inspectionDate, item);
+              _checks = _defaultChecksFor(item);
+              _findings.clear();
+              _status = 'good_standing';
+            });
+          },
+        ),
+        AppTextField(controller: _inspector, label: 'Inspector name'),
+        PickerTile(
+          icon: Icons.calendar_month_outlined,
+          label: 'Inspection date',
+          value: shortDate(_inspectionDate),
+          onTap: _pickInspectionDate,
+        ),
+        PickerTile(
+          icon: Icons.event_repeat_outlined,
+          label: 'Next due date',
+          value: shortDate(_nextDueDate),
+          onTap: _pickNextDueDate,
+        ),
+        DropdownTile<String>(
+          label: 'Inspection status',
+          value: _status,
+          items: const [
+            'good_standing',
+            'upcoming',
+            'for_completion',
+            'violation',
+          ],
+          itemLabel: sanitationStatusLabel,
+          onChanged: (item) => setState(() => _status = item),
+        ),
+        InspectionChecklistPanel(checks: _checks, onToggle: _toggleCheck),
+        AppTextField(controller: _findings, label: 'Findings', maxLines: 3),
+        AppTextField(
+          controller: _remarks,
+          label: 'Remarks / observations',
+          maxLines: 3,
+        ),
+        SubmitButton(
+          label: 'Submit Inspection',
+          loading: _submitting,
+          onPressed: _submit,
+        ),
+      ],
+    );
+  }
+
+  List<InspectionChecklistDraft> _defaultChecksFor(
+    SanitationEstablishment establishment,
+  ) {
+    final businessType = widget.bootstrap.businessTypes.firstWhereOrNull(
+      (item) => item.id == establishment.businessTypeId,
+    );
+    final requirements = businessType?.requirements ?? const [];
+
+    if (requirements.isEmpty) {
+      return const [
+        InspectionChecklistDraft('Proper waste disposal system', true),
+        InspectionChecklistDraft('Clean water supply available', true),
+        InspectionChecklistDraft('Functional toilet facilities', true),
+        InspectionChecklistDraft('Food handling area is clean', true),
+        InspectionChecklistDraft('Valid sanitary permit displayed', true),
+      ];
+    }
+
+    return requirements
+        .map((item) => InspectionChecklistDraft(item.requirementName, true))
+        .toList();
+  }
+
+  DateTime _suggestedDueDate(
+    DateTime date,
+    SanitationEstablishment establishment,
+  ) {
+    final months = establishment.inspectionFrequency == 'quarterly' ? 3 : 1;
+    return DateTime(date.year, date.month + months, date.day);
+  }
+
+  Future<void> _pickInspectionDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _inspectionDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked == null) return;
+    setState(() {
+      _inspectionDate = picked;
+      _nextDueDate = _suggestedDueDate(picked, _establishment);
+    });
+  }
+
+  Future<void> _pickNextDueDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _nextDueDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (picked != null) setState(() => _nextDueDate = picked);
+  }
+
+  void _toggleCheck(int index) {
+    setState(() {
+      final current = _checks[index];
+      _checks[index] = InspectionChecklistDraft(
+        current.requirementName,
+        !current.isComplied,
+      );
+      if (_checks.any((item) => !item.isComplied)) {
+        _status = 'for_completion';
+        if (_findings.text.trim().isEmpty) {
+          _findings.text = 'Some checklist items need correction.';
+        }
+      } else {
+        _status = 'good_standing';
+        if (_findings.text.trim() == 'Some checklist items need correction.') {
+          _findings.clear();
+        }
+      }
+    });
+  }
+
+  Future<void> _submit() async {
+    if (_establishment.id == 0 || widget.bootstrap.establishments.isEmpty) {
+      showAppMessage(context, 'No establishment records loaded.');
+      return;
+    }
+    if (_inspector.text.trim().isEmpty) {
+      showAppMessage(context, 'Inspector name is required.');
+      return;
+    }
+    if (_checks.isEmpty) {
+      showAppMessage(context, 'Inspection checklist is required.');
+      return;
+    }
+    if (_checks.any((item) => !item.isComplied) && _status == 'good_standing') {
+      showAppMessage(context, 'Update the status for unchecked items.');
+      return;
+    }
+
+    setState(() => _submitting = true);
+
+    try {
+      final response = await widget.api.submitSanitationInspection(
+        establishmentId: _establishment.id,
+        inspectorName: _inspector.text.trim(),
+        inspectionDate: isoDate(_inspectionDate),
+        nextDueDate: isoDate(_nextDueDate),
+        findings: _findings.text.trim(),
+        remarks: _remarks.text.trim(),
+        statusAfterInspection: _status,
+        checklistItems: _checks,
+      );
+
+      if (mounted) {
+        final receipt = MobileSanitationInspectionReceipt.fromResponse(
+          response,
+          establishment: _establishment,
+          inspectorName: _inspector.text.trim(),
+          status: _status,
+          inspectionDate: isoDate(_inspectionDate),
+        );
+        await showSubmissionDialog(
+          context,
+          title: 'Inspection submitted',
+          referenceLabel: 'Inspection ID',
+          referenceValue: receipt.reference,
+          message: 'Saved to Sanitation Web System.',
+          details: [
+            'Establishment: ${receipt.establishmentName}',
+            'Inspector: ${receipt.inspectorName}',
+            'Status: ${sanitationStatusLabel(receipt.status)}',
+            'Separate from household survey records.',
+          ],
+        );
+        if (mounted) Navigator.of(context).pop(receipt);
+      }
+    } catch (error) {
+      if (mounted) showAppMessage(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+}
+
+class InspectionChecklistPanel extends StatelessWidget {
+  const InspectionChecklistPanel({
+    super.key,
+    required this.checks,
+    required this.onToggle,
+  });
+
+  final List<InspectionChecklistDraft> checks;
+  final ValueChanged<int> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = checks.where((item) => item.isComplied).length;
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Sanitation Checklist',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                Text('$completed/${checks.length}'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...checks.asMap().entries.map(
+              (entry) => CheckboxListTile(
+                value: entry.value.isComplied,
+                onChanged: (_) => onToggle(entry.key),
+                contentPadding: EdgeInsets.zero,
+                title: Text(entry.value.requirementName),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1916,22 +3923,56 @@ class SanitationStandaloneBootstrap extends StatefulWidget {
 class _SanitationStandaloneBootstrapState
     extends State<SanitationStandaloneBootstrap> {
   final TourismApi _api = const TourismApi();
-  late Future<MobileBootstrap> _bootstrapFuture;
+  late Future<SanitationBootstrap> _bootstrapFuture;
 
   @override
   void initState() {
     super.initState();
-    _bootstrapFuture = _api.fetchBootstrap();
+    _bootstrapFuture = _api.fetchSanitationBootstrap();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<MobileBootstrap>(
+    return FutureBuilder<SanitationBootstrap>(
       future: _bootstrapFuture,
       builder: (context, snapshot) {
-        final data = snapshot.data ?? MobileBootstrap.fallback();
-        return SanitationMobileShell(api: _api, bootstrap: data);
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const SanitationLoadingScreen();
+        }
+
+        final data = snapshot.data ?? SanitationBootstrap.fallback();
+        return SanitationMobileShell(
+          api: _api,
+          bootstrap: data,
+          onRefresh: _api.fetchSanitationBootstrap,
+        );
       },
+    );
+  }
+}
+
+class SanitationLoadingScreen extends StatelessWidget {
+  const SanitationLoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Loading sanitation records...',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1948,15 +3989,34 @@ class TourismApi {
     }
   }
 
+  Future<SanitationBootstrap> fetchSanitationBootstrap() async {
+    try {
+      final data = await _get('/mobile/sanitation/bootstrap/');
+      return SanitationBootstrap.fromJson(data);
+    } catch (error) {
+      debugPrint('Sanitation bootstrap failed: $error');
+      return SanitationBootstrap.fallback(
+        message: 'Connection failed via $apiBaseUrl: ${conciseError(error)}',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> registerVisit({
     required String fullName,
     required String contactNumber,
     required String email,
+    required bool consentConfirmed,
     required String arrivalDate,
+    required int countryId,
+    required int regionId,
+    required int provinceId,
+    required String countryOfOrigin,
     required int resortId,
     required int itineraryId,
     required int travelModeId,
     required int boatTypeId,
+    required String boatCapacityFare,
+    required String parkingSpace,
     required int visitPurposeId,
     required int totalVisitors,
     required int totalMale,
@@ -1964,16 +4024,27 @@ class TourismApi {
     required int filipinoCount,
     required int maubaninCount,
     required int foreignerCount,
+    required int specialGroupCount,
+    required int age0To7,
+    required int age8To59,
+    required int age60Above,
   }) {
     return _post('/mobile/tourism/register-visit/', {
       'full_name': fullName,
       'contact_number': contactNumber,
       'email': email,
+      'consent_confirmed': consentConfirmed,
       'arrival_date': arrivalDate,
+      'country_id': countryId,
+      'region_id': regionId,
+      'province_id': provinceId,
+      'country_of_origin': countryOfOrigin,
       'resort_id': resortId,
       'itinerary_id': itineraryId,
       'travel_mode_id': travelModeId,
       'boat_type_id': boatTypeId,
+      'boat_capacity_fare': boatCapacityFare,
+      'parking_space': parkingSpace,
       'visit_purpose_id': visitPurposeId,
       'total_visitors': totalVisitors,
       'total_male': totalMale,
@@ -1981,7 +4052,10 @@ class TourismApi {
       'filipino_count': filipinoCount,
       'maubanin_count': maubaninCount,
       'foreigner_count': foreignerCount,
-      'age_8_59': totalVisitors,
+      'special_group_count': specialGroupCount,
+      'age_0_7': age0To7,
+      'age_8_59': age8To59,
+      'age_60_above': age60Above,
     });
   }
 
@@ -2009,19 +4083,85 @@ class TourismApi {
     required String category,
     required String barangay,
     required String description,
-    required String photoDocumentation,
+    XFile? photo,
     required String latitude,
     required String longitude,
   }) {
-    return _post('/mobile/sanitation/reports/', {
+    final fields = {
       'complainant_name': name,
       'contact_number': contactNumber,
       'category': category,
       'barangay': barangay,
       'description': description,
-      'photo_documentation': photoDocumentation,
       'latitude': latitude,
       'longitude': longitude,
+    };
+
+    if (photo != null) {
+      return _multipartPost('/mobile/sanitation/reports/', fields, photo);
+    }
+
+    return _post('/mobile/sanitation/reports/', fields);
+  }
+
+  Future<Map<String, dynamic>> submitHouseholdSurvey({
+    required String householdHead,
+    required String barangay,
+    required String address,
+    required int maleCount,
+    required int femaleCount,
+    required String toiletType,
+    required String waterLevel,
+    required String waterSource,
+    required String wasteDisposal,
+    required String remarks,
+    required String latitude,
+    required String longitude,
+  }) {
+    return _post('/mobile/sanitation/household-surveys/', {
+      'household_head': householdHead,
+      'barangay': barangay,
+      'address': address,
+      'male_count': maleCount,
+      'female_count': femaleCount,
+      'toilet_type': toiletType,
+      'water_level': waterLevel,
+      'water_source': waterSource,
+      'waste_disposal': wasteDisposal,
+      'remarks': remarks,
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+  }
+
+  Future<Map<String, dynamic>> submitSanitationInspection({
+    required int establishmentId,
+    required String inspectorName,
+    required String inspectionDate,
+    required String nextDueDate,
+    required String findings,
+    required String remarks,
+    required String statusAfterInspection,
+    required List<InspectionChecklistDraft> checklistItems,
+  }) {
+    return _post('/mobile/sanitation/inspections/', {
+      'establishment': establishmentId,
+      'inspector_name': inspectorName,
+      'inspection_date': inspectionDate,
+      'next_due_date': nextDueDate,
+      'findings': findings,
+      'remarks': remarks,
+      'status_after_inspection': statusAfterInspection,
+      'is_draft': false,
+      'checklist_items': checklistItems
+          .map(
+            (item) => {
+              'requirement_name': item.requirementName,
+              'is_complied': item.isComplied,
+              'notes': '',
+            },
+          )
+          .toList(),
     });
   }
 
@@ -2039,6 +4179,29 @@ class TourismApi {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> _multipartPost(
+    String path,
+    Map<String, String> fields,
+    XFile photo,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$apiBaseUrl$path'),
+    );
+    request.fields.addAll(fields);
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'photo',
+        await photo.readAsBytes(),
+        filename: photo.name,
+      ),
+    );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
     return _decode(response);
   }
 
@@ -2082,6 +4245,7 @@ class MobileBootstrap {
     required this.visitPurposes,
     required this.barangays,
     required this.notifications,
+    this.isOffline = false,
   });
 
   final List<Destination> destinations;
@@ -2095,6 +4259,7 @@ class MobileBootstrap {
   final List<RefItem> visitPurposes;
   final List<BarangayItem> barangays;
   final List<AppNotification> notifications;
+  final bool isOffline;
 
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
@@ -2113,13 +4278,14 @@ class MobileBootstrap {
       visitPurposes: parseList(refs['visitPurposes'], RefItem.fromJson),
       barangays: parseList(json['barangays'], BarangayItem.fromJson),
       notifications: parseList(json['notifications'], AppNotification.fromJson),
+      isOffline: false,
     );
   }
 
   factory MobileBootstrap.fallback() {
     return MobileBootstrap(
-      destinations: Destination.fallback(),
-      featuredDestinations: Destination.fallback().take(4).toList(),
+      destinations: const [],
+      featuredDestinations: const [],
       countries: const [RefItem(id: 1, name: 'Philippines')],
       regions: const [RefItem(id: 4, name: 'CALABARZON Region')],
       provinces: const [RefItem(id: 1, name: 'Quezon')],
@@ -2146,6 +4312,338 @@ class MobileBootstrap {
         BarangayItem(id: 3, name: 'Cagsiay'),
       ],
       notifications: AppNotification.fallback(),
+      isOffline: true,
+    );
+  }
+}
+
+class SanitationBootstrap {
+  const SanitationBootstrap({
+    required this.businessTypes,
+    required this.establishments,
+    required this.inspections,
+    required this.complaints,
+    required this.householdRecords,
+    required this.barangays,
+    required this.notifications,
+    this.offlineMessage = 'Only submitted reports in this session are visible.',
+    this.isOffline = false,
+  });
+
+  final List<SanitationBusinessType> businessTypes;
+  final List<SanitationEstablishment> establishments;
+  final List<SanitationInspectionItem> inspections;
+  final List<SanitationComplaintItem> complaints;
+  final List<HouseholdSanitationItem> householdRecords;
+  final List<BarangayItem> barangays;
+  final List<AppNotification> notifications;
+  final String offlineMessage;
+  final bool isOffline;
+
+  factory SanitationBootstrap.fromJson(Map<String, dynamic> json) {
+    return SanitationBootstrap(
+      businessTypes: parseList(
+        json['businessTypes'],
+        SanitationBusinessType.fromJson,
+      ),
+      establishments: parseList(
+        json['establishments'],
+        SanitationEstablishment.fromJson,
+      ),
+      inspections: parseList(
+        json['inspections'],
+        SanitationInspectionItem.fromJson,
+      ),
+      complaints: parseList(
+        (json['complaintData'] as Map<String, dynamic>?)?['rows'],
+        SanitationComplaintItem.fromJson,
+      ),
+      householdRecords: parseList(
+        json['householdRecords'],
+        HouseholdSanitationItem.fromJson,
+      ),
+      barangays: parseList(json['barangays'], BarangayItem.fromJson),
+      notifications: parseList(json['notifications'], AppNotification.fromJson),
+      isOffline: false,
+    );
+  }
+
+  factory SanitationBootstrap.fallback({String? message}) {
+    return SanitationBootstrap(
+      businessTypes: const [],
+      establishments: const [],
+      inspections: const [],
+      complaints: const [],
+      householdRecords: const [],
+      barangays: const [
+        BarangayItem(id: 1, name: 'Poblacion'),
+        BarangayItem(id: 2, name: 'San Isidro'),
+        BarangayItem(id: 3, name: 'Cagsiay'),
+      ],
+      notifications: const [
+        AppNotification(
+          id: 'offline-sanitation',
+          title: 'Cannot reach Sanitary Web System',
+          message: 'Connect the backend API to load establishment records.',
+          type: 'sanitation',
+        ),
+      ],
+      offlineMessage:
+          message ?? 'Only submitted reports in this session are visible.',
+      isOffline: true,
+    );
+  }
+}
+
+class SanitationBusinessType {
+  const SanitationBusinessType({
+    required this.id,
+    required this.name,
+    required this.inspectionFrequency,
+    required this.requirements,
+  });
+
+  final int id;
+  final String name;
+  final String inspectionFrequency;
+  final List<SanitationRequirement> requirements;
+
+  factory SanitationBusinessType.fromJson(Map<String, dynamic> json) {
+    return SanitationBusinessType(
+      id: jsonInt(json['id']),
+      name: '${json['name'] ?? ''}',
+      inspectionFrequency: '${json['inspection_frequency'] ?? 'monthly'}',
+      requirements: parseList(
+        json['requirements'],
+        SanitationRequirement.fromJson,
+      ),
+    );
+  }
+}
+
+class SanitationRequirement {
+  const SanitationRequirement({required this.requirementName});
+
+  final String requirementName;
+
+  factory SanitationRequirement.fromJson(Map<String, dynamic> json) {
+    return SanitationRequirement(
+      requirementName: '${json['requirement_name'] ?? ''}',
+    );
+  }
+}
+
+class SanitationEstablishment {
+  const SanitationEstablishment({
+    required this.id,
+    required this.businessName,
+    required this.ownerName,
+    required this.businessTypeId,
+    required this.businessTypeName,
+    required this.inspectionFrequency,
+    required this.barangay,
+    required this.address,
+    required this.permitNumber,
+    required this.permitExpiryDate,
+    required this.complianceStatus,
+    required this.statusLabel,
+    required this.permitStatus,
+    required this.permitStatusLabel,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final int id;
+  final String businessName;
+  final String ownerName;
+  final int businessTypeId;
+  final String businessTypeName;
+  final String inspectionFrequency;
+  final String barangay;
+  final String address;
+  final String permitNumber;
+  final String permitExpiryDate;
+  final String complianceStatus;
+  final String statusLabel;
+  final String permitStatus;
+  final String permitStatusLabel;
+  final double latitude;
+  final double longitude;
+
+  bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
+
+  factory SanitationEstablishment.fromJson(Map<String, dynamic> json) {
+    return SanitationEstablishment(
+      id: jsonInt(json['id']),
+      businessName: '${json['business_name'] ?? 'Establishment'}',
+      ownerName: '${json['owner_name'] ?? ''}',
+      businessTypeId: jsonInt(json['business_type']),
+      businessTypeName: '${json['business_type_name'] ?? 'Establishment'}',
+      inspectionFrequency: '${json['inspection_frequency'] ?? 'monthly'}',
+      barangay: '${json['barangay'] ?? 'Unspecified'}',
+      address: '${json['address'] ?? ''}',
+      permitNumber: '${json['permit_number'] ?? ''}',
+      permitExpiryDate: '${json['permit_expiry_date'] ?? ''}',
+      complianceStatus: '${json['compliance_status'] ?? 'upcoming'}',
+      statusLabel: '${json['compliance_status_label'] ?? 'Upcoming'}',
+      permitStatus: '${json['permit_status'] ?? 'renewal_due'}',
+      permitStatusLabel: '${json['permit_status_label'] ?? 'Renewal Due'}',
+      latitude: jsonDouble(json['latitude']),
+      longitude: jsonDouble(json['longitude']),
+    );
+  }
+
+  static SanitationEstablishment placeholder() {
+    return const SanitationEstablishment(
+      id: 0,
+      businessName: 'No establishment loaded',
+      ownerName: '',
+      businessTypeId: 0,
+      businessTypeName: 'Establishment',
+      inspectionFrequency: 'monthly',
+      barangay: 'Unspecified',
+      address: '',
+      permitNumber: '',
+      permitExpiryDate: '',
+      complianceStatus: 'upcoming',
+      statusLabel: 'Upcoming',
+      permitStatus: 'renewal_due',
+      permitStatusLabel: 'Renewal Due',
+      latitude: 0,
+      longitude: 0,
+    );
+  }
+}
+
+class SanitationInspectionItem {
+  const SanitationInspectionItem({
+    required this.id,
+    required this.establishmentName,
+    required this.inspectorName,
+    required this.inspectionDate,
+    required this.status,
+  });
+
+  final int id;
+  final String establishmentName;
+  final String inspectorName;
+  final String inspectionDate;
+  final String status;
+
+  factory SanitationInspectionItem.fromJson(Map<String, dynamic> json) {
+    return SanitationInspectionItem(
+      id: jsonInt(json['id']),
+      establishmentName: '${json['establishment_name'] ?? 'Establishment'}',
+      inspectorName: '${json['inspector_name'] ?? ''}',
+      inspectionDate: '${json['inspection_date'] ?? ''}',
+      status: '${json['status_after_inspection'] ?? 'upcoming'}',
+    );
+  }
+}
+
+class SanitationComplaintItem {
+  const SanitationComplaintItem({
+    required this.category,
+    required this.barangay,
+    required this.description,
+    required this.priority,
+  });
+
+  final String category;
+  final String barangay;
+  final String description;
+  final String priority;
+
+  factory SanitationComplaintItem.fromJson(Map<String, dynamic> json) {
+    return SanitationComplaintItem(
+      category: '${json['category'] ?? 'Sanitation concern'}',
+      barangay: '${json['barangay'] ?? 'Unspecified'}',
+      description: '${json['description'] ?? ''}',
+      priority: '${json['priority'] ?? 'medium'}',
+    );
+  }
+}
+
+class HouseholdSanitationItem {
+  const HouseholdSanitationItem({
+    required this.householdCode,
+    required this.householdHead,
+    required this.barangay,
+    required this.status,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String householdCode;
+  final String householdHead;
+  final String barangay;
+  final String status;
+  final double latitude;
+  final double longitude;
+
+  bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
+
+  factory HouseholdSanitationItem.fromJson(Map<String, dynamic> json) {
+    return HouseholdSanitationItem(
+      householdCode: '${json['household_code'] ?? ''}',
+      householdHead: '${json['household_head'] ?? 'Household'}',
+      barangay: '${json['barangay'] ?? 'Unspecified'}',
+      status: '${json['status'] ?? 'good_standing'}',
+      latitude: jsonDouble(json['latitude']),
+      longitude: jsonDouble(json['longitude']),
+    );
+  }
+}
+
+class InspectionChecklistDraft {
+  const InspectionChecklistDraft(this.requirementName, this.isComplied);
+
+  final String requirementName;
+  final bool isComplied;
+}
+
+class MobileUserProfile {
+  const MobileUserProfile({
+    required this.name,
+    required this.email,
+    required this.contactNumber,
+  });
+
+  final String name;
+  final String email;
+  final String contactNumber;
+
+  factory MobileUserProfile.guest() {
+    return const MobileUserProfile(name: '', email: '', contactNumber: '');
+  }
+
+  bool get isGuest => name.trim().isEmpty;
+
+  String get displayName => isGuest ? 'Mauban Tourism' : name.trim();
+
+  String get initials {
+    if (isGuest) return 'MT';
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'MT';
+    return parts
+        .take(2)
+        .map((part) => part.characters.first.toUpperCase())
+        .join();
+  }
+
+  MobileUserProfile copyWith({
+    String? name,
+    String? email,
+    String? contactNumber,
+  }) {
+    return MobileUserProfile(
+      name: cleanProfileValue(name) ?? this.name,
+      email: cleanProfileValue(email) ?? this.email,
+      contactNumber: cleanProfileValue(contactNumber) ?? this.contactNumber,
     );
   }
 }
@@ -2160,6 +4658,8 @@ class Destination {
     required this.rating,
     required this.imageKey,
     required this.monthlyArrivals,
+    required this.hasMayorPermit,
+    required this.access,
     required this.latitude,
     required this.longitude,
   });
@@ -2172,93 +4672,84 @@ class Destination {
   final double rating;
   final String imageKey;
   final int monthlyArrivals;
+  final bool hasMayorPermit;
+  final String access;
   final double latitude;
   final double longitude;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
+  String get permitLabel =>
+      hasMayorPermit ? 'Mayor\'s permit verified' : 'Permit not verified';
+  String get visitorsLabel =>
+      '${formatCount(monthlyArrivals)} visitor arrivals';
 
   factory Destination.fromJson(Map<String, dynamic> json) {
     return Destination(
       id: jsonInt(json['resort_id']),
-      name: '${json['resort_name'] ?? 'Destination'}',
+      name: cleanDestinationName('${json['resort_name'] ?? 'Destination'}'),
       type: '${json['type'] ?? 'Tourism Site'}',
       location: '${json['location'] ?? 'Mauban, Quezon'}',
       description: '${json['short_description'] ?? ''}',
       rating: jsonDouble(json['tourism_rating'], 4.5),
       imageKey: '${json['image_key'] ?? ''}',
       monthlyArrivals: jsonInt(json['monthly_arrivals']),
+      hasMayorPermit: jsonBool(json['with_mayors_permit']),
+      access: '${json['access'] ?? ''}',
       latitude: jsonDouble(json['latitude'], 14.18),
       longitude: jsonDouble(json['longitude'], 121.73),
     );
   }
 
-  static List<Destination> fallback() {
-    return const [
-      Destination(
-        id: 1,
-        name: 'Cagbalete Island',
-        type: 'Island',
-        location: 'Mauban, Quezon',
-        description:
-            'White-sand island destination known for sandbars, beach camping, and weekend eco escapes.',
-        rating: 4.8,
-        imageKey: 'cagbalete',
-        monthlyArrivals: 1860,
-        latitude: 14.25,
-        longitude: 121.82,
-      ),
-      Destination(
-        id: 2,
-        name: 'Dampalitan Island',
-        type: 'Island',
-        location: 'Mauban, Quezon',
-        description:
-            'Popular beach area for day tours, group outings, and quiet coastal stays.',
-        rating: 4.6,
-        imageKey: 'dampalitan-island',
-        monthlyArrivals: 1495,
-        latitude: 14.20,
-        longitude: 121.83,
-      ),
-      Destination(
-        id: 3,
-        name: 'Puting Buhangin Cove',
-        type: 'Beach',
-        location: 'Mauban, Quezon',
-        description:
-            'Scenic cove known for bright sand, clear water, and relaxed beach activities.',
-        rating: 4.5,
-        imageKey: 'puting-buhangin',
-        monthlyArrivals: 1160,
-        latitude: 14.18,
-        longitude: 121.74,
-      ),
-      Destination(
-        id: 5,
-        name: 'Mauban Lighthouse',
-        type: 'Landmark',
-        location: 'Mauban, Quezon',
-        description:
-            'Historic lighthouse stop for educational tours and cultural orientation.',
-        rating: 4.3,
-        imageKey: 'mauban-lighthouse',
-        monthlyArrivals: 820,
-        latitude: 14.19,
-        longitude: 121.73,
-      ),
-    ];
+  static Destination placeholder() {
+    return const Destination(
+      id: 0,
+      name: 'No destination loaded',
+      type: 'Tourism Site',
+      location: 'Mauban, Quezon',
+      description: 'Connect to the web system to load ranked destinations.',
+      rating: 0,
+      imageKey: '',
+      monthlyArrivals: 0,
+      hasMayorPermit: false,
+      access: '',
+      latitude: 14.185,
+      longitude: 121.731,
+    );
   }
 }
 
 class RefItem {
-  const RefItem({required this.id, required this.name});
+  const RefItem({
+    required this.id,
+    required this.name,
+    this.regionId,
+    this.code = '',
+  });
 
   final int id;
   final String name;
+  final int? regionId;
+  final String code;
 
   factory RefItem.fromJson(Map<String, dynamic> json) {
-    return RefItem(id: jsonInt(json['id']), name: '${json['name'] ?? ''}');
+    return RefItem(
+      id: jsonInt(json['id']),
+      name: '${json['name'] ?? ''}',
+      regionId: jsonNullableInt(json['region_id']),
+      code: '${json['code'] ?? ''}',
+    );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RefItem &&
+        other.id == id &&
+        other.regionId == regionId &&
+        other.name == name;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, regionId, name);
 }
 
 class BarangayItem {
@@ -2332,6 +4823,9 @@ class MobileVisitReceipt {
     required this.arrivalDate,
     required this.totalVisitors,
     required this.status,
+    required this.fullName,
+    required this.contactNumber,
+    required this.email,
   });
 
   final String reference;
@@ -2339,6 +4833,10 @@ class MobileVisitReceipt {
   final DateTime arrivalDate;
   final int totalVisitors;
   final String status;
+  final String fullName;
+  final String contactNumber;
+  final String email;
+  String get displayStatus => statusLabel(status);
 
   factory MobileVisitReceipt.fromResponse(
     Map<String, dynamic> json, {
@@ -2352,6 +4850,9 @@ class MobileVisitReceipt {
       arrivalDate: arrivalDate,
       totalVisitors: jsonInt(json['total_visitors'], totalVisitors),
       status: '${json['status'] ?? 'pending'}',
+      fullName: '${json['full_name'] ?? ''}',
+      contactNumber: '${json['contact_number'] ?? ''}',
+      email: '${json['email'] ?? ''}',
     );
   }
 }
@@ -2407,6 +4908,39 @@ class MobileSanitationReceipt {
       category: '${json['category'] ?? category}',
       barangay: '${json['barangay'] ?? barangay}',
       status: '${json['status'] ?? 'pending'}',
+    );
+  }
+}
+
+class MobileSanitationInspectionReceipt {
+  const MobileSanitationInspectionReceipt({
+    required this.reference,
+    required this.establishmentName,
+    required this.inspectorName,
+    required this.inspectionDate,
+    required this.status,
+  });
+
+  final String reference;
+  final String establishmentName;
+  final String inspectorName;
+  final String inspectionDate;
+  final String status;
+
+  factory MobileSanitationInspectionReceipt.fromResponse(
+    Map<String, dynamic> json, {
+    required SanitationEstablishment establishment,
+    required String inspectorName,
+    required String status,
+    required String inspectionDate,
+  }) {
+    return MobileSanitationInspectionReceipt(
+      reference: '${json['id'] ?? 'Saved'}',
+      establishmentName:
+          '${json['establishment_name'] ?? establishment.businessName}',
+      inspectorName: '${json['inspector_name'] ?? inspectorName}',
+      inspectionDate: '${json['inspection_date'] ?? inspectionDate}',
+      status: '${json['status_after_inspection'] ?? status}',
     );
   }
 }
@@ -2551,6 +5085,8 @@ class HeroCard extends StatelessWidget {
                   destination.location,
                   style: const TextStyle(color: Colors.white70),
                 ),
+                const SizedBox(height: 6),
+                VisitorPill(destination: destination, dark: true),
               ],
             ),
           ),
@@ -2718,6 +5254,8 @@ class DestinationTile extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    VisitorPill(destination: destination, dark: true),
                   ],
                 ),
               ),
@@ -2778,12 +5316,21 @@ class DestinationListCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      destination.visitorsLabel,
+                      style: const TextStyle(
+                        color: AppColors.deepGreen,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         RatingPill(rating: destination.rating),
                         const SizedBox(width: 8),
-                        StatusPill(text: destination.type),
+                        Expanded(child: StatusPill(text: destination.type)),
                       ],
                     ),
                   ],
@@ -2826,6 +5373,82 @@ class RatingPill extends StatelessWidget {
   }
 }
 
+class VisitorPill extends StatelessWidget {
+  const VisitorPill({super.key, required this.destination, this.dark = false});
+
+  final Destination destination;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: dark
+            ? Colors.white.withValues(alpha: 0.18)
+            : const Color(0xffecfdf3),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.groups_outlined,
+            size: 14,
+            color: dark ? Colors.white : AppColors.green,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${formatCount(destination.monthlyArrivals)} visits',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: dark ? Colors.white : AppColors.deepGreen,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PermitPill extends StatelessWidget {
+  const PermitPill({super.key, required this.verified});
+
+  final bool verified;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: verified ? const Color(0xffdcfce7) : const Color(0xfffff3bd),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            verified ? Icons.verified_outlined : Icons.info_outline,
+            size: 14,
+            color: verified ? AppColors.green : const Color(0xff9a6700),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            verified ? 'Permit verified' : 'Permit not verified',
+            style: TextStyle(
+              fontSize: 11,
+              color: verified ? AppColors.green : const Color(0xff9a6700),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class StatusPill extends StatelessWidget {
   const StatusPill({super.key, required this.text});
 
@@ -2841,6 +5464,7 @@ class StatusPill extends StatelessWidget {
       ),
       child: Text(
         text,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           fontSize: 11,
           color: AppColors.green,
@@ -2906,20 +5530,24 @@ class DataSourceBanner extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.text,
+    this.warning = false,
   });
 
   final IconData icon;
   final String title;
   final String text;
+  final bool warning;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xffecfdf3),
+        color: warning ? const Color(0xfffff3bd) : const Color(0xffecfdf3),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xffb7e8c6)),
+        border: Border.all(
+          color: warning ? const Color(0xffffd267) : const Color(0xffb7e8c6),
+        ),
       ),
       child: Row(
         children: [
@@ -2977,7 +5605,7 @@ class TripSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final item = destination ?? Destination.fallback().first;
+    final item = destination;
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -2992,7 +5620,13 @@ class TripSummaryCard extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
             ),
             const SizedBox(height: 12),
-            DestinationListCard(destination: item, onTap: () {}),
+            if (item == null)
+              const EmptyState(
+                icon: Icons.travel_explore_outlined,
+                title: 'No trip destination loaded yet',
+              )
+            else
+              DestinationListCard(destination: item, onTap: () {}),
             const Divider(),
             const Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -3067,8 +5701,7 @@ class _PlanVisitFormState extends State<PlanVisitForm> {
   @override
   void initState() {
     super.initState();
-    _destination =
-        widget.destinations.firstOrNull ?? Destination.fallback().first;
+    _destination = widget.destinations.firstOrNull ?? Destination.placeholder();
   }
 
   @override
@@ -3079,6 +5712,20 @@ class _PlanVisitFormState extends State<PlanVisitForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.destinations.isEmpty) {
+      return const Card(
+        elevation: 0,
+        color: Colors.white,
+        child: Padding(
+          padding: EdgeInsets.all(14),
+          child: EmptyState(
+            icon: Icons.travel_explore_outlined,
+            title: 'No destinations available for planning yet',
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -3173,6 +5820,92 @@ class LocationCard extends StatelessWidget {
         ),
         subtitle: Text('${destination.latitude}, ${destination.longitude}'),
         trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+class DestinationFactsPanel extends StatelessWidget {
+  const DestinationFactsPanel({super.key, required this.destination});
+
+  final Destination destination;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            FactRow(
+              icon: Icons.groups_outlined,
+              label: 'Visitor arrivals',
+              value: destination.visitorsLabel,
+            ),
+            FactRow(
+              icon: Icons.category_outlined,
+              label: 'Category',
+              value: destination.type,
+            ),
+            FactRow(
+              icon: Icons.verified_outlined,
+              label: 'Permit status',
+              value: destination.permitLabel,
+            ),
+            FactRow(
+              icon: Icons.route_outlined,
+              label: 'Access',
+              value: destination.access.isEmpty
+                  ? 'Not specified'
+                  : destination.access,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FactRow extends StatelessWidget {
+  const FactRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.green, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3601,6 +6334,13 @@ class IntroItem {
 
 extension FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+
+  T? firstWhereOrNull(bool Function(T item) test) {
+    for (final item in this) {
+      if (test(item)) return item;
+    }
+    return null;
+  }
 }
 
 List<T> parseList<T>(Object? value, T Function(Map<String, dynamic>) parser) {
@@ -3614,6 +6354,20 @@ List<T> parseList<T>(Object? value, T Function(Map<String, dynamic>) parser) {
 int jsonInt(Object? value, [int fallback = 0]) {
   if (value is int) return value;
   return int.tryParse('$value') ?? fallback;
+}
+
+int? jsonNullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  return int.tryParse('$value');
+}
+
+bool jsonBool(Object? value, [bool fallback = false]) {
+  if (value is bool) return value;
+  final text = '$value'.toLowerCase().trim();
+  if (text == 'true' || text == '1' || text == 'yes') return true;
+  if (text == 'false' || text == '0' || text == 'no') return false;
+  return fallback;
 }
 
 double jsonDouble(Object? value, [double fallback = 0]) {
@@ -3633,8 +6387,6 @@ String imageAssetFor(String imageKey) {
       return 'assets/destinations/cagbalete.jpg';
     case 'dampalitan-island':
       return 'assets/destinations/dampalitan.jpg';
-    case 'kwebang-lampas':
-      return 'assets/destinations/kwebang_lampas.jpg';
     case 'mauban-lighthouse':
       return 'assets/destinations/mauban_lighthouse.jpg';
     case 'mt-pinagbanderahan':
@@ -3642,7 +6394,7 @@ String imageAssetFor(String imageKey) {
     case 'puting-buhangin':
       return 'assets/destinations/puting_buhangin.jpg';
     default:
-      return 'assets/destinations/cagbalete.jpg';
+      return 'assets/mauban_map.png';
   }
 }
 
@@ -3652,6 +6404,158 @@ String isoDate(DateTime date) {
 
 String shortDate(DateTime date) {
   return '${date.month}/${date.day}/${date.year}';
+}
+
+String? cleanProfileValue(String? value) {
+  final trimmed = value?.trim() ?? '';
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+String cleanDestinationName(String value) {
+  var cleaned = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  while (cleaned.endsWith('(') || cleaned.endsWith('[')) {
+    cleaned = cleaned.substring(0, cleaned.length - 1).trim();
+  }
+  return cleaned.isEmpty ? 'Unnamed Destination' : cleaned;
+}
+
+String boatCapacityFareLabel(String value) {
+  return value.isEmpty ? 'Select capacity and fare' : value;
+}
+
+String statusLabel(String value) {
+  switch (value) {
+    case 'pending':
+      return 'Pending';
+    case 'arrived':
+      return 'Arrived';
+    case 'no_show':
+      return 'No-show';
+    default:
+      return value.isEmpty ? 'Pending' : value;
+  }
+}
+
+String sanitationStatusLabel(String value) {
+  switch (value) {
+    case 'good_standing':
+      return 'Good Standing';
+    case 'upcoming':
+      return 'Upcoming';
+    case 'for_completion':
+      return 'For Completion';
+    case 'violation':
+      return 'Violation';
+    case 'no_permit':
+      return 'No Permit';
+    case 'active':
+      return 'Active';
+    case 'renewal_due':
+      return 'Renewal Due';
+    case 'conditional':
+      return 'Conditional';
+    case 'suspended':
+      return 'Suspended';
+    case 'high':
+      return 'High';
+    case 'medium':
+      return 'Medium';
+    case 'low':
+      return 'Low';
+    default:
+      return value.isEmpty ? 'Pending' : value;
+  }
+}
+
+String permitStatusLabel(String value) => sanitationStatusLabel(value);
+
+String householdStatusLabel(String value) {
+  switch (value) {
+    case 'good_standing':
+      return 'Good Standing';
+    case 'for_completion':
+      return 'For Completion';
+    case 'violation':
+      return 'Violation';
+    default:
+      return value.isEmpty ? 'Good Standing' : value;
+  }
+}
+
+Color sanitationStatusColor(String value) {
+  switch (value) {
+    case 'good_standing':
+    case 'active':
+    case 'low':
+      return AppColors.green;
+    case 'upcoming':
+    case 'for_completion':
+    case 'renewal_due':
+    case 'conditional':
+    case 'medium':
+      return const Color(0xffd59b00);
+    case 'violation':
+    case 'no_permit':
+    case 'suspended':
+    case 'high':
+      return Colors.red;
+    default:
+      return AppColors.muted;
+  }
+}
+
+String formatCount(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < text.length; index += 1) {
+    final remaining = text.length - index;
+    buffer.write(text[index]);
+    if (remaining > 1 && remaining % 3 == 1) buffer.write(',');
+  }
+  return buffer.toString();
+}
+
+String householdToiletLabel(String value) {
+  switch (value) {
+    case 'water_sealed':
+      return 'Water-sealed';
+    case 'pour_flush':
+      return 'Pour-flush';
+    case 'pit_latrine':
+      return 'Pit latrine';
+    case 'none':
+      return 'No toilet facility';
+    default:
+      return value;
+  }
+}
+
+String householdWaterLabel(String value) {
+  switch (value) {
+    case 'level_1':
+      return 'Level I';
+    case 'level_2':
+      return 'Level II';
+    case 'level_3':
+      return 'Level III';
+    default:
+      return value;
+  }
+}
+
+String householdWasteLabel(String value) {
+  switch (value) {
+    case 'collected':
+      return 'Collected by LGU';
+    case 'composted':
+      return 'Composted';
+    case 'burned':
+      return 'Burned';
+    case 'dumped':
+      return 'Dumped';
+    default:
+      return value;
+  }
 }
 
 void showAppMessage(BuildContext context, String message) {
@@ -3666,6 +6570,7 @@ Future<void> showSubmissionDialog(
   required String referenceLabel,
   required String referenceValue,
   required String message,
+  List<String> details = const [],
 }) {
   return showDialog<void>(
     context: context,
@@ -3704,6 +6609,26 @@ Future<void> showSubmissionDialog(
               ],
             ),
           ),
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...details.map(
+              (detail) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline,
+                      color: AppColors.green,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(detail)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       actions: [

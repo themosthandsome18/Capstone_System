@@ -19,6 +19,9 @@ from .views import (
     mobile_destination_detail,
     mobile_destination_list,
     mobile_feedback_submit,
+    mobile_household_survey_submit,
+    mobile_sanitation_bootstrap,
+    mobile_sanitation_inspection_submit,
     mobile_sanitation_report_submit,
     mobile_tourism_bootstrap,
     mobile_tourist_registration,
@@ -58,7 +61,10 @@ urlpatterns = [
     path("mobile/tourism/destinations/<int:resort_id>/", mobile_destination_detail),
     path("mobile/tourism/register-visit/", mobile_tourist_registration),
     path("mobile/tourism/feedback/", mobile_feedback_submit),
+    path("mobile/sanitation/bootstrap/", mobile_sanitation_bootstrap),
+    path("mobile/sanitation/inspections/", mobile_sanitation_inspection_submit),
     path("mobile/sanitation/reports/", mobile_sanitation_report_submit),
+    path("mobile/sanitation/household-surveys/", mobile_household_survey_submit),
 
     # Tourism routes
     path("reference-tables/", reference_tables),

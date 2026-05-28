@@ -157,6 +157,8 @@ class VisitPurposeSerializer(NamedReferenceSerializer):
 
 class ResortSerializer(serializers.ModelSerializer):
     coordinates = serializers.SerializerMethodField()
+    resort_name = serializers.SerializerMethodField()
+    monthly_arrivals = serializers.SerializerMethodField()
 
     class Meta:
         model = Resort
@@ -182,6 +184,19 @@ class ResortSerializer(serializers.ModelSerializer):
             "lat": obj.latitude,
             "lng": obj.longitude,
         }
+
+    def get_resort_name(self, obj):
+        return clean_resort_display_name(obj.resort_name)
+
+    def get_monthly_arrivals(self, obj):
+        return getattr(obj, "visitor_total", obj.monthly_arrivals) or 0
+
+
+def clean_resort_display_name(name):
+    cleaned = " ".join(str(name or "").split()).strip(" -/")
+    while cleaned.endswith("(") or cleaned.endswith("["):
+        cleaned = cleaned[:-1].rstrip()
+    return cleaned or "Unnamed Destination"
 
 
 class FeedbackEntrySerializer(serializers.ModelSerializer):

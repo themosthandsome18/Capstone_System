@@ -15,14 +15,28 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.mauban_mobile_app"
+        applicationId = "com.mauban.mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] = "Mauban Mobile"
+    }
+
+    flavorDimensions += "module"
+    productFlavors {
+        create("tourism") {
+            dimension = "module"
+            applicationId = "com.mauban.tourism"
+            manifestPlaceholders["appLabel"] = "Mauban Tourism"
+        }
+        create("sanitation") {
+            dimension = "module"
+            applicationId = "com.mauban.sanitation"
+            manifestPlaceholders["appLabel"] = "Mauban Sanitation"
+        }
     }
 
     buildTypes {
@@ -42,4 +56,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("androidx.core:core:1.17.0")
 }
