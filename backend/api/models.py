@@ -453,10 +453,12 @@ SANITARY_PERMIT_SIZE_CHOICES = [
 
 SANITARY_FREQUENCY_MONTHLY = "monthly"
 SANITARY_FREQUENCY_QUARTERLY = "quarterly"
+SANITARY_FREQUENCY_ANNUAL = "annual"
 
 SANITARY_FREQUENCY_CHOICES = [
     (SANITARY_FREQUENCY_MONTHLY, "Monthly"),
     (SANITARY_FREQUENCY_QUARTERLY, "Quarterly"),
+    (SANITARY_FREQUENCY_ANNUAL, "Annual"),
 ]
 
 SANITARY_STATUS_GOOD = "good_standing"
@@ -570,7 +572,7 @@ class SanitaryRequirement(models.Model):
     is_required = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ["business_type__name", "permit_size", "requirement_name"]
+        ordering = ["business_type__name", "permit_size", "id"]
         unique_together = ("business_type", "permit_size", "requirement_name")
 
     def __str__(self):

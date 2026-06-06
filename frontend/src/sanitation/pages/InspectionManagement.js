@@ -786,7 +786,9 @@ function getSuggestedNextDueDate(dateValue, frequency) {
 
   const date = new Date(dateValue);
 
-  if (frequency === "quarterly") {
+  if (frequency === "annual") {
+    date.setFullYear(date.getFullYear() + 1);
+  } else if (frequency === "quarterly") {
     date.setMonth(date.getMonth() + 3);
   } else {
     date.setMonth(date.getMonth() + 1);
@@ -893,6 +895,7 @@ function statusClass(status = "") {
 function formatFrequency(value = "") {
   if (value === "monthly") return "Monthly";
   if (value === "quarterly") return "Quarterly";
+  if (value === "annual") return "Annual";
   return value || "Not Set";
 }
 

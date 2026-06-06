@@ -1271,6 +1271,15 @@ def build_sanitation_question_answers(establishments):
             SANITARY_STATUS_NO_PERMIT,
         ],
     ).count()
+    annual_queue = establishments.filter(
+        business_type__inspection_frequency="annual",
+        compliance_status__in=[
+            SANITARY_STATUS_UPCOMING,
+            SANITARY_STATUS_FOR_COMPLETION,
+            SANITARY_STATUS_VIOLATION,
+            SANITARY_STATUS_NO_PERMIT,
+        ],
+    ).count()
     urgent = list(
         establishments.filter(
             Q(compliance_status=SANITARY_STATUS_VIOLATION)
@@ -1324,8 +1333,8 @@ def build_sanitation_question_answers(establishments):
         },
         {
             "id": "inspection_frequency_queue",
-            "question": "Which inspection frequency queue needs more attention: monthly or quarterly?",
-            "answer": f"Monthly queue: {monthly_queue}; quarterly queue: {quarterly_queue}.",
+            "question": "Which inspection frequency queue needs more attention?",
+            "answer": f"Monthly queue: {monthly_queue}; quarterly queue: {quarterly_queue}; annual queue: {annual_queue}.",
         },
         {
             "id": "urgent_attention",

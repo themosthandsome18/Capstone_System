@@ -2397,7 +2397,7 @@
 }
 
 .gis-location-list {
-  min-height: 390px;
+  min-height: 0;
 }
 
 .gis-bottom-stats {
@@ -2471,7 +2471,11 @@
 
 .gis-location-list {
   @apply p-5;
-  min-height: 400px;
+  display: flex;
+  min-height: 0;
+  max-height: 430px;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .gis-location-list h3 {
@@ -2480,11 +2484,35 @@
 
 .gis-location-items {
   @apply mt-4 flex flex-col gap-2;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.gis-location-items::-webkit-scrollbar {
+  width: 7px;
+}
+
+.gis-location-items::-webkit-scrollbar-track {
+  background: #eef5f1;
+  border-radius: 999px;
+}
+
+.gis-location-items::-webkit-scrollbar-thumb {
+  background: #2fa34a;
+  border-radius: 999px;
 }
 
 .gis-location-item {
-  @apply flex w-full items-center justify-between border border-[#cbd5d1] bg-white/30 px-3 py-2 text-left transition;
+  @apply w-full items-center border border-[#cbd5d1] bg-white/30 px-3 py-2 text-left transition;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   min-height: 45px;
+}
+
+.gis-location-item > div:first-child {
+  min-width: 0;
 }
 
 .gis-location-item:hover {
@@ -2497,16 +2525,24 @@
 
 .gis-location-item p {
   @apply m-0 text-xs font-bold text-slate-700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gis-location-item span {
   @apply text-[10px] font-semibold text-slate-500;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Rating + visitors on location rows */
 
 .gis-rating {
   @apply flex items-center gap-1 text-yellow-500;
+  flex: 0 0 auto;
 }
 
 .gis-rating span {
@@ -2551,6 +2587,10 @@
   .gis-main-grid,
   .gis-bottom-stats {
     grid-template-columns: 1fr;
+  }
+
+  .gis-location-list {
+    max-height: 360px;
   }
 }
 

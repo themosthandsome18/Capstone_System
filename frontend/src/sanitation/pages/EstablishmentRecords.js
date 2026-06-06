@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
   FiDownload,
@@ -955,7 +956,8 @@ function RegisterEstablishmentModal({
             {autoRequirements.length ? (
               autoRequirements.map((requirement) => (
                 <span key={requirement.id}>
-                  OK {requirement.requirement_name}
+                  <FiCheckCircle />
+                  {requirement.requirement_name}
                 </span>
               ))
             ) : (

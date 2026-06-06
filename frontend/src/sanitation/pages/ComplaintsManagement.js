@@ -47,6 +47,7 @@ function ComplaintsManagement() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [pageError, setPageError] = useState("");
 
   const rows = complaintData?.rows || [];
   const summary = complaintData?.summary || {};
@@ -55,9 +56,21 @@ function ComplaintsManagement() {
   const maxCategory = Math.max(...byCategory.map((item) => item.total || 0), 1);
 
   useEffect(() => {
+    let mounted = true;
+
     if (!complaintData) {
-      refreshComplaintData(filters);
+      refreshComplaintData(filters).catch((requestError) => {
+        if (mounted) {
+          setPageError(
+            requestError.message || "Unable to load complaint records."
+          );
+        }
+      });
     }
+
+    return () => {
+      mounted = false;
+    };
   }, [complaintData, filters, refreshComplaintData]);
 
   const establishmentOptions = useMemo(
@@ -70,7 +83,13 @@ function ComplaintsManagement() {
 
   async function applyFilters(nextFilters) {
     setFilters(nextFilters);
-    await refreshComplaintData(nextFilters);
+    setPageError("");
+
+    try {
+      await refreshComplaintData(nextFilters);
+    } catch (requestError) {
+      setPageError(requestError.message || "Unable to filter complaint records.");
+    }
   }
 
   function openCreateModal() {
@@ -130,6 +149,9 @@ function ComplaintsManagement() {
       }
 
       setModalOpen(false);
+      setPageError("");
+    } catch (requestError) {
+      setPageError(requestError.message || "Unable to save complaint record.");
     } finally {
       setSaving(false);
     }
@@ -141,7 +163,12 @@ function ComplaintsManagement() {
     );
 
     if (confirmed) {
-      await deleteComplaint(item.id);
+      try {
+        await deleteComplaint(item.id);
+        setPageError("");
+      } catch (requestError) {
+        setPageError(requestError.message || "Unable to delete complaint record.");
+      }
     }
   }
 
@@ -168,7 +195,9 @@ function ComplaintsManagement() {
         </button>
       </div>
 
-      {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {error || pageError ? (
+        <p className="sanitation-error-text">{pageError || error}</p>
+      ) : null}
 
       <div className="complaint-stat-grid">
         <ComplaintStat label="Total Complaints" value={summary.total || 0} />

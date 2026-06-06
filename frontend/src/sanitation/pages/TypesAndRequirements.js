@@ -2,22 +2,69 @@ import { useEffect, useMemo, useState } from "react";
 import { FiCalendar, FiCheckCircle, FiPlus } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
+const STANDARD_REQUIREMENT_NAMES = [
+  "Xerox copy of DTI/SEC/CDA",
+  "Barangay Clearance of owner",
+  "Chest X-ray Results (Owner & employees)",
+  "CTC/Cedula of owner and employees",
+  "1x1 picture of owner and employees",
+  "Potability of Water Supply - Physical/Chemical Examination",
+  "Potability of Water Supply - Microbiological Examination",
+];
+
+const BUSINESS_TYPE_ORDER = [
+  "Water Refilling Station",
+  "Agro-industrial Establishment (Poultry / Piggery Farm)",
+  "Restaurant / Food Establishment",
+  "Public Market Stall",
+  "Drug Store",
+  "Sub-contractor",
+  "Resort / Picnic Ground",
+  "Boatman",
+  "Massage / Physical Therapy",
+  "Funeral Parlor",
+  "Burial Ground",
+  "Private Laboratory & Clinic",
+  "Karaoke / Video Bar / CSW",
+];
+
 function TypesAndRequirements() {
   const { businessTypes, loading, error } = useSanitationData();
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const [permitSize, setPermitSize] = useState("sp");
 
+  const orderedBusinessTypes = useMemo(() => {
+    return [...businessTypes].sort((first, second) => {
+      const firstIndex = BUSINESS_TYPE_ORDER.indexOf(first.name);
+      const secondIndex = BUSINESS_TYPE_ORDER.indexOf(second.name);
+
+      if (firstIndex === -1 && secondIndex === -1) {
+        return first.name.localeCompare(second.name);
+      }
+
+      if (firstIndex === -1) {
+        return 1;
+      }
+
+      if (secondIndex === -1) {
+        return -1;
+      }
+
+      return firstIndex - secondIndex;
+    });
+  }, [businessTypes]);
+
   useEffect(() => {
-    if (!selectedTypeId && businessTypes.length) {
-      setSelectedTypeId(String(businessTypes[0].id));
+    if (!selectedTypeId && orderedBusinessTypes.length) {
+      setSelectedTypeId(String(orderedBusinessTypes[0].id));
     }
-  }, [businessTypes, selectedTypeId]);
+  }, [orderedBusinessTypes, selectedTypeId]);
 
   const selectedType = useMemo(() => {
-    return businessTypes.find(
+    return orderedBusinessTypes.find(
       (type) => String(type.id) === String(selectedTypeId)
     );
-  }, [businessTypes, selectedTypeId]);
+  }, [orderedBusinessTypes, selectedTypeId]);
 
   const requirements = useMemo(() => {
     if (!selectedType) {
@@ -28,6 +75,19 @@ function TypesAndRequirements() {
       (requirement) => requirement.permit_size === permitSize
     );
   }, [selectedType, permitSize]);
+
+  const standardRequirements = useMemo(() => {
+    return STANDARD_REQUIREMENT_NAMES.map((requirementName) =>
+      requirements.find((item) => item.requirement_name === requirementName)
+    ).filter(Boolean);
+  }, [requirements]);
+
+  const additionalRequirements = useMemo(() => {
+    return requirements.filter(
+      (requirement) =>
+        !STANDARD_REQUIREMENT_NAMES.includes(requirement.requirement_name)
+    );
+  }, [requirements]);
 
   if (loading) {
     return (
@@ -57,15 +117,15 @@ function TypesAndRequirements() {
           </div>
 
           <div className="business-type-list">
-            {businessTypes.length ? (
-              businessTypes.map((type) => (
+            {orderedBusinessTypes.length ? (
+              orderedBusinessTypes.map((type) => (
                 <button
                   key={type.id}
                   type="button"
                   onClick={() => setSelectedTypeId(String(type.id))}
                   className={String(selectedTypeId) === String(type.id) ? "active" : ""}
                 >
-                  <span>{type.name}</span>
+                  <span title={type.name}>{type.name}</span>
                   <small>{formatFrequency(type.inspection_frequency)}</small>
                 </button>
               ))
@@ -96,7 +156,7 @@ function TypesAndRequirements() {
                     className={permitSize === "sp" ? "active" : ""}
                     onClick={() => setPermitSize("sp")}
                   >
-                    SP
+                    SP (Small)
                   </button>
                   <button
                     type="button"
@@ -109,10 +169,13 @@ function TypesAndRequirements() {
               </div>
 
               <div className="requirements-checklist">
-                <h3>Requirements Checklist</h3>
+                <h3>
+                  Standard Requirements{" "}
+                  <small>(applies to all establishments)</small>
+                </h3>
 
-                {requirements.length ? (
-                  requirements.map((item) => (
+                {standardRequirements.length ? (
+                  standardRequirements.map((item) => (
                     <div key={item.id} className="requirement-row">
                       <FiCheckCircle />
                       <span>{item.requirement_name}</span>
@@ -121,6 +184,26 @@ function TypesAndRequirements() {
                 ) : (
                   <div className="requirement-row">
                     <span>No requirements found for this permit size.</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="requirements-checklist additional-requirements">
+                <h3>
+                  Additional Requirements for {selectedType.name}{" "}
+                  <small>({permitSize === "sp" ? "SP" : "Large"})</small>
+                </h3>
+
+                {additionalRequirements.length ? (
+                  additionalRequirements.map((item) => (
+                    <div key={item.id} className="requirement-row">
+                      <FiCheckCircle />
+                      <span>{item.requirement_name}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="requirement-row">
+                    <span>No additional requirements for this business type.</span>
                   </div>
                 )}
               </div>
@@ -153,6 +236,10 @@ function formatFrequency(value = "") {
 
   if (value === "quarterly") {
     return "Quarterly";
+  }
+
+  if (value === "annual") {
+    return "Annual";
   }
 
   return value || "Not Set";

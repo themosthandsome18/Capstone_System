@@ -75,10 +75,12 @@ const statusClassNames = {
   no_show: "noshow",
 };
 
+const currentReportingYear = String(new Date().getFullYear());
+
 const reportingYearOptions = [
+  { value: "2026", label: "2026" },
   { value: "2025", label: "2025" },
   { value: "2024", label: "2024" },
-  { value: "2026", label: "2026" },
   { value: "all", label: "All Years" },
 ];
 
@@ -112,7 +114,7 @@ function BookingManagement() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState("");
   const [filters, setFilters] = useState({
-    year: "2025",
+    year: currentReportingYear,
     status: "",
     resort_id: "",
     region_id: "",

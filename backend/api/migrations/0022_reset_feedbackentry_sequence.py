@@ -1,6 +1,21 @@
 from django.db import migrations
 
 
+def reset_feedbackentry_sequence(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+
+    schema_editor.execute(
+        """
+        SELECT setval(
+            pg_get_serial_sequence('api_feedbackentry', 'id'),
+            COALESCE((SELECT MAX(id) FROM api_feedbackentry), 1),
+            (SELECT COUNT(*) FROM api_feedbackentry) > 0
+        );
+        """
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -8,14 +23,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            """
-            SELECT setval(
-                pg_get_serial_sequence('api_feedbackentry', 'id'),
-                COALESCE((SELECT MAX(id) FROM api_feedbackentry), 1),
-                (SELECT COUNT(*) FROM api_feedbackentry) > 0
-            );
-            """,
-            reverse_sql=migrations.RunSQL.noop,
+        migrations.RunPython(
+            reset_feedbackentry_sequence,
+            reverse_code=migrations.RunPython.noop,
         ),
     ]

@@ -1,10 +1,19 @@
-import Cagbalete from "../assets/Cagbalete.jpg";
-import DampalitanIsland from "../assets/DampalitanIsland.jpg";
-import KwebangLampas from "../assets/KwebangLampas.jpg";
 import MaubanMap from "../assets/mauban-map.png";
-import MaubanLighthouse from "../assets/Maubanlighthouse.jpg";
-import MtPinagbanderahan from "../assets/Mt.Pinagbanderahan.jpg";
-import PutingBuhangin from "../assets/PutingBuhangin.jpg";
+import AguhoPlayaBeachResort from "../assets/Aguho Playa Beach Resort - Cagbalete.jpg";
+import AquazulHotelAndResort from "../assets/Aquazul Hotel and Resort - Cagbalete.jpg";
+import DonaCholengCampingResort from "../assets/Dona Choleng Camping Resort - Cagbalete.jpg";
+import JovenciosResort from "../assets/Jovencio's Resort Cagbalete.jpg";
+import MvtStoNinoBeachResort from "../assets/MVT Sto. Nino Beach Resort - Cagbalete.jpg";
+import NenitaDelSol from "../assets/Nenita Del Sol - Cagbalete.jpg";
+import NilandinganCoveResort from "../assets/Nilandingan Cove Resort - Cagbalete.jpg";
+import OrlanBeachResort from "../assets/Orlan Beach Resort - Cagbalete.jpg";
+import RioDelSolBeachResort from "../assets/Rio Del Sol Beach Resort - Cagbalete.avif";
+import TentPlace from "../assets/Tent Place - Cagbalete.jpg";
+import TitaPinayBeachResort from "../assets/Tita Pinay Beach Resort - Cagbalete.png";
+import VillaCleofasCagbalete from "../assets/Villa Cleofas Cagbalete.webp";
+import VillaEscapardeCampingAndBeachResort from "../assets/Villa Escaparde Camping and Beach Resort.jpg";
+import VillaNoeBeach from "../assets/Villa Noe Beach- Cagbalete.jpg";
+import VillaPilarosaBeachResort from "../assets/Villa Pilarosa Beach Resort - Cagbalete.png";
 export const assetLibrary = {
   map: MaubanMap,
 };
@@ -104,93 +113,228 @@ export const visitPurposes = [
 export const resorts = [
   {
     resort_id: 1,
-    resort_name: "Cagbalete Island",
+    resort_name: "Dona Choleng Camping Resort",
     with_mayors_permit: true,
-    type: "Island Resort",
-    location: "Barangay Cagbalete I, Mauban, Quezon",
+    type: "Camping Resort",
+    location: "Cagbalete",
     short_description:
-      "White-sand island destination known for sandbars, beach camping, and weekend eco escapes.",
+      "Cagbalete camping resort for overnight stays, group visits, and beachside recreation.",
     tourism_rating: 4.8,
     access: "Boat Access",
     itinerary_ids: [1, 2],
-    image: Cagbalete,
-    monthly_arrivals: 1860,
-    coordinates: { lat: 13.9389, lng: 121.7974 },
+    image: DonaCholengCampingResort,
+    monthly_arrivals: 1842,
+    coordinates: { lat: 14.2748, lng: 121.8239 },
   },
   {
     resort_id: 2,
-    resort_name: "Dampalitan Island",
+    resort_name: "Aquazul Hotel and Resort",
     with_mayors_permit: true,
-    type: "Island Resort",
-    location: "Barangay Cagbalete II, Mauban, Quezon",
+    type: "Hotel and Resort",
+    location: "Cagbalete",
     short_description:
-      "Popular barkada and family stop with cottage rentals, picnic areas, and calm coastal waters.",
-    tourism_rating: 4.6,
+      "Island hotel and resort destination serving families, tour groups, and overnight visitors.",
+    tourism_rating: 4.7,
     access: "Boat Access",
     itinerary_ids: [1, 2],
-    image: DampalitanIsland,
-    monthly_arrivals: 1495,
-    coordinates: { lat: 13.9254, lng: 121.7861 },
+    image: AquazulHotelAndResort,
+    monthly_arrivals: 1456,
+    coordinates: { lat: 14.2716, lng: 121.8264 },
   },
   {
     resort_id: 3,
-    resort_name: "Puting Buhangin Cove",
-    with_mayors_permit: false,
+    resort_name: "Rio Del Sol Beach Resort",
+    with_mayors_permit: true,
     type: "Beach Resort",
-    location: "Sitio Puting Buhangin, Mauban, Quezon",
+    location: "Cagbalete",
     short_description:
-      "Quiet beach cove with overnight huts, snorkeling areas, and sunrise viewpoints.",
-    tourism_rating: 4.5,
-    access: "Road + Boat",
+      "Beach resort known for open shoreline views, day tours, and relaxing seaside stays.",
+    tourism_rating: 4.6,
+    access: "Boat Access",
     itinerary_ids: [1, 2],
-    image: PutingBuhangin,
-    monthly_arrivals: 1160,
-    coordinates: { lat: 13.9186, lng: 121.7702 },
+    image: RioDelSolBeachResort,
+    monthly_arrivals: 982,
+    coordinates: { lat: 14.2682, lng: 121.8291 },
   },
   {
     resort_id: 4,
-    resort_name: "Kwebang Lampas",
+    resort_name: "Jovencio's Resort",
     with_mayors_permit: true,
-    type: "Eco Site",
-    location: "Lamon Bay coast, Mauban, Quezon",
+    type: "Beach Resort",
+    location: "Cagbalete",
     short_description:
-      "Famous sea cave and beach attraction included in island hopping routes and photo tours.",
-    tourism_rating: 4.7,
+      "Cagbalete beach resort for small groups, casual swimming, and island leisure trips.",
+    tourism_rating: 4.3,
     access: "Boat Access",
-    itinerary_ids: [1, 3],
-    image: KwebangLampas,
-    monthly_arrivals: 1388,
-    coordinates: { lat: 13.9247, lng: 121.7791 },
+    itinerary_ids: [1, 2],
+    image: JovenciosResort,
+    monthly_arrivals: 648,
+    coordinates: { lat: 14.2655, lng: 121.8218 },
   },
   {
     resort_id: 5,
-    resort_name: "Mauban Lighthouse",
+    resort_name: "MVT Sto. Nino Beach Resort",
     with_mayors_permit: true,
-    type: "Heritage Site",
-    location: "Town Proper, Mauban, Quezon",
+    type: "Beach Resort",
+    location: "Cagbalete",
     short_description:
-      "Historic lighthouse stop ideal for educational tours, LGU visits, and cultural orientation.",
-    tourism_rating: 4.3,
-    access: "Road Access",
-    itinerary_ids: [4],
-    image: MaubanLighthouse,
-    monthly_arrivals: 820,
-    coordinates: { lat: 14.0245, lng: 121.7317 },
+      "Beach resort destination with shaded shoreline areas and family-friendly island access.",
+    tourism_rating: 4.4,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: MvtStoNinoBeachResort,
+    monthly_arrivals: 512,
+    coordinates: { lat: 14.2631, lng: 121.8245 },
   },
   {
     resort_id: 6,
-    resort_name: "Mt. Pinagbanderahan",
+    resort_name: "Nilandingan Cove Resort",
     with_mayors_permit: true,
-    type: "Eco Adventure",
-    location: "Inland highlands, Mauban, Quezon",
+    type: "Cove Resort",
+    location: "Cagbalete",
     short_description:
-      "Mountain trail destination with panoramic ridge views, trekking paths, and camp activity zones.",
+      "Cove resort destination for beach relaxation, coastal scenery, and low-density stays.",
+    tourism_rating: 4.3,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: NilandinganCoveResort,
+    monthly_arrivals: 384,
+    coordinates: { lat: 14.2604, lng: 121.8278 },
+  },
+  {
+    resort_id: 7,
+    resort_name: "Villa Cleofas Cagbalete",
+    with_mayors_permit: true,
+    type: "Camping Resort",
+    location: "Cagbalete",
+    short_description:
+      "Popular Cagbalete camping resort for overnight beach stays and group activities.",
+    tourism_rating: 4.8,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: VillaCleofasCagbalete,
+    monthly_arrivals: 1842,
+    coordinates: { lat: 14.2577, lng: 121.8212 },
+  },
+  {
+    resort_id: 8,
+    resort_name: "Villa Escaparde Camping and Beach Resort",
+    with_mayors_permit: true,
+    type: "Camping and Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Camping and beach resort serving barkada trips, family stays, and island recreation.",
+    tourism_rating: 4.7,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: VillaEscapardeCampingAndBeachResort,
+    monthly_arrivals: 1456,
+    coordinates: { lat: 14.2552, lng: 121.8251 },
+  },
+  {
+    resort_id: 9,
+    resort_name: "Villa Noe Beach",
+    with_mayors_permit: true,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach resort destination offering seaside cottages, island scenery, and visitor accommodations.",
+    tourism_rating: 4.6,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: VillaNoeBeach,
+    monthly_arrivals: 982,
+    coordinates: { lat: 14.2529, lng: 121.8287 },
+  },
+  {
+    resort_id: 10,
+    resort_name: "Villa Pilarosa Beach Resort",
+    with_mayors_permit: true,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach resort for swimming, cottage stays, and relaxed Cagbalete shoreline visits.",
+    tourism_rating: 4.3,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: VillaPilarosaBeachResort,
+    monthly_arrivals: 648,
+    coordinates: { lat: 14.2507, lng: 121.8229 },
+  },
+  {
+    resort_id: 11,
+    resort_name: "Tita Pinay Beach Resort",
+    with_mayors_permit: true,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach resort for family trips, day tours, and simple island lodging.",
     tourism_rating: 4.4,
-    access: "Road Access",
-    itinerary_ids: [3],
-    image: MtPinagbanderahan,
-    monthly_arrivals: 680,
-    coordinates: { lat: 13.9844, lng: 121.6796 },
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: TitaPinayBeachResort,
+    monthly_arrivals: 512,
+    coordinates: { lat: 14.2484, lng: 121.8261 },
+  },
+  {
+    resort_id: 12,
+    resort_name: "Aguho Playa Beach Resort",
+    with_mayors_permit: false,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach resort listed for tourism monitoring and permit follow-up.",
+    tourism_rating: 4.3,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: AguhoPlayaBeachResort,
+    monthly_arrivals: 384,
+    coordinates: { lat: 14.2462, lng: 121.8296 },
+  },
+  {
+    resort_id: 13,
+    resort_name: "Tent Place",
+    with_mayors_permit: true,
+    type: "Camping Resort",
+    location: "Cagbalete",
+    short_description:
+      "Camping destination for tent stays, island leisure, and beach group activities.",
+    tourism_rating: 4.8,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: TentPlace,
+    monthly_arrivals: 1842,
+    coordinates: { lat: 14.2438, lng: 121.8235 },
+  },
+  {
+    resort_id: 14,
+    resort_name: "Orlan Beach Resort",
+    with_mayors_permit: true,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach resort for island visitors, coastal recreation, and overnight stays.",
+    tourism_rating: 4.8,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: OrlanBeachResort,
+    monthly_arrivals: 1842,
+    coordinates: { lat: 14.2416, lng: 121.8272 },
+  },
+  {
+    resort_id: 15,
+    resort_name: "Nenita Del Sol",
+    with_mayors_permit: true,
+    type: "Beach Resort",
+    location: "Cagbalete",
+    short_description:
+      "Beach destination monitored for tourist arrivals, guest stays, and permit compliance.",
+    tourism_rating: 4.8,
+    access: "Boat Access",
+    itinerary_ids: [1, 2],
+    image: NenitaDelSol,
+    monthly_arrivals: 1842,
+    coordinates: { lat: 14.2393, lng: 121.8301 },
   },
 ];
 
@@ -571,7 +715,7 @@ export const feedbackEntries = [
     date: "2026-04-10",
     title: "Very organized island arrival",
     message:
-      "Boat queue was smooth and the welcome desk gave clear directions for the cottages and sandbar timings.",
+      "Boat queue was smooth and Dona Choleng staff gave clear directions for cottages and camp areas.",
   },
   {
     id: 2,
@@ -582,7 +726,7 @@ export const feedbackEntries = [
     date: "2026-04-09",
     title: "Nice beach, limited shaded seating",
     message:
-      "The location was scenic but more shaded waiting areas near the docking point would help senior guests.",
+      "Rio Del Sol was scenic but more shaded waiting areas near the docking point would help senior guests.",
   },
   {
     id: 3,
@@ -593,7 +737,7 @@ export const feedbackEntries = [
     date: "2026-04-08",
     title: "Great guide support",
     message:
-      "Our guide shared safety reminders before entering the cave, and the experience felt well-managed.",
+      "Jovencio's Resort staff shared clear safety reminders and the beach activity felt well-managed.",
   },
   {
     id: 4,
@@ -604,7 +748,7 @@ export const feedbackEntries = [
     date: "2026-04-07",
     title: "Needs cleaner restroom facilities",
     message:
-      "The island itself was enjoyable, but restroom maintenance needs more frequent attention during peak hours.",
+      "Aquazul was enjoyable, but restroom maintenance needs more frequent attention during peak hours.",
   },
   {
     id: 5,
@@ -615,7 +759,7 @@ export const feedbackEntries = [
     date: "2026-04-06",
     title: "Good eco-trail assistance",
     message:
-      "Trail markers were visible and staff were helpful in guiding our group through the safer route.",
+      "MVT Sto. Nino staff were helpful in guiding our group through the safer beach access route.",
   },
 ];
 
@@ -623,17 +767,17 @@ export const dashboardAlerts = [
   {
     id: 1,
     type: "Permit Reminder",
-    message: "Puting Buhangin Cove permit requires follow-up validation with the municipal licensing unit.",
+    message: "Aguho Playa Beach Resort permit requires follow-up validation with the municipal licensing unit.",
   },
   {
     id: 2,
     type: "Peak Load",
-    message: "Cagbalete Island weekend bookings are trending 18% above the weekly average.",
+    message: "Dona Choleng Camping Resort weekend bookings are trending 18% above the weekly average.",
   },
   {
     id: 3,
     type: "Guest Feedback",
-    message: "Restroom cleanliness concern reported for Dampalitan Island on April 7, 2026.",
+    message: "Restroom cleanliness concern reported for Aquazul Hotel and Resort on April 7, 2026.",
   },
 ];
 
@@ -648,7 +792,7 @@ export const executiveSummaryRows = [
   {
     id: 2,
     metric: "Top Destination Occupancy",
-    current: "Cagbalete Island - 82%",
+    current: "Dona Choleng Camping Resort - 82%",
     previous: "76%",
     status: "Up",
   },

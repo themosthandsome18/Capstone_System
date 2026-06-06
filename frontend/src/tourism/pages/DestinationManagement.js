@@ -57,10 +57,6 @@ function DestinationManagement() {
         return official;
       }
 
-      if (viewMode === "imported") {
-        return !official;
-      }
-
       return true;
     });
 
@@ -283,17 +279,10 @@ function DestinationManagement() {
         </button>
         <button
           type="button"
-          className={viewMode === "imported" ? "active" : ""}
-          onClick={() => setViewMode("imported")}
-        >
-          Imported Resort Names
-        </button>
-        <button
-          type="button"
           className={viewMode === "all" ? "active" : ""}
           onClick={() => setViewMode("all")}
         >
-          All
+          All Destinations
         </button>
       </div>
 

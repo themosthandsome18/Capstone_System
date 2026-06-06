@@ -1116,6 +1116,7 @@ function buildProgressColumns(summary) {
 function formatFrequency(value = "") {
   if (value === "monthly") return "Monthly";
   if (value === "quarterly") return "Quarterly";
+  if (value === "annual") return "Annual";
   return value || "Not Set";
 }
 

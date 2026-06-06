@@ -152,7 +152,7 @@ class MobilePublicApiTests(TestCase):
         names = [destination["resort_name"] for destination in destinations]
 
         self.assertLessEqual(len(destinations), 10)
-        self.assertNotIn("Kwebang Lampas", names)
+        self.assertIn("Dona Choleng Camping Resort", names)
         self.assertLess(len(destinations), Resort.objects.count())
         self.assertTrue(all(not name.endswith("(") for name in names))
 
@@ -166,7 +166,7 @@ class MobilePublicApiTests(TestCase):
             region=Region.objects.first(),
             province=Province.objects.first(),
             arrival_date="2026-06-02",
-            resort=Resort.objects.get(resort_name="Mt. Pinagbanderahan"),
+            resort=Resort.objects.get(resort_name="Orlan Beach Resort"),
             itinerary=Itinerary.objects.first(),
             travel_mode=TravelMode.objects.first(),
             boat_type=BoatType.objects.first(),
@@ -182,7 +182,7 @@ class MobilePublicApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         first_destination = response.json()["destinations"][0]
-        self.assertEqual(first_destination["resort_name"], "Mt. Pinagbanderahan")
+        self.assertEqual(first_destination["resort_name"], "Orlan Beach Resort")
         self.assertEqual(first_destination["monthly_arrivals"], 5000)
 
     def test_mobile_tourist_registration_creates_booking_record(self):

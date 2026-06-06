@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { tourismApi } from "../services/tourismApi";
 
 const TourismDataContext = createContext(null);
+const currentReportingYear = String(new Date().getFullYear());
 
 const bookingSummaryKeysByStatus = {
   pending: "pending",
@@ -23,7 +24,7 @@ const emptyBootstrap = {
   touristRecords: [],
   bookingManagement: {
     filters: {
-      year: "2025",
+      year: currentReportingYear,
       search: "",
       status: "",
       resort_id: "",
@@ -52,7 +53,7 @@ const emptyBootstrap = {
   },
   feedbackEntries: [],
   dashboardData: {
-    filters: { year: "2025" },
+    filters: { year: currentReportingYear },
     reportingDate: "",
     feePerVisitor: 300,
     metrics: {
@@ -72,7 +73,13 @@ const emptyBootstrap = {
     },
   },
   reportData: {
-    filters: { year: "2025", type: "resort", from: "", to: "", resort_id: "" },
+    filters: {
+      year: currentReportingYear,
+      type: "resort",
+      from: "",
+      to: "",
+      resort_id: "",
+    },
     feePerVisitor: 300,
     rows: [],
     questionAnswers: [],
@@ -87,7 +94,7 @@ const emptyBootstrap = {
     executiveSummaryRows: [],
   },
   arrivalMonitoring: {
-    filters: { year: "2025", from: "", to: "" },
+    filters: { year: currentReportingYear, from: "", to: "" },
     feePerVisitor: 300,
     reportDate: "",
     summary: {

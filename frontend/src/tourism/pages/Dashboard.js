@@ -46,10 +46,12 @@ function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
+const currentReportingYear = String(new Date().getFullYear());
+
 const reportingYearOptions = [
+  { value: "2026", label: "2026" },
   { value: "2025", label: "2025" },
   { value: "2024", label: "2024" },
-  { value: "2026", label: "2026" },
   { value: "all", label: "All Years" },
 ];
 
@@ -58,7 +60,7 @@ function Dashboard() {
   const { dashboardData, loading, error, refreshDashboardData } =
     useTourismData();
   const [selectedYear, setSelectedYear] = useState(
-    dashboardData.filters?.year || "2025"
+    dashboardData.filters?.year || currentReportingYear
   );
   const [dashboardError, setDashboardError] = useState("");
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);

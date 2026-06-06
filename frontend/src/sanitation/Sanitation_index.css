@@ -1102,17 +1102,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 
   cursor: pointer;
 }
 
 .business-type-list button span {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #111;
 }
 
 .business-type-list button small {
+  flex: 0 0 auto;
   min-width: 58px;
   height: 20px;
   border: 1px solid #d6d6d6;
@@ -1217,14 +1226,24 @@
   color: #111;
 }
 
+.requirements-checklist h3 small {
+  color: #777;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.additional-requirements {
+  margin-top: 18px;
+}
+
 .requirement-row {
-  height: 38px;
+  min-height: 38px;
   margin-bottom: 12px;
   border: 1px solid #d7e0dc;
   border-radius: 7px;
   background: #f7faf8;
 
-  padding: 0 12px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1237,6 +1256,7 @@
 
 .requirement-row span {
   font-size: 14px;
+  line-height: 1.35;
   color: #111;
 }
 
@@ -1917,8 +1937,19 @@
 }
 
 .auto-req-grid span {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 14px;
+  line-height: 1.35;
   color: #111;
+}
+
+.auto-req-grid svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #16a34a;
+  font-size: 15px;
 }
 
 .modal-actions {

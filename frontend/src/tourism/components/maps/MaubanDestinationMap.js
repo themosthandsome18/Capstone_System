@@ -10,24 +10,7 @@ import {
 const MAUBAN_TOURISM_CENTER = [14.225, 121.765];
 const DEFAULT_ZOOM = 11;
 
-// Temporary corrected coordinates for map display.
-// Later, mas maganda ilipat ito sa backend seed_data.py / database.
-const coordinateOverrides = {
-  1: { lat: 14.2778, lng: 121.8231 }, // Cagbalete Island
-  2: { lat: 14.2475, lng: 121.8215 }, // Dampalitan Island
-  3: { lat: 14.2335, lng: 121.8008 }, // Puting Buhangin Cove
-  4: { lat: 14.2225, lng: 121.7915 }, // Kwebang Lampas
-  5: { lat: 14.1808, lng: 121.7062 }, // Mauban Lighthouse / town proper
-  6: { lat: 14.1765, lng: 121.6905 }, // Mt. Pinagbanderahan
-};
-
 function getDestinationCoordinates(destination) {
-  const override = coordinateOverrides[destination.resort_id];
-
-  if (override) {
-    return override;
-  }
-
   if (destination.coordinates?.lat && destination.coordinates?.lng) {
     return {
       lat: Number(destination.coordinates.lat),

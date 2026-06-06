@@ -30,6 +30,7 @@ from .seed_data import (
     HOUSEHOLD_SANITATION_RECORDS,
     INITIAL_FEEDBACK_ENTRIES,
     INITIAL_TOURIST_RECORDS,
+    LEGACY_SANITARY_BUSINESS_TYPE_ALIASES,
     MAUBAN_BARANGAYS,
     REFERENCE_TABLES,
     SANITARY_BUSINESS_TYPES,
@@ -101,9 +102,11 @@ def ensure_initial_reference_data():
     global _REFERENCE_DATA_READY
 
     if _REFERENCE_DATA_READY and has_initial_reference_data():
+        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         return
 
     if has_initial_reference_data():
+        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         _REFERENCE_DATA_READY = True
         return
 
@@ -114,11 +117,7 @@ def ensure_initial_reference_data():
             continue
 
         if model is Resort:
-            for row in rows:
-                Resort.objects.get_or_create(
-                    resort_id=row["resort_id"],
-                    defaults=row,
-                )
+            sync_seed_resorts(rows)
             continue
 
         for row in rows:
@@ -131,6 +130,20 @@ def ensure_initial_reference_data():
 
     ensure_ph_location_regions_and_provinces()
     _REFERENCE_DATA_READY = True
+
+
+def sync_seed_resorts(rows):
+    seed_ids = []
+
+    for row in rows:
+        seed_ids.append(row["resort_id"])
+        Resort.objects.update_or_create(
+            resort_id=row["resort_id"],
+            defaults=row,
+        )
+
+    removable_resorts = Resort.objects.exclude(resort_id__in=seed_ids)
+    removable_resorts.filter(tourist_records__isnull=True).delete()
 
 
 def has_initial_reference_data():
@@ -350,6 +363,7 @@ def ensure_initial_tourism_data():
         and Resort.objects.exists()
         and Country.objects.exists()
     ):
+        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         _TOURISM_DATA_READY = True
         return
 
@@ -363,6 +377,8 @@ def ensure_initial_sanitation_data():
     global _SANITATION_DATA_READY
 
     if _SANITATION_DATA_READY and SanitaryEstablishment.objects.exists():
+        sync_sanitary_business_types_and_requirements()
+        ensure_initial_permit_renewals()
         return
 
     if (
@@ -373,34 +389,12 @@ def ensure_initial_sanitation_data():
         and SanitaryPermitRenewal.objects.exists()
         and SanitaryComplaint.objects.exists()
     ):
+        sync_sanitary_business_types_and_requirements()
+        ensure_initial_permit_renewals()
         _SANITATION_DATA_READY = True
         return
 
-    business_type_lookup = {}
-
-    for row in SANITARY_BUSINESS_TYPES:
-        business_type, _ = SanitaryBusinessType.objects.update_or_create(
-            name=row["name"],
-            defaults={
-                "inspection_frequency": row["inspection_frequency"],
-                "description": row.get("description", ""),
-            },
-        )
-        business_type_lookup[business_type.name] = business_type
-
-    for group in SANITARY_REQUIREMENTS:
-        business_type = business_type_lookup.get(group["business_type"])
-
-        if not business_type:
-            continue
-
-        for requirement_name in group["requirements"]:
-            SanitaryRequirement.objects.update_or_create(
-                business_type=business_type,
-                permit_size=group["permit_size"],
-                requirement_name=requirement_name,
-                defaults={"is_required": True},
-            )
+    business_type_lookup = sync_sanitary_business_types_and_requirements()
 
     establishment_lookup = {}
 
@@ -455,6 +449,92 @@ def ensure_initial_sanitation_data():
     _SANITATION_DATA_READY = True
 
 
+def sync_sanitary_business_types_and_requirements():
+    rename_legacy_sanitary_business_types()
+
+    business_type_lookup = {}
+
+    for row in SANITARY_BUSINESS_TYPES:
+        business_type, _ = SanitaryBusinessType.objects.update_or_create(
+            name=row["name"],
+            defaults={
+                "inspection_frequency": row["inspection_frequency"],
+                "description": row.get("description", ""),
+            },
+        )
+        business_type_lookup[business_type.name] = business_type
+
+    seed_requirement_keys = set()
+
+    for group in SANITARY_REQUIREMENTS:
+        business_type = business_type_lookup.get(group["business_type"])
+
+        if not business_type:
+            continue
+
+        for requirement_name in group["requirements"]:
+            seed_requirement_keys.add(
+                (business_type.id, group["permit_size"], requirement_name)
+            )
+            SanitaryRequirement.objects.update_or_create(
+                business_type=business_type,
+                permit_size=group["permit_size"],
+                requirement_name=requirement_name,
+                defaults={"is_required": True},
+            )
+
+    seed_type_ids = {business_type.id for business_type in business_type_lookup.values()}
+
+    for requirement in SanitaryRequirement.objects.filter(
+        business_type_id__in=seed_type_ids,
+    ):
+        key = (
+            requirement.business_type_id,
+            requirement.permit_size,
+            requirement.requirement_name,
+        )
+        if key not in seed_requirement_keys:
+            requirement.delete()
+
+    sync_seed_establishment_business_types(business_type_lookup)
+
+    return business_type_lookup
+
+
+def rename_legacy_sanitary_business_types():
+    for legacy_name, target_name in LEGACY_SANITARY_BUSINESS_TYPE_ALIASES.items():
+        legacy_type = SanitaryBusinessType.objects.filter(name=legacy_name).first()
+        if not legacy_type:
+            continue
+
+        target_type = SanitaryBusinessType.objects.filter(name=target_name).first()
+        if target_type:
+            SanitaryEstablishment.objects.filter(business_type=legacy_type).update(
+                business_type=target_type
+            )
+            SanitaryRequirement.objects.filter(business_type=legacy_type).delete()
+            if not legacy_type.establishments.exists():
+                legacy_type.delete()
+            continue
+
+        legacy_type.name = target_name
+        legacy_type.save(update_fields=["name"])
+
+
+def sync_seed_establishment_business_types(business_type_lookup):
+    for row in SANITARY_ESTABLISHMENTS:
+        business_type = business_type_lookup.get(row["business_type"])
+        if not business_type:
+            continue
+
+        SanitaryEstablishment.objects.filter(
+            business_name=row["business_name"],
+        ).update(
+            business_type=business_type,
+            permit_size=row["permit_size"],
+        )
+
+
 def ensure_initial_permit_renewals():
     stages = [
         ("notice_sent", "unpaid", 14),
@@ -466,19 +546,20 @@ def ensure_initial_permit_renewals():
         ("released", "paid", 100),
         ("lapsed", "unpaid", 8),
     ]
-    requirements = [
-        "Previous permit copy",
-        "Updated health certificates",
-        "Water potability test",
-        "Pest Control Certificate",
-        "Recent Inspection Report",
-    ]
-
     establishments = list(SanitaryEstablishment.objects.order_by("id")[:10])
     for index, establishment in enumerate(establishments, start=1):
         stage, payment_status, progress = stages[(index - 1) % len(stages)]
         expiration_date = timezone.localdate() + timedelta(days=(index * 8) - 18)
-        submitted_count = min(len(requirements), 2 + (index % len(requirements)))
+        requirements = list(
+            establishment.business_type.requirements.filter(
+                permit_size=establishment.permit_size
+            ).values_list("requirement_name", flat=True)
+        )
+        submitted_count = (
+            min(len(requirements), 2 + (index % len(requirements)))
+            if requirements
+            else 0
+        )
 
         SanitaryPermitRenewal.objects.update_or_create(
             renewal_id=f"RNW-2026-{index:04d}",

@@ -105,10 +105,12 @@ function getFirstColumnLabel(type) {
   return "Resort Name";
 }
 
+const currentReportingYear = String(new Date().getFullYear());
+
 const reportingYearOptions = [
+  { value: "2026", label: "2026" },
   { value: "2025", label: "2025" },
   { value: "2024", label: "2024" },
-  { value: "2026", label: "2026" },
   { value: "all", label: "All Years" },
 ];
 
@@ -117,7 +119,7 @@ function AnalyticsAndReport() {
 
   const [reportType, setReportType] = useState("resort");
   const [filters, setFilters] = useState({
-    year: "2025",
+    year: currentReportingYear,
     from: "",
     to: "",
     resort_id: "",

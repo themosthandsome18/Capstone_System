@@ -117,23 +117,33 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 
 # Database
-DATABASE_OPTIONS = {}
-DB_SSLMODE = config("DB_SSLMODE", default="")
+DB_ENGINE = config("DB_ENGINE", default="postgresql").strip().lower()
 
-if DB_SSLMODE:
-    DATABASE_OPTIONS["sslmode"] = DB_SSLMODE
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME"),
-        "USER": config("DB_USER"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5433"),
-        "OPTIONS": DATABASE_OPTIONS,
+if DB_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": config("SQLITE_DB_PATH", default=str(BASE_DIR / "db.sqlite3")),
+        }
     }
-}
+else:
+    DATABASE_OPTIONS = {}
+    DB_SSLMODE = config("DB_SSLMODE", default="")
+
+    if DB_SSLMODE:
+        DATABASE_OPTIONS["sslmode"] = DB_SSLMODE
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("DB_NAME"),
+            "USER": config("DB_USER"),
+            "PASSWORD": config("DB_PASSWORD"),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5433"),
+            "OPTIONS": DATABASE_OPTIONS,
+        }
+    }
 
 
 # Password validation

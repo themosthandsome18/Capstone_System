@@ -3,20 +3,41 @@ import {
   apiRequest,
   buildQueryString,
 } from "../../shared/apiClient";
-import cagbaleteImage from "../assets/Cagbalete.jpg";
-import dampalitanImage from "../assets/DampalitanIsland.jpg";
-import kwebangLampasImage from "../assets/KwebangLampas.jpg";
-import maubanLighthouseImage from "../assets/Maubanlighthouse.jpg";
-import mtPinagbanderahanImage from "../assets/Mt.Pinagbanderahan.jpg";
-import putingBuhanginImage from "../assets/PutingBuhangin.jpg";
+import aguhoPlayaBeachResortImage from "../assets/Aguho Playa Beach Resort - Cagbalete.jpg";
+import aquazulHotelAndResortImage from "../assets/Aquazul Hotel and Resort - Cagbalete.jpg";
+import donaCholengCampingResortImage from "../assets/Dona Choleng Camping Resort - Cagbalete.jpg";
+import jovenciosResortImage from "../assets/Jovencio's Resort Cagbalete.jpg";
+import mvtStoNinoBeachResortImage from "../assets/MVT Sto. Nino Beach Resort - Cagbalete.jpg";
+import nenitaDelSolImage from "../assets/Nenita Del Sol - Cagbalete.jpg";
+import nilandinganCoveResortImage from "../assets/Nilandingan Cove Resort - Cagbalete.jpg";
+import orlanBeachResortImage from "../assets/Orlan Beach Resort - Cagbalete.jpg";
+import rioDelSolBeachResortImage from "../assets/Rio Del Sol Beach Resort - Cagbalete.avif";
+import tentPlaceImage from "../assets/Tent Place - Cagbalete.jpg";
+import titaPinayBeachResortImage from "../assets/Tita Pinay Beach Resort - Cagbalete.png";
+import villaCleofasCagbaleteImage from "../assets/Villa Cleofas Cagbalete.webp";
+import villaEscapardeCampingAndBeachResortImage from "../assets/Villa Escaparde Camping and Beach Resort.jpg";
+import villaNoeBeachImage from "../assets/Villa Noe Beach- Cagbalete.jpg";
+import villaPilarosaBeachResortImage from "../assets/Villa Pilarosa Beach Resort - Cagbalete.png";
+
+const currentReportingYear = String(new Date().getFullYear());
 
 const resortImagesByKey = {
-  cagbalete: cagbaleteImage,
-  "dampalitan-island": dampalitanImage,
-  "kwebang-lampas": kwebangLampasImage,
-  "mauban-lighthouse": maubanLighthouseImage,
-  "mt-pinagbanderahan": mtPinagbanderahanImage,
-  "puting-buhangin": putingBuhanginImage,
+  "dona-choleng-camping-resort": donaCholengCampingResortImage,
+  "aquazul-hotel-and-resort": aquazulHotelAndResortImage,
+  "rio-del-sol-beach-resort": rioDelSolBeachResortImage,
+  "jovencios-resort": jovenciosResortImage,
+  "mvt-sto-nino-beach-resort": mvtStoNinoBeachResortImage,
+  "nilandingan-cove-resort": nilandinganCoveResortImage,
+  "villa-cleofas-cagbalete": villaCleofasCagbaleteImage,
+  "villa-escaparde-camping-and-beach-resort":
+    villaEscapardeCampingAndBeachResortImage,
+  "villa-noe-beach": villaNoeBeachImage,
+  "villa-pilarosa-beach-resort": villaPilarosaBeachResortImage,
+  "tita-pinay-beach-resort": titaPinayBeachResortImage,
+  "aguho-playa-beach-resort": aguhoPlayaBeachResortImage,
+  "tent-place": tentPlaceImage,
+  "orlan-beach-resort": orlanBeachResortImage,
+  "nenita-del-sol": nenitaDelSolImage,
 };
 
 const emptyReferenceTables = {
@@ -31,7 +52,7 @@ const emptyReferenceTables = {
 };
 
 const emptyDashboardData = {
-  filters: { year: "2025" },
+  filters: { year: currentReportingYear },
   reportingDate: "",
   feePerVisitor: 300,
   metrics: {
@@ -56,7 +77,13 @@ const emptyDashboardData = {
 };
 
 const emptyReportData = {
-  filters: { year: "2025", type: "resort", from: "", to: "", resort_id: "" },
+  filters: {
+    year: currentReportingYear,
+    type: "resort",
+    from: "",
+    to: "",
+    resort_id: "",
+  },
   feePerVisitor: 300,
   rows: [],
   questionAnswers: [],
@@ -64,7 +91,7 @@ const emptyReportData = {
 };
 
 const emptyArrivalMonitoring = {
-  filters: { year: "2025", from: "", to: "" },
+  filters: { year: currentReportingYear, from: "", to: "" },
   feePerVisitor: 300,
   reportDate: "",
   summary: {
@@ -87,7 +114,7 @@ const emptyArrivalMonitoring = {
 
 const emptyBookingManagement = {
   filters: {
-    year: "2025",
+    year: currentReportingYear,
     search: "",
     status: "",
     resort_id: "",

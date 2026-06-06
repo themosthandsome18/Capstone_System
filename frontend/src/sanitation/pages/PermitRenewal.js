@@ -30,15 +30,6 @@ const paymentOptions = [
   { value: "partial", label: "Partial" },
 ];
 
-const requirementOptions = [
-  "Previous permit copy",
-  "Updated health certificates",
-  "Water potability test",
-  "Pest Control Certificate",
-  "Waste Management MOA",
-  "Recent Inspection Report",
-];
-
 const initialForm = {
   establishment: "",
   permit_type: "Sanitary Permit",
@@ -77,6 +68,16 @@ function PermitRenewal() {
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const formRequirementOptions = useMemo(
+    () =>
+      getEstablishmentRequirements(
+        form.establishment,
+        establishments,
+        businessTypes
+      ),
+    [businessTypes, establishments, form.establishment]
+  );
 
   useEffect(() => {
     if (!renewalData) {
@@ -119,7 +120,15 @@ function PermitRenewal() {
   }
 
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === "establishment") {
+        next.submitted_requirements = [];
+      }
+
+      return next;
+    });
   }
 
   function toggleRequirement(requirement) {
@@ -360,16 +369,20 @@ function PermitRenewal() {
             <div className="renewal-checklist">
               <span>Requirements Checklist</span>
               <div>
-                {requirementOptions.map((requirement) => (
-                  <label key={requirement}>
-                    <input
-                      type="checkbox"
-                      checked={form.submitted_requirements.includes(requirement)}
-                      onChange={() => toggleRequirement(requirement)}
-                    />
-                    {requirement}
-                  </label>
-                ))}
+                {formRequirementOptions.length ? (
+                  formRequirementOptions.map((requirement) => (
+                    <label key={requirement}>
+                      <input
+                        type="checkbox"
+                        checked={form.submitted_requirements.includes(requirement)}
+                        onChange={() => toggleRequirement(requirement)}
+                      />
+                      {requirement}
+                    </label>
+                  ))
+                ) : (
+                  <label>Select an establishment to load requirements.</label>
+                )}
               </div>
             </div>
 
@@ -396,6 +409,8 @@ function PermitRenewal() {
       {detail ? (
         <RenewalDetailModal
           row={detail}
+          establishments={establishments}
+          businessTypes={businessTypes}
           onClose={() => setDetail(null)}
           onAdvance={() => handleAction(detail, "advance_stage")}
           onRelease={() => handleAction(detail, "mark_released")}
@@ -418,8 +433,21 @@ function RenewalStat({ label, value, icon, danger = false }) {
   );
 }
 
-function RenewalDetailModal({ row, onClose, onAdvance, onRelease, saving }) {
+function RenewalDetailModal({
+  row,
+  establishments,
+  businessTypes,
+  onClose,
+  onAdvance,
+  onRelease,
+  saving,
+}) {
   const submitted = row.submitted_requirements || [];
+  const requirementOptions = getEstablishmentRequirements(
+    row.establishment,
+    establishments,
+    businessTypes
+  );
 
   return (
     <div className="renewal-modal-backdrop">
@@ -489,6 +517,26 @@ function RenewalDetailModal({ row, onClose, onAdvance, onRelease, saving }) {
       </div>
     </div>
   );
+}
+
+function getEstablishmentRequirements(establishmentId, establishments, businessTypes) {
+  const establishment = establishments.find(
+    (item) => String(item.id) === String(establishmentId)
+  );
+
+  if (!establishment) {
+    return [];
+  }
+
+  const businessType = businessTypes.find(
+    (item) => String(item.id) === String(establishment.business_type)
+  );
+
+  return (businessType?.requirements || [])
+    .filter(
+      (requirement) => requirement.permit_size === establishment.permit_size
+    )
+    .map((requirement) => requirement.requirement_name);
 }
 
 function Info({ label, value }) {

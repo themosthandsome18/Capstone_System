@@ -11,10 +11,12 @@ import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
 import { useState } from "react";
 
+const currentReportingYear = String(new Date().getFullYear());
+
 const reportingYearOptions = [
+  { value: "2026", label: "2026" },
   { value: "2025", label: "2025" },
   { value: "2024", label: "2024" },
-  { value: "2026", label: "2026" },
   { value: "all", label: "All Years" },
 ];
 
@@ -46,7 +48,7 @@ function ArrivalMonitoring() {
   const { arrivalMonitoring, loading, error, refreshArrivalMonitoring } =
     useTourismData();
   const [selectedYear, setSelectedYear] = useState(
-    arrivalMonitoring.filters?.year || "2025"
+    arrivalMonitoring.filters?.year || currentReportingYear
   );
   const [arrivalError, setArrivalError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
