@@ -37,6 +37,9 @@ function InspectionManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    getMonthStart(new Date())
+  );
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -92,12 +95,20 @@ function InspectionManagement() {
   }).length;
 
   const calendarCells = useMemo(() => {
-    return buildCalendarCells(rows);
-  }, [rows]);
+    return buildCalendarCells(rows, calendarMonth);
+  }, [calendarMonth, rows]);
 
   function openForm(row) {
     setSelectedEstablishment(row);
     setShowForm(true);
+  }
+
+  function moveCalendarMonth(offset) {
+    setCalendarMonth((currentMonth) =>
+      getMonthStart(
+        new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1)
+      )
+    );
   }
 
   function handleExport() {
@@ -460,10 +471,38 @@ function InspectionManagement() {
         </section>
       ) : (
         <section className="inspection-calendar-card">
-          <h3>
-            <FiCalendar />
-            Upcoming Inspections - Next 4 Weeks
-          </h3>
+          <div className="inspection-calendar-header">
+            <div>
+              <h3>
+                <FiCalendar />
+                Inspection Calendar
+              </h3>
+              <p>Review completed inspections and upcoming due dates.</p>
+            </div>
+
+            <div className="inspection-calendar-actions">
+              <button
+                type="button"
+                onClick={() => moveCalendarMonth(-1)}
+                aria-label="Previous month"
+              >
+                <FiChevronLeft />
+              </button>
+              <strong>{formatMonthTitle(calendarMonth)}</strong>
+              <button
+                type="button"
+                onClick={() => moveCalendarMonth(1)}
+                aria-label="Next month"
+              >
+                <FiChevronRight />
+              </button>
+            </div>
+          </div>
+
+          <div className="inspection-calendar-key">
+            <span className="completed">Inspection Date</span>
+            <span className="due">Next Due</span>
+          </div>
 
           <div className="calendar-weekdays">
             {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
@@ -472,18 +511,29 @@ function InspectionManagement() {
           </div>
 
           <div className="inspection-calendar-grid">
-            {calendarCells.map((cell, index) => (
-              <div key={`${cell.day}-${index}`} className="calendar-cell">
+            {calendarCells.map((cell) => (
+              <div
+                key={cell.date}
+                className={`calendar-cell ${cell.isCurrentMonth ? "" : "muted"} ${
+                  cell.isToday ? "today" : ""
+                }`}
+              >
                 <span>{cell.day}</span>
 
-                {cell.events.map((event, eventIndex) => (
-                  <div
-                    key={`${event.title}-${eventIndex}`}
-                    className={`calendar-event ${event.status}`}
-                  >
-                    {event.title}
-                  </div>
-                ))}
+                <div className="inspection-calendar-events">
+                  {cell.events.map((event) => (
+                    <button
+                      type="button"
+                      key={event.key}
+                      className={`calendar-event ${event.status}`}
+                      onClick={() => openForm(event.row)}
+                      title={`${event.typeLabel}: ${event.title}`}
+                    >
+                      <small>{event.typeLabel}</small>
+                      <strong>{event.title}</strong>
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -778,13 +828,15 @@ function InspectionFormModal({
 }
 
 function getTodayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toIsoDate(new Date());
 }
 
 function getSuggestedNextDueDate(dateValue, frequency) {
   if (!dateValue) return "";
 
-  const date = new Date(dateValue);
+  const date = parseLocalDate(dateValue);
+
+  if (!date) return "";
 
   if (frequency === "annual") {
     date.setFullYear(date.getFullYear() + 1);
@@ -794,12 +846,14 @@ function getSuggestedNextDueDate(dateValue, frequency) {
     date.setMonth(date.getMonth() + 1);
   }
 
-  return date.toISOString().slice(0, 10);
+  return toIsoDate(date);
 }
 
 function getDayDifference(dateValue) {
   const today = new Date();
-  const target = new Date(dateValue);
+  const target = parseLocalDate(dateValue);
+
+  if (!target) return 0;
 
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
@@ -851,30 +905,68 @@ function matchesDueFilter(dateValue, filter) {
   return true;
 }
 
-function buildCalendarCells(rows) {
-  const today = new Date();
+function buildCalendarCells(rows, monthStart) {
+  const todayIso = toIsoDate(new Date());
+  const anchor = getMonthStart(monthStart || new Date());
+  const firstVisibleDate = new Date(anchor);
+  firstVisibleDate.setDate(anchor.getDate() - anchor.getDay());
+  const daysInMonth = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth() + 1,
+    0
+  ).getDate();
+  const visibleCellCount = Math.ceil((anchor.getDay() + daysInMonth) / 7) * 7;
+  const eventsByDate = buildCalendarEventMap(rows);
   const cells = [];
 
-  for (let index = 0; index < 28; index += 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + index);
+  for (let index = 0; index < visibleCellCount; index += 1) {
+    const date = new Date(firstVisibleDate);
+    date.setDate(firstVisibleDate.getDate() + index);
 
-    const isoDate = date.toISOString().slice(0, 10);
-
-    const events = rows
-      .filter((row) => row.nextDueDate === isoDate)
-      .map((row) => ({
-        title: row.business_name,
-        status: calendarStatusClass(row.compliance_status_label),
-      }));
+    const isoDate = toIsoDate(date);
 
     cells.push({
+      date: isoDate,
       day: String(date.getDate()),
-      events,
+      isCurrentMonth: date.getMonth() === anchor.getMonth(),
+      isToday: isoDate === todayIso,
+      events: eventsByDate.get(isoDate) || [],
     });
   }
 
   return cells;
+}
+
+function buildCalendarEventMap(rows) {
+  const eventsByDate = new Map();
+
+  function addEvent(dateValue, event) {
+    if (!dateValue) return;
+
+    const events = eventsByDate.get(dateValue) || [];
+    events.push(event);
+    eventsByDate.set(dateValue, events);
+  }
+
+  rows.forEach((row) => {
+    addEvent(row.lastInspectionDate, {
+      key: `${row.id}-inspection-${row.lastInspectionDate}`,
+      row,
+      title: row.business_name,
+      typeLabel: "Inspection",
+      status: "completed",
+    });
+
+    addEvent(row.nextDueDate, {
+      key: `${row.id}-due-${row.nextDueDate}`,
+      row,
+      title: row.business_name,
+      typeLabel: "Next Due",
+      status: calendarStatusClass(row.compliance_status_label),
+    });
+  });
+
+  return eventsByDate;
 }
 
 function calendarStatusClass(status = "") {
@@ -902,11 +994,44 @@ function formatFrequency(value = "") {
 function formatDate(value) {
   if (!value) return "";
 
-  return new Date(value).toLocaleDateString("en-US", {
+  const date = parseLocalDate(value);
+
+  if (!date) return "";
+
+  return date.toLocaleDateString("en-US", {
     month: "short",
     day: "2-digit",
     year: "numeric",
   });
+}
+
+function formatMonthTitle(value) {
+  return value.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function getMonthStart(value) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function parseLocalDate(value) {
+  if (!value) return null;
+
+  const [year, month, day] = String(value).split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
+function toIsoDate(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function escapeHtml(value = "") {

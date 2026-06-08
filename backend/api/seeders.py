@@ -377,8 +377,6 @@ def ensure_initial_sanitation_data():
     global _SANITATION_DATA_READY
 
     if _SANITATION_DATA_READY and SanitaryEstablishment.objects.exists():
-        sync_sanitary_business_types_and_requirements()
-        ensure_initial_permit_renewals()
         return
 
     if (
@@ -389,8 +387,6 @@ def ensure_initial_sanitation_data():
         and SanitaryPermitRenewal.objects.exists()
         and SanitaryComplaint.objects.exists()
     ):
-        sync_sanitary_business_types_and_requirements()
-        ensure_initial_permit_renewals()
         _SANITATION_DATA_READY = True
         return
 

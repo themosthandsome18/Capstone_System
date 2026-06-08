@@ -22,6 +22,8 @@ from .views import (
     mobile_household_survey_submit,
     mobile_sanitation_bootstrap,
     mobile_sanitation_inspection_submit,
+    mobile_sanitation_permit_verify,
+    mobile_sanitation_report_history,
     mobile_sanitation_report_submit,
     mobile_tourism_bootstrap,
     mobile_tourist_registration,
@@ -64,6 +66,8 @@ urlpatterns = [
     path("mobile/sanitation/bootstrap/", mobile_sanitation_bootstrap),
     path("mobile/sanitation/inspections/", mobile_sanitation_inspection_submit),
     path("mobile/sanitation/reports/", mobile_sanitation_report_submit),
+    path("mobile/sanitation/reports/history/", mobile_sanitation_report_history),
+    path("mobile/sanitation/permits/verify/", mobile_sanitation_permit_verify),
     path("mobile/sanitation/household-surveys/", mobile_household_survey_submit),
 
     # Tourism routes

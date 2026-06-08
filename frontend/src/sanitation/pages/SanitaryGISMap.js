@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
@@ -21,6 +21,19 @@ L.Icon.Default.mergeOptions({
 
 const maubanCenter = [14.185, 121.731];
 
+const tileLayers = {
+  street: {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  },
+  satellite: {
+    attribution:
+      "Tiles &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  },
+};
+
 const establishmentStatusFilters = [
   { value: "all", label: "All Establishments" },
   { value: "good_standing", label: "Good Standing" },
@@ -42,33 +55,32 @@ function SanitaryGISMap() {
     useSanitationData();
 
   const [mapMode, setMapMode] = useState("establishments");
+  const [mapLayer, setMapLayer] = useState("street");
   const [statusFilter, setStatusFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("All Barangays");
   const [selectedItemId, setSelectedItemId] = useState(null);
 
   const isHouseholdMode = mapMode === "households";
 
-  const mappedItems = useMemo(() => {
+  const sourceItems = useMemo(() => {
     const source = isHouseholdMode ? householdRecords : establishments;
 
-    return source
-      .filter((item) => item.latitude && item.longitude)
-      .map((item) => ({
-        ...item,
-        position: [Number(item.latitude), Number(item.longitude)],
-      }));
+    return source.map((item) => ({
+      ...item,
+      position: getMapPosition(item),
+    }));
   }, [establishments, householdRecords, isHouseholdMode]);
 
   const barangays = useMemo(() => {
     const uniqueBarangays = new Set(
-      mappedItems.map((item) => item.barangay).filter(Boolean)
+      sourceItems.map((item) => item.barangay).filter(Boolean)
     );
 
     return ["All Barangays", ...Array.from(uniqueBarangays).sort()];
-  }, [mappedItems]);
+  }, [sourceItems]);
 
-  const filteredItems = useMemo(() => {
-    return mappedItems.filter((item) => {
+  const filteredSourceItems = useMemo(() => {
+    return sourceItems.filter((item) => {
       const statusValue = isHouseholdMode
         ? item.status
         : item.compliance_status;
@@ -82,7 +94,19 @@ function SanitaryGISMap() {
 
       return matchesStatus && matchesBarangay;
     });
-  }, [mappedItems, statusFilter, barangayFilter, isHouseholdMode]);
+  }, [sourceItems, statusFilter, barangayFilter, isHouseholdMode]);
+
+  const filteredItems = useMemo(
+    () => filteredSourceItems.filter((item) => item.position),
+    [filteredSourceItems]
+  );
+  const unmappedItems = useMemo(
+    () => filteredSourceItems.filter((item) => !item.position),
+    [filteredSourceItems]
+  );
+  const mappedTotal = sourceItems.filter((item) => item.position).length;
+  const unmappedTotal = sourceItems.length - mappedTotal;
+  const tileLayer = tileLayers[mapLayer] || tileLayers.street;
 
   const selectedItem =
     filteredItems.find((item) => item.id === selectedItemId) ||
@@ -161,6 +185,24 @@ function SanitaryGISMap() {
           </select>
         </div>
 
+        <div className="gis-layer-toggle">
+          <button
+            type="button"
+            className={mapLayer === "street" ? "active" : ""}
+            onClick={() => setMapLayer("street")}
+          >
+            Street
+          </button>
+
+          <button
+            type="button"
+            className={mapLayer === "satellite" ? "active" : ""}
+            onClick={() => setMapLayer("satellite")}
+          >
+            Satellite
+          </button>
+        </div>
+
         <div className="gis-legend">
           <span>
             <i className="low" /> Low Risk
@@ -176,6 +218,13 @@ function SanitaryGISMap() {
         </div>
       </div>
 
+      <div className="gis-map-summary-row">
+        <MapSummaryCard label="Mapped" value={mappedTotal} />
+        <MapSummaryCard label="Unmapped" value={unmappedTotal} />
+        <MapSummaryCard label="Filtered Pins" value={filteredItems.length} />
+        <MapSummaryCard label="Filtered Unmapped" value={unmappedItems.length} />
+      </div>
+
       <div className="gis-layout">
         <div className="gis-map">
           <MapContainer
@@ -185,8 +234,8 @@ function SanitaryGISMap() {
             zoomControl
           >
             <TileLayer
-              attribution=""
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution={tileLayer.attribution}
+              url={tileLayer.url}
             />
 
             <FitMapToItems items={filteredItems} />
@@ -215,7 +264,23 @@ function SanitaryGISMap() {
             })}
           </MapContainer>
 
-          <button type="button" className="gis-layer-btn">
+          {!filteredItems.length ? (
+            <div className="gis-map-empty-overlay">
+              No mapped coordinates match the current filters.
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            className="gis-layer-btn"
+            aria-label="Toggle map layer"
+            title="Toggle map layer"
+            onClick={() =>
+              setMapLayer((current) =>
+                current === "street" ? "satellite" : "street"
+              )
+            }
+          >
             <FiLayers />
           </button>
         </div>
@@ -295,8 +360,37 @@ function SanitaryGISMap() {
               </p>
             )}
           </div>
+
+          {unmappedItems.length ? (
+            <div className="gis-unmapped-panel">
+              <h4>Unmapped Records</h4>
+              <p>
+                These records match the filters but need latitude and longitude.
+              </p>
+
+              {unmappedItems.slice(0, 8).map((item) => (
+                <div key={`${mapMode}-unmapped-${item.id}`}>
+                  <strong>
+                    {isHouseholdMode
+                      ? item.household_head
+                      : item.business_name}
+                  </strong>
+                  <small>{item.barangay || "No barangay"}</small>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </aside>
       </div>
+    </div>
+  );
+}
+
+function MapSummaryCard({ label, value }) {
+  return (
+    <div className="gis-map-summary-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -342,7 +436,7 @@ function HouseholdPopup({ item }) {
 function FitMapToItems({ items }) {
   const map = useMap();
 
-  useMemo(() => {
+  useEffect(() => {
     if (!items.length) {
       map.setView(maubanCenter, 14);
       return;
@@ -361,7 +455,7 @@ function FitMapToItems({ items }) {
 }
 
 function getRiskColor(item) {
-  const score = item.risk_score || 0;
+  const score = Number(item.risk_score || 0);
 
   if (score >= 70) return "#ef2222";
   if (score >= 35) return "#f5c400";
@@ -386,6 +480,36 @@ function createIcon(color) {
 
 function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
+}
+
+function parseCoordinate(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getMapPosition(item) {
+  const lat =
+    parseCoordinate(item.latitude) ?? parseCoordinate(item.coordinates?.lat);
+  const lng =
+    parseCoordinate(item.longitude) ?? parseCoordinate(item.coordinates?.lng);
+
+  if (lat === null || lng === null) {
+    return null;
+  }
+
+  if (Math.abs(lat) < 0.001 || Math.abs(lng) < 0.001) {
+    return null;
+  }
+
+  if (lat < 13.9 || lat > 14.4 || lng < 121.55 || lng > 122) {
+    return null;
+  }
+
+  return [lat, lng];
 }
 
 export default SanitaryGISMap;

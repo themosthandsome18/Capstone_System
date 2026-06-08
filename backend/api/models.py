@@ -711,6 +711,11 @@ class SanitaryComplaint(models.Model):
     photo_documentation = models.CharField(max_length=500, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    assigned_inspector = models.CharField(max_length=160, blank=True)
+    inspection_scheduled_date = models.DateField(null=True, blank=True)
+    inspection_scheduled_time = models.TimeField(null=True, blank=True)
+    inspection_schedule_note = models.TextField(blank=True)
+    inspection_notify_reporter = models.BooleanField(default=True)
     action_taken = models.TextField(blank=True)
     resolved_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -723,6 +728,7 @@ class SanitaryComplaint(models.Model):
             models.Index(fields=["barangay", "status"], name="san_comp_brgy_status_idx"),
             models.Index(fields=["establishment", "status"], name="san_comp_est_status_idx"),
             models.Index(fields=["reported_date"], name="san_comp_reported_idx"),
+            models.Index(fields=["inspection_scheduled_date"], name="san_comp_sched_idx"),
         ]
 
     def __str__(self):

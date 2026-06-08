@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -10,18 +10,43 @@ import {
 const MAUBAN_TOURISM_CENTER = [14.225, 121.765];
 const DEFAULT_ZOOM = 11;
 
-function getDestinationCoordinates(destination) {
-  if (destination.coordinates?.lat && destination.coordinates?.lng) {
-    return {
-      lat: Number(destination.coordinates.lat),
-      lng: Number(destination.coordinates.lng),
-    };
+const tileLayers = {
+  street: {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  },
+  satellite: {
+    attribution:
+      "Tiles &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  },
+};
+
+function parseCoordinate(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
   }
 
-  return {
-    lat: Number(destination.latitude || MAUBAN_TOURISM_CENTER[0]),
-    lng: Number(destination.longitude || MAUBAN_TOURISM_CENTER[1]),
-  };
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isLikelyMaubanCoordinate(lat, lng) {
+  return lat >= 13.9 && lat <= 14.4 && lng >= 121.55 && lng <= 122;
+}
+
+function getDestinationCoordinates(destination) {
+  const coordinateLat = parseCoordinate(destination.coordinates?.lat);
+  const coordinateLng = parseCoordinate(destination.coordinates?.lng);
+  const lat = coordinateLat ?? parseCoordinate(destination.latitude);
+  const lng = coordinateLng ?? parseCoordinate(destination.longitude);
+
+  if (lat === null || lng === null || !isLikelyMaubanCoordinate(lat, lng)) {
+    return null;
+  }
+
+  return { lat, lng };
 }
 
 function getMarkerColor(type = "") {
@@ -58,15 +83,15 @@ function FitMapToDestinations({ destinations }) {
     }
 
     if (destinations.length === 1) {
-      const coordinates = getDestinationCoordinates(destinations[0]);
+      const coordinates = destinations[0].mapCoordinates;
       map.setView([coordinates.lat, coordinates.lng], 14);
       return;
     }
 
-    const bounds = destinations.map((destination) => {
-      const coordinates = getDestinationCoordinates(destination);
-      return [coordinates.lat, coordinates.lng];
-    });
+    const bounds = destinations.map((destination) => [
+      destination.mapCoordinates.lat,
+      destination.mapCoordinates.lng,
+    ]);
 
     map.fitBounds(bounds, {
       padding: [40, 40],
@@ -77,17 +102,45 @@ function FitMapToDestinations({ destinations }) {
   return null;
 }
 
+function FocusSelectedDestination({ selectedDestination }) {
+  const map = useMap();
+  const didMount = useRef(false);
+
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+
+    const coordinates = selectedDestination
+      ? getDestinationCoordinates(selectedDestination)
+      : null;
+
+    if (coordinates) {
+      map.setView([coordinates.lat, coordinates.lng], Math.max(map.getZoom(), 14), {
+        animate: true,
+      });
+    }
+  }, [map, selectedDestination]);
+
+  return null;
+}
+
 function MaubanDestinationMap({
   destinations,
   selectedDestination,
   onSelectDestination,
+  mapLayer = "street",
 }) {
   const mappedDestinations = useMemo(() => {
-    return destinations.map((destination) => ({
-      ...destination,
-      mapCoordinates: getDestinationCoordinates(destination),
-    }));
+    return destinations
+      .map((destination) => ({
+        ...destination,
+        mapCoordinates: getDestinationCoordinates(destination),
+      }))
+      .filter((destination) => destination.mapCoordinates);
   }, [destinations]);
+  const tileLayer = tileLayers[mapLayer] || tileLayers.street;
 
   return (
     <div className="mauban-map-frame">
@@ -129,11 +182,12 @@ function MaubanDestinationMap({
         className="h-full w-full"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={tileLayer.attribution}
+          url={tileLayer.url}
         />
 
         <FitMapToDestinations destinations={mappedDestinations} />
+        <FocusSelectedDestination selectedDestination={selectedDestination} />
 
         {mappedDestinations.map((destination) => {
           const active =

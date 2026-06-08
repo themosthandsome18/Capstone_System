@@ -1,4 +1,6 @@
+import json
 from datetime import timedelta
+from urllib.parse import parse_qs, unquote, urlparse
 
 from django.db.models import Q, Sum
 from django.db.models.deletion import ProtectedError
@@ -310,6 +312,112 @@ def mobile_sanitation_report_submit(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def mobile_sanitation_report_history(request):
+    ensure_mobile_barangays()
+
+    contact = (request.query_params.get("contact") or "").strip()
+    reference = (request.query_params.get("reference") or "").strip()
+
+    if not contact and not reference:
+        return Response(
+            {"detail": "Enter a contact number or complaint ID."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    complaints = SanitaryComplaint.objects.all()
+
+    if reference:
+        complaints = complaints.filter(
+            Q(complaint_id__iexact=reference)
+            | Q(id=parse_mobile_int(reference, 0))
+        )
+
+    if contact:
+        complaints = complaints.filter(contact_number__icontains=contact)
+
+    complaints = complaints.order_by("-reported_date", "-id")[:30]
+
+    return Response(
+        {
+            "rows": [
+                serialize_mobile_sanitation_complaint(item)
+                for item in complaints
+            ],
+            "summary": {
+                "total": complaints.count(),
+            },
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_sanitation_permit_verify(request):
+    ensure_initial_sanitation_data()
+
+    raw_code = (
+        request.query_params.get("code")
+        or request.query_params.get("permit_number")
+        or request.query_params.get("reference")
+        or ""
+    )
+    code = normalize_mobile_lookup_code(raw_code)
+
+    if not code:
+        return Response(
+            {"detail": "Enter or scan a sanitary permit code."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    query = Q(permit_number__iexact=code)
+    numeric_id = parse_mobile_int(code, 0)
+    if numeric_id:
+        query |= Q(id=numeric_id)
+
+    establishment = (
+        SanitaryEstablishment.objects.select_related("business_type")
+        .filter(query)
+        .first()
+    )
+
+    if establishment is None:
+        return Response(
+            {
+                "verified": False,
+                "code": code,
+                "detail": "No sanitary permit record matched this code.",
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    return Response(
+        {
+            "verified": True,
+            "code": code,
+            "establishment": serialize_mobile_sanitation_establishment(
+                establishment
+            ),
+            "permit": {
+                "permit_number": establishment.permit_number,
+                "permit_status": establishment.permit_status,
+                "permit_status_label": establishment.get_permit_status_display(),
+                "permit_issued_date": date_to_iso(
+                    establishment.permit_issued_date
+                ),
+                "permit_expiry_date": date_to_iso(
+                    establishment.permit_expiry_date
+                ),
+                "compliance_status": establishment.compliance_status,
+                "compliance_status_label": (
+                    establishment.get_compliance_status_display()
+                ),
+            },
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def mobile_sanitation_bootstrap(request):
     ensure_initial_sanitation_data()
     ensure_initial_household_data()
@@ -467,6 +575,19 @@ def serialize_mobile_sanitation_complaint(complaint):
         "description": complaint.description,
         "latitude": complaint.latitude,
         "longitude": complaint.longitude,
+        "assigned_inspector": complaint.assigned_inspector,
+        "inspection_scheduled_date": date_to_iso(
+            complaint.inspection_scheduled_date
+        ),
+        "inspection_scheduled_time": (
+            complaint.inspection_scheduled_time.strftime("%H:%M")
+            if complaint.inspection_scheduled_time
+            else ""
+        ),
+        "inspection_schedule_note": complaint.inspection_schedule_note,
+        "inspection_notify_reporter": complaint.inspection_notify_reporter,
+        "action_taken": complaint.action_taken,
+        "resolved_date": date_to_iso(complaint.resolved_date),
     }
 
 
@@ -689,6 +810,35 @@ def ensure_mobile_reference_data(include_barangays=False):
 def ensure_mobile_barangays():
     if not Barangay.objects.exists():
         ensure_initial_barangays()
+
+
+def normalize_mobile_lookup_code(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            for key in ["permit_number", "permitNumber", "code", "reference"]:
+                candidate = str(payload.get(key) or "").strip()
+                if candidate:
+                    return candidate
+    except (TypeError, ValueError):
+        pass
+
+    parsed = urlparse(text)
+    if parsed.query:
+        params = parse_qs(parsed.query)
+        for key in ["permit_number", "permitNumber", "code", "reference", "q"]:
+            if params.get(key):
+                return unquote(params[key][0]).strip()
+
+    for marker in ["permit_number=", "permitNumber=", "code=", "reference="]:
+        if marker in text:
+            return unquote(text.split(marker, 1)[1].split("&", 1)[0]).strip()
+
+    return unquote(text).strip()
 
 
 def normalize_mobile_visit_payload(data):

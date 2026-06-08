@@ -35,7 +35,7 @@ android {
         create("sanitation") {
             dimension = "module"
             applicationId = "com.mauban.sanitation"
-            manifestPlaceholders["appLabel"] = "Mauban Sanitation"
+            manifestPlaceholders["appLabel"] = "Mauban Sanitation & Community"
         }
     }
 

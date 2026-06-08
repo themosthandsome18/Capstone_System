@@ -6,7 +6,6 @@ const businessLinks = [
   { to: "/sanitation/requirements", label: "Types & Requirements" },
   { to: "/sanitation/establishments", label: "Establishment Records" },
   { to: "/sanitation/inspections", label: "Inspection Management" },
-  { to: "/sanitation/complaints", label: "Complaint Management" },
   { to: "/sanitation/permits", label: "Permit Monitoring" },
   { to: "/sanitation/renewals", label: "Permit Renewal" },
   { to: "/sanitation/submissions", label: "Submission Tracking" },
@@ -15,6 +14,7 @@ const businessLinks = [
 
 const householdLinks = [
   { to: "/sanitation/households", label: "Households Records" },
+  { to: "/sanitation/community-report", label: "Community Report" },
   { to: "/sanitation/gis-map", label: "GIS Map" },
   { to: "/sanitation/household-reports", label: "Report and Analytics" },
   { to: "/sanitation/activity-logs", label: "Activity Logs" },

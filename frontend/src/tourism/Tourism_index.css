@@ -2467,6 +2467,43 @@
   @apply mt-4 text-xs leading-5 text-black;
 }
 
+.gis-selected-destination {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gis-selected-destination strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.gis-selected-destination span {
+  width: fit-content;
+  border-radius: 999px;
+  background: #e4f6ea;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #17643a;
+}
+
+.gis-selected-destination p {
+  margin: 0;
+  color: #475569;
+}
+
+.gis-selected-destination small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
 /* ================= ALL LOCATIONS BOX ================= */
 
 .gis-location-list {
@@ -2501,6 +2538,17 @@
 .gis-location-items::-webkit-scrollbar-thumb {
   background: #2fa34a;
   border-radius: 999px;
+}
+
+.gis-empty-note {
+  margin: 0;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .gis-location-item {

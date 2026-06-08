@@ -14,6 +14,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
+import LocationPicker from "../../shared/LocationPicker";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const initialForm = {
@@ -933,6 +934,13 @@ function RegisterEstablishmentModal({
             />
           </label>
         </div>
+
+        <LocationPicker
+          label="Establishment Map Pin"
+          latitude={form.latitude}
+          longitude={form.longitude}
+          onChange={onChange}
+        />
 
         <label className="modal-field full">
           <span>Remarks</span>

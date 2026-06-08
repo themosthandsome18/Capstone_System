@@ -1,20 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiLayers, FiStar } from "react-icons/fi";
+import { FiLayers, FiMapPin, FiStar } from "react-icons/fi";
 import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
 import { useTourismData } from "../context/TourismDataContext";
 
-const OFFICIAL_DESTINATION_LIMIT = 6;
+const OFFICIAL_DESTINATION_LIMIT = 15;
+
+function parseCoordinate(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasValidMapCoordinates(destination) {
+  const lat =
+    parseCoordinate(destination.coordinates?.lat) ??
+    parseCoordinate(destination.latitude);
+  const lng =
+    parseCoordinate(destination.coordinates?.lng) ??
+    parseCoordinate(destination.longitude);
+
+  return lat !== null && lng !== null && lat >= 13.9 && lat <= 14.4 && lng >= 121.55 && lng <= 122;
+}
 
 function isOfficialMapDestination(destination) {
   return (
-    Boolean(destination.image_key) ||
-    Boolean(destination.with_mayors_permit) ||
-    Number(destination.resort_id || 0) <= OFFICIAL_DESTINATION_LIMIT
+    hasValidMapCoordinates(destination) &&
+    (Boolean(destination.image_key) ||
+      Boolean(destination.with_mayors_permit) ||
+      Number(destination.resort_id || 0) <= OFFICIAL_DESTINATION_LIMIT)
   );
 }
 
 function GISMap() {
   const { referenceTables } = useTourismData();
+  const [mapLayer, setMapLayer] = useState("street");
   const mapDestinations = useMemo(
     () => referenceTables.resorts.filter(isOfficialMapDestination),
     [referenceTables.resorts]
@@ -58,13 +80,21 @@ function GISMap() {
         </div>
 
         <div className="gis-actions">
-          <button type="button">
+          <button
+            type="button"
+            className={mapLayer === "street" ? "active" : ""}
+            onClick={() => setMapLayer("street")}
+          >
             <FiLayers size={15} />
-            Layers
+            Street
           </button>
 
-          <button type="button" className="active">
-            Heatmap
+          <button
+            type="button"
+            className={mapLayer === "satellite" ? "active" : ""}
+            onClick={() => setMapLayer("satellite")}
+          >
+            Satellite
           </button>
         </div>
       </div>
@@ -80,49 +110,71 @@ function GISMap() {
             destinations={mapDestinations}
             selectedDestination={selectedDestination}
             onSelectDestination={setSelectedDestination}
+            mapLayer={mapLayer}
           />
         </section>
 
         <aside className="gis-side-panel">
           <div className="gis-info-card">
             <h3>Location Details</h3>
-            <p>Click on a marker to view location details.</p>
+
+            {selectedDestination ? (
+              <div className="gis-selected-destination">
+                <strong>{selectedDestination.resort_name}</strong>
+                <span>{selectedDestination.type}</span>
+                <p>{selectedDestination.location}</p>
+                <small>
+                  <FiMapPin size={11} />
+                  {selectedDestination.latitude},{" "}
+                  {selectedDestination.longitude}
+                </small>
+              </div>
+            ) : (
+              <p>No mapped tourism destination selected.</p>
+            )}
           </div>
 
           <div className="gis-location-list">
-            <h3>All Locations</h3>
+            <h3>Mapped Locations</h3>
 
             <div className="gis-location-items">
-              {mapDestinations.map((destination) => (
-                <button
-                  key={destination.resort_id}
-                  type="button"
-                  onClick={() => setSelectedDestination(destination)}
-                  className={`gis-location-item ${
-                    selectedDestination?.resort_id === destination.resort_id
-                      ? "selected"
-                      : ""
-                  }`}
-                >
-                  <div>
-                    <p>{destination.resort_name}</p>
-                    <span>{destination.type}</span>
-                  </div>
+              {mapDestinations.length ? (
+                mapDestinations.map((destination) => (
+                  <button
+                    key={destination.resort_id}
+                    type="button"
+                    onClick={() => setSelectedDestination(destination)}
+                    className={`gis-location-item ${
+                      selectedDestination?.resort_id === destination.resort_id
+                        ? "selected"
+                        : ""
+                    }`}
+                  >
+                    <div>
+                      <p>{destination.resort_name}</p>
+                      <span>{destination.type}</span>
+                    </div>
 
-                  <div className="gis-rating">
-                    <FiStar size={11} />
-                    <span>{destination.tourism_rating}</span>
-                  </div>
-                </button>
-              ))}
+                    <div className="gis-rating">
+                      <FiStar size={11} />
+                      <span>{destination.tourism_rating}</span>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="gis-empty-note">
+                  No tourism destinations with valid coordinates are available.
+                </p>
+              )}
             </div>
           </div>
 
           <div className="gis-heatmap-card">
-            <h3>Heatmap Active</h3>
+            <h3>GIS Coverage</h3>
             <p>
-              Showing tourist density across Mauban barangays based on the last
-              30 days of arrivals.
+              Showing official destinations with verified Mauban coordinates.
+              Imported placeholder records are hidden from the map until exact
+              coordinates are added.
             </p>
           </div>
         </aside>

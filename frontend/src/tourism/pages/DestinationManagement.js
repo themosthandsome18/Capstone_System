@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { FiEdit2, FiMapPin, FiStar, FiTrash2 } from "react-icons/fi";
+import LocationPicker from "../../shared/LocationPicker";
 import { useTourismData } from "../context/TourismDataContext";
 
 const initialForm = {
@@ -18,7 +19,7 @@ const initialForm = {
 };
 
 const emptyDestinations = [];
-const OFFICIAL_DESTINATION_LIMIT = 6;
+const OFFICIAL_DESTINATION_LIMIT = 15;
 
 function isOfficialDestination(destination) {
   return (
@@ -461,6 +462,13 @@ function DestinationManagement() {
                 value={form.longitude}
                 onChange={(value) => updateField("longitude", value)}
                 required
+              />
+
+              <LocationPicker
+                label="Destination Map Pin"
+                latitude={form.latitude}
+                longitude={form.longitude}
+                onChange={updateField}
               />
 
               <TextField

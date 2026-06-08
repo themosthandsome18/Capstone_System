@@ -1,0 +1,130 @@
+.location-picker {
+  grid-column: 1 / -1;
+  border: 1px solid #cbd5d1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.location-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.location-picker-header span {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.location-picker-header small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.location-picker-link {
+  flex: 0 0 auto;
+  border: 1px solid #99d6b8;
+  border-radius: 7px;
+  background: #f0fdf4;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #047857;
+  text-decoration: none;
+}
+
+.location-picker-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.location-picker-search input {
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #cbd5d1;
+  border-radius: 7px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  outline: none;
+}
+
+.location-picker-search button {
+  height: 38px;
+  border: 0;
+  border-radius: 7px;
+  background: #064f34;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.location-picker-search button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.location-picker-error {
+  margin: -4px 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.location-picker-map {
+  height: 280px;
+  overflow: hidden;
+  border: 1px solid #aeb7b1;
+  border-radius: 7px;
+  background: #e2e8f0;
+}
+
+.location-picker-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+.location-picker-marker {
+  background: transparent;
+  border: 0;
+}
+
+.location-picker-marker-dot {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
+}
+
+@media (max-width: 720px) {
+  .location-picker-header,
+  .location-picker-search {
+    grid-template-columns: 1fr;
+  }
+
+  .location-picker-search {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .location-picker-link,
+  .location-picker-search button {
+    width: 100%;
+    text-align: center;
+  }
+}

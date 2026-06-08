@@ -305,6 +305,48 @@ class MobilePublicApiTests(TestCase):
         self.assertEqual(complaint.photo_documentation, "sample-photo.jpg")
         self.assertEqual(complaint.status, "pending")
 
+    def test_mobile_sanitation_report_history_filters_by_contact(self):
+        self.client.post(
+            "/api/mobile/sanitation/reports/",
+            {
+                "complainant_name": "Resident Reporter",
+                "contact_number": "09170000000",
+                "category": "Unsafe water source",
+                "barangay": "Poblacion",
+                "description": "Water source needs inspection.",
+            },
+            format="json",
+        )
+
+        response = self.client.get(
+            "/api/mobile/sanitation/reports/history/",
+            {"contact": "09170000000"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.json()["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "pending")
+        self.assertIn("status_label", rows[0])
+
+    def test_mobile_sanitation_permit_verify_by_permit_number(self):
+        bootstrap = self.client.get("/api/mobile/sanitation/bootstrap/").json()
+        permit_number = next(
+            item["permit_number"]
+            for item in bootstrap["establishments"]
+            if item["permit_number"]
+        )
+
+        response = self.client.get(
+            "/api/mobile/sanitation/permits/verify/",
+            {"code": permit_number},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertTrue(data["verified"])
+        self.assertEqual(data["permit"]["permit_number"], permit_number)
+
     def test_mobile_sanitation_bootstrap_is_public(self):
         response = self.client.get("/api/mobile/sanitation/bootstrap/")
 
