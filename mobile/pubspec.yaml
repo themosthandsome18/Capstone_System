@@ -38,6 +38,7 @@ dependencies:
   image_picker: ^1.2.2
   geolocator: ^14.0.2
   shared_preferences: ^2.5.5
+  mobile_scanner: ^7.2.0
 
 dev_dependencies:
   flutter_test:
@@ -63,8 +64,21 @@ flutter:
 
   assets:
     - assets/tourism_logo.jpg
-    - assets/mauban_map.png
-    - assets/destinations/
+    - assets/destinations/Aguho Playa Beach Resort - Cagbalete.jpg
+    - assets/destinations/Aquazul Hotel and Resort - Cagbalete.jpg
+    - assets/destinations/Dona Choleng Camping Resort - Cagbalete.jpg
+    - "assets/destinations/Jovencio's Resort Cagbalete.jpg"
+    - assets/destinations/MVT Sto. Nino Beach Resort - Cagbalete.jpg
+    - assets/destinations/Nenita Del Sol - Cagbalete.jpg
+    - assets/destinations/Nilandingan Cove Resort - Cagbalete.jpg
+    - assets/destinations/Orlan Beach Resort - Cagbalete.jpg
+    - assets/destinations/Rio Del Sol Beach Resort - Cagbalete.avif
+    - assets/destinations/Tent Place - Cagbalete.jpg
+    - assets/destinations/Tita Pinay Beach Resort - Cagbalete.png
+    - assets/destinations/Villa Cleofas Cagbalete.webp
+    - assets/destinations/Villa Escaparde Camping and Beach Resort.jpg
+    - assets/destinations/Villa Noe Beach- Cagbalete.jpg
+    - assets/destinations/Villa Pilarosa Beach Resort - Cagbalete.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

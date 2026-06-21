@@ -16,6 +16,7 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { QRCodeSVG } from "qrcode.react";
 
 const initialForm = {
   business_name: "",
@@ -661,6 +662,31 @@ function EstablishmentDetailModal({
             <p>{establishment.remarks || "No remarks recorded."}</p>
           </div>
         </div>
+
+        {establishment.has_permit && (
+          <div className="establishment-detail-note" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', backgroundColor: '#f8fafc' }}>
+            <QRCodeSVG 
+              value={`${window.location.origin}/verify-permit/${establishment.id}`} 
+              size={120} 
+              level="H"
+              includeMargin={true}
+            />
+            <div>
+              <strong style={{ display: 'block', fontSize: '1.1rem', marginBottom: '0.5rem' }}>Official Permit QR Code</strong>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
+                Tourists and inspectors can scan this code using the Mauban Mobile App or any smartphone camera to instantly verify the compliance status of this establishment.
+              </p>
+              <a 
+                href={`/verify-permit/${establishment.id}`} 
+                target="_blank" 
+                rel="noreferrer"
+                style={{ display: 'inline-block', marginTop: '0.75rem', fontWeight: 600, color: '#2563eb' }}
+              >
+                Test Verification Page &rarr;
+              </a>
+            </div>
+          </div>
+        )}
 
         <div className="establishment-timeline-panel">
           <div className="establishment-timeline-title">

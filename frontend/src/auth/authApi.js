@@ -24,6 +24,8 @@ export async function logout() {
     await apiRequest("/auth/logout/", {
       method: "POST",
     });
+  } catch (error) {
+    console.warn("API logout request failed, clearing local token anyway:", error);
   } finally {
     setStoredAuthToken("");
   }

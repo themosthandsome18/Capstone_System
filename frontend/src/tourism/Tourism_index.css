@@ -2847,4 +2847,13 @@
   }
 }
 
+.analytics-question-item {
+  transition: all 0.3s ease !important;
+}
+
+.analytics-question-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(34, 72, 55, 0.18) !important;
+}
+
 }

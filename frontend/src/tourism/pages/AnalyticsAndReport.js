@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import {
+  ArcElement,
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Legend,
   LinearScale,
+  RadialLinearScale,
   Tooltip,
 } from "chart.js";
-import { Bar } from "react-chartjs-2";
-import { FiDownload, FiPrinter } from "react-icons/fi";
+import { Bar, Doughnut, Pie, PolarArea } from "react-chartjs-2";
+import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -113,6 +124,21 @@ const reportingYearOptions = [
   { value: "2024", label: "2024" },
   { value: "all", label: "All Years" },
 ];
+
+const tourismTitleMap = {
+  top_resort: "Top Tourist Destination",
+  month_compare: "Month-over-Month Arrivals",
+  peak_month: "Peak Season Analysis",
+  classification: "Visitor Demographics",
+  stay_type: "Same-Day vs. Overnight Stays",
+  overnight_resort: "Top Destination for Overnight Stays",
+  average_stay: "Average Length of Stay",
+  top_origin: "Top Visitor Origins",
+  visit_purpose: "Primary Purpose of Travel",
+  high_demand: "Destinations with Growing Demand",
+  validation: "Data Quality & Validation",
+};
+
 
 function AnalyticsAndReport() {
   const { referenceTables, reportData, refreshReportData } = useTourismData();
@@ -421,33 +447,35 @@ function AnalyticsAndReport() {
 
       {reportError ? <p className="tourist-record-error">{reportError}</p> : null}
 
-      <section className="analytics-question-card">
-        <div className="report-card-title">
-          <h3>Questions Answered by the System</h3>
-          <p>Computed from tourist records, selected filters, and arrival status</p>
-        </div>
+      <div className="analytics-question-title-row" style={{ marginTop: "12px", marginBottom: "16px" }}>
+        <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
+        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Computed from tourist records, selected filters, and arrival status</p>
+      </div>
 
-        <div className="analytics-question-grid">
-          {questionAnswers.length ? (
-            questionAnswers.map((item, index) => (
-              <article
-                key={item.id || item.question}
-                className="analytics-question-item"
-              >
-                <div className="analytics-question-top">
-                  <span>Q{index + 1}</span>
-                  <small>{getVisualLabel(item.visual?.type)}</small>
-                </div>
-                <h4>{item.question}</h4>
-                <VisualAnswer visual={item.visual} />
-                <p>{item.answer}</p>
-              </article>
-            ))
-          ) : (
-            <p className="analytics-question-empty">No question answers available.</p>
-          )}
-        </div>
-      </section>
+      <div className="analytics-question-grid" style={{ marginTop: 0 }}>
+        {questionAnswers.length ? (
+          questionAnswers.map((item, index) => (
+            <article
+              key={item.id || item.question}
+              className="analytics-question-item"
+              style={{
+                boxShadow: "0 10px 25px rgba(34, 72, 55, 0.12)",
+                background: "#ffffff",
+                border: "1px solid #d7e5e1",
+              }}
+            >
+              <div className="analytics-question-top" style={{ justifyContent: "flex-end" }}>
+                <small>{getVisualLabel(item.visual?.type, item.id)}</small>
+              </div>
+              <h4>{tourismTitleMap[item.id] || item.question}</h4>
+              <VisualAnswer visual={item.visual} questionId={item.id} />
+              <p>{item.answer}</p>
+            </article>
+          ))
+        ) : (
+          <p className="analytics-question-empty">No insights available.</p>
+        )}
+      </div>
 
       <div className="report-print-area">
         <div className="report-chart-card">
@@ -533,74 +561,394 @@ function AnalyticsAndReport() {
   );
 }
 
-function VisualAnswer({ visual }) {
+function VisualAnswer({ visual, questionId }) {
   if (!visual) {
     return null;
   }
 
-  if (visual.type === "share") {
+  // Helper for rendering Pie charts
+  if (
+    questionId === "top_resort" ||
+    questionId === "overnight_resort" ||
+    questionId === "top_origin"
+  ) {
+    const mainLabel = visual.label || "Top Destination";
+    const mainValue = Number(visual.value || 0);
+    const totalVal = Number(visual.total || 0);
+    const othersValue = Math.max(0, totalVal - mainValue);
+
+    const chartData = {
+      labels: [mainLabel, "Others"],
+      datasets: [
+        {
+          data: [mainValue, othersValue],
+          backgroundColor: ["#147c79", "#cbd5e1"],
+          borderWidth: 0,
+        },
+      ],
+    };
+
+    const isDoughnut = questionId === "top_origin";
+
     return (
-      <div className="insight-share">
-        <div className="insight-share-main">
-          <strong>{Number(visual.value || 0).toLocaleString()}</strong>
-          <span>{visual.label}</span>
+      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+        {isDoughnut ? (
+          <Doughnut
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 6,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        ) : (
+          <Pie
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 6,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (questionId === "stay_type" || questionId === "classification" || questionId === "validation") {
+    const isPie = questionId === "stay_type";
+    const chartData = {
+      labels: (visual.items || []).map((item) => item.label),
+      datasets: [
+        {
+          data: (visual.items || []).map((item) => item.value),
+          backgroundColor: isPie 
+            ? ["#147c79", "#ffc978"]
+            : ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
+          borderWidth: 0,
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+        {isPie ? (
+          <Pie
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 6,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        ) : (
+          <Doughnut
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 6,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (questionId === "visit_purpose") {
+    const chartData = {
+      labels: (visual.items || [
+        { label: visual.label, value: visual.value },
+        { label: "Others", value: Math.max(0, (visual.total || 0) - (visual.value || 0)) }
+      ]).map((item) => item.label),
+      datasets: [
+        {
+          data: (visual.items || [
+            { label: visual.label, value: visual.value },
+            { label: "Others", value: Math.max(0, (visual.total || 0) - (visual.value || 0)) }
+          ]).map((item) => item.value),
+          backgroundColor: ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
+          borderWidth: 1,
+          borderColor: "#ffffff",
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+        <PolarArea
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            scales: {
+              r: {
+                ticks: { display: false },
+                grid: { color: "rgba(148, 163, 184, 0.15)" },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: "right",
+                labels: {
+                  boxWidth: 8,
+                  font: { size: 9, weight: "bold" },
+                  color: "#475569",
+                  padding: 6,
+                },
+              },
+              tooltip: { enabled: true },
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (questionId === "peak_month") {
+    // Render custom SVG Circular Progress ring
+    const percentage = visual.percentage || 100;
+    const value = visual.value || 0;
+    const label = visual.label || "Peak Season";
+
+    const radius = 30;
+    const strokeWidth = 6;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (clampPercent(percentage) / 100) * circumference;
+
+    return (
+      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "15px 0" }}>
+        <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+          <circle
+            cx="40"
+            cy="40"
+            r={radius}
+            fill="transparent"
+            stroke="#f1f5f9"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx="40"
+            cy="40"
+            r={radius}
+            fill="transparent"
+            stroke="#147c79"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.5s ease" }}
+          />
+        </svg>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <strong style={{ fontSize: "20px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#1e293b", marginTop: "3px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          <small style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+            {Number(value).toLocaleString()} visitors
+          </small>
         </div>
-        <div className="insight-track">
-          <b style={{ width: `${clampPercent(visual.percentage)}%` }} />
+      </div>
+    );
+  }
+
+  if (questionId === "average_stay") {
+    const value = visual.value || "0";
+    
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "20px 0" }}>
+        <div style={{
+          width: "48px",
+          height: "48px",
+          borderRadius: "50%",
+          background: "#e6f4f3",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#147c79",
+          fontSize: "20px",
+          flexShrink: 0,
+        }}>
+          <FiClock />
         </div>
-        <small>
-          {visual.percentage || 0}% of {Number(visual.total || 0).toLocaleString()} visitors
-        </small>
+        <div>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1 }}>
+            {value}
+          </strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
+            nights average length of stay
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback / original types
+  if (visual.type === "share") {
+    const percentage = visual.percentage || 0;
+    const value = visual.value || 0;
+    const label = visual.label || "";
+
+    const radius = 30;
+    const strokeWidth = 6;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (clampPercent(percentage) / 100) * circumference;
+
+    return (
+      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "15px 0" }}>
+        <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+          <circle
+            cx="40"
+            cy="40"
+            r={radius}
+            fill="transparent"
+            stroke="#f1f5f9"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx="40"
+            cy="40"
+            r={radius}
+            fill="transparent"
+            stroke="#147c79"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.5s ease" }}
+          />
+        </svg>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <strong style={{ fontSize: "20px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#1e293b", marginTop: "3px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          <small style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+            {Number(value).toLocaleString()} visitors
+          </small>
+        </div>
       </div>
     );
   }
 
   if (visual.type === "comparison") {
-    const max = Math.max(...(visual.items || []).map((item) => item.value || 0), 1);
+    const chartData = {
+      labels: (visual.items || []).map((item) => item.label),
+      datasets: [
+        {
+          data: (visual.items || []).map((item) => item.value),
+          backgroundColor: ["#32a19b", "#2f9c9c", "#6abdc0", "#8fdcda"],
+          borderRadius: 4,
+          maxBarThickness: 35,
+        },
+      ],
+    };
 
     return (
-      <div className="insight-bars">
-        {(visual.items || []).map((item) => (
-          <div className="insight-bar-row" key={item.label}>
-            <span>{item.label}</span>
-            <div>
-              <b style={{ width: `${clampPercent(((item.value || 0) / max) * 100)}%` }} />
-            </div>
-            <strong>{Number(item.value || 0).toLocaleString()}</strong>
-          </div>
-        ))}
+      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+        <Bar
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: true },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { font: { size: 9 }, color: "#64748b" },
+                grid: { color: "rgba(148, 163, 184, 0.1)" },
+              },
+              x: {
+                ticks: { font: { size: 9 }, color: "#64748b" },
+                grid: { display: false },
+              },
+            },
+          }}
+        />
       </div>
     );
   }
 
   if (visual.type === "stack" || visual.type === "split") {
-    const total = (visual.items || []).reduce(
-      (sum, item) => sum + Number(item.value || 0),
-      0
-    );
+    const chartData = {
+      labels: (visual.items || []).map((item) => item.label),
+      datasets: [
+        {
+          data: (visual.items || []).map((item) => item.value),
+          backgroundColor: ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
+          borderWidth: 0,
+        },
+      ],
+    };
 
     return (
-      <div className="insight-stack-wrap">
-        <div className={`insight-stack ${visual.type}`}>
-          {(visual.items || []).map((item, index) => (
-            <span
-              key={item.label}
-              className={`tone-${index + 1}`}
-              style={{
-                width: `${total ? ((item.value || 0) / total) * 100 : 0}%`,
-              }}
-              title={`${item.label}: ${item.value}`}
-            />
-          ))}
-        </div>
-        <div className="insight-legend">
-          {(visual.items || []).map((item, index) => (
-            <span key={item.label}>
-              <i className={`tone-${index + 1}`} />
-              {item.label}: {Number(item.value || 0).toLocaleString()}
-            </span>
-          ))}
-        </div>
+      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+        <Doughnut
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "right",
+                labels: {
+                  boxWidth: 8,
+                  font: { size: 9, weight: "bold" },
+                  color: "#475569",
+                  padding: 6,
+                },
+              },
+              tooltip: { enabled: true },
+            },
+          }}
+        />
       </div>
     );
   }
@@ -710,10 +1058,15 @@ function getFallbackLabel(answer) {
   return "Result";
 }
 
-function getVisualLabel(type) {
-  if (type === "comparison") return "Comparison";
+function getVisualLabel(type, questionId) {
+  if (questionId === "top_resort" || questionId === "stay_type" || questionId === "overnight_resort") return "Pie Chart";
+  if (questionId === "classification" || questionId === "top_origin" || questionId === "validation") return "Doughnut Chart";
+  if (questionId === "visit_purpose") return "Polar Area";
+  if (questionId === "peak_month") return "Gauge Ring";
+  if (questionId === "average_stay") return "Metric Info";
+  if (type === "comparison") return "Comparison Chart";
   if (type === "stack") return "Distribution";
-  if (type === "split") return "Split";
+  if (type === "split") return "Split Chart";
   if (type === "metric") return "Metric";
   return "Share";
 }

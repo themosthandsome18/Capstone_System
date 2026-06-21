@@ -273,12 +273,15 @@ function HouseholdRecords() {
 
                   <div className="risk-track">
                     <b
-                      className={item.atRisk > 0 ? "red" : "yellow"}
+                      className={item.atRisk > 0 ? "red" : ""}
                       style={{
-                        width: `${Math.max(
-                          8,
-                          Math.round((item.atRisk / maxRiskValue) * 100)
-                        )}%`,
+                        width:
+                          item.atRisk > 0
+                            ? `${Math.max(
+                                8,
+                                Math.round((item.atRisk / maxRiskValue) * 100)
+                              )}%`
+                            : "0%",
                       }}
                     />
                   </div>
@@ -527,22 +530,33 @@ function buildHouseholdSummary(records) {
 }
 
 function buildRiskRows(records, barangayNames) {
-  return barangayNames.map((barangay) => {
-    const barangayRecords = records.filter((item) => item.barangay === barangay);
+  return barangayNames
+    .map((barangay) => {
+      const barangayRecords = records.filter(
+        (item) => item.barangay === barangay
+      );
 
-    return {
-      barangay,
-      total: barangayRecords.length,
-      atRisk: barangayRecords.filter((item) => item.status === "violation")
-        .length,
-      forCompletion: barangayRecords.filter(
-        (item) => item.status === "for_completion"
-      ).length,
-      goodStanding: barangayRecords.filter(
-        (item) => item.status === "good_standing"
-      ).length,
-    };
-  });
+      return {
+        barangay,
+        total: barangayRecords.length,
+        atRisk: barangayRecords.filter((item) => item.status === "violation")
+          .length,
+        forCompletion: barangayRecords.filter(
+          (item) => item.status === "for_completion"
+        ).length,
+        goodStanding: barangayRecords.filter(
+          (item) => item.status === "good_standing"
+        ).length,
+      };
+    })
+    .filter((item) => item.total > 0)
+    .sort(
+      (a, b) =>
+        b.atRisk - a.atRisk ||
+        b.forCompletion - a.forCompletion ||
+        b.total - a.total ||
+        a.barangay.localeCompare(b.barangay)
+    );
 }
 
 function countBy(records, field, value) {

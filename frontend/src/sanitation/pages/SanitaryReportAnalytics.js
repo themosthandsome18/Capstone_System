@@ -6,12 +6,15 @@ import {
   Chart as ChartJS,
   Legend,
   LinearScale,
+  RadialLinearScale,
   Tooltip,
 } from "chart.js";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { Bar, Doughnut, Pie } from "react-chartjs-2";
 import {
   FiAlertTriangle,
+  FiAlertCircle,
   FiCalendar,
+  FiClock,
   FiDownload,
   FiFileText,
   FiFilter,
@@ -23,7 +26,15 @@ import {
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 const defaultFilters = {
   barangay: "all",
@@ -47,6 +58,20 @@ const complianceStatusOptions = [
   { value: "violation", label: "Violation" },
   { value: "no_permit", label: "No Permit" },
 ];
+
+const sanitationTitleMap = {
+  permit_status: "Sanitary Permit Standing",
+  immediate_action: "Urgent Enforcement & Inspection Queue",
+  inspection_effect: "Impact of Recent Inspections",
+  repeated_issues: "Recurring Complaints & Issues",
+  resolution_time: "Violation Resolution Efficiency",
+  likely_compliant: "Establishments Near Full Compliance",
+  household_poor_barangays: "Barangays with Poor Sanitation",
+  household_profile: "Barangay Sanitation Profiles",
+  priority_households: "High-Risk Households Priority Watch",
+  risk_factor: "Dominant Household Risk Factors",
+  geographic_risk: "Geographic Risk Hotspots",
+};
 
 function SanitaryReportAnalytics() {
   const {
@@ -432,50 +457,75 @@ function SanitaryReportAnalytics() {
         </section>
       </div>
 
-      <section className="sanitary-question-card">
-        <div className="summary-title">
-          <FiFileText />
+      <div className="sanitary-question-title-row" style={{ marginTop: "24px", marginBottom: "16px" }}>
+        <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0f7a45" }}>Administrative & Community Insights</h3>
+        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Grouped decision support from permits, inspections, complaints, and household data</p>
+      </div>
 
-          <div>
-            <h3>Questions Answered by the System</h3>
-            <p>Grouped decision support from permits, inspections, complaints, and household data</p>
-          </div>
-        </div>
+      <div className="question-tabs" style={{ background: "transparent", padding: 0, borderBottom: "1px solid #e2e8f0", marginBottom: "16px" }}>
+        {questionGroups.map((group) => (
+          <button
+            type="button"
+            key={group.id}
+            className={activeQuestionSection?.id === group.id ? "active" : ""}
+            onClick={() => setActiveQuestionGroup(group.id)}
+            style={{
+              background: "transparent",
+              border: "none",
+              borderBottom: activeQuestionSection?.id === group.id ? "2px solid #0f7a45" : "none",
+              padding: "10px 16px",
+              fontWeight: "700",
+              color: activeQuestionSection?.id === group.id ? "#0f7a45" : "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            {group.label}
+            <span style={{
+              marginLeft: "6px",
+              background: activeQuestionSection?.id === group.id ? "#0f7a45" : "#e2e8f0",
+              color: activeQuestionSection?.id === group.id ? "#ffffff" : "#475569",
+              borderRadius: "999px",
+              padding: "2px 6px",
+              fontSize: "10px",
+            }}>{group.items.length}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className="question-tabs">
-          {questionGroups.map((group) => (
-            <button
-              type="button"
-              key={group.id}
-              className={activeQuestionSection?.id === group.id ? "active" : ""}
-              onClick={() => setActiveQuestionGroup(group.id)}
+      <div className="sanitary-question-grid" style={{ marginTop: 0 }}>
+        {activeQuestionSection?.items.length ? (
+          activeQuestionSection.items.map((item) => (
+            <article
+              key={item.id || item.question}
+              className="sanitary-question-item"
+              style={{
+                boxShadow: "0 10px 25px rgba(34, 72, 55, 0.12)",
+                background: "#ffffff",
+                border: "1px solid #d7e5e1",
+                borderRadius: "12px",
+                padding: "18px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                minHeight: "260px",
+                justifyContent: "space-between",
+              }}
             >
-              {group.label}
-              <span>{group.items.length}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="sanitary-question-list">
-          {activeQuestionSection?.items.length ? (
-            activeQuestionSection.items.map((item, index) => (
-              <details
-                key={item.id || item.question}
-                className="sanitary-question-item"
-                open={index === 0}
-              >
-                <summary>
-                  <span>Q{index + 1}</span>
-                  <strong>{item.question}</strong>
-                </summary>
-                <p>{item.answer}</p>
-              </details>
-            ))
-          ) : (
-            <p className="submission-empty">No question answers available.</p>
-          )}
-        </div>
-      </section>
+              <div>
+                <h4 style={{ margin: 0, fontSize: "13px", fontWeight: "800", color: "#111827", lineHeight: "1.35" }}>
+                  {sanitationTitleMap[item.id] || item.question}
+                </h4>
+                <SanitaryVisualAnswer item={item} summary={summary} />
+              </div>
+              <p style={{ margin: "auto 0 0", border: 0, padding: 0, fontSize: "11px", color: "#4b5563", lineHeight: "1.45" }}>
+                {item.answer}
+              </p>
+            </article>
+          ))
+        ) : (
+          <p className="submission-empty">No insights available.</p>
+        )}
+      </div>
 
       <section className="sanitary-insight-card">
         <h3>Top Establishments Needing Attention</h3>
@@ -1142,6 +1192,465 @@ function riskClass(value = "") {
   if (value.toLowerCase().includes("high")) return "high";
   if (value.toLowerCase().includes("medium")) return "medium";
   return "low";
+}
+
+
+
+function SanitaryVisualAnswer({ item, summary }) {
+  const text = item.answer || "";
+  const id = item.id;
+
+  if (!text || text.includes("No matching") || text.includes("No establishment") || text.includes("No priority")) {
+    return null;
+  }
+
+  // 1. Monitored Establishments
+  if (id === "monitored_establishments") {
+    const numbers = [...text.matchAll(/\d+/g)].map(Number);
+    const count = numbers[0] || 0;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "15px 0" }}>
+        <div style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "50%",
+          background: "#e6f4f3",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#0f7a45",
+          fontSize: "18px",
+          flexShrink: 0,
+        }}>
+          <FiFileText />
+        </div>
+        <div>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#0f7a45", lineHeight: 1 }}>
+            {count}
+          </strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
+            total monitored establishments
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Compliance Rate
+  if (id === "compliance_rate") {
+    const numbers = [...text.matchAll(/\d+(?:\.\d+)?/g)].map(Number);
+    const goodCount = numbers[0] || 0;
+    const totalCount = numbers[1] || 0;
+    const rate = numbers[2] || 0;
+
+    const radius = 26;
+    const strokeWidth = 5;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (rate / 100) * circumference;
+
+    return (
+      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "14px", margin: "10px 0" }}>
+        <svg width="70" height="70" viewBox="0 0 70 70" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+          <circle cx="35" cy="35" r={radius} fill="transparent" stroke="#f1f5f9" strokeWidth={strokeWidth} />
+          <circle cx="35" cy="35" r={radius} fill="transparent" stroke="#0f7a45" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" />
+        </svg>
+        <div>
+          <strong style={{ fontSize: "18px", fontWeight: "900", color: "#0f7a45", lineHeight: 1.1 }}>{rate}%</strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#1e293b", display: "block", marginTop: "2px" }}>Compliance Rate</span>
+          <small style={{ fontSize: "10px", color: "#64748b" }}>{goodCount} of {totalCount} in good standing</small>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Top-leads shares (largest_business_type, violation_business_type, barangay_risk, household_poor_barangays, risk_factor)
+  if (
+    id === "largest_business_type" ||
+    id === "violation_business_type" ||
+    id === "barangay_risk" ||
+    id === "household_poor_barangays" ||
+    id === "risk_factor"
+  ) {
+    const parts = text.split(" leads with ");
+    let name = parts[0] || "Top Item";
+    if (id === "risk_factor") {
+      const mainPart = text.split(" contributes the most ");
+      name = mainPart[0] || "Risk Factor";
+    }
+
+    const numbers = [...text.matchAll(/\d+(?:\.\d+)?/g)].map(Number);
+    const value = numbers[0] || 0;
+    const total = numbers[1] || 0;
+    const others = Math.max(0, total - value);
+
+    const chartData = {
+      labels: [name, "Others"],
+      datasets: [
+        {
+          data: [value, others],
+          backgroundColor: ["#0f7a45", "#cbd5e1"],
+          borderWidth: 0,
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+        <Pie
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "right",
+                labels: {
+                  boxWidth: 8,
+                  font: { size: 9, weight: "bold" },
+                  color: "#475569",
+                  padding: 4,
+                },
+              },
+              tooltip: { enabled: true },
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 4. Requirements Queue
+  if (id === "requirements_queue") {
+    const numbers = [...text.matchAll(/\d+/g)].map(Number);
+    const completion = numbers[0] || 0;
+    const upcoming = numbers[1] || 0;
+
+    const chartData = {
+      labels: ["For Completion", "Upcoming Inspection"],
+      datasets: [
+        {
+          data: [completion, upcoming],
+          backgroundColor: ["#f59e0b", "#3b82f6"],
+          borderWidth: 0,
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+        <Doughnut
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "right",
+                labels: {
+                  boxWidth: 8,
+                  font: { size: 9, weight: "bold" },
+                  color: "#475569",
+                  padding: 4,
+                },
+              },
+              tooltip: { enabled: true },
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 5. Permit Gap
+  if (id === "permit_gap") {
+    const numbers = [...text.matchAll(/\d+/g)].map(Number);
+    const withoutPermit = numbers[0] || 0;
+    const noPermitStatus = numbers[1] || 0;
+
+    const chartData = {
+      labels: ["Missing Permit Flag", "No-Permit Status"],
+      datasets: [
+        {
+          data: [withoutPermit, noPermitStatus],
+          backgroundColor: ["#ef4444", "#f97316"],
+          borderWidth: 0,
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+        <Pie
+          data={chartData}
+          options={{
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "right",
+                labels: {
+                  boxWidth: 8,
+                  font: { size: 9, weight: "bold" },
+                  color: "#475569",
+                  padding: 4,
+                },
+              },
+              tooltip: { enabled: true },
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 6. Permit Status Distribution
+  if (id === "permit_status") {
+    const parts = text.split(", ");
+    const items = parts.map(part => {
+      const [label, valStr] = part.split(": ");
+      return { label: label || "Unknown", value: Number(valStr || 0) };
+    }).filter(item => !isNaN(item.value) && item.value > 0);
+
+    if (items.length) {
+      const chartData = {
+        labels: items.map(item => item.label),
+        datasets: [
+          {
+            data: items.map(item => item.value),
+            backgroundColor: ["#0f7a45", "#3b82f6", "#f59e0b", "#ef4444", "#94a3b8"],
+            borderWidth: 0,
+          },
+        ],
+      };
+
+      return (
+        <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+          <Doughnut
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 4,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 7. Inspection Frequency Queue
+  if (id === "inspection_frequency_queue") {
+    const parts = text.split("; ");
+    const items = parts.map(part => {
+      const [label, valStr] = part.split(": ");
+      return { label: label ? label.replace(" queue", "").replace("monthly", "Monthly").replace("quarterly", "Quarterly").replace("annual", "Annual") : "Unknown", value: Number(valStr || 0) };
+    }).filter(item => !isNaN(item.value));
+
+    if (items.length) {
+      const chartData = {
+        labels: items.map(item => item.label),
+        datasets: [
+          {
+            data: items.map(item => item.value),
+            backgroundColor: ["#10b981", "#3b82f6", "#f59e0b"],
+            borderWidth: 0,
+          },
+        ],
+      };
+
+      return (
+        <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+          <Doughnut
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: "right",
+                  labels: {
+                    boxWidth: 8,
+                    font: { size: 9, weight: "bold" },
+                    color: "#475569",
+                    padding: 4,
+                  },
+                },
+                tooltip: { enabled: true },
+              },
+            }}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 8. Geographic Risk / Risk Map
+  if (id === "geographic_risk") {
+    const matches = [...text.matchAll(/([A-Za-z0-9\s.]+)\s*\((\d+)\)/g)];
+    const items = matches.map(m => ({
+      label: m[1].trim(),
+      value: Number(m[2])
+    }));
+
+    if (items.length) {
+      const chartData = {
+        labels: items.map(item => item.label),
+        datasets: [
+          {
+            data: items.map(item => item.value),
+            backgroundColor: "#ef4444",
+            borderRadius: 4,
+            maxBarThickness: 15,
+          },
+        ],
+      };
+
+      return (
+        <div style={{ height: "115px", position: "relative", margin: "5px 0" }}>
+          <Bar
+            data={chartData}
+            options={{
+              indexAxis: "y",
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true },
+              },
+              scales: {
+                x: {
+                  beginAtZero: true,
+                  ticks: { font: { size: 8 }, color: "#64748b" },
+                  grid: { color: "rgba(148, 163, 184, 0.1)" },
+                },
+                y: {
+                  ticks: { font: { size: 8 }, color: "#64748b" },
+                  grid: { display: false },
+                },
+              },
+            }}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 9. Urgent / Immediate Action lists
+  if (id === "immediate_action" || id === "urgent_attention") {
+    const listText = text.replace("Immediate follow-up list: ", "").replace("Immediate inspection list: ", "");
+    const names = listText.split(", ").filter(name => name.trim().length > 0);
+    
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", margin: "10px 0" }}>
+        {names.map((name, index) => (
+          <div key={index} style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            background: "#fef2f2",
+            border: "1px solid #fee2e2",
+            borderRadius: "6px",
+            padding: "6px 10px",
+            fontSize: "11px",
+            color: "#991b1b",
+            fontWeight: "700"
+          }}>
+            <FiAlertCircle style={{ color: "#ef4444" }} />
+            <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{name}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // 10. Priority Households
+  if (id === "priority_households") {
+    const matches = [...text.matchAll(/([A-Za-z0-9\s.,]+)\s*\(([^)]+)\)/g)];
+    const items = matches.map(m => ({
+      name: m[1].trim(),
+      risk: m[2].trim()
+    }));
+
+    if (items.length) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", margin: "10px 0" }}>
+          {items.map((item, index) => {
+            const isHigh = item.risk.toLowerCase().includes("high");
+            const isMedium = item.risk.toLowerCase().includes("medium");
+            const badgeBg = isHigh ? "#fee2e2" : isMedium ? "#ffedd5" : "#f0fdf4";
+            const badgeColor = isHigh ? "#991b1b" : isMedium ? "#c2410c" : "#166534";
+            return (
+              <div key={index} style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "6px 10px",
+                fontSize: "11px"
+              }}>
+                <span style={{ fontWeight: "700", color: "#334155" }}>{item.name}</span>
+                <span style={{
+                  background: badgeBg,
+                  color: badgeColor,
+                  padding: "2px 6px",
+                  borderRadius: "999px",
+                  fontSize: "9px",
+                  fontWeight: "800"
+                }}>{item.risk}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+  }
+
+  // 11. Resolution Time
+  if (id === "resolution_time") {
+    const numbers = [...text.matchAll(/\d+(?:\.\d+)?/g)].map(Number);
+    const days = numbers[0] || 0;
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "15px 0" }}>
+        <div style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "50%",
+          background: "#fef3c7",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#d97706",
+          fontSize: "18px",
+          flexShrink: 0,
+        }}>
+          <FiClock />
+        </div>
+        <div>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#d97706", lineHeight: 1 }}>
+            {days}
+          </strong>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
+            average resolution time (days)
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default SanitaryReportAnalytics;

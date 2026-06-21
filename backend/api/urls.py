@@ -1,36 +1,31 @@
 from django.urls import path
 
 from .auth_views import current_user_view, login_view, logout_view
-from .views import (
+from .views.shared import (
     activity_log_list,
-    arrival_monitoring_data,
     bootstrap_data,
+    health_check,
+    reference_tables,
+)
+from .views.tourism import (
+    arrival_monitoring_data,
     booking_management_data,
     dashboard_data,
     feedback_detail,
     feedback_list,
-    health_check,
+    online_booking_import,
+    reports_data,
+    resort_detail,
+    resort_list,
+    tourist_record_detail,
+    tourist_record_list,
+)
+from .views.sanitation import (
     household_barangay_list,
     household_bootstrap_data,
     household_dashboard_data,
     household_record_detail,
     household_record_list,
-    reference_tables,
-    mobile_destination_detail,
-    mobile_destination_list,
-    mobile_feedback_submit,
-    mobile_household_survey_submit,
-    mobile_sanitation_bootstrap,
-    mobile_sanitation_inspection_submit,
-    mobile_sanitation_permit_verify,
-    mobile_sanitation_report_history,
-    mobile_sanitation_report_submit,
-    mobile_tourism_bootstrap,
-    mobile_tourist_registration,
-    online_booking_import,
-    reports_data,
-    resort_detail,
-    resort_list,
     sanitation_bootstrap_data,
     sanitation_business_type_list,
     sanitation_complaint_detail,
@@ -45,8 +40,19 @@ from .views import (
     sanitation_renewal_list,
     sanitation_report_data,
     sanitation_submission_data,
-    tourist_record_detail,
-    tourist_record_list,
+)
+from .views.mobile import (
+    mobile_destination_detail,
+    mobile_destination_list,
+    mobile_feedback_submit,
+    mobile_household_survey_submit,
+    mobile_sanitation_bootstrap,
+    mobile_sanitation_inspection_submit,
+    mobile_sanitation_permit_verify,
+    mobile_sanitation_report_history,
+    mobile_sanitation_report_submit,
+    mobile_tourism_bootstrap,
+    mobile_tourist_registration,
 )
 
 urlpatterns = [

@@ -18,6 +18,7 @@ import SanitaryReportAnalytics from "./sanitation/pages/SanitaryReportAnalytics"
 import SanitationDashboard from "./sanitation/pages/SanitationDashboard";
 import SubmissionTracking from "./sanitation/pages/SubmissionTracking";
 import TypesAndRequirements from "./sanitation/pages/TypesAndRequirements";
+import VerifyPermit from "./sanitation/pages/VerifyPermit";
 import ActivityLogsPage from "./shared/pages/ActivityLogsPage";
 import AppShell from "./tourism/components/layout/AppShell";
 import { TourismDataProvider } from "./tourism/context/TourismDataContext";
@@ -65,6 +66,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify-permit/:code" element={<VerifyPermit />} />
 
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/module-selection" element={<ModuleSelectionPage />} />

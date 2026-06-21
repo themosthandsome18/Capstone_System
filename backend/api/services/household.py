@@ -12,24 +12,26 @@ def build_household_dashboard_payload():
     with_water_access = records.filter(water_level__in=["level_2", "level_3"]).count()
     at_risk = records.filter(status="violation").count()
 
-    risk_by_barangay = []
-    for barangay in records.values_list("barangay", flat=True).distinct():
-        barangay_records = records.filter(barangay=barangay)
-        violation_count = barangay_records.filter(status="violation").count()
+    from django.db.models import Count, Q
 
-        risk_by_barangay.append(
-            {
-                "barangay": barangay,
-                "total": barangay_records.count(),
-                "atRisk": violation_count,
-                "forCompletion": barangay_records.filter(
-                    status="for_completion"
-                ).count(),
-                "goodStanding": barangay_records.filter(
-                    status="good_standing"
-                ).count(),
-            }
-        )
+    risk_by_barangay = []
+    
+    barangay_stats = records.values("barangay").annotate(
+        total_count=Count("id"),
+        at_risk_count=Count("id", filter=Q(status="violation")),
+        for_completion_count=Count("id", filter=Q(status="for_completion")),
+        good_standing_count=Count("id", filter=Q(status="good_standing"))
+    )
+
+    for stat in barangay_stats:
+        if stat["barangay"]:
+            risk_by_barangay.append({
+                "barangay": stat["barangay"],
+                "total": stat["total_count"],
+                "atRisk": stat["at_risk_count"],
+                "forCompletion": stat["for_completion_count"],
+                "goodStanding": stat["good_standing_count"],
+            })
 
     return {
         "summary": {

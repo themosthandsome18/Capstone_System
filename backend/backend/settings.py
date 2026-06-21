@@ -57,6 +57,8 @@ SECRET_KEY = config("SECRET_KEY")
 
 DEBUG = bool_config("DEBUG", default=True)
 
+USE_SEED_DATA = bool_config("USE_SEED_DATA", default=True)
+
 ALLOWED_HOSTS = csv_config(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost,testserver",

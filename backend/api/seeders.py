@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
+from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
 
@@ -101,12 +102,17 @@ REGION_DISPLAY_ORDER = [
 def ensure_initial_reference_data():
     global _REFERENCE_DATA_READY
 
+    if not getattr(settings, "USE_SEED_DATA", True):
+        _REFERENCE_DATA_READY = True
+        return
+
+    if _REFERENCE_DATA_READY and not has_initial_reference_data():
+        _REFERENCE_DATA_READY = False
+
     if _REFERENCE_DATA_READY and has_initial_reference_data():
-        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         return
 
     if has_initial_reference_data():
-        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         _REFERENCE_DATA_READY = True
         return
 
@@ -355,6 +361,13 @@ def ensure_initial_data():
 def ensure_initial_tourism_data():
     global _TOURISM_DATA_READY
 
+    if not getattr(settings, "USE_SEED_DATA", True):
+        _TOURISM_DATA_READY = True
+        return
+
+    if _TOURISM_DATA_READY and not TouristRecord.objects.exists():
+        _TOURISM_DATA_READY = False
+
     if _TOURISM_DATA_READY:
         return
 
@@ -363,7 +376,6 @@ def ensure_initial_tourism_data():
         and Resort.objects.exists()
         and Country.objects.exists()
     ):
-        sync_seed_resorts(REFERENCE_TABLES["resorts"])
         _TOURISM_DATA_READY = True
         return
 
@@ -375,6 +387,13 @@ def ensure_initial_tourism_data():
 
 def ensure_initial_sanitation_data():
     global _SANITATION_DATA_READY
+
+    if not getattr(settings, "USE_SEED_DATA", True):
+        _SANITATION_DATA_READY = True
+        return
+
+    if _SANITATION_DATA_READY and not SanitaryEstablishment.objects.exists():
+        _SANITATION_DATA_READY = False
 
     if _SANITATION_DATA_READY and SanitaryEstablishment.objects.exists():
         return
@@ -624,6 +643,9 @@ def ensure_initial_sanitary_complaints():
 
 
 def ensure_initial_household_data():
+    if not getattr(settings, "USE_SEED_DATA", True):
+        return
+
     ensure_initial_barangays()
 
     if HouseholdSanitationRecord.objects.exists():

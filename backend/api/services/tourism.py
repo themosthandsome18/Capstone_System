@@ -228,7 +228,7 @@ def build_booking_management_payload(params=None):
     date_from = (params.get("from") or "").strip()
     date_to = (params.get("to") or "").strip()
     page = parse_positive_int(params.get("page"), 1)
-    page_size = min(parse_positive_int(params.get("page_size"), 10), 100)
+    requested_page_size = params.get("page_size")
 
     if search:
         records = records.filter(
@@ -258,6 +258,10 @@ def build_booking_management_payload(params=None):
         records = records.filter(arrival_date__lte=date_to)
 
     filtered_count = records.count()
+    if requested_page_size in (None, ""):
+        page_size = max(filtered_count, 1)
+    else:
+        page_size = min(parse_positive_int(requested_page_size, 10), 100)
     total_pages = max(1, (filtered_count + page_size - 1) // page_size)
     page = min(page, total_pages)
     offset = (page - 1) * page_size
