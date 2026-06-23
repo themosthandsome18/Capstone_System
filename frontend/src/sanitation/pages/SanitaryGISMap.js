@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
-  Marker,
-  Popup,
   TileLayer,
   useMap,
 } from "react-leaflet";
 import { FiLayers } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
+import HeatmapLayer from "../components/HeatmapLayer";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -24,13 +23,13 @@ const maubanCenter = [14.185, 121.731];
 const tileLayers = {
   street: {
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      '&copy; <a href="https://maps.google.com">Google Maps</a>',
+    url: "http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}",
   },
   satellite: {
     attribution:
-      "Tiles &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      '&copy; <a href="https://maps.google.com">Google Maps Satellite</a>',
+    url: "http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}",
   },
 };
 
@@ -240,28 +239,7 @@ function SanitaryGISMap() {
 
             <FitMapToItems items={filteredItems} />
 
-            {filteredItems.map((item) => {
-              const markerColor = getRiskColor(item);
-
-              return (
-                <Marker
-                  key={`${mapMode}-${item.id}`}
-                  position={item.position}
-                  icon={createIcon(markerColor)}
-                  eventHandlers={{
-                    click: () => setSelectedItemId(item.id),
-                  }}
-                >
-                  <Popup>
-                    {isHouseholdMode ? (
-                      <HouseholdPopup item={item} />
-                    ) : (
-                      <EstablishmentPopup item={item} />
-                    )}
-                  </Popup>
-                </Marker>
-              );
-            })}
+            <HeatmapLayer items={filteredItems} />
           </MapContainer>
 
           {!filteredItems.length ? (
@@ -395,43 +373,7 @@ function MapSummaryCard({ label, value }) {
   );
 }
 
-function EstablishmentPopup({ item }) {
-  return (
-    <div className="gis-popup">
-      <strong>{item.business_name}</strong>
-      <br />
-      Owner: {item.owner_name}
-      <br />
-      Type: {item.business_type_name}
-      <br />
-      Barangay: {item.barangay}
-      <br />
-      Status: {item.compliance_status_label}
-      <br />
-      Risk: {item.risk_level} ({item.risk_score})
-    </div>
-  );
-}
 
-function HouseholdPopup({ item }) {
-  return (
-    <div className="gis-popup">
-      <strong>{item.household_head}</strong>
-      <br />
-      Code: {item.household_code}
-      <br />
-      Barangay: {item.barangay}
-      <br />
-      Toilet: {item.toilet_type_label}
-      <br />
-      Water: {item.water_level_label}
-      <br />
-      Status: {item.status_label}
-      <br />
-      Risk: {item.risk_level} ({item.risk_score})
-    </div>
-  );
-}
 
 function FitMapToItems({ items }) {
   const map = useMap();
@@ -462,21 +404,7 @@ function getRiskColor(item) {
   return "#0f7a45";
 }
 
-function createIcon(color) {
-  return new L.DivIcon({
-    className: "custom-marker",
-    html: `<div style="
-      background:${color};
-      width:18px;
-      height:18px;
-      border-radius:50%;
-      border:2px solid white;
-      box-shadow:0 2px 6px rgba(0,0,0,0.45);
-    "></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-  });
-}
+
 
 function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");

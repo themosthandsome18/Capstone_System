@@ -13,13 +13,13 @@ const DEFAULT_ZOOM = 11;
 const tileLayers = {
   street: {
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      '&copy; <a href="https://maps.google.com">Google Maps</a>',
+    url: "http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}",
   },
   satellite: {
     attribution:
-      "Tiles &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      '&copy; <a href="https://maps.google.com">Google Maps Satellite</a>',
+    url: "http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}",
   },
 };
 
