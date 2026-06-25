@@ -2,7 +2,7 @@ part of '../main.dart';
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8000/api',
+  defaultValue: 'http://127.0.0.1:8000/api',
 );
 
 const appModule = String.fromEnvironment('APP_MODULE', defaultValue: 'tourism');
@@ -111,7 +111,7 @@ String imageAssetFor(String imageKey) {
     return 'assets/destinations/Orlan Beach Resort - Cagbalete.jpg';
   }
   if (cleanKey.contains('rio-del-sol')) {
-    return 'assets/destinations/Rio Del Sol Beach Resort - Cagbalete.avif';
+    return 'assets/destinations/Rio Del Sol Beach Resort - Cagbalete.jpg';
   }
   if (cleanKey.contains('tent')) {
     return 'assets/destinations/Tent Place - Cagbalete.jpg';

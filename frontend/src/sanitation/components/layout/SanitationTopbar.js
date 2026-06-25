@@ -38,7 +38,9 @@ function SanitationTopbar() {
 
           <div className="admin-text">
             <span>{user?.display_name || user?.username}</span>
-            <small>{user?.profile?.role_label}</small>
+            {user?.profile?.role_label && (user?.display_name || user?.username) !== user?.profile?.role_label ? (
+              <small>{user?.profile?.role_label}</small>
+            ) : null}
           </div>
         </div>
 

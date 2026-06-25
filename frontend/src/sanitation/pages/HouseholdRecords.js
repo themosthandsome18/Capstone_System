@@ -5,8 +5,12 @@ import {
   FiChevronRight,
   FiDownload,
   FiDroplet,
+  FiEdit2,
+  FiEye,
   FiHome,
+  FiPlus,
   FiSearch,
+  FiX,
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
@@ -18,13 +22,62 @@ const statusOptions = [
   { value: "violation", label: "Violation" },
 ];
 
+const toiletOptions = [
+  { value: "water_sealed", label: "Water-Sealed" },
+  { value: "pour_flush", label: "Pour Flush" },
+  { value: "pit_latrine", label: "Pit Latrine" },
+  { value: "none", label: "None" },
+];
+
+const waterLevelOptions = [
+  { value: "level_1", label: "Level I" },
+  { value: "level_2", label: "Level II" },
+  { value: "level_3", label: "Level III" },
+];
+
+const wasteOptions = [
+  { value: "collected", label: "Collected by LGU" },
+  { value: "composted", label: "Composted" },
+  { value: "burned", label: "Burned" },
+  { value: "dumped", label: "Dumped" },
+];
+
+const statusFormOptions = [
+  { value: "good_standing", label: "Good Standing" },
+  { value: "for_completion", label: "For Completion" },
+  { value: "violation", label: "Violation" },
+];
+
+const emptyForm = {
+  household_head: "",
+  barangay: "",
+  address: "",
+  male_count: 0,
+  female_count: 0,
+  toilet_type: "water_sealed",
+  water_level: "level_3",
+  water_source: "",
+  waste_disposal: "collected",
+  status: "good_standing",
+  last_survey_date: "",
+  remarks: "",
+};
+
 function HouseholdRecords() {
-  const { barangays, householdRecords, loading, error } =
+  const { barangays, householdRecords, householdDashboardData, loading, error, createHousehold, updateHousehold } =
     useSanitationData();
 
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+
+  // Modal states
+  const [viewRecord, setViewRecord] = useState(null);
+  const [editRecord, setEditRecord] = useState(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const barangayOptions = useMemo(() => {
     const officialBarangays = (barangays || [])
@@ -54,73 +107,98 @@ function HouseholdRecords() {
     return householdRecords.filter((item) => item.barangay === barangayFilter);
   }, [householdRecords, barangayFilter]);
 
-  const summary = useMemo(
-    () => buildHouseholdSummary(barangayRecords),
-    [barangayRecords]
-  );
+  const summary = householdDashboardData?.summary || {
+    totalHouseholds: 0,
+    withSanitaryFacility: 0,
+    sanitaryFacilityCoverage: 0,
+    withWaterAccess: 0,
+    waterAccessCoverage: 0,
+    atRiskHouseholds: 0,
+  };
 
   const riskByBarangay = useMemo(() => {
-    const names =
-      barangayFilter === "all"
-        ? barangayOptions.filter((barangay) => barangay !== "all")
-        : [barangayFilter];
+    let globalRisk = householdDashboardData?.riskByBarangay || [];
+    if (barangayFilter !== "all") {
+      globalRisk = globalRisk.filter((item) => item.barangay === barangayFilter);
+    }
+    // Filter out barangays with 0 risk and sort descending
+    return globalRisk
+      .filter((item) => item.atRisk > 0)
+      .sort((a, b) => b.atRisk - a.atRisk);
+  }, [householdDashboardData, barangayFilter]);
 
-    return buildRiskRows(householdRecords, names);
-  }, [householdRecords, barangayOptions, barangayFilter]);
+  const toiletDistribution = useMemo(() => {
+    let waterSealed = 0;
+    let pourFlush = 0;
+    let pitLatrine = 0;
+    let none = 0;
 
-  const toiletDistribution = useMemo(
-    () => ({
-      waterSealed: countBy(barangayRecords, "toilet_type", "water_sealed"),
-      pourFlush: countBy(barangayRecords, "toilet_type", "pour_flush"),
-      pitLatrine: countBy(barangayRecords, "toilet_type", "pit_latrine"),
-      none: countBy(barangayRecords, "toilet_type", "none"),
-    }),
-    [barangayRecords]
-  );
+    barangayRecords.forEach((item) => {
+      if (item.toilet_type === "water_sealed") waterSealed++;
+      else if (item.toilet_type === "pour_flush") pourFlush++;
+      else if (item.toilet_type === "pit_latrine") pitLatrine++;
+      else if (item.toilet_type === "none") none++;
+    });
 
-  const wasteDistribution = useMemo(
-    () => ({
-      collected: countBy(barangayRecords, "waste_disposal", "collected"),
-      composted: countBy(barangayRecords, "waste_disposal", "composted"),
-      burned: countBy(barangayRecords, "waste_disposal", "burned"),
-      dumped: countBy(barangayRecords, "waste_disposal", "dumped"),
-    }),
-    [barangayRecords]
-  );
+    return { waterSealed, pourFlush, pitLatrine, none };
+  }, [barangayRecords]);
 
-  const waterDistribution = useMemo(
-    () => ({
-      level1: countBy(barangayRecords, "water_level", "level_1"),
-      level2: countBy(barangayRecords, "water_level", "level_2"),
-      level3: countBy(barangayRecords, "water_level", "level_3"),
-    }),
-    [barangayRecords]
-  );
+  const wasteDistribution = useMemo(() => {
+    let collected = 0;
+    let composted = 0;
+    let burned = 0;
+    let dumped = 0;
+
+    barangayRecords.forEach((item) => {
+      if (item.waste_disposal === "collected") collected++;
+      else if (item.waste_disposal === "composted") composted++;
+      else if (item.waste_disposal === "burned") burned++;
+      else if (item.waste_disposal === "dumped") dumped++;
+    });
+
+    return { collected, composted, burned, dumped };
+  }, [barangayRecords]);
+
+  const waterDistribution = useMemo(() => {
+    let level1 = 0;
+    let level2 = 0;
+    let level3 = 0;
+
+    barangayRecords.forEach((item) => {
+      if (item.water_level === "level_1") level1++;
+      else if (item.water_level === "level_2") level2++;
+      else if (item.water_level === "level_3") level3++;
+    });
+
+    return { level1, level2, level3 };
+  }, [barangayRecords]);
 
   const filteredHouseholds = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return barangayRecords.filter((item) => {
-      const searchText = [
-        item.household_code,
-        item.household_head,
-        item.barangay,
-        item.address,
-        item.toilet_type_label,
-        item.water_level_label,
-        item.water_source,
-        item.waste_disposal_label,
-        item.status_label,
-      ]
-        .join(" ")
-        .toLowerCase();
+    return barangayRecords
+      .filter((item) => {
+        const searchText = [
+          item.household_code,
+          item.household_head,
+          item.barangay,
+          item.address,
+          item.toilet_type_label,
+          item.water_level_label,
+          item.water_source,
+          item.waste_disposal_label,
+          item.status_label,
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      const matchesSearch = searchText.includes(keyword);
-      const matchesStatus =
-        statusFilter === "all" || item.status === statusFilter;
+        const matchesSearch = searchText.includes(keyword);
+        const matchesStatus =
+          statusFilter === "all" || item.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
-    });
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
   }, [barangayRecords, search, statusFilter]);
 
   const highestRiskBarangay = useMemo(() => {
@@ -191,6 +269,90 @@ function HouseholdRecords() {
     exportCsv(datedCsvFilename("household-records"), headers, rows);
   }
 
+  function openAdd() {
+    setForm(emptyForm);
+    setFormError("");
+    setIsAddOpen(true);
+  }
+
+  function openEdit(record) {
+    setForm({
+      household_head: record.household_head || "",
+      barangay: record.barangay || "",
+      address: record.address || "",
+      male_count: record.male_count ?? 0,
+      female_count: record.female_count ?? 0,
+      toilet_type: record.toilet_type || "water_sealed",
+      water_level: record.water_level || "level_3",
+      water_source: record.water_source || "",
+      waste_disposal: record.waste_disposal || "collected",
+      status: record.status || "good_standing",
+      last_survey_date: record.last_survey_date || "",
+      remarks: record.remarks || "",
+    });
+    setFormError("");
+    setEditRecord(record);
+  }
+
+  function closeModals() {
+    setIsAddOpen(false);
+    setEditRecord(null);
+    setViewRecord(null);
+    setFormError("");
+  }
+
+  function updateField(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSaveAdd() {
+    if (!form.household_head.trim()) {
+      setFormError("Household Head is required.");
+      return;
+    }
+    if (!form.barangay.trim()) {
+      setFormError("Barangay is required.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    try {
+      await createHousehold({
+        ...form,
+        male_count: Number(form.male_count) || 0,
+        female_count: Number(form.female_count) || 0,
+        last_survey_date: form.last_survey_date || null,
+      });
+      closeModals();
+    } catch (err) {
+      setFormError(err?.message || "Failed to save household record.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!form.household_head.trim()) {
+      setFormError("Household Head is required.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    try {
+      await updateHousehold(editRecord.id, {
+        ...form,
+        male_count: Number(form.male_count) || 0,
+        female_count: Number(form.female_count) || 0,
+        last_survey_date: form.last_survey_date || null,
+      });
+      closeModals();
+    } catch (err) {
+      setFormError(err?.message || "Failed to update household record.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return <div className="household-page">Loading household records...</div>;
   }
@@ -203,13 +365,23 @@ function HouseholdRecords() {
           <p>Monitor household sanitation profiles and risk indicators</p>
         </div>
 
-        <button
-          type="button"
-          className="sanitation-export-btn"
-          onClick={handleExport}
-        >
-          <FiDownload /> Export CSV
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            type="button"
+            className="sanitation-export-btn"
+            onClick={handleExport}
+          >
+            <FiDownload /> Export CSV
+          </button>
+          <button
+            type="button"
+            className="sanitation-export-btn"
+            style={{ background: "#16a34a", color: "white", borderColor: "#16a34a" }}
+            onClick={openAdd}
+          >
+            <FiPlus /> Add Household
+          </button>
+        </div>
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
@@ -304,6 +476,13 @@ function HouseholdRecords() {
           </div>
 
           <div className="household-bar-chart">
+            <div className="household-y-axis">
+              <span>{maxToiletValue}</span>
+              <span>{Math.round(maxToiletValue * 0.75)}</span>
+              <span>{Math.round(maxToiletValue * 0.5)}</span>
+              <span>{Math.round(maxToiletValue * 0.25)}</span>
+              <span>0</span>
+            </div>
             <MockBar
               label="Water-Sealed"
               value={toiletDistribution.waterSealed || 0}
@@ -340,6 +519,13 @@ function HouseholdRecords() {
           </div>
 
           <div className="household-bar-chart">
+            <div className="household-y-axis">
+              <span>{maxWasteValue}</span>
+              <span>{Math.round(maxWasteValue * 0.75)}</span>
+              <span>{Math.round(maxWasteValue * 0.5)}</span>
+              <span>{Math.round(maxWasteValue * 0.25)}</span>
+              <span>0</span>
+            </div>
             <MockBar
               label="Collected"
               value={wasteDistribution.collected || 0}
@@ -443,6 +629,7 @@ function HouseholdRecords() {
                 <th>Water Source</th>
                 <th>Waste Disposal</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
@@ -473,11 +660,31 @@ function HouseholdRecords() {
                         {row.status_label}
                       </span>
                     </td>
+                    <td>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          type="button"
+                          className="hh-action-btn view"
+                          title="View Details"
+                          onClick={() => setViewRecord(row)}
+                        >
+                          <FiEye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="hh-action-btn edit"
+                          title="Edit Record"
+                          onClick={() => openEdit(row)}
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="household-empty">
+                  <td colSpan="8" className="household-empty">
                     No household records found.
                   </td>
                 </tr>
@@ -501,6 +708,246 @@ function HouseholdRecords() {
           </div>
         </div>
       </section>
+
+      {/* ── VIEW MODAL ── */}
+      {viewRecord && (
+        <div className="hh-modal-overlay" onClick={closeModals}>
+          <div className="hh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="hh-modal-header">
+              <div>
+                <h2>{viewRecord.household_head}</h2>
+                <span className={`household-status ${statusClass(viewRecord.status_label)}`}>
+                  {viewRecord.status_label}
+                </span>
+              </div>
+              <button type="button" className="hh-modal-close" onClick={closeModals}>
+                <FiX />
+              </button>
+            </div>
+
+            <div className="hh-modal-body">
+              <div className="hh-detail-grid">
+                <HHDetailItem label="Household Code" value={viewRecord.household_code} />
+                <HHDetailItem label="Barangay" value={viewRecord.barangay} />
+                <HHDetailItem label="Address" value={viewRecord.address || "—"} />
+                <HHDetailItem label="Male Members" value={viewRecord.male_count} />
+                <HHDetailItem label="Female Members" value={viewRecord.female_count} />
+                <HHDetailItem label="Total Members" value={viewRecord.total_members} />
+                <HHDetailItem label="Toilet Type" value={viewRecord.toilet_type_label} />
+                <HHDetailItem label="Water Level" value={viewRecord.water_level_label} />
+                <HHDetailItem label="Water Source" value={viewRecord.water_source || "—"} />
+                <HHDetailItem label="Waste Disposal" value={viewRecord.waste_disposal_label} />
+                <HHDetailItem label="Last Survey Date" value={viewRecord.last_survey_date || "—"} />
+                <HHDetailItem label="Remarks" value={viewRecord.remarks || "—"} fullWidth />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD MODAL ── */}
+      {isAddOpen && (
+        <div className="hh-modal-overlay" onClick={closeModals}>
+          <div className="hh-modal hh-modal-form" onClick={(e) => e.stopPropagation()}>
+            <div className="hh-modal-header">
+              <h2>Add Household Record</h2>
+              <button type="button" className="hh-modal-close" onClick={closeModals}>
+                <FiX />
+              </button>
+            </div>
+
+            <div className="hh-modal-body">
+              <HouseholdForm
+                form={form}
+                updateField={updateField}
+                barangayOptions={barangayOptions.filter((b) => b !== "all")}
+                formError={formError}
+              />
+            </div>
+
+            <div className="hh-modal-footer">
+              <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
+                Cancel
+              </button>
+              <button type="button" className="hh-btn-save" onClick={handleSaveAdd} disabled={saving}>
+                {saving ? "Saving..." : "Save Household"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT MODAL ── */}
+      {editRecord && (
+        <div className="hh-modal-overlay" onClick={closeModals}>
+          <div className="hh-modal hh-modal-form" onClick={(e) => e.stopPropagation()}>
+            <div className="hh-modal-header">
+              <div>
+                <h2>Edit Household</h2>
+                <small style={{ color: "#6b7280" }}>{editRecord.household_code}</small>
+              </div>
+              <button type="button" className="hh-modal-close" onClick={closeModals}>
+                <FiX />
+              </button>
+            </div>
+
+            <div className="hh-modal-body">
+              <HouseholdForm
+                form={form}
+                updateField={updateField}
+                barangayOptions={barangayOptions.filter((b) => b !== "all")}
+                formError={formError}
+              />
+            </div>
+
+            <div className="hh-modal-footer">
+              <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
+                Cancel
+              </button>
+              <button type="button" className="hh-btn-save" onClick={handleSaveEdit} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Reusable form shared by Add and Edit ── */
+function HouseholdForm({ form, updateField, barangayOptions, formError }) {
+  return (
+    <div className="hh-form-grid">
+      {formError && <p className="hh-form-error">{formError}</p>}
+
+      <div className="hh-form-group hh-full">
+        <label>Household Head *</label>
+        <input
+          type="text"
+          value={form.household_head}
+          onChange={(e) => updateField("household_head", e.target.value)}
+          placeholder="Full name of household head"
+        />
+      </div>
+
+      <div className="hh-form-group">
+        <label>Barangay *</label>
+        {barangayOptions.length > 0 ? (
+          <select
+            value={form.barangay}
+            onChange={(e) => updateField("barangay", e.target.value)}
+          >
+            <option value="">Select barangay...</option>
+            {barangayOptions.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={form.barangay}
+            onChange={(e) => updateField("barangay", e.target.value)}
+            placeholder="Barangay name"
+          />
+        )}
+      </div>
+
+      <div className="hh-form-group hh-full">
+        <label>Address</label>
+        <input
+          type="text"
+          value={form.address}
+          onChange={(e) => updateField("address", e.target.value)}
+          placeholder="House no., street, sitio"
+        />
+      </div>
+
+      <div className="hh-form-group">
+        <label>Male Members</label>
+        <input
+          type="number"
+          min="0"
+          value={form.male_count}
+          onChange={(e) => updateField("male_count", e.target.value)}
+        />
+      </div>
+
+      <div className="hh-form-group">
+        <label>Female Members</label>
+        <input
+          type="number"
+          min="0"
+          value={form.female_count}
+          onChange={(e) => updateField("female_count", e.target.value)}
+        />
+      </div>
+
+      <div className="hh-form-group">
+        <label>Toilet Type</label>
+        <select value={form.toilet_type} onChange={(e) => updateField("toilet_type", e.target.value)}>
+          {toiletOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div className="hh-form-group">
+        <label>Water Level</label>
+        <select value={form.water_level} onChange={(e) => updateField("water_level", e.target.value)}>
+          {waterLevelOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div className="hh-form-group">
+        <label>Water Source</label>
+        <input
+          type="text"
+          value={form.water_source}
+          onChange={(e) => updateField("water_source", e.target.value)}
+          placeholder="e.g. MWSS, Deep Well"
+        />
+      </div>
+
+      <div className="hh-form-group">
+        <label>Waste Disposal</label>
+        <select value={form.waste_disposal} onChange={(e) => updateField("waste_disposal", e.target.value)}>
+          {wasteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div className="hh-form-group">
+        <label>Status</label>
+        <select value={form.status} onChange={(e) => updateField("status", e.target.value)}>
+          {statusFormOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div className="hh-form-group">
+        <label>Last Survey Date</label>
+        <input
+          type="date"
+          value={form.last_survey_date}
+          onChange={(e) => updateField("last_survey_date", e.target.value)}
+        />
+      </div>
+
+      <div className="hh-form-group hh-full">
+        <label>Remarks</label>
+        <textarea
+          rows={3}
+          value={form.remarks}
+          onChange={(e) => updateField("remarks", e.target.value)}
+          placeholder="Additional notes..."
+        />
+      </div>
+    </div>
+  );
+}
+
+function HHDetailItem({ label, value, fullWidth }) {
+  return (
+    <div className={`hh-detail-item${fullWidth ? " hh-full" : ""}`}>
+      <span className="hh-detail-label">{label}</span>
+      <span className="hh-detail-value">{value}</span>
     </div>
   );
 }
@@ -583,7 +1030,9 @@ function MockBar({ label, value, maxValue, color }) {
   return (
     <div className="household-bar-item">
       <div className="household-bar-area">
-        <span className={color} style={{ height: `${height}px` }} />
+        <span className={color} style={{ height: `${height}px` }}>
+          {value > 0 && <div className="bar-value">{value}</div>}
+        </span>
       </div>
 
       <small>{label}</small>

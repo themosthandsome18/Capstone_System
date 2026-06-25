@@ -5,10 +5,12 @@ class HouseholdSurveyPage extends StatefulWidget {
     super.key,
     required this.api,
     required this.barangays,
+    this.household,
   });
 
   final TourismApi api;
   final List<BarangayItem> barangays;
+  final HouseholdSanitationItem? household;
 
   @override
   State<HouseholdSurveyPage> createState() => _HouseholdSurveyPageState();
@@ -35,7 +37,14 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   @override
   void initState() {
     super.initState();
-    _barangay = widget.barangays.firstOrNull?.name ?? 'Poblacion';
+    _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? 'Poblacion';
+    if (widget.household != null) {
+      _head.text = widget.household!.householdHead;
+      if (widget.household!.hasCoordinates) {
+        _latitude.text = widget.household!.latitude.toString();
+        _longitude.text = widget.household!.longitude.toString();
+      }
+    }
   }
 
   @override
@@ -187,6 +196,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
     try {
       final response = await widget.api.submitHouseholdSurvey(
+        householdCode: widget.household?.householdCode,
         householdHead: _head.text.trim(),
         barangay: _barangay,
         address: _address.text.trim(),
@@ -304,7 +314,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
-  XFile? _photo;
+  List<XFile> _photos = [];
   String _category = sanitationReportCategories.first;
   String _priority = 'medium';
   late String _barangay;
@@ -412,10 +422,14 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           maxLines: 4,
         ),
         PhotoPickerPanel(
-          photoName: _photo?.name,
+          photoName: _photos.isEmpty
+              ? null
+              : _photos.length == 1
+                  ? _photos.first.name
+                  : '${_photos.length} photos selected',
           onCamera: () => _pickPhoto(ImageSource.camera),
           onGallery: () => _pickPhoto(ImageSource.gallery),
-          onClear: _photo == null ? null : () => setState(() => _photo = null),
+          onClear: _photos.isEmpty ? null : () => setState(() => _photos.clear()),
         ),
         LocationCapturePanel(
           latitude: _latitude.text,
@@ -510,7 +524,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         priority: _priority,
         barangay: _barangay,
         description: _description.text.trim(),
-        photo: _photo,
+        photos: _photos,
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
       );
@@ -555,13 +569,35 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
 
   Future<void> _pickPhoto(ImageSource source) async {
     try {
-      final picked = await _imagePicker.pickImage(
-        source: source,
-        imageQuality: 80,
-        maxWidth: 1600,
-      );
-      if (picked != null) {
-        setState(() => _photo = picked);
+      if (source == ImageSource.gallery) {
+        final picked = await _imagePicker.pickMultiImage(
+          imageQuality: 80,
+          maxWidth: 1600,
+        );
+        if (picked.isNotEmpty) {
+          setState(() {
+            _photos.addAll(picked);
+            if (_photos.length > 5) {
+              _photos = _photos.sublist(0, 5);
+              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            }
+          });
+        }
+      } else {
+        final picked = await _imagePicker.pickImage(
+          source: source,
+          imageQuality: 80,
+          maxWidth: 1600,
+        );
+        if (picked != null) {
+          setState(() {
+            _photos.add(picked);
+            if (_photos.length > 5) {
+              _photos = _photos.sublist(0, 5);
+              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            }
+          });
+        }
       }
     } catch (error) {
       if (mounted) showAppMessage(context, 'Photo capture failed: $error');
@@ -700,6 +736,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         householdRecords: _bootstrap.householdRecords,
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
+        onEditHousehold: _openHouseholdSurvey,
       ),
       SanitationReportsPage(
         reports: _reports,
@@ -847,12 +884,13 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     }
   }
 
-  Future<void> _openHouseholdSurvey() async {
+  Future<void> _openHouseholdSurvey([HouseholdSanitationItem? household]) async {
     final submitted = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => HouseholdSurveyPage(
           api: widget.api,
           barangays: _bootstrap.barangays,
+          household: household,
         ),
       ),
     );
@@ -1253,19 +1291,145 @@ class SanitationMapPage extends StatefulWidget {
     required this.householdRecords,
     required this.onRefresh,
     required this.refreshing,
+    this.onEditHousehold,
   });
 
   final List<SanitationEstablishment> establishments;
   final List<HouseholdSanitationItem> householdRecords;
   final Future<void> Function() onRefresh;
   final bool refreshing;
+  final ValueChanged<HouseholdSanitationItem>? onEditHousehold;
 
   @override
   State<SanitationMapPage> createState() => _SanitationMapPageState();
 }
 
+class BarangayPolygon {
+  final String name;
+  final List<List<LatLng>> polygons;
+
+  BarangayPolygon({required this.name, required this.polygons});
+}
+
 class _SanitationMapPageState extends State<SanitationMapPage> {
   bool _showHouseholds = false;
+  
+  List<BarangayPolygon> _barangayPolygons = [];
+  bool _isLoadingGeoJson = true;
+  String? _selectedBarangay;
+  
+  // Create a hitNotifier for flutter_map 8.0 Polygon layer
+  final _hitNotifier = ValueNotifier<LayerHitResult<Object>?>(null);
+
+  String _normalizeBgyName(String? name) {
+    if (name == null) return '';
+    String n = name.toLowerCase().trim();
+    n = n.replaceAll(RegExp(r'\s+1$'), ' i');
+    n = n.replaceAll(RegExp(r'\s+2$'), ' ii');
+    n = n.replaceAll(RegExp(r'\s+3$'), ' iii');
+    n = n.replaceAll(RegExp(r'\s+4$'), ' iv');
+    n = n.replaceAll(RegExp(r'\s+5$'), ' v');
+    return n;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGeoJson();
+    
+    _hitNotifier.addListener(() {
+      final hit = _hitNotifier.value;
+      if (hit != null && hit.hitValues.isNotEmpty) {
+        setState(() {
+          _selectedBarangay = hit.hitValues.first as String;
+        });
+      } else {
+        setState(() {
+          _selectedBarangay = null;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadGeoJson() async {
+    try {
+      final jsonString = await rootBundle.loadString('assets/mauban_barangays.json');
+      final data = jsonDecode(jsonString);
+      final features = data['features'] as List;
+      
+      List<BarangayPolygon> parsed = [];
+      for (var feature in features) {
+        final Map<String, dynamic>? props = feature['properties'];
+        final Map<String, dynamic>? geom = feature['geometry'];
+        if (props == null || geom == null) continue;
+        
+        final name = props['NAME_3']?.toString() ?? '';
+        final type = geom['type'];
+        final coords = geom['coordinates'] as List;
+        
+        List<List<LatLng>> polyList = [];
+        
+        if (type == 'Polygon') {
+          for (var ring in coords) {
+            List<LatLng> points = [];
+            for (var pt in ring) {
+              points.add(LatLng(pt[1].toDouble(), pt[0].toDouble())); // lat, lng
+            }
+            polyList.add(points);
+          }
+        } else if (type == 'MultiPolygon') {
+          for (var polygon in coords) {
+            for (var ring in polygon) {
+              List<LatLng> points = [];
+              for (var pt in ring) {
+                points.add(LatLng(pt[1].toDouble(), pt[0].toDouble()));
+              }
+              polyList.add(points);
+            }
+          }
+        }
+        
+        parsed.add(BarangayPolygon(name: name, polygons: polyList));
+      }
+      
+      setState(() {
+        _barangayPolygons = parsed;
+        _isLoadingGeoJson = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading GeoJSON: $e");
+      setState(() => _isLoadingGeoJson = false);
+    }
+  }
+
+  Map<String, Map<String, dynamic>> _calculateAggregates() {
+    final Map<String, Map<String, dynamic>> agg = {};
+    
+    for (var item in widget.householdRecords) {
+      final bgy = _normalizeBgyName(item.barangay);
+      if (!agg.containsKey(bgy)) {
+        agg[bgy] = { 'total': 0, 'high': 0, 'medium': 0, 'low': 0 };
+      }
+      agg[bgy]!['total'] = (agg[bgy]!['total'] as int) + 1;
+      
+      if (item.status == 'violation') {
+        agg[bgy]!['high'] = (agg[bgy]!['high'] as int) + 1;
+      } else if (item.status == 'for_completion') {
+        agg[bgy]!['medium'] = (agg[bgy]!['medium'] as int) + 1;
+      } else {
+        agg[bgy]!['low'] = (agg[bgy]!['low'] as int) + 1;
+      }
+    }
+    return agg;
+  }
+
+  // Gradient color method removed since we are using stripes
+
+  @override
+  void dispose() {
+    _hitNotifier.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1278,6 +1442,45 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
     final pinCount = _showHouseholds
         ? householdPins.length
         : establishmentPins.length;
+
+    final aggregates = _calculateAggregates();
+    
+    // Prepare polygons
+    List<Polygon> mapPolygons = [];
+    List<List<LatLng>> selectedBgyPolygons = [];
+    double selRedPct = 0.0;
+    double selYellowPct = 0.0;
+    double selGreenPct = 0.0;
+
+    if (_showHouseholds && !_isLoadingGeoJson) {
+      for (var bgy in _barangayPolygons) {
+        final bgyName = _normalizeBgyName(bgy.name);
+        final agg = aggregates[bgyName] ?? {'total': 0, 'high': 0, 'medium': 0, 'low': 0};
+        final total = agg['total'] as int;
+        
+        final isSelected = _selectedBarangay != null && _normalizeBgyName(_selectedBarangay) == bgyName;
+        
+        if (total > 0 && isSelected) {
+           selRedPct = (agg['high'] as int) / total;
+           selYellowPct = (agg['medium'] as int) / total;
+           selGreenPct = (agg['low'] as int) / total;
+           selectedBgyPolygons.addAll(bgy.polygons);
+        }
+
+        for (var points in bgy.polygons) {
+          mapPolygons.add(
+            Polygon(
+              points: points,
+              color: Colors.transparent,
+              borderColor: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+              borderStrokeWidth: isSelected ? 3.0 : 1.0,
+              label: bgy.name, // Used for hit testing identification
+              hitValue: bgy.name,
+            ),
+          );
+        }
+      }
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
@@ -1322,20 +1525,22 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'mauban_sanitation_mobile',
                 ),
+                if (_showHouseholds && selectedBgyPolygons.isNotEmpty)
+                  StripedPolygonLayer(
+                    polygons: selectedBgyPolygons,
+                    redPct: selRedPct,
+                    yellowPct: selYellowPct,
+                    greenPct: selGreenPct,
+                  ),
+                if (_showHouseholds && mapPolygons.isNotEmpty)
+                  PolygonLayer(
+                    polygons: mapPolygons,
+                    hitNotifier: _hitNotifier,
+                  ),
                 MarkerLayer(
                   markers:
                       (_showHouseholds
-                              ? householdPins.map(
-                                  (item) => Marker(
-                                    point: LatLng(
-                                      item.latitude,
-                                      item.longitude,
-                                    ),
-                                    width: 42,
-                                    height: 42,
-                                    child: const MapPin(),
-                                  ),
-                                )
+                              ? <Marker>[]
                               : establishmentPins.map(
                                   (item) => Marker(
                                     point: LatLng(
@@ -1360,17 +1565,22 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
         ),
         if (_showHouseholds)
           ...widget.householdRecords
+              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
               .take(20)
               .map(
-                (item) => SimpleInfoCard(
-                  icon: Icons.home_work_outlined,
-                  title: item.householdHead,
-                  subtitle: '${item.householdCode} - ${item.barangay}',
-                  trailing: householdStatusLabel(item.status),
+                (item) => GestureDetector(
+                  onTap: () => widget.onEditHousehold?.call(item),
+                  child: SimpleInfoCard(
+                    icon: Icons.home_work_outlined,
+                    title: item.householdHead,
+                    subtitle: '${item.householdCode} - ${item.barangay}',
+                    trailing: householdStatusLabel(item.status),
+                  ),
                 ),
               )
         else
           ...widget.establishments
+              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
               .take(20)
               .map(
                 (item) => SimpleInfoCard(
@@ -2765,15 +2975,16 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                               ),
                             ],
                           ),
-                          if (widget.bootstrap.isOffline) ...[
-                            const SizedBox(height: 14),
-                            DataSourceBanner(
-                              icon: Icons.cloud_off_outlined,
-                              title: 'Backend not reachable',
-                              text: widget.bootstrap.offlineMessage,
-                              warning: true,
-                            ),
-                          ],
+                          // Removed offline warning banner as requested for the presentation
+                          // if (widget.bootstrap.isOffline) ...[
+                          //   const SizedBox(height: 14),
+                          //   DataSourceBanner(
+                          //     icon: Icons.cloud_off_outlined,
+                          //     title: 'Backend not reachable',
+                          //     text: widget.bootstrap.offlineMessage,
+                          //     warning: true,
+                          //   ),
+                          // ],
                         ],
                       ),
                     ),

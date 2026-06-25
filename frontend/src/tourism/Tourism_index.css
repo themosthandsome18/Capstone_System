@@ -882,6 +882,7 @@
 .booking-row-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -1275,11 +1276,7 @@
 
 /* ================= COLORS ================= */
 
-.booking-page-btn.prev {
-  background: #8bd39b;
-  color: white;
-}
-
+.booking-page-btn.prev,
 .booking-page-btn.next {
   background: #2fa34a;
   color: white;
@@ -1287,20 +1284,21 @@
 
 /* ================= CLICK EFFECT ================= */
 
-.booking-page-btn:active:not(.disabled) {
+.booking-page-btn:active:not(.disabled):not(:disabled) {
   transform: scale(0.92);
   background: #1f7f36;
 }
 
 /* ================= HOVER ================= */
 
-.booking-page-btn:hover:not(.disabled) {
+.booking-page-btn:hover:not(.disabled):not(:disabled) {
   filter: brightness(0.95);
 }
 
 /* ================= DISABLED ================= */
 
-.booking-page-btn.disabled {
+.booking-page-btn.disabled,
+.booking-page-btn:disabled {
   background: #e5e7eb;
   color: #9ca3af;
   cursor: not-allowed;
@@ -1862,6 +1860,7 @@
 
 .message {
   @apply mt-2 text-sm leading-5 text-black;
+  white-space: pre-line;
 }
 
 .feedback-reply {
@@ -1995,6 +1994,7 @@
 .report-chart-card {
   @apply rounded-[24px] bg-white/80 p-5;
   box-shadow: 0 18px 32px rgba(34, 72, 55, 0.16);
+  margin-bottom: 24px;
 }
 
 .report-card-title h3 {
@@ -2083,7 +2083,7 @@
 .analytics-question-grid {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -2519,6 +2519,27 @@
   @apply m-0 text-base font-extrabold text-black;
 }
 
+.gis-search-box {
+  padding: 8px 8px 4px;
+}
+
+.gis-search-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  background: white;
+  color: #374151;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.gis-search-input:focus {
+  border-color: #2fa34a;
+}
+
 .gis-location-items {
   @apply mt-4 flex flex-col gap-2;
   min-height: 0;
@@ -2569,6 +2590,7 @@
 
 .gis-location-item.selected {
   background: #e4f6ea;
+  border-left: 3px solid #2fa34a;
 }
 
 .gis-location-item p {

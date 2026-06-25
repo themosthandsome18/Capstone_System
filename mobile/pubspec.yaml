@@ -39,6 +39,7 @@ dependencies:
   geolocator: ^14.0.2
   shared_preferences: ^2.5.5
   mobile_scanner: ^7.2.0
+  google_fonts: ^8.1.0
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +65,7 @@ flutter:
 
   assets:
     - assets/tourism_logo.jpg
+    - assets/mauban_barangays.json
     - assets/destinations/Aguho Playa Beach Resort - Cagbalete.jpg
     - assets/destinations/Aquazul Hotel and Resort - Cagbalete.jpg
     - assets/destinations/Dona Choleng Camping Resort - Cagbalete.jpg
@@ -72,7 +74,7 @@ flutter:
     - assets/destinations/Nenita Del Sol - Cagbalete.jpg
     - assets/destinations/Nilandingan Cove Resort - Cagbalete.jpg
     - assets/destinations/Orlan Beach Resort - Cagbalete.jpg
-    - assets/destinations/Rio Del Sol Beach Resort - Cagbalete.avif
+    - assets/destinations/Rio Del Sol Beach Resort - Cagbalete.jpg
     - assets/destinations/Tent Place - Cagbalete.jpg
     - assets/destinations/Tita Pinay Beach Resort - Cagbalete.png
     - assets/destinations/Villa Cleofas Cagbalete.webp

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   FiCheckCircle,
   FiChevronLeft,
@@ -69,7 +70,9 @@ function EstablishmentRecords() {
 
   const [showModal, setShowModal] = useState(false);
   const [editingEstablishment, setEditingEstablishment] = useState(null);
-  const [search, setSearch] = useState("");
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [statusFilter, setStatusFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [businessTypeFilter, setBusinessTypeFilter] = useState("all");

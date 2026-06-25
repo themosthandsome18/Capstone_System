@@ -23,6 +23,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       appBar: AppBar(
         title: const Text('Scan QR Code'),
         actions: [
+          /*
           IconButton(
             icon: ValueListenableBuilder(
               valueListenable: _controller.torchState,
@@ -51,6 +52,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
             onPressed: () => _controller.switchCamera(),
           ),
+          */
         ],
       ),
       body: Stack(

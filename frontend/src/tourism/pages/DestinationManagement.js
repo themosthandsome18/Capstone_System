@@ -47,19 +47,9 @@ function DestinationManagement() {
   const [formError, setFormError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState("");
-  const [viewMode, setViewMode] = useState("official");
-
   const filteredDestinations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    const scopedDestinations = destinations.filter((destination) => {
-      const official = isOfficialDestination(destination);
-
-      if (viewMode === "official") {
-        return official;
-      }
-
-      return true;
-    });
+    const scopedDestinations = destinations;
 
     if (!keyword) {
       return scopedDestinations;
@@ -76,7 +66,7 @@ function DestinationManagement() {
         .toLowerCase()
         .includes(keyword);
     });
-  }, [destinations, search, viewMode]);
+  }, [destinations, search]);
 
   const averageRating = (
     filteredDestinations.reduce(
@@ -270,22 +260,6 @@ function DestinationManagement() {
         />
       </div>
 
-      <div className="destination-filter-tabs">
-        <button
-          type="button"
-          className={viewMode === "official" ? "active" : ""}
-          onClick={() => setViewMode("official")}
-        >
-          Official Destinations
-        </button>
-        <button
-          type="button"
-          className={viewMode === "all" ? "active" : ""}
-          onClick={() => setViewMode("all")}
-        >
-          All Destinations
-        </button>
-      </div>
 
       <div className="destination-grid">
         {filteredDestinations.map((destination) => (

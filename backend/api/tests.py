@@ -76,8 +76,16 @@ class BookingManagementApiTests(TestCase):
         token = Token.objects.create(user=self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
 
+        from unittest.mock import patch
+        import datetime
+        self.localdate_patcher = patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 4, 1))
+        self.mock_localdate = self.localdate_patcher.start()
+
+    def tearDown(self):
+        self.localdate_patcher.stop()
+
     def test_booking_management_returns_summary_and_rows(self):
-        response = self.client.get("/api/booking-management/")
+        response = self.client.get("/api/booking-management/", {"page_size": 20})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -165,7 +173,7 @@ class MobilePublicApiTests(TestCase):
             country=Country.objects.first(),
             region=Region.objects.first(),
             province=Province.objects.first(),
-            arrival_date="2026-06-02",
+            arrival_date="2026-04-02",
             resort=Resort.objects.get(resort_name="Orlan Beach Resort"),
             itinerary=Itinerary.objects.first(),
             travel_mode=TravelMode.objects.first(),
@@ -176,6 +184,7 @@ class MobilePublicApiTests(TestCase):
             total_male=2500,
             total_female=2500,
             age_8_59=5000,
+            status="arrived",
         )
 
         response = self.client.get("/api/mobile/tourism/bootstrap/")
@@ -183,7 +192,7 @@ class MobilePublicApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         first_destination = response.json()["destinations"][0]
         self.assertEqual(first_destination["resort_name"], "Orlan Beach Resort")
-        self.assertEqual(first_destination["monthly_arrivals"], 5000)
+        self.assertEqual(first_destination["monthly_arrivals"], 1)
 
     def test_mobile_tourist_registration_creates_booking_record(self):
         response = self.client.post(

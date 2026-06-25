@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiAlertTriangle,
   FiFilter,
@@ -6,8 +7,14 @@ import {
   FiMapPin,
   FiSearch,
   FiTrash2,
+  FiClock,
+  FiTag,
+  FiUser,
+  FiBell,
+  FiFileText,
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { API_BASE_URL } from "../../shared/apiClient";
 
 const reportCategories = [
   "Public Restroom",
@@ -42,6 +49,7 @@ const emptySchedule = {
 };
 
 function ComplaintsManagement() {
+  const navigate = useNavigate();
   const {
     complaintData,
     loading,
@@ -67,6 +75,8 @@ function ComplaintsManagement() {
   const [anonymous, setAnonymous] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [dayModalData, setDayModalData] = useState(null);
+  const [inspectionModalData, setInspectionModalData] = useState(null);
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
@@ -182,9 +192,8 @@ function ComplaintsManagement() {
   }
 
   async function handleDelete(report) {
-    const confirmed = window.confirm(
-      `Delete community report ${report.complaint_id}?`
-    );
+    // Temporarily bypass window.confirm as it might be blocked by the browser
+    const confirmed = true;
 
     if (!confirmed) return;
 
@@ -327,9 +336,14 @@ function ComplaintsManagement() {
         month={calendarMonth}
         events={calendarEvents}
         onMonthChange={setCalendarMonth}
-        onSelectReport={(reportId) => {
-          const report = rows.find((item) => item.id === reportId);
+        onSelectReport={(id) => {
+          const report = rows.find((r) => r.id === id);
           if (report) setSelectedReport(report);
+        }}
+        onOpenDayEvents={(day, events) => setDayModalData({ day, events })}
+        onOpenInspection={(id) => {
+          const report = rows.find((r) => r.id === id);
+          if (report) setInspectionModalData(report);
         }}
       />
 
@@ -359,6 +373,7 @@ function ComplaintsManagement() {
                 updateReportStatus(selectedReport, status, actionTaken)
               }
               onSchedule={() => openSchedule(selectedReport)}
+              onLocationClick={() => navigate("/sanitation/gis-map", { state: { mode: "community_reports", reportId: selectedReport.id } })}
             />
           ) : (
             <div className="community-empty">Select a community report.</div>
@@ -392,6 +407,30 @@ function ComplaintsManagement() {
           }
         />
       ) : null}
+
+      {dayModalData ? (
+        <DayEventsModal
+          day={dayModalData.day}
+          events={dayModalData.events}
+          onClose={() => setDayModalData(null)}
+          onSelectReport={(id) => {
+            setSelectedReport(rows.find((r) => r.id === id));
+            setDayModalData(null);
+          }}
+          onOpenInspection={(id) => {
+            setInspectionModalData(rows.find((r) => r.id === id));
+            setDayModalData(null);
+          }}
+        />
+      ) : null}
+
+      {inspectionModalData ? (
+        <InspectionDetailsModal
+          report={inspectionModalData}
+          onClose={() => setInspectionModalData(null)}
+          onLocationClick={() => navigate("/sanitation/gis-map", { state: { mode: "community_reports", reportId: inspectionModalData.id } })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -405,7 +444,7 @@ function CommunityStat({ label, value, tone }) {
   );
 }
 
-function CommunityCalendar({ month, events, onMonthChange, onSelectReport }) {
+function CommunityCalendar({ month, events, onMonthChange, onSelectReport, onOpenDayEvents, onOpenInspection }) {
   const days = buildCalendarDays(month);
   const eventMap = events.reduce((map, event) => {
     map[event.date] = [...(map[event.date] || []), event];
@@ -458,7 +497,8 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport }) {
               key={key}
               className={`community-calendar-day ${
                 isCurrentMonth ? "" : "muted"
-              }`}
+              } ${dayEvents.length >= 3 ? "clickable" : ""}`}
+              onClick={dayEvents.length >= 3 ? () => onOpenDayEvents(day, dayEvents) : undefined}
             >
               <span>{day.getDate()}</span>
               <div className="community-calendar-events">
@@ -467,7 +507,14 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport }) {
                     key={`${event.type}-${event.reportId}-${event.date}`}
                     type="button"
                     className={event.type}
-                    onClick={() => onSelectReport(event.reportId)}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (event.type === "inspection") {
+                        onOpenInspection(event.reportId);
+                      } else {
+                        onSelectReport(event.reportId);
+                      }
+                    }}
                     title={`${event.label}: ${event.title}`}
                   >
                     <strong>{event.label}</strong>
@@ -475,7 +522,13 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport }) {
                   </button>
                 ))}
                 {dayEvents.length > 3 ? (
-                  <em>+{dayEvents.length - 3} more</em>
+                  <button 
+                    type="button" 
+                    className="community-more-btn"
+                    onClick={(e) => { e.stopPropagation(); onOpenDayEvents(day, dayEvents); }}
+                  >
+                    +{dayEvents.length - 3} more
+                  </button>
                 ) : null}
               </div>
             </div>
@@ -511,7 +564,7 @@ function ReportListCard({ item, active, onSelect }) {
   );
 }
 
-function ReportDetail({ report, saving, onDelete, onStatus, onSchedule }) {
+function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocationClick }) {
   return (
     <div className="community-detail-card">
       <div className="community-detail-title">
@@ -533,10 +586,21 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule }) {
         <h3>Photo Evidence</h3>
         <div className="community-photo-grid">
           {report.photo_documentation ? (
-            <div className="community-photo-note">
-              <FiImage />
-              <span>{report.photo_documentation}</span>
-            </div>
+            report.photo_documentation.split(",").map((photoUrl, index) => {
+              const fullUrl = photoUrl.startsWith("http") 
+                ? photoUrl 
+                : `${API_BASE_URL.replace("/api", "")}${photoUrl.startsWith("/") ? "" : "/"}${photoUrl}`;
+                
+              return (
+                <div key={index} className="community-photo-image">
+                  <img 
+                    src={fullUrl} 
+                    alt={`Complaint Evidence ${index + 1}`}
+                    style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0", backgroundColor: "#f8fafc" }}
+                  />
+                </div>
+              );
+            })
           ) : (
             <div className="community-photo-empty">None</div>
           )}
@@ -549,8 +613,12 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule }) {
           <strong>{report.complainant_name || "Anonymous"}</strong>
           <small>{report.contact_number || "No contact number"}</small>
         </div>
-        <div>
-          <span>Location</span>
+        <div 
+          onClick={onLocationClick}
+          style={{ cursor: "pointer", transition: "all 0.2s" }}
+          title="View exact location on GIS Map"
+        >
+          <span>Location <small style={{ color: "#0ea5e9", marginLeft: "4px", fontWeight: "600", textTransform: "none", fontSize: "11px" }}>View on Map &rarr;</small></span>
           <strong>{report.barangay || "Unspecified"}</strong>
           <small>{reportTitle(report)}</small>
         </div>
@@ -899,8 +967,164 @@ function ScheduleInspectionModal({
   );
 }
 
+function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection }) {
+  const formattedDate = day.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="community-modal-backdrop" onClick={onClose}>
+      <div className="community-day-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="community-day-modal-header">
+          <div>
+            <h2>{formattedDate}</h2>
+            <p>{events.length} Inspection and Report scheduled</p>
+          </div>
+          <button type="button" onClick={onClose} className="community-close-btn">
+            X
+          </button>
+        </div>
+        <div className="community-day-modal-body">
+          {events
+            .slice()
+            .sort((a, b) => a.time.localeCompare(b.time))
+            .map((evt, idx) => {
+              const report = evt.raw;
+              const isUrgent = report.priority === "high";
+            const isStandard = report.priority === "medium";
+            const priorityLabel = isUrgent ? "Urgent" : isStandard ? "Standard" : "Routine";
+            const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
+
+            return (
+              <div
+                key={idx}
+                className={`community-day-event-card type-${evt.type}`}
+                onClick={() => {
+                  if (evt.type === "inspection" && onOpenInspection) {
+                    onOpenInspection(evt.reportId);
+                  } else {
+                    onSelectReport(evt.reportId);
+                  }
+                }}
+              >
+                <div className="community-day-event-time">{evt.time}</div>
+                <div className="community-day-event-info">
+                  <strong>{reportTitle(report)}</strong>
+                  <small>
+                    {report.category} {report.assigned_inspector ? `• ${report.assigned_inspector}` : ""}
+                  </small>
+                </div>
+                <div className="community-day-event-status">
+                  {evt.type === "inspection" && (
+                    <span className={`community-pill ${priorityClass}`}>
+                      {priorityLabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InspectionDetailsModal({ report, onClose, onLocationClick }) {
+  if (!report) return null;
+
+  const dateStr = report.inspection_scheduled_date || new Date().toISOString().slice(0, 10);
+  const dateObj = new Date(dateStr);
+  const formattedDate = dateObj.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+  const shortMonth = dateObj.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  const day = dateObj.getDate();
+
+  const isUrgent = report.priority === "high";
+  const isStandard = report.priority === "medium";
+  const priorityLabel = isUrgent ? "Urgent" : isStandard ? "Standard" : "Routine";
+  const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
+  const priorityBorderColor = isUrgent ? "#ef4444" : isStandard ? "#f59e0b" : "#10b981";
+
+  return (
+    <div className="community-modal-backdrop" onClick={onClose}>
+      <div className="community-inspection-modal" onClick={(e) => e.stopPropagation()} style={{ borderTopColor: priorityBorderColor }}>
+        <div className="community-inspection-modal-header">
+          <div>
+            <h2>{reportTitle(report)}</h2>
+            <p>{report.category}</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <span className={`community-pill ${priorityClass}`}>
+              {priorityLabel}
+            </span>
+            <button type="button" onClick={onClose} className="community-close-btn">
+              X
+            </button>
+          </div>
+        </div>
+
+        <div className="community-inspection-modal-body">
+          <div className="community-inspection-schedule-box">
+            <div className="community-inspection-calendar-icon">
+              <span>{shortMonth}</span>
+              <strong>{day}</strong>
+            </div>
+            <div className="community-inspection-schedule-info">
+              <small>SCHEDULED</small>
+              <strong>{formattedDate}</strong>
+              <span>
+                <FiClock /> {report.inspection_scheduled_time ? report.inspection_scheduled_time.slice(0, 5) : "TBD"}
+              </span>
+            </div>
+          </div>
+
+          <div className="community-inspection-grid">
+            <div 
+              className="community-inspection-grid-item" 
+              onClick={onLocationClick} 
+              style={{ cursor: "pointer", transition: "all 0.2s" }} 
+              onMouseOver={(e) => e.currentTarget.style.borderColor = "#0ea5e9"} 
+              onMouseOut={(e) => e.currentTarget.style.borderColor = "#e2e8f0"}
+              title="View exact location on GIS Map"
+            >
+              <small><FiMapPin /> LOCATION</small>
+              <strong>{report.establishment_name || report.barangay || "Community location"}</strong>
+              <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>View on Map &rarr;</small>
+            </div>
+            <div className="community-inspection-grid-item">
+              <small><FiTag /> CATEGORY</small>
+              <strong>{report.category.toUpperCase()}</strong>
+            </div>
+            <div className="community-inspection-grid-item">
+              <small><FiUser /> INSPECTOR ASSIGNED</small>
+              <strong>{report.assigned_inspector || "Unassigned"}</strong>
+            </div>
+            <div className="community-inspection-grid-item">
+              <small><FiBell /> NOTIFY REPORTER</small>
+              <strong>{report.inspection_notify_reporter && report.contact_number ? "Yes" : "No"}</strong>
+            </div>
+          </div>
+
+          <div className="community-inspection-notes">
+            <small><FiFileText /> INSPECTOR NOTES</small>
+            <p>{report.inspection_schedule_note || "No notes"}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function reportTitle(item) {
-  return item.establishment_name || item.barangay || "Community location";
+  return item.complainant_name || "Anonymous";
 }
 
 function buildCalendarEvents(rows) {
@@ -910,16 +1134,21 @@ function buildCalendarEvents(rows) {
     if (item.reported_date) {
       events.push({
         date: item.reported_date,
+        time: "09:00",
         type: "report",
         label: "Report",
         title: reportTitle(item),
         reportId: item.id,
+        raw: item,
       });
     }
 
     if (item.inspection_scheduled_date) {
       events.push({
         date: item.inspection_scheduled_date,
+        time: item.inspection_scheduled_time
+          ? item.inspection_scheduled_time.slice(0, 5)
+          : "08:00",
         type: "inspection",
         label: "Inspection",
         title: `${reportTitle(item)}${
@@ -928,6 +1157,7 @@ function buildCalendarEvents(rows) {
             : ""
         }`,
         reportId: item.id,
+        raw: item,
       });
     }
 

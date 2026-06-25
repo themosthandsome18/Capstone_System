@@ -41,10 +41,20 @@ from api.services.tourism import (
 )
 
 
+def auto_update_no_show_bookings():
+    from django.utils import timezone
+    from api.models import BOOKING_STATUS_PENDING, BOOKING_STATUS_NO_SHOW
+    TouristRecord.objects.filter(
+        status=BOOKING_STATUS_PENDING,
+        arrival_date__lt=timezone.localdate()
+    ).update(status=BOOKING_STATUS_NO_SHOW)
+
+
 @api_view(["GET"])
 @module_required("tourism")
 def arrival_monitoring_data(request):
     ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
     return Response(build_arrival_monitoring_payload(request.query_params))
 
 
@@ -52,6 +62,7 @@ def arrival_monitoring_data(request):
 @module_required("tourism")
 def booking_management_data(request):
     ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
     return Response(build_booking_management_payload(request.query_params))
 
 
@@ -175,6 +186,7 @@ def tourist_record_detail(request, survey_id):
 @module_required("tourism")
 def dashboard_data(request):
     ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
     return Response(build_dashboard_payload(request.query_params))
 
 
@@ -182,6 +194,7 @@ def dashboard_data(request):
 @module_required("tourism")
 def reports_data(request):
     ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
     return Response(build_reports_payload(request.query_params))
 
 

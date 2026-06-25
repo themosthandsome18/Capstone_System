@@ -292,19 +292,22 @@ export function SanitationDataProvider({ children }) {
 
   async function createComplaint(payload) {
     const created = await createSanitationComplaint(payload);
-    await loadSanitationData({ includeHouseholds: false });
+    await refreshComplaintData();
+    await refreshDashboardData();
     return created;
   }
 
   async function updateComplaint(id, payload) {
     const updated = await updateSanitationComplaint(id, payload);
-    await loadSanitationData({ includeHouseholds: false });
+    await refreshComplaintData();
+    await refreshDashboardData();
     return updated;
   }
 
   async function deleteComplaint(id) {
     await deleteSanitationComplaint(id);
-    await loadSanitationData({ includeHouseholds: false });
+    await refreshComplaintData();
+    await refreshDashboardData();
   }
 
   async function createHousehold(payload) {

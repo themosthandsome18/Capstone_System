@@ -1,48 +1,40 @@
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FiBell, FiCalendar, FiLogOut, FiSearch } from "react-icons/fi";
+import { FiBell, FiLogOut } from "react-icons/fi";
 import { useAuth } from "../../../auth/AuthContext";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
   "/": {
     title: "Dashboard Overview",
-    searchPlaceholder: "Search tourism records...",
     showAdd: true,
   },
   "/tourist-data": {
     title: "Booking Management",
-    searchPlaceholder: "Search bookings, guests...",
     showAdd: true,
   },
   "/arrival-monitoring": {
     title: "Arrival Monitoring",
-    searchPlaceholder: "Search arrivals...",
     showAdd: true,
   },
   "/destinations": {
     title: "Destination Management",
-    searchPlaceholder: "Search destinations...",
     showAdd: false,
   },
   "/feedback": {
     title: "Feedback Monitoring",
-    searchPlaceholder: "Search feedback...",
     showAdd: false,
   },
   "/analytics-reports": {
     title: "Reports",
-    searchPlaceholder: "Search reports...",
     showAdd: false,
   },
   "/gis-map": {
     title: "GIS Map",
-    searchPlaceholder: "Search locations...",
     showAdd: false,
   },
   "/activity-logs": {
     title: "Activity Logs",
-    searchPlaceholder: "Search activity...",
     showAdd: false,
   },
 };
@@ -65,7 +57,6 @@ function AppShell() {
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
-  const [globalSearch, setGlobalSearch] = useState("");
 
   function handleAddEntry() {
     if (location.pathname !== "/tourist-data") {
@@ -109,25 +100,6 @@ function AppShell() {
           </div>
 
           <div className="topbar-actions">
-            <div className="search-box">
-              <FiSearch size={18} />
-              <input
-                type="text"
-                placeholder={currentPage.searchPlaceholder}
-                value={globalSearch}
-                onChange={(event) => setGlobalSearch(event.target.value)}
-              />
-            </div>
-
-            <button
-              type="button"
-              className="topbar-pill"
-              title="Current date"
-              aria-label="Current date"
-            >
-              <FiCalendar />
-              Today
-            </button>
 
             <button
               type="button"
@@ -160,7 +132,7 @@ function AppShell() {
 
             <div className="topbar-user">
               <span>{user?.display_name || user?.username}</span>
-              <small>{user?.profile?.role_label}</small>
+              <small>{user?.profile?.role_label || (role ? role.charAt(0).toUpperCase() + role.slice(1) : "User")}</small>
             </div>
 
             <button
@@ -176,7 +148,7 @@ function AppShell() {
         </header>
 
         <section className="tourism-content">
-          <Outlet context={{ addEntryRequestId, globalSearch }} />
+          <Outlet context={{ addEntryRequestId }} />
         </section>
       </main>
     </div>

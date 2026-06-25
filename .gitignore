@@ -12,3 +12,30 @@ backend/data/
 mobile/android/build/
 mobile/cloudflared.exe
 mobile/*.png
+
+# IDE Folders
+.idea/
+.vscode/
+
+# Temporary / Scratch scripts & files
+backend/add_metrics.py
+backend/add_top_n.py
+backend/fetch_error.py
+backend/fix_seed.py
+backend/format_card.py
+backend/format_visual.py
+backend/inspect_arrivals_comparison.py
+backend/profile.txt
+backend/test_func2.py
+backend/test_reports.py
+backend/update_household_status.py
+backend/update_js.py
+backend/update_js2.py
+backend/update_payload.py
+backend/update_sra.py
+backend/update_style.py
+backend/complaints/
+backend/media/
+frontend/scale.js
+frontend/scale_index.js
+mobile/my_test_project/

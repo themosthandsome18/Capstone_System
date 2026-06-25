@@ -162,7 +162,6 @@ def validate_tourist_record_values(values):
     visitor_classification_total = (
         counts["foreigner_count"]
         + counts["filipino_count"]
-        + counts["maubanin_count"]
     )
     gender_total = counts["total_male"] + counts["total_female"]
     age_total = counts["age_0_7"] + counts["age_8_59"] + counts["age_60_above"]
@@ -170,7 +169,13 @@ def validate_tourist_record_values(values):
     if total_visitors != visitor_classification_total:
         add_error(
             "total_visitors",
-            "Must equal foreigner_count + filipino_count + maubanin_count.",
+            "Must equal foreigner_count + filipino_count.",
+        )
+
+    if counts["maubanin_count"] > counts["filipino_count"]:
+        add_error(
+            "maubanin_count",
+            "Cannot be greater than filipino_count.",
         )
 
     if total_visitors != gender_total:
@@ -293,10 +298,34 @@ class FeedbackEntry(models.Model):
     reply = models.TextField(blank=True)
 
     class Meta:
-        ordering = ["-date", "id"]
+        ordering = ["-id"]
 
     def __str__(self):
         return f"{self.reviewer} - {self.destination}"
+
+    @staticmethod
+    def _recalculate_rating(destination):
+        from django.db.models import Avg
+        avg_rating = destination.feedback_entries.aggregate(Avg("rating"))["rating__avg"]
+        if avg_rating is not None:
+            destination.tourism_rating = round(float(avg_rating), 1)
+        else:
+            destination.tourism_rating = 0.0
+        destination.save(update_fields=["tourism_rating"])
+
+
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=FeedbackEntry)
+def update_resort_rating_on_save(sender, instance, **kwargs):
+    FeedbackEntry._recalculate_rating(instance.destination)
+
+
+@receiver(post_delete, sender=FeedbackEntry)
+def update_resort_rating_on_delete(sender, instance, **kwargs):
+    FeedbackEntry._recalculate_rating(instance.destination)
 
 
 class TouristStat(models.Model):
@@ -376,7 +405,7 @@ class TouristRecord(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-arrival_date", "survey_id"]
+        ordering = ["-updated_at", "-arrival_date", "survey_id"]
         indexes = [
             models.Index(
                 fields=["status", "arrival_date"],
@@ -624,7 +653,7 @@ class SanitaryEstablishment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["business_name"]
+        ordering = ["-updated_at", "-id"]
         indexes = [
             models.Index(fields=["barangay"], name="san_est_barangay_idx"),
             models.Index(fields=["business_type", "compliance_status"], name="san_est_type_status_idx"),
@@ -891,6 +920,41 @@ class HouseholdSanitationRecord(models.Model):
 
     def __str__(self):
         return f"{self.household_code} - {self.household_head}"
+
+    def save(self, *args, **kwargs):
+        toilet_score = {
+            "water_sealed": 3,
+            "pour_flush": 2,
+            "pit_latrine": 1,
+            "none": 0,
+        }.get(self.toilet_type, 0)
+
+        water_score = {
+            "level_3": 3,
+            "level_2": 2,
+            "level_1": 1,
+            "none": 0,
+        }.get(self.water_level, 0)
+
+        waste_score = {
+            "collected": 3,
+            "composted": 2,
+            "burned": 1,
+            "dumped": 0,
+        }.get(self.waste_disposal, 0)
+
+        total_score = toilet_score + water_score + waste_score
+
+        if self.toilet_type == "none" or self.water_level == "none" or self.waste_disposal == "dumped":
+            self.status = "violation"
+        elif 7 <= total_score <= 9:
+            self.status = "good_standing"
+        elif 4 <= total_score <= 6:
+            self.status = "for_completion"
+        else:
+            self.status = "violation"
+
+        super().save(*args, **kwargs)
 
     @property
     def total_members(self):

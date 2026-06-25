@@ -2,7 +2,7 @@ import json
 from datetime import timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -111,7 +111,10 @@ def mobile_destination_list(request):
 @permission_classes([AllowAny])
 def mobile_destination_detail(request, resort_id):
     ensure_mobile_reference_data()
-    resort = get_object_or_404(Resort, resort_id=resort_id)
+    resort = get_object_or_404(
+        get_mobile_destination_queryset(),
+        resort_id=resort_id,
+    )
     feedback = FeedbackEntry.objects.filter(destination=resort).order_by("-date", "-id")[:5]
 
     return Response(
@@ -133,34 +136,34 @@ MOBILE_EXCLUDED_DESTINATION_NAMES = {
     "Private Property",
     "Residence",
     "Transient",
+    "Others / Private Residence",
 }
 
 
 def get_mobile_destination_queryset():
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    today = timezone.localdate()
     return Resort.objects.exclude(
         resort_name__in=MOBILE_EXCLUDED_DESTINATION_NAMES,
-    ).exclude(resort_name__icontains="Kwebang")
+    ).exclude(resort_name__icontains="Kwebang").annotate(
+        visitor_total=Count(
+            "tourist_records",
+            filter=Q(
+                tourist_records__status="arrived",
+                tourist_records__arrival_date__year=today.year,
+                tourist_records__arrival_date__month=today.month
+            )
+        )
+    )
 
 
 def get_mobile_top_destinations(limit=10):
     destinations = (
         get_mobile_destination_queryset()
-        .annotate(visitor_total=Coalesce(Sum("tourist_records__total_visitors"), 0))
-        .filter(visitor_total__gt=0)
-        .order_by("-visitor_total", "resort_name")
+        .order_by("-visitor_total", "-monthly_arrivals", "-tourism_rating", "resort_name")
     )
-    top_destinations = list(destinations[:limit])
-
-    if len(top_destinations) < limit:
-        existing_ids = [destination.resort_id for destination in top_destinations]
-        fallback_destinations = (
-            get_mobile_destination_queryset()
-            .exclude(resort_id__in=existing_ids)
-            .order_by("-monthly_arrivals", "-tourism_rating", "resort_name")
-        )
-        top_destinations.extend(fallback_destinations[: limit - len(top_destinations)])
-
-    return top_destinations[:limit]
+    return list(destinations[:limit])
 
 
 @api_view(["POST"])
@@ -232,7 +235,7 @@ def mobile_sanitation_report_submit(request):
     ensure_mobile_barangays()
 
     data = request.data.copy()
-    upload = request.FILES.get("photo") or request.FILES.get("image")
+    uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
 
     data["complaint_id"] = generate_complaint_id()
     data["complainant_name"] = (
@@ -245,8 +248,15 @@ def mobile_sanitation_report_submit(request):
     data["barangay"] = data.get("barangay") or "Unspecified"
     data["description"] = data.get("description") or data.get("message") or ""
 
-    if upload and not data.get("photo_documentation"):
-        data["photo_documentation"] = upload.name
+    if uploads and not data.get("photo_documentation"):
+        from django.core.files.storage import default_storage
+        import time
+        saved_urls = []
+        for upload in uploads:
+            filename = f"complaints/{int(time.time())}_{upload.name.replace(' ', '_')}"
+            saved_path = default_storage.save(filename, upload)
+            saved_urls.append(default_storage.url(saved_path))
+        data["photo_documentation"] = ",".join(saved_urls)
 
     for field in ["latitude", "longitude"]:
         if data.get(field) in ("", None):
@@ -388,7 +398,7 @@ def mobile_sanitation_bootstrap(request):
         "establishment",
         "establishment__business_type",
     ).prefetch_related("checklist_items")[:25]
-    household_records = HouseholdSanitationRecord.objects.all()[:50]
+    household_records = HouseholdSanitationRecord.objects.all()
     complaints = SanitaryComplaint.objects.exclude(
         status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
     ).order_by("-reported_date", "-id")[:50]
@@ -591,7 +601,11 @@ def mobile_sanitation_inspection_submit(request):
     upload = request.FILES.get("photo") or request.FILES.get("image")
 
     if upload and not data.get("photo_documentation"):
-        data["photo_documentation"] = upload.name
+        from django.core.files.storage import default_storage
+        import time
+        filename = f"inspections/{int(time.time())}_{upload.name.replace(' ', '_')}"
+        saved_path = default_storage.save(filename, upload)
+        data["photo_documentation"] = default_storage.url(saved_path)
 
     serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
@@ -637,7 +651,16 @@ def mobile_household_survey_submit(request):
         if data.get(field) in ("", None):
             data.pop(field, None)
 
-    serializer = HouseholdSanitationRecordSerializer(data=data)
+    household_code = data.get("household_code")
+    instance = None
+    if household_code:
+        instance = HouseholdSanitationRecord.objects.filter(household_code=household_code).first()
+
+    if instance:
+        serializer = HouseholdSanitationRecordSerializer(instance, data=data, partial=True)
+    else:
+        serializer = HouseholdSanitationRecordSerializer(data=data)
+
     serializer.is_valid(raise_exception=True)
     record = serializer.save()
 
@@ -849,7 +872,7 @@ def normalize_mobile_counts(data):
     foreigner_count = parse_mobile_int(data.get("foreigner_count"), 0)
     filipino_count = parse_mobile_int(data.get("filipino_count"), 0)
     maubanin_count = parse_mobile_int(data.get("maubanin_count"), 0)
-    classification_total = foreigner_count + filipino_count + maubanin_count
+    classification_total = foreigner_count + filipino_count
     total_visitors = parse_mobile_int(data.get("total_visitors"), classification_total)
 
     if total_visitors <= 0:
@@ -861,6 +884,12 @@ def normalize_mobile_counts(data):
         maubanin_count = 0
     elif not data.get("total_visitors"):
         total_visitors = classification_total
+    elif classification_total != total_visitors:
+        if foreigner_count + filipino_count + maubanin_count == total_visitors:
+            filipino_count = filipino_count + maubanin_count
+        else:
+            filipino_count = max(0, total_visitors - foreigner_count)
+        classification_total = foreigner_count + filipino_count
 
     total_male = parse_mobile_int(data.get("total_male"), 0)
     total_female = parse_mobile_int(data.get("total_female"), 0)
@@ -934,4 +963,4 @@ def append_sanitation_feedback(message, data):
     if not notes:
         return base_message
 
-    return f"{base_message}\n\nSanitation feedback: {'; '.join(notes)}"
+    return f"{base_message}\n\nCleanliness feedback: {'; '.join(notes)}"

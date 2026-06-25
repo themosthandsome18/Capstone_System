@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { tourismApi } from "../services/tourismApi";
 
 const TourismDataContext = createContext(null);
@@ -152,6 +152,59 @@ export function TourismDataProvider({ children }) {
     };
   }, []);
 
+  const bootstrapRef = useRef(bootstrap);
+  useEffect(() => {
+    bootstrapRef.current = bootstrap;
+  }, [bootstrap]);
+
+  const pollLatestData = useCallback(async () => {
+    try {
+      const currentBootstrap = bootstrapRef.current;
+      const currentFilters = currentBootstrap.bookingManagement?.filters || {};
+      const currentPage = currentBootstrap.bookingManagement?.pagination?.page || 1;
+      const currentPageSize = currentBootstrap.bookingManagement?.pagination?.pageSize || 10;
+      const bookingParams = {
+        ...currentFilters,
+        page: currentPage,
+        pageSize: currentPageSize,
+      };
+
+      const [bootstrapData, bookingData] = await Promise.all([
+        tourismApi.getBootstrapData(),
+        tourismApi.getBookingManagementData(bookingParams)
+      ]);
+
+      setBootstrap((current) => {
+        const activeFilters = current.bookingManagement?.filters || {};
+        const activePage = current.bookingManagement?.pagination?.page || 1;
+
+        return {
+          ...current,
+          referenceTables: bootstrapData.referenceTables,
+          feedbackEntries: bootstrapData.feedbackEntries,
+          bookingManagement: {
+            ...bookingData,
+            filters: activeFilters,
+            pagination: {
+              ...bookingData.pagination,
+              page: activePage
+            }
+          }
+        };
+      });
+    } catch (err) {
+      // Quietly handle connection drops in background
+    }
+  }, []);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      pollLatestData();
+    }, 15000); // Poll every 15 seconds
+
+    return () => clearInterval(intervalId);
+  }, [pollLatestData]);
+
   const refreshArrivalMonitoring = useCallback(async function refreshArrivalMonitoring(
     params = {}
   ) {
@@ -205,6 +258,18 @@ export function TourismDataProvider({ children }) {
     }));
   }
 
+  async function refreshReferenceTables() {
+    try {
+      const response = await tourismApi.getBootstrapData();
+      setBootstrap((current) => ({
+        ...current,
+        referenceTables: response.referenceTables,
+      }));
+    } catch (err) {
+      console.error("Failed to refresh reference tables", err);
+    }
+  }
+
   async function createRecord(payload) {
     const createdRecord = await tourismApi.createTouristRecord(payload);
     setBootstrap((current) => ({
@@ -212,6 +277,7 @@ export function TourismDataProvider({ children }) {
       touristRecords: [createdRecord, ...current.touristRecords],
     }));
     await refreshComputedData();
+    await refreshReferenceTables();
   }
 
   async function updateRecord(surveyId, payload, options = {}) {
@@ -232,6 +298,7 @@ export function TourismDataProvider({ children }) {
     if (refreshComputed) {
       await refreshComputedData();
     }
+    await refreshReferenceTables();
 
     return updatedRecord;
   }
@@ -245,6 +312,7 @@ export function TourismDataProvider({ children }) {
       ),
     }));
     await refreshComputedData();
+    await refreshReferenceTables();
   }
 
   async function previewOnlineBookingImport(file, options = {}) {
@@ -317,6 +385,7 @@ export function TourismDataProvider({ children }) {
         entry.id === feedbackId ? { ...entry, ...updatedFeedback } : entry
       ),
     }));
+    await refreshReferenceTables();
     return updatedFeedback;
   }
 

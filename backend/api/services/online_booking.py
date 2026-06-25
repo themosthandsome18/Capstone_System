@@ -429,14 +429,14 @@ def build_payload(sheet, row_number, status, resolver):
         "status": status,
     }
 
-    classification_total = foreigner_count + filipino_count + maubanin_count
+    classification_total = foreigner_count + filipino_count
     if not total_visitors and classification_total:
         payload["total_visitors"] = classification_total
         total_visitors = classification_total
 
     if classification_total != total_visitors:
         payload["filipino_count"] = max(
-            total_visitors - foreigner_count - maubanin_count,
+            total_visitors - foreigner_count,
             0,
         )
 
@@ -504,6 +504,40 @@ class ReferenceResolver:
             resort = self.resort_cache[key]
             self.resort_name_by_id[resort.resort_id] = resort.resort_name
             return resort
+
+        # Resolve to fallback "Others / Private Residence" (ID 16) instead of creating new resorts
+        others_resort = None
+        for r in self.resort_cache.values():
+            if r.resort_id == 16:
+                others_resort = r
+                break
+
+        if others_resort:
+            return others_resort
+
+        try:
+            others_resort, _ = Resort.objects.get_or_create(
+                resort_id=16,
+                defaults={
+                    "resort_name": "Others / Private Residence",
+                    "with_mayors_permit": False,
+                    "type": "Private Residence / Others",
+                    "location": "Mauban, Quezon",
+                    "short_description": "Fallback destination for private residences, homestays, and other non-resort locations.",
+                    "tourism_rating": 0.0,
+                    "access": "N/A",
+                    "itinerary_ids": [],
+                    "image_key": "",
+                    "monthly_arrivals": 0,
+                    "latitude": 14.185,
+                    "longitude": 121.725
+                }
+            )
+            self.resort_cache[normalize_key(others_resort.resort_name)] = others_resort
+            self.resort_name_by_id[16] = others_resort.resort_name
+            return others_resort
+        except Exception:
+            pass
 
         resort_data = {
             "resort_id": self.next_resort_id,

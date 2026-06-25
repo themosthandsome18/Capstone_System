@@ -14,9 +14,12 @@ from ..models import (
     COMPLAINT_STATUS_PENDING,
     COMPLAINT_STATUS_REJECTED,
     COMPLAINT_STATUS_RESOLVED,
+    HOUSEHOLD_STATUS_GOOD,
     HOUSEHOLD_STATUS_FOR_COMPLETION,
     HOUSEHOLD_STATUS_VIOLATION,
     HOUSEHOLD_TOILET_NONE,
+    HOUSEHOLD_WASTE_COLLECTED,
+    HOUSEHOLD_WASTE_COMPOSTED,
     HOUSEHOLD_WASTE_BURNED,
     HOUSEHOLD_WASTE_DUMPED,
     HOUSEHOLD_WATER_LEVEL_1,
@@ -981,6 +984,10 @@ def build_adviser_sanitation_questions(establishments, needs_attention=None):
         has_permit=True,
         permit_status__in=[PERMIT_STATUS_ACTIVE, PERMIT_STATUS_RENEWAL_DUE],
     ).exclude(compliance_status=SANITARY_STATUS_VIOLATION)[:5]
+    top_7_household_risk_barangay = top_n_sanitation_group(
+        households.filter(status__in=[HOUSEHOLD_STATUS_VIOLATION, HOUSEHOLD_STATUS_FOR_COMPLETION]),
+        "barangay", limit=7
+    )
     household_risk_barangay = top_sanitation_group(
         households.filter(status__in=[HOUSEHOLD_STATUS_VIOLATION, HOUSEHOLD_STATUS_FOR_COMPLETION]),
         "barangay",
@@ -1001,55 +1008,60 @@ def build_adviser_sanitation_questions(establishments, needs_attention=None):
     top_factor = max(factor_counts.items(), key=lambda item: item[1]) if factor_counts else ("", 0)
     geographic_hotspot = build_combined_geographic_hotspots(establishments, households)
 
-    return [
+    # New Household metrics
+    top_5_safe_toilet = top_n_sanitation_group(
+        households.exclude(toilet_type=HOUSEHOLD_TOILET_NONE),
+        "barangay", limit=5
+    )
+    top_5_no_water = top_n_sanitation_group(
+        households.filter(water_level=HOUSEHOLD_WATER_LEVEL_1),
+        "barangay", limit=5
+    )
+    
+    total_hh = households.count()
+    good_hh = households.filter(status=HOUSEHOLD_STATUS_GOOD).count()
+    hh_compliance_rate = round((good_hh / total_hh) * 100, 1) if total_hh else 0
+
+    waste_data = [
+        {"name": "Collected", "total": households.filter(waste_disposal=HOUSEHOLD_WASTE_COLLECTED).count()},
+        {"name": "Composted", "total": households.filter(waste_disposal=HOUSEHOLD_WASTE_COMPOSTED).count()},
+        {"name": "Burned", "total": households.filter(waste_disposal=HOUSEHOLD_WASTE_BURNED).count()},
+        {"name": "Dumped", "total": households.filter(waste_disposal=HOUSEHOLD_WASTE_DUMPED).count()}
+    ]
+
+    return build_sanitation_question_answers(establishments) + [
         {
-            "id": "permit_status",
-            "question": "What is the current sanitation permit status of each registered establishment?",
-            "answer": permit_status_text,
-            "visual": "permit_status",
+            "id": "household_safe_toilet_barangays",
+            "question": "Which barangays have the highest number of households with safe toilet facilities?",
+            "answer": format_sanitation_top_answer(top_5_safe_toilet[0], total_hh, "households") if top_5_safe_toilet else "No data available.",
+            "chart_data": top_5_safe_toilet,
+            "visual": "household_safe_toilet_barangays",
         },
         {
-            "id": "immediate_action",
-            "question": "Which establishments need immediate inspection, follow-up, or enforcement action?",
-            "answer": ", ".join(item["business_name"] for item in immediate) or "No establishment is currently flagged for immediate action.",
-            "visual": "needs_attention",
+            "id": "household_no_water_barangays",
+            "question": "Which barangays have the highest number of households lacking access to piped water?",
+            "answer": format_sanitation_top_answer(top_5_no_water[0], total_hh, "households") if top_5_no_water else "No data available.",
+            "chart_data": top_5_no_water,
+            "visual": "household_no_water_barangays",
         },
         {
-            "id": "inspection_effect",
-            "question": "How do inspection findings affect the compliance status of an establishment?",
-            "answer": (
-                f"The latest non-compliant inspection changed {latest_failed.establishment.business_name} to {latest_failed.get_status_after_inspection_display()}."
-                if latest_failed
-                else "Inspection records currently show no non-compliant status changes."
-            ),
-            "visual": "inspection_status",
+            "id": "household_compliance_rate",
+            "question": "What is the overall sanitation compliance rate among monitored households?",
+            "answer": f"Good Standing: {good_hh}, Total: {total_hh}, Rate: {hh_compliance_rate}",
+            "visual": "household_compliance_rate",
         },
         {
-            "id": "repeated_issues",
-            "question": "Which establishments have repeated violations or recurring sanitation issues?",
-            "answer": ", ".join(
-                f"{item['establishment__business_name']} ({item['total']})"
-                for item in repeated[:5]
-            )
-            or "No establishment has two or more open recurring complaint records.",
-            "visual": "recurring",
-        },
-        {
-            "id": "resolution_time",
-            "question": "What is the average time needed to resolve sanitation violations after inspection?",
-            "answer": f"Resolved complaint records average {average_resolution} day(s) from report to resolution.",
-            "visual": "resolution_time",
-        },
-        {
-            "id": "likely_compliant",
-            "question": "Which establishments are most likely to become fully compliant based on their permit status, inspection results, and violation records?",
-            "answer": ", ".join(item.business_name for item in likely_compliant) or "No likely-compliant establishment candidates found.",
-            "visual": "compliance_prediction",
+            "id": "household_waste_distribution",
+            "question": "What is the distribution of waste disposal methods used by households?",
+            "answer": "Waste distribution analysis",
+            "chart_data": waste_data,
+            "visual": "household_waste_distribution",
         },
         {
             "id": "household_poor_barangays",
             "question": "Which barangays have the highest number of households with poor sanitation conditions?",
             "answer": format_sanitation_top_answer(household_risk_barangay, households.count(), "household concern records"),
+            "chart_data": top_7_household_risk_barangay,
             "visual": "household_risk_barangay",
         },
         {
@@ -1072,6 +1084,11 @@ def build_adviser_sanitation_questions(establishments, needs_attention=None):
             "id": "risk_factor",
             "question": "Which household sanitation factor contributes most to high risk: unsafe water source, unavailable toilet facility, or improper waste disposal?",
             "answer": f"{top_factor[0].title()} contributes the most with {top_factor[1]} household record(s).",
+            "chart_data": [
+                {"name": "Unsafe Water Source", "total": factor_counts["unsafe water source"]},
+                {"name": "No Toilet Facility", "total": factor_counts["unavailable toilet facility"]},
+                {"name": "Improper Waste Disposal", "total": factor_counts["improper waste disposal"]},
+            ],
             "visual": "risk_factor",
         },
         {
@@ -1096,10 +1113,10 @@ def build_household_barangay_profile(households):
         water_access=Count("id", filter=~Q(water_level=HOUSEHOLD_WATER_LEVEL_1)),
         proper_waste=Count(
             "id",
-            filter=~Q(
+            filter=Q(
                 waste_disposal__in=[
-                    HOUSEHOLD_WASTE_BURNED,
-                    HOUSEHOLD_WASTE_DUMPED,
+                    HOUSEHOLD_WASTE_COLLECTED,
+                    HOUSEHOLD_WASTE_COMPOSTED,
                 ]
             ),
         ),
@@ -1232,9 +1249,23 @@ def build_sanitation_question_answers(establishments):
     without_permit = establishments.filter(has_permit=False).count()
     compliance_rate = round((good / total) * 100, 1) if total else 0
     top_type = top_sanitation_group(establishments, "business_type__name")
+    top_7_type = top_n_sanitation_group(establishments, "business_type__name", limit=7)
     top_violation_type = top_sanitation_group(
         establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION),
         "business_type__name",
+    )
+    top_7_violation_type = top_n_sanitation_group(
+        establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION),
+        "business_type__name",
+        limit=7,
+    )
+    top_5_barangay_risk = top_n_sanitation_group(
+        establishments.filter(
+            Q(compliance_status=SANITARY_STATUS_VIOLATION)
+            | Q(compliance_status=SANITARY_STATUS_FOR_COMPLETION)
+            | Q(compliance_status=SANITARY_STATUS_NO_PERMIT)
+        ),
+        "barangay", limit=5
     )
     top_barangay_risk = top_sanitation_group(
         establishments.filter(
@@ -1305,11 +1336,13 @@ def build_sanitation_question_answers(establishments):
             "id": "largest_business_type",
             "question": "Which business type has the highest number of monitored establishments?",
             "answer": format_sanitation_top_answer(top_type, total, "establishments"),
+            "chart_data": top_7_type,
         },
         {
             "id": "violation_business_type",
             "question": "Which business type has the highest number of sanitation violations or complaints?",
             "answer": format_sanitation_top_answer(top_violation_type, violation, "violation records"),
+            "chart_data": top_7_violation_type,
         },
         {
             "id": "requirements_queue",
@@ -1330,6 +1363,7 @@ def build_sanitation_question_answers(establishments):
             "id": "barangay_risk",
             "question": "Which barangay has the highest sanitation concern count?",
             "answer": format_sanitation_top_answer(top_barangay_risk, total, "concern records"),
+            "chart_data": top_5_barangay_risk,
         },
         {
             "id": "inspection_frequency_queue",
@@ -1347,6 +1381,18 @@ def build_sanitation_question_answers(establishments):
         },
     ]
 
+
+
+def top_n_sanitation_group(queryset, group_field, limit=5):
+    items = (
+        queryset.values(group_field)
+        .annotate(total=Count("id"))
+        .order_by("-total", group_field)[:limit]
+    )
+    return [
+        {"name": item.get(group_field) or "Unspecified", "total": item["total"] or 0}
+        for item in items
+    ]
 
 def top_sanitation_group(queryset, group_field):
     item = (

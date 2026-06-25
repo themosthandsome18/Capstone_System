@@ -1,13 +1,16 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter/services.dart';
 
 part 'constants/colors.dart';
 part 'utils/helpers.dart';
@@ -18,6 +21,7 @@ part 'screens/common_screens.dart';
 part 'screens/tourism_screens.dart';
 part 'screens/sanitation_screens.dart';
 part 'screens/qr_scanner_screen.dart';
+part 'widgets/striped_polygon_layer.dart';
 
 void main() {
   if (appModule == 'sanitation') {
@@ -42,7 +46,7 @@ class MaubanMobileApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.canvas,
-        fontFamily: 'Arial',
+        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
         useMaterial3: true,
       ),
       home: const AppBootstrap(),

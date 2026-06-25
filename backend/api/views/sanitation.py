@@ -66,7 +66,7 @@ def sanitation_bootstrap_data(request):
             "establishments": SanitaryEstablishmentSerializer(
                 with_establishment_rollups(
                     SanitaryEstablishment.objects.select_related("business_type").all()
-                ),
+                ).order_by("-updated_at", "-id"),
                 many=True,
             ).data,
             "inspections": SanitaryInspectionSerializer(
@@ -109,7 +109,7 @@ def sanitation_establishment_list(request):
     if request.method == "GET":
         establishments = with_establishment_rollups(
             SanitaryEstablishment.objects.select_related("business_type").all()
-        )
+        ).order_by("-updated_at", "-id")
         return Response(SanitaryEstablishmentSerializer(establishments, many=True).data)
 
     serializer = SanitaryEstablishmentSerializer(data=request.data)
@@ -480,7 +480,16 @@ def household_record_list(request):
         records = get_household_records_queryset(request.query_params)
         return Response(HouseholdSanitationRecordSerializer(records, many=True).data)
 
-    serializer = HouseholdSanitationRecordSerializer(data=request.data)
+    data = request.data.copy()
+    if not data.get("household_code"):
+        count = HouseholdSanitationRecord.objects.count()
+        new_code = f"H-{count + 1:04d}"
+        while HouseholdSanitationRecord.objects.filter(household_code=new_code).exists():
+            count += 1
+            new_code = f"H-{count + 1:04d}"
+        data["household_code"] = new_code
+
+    serializer = HouseholdSanitationRecordSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     record = serializer.save()
     log_activity(

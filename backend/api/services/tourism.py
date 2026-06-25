@@ -84,7 +84,23 @@ def build_reference_tables_payload():
     payload = {}
 
     for payload_key, (model, serializer_class) in REFERENCE_TABLE_SERIALIZERS.items():
-        payload[payload_key] = serializer_class(model.objects.all(), many=True).data
+        if model is Resort:
+            from django.db.models import Count, Q
+            from django.utils import timezone
+            today = timezone.localdate()
+            queryset = Resort.objects.annotate(
+                visitor_total=Count(
+                    "tourist_records",
+                    filter=Q(
+                        tourist_records__status="arrived",
+                        tourist_records__arrival_date__year=today.year,
+                        tourist_records__arrival_date__month=today.month
+                    )
+                )
+            )
+        else:
+            queryset = model.objects.all()
+        payload[payload_key] = serializer_class(queryset, many=True).data
 
     return payload
 
@@ -155,7 +171,7 @@ def build_arrival_monitoring_payload(params=None):
     if date_to:
         records = records.filter(arrival_date__lte=date_to)
 
-    records = records.order_by("-arrival_date", "survey_id")
+    records = records.order_by("-updated_at", "-arrival_date")
 
     rows = []
     totals = {
@@ -167,33 +183,49 @@ def build_arrival_monitoring_payload(params=None):
         "feesCollected": 0,
     }
 
-    for record in records:
-        overnight, same_day = get_stay_counts(record)
-        fee_paid = record.total_visitors * ARRIVAL_FEE_PER_VISITOR
+    values_list = records.values(
+        "survey_id", "arrival_date", "full_name", "total_male", "total_female", 
+        "total_visitors", "itinerary__name", "resort__resort_name", "updated_at"
+    )
 
-        totals["totalArrivals"] += record.total_visitors
-        totals["totalMale"] += record.total_male
-        totals["totalFemale"] += record.total_female
+    first_arrival_date = None
+
+    for val in values_list:
+        if not first_arrival_date:
+            first_arrival_date = val["arrival_date"]
+
+        itinerary_name = (val["itinerary__name"] or "").lower()
+        if "day" in itinerary_name or "same" in itinerary_name:
+            overnight = 0
+            same_day = val["total_visitors"]
+        else:
+            overnight = val["total_visitors"]
+            same_day = 0
+            
+        fee_paid = val["total_visitors"] * ARRIVAL_FEE_PER_VISITOR
+
+        totals["totalArrivals"] += val["total_visitors"]
+        totals["totalMale"] += val["total_male"]
+        totals["totalFemale"] += val["total_female"]
         totals["overnight"] += overnight
         totals["sameDay"] += same_day
         totals["feesCollected"] += fee_paid
 
-        rows.append(
-            {
-                "survey_id": record.survey_id,
-                "date": record.arrival_date.isoformat(),
-                "group": record.full_name,
-                "male": record.total_male,
-                "female": record.total_female,
-                "itinerary": record.itinerary.name,
+        if len(rows) < 300:
+            rows.append({
+                "survey_id": val["survey_id"],
+                "date": val["arrival_date"].isoformat(),
+                "group": val["full_name"],
+                "male": val["total_male"],
+                "female": val["total_female"],
+                "itinerary": val["itinerary__name"] or "",
                 "overnight": overnight,
                 "sameDay": same_day,
-                "resort": record.resort.resort_name,
+                "resort": val["resort__resort_name"] or "",
                 "feePaid": fee_paid,
-            }
-        )
+            })
 
-    latest_arrival = records.first()
+    latest_arrival_date_str = first_arrival_date.isoformat() if first_arrival_date else None
 
     return {
         "filters": {
@@ -202,7 +234,7 @@ def build_arrival_monitoring_payload(params=None):
             "to": date_to,
         },
         "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
-        "reportDate": latest_arrival.arrival_date.isoformat() if latest_arrival else None,
+        "reportDate": latest_arrival_date_str,
         "summary": totals,
         "rows": rows,
         "dailyTotals": {
@@ -216,6 +248,11 @@ def build_arrival_monitoring_payload(params=None):
 
 
 def build_booking_management_payload(params=None):
+    TouristRecord.objects.filter(
+        status=BOOKING_STATUS_PENDING,
+        arrival_date__lt=timezone.localdate()
+    ).update(status=BOOKING_STATUS_NO_SHOW)
+
     params = params or {}
     reporting_year = get_reporting_year(params)
     records = apply_reporting_year(TouristRecord.objects.all(), reporting_year)
@@ -259,13 +296,13 @@ def build_booking_management_payload(params=None):
 
     filtered_count = records.count()
     if requested_page_size in (None, ""):
-        page_size = max(filtered_count, 1)
+        page_size = 10
     else:
         page_size = min(parse_positive_int(requested_page_size, 10), 100)
     total_pages = max(1, (filtered_count + page_size - 1) // page_size)
     page = min(page, total_pages)
     offset = (page - 1) * page_size
-    records = records.order_by("-arrival_date", "survey_id")
+    records = records.order_by("-updated_at", "-arrival_date", "survey_id")
     page_records = records[offset : offset + page_size]
 
     status_labels = dict(TouristRecord._meta.get_field("status").choices)
@@ -378,10 +415,10 @@ def build_booking_management_payload(params=None):
             "to": date_to,
         },
         "summary": {
-            "verifiedEntries": summary["verifiedEntries"],
-            "pending": summary["pending"],
-            "arrived": summary["arrived"],
-            "noShow": summary["noShow"],
+            "verifiedEntries": summary["verifiedEntries"] or 0,
+            "pending": summary["pending"] or 0,
+            "arrived": summary["arrived"] or 0,
+            "noShow": summary["noShow"] or 0,
         },
         "pagination": {
             "page": page,
@@ -610,9 +647,9 @@ def build_reports_payload(params=None):
     elif report_type == "monthly":
         monthly_data = {}
 
-        for record in records:
-            key = record.arrival_date.strftime("%Y-%m")
-            label = record.arrival_date.strftime("%B %Y")
+        for val in records.values("arrival_date", "total_visitors"):
+            key = val["arrival_date"].strftime("%Y-%m")
+            label = val["arrival_date"].strftime("%B %Y")
 
             if key not in monthly_data:
                 monthly_data[key] = {
@@ -623,7 +660,7 @@ def build_reports_payload(params=None):
                     "avg": 0,
                 }
 
-            monthly_data[key]["visitors"] += record.total_visitors
+            monthly_data[key]["visitors"] += val["total_visitors"]
 
         for key in sorted(monthly_data.keys()):
             row = monthly_data[key]
@@ -806,6 +843,7 @@ def build_tourism_question_answers(params=None):
 
     total_visitors = sum_visitors(arrived)
     top_resort = top_group(arrived, "resort__resort_name")
+    top_6_resorts = top_n_groups(arrived, "resort__resort_name", limit=6)
     previous_month, current_month = get_month_comparison(arrived)
     peak_month = get_peak_month(arrived)
     classification = arrived.aggregate(
@@ -818,17 +856,31 @@ def build_tourism_question_answers(params=None):
     stay_nights_total = 0
     overnight_by_resort = {}
 
-    for record in arrived:
-        record_overnight, record_same_day = get_stay_counts(record)
+    for val in arrived.values("itinerary__name", "total_visitors", "resort__resort_name"):
+        itinerary_name = (val["itinerary__name"] or "").lower()
+        total_visitors = val["total_visitors"] or 0
+
+        if "day" in itinerary_name or "same" in itinerary_name:
+            record_overnight = 0
+            record_same_day = total_visitors
+            nights = 0
+        else:
+            record_overnight = total_visitors
+            record_same_day = 0
+            if "2" in itinerary_name: nights = 2
+            elif "3" in itinerary_name: nights = 3
+            elif "4" in itinerary_name: nights = 4
+            elif "5" in itinerary_name: nights = 5
+            else: nights = 1
+
         same_day += record_same_day
         overnight += record_overnight
-        nights = estimate_stay_nights(record)
-        stay_nights_total += nights * record.total_visitors
+        stay_nights_total += nights * total_visitors
 
         if nights > 0:
-            resort_name = record.resort.resort_name
+            resort_name = val["resort__resort_name"] or "Unspecified"
             overnight_by_resort[resort_name] = (
-                overnight_by_resort.get(resort_name, 0) + record.total_visitors
+                overnight_by_resort.get(resort_name, 0) + total_visitors
             )
 
     top_overnight_resort = max(
@@ -836,6 +888,11 @@ def build_tourism_question_answers(params=None):
         key=lambda item: item[1],
         default=("", 0),
     )
+    top_6_overnight_resorts = sorted(
+        overnight_by_resort.items(),
+        key=lambda item: (-item[1], item[0])
+    )[:6]
+
     top_origin = first_non_empty(
         [
             top_group(arrived, "province__name"),
@@ -843,7 +900,11 @@ def build_tourism_question_answers(params=None):
             top_group(arrived, "country__name"),
         ]
     )
+    top_6_origins = top_n_groups(arrived, "province__name", limit=6)
+
     top_purpose = top_group(arrived, "visit_purpose__name")
+    top_6_purposes = top_n_groups(arrived, "visit_purpose__name", limit=6)
+
     demand = get_recent_demand_signal(arrived)
     validation = get_validation_summary(all_records)
     average_stay = round(stay_nights_total / total_visitors, 1) if total_visitors else 0
@@ -853,7 +914,13 @@ def build_tourism_question_answers(params=None):
             "id": "top_resort",
             "question": "Which resort or tourist destination receives the highest number of tourist arrivals within a selected date range?",
             "answer": format_top_answer(top_resort, total_visitors, "visitors"),
-            "visual": build_share_visual(top_resort["name"], top_resort["total"], total_visitors),
+            "visual": {
+                "type": "ranking",
+                "items": [
+                    {"label": r["name"], "value": r["total"]}
+                    for r in top_6_resorts
+                ],
+            },
         },
         {
             "id": "month_compare",
@@ -911,7 +978,13 @@ def build_tourism_question_answers(params=None):
                 if top_overnight_resort[0]
                 else "No overnight stays are recorded yet."
             ),
-            "visual": build_share_visual(top_overnight_resort[0], top_overnight_resort[1], overnight),
+            "visual": {
+                "type": "ranking",
+                "items": [
+                    {"label": name, "value": val}
+                    for name, val in top_6_overnight_resorts
+                ],
+            },
         },
         {
             "id": "average_stay",
@@ -928,13 +1001,25 @@ def build_tourism_question_answers(params=None):
             "id": "top_origin",
             "question": "Which province, region, or country contributes the highest number of tourist arrivals?",
             "answer": format_top_answer(top_origin, total_visitors, "visitors"),
-            "visual": build_share_visual(top_origin["name"], top_origin["total"], total_visitors),
+            "visual": {
+                "type": "ranking",
+                "items": [
+                    {"label": r["name"], "value": r["total"]}
+                    for r in top_6_origins
+                ],
+            },
         },
         {
             "id": "visit_purpose",
             "question": "What are the most common visit purposes of tourists, such as leisure, business, or other purposes?",
             "answer": format_top_answer(top_purpose, total_visitors, "visitors"),
-            "visual": build_share_visual(top_purpose["name"], top_purpose["total"], total_visitors),
+            "visual": {
+                "type": "ranking",
+                "items": [
+                    {"label": r["name"], "value": r["total"]}
+                    for r in top_6_purposes
+                ],
+            },
         },
         {
             "id": "high_demand",
@@ -999,6 +1084,18 @@ def top_group(queryset, group_field):
     return {"name": item.get(group_field) or "Unspecified", "total": item["total"] or 0}
 
 
+def top_n_groups(queryset, group_field, limit=5):
+    items = (
+        queryset.values(group_field)
+        .annotate(total=Sum("total_visitors"))
+        .order_by("-total", group_field)[:limit]
+    )
+    return [
+        {"name": item.get(group_field) or "Unspecified", "total": item["total"] or 0}
+        for item in items
+    ]
+
+
 def first_non_empty(items):
     for item in items:
         if item.get("name"):
@@ -1057,13 +1154,13 @@ def get_peak_month(arrived_records=None):
         else TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
     )
 
-    for record in records:
-        key = record.arrival_date.strftime("%Y-%m")
+    for val in records.values("arrival_date", "total_visitors"):
+        key = val["arrival_date"].strftime("%Y-%m")
         monthly_data.setdefault(
             key,
-            {"name": record.arrival_date.strftime("%B %Y"), "total": 0},
+            {"name": val["arrival_date"].strftime("%B %Y"), "total": 0},
         )
-        monthly_data[key]["total"] += record.total_visitors
+        monthly_data[key]["total"] += val["total_visitors"]
 
     if not monthly_data:
         return {"name": "", "total": 0}

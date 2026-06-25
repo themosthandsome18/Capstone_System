@@ -1,9 +1,17 @@
+import React, { useEffect } from "react";
 import { FiDownload, FiFileText, FiMapPin, FiPrinter } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
+import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
 
 function HouseholdReportAnalytics() {
-  const { householdRecords, householdDashboardData, loading, error } =
+  const { householdRecords, householdDashboardData, loading, error, reportData, refreshReportData } =
     useSanitationData();
+
+  useEffect(() => {
+    if (!reportData && refreshReportData) {
+      refreshReportData();
+    }
+  }, [reportData, refreshReportData]);
 
   const summary = householdDashboardData?.summary || buildLocalSummary(householdRecords);
   const barangayData = buildBarangayInfrastructure(householdRecords);
@@ -284,6 +292,59 @@ function HouseholdReportAnalytics() {
           </tbody>
         </table>
       </section>
+
+      <div style={{ marginTop: "18px" }}>
+        <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "800", color: "#111" }}>Household Insights &amp; Actionables</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
+          {reportData?.questionAnswers
+            ?.filter((item) => [
+              "household_poor_barangays",
+              "household_risk_barangay",
+              "household_safe_toilet_barangays",
+              "household_no_water_barangays",
+              "household_compliance_rate",
+              "household_waste_distribution",
+              "priority_households",
+              "risk_factor",
+              "barangay_risk",
+            ].includes(item.id))
+            .map((item) => {
+              const titles = {
+                household_poor_barangays: "Poor Sanitation by Barangay",
+                household_risk_barangay: "Highest Sanitation Concern Count",
+                household_safe_toilet_barangays: "Safe Toilet Facilities by Barangay",
+                household_no_water_barangays: "Lack of Piped Water by Barangay",
+                household_compliance_rate: "Household Compliance Rate",
+                household_waste_distribution: "Waste Disposal Methods",
+                priority_households: "Priority Households (High Risk)",
+                risk_factor: "Top Contributing Risk Factor",
+                barangay_risk: "Barangay Risk Overview",
+              };
+              return (
+                <div
+                  key={item.id}
+                  className="sanitary-question-item"
+                  style={{
+                    boxShadow: "0 10px 25px rgba(34, 72, 55, 0.12)",
+                    background: "#ffffff",
+                    border: "1px solid #d7e5e1",
+                    borderRadius: "12px",
+                    padding: "18px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    overflow: "visible",
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: "13px", fontWeight: "800", color: "#111827", lineHeight: "1.35" }}>
+                    {titles[item.id] || item.id}
+                  </h4>
+                  <SanitaryVisualAnswer item={item} summary={{}} />
+                </div>
+              );
+            })}
+        </div>
+      </div>
     </div>
   );
 }

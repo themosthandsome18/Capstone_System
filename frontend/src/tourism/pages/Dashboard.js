@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
@@ -55,6 +55,69 @@ const reportingYearOptions = [
   { value: "all", label: "All Years" },
 ];
 
+const lineOptions = {
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: true },
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 400,
+      ticks: {
+        stepSize: 100,
+        color: "#a1aaa6",
+      },
+      grid: {
+        color: "rgba(190, 205, 198, 0.35)",
+      },
+    },
+    x: {
+      ticks: {
+        color: "#a1aaa6",
+      },
+      grid: {
+        display: false,
+      },
+    },
+  },
+};
+
+const barOptions = {
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: true },
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      grid: {
+        color: "rgba(150, 180, 175, 0.35)",
+      },
+      ticks: {
+        color: "#6b7470",
+      },
+    },
+    x: {
+      grid: {
+        display: false,
+      },
+      ticks: {
+        color: "#4f5a55",
+      },
+    },
+  },
+};
+
+const doughnutOptions = {
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+  },
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const { dashboardData, loading, error, refreshDashboardData } =
@@ -70,7 +133,7 @@ function Dashboard() {
   const stayType = dashboardData.stayType;
   const validation = dashboardData.validation;
 
-  const dailyVisitorData = {
+  const dailyVisitorData = useMemo(() => ({
     labels: dashboardData.trends.labels,
     datasets: [
       {
@@ -82,9 +145,9 @@ function Dashboard() {
         pointBackgroundColor: "#6abdc0",
       },
     ],
-  };
+  }), [dashboardData.trends.labels, dashboardData.trends.arrivals]);
 
-  const touristClassificationData = {
+  const touristClassificationData = useMemo(() => ({
     labels: ["Filipino", "Maubanin", "Foreign"],
     datasets: [
       {
@@ -98,9 +161,9 @@ function Dashboard() {
         cutout: "62%",
       },
     ],
-  };
+  }), [classification.filipino, classification.maubanin, classification.foreign]);
 
-  const genderData = {
+  const genderData = useMemo(() => ({
     labels: ["Male", "Female"],
     datasets: [
       {
@@ -110,9 +173,9 @@ function Dashboard() {
         barThickness: 80,
       },
     ],
-  };
+  }), [gender.male, gender.female]);
 
-  const stayTypeData = {
+  const stayTypeData = useMemo(() => ({
     labels: ["Day Tour", "Overnight"],
     datasets: [
       {
@@ -122,70 +185,9 @@ function Dashboard() {
         cutout: "62%",
       },
     ],
-  };
+  }), [stayType.dayTour, stayType.overnight]);
 
-  const lineOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 400,
-        ticks: {
-          stepSize: 100,
-          color: "#a1aaa6",
-        },
-        grid: {
-          color: "rgba(190, 205, 198, 0.35)",
-        },
-      },
-      x: {
-        ticks: {
-          color: "#a1aaa6",
-        },
-        grid: {
-          display: false,
-        },
-      },
-    },
-  };
 
-  const barOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: "rgba(150, 180, 175, 0.35)",
-        },
-        ticks: {
-          color: "#6b7470",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          color: "#4f5a55",
-        },
-      },
-    },
-  };
-
-  const doughnutOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-    },
-  };
 
   if (loading) {
     return <div className="dashboard-loading">Loading dashboard data...</div>;

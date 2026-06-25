@@ -62,7 +62,9 @@ def activity_log_list(request):
 @api_view(["GET"])
 @module_required("tourism")
 def bootstrap_data(request):
+    from api.views.tourism import auto_update_no_show_bookings
     ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
 
     return Response(
         {
@@ -75,7 +77,7 @@ def bootstrap_data(request):
             ).data,
             "arrivalMonitoring": build_arrival_monitoring_payload(),
             "dashboardData": build_dashboard_payload(),
-            "reportData": build_reports_payload({"include_questions": False}),
+            "reportData": build_reports_payload({"include_questions": True}),
         }
     )
 

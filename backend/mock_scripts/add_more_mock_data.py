@@ -50,8 +50,8 @@ if resorts and countries and regions and provinces and itineraries and travel_mo
         arrival_date = timezone.localdate() - timedelta(days=random.randint(0, 100))
         foreigner = random.randint(0, 2)
         filipino = random.randint(1, 5)
-        maubanin = random.randint(0, 2)
-        total = foreigner + filipino + maubanin
+        maubanin = random.randint(0, filipino)
+        total = foreigner + filipino
         
         TouristRecord.objects.create(
             survey_id=f"SURV-{2026}-{random.randint(1000, 9999)}",

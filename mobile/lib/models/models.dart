@@ -648,12 +648,18 @@ class MobileFeedbackReceipt {
     required this.destination,
     required this.reviewer,
     required this.rating,
+    required this.message,
+    required this.reply,
+    required this.date,
   });
 
   final String reference;
   final Destination destination;
   final String reviewer;
   final int rating;
+  final String message;
+  final String reply;
+  final String date;
 
   factory MobileFeedbackReceipt.fromResponse(
     Map<String, dynamic> json, {
@@ -666,6 +672,9 @@ class MobileFeedbackReceipt {
       destination: destination,
       reviewer: '${json['reviewer'] ?? reviewer}',
       rating: jsonInt(json['rating'], rating),
+      message: '${json['message'] ?? ''}',
+      reply: '${json['reply'] ?? ''}',
+      date: '${json['date'] ?? ''}',
     );
   }
 }

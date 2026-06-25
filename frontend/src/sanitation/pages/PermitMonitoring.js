@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiAlertTriangle, FiClock, FiFileText, FiSearch } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
@@ -12,6 +13,7 @@ const permitStatusOptions = [
 ];
 
 function PermitMonitoring() {
+  const navigate = useNavigate();
   const { establishments, inspections, permitData, loading, error } =
     useSanitationData();
 
@@ -123,7 +125,9 @@ function PermitMonitoring() {
               key={row.id}
               title={row.business_name}
               desc={`${row.business_type_name} | ${row.permit_size_label}`}
+              permitNumber={row.permit_number}
               status={row.permit_status_label}
+              onClick={() => navigate("/sanitation/establishments?search=" + encodeURIComponent(row.business_name))}
             />
           ))
         ) : (
@@ -184,7 +188,7 @@ function PermitMonitoring() {
             <tbody>
               {filteredRows.length ? (
                 filteredRows.map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} onClick={() => navigate("/sanitation/establishments?search=" + encodeURIComponent(row.business_name))} style={{ cursor: "pointer" }}>
                     <td>
                       <strong>{row.business_name}</strong>
                       <small>{row.owner_name}</small>
@@ -245,14 +249,14 @@ function PermitStat({ title, value, icon, color }) {
   );
 }
 
-function PermitAlert({ title, desc, status }) {
+function PermitAlert({ title, desc, status, permitNumber, onClick }) {
   return (
-    <div className="permit-alert-card">
+    <div className="permit-alert-card" onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
       <FiAlertTriangle />
 
       <div>
         <h3>{title}</h3>
-        <p>{desc}</p>
+        <p>{permitNumber ? `Permit #: ${permitNumber} | ` : ""}{desc}</p>
         <strong>{status}</strong>
       </div>
     </div>

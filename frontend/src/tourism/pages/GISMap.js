@@ -44,6 +44,18 @@ function GISMap() {
   const [selectedDestination, setSelectedDestination] = useState(
     mapDestinations[0] || null
   );
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredDestinations = useMemo(() => {
+    if (!searchQuery.trim()) return mapDestinations;
+    const q = searchQuery.toLowerCase();
+    return mapDestinations.filter(
+      (d) =>
+        d.resort_name?.toLowerCase().includes(q) ||
+        d.type?.toLowerCase().includes(q) ||
+        d.location?.toLowerCase().includes(q)
+    );
+  }, [mapDestinations, searchQuery]);
 
   useEffect(() => {
     const selectedStillVisible = mapDestinations.some(
@@ -137,9 +149,19 @@ function GISMap() {
           <div className="gis-location-list">
             <h3>Mapped Locations</h3>
 
+            <div className="gis-search-box">
+              <input
+                type="text"
+                placeholder="Search locations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="gis-search-input"
+              />
+            </div>
+
             <div className="gis-location-items">
-              {mapDestinations.length ? (
-                mapDestinations.map((destination) => (
+              {filteredDestinations.length ? (
+                filteredDestinations.map((destination) => (
                   <button
                     key={destination.resort_id}
                     type="button"
@@ -163,7 +185,7 @@ function GISMap() {
                 ))
               ) : (
                 <p className="gis-empty-note">
-                  No tourism destinations with valid coordinates are available.
+                  {searchQuery ? `No results for "${searchQuery}"` : "No tourism destinations with valid coordinates are available."}
                 </p>
               )}
             </div>

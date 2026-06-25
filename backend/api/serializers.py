@@ -189,7 +189,22 @@ class ResortSerializer(serializers.ModelSerializer):
         return clean_resort_display_name(obj.resort_name)
 
     def get_monthly_arrivals(self, obj):
-        return getattr(obj, "visitor_total", obj.monthly_arrivals) or 0
+        visitor_total = getattr(obj, "visitor_total", None)
+        if visitor_total is not None:
+            return visitor_total
+
+        from api.models import TouristRecord
+        from django.utils import timezone
+        
+        today = timezone.localdate()
+        total = TouristRecord.objects.filter(
+            resort=obj,
+            status="arrived",
+            arrival_date__year=today.year,
+            arrival_date__month=today.month
+        ).count()
+        
+        return total
 
 
 def clean_resort_display_name(name):
@@ -297,7 +312,6 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             attrs["total_visitors"] = (
                 attrs.get("foreigner_count", 0)
                 + attrs.get("filipino_count", 0)
-                + attrs.get("maubanin_count", 0)
             )
 
         values = self._merged_validation_values(attrs)

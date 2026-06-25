@@ -2,7 +2,7 @@ part of '../main.dart';
 
 class TourismApi {
   const TourismApi();
-  static const Duration _requestTimeout = Duration(seconds: 8);
+  static const Duration _requestTimeout = Duration(seconds: 30);
 
   Future<MobileBootstrap> fetchBootstrap() async {
     try {
@@ -13,6 +13,10 @@ class TourismApi {
     }
   }
 
+  Future<Map<String, dynamic>> fetchDestinationDetail(int resortId) async {
+    return _get('/mobile/tourism/destinations/$resortId/');
+  }
+
   Future<SanitationBootstrap> fetchSanitationBootstrap() async {
     try {
       final data = await _get('/mobile/sanitation/bootstrap/');
@@ -20,7 +24,7 @@ class TourismApi {
     } catch (error) {
       debugPrint('Sanitation bootstrap failed: $error');
       return SanitationBootstrap.fallback(
-        message: 'Connection failed via $apiBaseUrl: ${conciseError(error)}',
+        message: 'Connection failed. Please ensure the backend server is running.',
       );
     }
   }
@@ -126,7 +130,7 @@ class TourismApi {
     required String priority,
     required String barangay,
     required String description,
-    XFile? photo,
+    List<XFile> photos = const [],
     required String latitude,
     required String longitude,
   }) {
@@ -141,8 +145,8 @@ class TourismApi {
       'longitude': longitude,
     };
 
-    if (photo != null) {
-      return _multipartPost('/mobile/sanitation/reports/', fields, photo);
+    if (photos.isNotEmpty) {
+      return _multipartPost('/mobile/sanitation/reports/', fields, photos);
     }
 
     return _post('/mobile/sanitation/reports/', fields);
@@ -164,6 +168,7 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    String? householdCode,
     required String householdHead,
     required String barangay,
     required String address,
@@ -177,7 +182,7 @@ class TourismApi {
     required String latitude,
     required String longitude,
   }) {
-    return _post('/mobile/sanitation/household-surveys/', {
+    final body = <String, dynamic>{
       'household_head': householdHead,
       'barangay': barangay,
       'address': address,
@@ -190,7 +195,11 @@ class TourismApi {
       'remarks': remarks,
       'latitude': latitude,
       'longitude': longitude,
-    });
+    };
+    if (householdCode != null) {
+      body['household_code'] = householdCode;
+    }
+    return _post('/mobile/sanitation/household-surveys/', body);
   }
 
   Future<Map<String, dynamic>> submitSanitationInspection({
@@ -257,20 +266,22 @@ class TourismApi {
   Future<Map<String, dynamic>> _multipartPost(
     String path,
     Map<String, String> fields,
-    XFile photo,
+    List<XFile> photos,
   ) async {
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$apiBaseUrl$path'),
     );
     request.fields.addAll(fields);
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'photo',
-        await photo.readAsBytes(),
-        filename: photo.name,
-      ),
-    );
+    for (final photo in photos) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'photo',
+          await photo.readAsBytes(),
+          filename: photo.name,
+        ),
+      );
+    }
 
     final streamed = await request.send().timeout(_requestTimeout);
     final response = await http.Response.fromStream(streamed);

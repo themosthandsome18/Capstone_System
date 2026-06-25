@@ -97,7 +97,7 @@ function BookingManagement() {
   } = useTourismData();
 
   const { role } = useAuth();
-  const { addEntryRequestId, globalSearch } = useOutletContext() || {};
+  const { addEntryRequestId } = useOutletContext() || {};
   const isAdmin = role === "admin";
 
   const [search, setSearch] = useState("");
@@ -133,12 +133,6 @@ function BookingManagement() {
     }
   }, [addEntryRequestId]);
 
-  useEffect(() => {
-    if (globalSearch !== undefined) {
-      setSearch(globalSearch);
-      setPage(1);
-    }
-  }, [globalSearch]);
 
   useEffect(() => {
     let active = true;
@@ -229,8 +223,7 @@ function BookingManagement() {
   const formTotals = useMemo(() => {
     const classification =
       toInteger(form.filipino_count) +
-      toInteger(form.foreigner_count) +
-      toInteger(form.maubanin_count);
+      toInteger(form.foreigner_count);
     const gender = toInteger(form.total_male) + toInteger(form.total_female);
     const ages =
       toInteger(form.age_0_7) +
@@ -324,7 +317,7 @@ function BookingManagement() {
     const filipinoCount = toInteger(form.filipino_count);
     const foreignerCount = toInteger(form.foreigner_count);
     const maubaninCount = toInteger(form.maubanin_count);
-    const totalVisitors = filipinoCount + foreignerCount + maubaninCount;
+    const totalVisitors = filipinoCount + foreignerCount;
 
     return {
       full_name: form.full_name.trim(),
@@ -362,11 +355,15 @@ function BookingManagement() {
     const ageTotal = payload.age_0_7 + payload.age_8_59 + payload.age_60_above;
 
     if (payload.total_visitors !== genderTotal) {
-      return "Filipino + foreigner + Maubanin count must equal total male + total female.";
+      return "Filipino + foreigner count must equal total male + total female.";
     }
 
     if (payload.total_visitors !== ageTotal) {
-      return "Filipino + foreigner + Maubanin count must equal age 0-7 + age 8-59 + age 60+.";
+      return "Filipino + foreigner count must equal age 0-7 + age 8-59 + age 60+.";
+    }
+
+    if (payload.maubanin_count > payload.filipino_count) {
+      return "Maubanin count cannot be greater than Filipino count.";
     }
 
     if (payload.special_group_count > payload.total_visitors) {
@@ -458,7 +455,7 @@ function BookingManagement() {
       await updateRecord(
         record.survey_id,
         { status: nextStatus },
-        { refreshComputed: false }
+        { refreshComputed: true }
       );
       setUpdatingStatus("");
       loadBookingRows();
@@ -490,7 +487,7 @@ function BookingManagement() {
 
   function fillGenderBalance() {
     setForm((current) => {
-      const total = toInteger(current.filipino_count) + toInteger(current.foreigner_count) + toInteger(current.maubanin_count);
+      const total = toInteger(current.filipino_count) + toInteger(current.foreigner_count);
       const male = Math.min(toInteger(current.total_male), total);
 
       return {
@@ -503,7 +500,7 @@ function BookingManagement() {
 
   function fillAgeBalance() {
     setForm((current) => {
-      const total = toInteger(current.filipino_count) + toInteger(current.foreigner_count) + toInteger(current.maubanin_count);
+      const total = toInteger(current.filipino_count) + toInteger(current.foreigner_count);
       const age0To7 = Math.min(toInteger(current.age_0_7), total);
       const age60Above = Math.min(toInteger(current.age_60_above), Math.max(total - age0To7, 0));
 
@@ -793,7 +790,7 @@ function BookingManagement() {
                   "Status",
                   "Actions",
                 ].map((header) => (
-                  <th key={header}>{header}</th>
+                  <th key={header} style={header === "Actions" ? { textAlign: "center" } : {}}>{header}</th>
                 ))}
               </tr>
             </thead>

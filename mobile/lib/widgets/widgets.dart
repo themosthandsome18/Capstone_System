@@ -509,25 +509,37 @@ class HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: Stack(
-        children: [
-          DestinationImage(destination: destination, height: 170),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.65),
-                  ],
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          children: [
+            DestinationImage(destination: destination, height: 170),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.4, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.8),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           Positioned(
             left: 16,
             right: 16,
@@ -553,6 +565,7 @@ class HeroCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -596,8 +609,10 @@ class QuickAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
+      child: AnimatedScaleButton(
         onTap: onTap,
+        child: InkWell(
+          onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -624,6 +639,7 @@ class QuickAction extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -741,16 +757,26 @@ class DestinationListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
+    return AnimatedScaleButton(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
           child: Row(
             children: [
               ClipRRect(
@@ -802,6 +828,7 @@ class DestinationListCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -955,11 +982,17 @@ class InfoBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-      ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
+            ),
       child: Row(
         children: [
           Icon(icon, color: AppColors.green),
@@ -982,6 +1015,9 @@ class InfoBanner extends StatelessWidget {
           ),
         ],
       ),
+        ),
+      ),
+      ),
     );
   }
 }
@@ -1002,15 +1038,19 @@ class DataSourceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: warning ? const Color(0xfffff3bd) : const Color(0xffecfdf3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: warning ? const Color(0xffffd267) : const Color(0xffb7e8c6),
-        ),
-      ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: warning ? const Color(0xfffff3bd).withValues(alpha: 0.6) : const Color(0xffecfdf3).withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: warning ? const Color(0xffffd267).withValues(alpha: 0.5) : const Color(0xffb7e8c6).withValues(alpha: 0.5),
+            ),
+          ),
       child: Row(
         children: [
           Icon(icon, color: AppColors.green),
@@ -1032,6 +1072,8 @@ class DataSourceBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -1489,12 +1531,17 @@ class DropdownTile<T> extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<T>(
+        isExpanded: true,
         initialValue: value,
         items: choices
             .map(
               (item) => DropdownMenuItem<T>(
                 value: item,
-                child: Text(itemLabel(item), overflow: TextOverflow.ellipsis),
+                child: Text(
+                  itemLabel(item),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
             )
             .toList(),
@@ -1774,6 +1821,62 @@ class ProfileLink extends StatelessWidget {
         leading: Icon(icon),
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
         trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+class AnimatedScaleButton extends StatefulWidget {
+  const AnimatedScaleButton({super.key, required this.child, required this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<AnimatedScaleButton> createState() => _AnimatedScaleButtonState();
+}
+
+class _AnimatedScaleButtonState extends State<AnimatedScaleButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        if (widget.onTap != null) _controller.forward();
+      },
+      onTapUp: (_) {
+        if (widget.onTap != null) _controller.reverse();
+      },
+      onTapCancel: () {
+        if (widget.onTap != null) _controller.reverse();
+      },
+      onTap: widget.onTap,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: widget.child,
       ),
     );
   }

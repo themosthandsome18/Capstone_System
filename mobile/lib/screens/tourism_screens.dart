@@ -171,19 +171,6 @@ class HomePage extends StatelessWidget {
           profile.displayName,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
-        const SizedBox(height: 10),
-        DataSourceBanner(
-          icon: bootstrap.isOffline
-              ? Icons.cloud_off_outlined
-              : Icons.cloud_done_outlined,
-          title: bootstrap.isOffline
-              ? 'Cannot reach Tourism Web System'
-              : 'Connected to Tourism Web System',
-          text: bootstrap.isOffline
-              ? 'No fallback destinations are shown. Start the backend API to load the live tourism records.'
-              : 'Showing the Top ${bootstrap.destinations.length} most visited resorts from Booking Management records.',
-          warning: bootstrap.isOffline,
-        ),
         const SizedBox(height: 12),
         SearchBox(hint: 'Search destinations, resorts...'),
         const SizedBox(height: 14),
@@ -193,7 +180,7 @@ class HomePage extends StatelessWidget {
             title: 'No destinations loaded from the web system',
           )
         else
-          GestureDetector(
+          AnimatedScaleButton(
             onTap: () => onOpenDestination(heroDestination),
             child: HeroCard(destination: heroDestination),
           ),
@@ -236,13 +223,7 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
-        if (bootstrap.destinations.isNotEmpty)
-          DataSourceBanner(
-            icon: Icons.bar_chart_outlined,
-            title: 'Based on Tourism Records',
-            text:
-                'Ranked by total visitor arrivals submitted through the web system and mobile registration.',
-          ),
+
         SectionHeader(
           title: 'Most Visited Resorts',
           action: 'Map',
@@ -319,18 +300,6 @@ class _DestinationListPageState extends State<DestinationListPage> {
           title: 'Destinations',
           subtitle: 'Find places to visit',
         ),
-        DataSourceBanner(
-          icon: widget.destinations.isEmpty
-              ? Icons.cloud_off_outlined
-              : Icons.cloud_done_outlined,
-          title: widget.destinations.isEmpty
-              ? 'Cannot reach Tourism Web System'
-              : 'Top ${widget.destinations.length} most visited resorts loaded',
-          text: widget.destinations.isEmpty
-              ? 'The mobile app is not showing fake destination records.'
-              : 'Source: Tourism Booking Management records via $apiBaseUrl',
-          warning: widget.destinations.isEmpty,
-        ),
         const SizedBox(height: 12),
         SearchBox(
           hint: 'Search destinations, resorts...',
@@ -382,6 +351,134 @@ class TourismMapPage extends StatelessWidget {
   final List<Destination> destinations;
   final ValueChanged<Destination> onOpenDestination;
 
+  void _openFullscreenMap(BuildContext context, List<Destination> highlighted) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            children: [
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: const LatLng(14.185, 121.731),
+                  initialZoom: 12.0,
+                  minZoom: 8,
+                  maxZoom: 18,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'mauban_mobile_app',
+                  ),
+                  MarkerLayer(
+                    markers: highlighted
+                        .map(
+                          (destination) => Marker(
+                            point: LatLng(
+                              destination.latitude,
+                              destination.longitude,
+                            ),
+                            width: 46,
+                            height: 46,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                onOpenDestination(destination);
+                              },
+                              child: const MapPin(),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+              // Back button overlay
+              Positioned(
+                top: 48,
+                left: 16,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_back_ios_new_rounded,
+                            size: 14, color: Color(0xFF147c79)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Back',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF147c79),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Title overlay
+              Positioned(
+                top: 48,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Mauban Tourism Map',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0f2e1f),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mappedDestinations = destinations
@@ -396,58 +493,93 @@ class TourismMapPage extends StatelessWidget {
           title: 'Maps & Guides',
           subtitle: 'Interactive tourism map of Mauban',
         ),
-        DataSourceBanner(
-          icon: Icons.map_outlined,
-          title: '${mappedDestinations.length} mapped records',
-          text: highlighted.length == mappedDestinations.length
-              ? 'Tap a pin to open destination details.'
-              : 'Showing the first ${highlighted.length} pins to keep the map readable. Use Explore for the full list.',
-        ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 390,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: const LatLng(14.185, 121.731),
-                initialZoom: 10.5,
-                minZoom: 8,
-                maxZoom: 18,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        Stack(
+          children: [
+            SizedBox(
+              height: 390,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: const LatLng(14.185, 121.731),
+                    initialZoom: 10.5,
+                    minZoom: 8,
+                    maxZoom: 18,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'mauban_mobile_app',
+                    ),
+                    MarkerLayer(
+                      markers: highlighted
+                          .map(
+                            (destination) => Marker(
+                              point: LatLng(
+                                destination.latitude,
+                                destination.longitude,
+                              ),
+                              width: 46,
+                              height: 46,
+                              child: GestureDetector(
+                                onTap: () => onOpenDestination(destination),
+                                child: const MapPin(),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                 ),
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'mauban_mobile_app',
-                ),
-                MarkerLayer(
-                  markers: highlighted
-                      .map(
-                        (destination) => Marker(
-                          point: LatLng(
-                            destination.latitude,
-                            destination.longitude,
-                          ),
-                          width: 46,
-                          height: 46,
-                          child: GestureDetector(
-                            onTap: () => onOpenDestination(destination),
-                            child: const MapPin(),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
             ),
-          ),
+            // Expand button — tapping only this opens fullscreen
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: () => _openFullscreenMap(context, highlighted),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF147c79),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.fullscreen_rounded,
+                          color: Colors.white, size: 16),
+                      SizedBox(width: 5),
+                      Text(
+                        'Full Screen',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         SectionHeader(title: 'Nearby Places'),
         ...destinations
-            .take(12)
             .map(
               (destination) => DestinationListCard(
                 destination: destination,
@@ -588,7 +720,7 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
-class DestinationDetailPage extends StatelessWidget {
+class DestinationDetailPage extends StatefulWidget {
   const DestinationDetailPage({
     super.key,
     required this.destination,
@@ -605,6 +737,41 @@ class DestinationDetailPage extends StatelessWidget {
   final ValueChanged<MobileFeedbackReceipt> onFeedbackSubmitted;
 
   @override
+  State<DestinationDetailPage> createState() => _DestinationDetailPageState();
+}
+
+class _DestinationDetailPageState extends State<DestinationDetailPage> {
+  bool _loading = true;
+  List<MobileFeedbackReceipt> _recentFeedback = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDetail();
+  }
+
+  Future<void> _fetchDetail() async {
+    try {
+      final data = await widget.api.fetchDestinationDetail(widget.destination.id);
+      if (data.containsKey('recentFeedback')) {
+        final list = data['recentFeedback'] as List;
+        setState(() {
+          _recentFeedback = list.map((e) => MobileFeedbackReceipt.fromResponse(
+            e,
+            destination: widget.destination,
+            reviewer: e['reviewer'] ?? '',
+            rating: e['rating'] ?? 5,
+          )).toList();
+        });
+      }
+    } catch (_) {
+      // Ignore errors, keep empty list
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: CustomScrollView(
@@ -612,9 +779,45 @@ class DestinationDetailPage extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
+            backgroundColor: AppColors.green,
+            foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
-              title: Text(destination.name),
-              background: DestinationImage(destination: destination),
+              titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              title: Text(
+                widget.destination.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 8,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DestinationImage(destination: widget.destination),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0.0, 0.5, 1.0],
+                        colors: [
+                          Colors.black38,
+                          Colors.transparent,
+                          Colors.black87,
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -628,23 +831,51 @@ class DestinationDetailPage extends StatelessWidget {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      RatingPill(rating: destination.rating),
-                      StatusPill(text: destination.type),
-                      PermitPill(verified: destination.hasMayorPermit),
+                      RatingPill(rating: widget.destination.rating),
+                      StatusPill(text: widget.destination.type),
+                      PermitPill(verified: widget.destination.hasMayorPermit),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    destination.location,
+                    widget.destination.location,
                     style: const TextStyle(color: AppColors.muted),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    destination.description,
+                    widget.destination.description,
                     style: const TextStyle(height: 1.45),
                   ),
+                  if (widget.destination.access.trim().isNotEmpty) ...[
+                    SectionHeader(title: 'How to get there'),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.directions_bus_outlined, color: AppColors.green, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              widget.destination.access,
+                              style: const TextStyle(
+                                height: 1.4,
+                                color: Color(0xFF166534),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   SectionHeader(title: 'Tourism Record'),
-                  DestinationFactsPanel(destination: destination),
+                  DestinationFactsPanel(destination: widget.destination),
                   SectionHeader(title: 'Amenities'),
                   Wrap(
                     spacing: 8,
@@ -660,7 +891,7 @@ class DestinationDetailPage extends StatelessWidget {
                     ],
                   ),
                   SectionHeader(title: 'Location'),
-                  LocationCard(destination: destination),
+                  LocationCard(destination: widget.destination),
                   const SizedBox(height: 18),
                   FilledButton.icon(
                     onPressed: () async {
@@ -668,13 +899,13 @@ class DestinationDetailPage extends StatelessWidget {
                           .push<MobileVisitReceipt>(
                             MaterialPageRoute(
                               builder: (context) => TouristRegistrationPage(
-                                api: api,
-                                bootstrap: bootstrap,
-                                initialDestination: destination,
+                                api: widget.api,
+                                bootstrap: widget.bootstrap,
+                                initialDestination: widget.destination,
                               ),
                             ),
                           );
-                      if (receipt != null) onVisitSubmitted(receipt);
+                      if (receipt != null) widget.onVisitSubmitted(receipt);
                     },
                     icon: const Icon(Icons.send_outlined),
                     label: const Text('Register Visit'),
@@ -686,16 +917,114 @@ class DestinationDetailPage extends StatelessWidget {
                           .push<MobileFeedbackReceipt>(
                             MaterialPageRoute(
                               builder: (context) => FeedbackPage(
-                                api: api,
-                                destination: destination,
+                                api: widget.api,
+                                destination: widget.destination,
                               ),
                             ),
                           );
-                      if (receipt != null) onFeedbackSubmitted(receipt);
+                      if (receipt != null) {
+                        widget.onFeedbackSubmitted(receipt);
+                        _fetchDetail();
+                      }
                     },
                     icon: const Icon(Icons.star_border),
                     label: const Text('Share Feedback'),
                   ),
+                  const SizedBox(height: 24),
+                  SectionHeader(title: 'Ratings & Reviews'),
+                  if (_loading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_recentFeedback.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.rate_review_outlined, color: Colors.grey, size: 32),
+                          SizedBox(height: 8),
+                          Text('No reviews yet. Be the first!', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._recentFeedback.map((feedback) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  feedback.reviewer,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                Row(
+                                  children: List.generate(
+                                    5,
+                                    (index) => Icon(
+                                      index < feedback.rating ? Icons.star : Icons.star_border,
+                                      size: 14,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (feedback.date.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                                child: Text(feedback.date, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              ),
+                            if (feedback.message.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(feedback.message, style: const TextStyle(fontSize: 13, height: 1.4)),
+                              ),
+                            if (feedback.reply.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(top: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border(left: BorderSide(color: AppColors.green, width: 3)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Tourism Admin Response',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.green),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(feedback.reply, style: const TextStyle(fontSize: 13, height: 1.4)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    )),
                 ],
               ),
             ),

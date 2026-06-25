@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import {
   ArcElement,
   BarElement,
@@ -9,7 +9,7 @@ import {
   RadialLinearScale,
   Tooltip,
 } from "chart.js";
-import { Bar, Doughnut, Pie, PolarArea } from "react-chartjs-2";
+import { Bar, Doughnut, Pie } from "react-chartjs-2";
 import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
@@ -140,6 +140,36 @@ const tourismTitleMap = {
 };
 
 
+
+
+const mainReportChartOptions = {
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: true },
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: {
+        color: "#5f6f6b",
+        font: { size: 16 },
+      },
+      grid: {
+        color: "rgba(148, 163, 184, 0.25)",
+        borderDash: [4, 4],
+      },
+    },
+    x: {
+      ticks: {
+        color: "#5f6f6b",
+        font: { size: 15 },
+      },
+      grid: { display: false },
+    },
+  },
+};
+
 function AnalyticsAndReport() {
   const { referenceTables, reportData, refreshReportData } = useTourismData();
 
@@ -153,15 +183,18 @@ function AnalyticsAndReport() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportError, setReportError] = useState("");
 
-  const rows = reportData.rows || [];
-  const questionAnswers = (reportData.questionAnswers || []).map((item) => ({
-    ...item,
-    visual: item.visual || buildFallbackVisual(item),
-  }));
+  const rows = useMemo(() => reportData.rows || [], [reportData.rows]);
+  const questionAnswers = useMemo(() => {
+    return (reportData.questionAnswers || []).map((item) => ({
+      ...item,
+      visual: item.visual || buildFallbackVisual(item),
+    }));
+  }, [reportData.questionAnswers]);
+
   const totalVisitors = reportData.totals?.visitors || 0;
   const totalRevenue = reportData.totals?.revenue || 0;
 
-  const chartData = {
+  const chartData = useMemo(() => ({
     labels: rows.map((item) => item.name),
     datasets: [
       {
@@ -171,7 +204,7 @@ function AnalyticsAndReport() {
         barThickness: reportType === "resort" ? 80 : 55,
       },
     ],
-  };
+  }), [rows, reportType]);
 
   useEffect(() => {
     let active = true;
@@ -487,33 +520,7 @@ function AnalyticsAndReport() {
           <div className="report-chart-area">
             <Bar
               data={chartData}
-              options={{
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false },
-                  tooltip: { enabled: true },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: "#5f6f6b",
-                      font: { size: 16 },
-                    },
-                    grid: {
-                      color: "rgba(148, 163, 184, 0.25)",
-                      borderDash: [4, 4],
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#5f6f6b",
-                      font: { size: 15 },
-                    },
-                    grid: { display: false },
-                  },
-                },
-              }}
+              options={mainReportChartOptions}
             />
           </div>
         </div>
@@ -561,89 +568,26 @@ function AnalyticsAndReport() {
   );
 }
 
-function VisualAnswer({ visual, questionId }) {
+const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
   if (!visual) {
     return null;
   }
 
-  // Helper for rendering Pie charts
-  if (
-    questionId === "top_resort" ||
-    questionId === "overnight_resort" ||
-    questionId === "top_origin"
-  ) {
-    const mainLabel = visual.label || "Top Destination";
-    const mainValue = Number(visual.value || 0);
-    const totalVal = Number(visual.total || 0);
-    const othersValue = Math.max(0, totalVal - mainValue);
 
-    const chartData = {
-      labels: [mainLabel, "Others"],
-      datasets: [
-        {
-          data: [mainValue, othersValue],
-          backgroundColor: ["#147c79", "#cbd5e1"],
-          borderWidth: 0,
-        },
-      ],
-    };
-
-    const isDoughnut = questionId === "top_origin";
-
-    return (
-      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
-        {isDoughnut ? (
-          <Doughnut
-            data={chartData}
-            options={{
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: true,
-                  position: "right",
-                  labels: {
-                    boxWidth: 8,
-                    font: { size: 9, weight: "bold" },
-                    color: "#475569",
-                    padding: 6,
-                  },
-                },
-                tooltip: { enabled: true },
-              },
-            }}
-          />
-        ) : (
-          <Pie
-            data={chartData}
-            options={{
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: true,
-                  position: "right",
-                  labels: {
-                    boxWidth: 8,
-                    font: { size: 9, weight: "bold" },
-                    color: "#475569",
-                    padding: 6,
-                  },
-                },
-                tooltip: { enabled: true },
-              },
-            }}
-          />
-        )}
-      </div>
-    );
-  }
 
   if (questionId === "stay_type" || questionId === "classification" || questionId === "validation") {
     const isPie = questionId === "stay_type";
+    const items = visual.items || [];
+    const total = items.reduce((sum, item) => sum + (item.value || 0), 0);
     const chartData = {
-      labels: (visual.items || []).map((item) => item.label),
+      labels: items.map((item) => {
+        const val = Number(item.value || 0);
+        const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "0.0";
+        return `${item.label}: ${val.toLocaleString()} (${pct}%)`;
+      }),
       datasets: [
         {
-          data: (visual.items || []).map((item) => item.value),
+          data: items.map((item) => item.value),
           backgroundColor: isPie 
             ? ["#147c79", "#ffc978"]
             : ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
@@ -653,7 +597,7 @@ function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         {isPie ? (
           <Pie
             data={chartData}
@@ -664,10 +608,10 @@ function VisualAnswer({ visual, questionId }) {
                   display: true,
                   position: "right",
                   labels: {
-                    boxWidth: 8,
-                    font: { size: 9, weight: "bold" },
+                    boxWidth: 10,
+                    font: { size: 11, weight: "bold" },
                     color: "#475569",
-                    padding: 6,
+                    padding: 8,
                   },
                 },
                 tooltip: { enabled: true },
@@ -684,10 +628,10 @@ function VisualAnswer({ visual, questionId }) {
                   display: true,
                   position: "right",
                   labels: {
-                    boxWidth: 8,
-                    font: { size: 9, weight: "bold" },
+                    boxWidth: 10,
+                    font: { size: 11, weight: "bold" },
                     color: "#475569",
-                    padding: 6,
+                    padding: 8,
                   },
                 },
                 tooltip: { enabled: true },
@@ -699,55 +643,7 @@ function VisualAnswer({ visual, questionId }) {
     );
   }
 
-  if (questionId === "visit_purpose") {
-    const chartData = {
-      labels: (visual.items || [
-        { label: visual.label, value: visual.value },
-        { label: "Others", value: Math.max(0, (visual.total || 0) - (visual.value || 0)) }
-      ]).map((item) => item.label),
-      datasets: [
-        {
-          data: (visual.items || [
-            { label: visual.label, value: visual.value },
-            { label: "Others", value: Math.max(0, (visual.total || 0) - (visual.value || 0)) }
-          ]).map((item) => item.value),
-          backgroundColor: ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
-          borderWidth: 1,
-          borderColor: "#ffffff",
-        },
-      ],
-    };
 
-    return (
-      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
-        <PolarArea
-          data={chartData}
-          options={{
-            maintainAspectRatio: false,
-            scales: {
-              r: {
-                ticks: { display: false },
-                grid: { color: "rgba(148, 163, 184, 0.15)" },
-              },
-            },
-            plugins: {
-              legend: {
-                display: true,
-                position: "right",
-                labels: {
-                  boxWidth: 8,
-                  font: { size: 9, weight: "bold" },
-                  color: "#475569",
-                  padding: 6,
-                },
-              },
-              tooltip: { enabled: true },
-            },
-          }}
-        />
-      </div>
-    );
-  }
 
   if (questionId === "peak_month") {
     // Render custom SVG Circular Progress ring
@@ -755,25 +651,25 @@ function VisualAnswer({ visual, questionId }) {
     const value = visual.value || 0;
     const label = visual.label || "Peak Season";
 
-    const radius = 30;
-    const strokeWidth = 6;
+    const radius = 38;
+    const strokeWidth = 8;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (clampPercent(percentage) / 100) * circumference;
 
     return (
-      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "15px 0" }}>
-        <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "20px", margin: "15px 0" }}>
+        <svg width="100" height="100" viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
           <circle
-            cx="40"
-            cy="40"
+            cx="50"
+            cy="50"
             r={radius}
             fill="transparent"
             stroke="#f1f5f9"
             strokeWidth={strokeWidth}
           />
           <circle
-            cx="40"
-            cy="40"
+            cx="50"
+            cy="50"
             r={radius}
             fill="transparent"
             stroke="#147c79"
@@ -785,11 +681,11 @@ function VisualAnswer({ visual, questionId }) {
           />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <strong style={{ fontSize: "20px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
-          <span style={{ fontSize: "11px", fontWeight: "700", color: "#1e293b", marginTop: "3px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
-          <small style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+          <small style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
             {Number(value).toLocaleString()} visitors
           </small>
         </div>
@@ -801,26 +697,26 @@ function VisualAnswer({ visual, questionId }) {
     const value = visual.value || "0";
     
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "20px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", margin: "20px 0" }}>
         <div style={{
-          width: "48px",
-          height: "48px",
+          width: "60px",
+          height: "60px",
           borderRadius: "50%",
           background: "#e6f4f3",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: "#147c79",
-          fontSize: "20px",
+          fontSize: "26px",
           flexShrink: 0,
         }}>
           <FiClock />
         </div>
         <div>
-          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1 }}>
+          <strong style={{ fontSize: "32px", fontWeight: "900", color: "#147c79", lineHeight: 1 }}>
             {value}
           </strong>
-          <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
+          <span style={{ fontSize: "13px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
             nights average length of stay
           </span>
         </div>
@@ -834,25 +730,25 @@ function VisualAnswer({ visual, questionId }) {
     const value = visual.value || 0;
     const label = visual.label || "";
 
-    const radius = 30;
-    const strokeWidth = 6;
+    const radius = 38;
+    const strokeWidth = 8;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (clampPercent(percentage) / 100) * circumference;
 
     return (
-      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "15px 0" }}>
-        <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <div className="radial-progress-widget" style={{ display: "flex", alignItems: "center", gap: "20px", margin: "15px 0" }}>
+        <svg width="100" height="100" viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
           <circle
-            cx="40"
-            cy="40"
+            cx="50"
+            cy="50"
             r={radius}
             fill="transparent"
             stroke="#f1f5f9"
             strokeWidth={strokeWidth}
           />
           <circle
-            cx="40"
-            cy="40"
+            cx="50"
+            cy="50"
             r={radius}
             fill="transparent"
             stroke="#147c79"
@@ -864,11 +760,11 @@ function VisualAnswer({ visual, questionId }) {
           />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <strong style={{ fontSize: "20px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
-          <span style={{ fontSize: "11px", fontWeight: "700", color: "#1e293b", marginTop: "3px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
-          <small style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+          <small style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
             {Number(value).toLocaleString()} visitors
           </small>
         </div>
@@ -890,7 +786,7 @@ function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         <Bar
           data={chartData}
           options={{
@@ -902,11 +798,11 @@ function VisualAnswer({ visual, questionId }) {
             scales: {
               y: {
                 beginAtZero: true,
-                ticks: { font: { size: 9 }, color: "#64748b" },
+                ticks: { font: { size: 11 }, color: "#64748b" },
                 grid: { color: "rgba(148, 163, 184, 0.1)" },
               },
               x: {
-                ticks: { font: { size: 9 }, color: "#64748b" },
+                ticks: { font: { size: 11 }, color: "#64748b" },
                 grid: { display: false },
               },
             },
@@ -917,11 +813,17 @@ function VisualAnswer({ visual, questionId }) {
   }
 
   if (visual.type === "stack" || visual.type === "split") {
+    const items = visual.items || [];
+    const total = items.reduce((sum, item) => sum + (item.value || 0), 0);
     const chartData = {
-      labels: (visual.items || []).map((item) => item.label),
+      labels: items.map((item) => {
+        const val = Number(item.value || 0);
+        const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "0.0";
+        return `${item.label}: ${val.toLocaleString()} (${pct}%)`;
+      }),
       datasets: [
         {
-          data: (visual.items || []).map((item) => item.value),
+          data: items.map((item) => item.value),
           backgroundColor: ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
           borderWidth: 0,
         },
@@ -929,7 +831,7 @@ function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "125px", position: "relative", margin: "10px 0" }}>
+      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         <Doughnut
           data={chartData}
           options={{
@@ -939,10 +841,10 @@ function VisualAnswer({ visual, questionId }) {
                 display: true,
                 position: "right",
                 labels: {
-                  boxWidth: 8,
-                  font: { size: 9, weight: "bold" },
+                  boxWidth: 10,
+                  font: { size: 11, weight: "bold" },
                   color: "#475569",
-                  padding: 6,
+                  padding: 8,
                 },
               },
               tooltip: { enabled: true },
@@ -963,8 +865,49 @@ function VisualAnswer({ visual, questionId }) {
     );
   }
 
+  if (visual.type === "ranking") {
+    const chartData = {
+      labels: (visual.items || []).map((item) => item.label),
+      datasets: [
+        {
+          data: (visual.items || []).map((item) => item.value),
+          backgroundColor: "#147c79",
+          borderRadius: 4,
+          maxBarThickness: 16,
+        },
+      ],
+    };
+
+    return (
+      <div style={{ height: `${Math.max(150, (visual.items || []).length * 36)}px`, position: "relative", margin: "10px 0" }}>
+        <Bar
+          data={chartData}
+          options={{
+            indexAxis: "y",
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: true },
+            },
+            scales: {
+              x: {
+                beginAtZero: true,
+                ticks: { font: { size: 11 }, color: "#64748b" },
+                grid: { color: "rgba(148, 163, 184, 0.1)" },
+              },
+              y: {
+                ticks: { font: { size: 11 }, color: "#64748b" },
+                grid: { display: false },
+              },
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
   return null;
-}
+});
 
 function buildFallbackVisual(item) {
   const answer = item.answer || "";

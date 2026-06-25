@@ -29,6 +29,7 @@ function InspectionManagement() {
     loading,
     error,
     createInspection,
+    updateInspection,
   } = useSanitationData();
 
   const [view, setView] = useState("list");
@@ -320,12 +321,14 @@ function InspectionManagement() {
           </button>
         </div>
 
-        <div className="inspection-legend">
-          <span className="good">Good Standing</span>
-          <span className="upcoming">Upcoming</span>
-          <span className="completion">For Completion</span>
-          <span className="violation">Violation</span>
-        </div>
+        {view === "list" && (
+          <div className="inspection-legend">
+            <span className="good">Good Standing</span>
+            <span className="upcoming">Upcoming</span>
+            <span className="completion">For Completion</span>
+            <span className="violation">Violation</span>
+          </div>
+        )}
       </div>
 
       {view === "list" ? (
@@ -500,8 +503,8 @@ function InspectionManagement() {
           </div>
 
           <div className="inspection-calendar-key">
-            <span className="completed">Inspection Date</span>
-            <span className="due">Next Due</span>
+            <span className="good">Upcoming Due</span>
+            <span className="violation">Overdue</span>
           </div>
 
           <div className="calendar-weekdays">
@@ -545,6 +548,7 @@ function InspectionManagement() {
           establishment={selectedEstablishment}
           businessTypes={businessTypes}
           createInspection={createInspection}
+          updateInspection={updateInspection}
           onClose={() => setShowForm(false)}
         />
       ) : null}
@@ -556,6 +560,7 @@ function InspectionFormModal({
   establishment,
   businessTypes,
   createInspection,
+  updateInspection,
   onClose,
 }) {
   const selectedType = businessTypes.find(
@@ -566,25 +571,84 @@ function InspectionFormModal({
     (requirement) => requirement.permit_size === establishment.permit_size
   );
 
-  const [inspectorName, setInspectorName] = useState("Insp. J. Cruz");
-  const [inspectionDate, setInspectionDate] = useState(getTodayDate());
+  if (defaultRequirements.length === 0) {
+    const STANDARD_REQUIREMENT_NAMES = [
+      "1x1 picture of owner and employees",
+      "Barangay Clearance of owner",
+      "CTC/Cedula of owner and employees",
+      "Certificate of 40-hour Training Course (Owner)",
+      "Certificate of Potability of Product Water",
+      "Chest X-ray Results (Owner & employees)",
+      "DOH Operational Permit Certificate",
+      "Potability of Water Supply - Microbiological Examination",
+      "Potability of Water Supply - Physical/Chemical Examination",
+      "Xerox copy of DTI/SEC/CDA",
+    ];
+    defaultRequirements.push(
+      ...STANDARD_REQUIREMENT_NAMES.map((name) => ({
+        requirement_name: name,
+        permit_size: establishment.permit_size || "sp",
+        is_required: true,
+      }))
+    );
+  }
+
+  const isDraftOrRecent = establishment.latestInspection?.is_draft || 
+    establishment.latestInspection?.inspection_date === getTodayDate();
+    
+  const draft = isDraftOrRecent ? establishment.latestInspection : null;
+
+  const [inspectorName, setInspectorName] = useState(draft?.inspector_name || "Insp. J. Cruz");
+  const [inspectionDate, setInspectionDate] = useState(draft?.inspection_date || getTodayDate());
   const [nextDueDate, setNextDueDate] = useState(
-    getSuggestedNextDueDate(
-      getTodayDate(),
+    draft?.next_due_date || getSuggestedNextDueDate(
+      draft?.inspection_date || getTodayDate(),
       establishment.inspection_frequency || "monthly"
     )
   );
-  const [findings, setFindings] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [statusAfterInspection, setStatusAfterInspection] =
-    useState("good_standing");
-  const [checks, setChecks] = useState(() =>
-    defaultRequirements.map((requirement) => ({
-      requirement_name: requirement.requirement_name,
-      is_complied: true,
-      notes: "",
-    }))
-  );
+  const [findings, setFindings] = useState(draft?.findings || "");
+  const [remarks, setRemarks] = useState(draft?.remarks || "");
+  const initialChecks = (() => {
+    const existingChecks = draft?.checklist_items || [];
+    // Default to true only if in good standing or upcoming
+    const defaultComplied = establishment.compliance_status === "good_standing" || establishment.compliance_status === "upcoming";
+    
+    return defaultRequirements.map((requirement, index) => {
+      const existing = existingChecks.find(c => c.requirement_name === requirement.requirement_name);
+      if (existing) {
+        return {
+          requirement_name: existing.requirement_name,
+          is_complied: existing.is_complied,
+          notes: existing.notes || "",
+        };
+      }
+      
+      let isComplied = defaultComplied;
+      if (establishment.compliance_status === "for_completion") {
+        // To accurately reflect 'for_completion', we check all items EXCEPT the last one (if there are multiple)
+        isComplied = index < defaultRequirements.length - 1 || defaultRequirements.length === 1;
+      }
+
+      return {
+        requirement_name: requirement.requirement_name,
+        is_complied: isComplied,
+        notes: "",
+      };
+    });
+  })();
+
+  const [checks, setChecks] = useState(initialChecks);
+
+  const [statusAfterInspection, setStatusAfterInspection] = useState(() => {
+    if (draft?.status_after_inspection) return draft.status_after_inspection;
+    
+    const completed = initialChecks.filter((item) => item.is_complied).length;
+    const total = initialChecks.length;
+    
+    if (total === 0 || completed === total) return "good_standing";
+    if (completed === 0) return "violation";
+    return "for_completion";
+  });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -593,23 +657,23 @@ function InspectionFormModal({
   const percentage = Math.round((completedCount / totalCount) * 100);
 
   function handleCheck(index) {
-    setChecks((current) => {
-      const updated = current.map((item, itemIndex) =>
-        itemIndex === index
-          ? { ...item, is_complied: !item.is_complied }
-          : item
-      );
+    const updated = checks.map((item, itemIndex) =>
+      itemIndex === index
+        ? { ...item, is_complied: !item.is_complied }
+        : item
+    );
+    setChecks(updated);
 
-      const hasMissing = updated.some((item) => !item.is_complied);
+    const completed = updated.filter((item) => item.is_complied).length;
+    const total = updated.length;
 
-      if (hasMissing) {
-        setStatusAfterInspection("for_completion");
-      } else {
-        setStatusAfterInspection("good_standing");
-      }
-
-      return updated;
-    });
+    if (total === 0 || completed === total) {
+      setStatusAfterInspection("good_standing");
+    } else if (completed === 0) {
+      setStatusAfterInspection("violation");
+    } else {
+      setStatusAfterInspection("for_completion");
+    }
   }
 
   function getErrorMessage(requestError) {
@@ -644,18 +708,24 @@ function InspectionFormModal({
     setFormError("");
 
     try {
-      await createInspection({
+      const payload = {
         establishment: establishment.id,
         inspector_name: inspectorName.trim(),
         inspection_date: inspectionDate,
         next_due_date: nextDueDate || null,
         findings: findings.trim(),
         remarks: remarks.trim(),
-        status_after_inspection: isDraft ? "upcoming" : statusAfterInspection,
+        status_after_inspection: statusAfterInspection,
         photo_documentation: "",
         is_draft: isDraft,
         checklist_items: checks,
-      });
+      };
+
+      if (draft) {
+        await updateInspection(draft.id, payload);
+      } else {
+        await createInspection(payload);
+      }
 
       onClose();
     } catch (requestError) {
@@ -949,26 +1019,32 @@ function buildCalendarEventMap(rows) {
   }
 
   rows.forEach((row) => {
-    addEvent(row.lastInspectionDate, {
-      key: `${row.id}-inspection-${row.lastInspectionDate}`,
-      row,
-      title: row.business_name,
-      typeLabel: "Inspection",
-      status: "completed",
-    });
+    if (row.nextDueDate) {
+      const diff = getDayDifference(row.nextDueDate);
+      
+      // Overdue is red, upcoming is green
+      let statusClass = "good"; // Green
+      let typeLabel = "Upcoming Due";
 
-    addEvent(row.nextDueDate, {
-      key: `${row.id}-due-${row.nextDueDate}`,
-      row,
-      title: row.business_name,
-      typeLabel: "Next Due",
-      status: calendarStatusClass(row.compliance_status_label),
-    });
+      if (diff < 0) {
+        statusClass = "violation"; // Red
+        typeLabel = "Overdue";
+      }
+
+      addEvent(row.nextDueDate, {
+        key: `${row.id}-due-${row.nextDueDate}`,
+        row,
+        title: row.business_name,
+        typeLabel: typeLabel,
+        status: statusClass,
+      });
+    }
   });
 
   return eventsByDate;
 }
 
+// eslint-disable-next-line no-unused-vars
 function calendarStatusClass(status = "") {
   const normalized = status.toLowerCase();
 

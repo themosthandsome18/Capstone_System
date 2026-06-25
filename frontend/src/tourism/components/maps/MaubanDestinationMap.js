@@ -50,26 +50,6 @@ function getDestinationCoordinates(destination) {
 }
 
 function getMarkerColor(type = "") {
-  if (type.includes("Island")) {
-    return "#53c7be";
-  }
-
-  if (type.includes("Beach")) {
-    return "#2f9c94";
-  }
-
-  if (type.includes("Cave")) {
-    return "#5b8df0";
-  }
-
-  if (type.includes("Mountain") || type.includes("Eco Adventure")) {
-    return "#f59e0b";
-  }
-
-  if (type.includes("Eco")) {
-    return "#5b8df0";
-  }
-
   return "#ef4444";
 }
 
@@ -132,6 +112,13 @@ function MaubanDestinationMap({
   onSelectDestination,
   mapLayer = "street",
 }) {
+  const markerRefs = useRef({});
+
+  useEffect(() => {
+    if (selectedDestination?.resort_id && markerRefs.current[selectedDestination.resort_id]) {
+      markerRefs.current[selectedDestination.resort_id].openPopup();
+    }
+  }, [selectedDestination]);
   const mappedDestinations = useMemo(() => {
     return destinations
       .map((destination) => ({
@@ -144,36 +131,7 @@ function MaubanDestinationMap({
 
   return (
     <div className="mauban-map-frame">
-      <div className="absolute left-3 top-3 z-[500] rounded-[6px] bg-white/95 px-3 py-3 shadow-md">
-        <p className="mb-2 text-xs font-semibold text-slate-700">Legend</p>
 
-        <div className="space-y-2 text-[11px] text-slate-600">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#2f9c94]" />
-            Beach
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#53c7be]" />
-            Island
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#5b8df0]" />
-            Eco / Cave
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#f59e0b]" />
-            Mountain
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#ef4444]" />
-            Landmark
-          </div>
-        </div>
-      </div>
 
       <MapContainer
         center={MAUBAN_TOURISM_CENTER}
@@ -198,6 +156,11 @@ function MaubanDestinationMap({
           return (
             <CircleMarker
               key={destination.resort_id}
+              ref={(ref) => {
+                if (ref) {
+                  markerRefs.current[destination.resort_id] = ref;
+                }
+              }}
               center={[
                 destination.mapCoordinates.lat,
                 destination.mapCoordinates.lng,
@@ -213,19 +176,48 @@ function MaubanDestinationMap({
                 click: () => onSelectDestination(destination),
               }}
             >
-              <Popup>
-                <div className="min-w-[180px]">
-                  <p className="font-semibold text-slate-900">
+              <Popup minWidth={220} maxWidth={260}>
+                <div style={{ padding: "2px 0" }}>
+                  {destination.image && (
+                    <img
+                      src={destination.image}
+                      alt={destination.resort_name}
+                      style={{
+                        width: "100%",
+                        height: "110px",
+                        objectFit: "cover",
+                        borderRadius: "6px",
+                        marginBottom: "8px",
+                        display: "block",
+                      }}
+                      onError={(e) => { e.target.style.display = "none"; }}
+                    />
+                  )}
+                  <p style={{ fontWeight: 700, fontSize: "13px", color: "#111827", margin: "0 0 4px" }}>
                     {destination.resort_name}
                   </p>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    {destination.location}
-                  </p>
-
-                  <p className="mt-2 text-[11px] text-slate-500">
-                    Lat: {destination.mapCoordinates.lat}, Lng:{" "}
-                    {destination.mapCoordinates.lng}
+                  <span style={{
+                    display: "inline-block",
+                    background: "#dcfce7",
+                    color: "#16a34a",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    borderRadius: "999px",
+                    padding: "1px 8px",
+                    marginBottom: "6px",
+                  }}>
+                    {destination.type}
+                  </span>
+                  {destination.tourism_rating && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "4px" }}>
+                      {[1,2,3,4,5].map((s) => (
+                        <span key={s} style={{ color: Number(destination.tourism_rating) >= s ? "#f59e0b" : "#d1d5db", fontSize: "12px" }}>★</span>
+                      ))}
+                      <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "2px" }}>{destination.tourism_rating}</span>
+                    </div>
+                  )}
+                  <p style={{ fontSize: "11px", color: "#6b7280", margin: "0" }}>
+                    📍 {destination.location}
                   </p>
                 </div>
               </Popup>
