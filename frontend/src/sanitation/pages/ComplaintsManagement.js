@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FiAlertCircle,
   FiAlertTriangle,
   FiCalendar,
-  FiCheckCircle,
   FiClock,
   FiFilter,
-  FiImage,
-  FiInfo,
   FiMapPin,
   FiSearch,
-  FiShield,
   FiTrash2,
   FiUser,
-  FiX,
 } from "react-icons/fi";
 import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
@@ -178,19 +172,6 @@ export function getScheduleDateLimits(priority) {
   };
 }
 
-const emptyForm = {
-  complainant_name: "",
-  contact_number: "",
-  category: "Contaminated Water Source",
-  barangay: "",
-  reported_date: new Date().toISOString().slice(0, 10),
-  status: "pending",
-  priority: "high",
-  description: "",
-  action_taken: "",
-  resolved_date: "",
-};
-
 const emptySchedule = {
   inspector: "Insp. J. Cruz",
   date: new Date().toISOString().slice(0, 10),
@@ -207,7 +188,6 @@ function ComplaintsManagement() {
     loading,
     error,
     refreshComplaintData,
-    createComplaint,
     updateComplaint,
     deleteComplaint,
   } = useSanitationData();
@@ -236,18 +216,14 @@ function ComplaintsManagement() {
     status: "all", // "all", "pending", "investigating", "resolved"
   });
 
-  const [formOpen, setFormOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
-  const [form, setForm] = useState(emptyForm);
   const [schedule, setSchedule] = useState(emptySchedule);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
-  const [anonymous, setAnonymous] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pageError, setPageError] = useState("");
   const [dayModalData, setDayModalData] = useState(null);
   const [inspectionModalData, setInspectionModalData] = useState(null);
-  const [dailyCount, setDailyCount] = useState(() => getDailyReportCount());
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
@@ -314,61 +290,6 @@ function ComplaintsManagement() {
       }
     }
   }, [selectedReport, visibleRows]);
-
-  function openPublicForm() {
-    const initialCategory = CATEGORY_DEFINITIONS[0];
-    setForm({
-      ...emptyForm,
-      category: initialCategory.category,
-      priority: initialCategory.priority,
-    });
-    setAnonymous(false);
-    setFormOpen(true);
-  }
-
-  function handleFormCategoryChange(newCategory) {
-    const info = getCategoryInfo(newCategory);
-    setForm((current) => ({
-      ...current,
-      category: newCategory,
-      priority: info.priority,
-    }));
-  }
-
-  async function handleSubmitReport(event) {
-    event.preventDefault();
-
-    if (dailyCount >= REPORT_LIMIT_MAX) {
-      setPageError(
-        "Nakaabot ka na sa limit na 5 community reports para sa araw na ito. Upang maiwasan ang spam at masuri nang maayos ang mga naunang ulat, mangyaring maghintay bago magsumite muli."
-      );
-      return;
-    }
-
-    setSaving(true);
-
-    const payload = {
-      ...form,
-      establishment: null,
-      complainant_name: anonymous ? "" : form.complainant_name,
-      contact_number: anonymous ? "" : form.contact_number,
-      status: "pending",
-      resolved_date: null,
-    };
-
-    try {
-      const created = await createComplaint(payload);
-      incrementDailyReportCount();
-      setDailyCount(getDailyReportCount());
-      setSelectedReport(created);
-      setFormOpen(false);
-      setPageError("");
-    } catch (requestError) {
-      setPageError(requestError.message || "Unable to submit community concern.");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function updateReportStatus(report, status, actionTaken = "") {
     setSaving(true);
@@ -498,10 +419,6 @@ function ComplaintsManagement() {
             Track public sanitation concerns from residents, assess urgency SLAs, and schedule on-site inspections.
           </p>
         </div>
-
-        <button type="button" className="community-primary-btn" onClick={openPublicForm}>
-          View Public Concern Form
-        </button>
       </header>
 
       {error || pageError ? (
@@ -615,22 +532,6 @@ function ComplaintsManagement() {
           )}
         </section>
       </main>
-
-      {formOpen ? (
-        <PublicReportModal
-          form={form}
-          anonymous={anonymous}
-          saving={saving}
-          dailyCount={dailyCount}
-          onAnonymousChange={setAnonymous}
-          onClose={() => setFormOpen(false)}
-          onSubmit={handleSubmitReport}
-          onCategoryChange={handleFormCategoryChange}
-          onChange={(field, value) =>
-            setForm((current) => ({ ...current, [field]: value }))
-          }
-        />
-      ) : null}
 
       {scheduleOpen && selectedReport ? (
         <ScheduleInspectionModal
@@ -900,7 +801,7 @@ function ReportListCard({ item, active, onSelect }) {
         ) : (
           <span className="urgency-tag routine">🟢 Routine</span>
         )}
-        <small>{relativeReportDate(item.reported_date)}</small>
+        <small>{relativeReportDate(item.reported_date)} • {formatReportTime12h(item)}</small>
       </div>
     </button>
   );
@@ -983,6 +884,11 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
           <span>Reporter</span>
           <strong>{report.complainant_name || "Anonymous"}</strong>
           <small>{report.contact_number || "No contact number provided"}</small>
+        </div>
+        <div>
+          <span>Reported Time</span>
+          <strong>{formatReportTime12h(report)}</strong>
+          <small>{report.reported_date || "Today"}</small>
         </div>
         <div
           onClick={onLocationClick}
@@ -1091,220 +997,6 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
           Mark Resolved
         </button>
       </div>
-    </div>
-  );
-}
-
-function PublicReportModal({
-  form,
-  anonymous,
-  saving,
-  dailyCount,
-  onAnonymousChange,
-  onClose,
-  onSubmit,
-  onCategoryChange,
-  onChange,
-}) {
-  const currentCategoryInfo = getCategoryInfo(form.category);
-  const [showGuide, setShowGuide] = useState(true);
-  const isLimitReached = dailyCount >= REPORT_LIMIT_MAX;
-  const remainingAllowance = Math.max(0, REPORT_LIMIT_MAX - dailyCount);
-
-  return (
-    <div className="community-modal-backdrop">
-      <form className="community-public-modal" onSubmit={onSubmit}>
-        <button type="button" className="community-back-btn" onClick={onClose}>
-          &larr; Back
-        </button>
-
-        <div className="modal-header-with-badge">
-          <div>
-            <h2>Report Unsanitary Conditions</h2>
-            <p>Saw something concerning? Tell the Sanitary Section so they can inspect.</p>
-          </div>
-          <span className={`daily-limit-badge ${isLimitReached ? "limit-full" : "limit-ok"}`}>
-            <FiShield /> {remainingAllowance} of {REPORT_LIMIT_MAX} submissions left today
-          </span>
-        </div>
-
-        {/* ── Anti-Spam Limit Blocking Banner ── */}
-        {isLimitReached && (
-          <div className="report-limit-reached-banner">
-            <FiAlertCircle />
-            <div>
-              <strong>Daily Submission Limit Reached (5 of 5 used)</strong>
-              <p>
-                Naabot mo na ang pinakamataas na limit na 5 reports ngayong araw. Ang patakarang ito ay upang maiwasan ang spam at masiguro na matutugunan ng Sanitary Inspectors ang bawat concern. Mangyaring maghintay muna sa update ng inyong mga naunang ulat.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Citizen Awareness & Scope Guide ── */}
-        <div className="sanitation-scope-guide-card">
-          <div
-            className="scope-guide-header"
-            onClick={() => setShowGuide(!showGuide)}
-            title="I-click para itago o ipakita ang gabay"
-          >
-            <div className="scope-guide-title">
-              <FiInfo />
-              <strong>Gabay sa Pag-uulat: Ano-ano ang Sakop ng Sanitary Section?</strong>
-            </div>
-            <button type="button" className="toggle-guide-btn">
-              {showGuide ? "Hide Guide ▲" : "Show Scope Guide ▼"}
-            </button>
-          </div>
-
-          {showGuide && (
-            <div className="guide-scope-grid">
-              <div className="scope-box allowed">
-                <h4><FiCheckCircle /> Sakop na Pwedeng I-report (Sanitation):</h4>
-                <ul>
-                  <li><strong>🍲 Pagkain at Inumin:</strong> Maruming paghawak ng pagkain sa mga kainan, panis/kontaminado, walang sanitary permit.</li>
-                  <li><strong>🚯 Basura at Dumi:</strong> Tambak na basura sa pampublikong lugar, pagsusunog, ilegal na tapunan.</li>
-                  <li><strong>🦟 Kanal at Lamok:</strong> Baradong kanal na may stagnant water (Dengue hazard), masangsang na tubig.</li>
-                  <li><strong>🚽 Poso Negro &amp; Sewerage:</strong> Umapaw o tumagas na septic tank, maruming tubig-kanal sa kalsada.</li>
-                  <li><strong>🐖 Amoy ng Alagang Hayop:</strong> Masangsang na amoy at langaw mula sa babuyan o manukan malapit sa bahay.</li>
-                </ul>
-              </div>
-
-              <div className="scope-box not-allowed">
-                <h4><FiX /> HINDI Sakop (I-refer sa Tamang Tanggapan):</h4>
-                <ul>
-                  <li><strong>👮 Krimen, away, o ingay sa gabi:</strong> I-report sa <em>PNP Mauban o Barangay Lupon</em>.</li>
-                  <li><strong>🏗️ Boundary ng lupa o sira sa gusali:</strong> I-report sa <em>Municipal Engineering Office</em>.</li>
-                  <li><strong>⚡ Putol na linya ng kuryente o brownout:</strong> I-report sa <em>Quezelco / Electric Provider</em>.</li>
-                </ul>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <label className="community-field-label">Select Category (Classified by Urgency)</label>
-        <div className="community-category-picker-grid">
-          {CATEGORY_DEFINITIONS.map((item) => (
-            <button
-              key={item.category}
-              type="button"
-              className={`community-category-btn ${
-                form.category === item.category ? "active" : ""
-              } ${item.iconTone}`}
-              onClick={() => onCategoryChange(item.category)}
-            >
-              <div className="cat-btn-top">
-                <strong>{item.category}</strong>
-                <span className={`cat-priority-badge ${item.priority}`}>
-                  {item.priority === "high"
-                    ? "🔴 Urgent"
-                    : item.priority === "medium"
-                    ? "🟡 Standard"
-                    : "🟢 Routine"}
-                </span>
-              </div>
-              <small>{item.hint}</small>
-            </button>
-          ))}
-        </div>
-
-        {/* ── Auto Urgency Banner ── */}
-        <div className={`sla-urgency-notice ${currentCategoryInfo.iconTone}`}>
-          <FiInfo />
-          <div>
-            <strong>Inspection Response Target: {currentCategoryInfo.group}</strong>
-            <p>
-              {currentCategoryInfo.priority === "high"
-                ? "This issue is categorized as Urgent. Sanitary inspectors must conduct the inspection Today or Tomorrow."
-                : currentCategoryInfo.priority === "medium"
-                ? "This issue is categorized as Standard. Inspection will be scheduled within 3 to 5 days."
-                : "This issue is categorized as Routine. Inspection will be scheduled within 7 to 14 days."}
-            </p>
-          </div>
-        </div>
-
-        <label className="community-field-label" htmlFor="community-location">
-          Location / Address in Mauban
-        </label>
-        <div className="community-location-row">
-          <input
-            id="community-location"
-            value={form.barangay}
-            onChange={(event) => onChange("barangay", event.target.value)}
-            placeholder="e.g. Barangay Poblacion, Public Market near fish stall"
-            required
-          />
-          <button type="button" title="Use current GPS location">
-            <FiMapPin />
-            GPS
-          </button>
-        </div>
-
-        <label className="community-field-label" htmlFor="community-description">
-          Describe the situation
-        </label>
-        <textarea
-          id="community-description"
-          value={form.description}
-          onChange={(event) => onChange("description", event.target.value)}
-          placeholder="Describe what you observed (e.g. leaking sewer, contaminated well water, unpleasant odor)..."
-          required
-        />
-
-        <label className="community-field-label">Photo Evidence (Optional)</label>
-        <div className="community-upload-box">
-          <FiImage />
-          <span>Upload photo evidence</span>
-        </div>
-
-        <div className="community-anonymous-box">
-          <label>
-            <input
-              type="checkbox"
-              checked={anonymous}
-              onChange={(event) => onAnonymousChange(event.target.checked)}
-            />
-            Submit anonymously
-          </label>
-
-          {!anonymous ? (
-            <div className="community-reporter-grid">
-              <label>
-                Your Name
-                <input
-                  value={form.complainant_name}
-                  onChange={(event) =>
-                    onChange("complainant_name", event.target.value)
-                  }
-                  placeholder="Juan Dela Cruz"
-                />
-              </label>
-              <label>
-                Contact Number
-                <input
-                  value={form.contact_number}
-                  onChange={(event) =>
-                    onChange("contact_number", event.target.value)
-                  }
-                  placeholder="09XXXXXXXXX"
-                />
-              </label>
-            </div>
-          ) : null}
-        </div>
-
-        <button
-          type="submit"
-          className="community-submit-btn"
-          disabled={saving || isLimitReached}
-        >
-          {isLimitReached
-            ? "Submission Limit Reached (Max 5 Today)"
-            : saving
-            ? "Submitting..."
-            : "Submit Concern Report"}
-        </button>
-      </form>
     </div>
   );
 }
@@ -1484,7 +1176,7 @@ function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection
         <div className="community-day-modal-body">
           {events
             .slice()
-            .sort((a, b) => a.time.localeCompare(b.time))
+            .sort((a, b) => (a.sortTime || a.time).localeCompare(b.sortTime || b.time))
             .map((evt, idx) => {
               const report = evt.raw;
               const isUrgent = report.priority === "high";
@@ -1629,8 +1321,61 @@ function InspectionDetailsModal({ report, onClose, onLocationClick }) {
   );
 }
 
-function reportTitle(item) {
+export function reportTitle(item) {
   return item.complainant_name || "Anonymous";
+}
+
+export function formatTime12h(timeStr) {
+  if (!timeStr) return "";
+  const parts = String(timeStr).split(":");
+  if (parts.length >= 2) {
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+  }
+  return timeStr;
+}
+
+export function formatReportTime(item) {
+  if (item?.reported_time) {
+    return item.reported_time;
+  }
+  if (item?.created_at) {
+    try {
+      const d = new Date(item.created_at);
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return "09:00";
+}
+
+export function formatReportTime12h(item) {
+  if (item?.reported_time_12h) {
+    return item.reported_time_12h;
+  }
+  if (item?.created_at) {
+    try {
+      const d = new Date(item.created_at);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return formatTime12h(item?.reported_time || "09:00");
 }
 
 function buildCalendarEvents(rows, calFilters = {}) {
@@ -1656,9 +1401,12 @@ function buildCalendarEvents(rows, calFilters = {}) {
     const events = [];
 
     if (item.reported_date && (eventType === "all" || eventType === "report")) {
+      const time24 = formatReportTime(item);
+      const time12 = formatReportTime12h(item);
       events.push({
         date: item.reported_date,
-        time: "09:00",
+        time: time12,
+        sortTime: time24,
         type: "report",
         label: "Report",
         title: reportTitle(item),
@@ -1670,16 +1418,19 @@ function buildCalendarEvents(rows, calFilters = {}) {
     if (
       item.inspection_scheduled_date &&
       (eventType === "all" || eventType === "inspection")) {
+      const inspectionTime = item.inspection_scheduled_time
+        ? item.inspection_scheduled_time.slice(0, 5)
+        : "08:00";
+      const time12 = formatTime12h(inspectionTime);
       events.push({
         date: item.inspection_scheduled_date,
-        time: item.inspection_scheduled_time
-          ? item.inspection_scheduled_time.slice(0, 5)
-          : "08:00",
+        time: time12,
+        sortTime: inspectionTime,
         type: "inspection",
         label: "Inspection",
         title: `${reportTitle(item)}${
           item.inspection_scheduled_time
-            ? ` - ${item.inspection_scheduled_time.slice(0, 5)}`
+            ? ` - ${time12}`
             : ""
         }`,
         reportId: item.id,

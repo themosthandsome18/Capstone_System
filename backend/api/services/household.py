@@ -1,3 +1,4 @@
+from django.db.models import Count, Q
 from ..models import HouseholdSanitationRecord
 from ..seeders import ensure_initial_household_data
 
@@ -6,21 +7,37 @@ def build_household_dashboard_payload():
     ensure_initial_household_data()
 
     records = HouseholdSanitationRecord.objects.all()
-    total = records.count()
 
-    with_sanitary_facility = records.exclude(toilet_type="none").count()
-    with_water_access = records.filter(water_level__in=["level_2", "level_3"]).count()
-    at_risk = records.filter(status="violation").count()
+    # Consolidate all distribution and summary counts into a single aggregate query
+    agg = records.aggregate(
+        total=Count("id"),
+        with_sanitary_facility=Count("id", filter=~Q(toilet_type="none")),
+        with_water_access=Count("id", filter=Q(water_level__in=["level_2", "level_3"])),
+        at_risk=Count("id", filter=Q(status="violation")),
+        toilet_water_sealed=Count("id", filter=Q(toilet_type="water_sealed")),
+        toilet_pour_flush=Count("id", filter=Q(toilet_type="pour_flush")),
+        toilet_pit_latrine=Count("id", filter=Q(toilet_type="pit_latrine")),
+        toilet_none=Count("id", filter=Q(toilet_type="none")),
+        waste_collected=Count("id", filter=Q(waste_disposal="collected")),
+        waste_composted=Count("id", filter=Q(waste_disposal="composted")),
+        waste_burned=Count("id", filter=Q(waste_disposal="burned")),
+        waste_dumped=Count("id", filter=Q(waste_disposal="dumped")),
+        water_level1=Count("id", filter=Q(water_level="level_1")),
+        water_level2=Count("id", filter=Q(water_level="level_2")),
+        water_level3=Count("id", filter=Q(water_level="level_3")),
+    )
 
-    from django.db.models import Count, Q
+    total = agg["total"] or 0
+    with_sanitary_facility = agg["with_sanitary_facility"] or 0
+    with_water_access = agg["with_water_access"] or 0
+    at_risk = agg["at_risk"] or 0
 
     risk_by_barangay = []
-    
     barangay_stats = records.values("barangay").annotate(
         total_count=Count("id"),
         at_risk_count=Count("id", filter=Q(status="violation")),
         for_completion_count=Count("id", filter=Q(status="for_completion")),
-        good_standing_count=Count("id", filter=Q(status="good_standing"))
+        good_standing_count=Count("id", filter=Q(status="good_standing")),
     )
 
     for stat in barangay_stats:
@@ -50,20 +67,20 @@ def build_household_dashboard_payload():
         },
         "riskByBarangay": risk_by_barangay,
         "toiletDistribution": {
-            "waterSealed": records.filter(toilet_type="water_sealed").count(),
-            "pourFlush": records.filter(toilet_type="pour_flush").count(),
-            "pitLatrine": records.filter(toilet_type="pit_latrine").count(),
-            "none": records.filter(toilet_type="none").count(),
+            "waterSealed": agg["toilet_water_sealed"] or 0,
+            "pourFlush": agg["toilet_pour_flush"] or 0,
+            "pitLatrine": agg["toilet_pit_latrine"] or 0,
+            "none": agg["toilet_none"] or 0,
         },
         "wasteDistribution": {
-            "collected": records.filter(waste_disposal="collected").count(),
-            "composted": records.filter(waste_disposal="composted").count(),
-            "burned": records.filter(waste_disposal="burned").count(),
-            "dumped": records.filter(waste_disposal="dumped").count(),
+            "collected": agg["waste_collected"] or 0,
+            "composted": agg["waste_composted"] or 0,
+            "burned": agg["waste_burned"] or 0,
+            "dumped": agg["waste_dumped"] or 0,
         },
         "waterDistribution": {
-            "level1": records.filter(water_level="level_1").count(),
-            "level2": records.filter(water_level="level_2").count(),
-            "level3": records.filter(water_level="level_3").count(),
+            "level1": agg["water_level1"] or 0,
+            "level2": agg["water_level2"] or 0,
+            "level3": agg["water_level3"] or 0,
         },
     }

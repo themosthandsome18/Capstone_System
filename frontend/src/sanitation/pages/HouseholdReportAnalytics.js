@@ -10,6 +10,7 @@ import {
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
+import PageLoader from "../../shared/PageLoader";
 
 function formatHouseholdStatus(status) {
   if (status === "for_completion" || status === "For Completion") return "For Compliance";
@@ -167,7 +168,12 @@ function HouseholdReportAnalytics() {
   if (loading) {
     return (
       <div className="household-report-page">
-        Loading household report analytics...
+        <PageLoader
+          message="Loading Household Report Analytics..."
+          subtext="Compiling barangay sanitation profiles and infrastructure"
+          variant="content"
+          theme="sanitation"
+        />
       </div>
     );
   }

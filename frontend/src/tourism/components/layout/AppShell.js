@@ -4,6 +4,8 @@ import { FiBell, FiLogOut } from "react-icons/fi";
 import { useAuth } from "../../../auth/AuthContext";
 import { useTourismData } from "../../context/TourismDataContext";
 import LoadingOverlay from "../../../shared/LoadingOverlay";
+import PageLoader from "../../../shared/PageLoader";
+import ErrorBoundary from "../../../shared/ErrorBoundary";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -12,7 +14,7 @@ const pageInfo = {
     showAdd: true,
   },
   "/tourist-data": {
-    title: "Tourist Records Management",
+    title: "Record Management",
     showAdd: true,
   },
   "/arrival-monitoring": {
@@ -64,10 +66,12 @@ function AppShell() {
   // Show full-page spinner while bootstrap data is loading
   if (loading) {
     return (
-      <div className="page-loading">
-        <div className="page-loading__ring" />
-        <p className="page-loading__text">Loading Tourism Data...</p>
-      </div>
+      <PageLoader
+        message="Loading Tourism Management System..."
+        subtext="Synchronizing arrivals, bookings, and destinations"
+        variant="fullscreen"
+        theme="tourism"
+      />
     );
   }
 
@@ -162,7 +166,9 @@ function AppShell() {
         </header>
 
         <section className="tourism-content">
-          <Outlet context={{ addEntryRequestId }} />
+          <ErrorBoundary featureName="Tourism Section">
+            <Outlet context={{ addEntryRequestId }} />
+          </ErrorBoundary>
         </section>
       </main>
     </div>

@@ -340,7 +340,9 @@ class TouristRecord(models.Model):
     submitted_at = models.DateTimeField(null=True, blank=True)
     email = models.EmailField(blank=True)
     consent_confirmed = models.BooleanField(default=True)
-    full_name = models.CharField(max_length=120)
+    first_name = models.CharField(max_length=60, blank=True, default="")
+    last_name = models.CharField(max_length=60, blank=True, default="")
+    full_name = models.CharField(max_length=120, blank=True, default="")
     contact_number = models.CharField(max_length=120, blank=True)
     country = models.ForeignKey(
         Country,
@@ -444,6 +446,15 @@ class TouristRecord(models.Model):
         errors = validate_tourist_record_values(values)
         if errors:
             raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.first_name or self.last_name:
+            self.full_name = f"{self.first_name} {self.last_name}".strip()
+        elif self.full_name and not self.first_name and not self.last_name:
+            parts = self.full_name.strip().split(" ")
+            self.last_name = parts[-1] if len(parts) > 1 else ""
+            self.first_name = " ".join(parts[:-1]) if len(parts) > 1 else parts[0]
+        super().save(*args, **kwargs)
 
 
 class ResortMonthlyArrival(models.Model):

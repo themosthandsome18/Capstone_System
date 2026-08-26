@@ -48,7 +48,9 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> registerVisit({
-    required String fullName,
+    required String firstName,
+    required String lastName,
+    String? fullName,
     required String contactNumber,
     required String email,
     required bool consentConfirmed,
@@ -75,8 +77,14 @@ class TourismApi {
     required int age8To59,
     required int age60Above,
   }) {
+    final computedFullName = (fullName != null && fullName.trim().isNotEmpty)
+        ? fullName.trim()
+        : '$firstName $lastName'.trim();
+
     return _post('/mobile/tourism/register-visit/', {
-      'full_name': fullName,
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'full_name': computedFullName,
       'contact_number': contactNumber,
       'email': email,
       'consent_confirmed': consentConfirmed,

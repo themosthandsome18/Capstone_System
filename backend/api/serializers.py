@@ -277,6 +277,8 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             "submitted_at",
             "email",
             "consent_confirmed",
+            "first_name",
+            "last_name",
             "full_name",
             "contact_number",
             "country_id",
@@ -642,6 +644,22 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
         source="get_priority_display",
         read_only=True,
     )
+    reported_time = serializers.SerializerMethodField()
+    reported_time_12h = serializers.SerializerMethodField()
+
+    def get_reported_time(self, obj):
+        if obj.created_at:
+            from django.utils import timezone
+            local_dt = timezone.localtime(obj.created_at)
+            return local_dt.strftime("%H:%M")
+        return "09:00"
+
+    def get_reported_time_12h(self, obj):
+        if obj.created_at:
+            from django.utils import timezone
+            local_dt = timezone.localtime(obj.created_at)
+            return local_dt.strftime("%I:%M %p").lstrip("0")
+        return "9:00 AM"
 
     class Meta:
         model = SanitaryComplaint
@@ -671,6 +689,8 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             "inspection_notify_reporter",
             "action_taken",
             "resolved_date",
+            "reported_time",
+            "reported_time_12h",
             "created_at",
             "updated_at",
         ]

@@ -1177,14 +1177,15 @@ class TouristRegistrationPage extends StatefulWidget {
 }
 
 class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
-  final TextEditingController _name = TextEditingController();
+  final TextEditingController _firstName = TextEditingController();
+  final TextEditingController _lastName = TextEditingController();
   final TextEditingController _contact = TextEditingController();
   final TextEditingController _email = TextEditingController();
   final TextEditingController _countryOfOrigin = TextEditingController(
     text: 'Philippines',
   );
   final TextEditingController _parkingSpace = TextEditingController();
-  DateTime _arrivalDate = DateTime.now();
+  late DateTime _arrivalDate;
   late Destination _destination;
   late RefItem _country;
   late RefItem _region;
@@ -1210,6 +1211,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _arrivalDate = DateTime(now.year, now.month, now.day);
     _destination =
         widget.initialDestination ??
         widget.bootstrap.destinations.firstOrNull ??
@@ -1239,7 +1242,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
   @override
   void dispose() {
-    _name.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
     _contact.dispose();
     _email.dispose();
     _countryOfOrigin.dispose();
@@ -1251,12 +1255,22 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   Widget build(BuildContext context) {
     return FormPageScaffold(
       title: 'Tourist Registration',
-      subtitle: 'Help us welcome you',
+      subtitle: 'Help us welcome you to Mauban',
       children: [
-        const FormSectionTitle('Contact Info'),
-        AppTextField(controller: _name, label: 'Full name'),
-        AppTextField(controller: _contact, label: 'Contact number'),
-        AppTextField(controller: _email, label: 'Email address'),
+        // ── 1. Tourist Info (Katulad sa Web System) ──
+        const FormSectionTitle('1. Tourist Info'),
+        AppTextField(controller: _firstName, label: 'First name *'),
+        AppTextField(controller: _lastName, label: 'Last name *'),
+        AppTextField(
+          controller: _contact,
+          label: 'Contact number *',
+          keyboardType: TextInputType.phone,
+        ),
+        AppTextField(
+          controller: _email,
+          label: 'Email address (Optional)',
+          keyboardType: TextInputType.emailAddress,
+        ),
         CheckboxListTile(
           value: _consentConfirmed,
           onChanged: (value) {
@@ -1268,9 +1282,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
             'I consent to submit this visitor record to Mauban LGU Tourism.',
           ),
         ),
-        const FormSectionTitle('Origin'),
+
+        // ── 2. Location & Origin ──
+        const FormSectionTitle('2. Location & Destination'),
         DropdownTile<RefItem>(
-          label: 'Country',
+          label: 'Country *',
           value: _country,
           items: widget.bootstrap.countries,
           itemLabel: (item) => item.name,
@@ -1284,7 +1300,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           },
         ),
         DropdownTile<RefItem>(
-          label: 'Region',
+          label: 'Region *',
           value: _region,
           items: widget.bootstrap.regions,
           itemLabel: (item) => item.name,
@@ -1296,40 +1312,103 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           },
         ),
         DropdownTile<RefItem>(
-          label: 'Province',
+          label: 'Province *',
           value: _province,
           items: _provincesForRegion(_region),
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _province = item),
         ),
-        AppTextField(controller: _countryOfOrigin, label: 'Country of origin'),
-        const FormSectionTitle('Trip Details'),
-        PickerTile(
-          icon: Icons.calendar_month_outlined,
-          label: 'Arrival date',
-          value: shortDate(_arrivalDate),
-          onTap: _pickDate,
-        ),
+        AppTextField(controller: _countryOfOrigin, label: 'Country of origin *'),
         DropdownTile<Destination>(
-          label: 'Destination / Resort',
+          label: 'Destination / Resort *',
           value: _destination,
           items: widget.bootstrap.destinations,
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _destination = item),
         ),
+
+        // ── 3. Travel Details ──
+        const FormSectionTitle('3. Travel Details'),
         DropdownTile<RefItem>(
-          label: 'Itinerary',
+          label: 'Travel Itinerary *',
           value: _itinerary,
           items: widget.bootstrap.itineraries,
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _itinerary = item),
         ),
+        DropdownTile<RefItem>(
+          label: 'Vehicle Classification / Mode of Travel *',
+          value: _travelMode,
+          items: widget.bootstrap.travelModes,
+          itemLabel: (item) => item.name,
+          onChanged: (item) => setState(() => _travelMode = item),
+        ),
+        DropdownTile<RefItem>(
+          label: 'Boat Classification *',
+          value: _boatType,
+          items: widget.bootstrap.boatTypes,
+          itemLabel: (item) => item.name,
+          onChanged: (item) => setState(() => _boatType = item),
+        ),
+        DropdownTile<String>(
+          label: 'Boat Capacity & Fare',
+          value: _boatCapacityFare,
+          items: boatCapacityFareOptions,
+          itemLabel: boatCapacityFareLabel,
+          onChanged: (item) => setState(() => _boatCapacityFare = item),
+        ),
+        AppTextField(controller: _parkingSpace, label: 'Parking space (Optional)'),
+        DropdownTile<RefItem>(
+          label: 'Purpose of Travel *',
+          value: _purpose,
+          items: widget.bootstrap.visitPurposes,
+          itemLabel: (item) => item.name,
+          onChanged: (item) => setState(() => _purpose = item),
+        ),
+        PickerTile(
+          icon: Icons.calendar_month_outlined,
+          label: 'Arrival date *',
+          value: shortDate(_arrivalDate),
+          onTap: _pickDate,
+        ),
+
+        // ── 4. Head Count & Demographics ──
+        const FormSectionTitle('4. Head Count & Demographics'),
         CounterPanel(
-          title: 'Your Group',
+          title: 'Total Group Size',
           counters: [
-            CounterItem('Visitors', _visitors, (value) {
+            CounterItem('Total Visitors', _visitors, (value) {
               setState(() => _setVisitors(value));
             }),
+          ],
+        ),
+        CounterPanel(
+          title: 'Nationality & Residence (Must equal Total Visitors)',
+          counters: [
+            CounterItem('Filipino', _filipino, (value) {
+              setState(() {
+                _filipino = clampInt(value, 0, _visitors);
+                _foreign = _visitors - _filipino;
+                _maubanin = clampInt(_maubanin, 0, _filipino);
+              });
+            }),
+            CounterItem('Foreigner', _foreign, (value) {
+              setState(() {
+                _foreign = clampInt(value, 0, _visitors);
+                _filipino = _visitors - _foreign;
+                _maubanin = clampInt(_maubanin, 0, _filipino);
+              });
+            }),
+            CounterItem('Maubanin (Local Resident, subset of Filipino)', _maubanin, (value) {
+              setState(() {
+                _maubanin = clampInt(value, 0, _filipino);
+              });
+            }),
+          ],
+        ),
+        CounterPanel(
+          title: 'Gender Breakdown (Must equal Total Visitors)',
+          counters: [
             CounterItem('Male', _male, (value) {
               setState(() {
                 _male = clampInt(value, 0, _visitors);
@@ -1342,38 +1421,21 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
                 _male = _visitors - _female;
               });
             }),
-            CounterItem('Maubanin', _maubanin, (value) {
-              setState(() {
-                _maubanin = clampInt(value, 0, _visitors);
-                _syncClassification();
-              });
-            }),
-            CounterItem('Foreign', _foreign, (value) {
-              setState(() {
-                _foreign = clampInt(value, 0, _visitors);
-                _syncClassification();
-              });
-            }),
           ],
         ),
         CounterPanel(
-          title: 'Age and Special Groups',
+          title: 'Age Groups (Must equal Total Visitors)',
           counters: [
-            CounterItem('Senior/PWD/7 below', _specialGroup, (value) {
-              setState(() {
-                _specialGroup = clampInt(value, 0, _visitors);
-              });
-            }),
-            CounterItem('Age 0-7', _age0To7, (value) {
+            CounterItem('Age 0-7 (Children)', _age0To7, (value) {
               setState(() {
                 _age0To7 = clampInt(value, 0, _visitors);
                 _syncAgeGroups();
               });
             }),
-            CounterItem('Age 8-59', _age8To59, (value) {
+            CounterItem('Age 8-59 (Adults)', _age8To59, (value) {
               setState(() => _setAge8To59(value));
             }),
-            CounterItem('Age 60+', _age60Above, (value) {
+            CounterItem('Age 60+ (Seniors)', _age60Above, (value) {
               setState(() {
                 _age60Above = clampInt(value, 0, _visitors);
                 _syncAgeGroups();
@@ -1381,35 +1443,17 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
             }),
           ],
         ),
-        DropdownTile<RefItem>(
-          label: 'Vehicle classification',
-          value: _travelMode,
-          items: widget.bootstrap.travelModes,
-          itemLabel: (item) => item.name,
-          onChanged: (item) => setState(() => _travelMode = item),
+        CounterPanel(
+          title: 'Special Groups (Within Total Visitors)',
+          counters: [
+            CounterItem('Senior / PWD / Pregnant / 7 below', _specialGroup, (value) {
+              setState(() {
+                _specialGroup = clampInt(value, 0, _visitors);
+              });
+            }),
+          ],
         ),
-        DropdownTile<RefItem>(
-          label: 'Boat classification',
-          value: _boatType,
-          items: widget.bootstrap.boatTypes,
-          itemLabel: (item) => item.name,
-          onChanged: (item) => setState(() => _boatType = item),
-        ),
-        DropdownTile<String>(
-          label: 'Boat capacity and fare',
-          value: _boatCapacityFare,
-          items: boatCapacityFareOptions,
-          itemLabel: boatCapacityFareLabel,
-          onChanged: (item) => setState(() => _boatCapacityFare = item),
-        ),
-        AppTextField(controller: _parkingSpace, label: 'Parking space'),
-        DropdownTile<RefItem>(
-          label: 'Purpose of travel',
-          value: _purpose,
-          items: widget.bootstrap.visitPurposes,
-          itemLabel: (item) => item.name,
-          onChanged: (item) => setState(() => _purpose = item),
-        ),
+
         SubmitButton(
           label: 'Submit Registration',
           loading: _submitting,
@@ -1453,11 +1497,13 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _arrivalDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _arrivalDate.isBefore(today) ? today : _arrivalDate,
+      firstDate: today, // Hindi na mapipindot ang mga nakaraang petsa!
+      lastDate: today.add(const Duration(days: 365)),
     );
 
     if (picked != null) {
@@ -1474,9 +1520,15 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
     setState(() => _submitting = true);
 
+    final firstName = _firstName.text.trim();
+    final lastName = _lastName.text.trim();
+    final fullName = '$firstName $lastName'.trim();
+
     try {
       final response = await widget.api.registerVisit(
-        fullName: _name.text.trim(),
+        firstName: firstName,
+        lastName: lastName,
+        fullName: fullName,
         contactNumber: _contact.text.trim(),
         email: _email.text.trim(),
         consentConfirmed: _consentConfirmed,
@@ -1519,6 +1571,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           message:
               'This record was saved to the Tourism Web System and can be checked in Booking Management.',
           details: [
+            'Tourist: ${receipt.fullName}',
             'Destination: ${receipt.destination.name}',
             'Visitors: ${receipt.totalVisitors}',
             'Arrival date: ${shortDate(receipt.arrivalDate)}',
@@ -1535,18 +1588,25 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
 
   String? _validateRegistration() {
-    final name = _name.text.trim();
+    final firstName = _firstName.text.trim();
+    final lastName = _lastName.text.trim();
     final contact = _contact.text.trim();
     final email = _email.text.trim();
     final countryOfOrigin = _countryOfOrigin.text.trim();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    if (name.isEmpty) return 'Full name is required.';
+    if (firstName.isEmpty) return 'First name is required.';
+    if (lastName.isEmpty) return 'Last name is required.';
     if (contact.isEmpty) return 'Contact number is required.';
     if (email.isNotEmpty && !email.contains('@')) {
       return 'Enter a valid email address or leave email blank.';
     }
     if (!_consentConfirmed) {
       return 'Consent is required before submitting.';
+    }
+    if (_arrivalDate.isBefore(today)) {
+      return 'Arrival date cannot be in the past. Please select today or a future date.';
     }
     if (_destination.id == 0 || widget.bootstrap.destinations.isEmpty) {
       return 'No destination is loaded from the Tourism Web System yet.';
@@ -1556,8 +1616,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     if (_male + _female != _visitors) {
       return 'Male and female counts must equal total visitors.';
     }
-    if (_filipino + _maubanin + _foreign != _visitors) {
-      return 'Filipino, Maubanin, and foreigner counts must equal total visitors.';
+    if (_filipino + _foreign != _visitors) {
+      return 'Filipino and foreigner counts must equal total visitors.';
+    }
+    if (_maubanin > _filipino) {
+      return 'Maubanin count cannot be greater than Filipino count.';
     }
     if (_age0To7 + _age8To59 + _age60Above != _visitors) {
       return 'Age group counts must equal total visitors.';
@@ -1573,18 +1636,15 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     _visitors = clampInt(value, 1, 99);
     _male = clampInt(_male, 0, _visitors);
     _female = _visitors - _male;
-    _maubanin = clampInt(_maubanin, 0, _visitors);
-    _foreign = clampInt(_foreign, 0, _visitors - _maubanin);
     _syncClassification();
     _specialGroup = clampInt(_specialGroup, 0, _visitors);
     _syncAgeGroups();
   }
 
   void _syncClassification() {
-    if (_maubanin + _foreign > _visitors) {
-      _foreign = clampInt(_visitors - _maubanin, 0, _visitors);
-    }
-    _filipino = clampInt(_visitors - _maubanin - _foreign, 0, _visitors);
+    _foreign = clampInt(_foreign, 0, _visitors);
+    _filipino = clampInt(_visitors - _foreign, 0, _visitors);
+    _maubanin = clampInt(_maubanin, 0, _filipino);
   }
 
   void _syncAgeGroups() {

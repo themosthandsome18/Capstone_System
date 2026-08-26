@@ -5,7 +5,6 @@ import {
   FiChevronRight,
   FiFilter,
   FiSearch,
-  FiEdit2,
   FiEye,
   FiTrash2,
   FiCheck,
@@ -86,6 +85,30 @@ const reportingYearOptions = [
   { value: "all", label: "All Years" },
 ];
 
+function getFirstName(record) {
+  if (!record) return "";
+  if (record.first_name) return record.first_name;
+  if (!record.full_name) return "";
+  const parts = record.full_name.trim().split(" ");
+  return parts.length > 1 ? parts.slice(0, -1).join(" ") : parts[0];
+}
+
+function getLastName(record) {
+  if (!record) return "";
+  if (record.last_name) return record.last_name;
+  if (!record.full_name) return "";
+  const parts = record.full_name.trim().split(" ");
+  return parts.length > 1 ? parts[parts.length - 1] : "";
+}
+
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function BookingManagement() {
   const {
     bookingManagement,
@@ -106,7 +129,15 @@ function BookingManagement() {
   const [page, setPage] = useState(1);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
-  const [detailRecord, setDetailRecord] = useState(null);
+
+  const todayDateString = useMemo(() => getTodayDateString(), []);
+
+  const minArrivalDate = useMemo(() => {
+    if (editingRecord?.arrival_date && editingRecord.arrival_date < todayDateString) {
+      return editingRecord.arrival_date;
+    }
+    return todayDateString;
+  }, [editingRecord, todayDateString]);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [form, setForm] = useState(initialForm);
@@ -260,7 +291,7 @@ function BookingManagement() {
     setIsAddOpen(true);
   }
 
-  function openEditRecord(record) {
+  function openViewRecord(record) {
     setEditingRecord(record);
     let firstName = record.first_name || "";
     let lastName = record.last_name || "";
@@ -304,8 +335,25 @@ function BookingManagement() {
 
     setFormError("");
     setStepError("");
-    setCurrentStep(1);
+    setCurrentStep(5);
     setIsAddOpen(true);
+  }
+
+  function handleSidebarStepClick(targetStep) {
+    if (editingRecord) {
+      jumpToStep(targetStep);
+      return;
+    }
+    if (targetStep <= currentStep) {
+      jumpToStep(targetStep);
+      return;
+    }
+    const err = validateStep(currentStep);
+    if (err) {
+      setStepError(err);
+      return;
+    }
+    jumpToStep(targetStep);
   }
 
   function closeForm() {
@@ -402,6 +450,9 @@ function BookingManagement() {
         if (!form.travel_mode_id) return "Vehicle Classification is required.";
         if (!form.visit_purpose_id) return "Purpose of Travel is required.";
         if (!form.arrival_date) return "Arrival Date is required.";
+        if (form.arrival_date < minArrivalDate) {
+          return "Arrival Date cannot be in the past. Please select today or a future date.";
+        }
         return "";
       case 4: {
         const payload = buildPayload();
@@ -652,7 +703,8 @@ function BookingManagement() {
   function handleExport() {
     const headers = [
       "Survey ID",
-      "Guest",
+      "First Name",
+      "Last Name",
       "Contact",
       "Country",
       "Region",
@@ -666,7 +718,8 @@ function BookingManagement() {
 
     const rows = bookingRows.map((record) => [
       record.survey_id,
-      record.full_name,
+      getFirstName(record),
+      getLastName(record),
       record.contact_number,
       record.country_name || resolveLabel(referenceTables.countries, record.country_id),
       record.region_name || resolveLabel(referenceTables.regions, record.region_id),
@@ -721,7 +774,7 @@ function BookingManagement() {
     <div className="booking-page">
       <div className="booking-header">
         <div>
-          <h1>Tourist Records Management</h1>
+          <h1>Record Management</h1>
           <p>Track visitor registrations, verify tourist counts, and manage arrivals</p>
         </div>
 
@@ -860,7 +913,8 @@ function BookingManagement() {
             <thead>
               <tr>
                 {[
-                  "Guest",
+                  "First Name",
+                  "Last Name",
                   "Contact",
                   "Country",
                   "Pax",
@@ -884,8 +938,12 @@ function BookingManagement() {
                   return (
                     <tr key={row.survey_id}>
                       <td>
-                        <p className="booking-guest-name">{row.full_name}</p>
+                        <p className="booking-guest-name">{getFirstName(row)}</p>
                         <p className="booking-id">{row.survey_id}</p>
+                      </td>
+
+                      <td>
+                        <p className="booking-guest-name">{getLastName(row)}</p>
                       </td>
 
                       <td>{row.contact_number}</td>
@@ -930,22 +988,11 @@ function BookingManagement() {
                             type="button"
                             className="booking-icon-btn view"
                             disabled={Boolean(updatingStatus)}
-                            onClick={() => setDetailRecord(row)}
-                            title="View record"
+                            onClick={() => openViewRecord(row)}
+                            title="View & Review record"
                             aria-label="View record"
                           >
                             <FiEye/>
-                          </button>
-
-                          <button
-                            type="button"
-                            className="booking-icon-btn edit"
-                            disabled={Boolean(updatingStatus)}
-                            onClick={() => openEditRecord(row)}
-                            title="Edit record"
-                            aria-label="Edit record"
-                          >
-                            <FiEdit2/>
                           </button>
 
                           {isAdmin ? (
@@ -962,7 +1009,7 @@ function BookingManagement() {
                             >
                               <FiTrash2/>
                             </button>
-          ) : null}
+                          ) : null}
 
                           <button
                             type="button"
@@ -1039,20 +1086,22 @@ function BookingManagement() {
           <div className="wizard-shell">
             {/* ── Sidebar ── */}
             <aside className="wizard-sidebar">
-              <p className="wizard-sidebar-title">Data Management Add Record</p>
+              <p className="wizard-sidebar-title">
+                {editingRecord ? "Tourist Record Details & Edit" : "Data Management Add Record"}
+              </p>
               {WIZARD_STEPS.map((step, idx) => {
                 const stepNum = idx + 1;
-                const isCompleted = stepNum < currentStep;
+                const isCompleted = editingRecord ? true : stepNum < currentStep;
                 const isActive = stepNum === currentStep;
                 return (
                   <div
                     key={stepNum}
-                    className={`wizard-step-item${isCompleted ? " completed" : ""}${isActive ? " active" : ""}`}
-                    onClick={() => isCompleted && jumpToStep(stepNum)}
-                    title={isCompleted ? `Go back to ${step.label}` : undefined}
+                    className={`wizard-step-item clickable${isCompleted ? " completed" : ""}${isActive ? " active" : ""}`}
+                    onClick={() => handleSidebarStepClick(stepNum)}
+                    title={`Go to ${step.label}`}
                   >
                     <div className="wizard-step-bubble">
-                      {isCompleted ? <FiCheck size={12} /> : stepNum}
+                      {isCompleted && !isActive ? <FiCheck size={12} /> : stepNum}
                     </div>
                     <div className="wizard-step-label">
                       <strong>{step.label}</strong>
@@ -1070,12 +1119,25 @@ function BookingManagement() {
                   <span className="wizard-step-title">
                     Step {currentStep} of 5 &bull; {WIZARD_STEPS[currentStep - 1].label}
                   </span>
-                  <span className="wizard-progress-label">{Math.round(((currentStep - 1) / 5) * 100)}% done</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <span className="wizard-progress-label">
+                      {currentStep === 5 ? "100%" : `${Math.round(((currentStep - 1) / 5) * 100)}%`} done
+                    </span>
+                    <button
+                      type="button"
+                      className="wizard-close-btn"
+                      onClick={closeForm}
+                      title="Close"
+                      aria-label="Close"
+                    >
+                      <FiX size={18} />
+                    </button>
+                  </div>
                 </div>
                 <div className="wizard-progress-track">
                   <div
                     className="wizard-progress-bar"
-                    style={{ width: `${Math.round(((currentStep - 1) / 5) * 100)}%` }}
+                    style={{ width: `${currentStep === 5 ? 100 : Math.round(((currentStep - 1) / 5) * 100)}%` }}
                   />
                 </div>
               </div>
@@ -1227,6 +1289,7 @@ function BookingManagement() {
                     <WizardField label="Arrival Date" required>
                       <input
                         type="date"
+                        min={minArrivalDate}
                         value={form.arrival_date}
                         onChange={(e) => updateField("arrival_date", e.target.value)}
                       />
@@ -1351,20 +1414,36 @@ function BookingManagement() {
                       Continue &rsaquo;
                     </button>
                   )}
-                  {currentStep === 1 && (
+                  {editingRecord && currentStep < 5 && (
+                    <button
+                      type="button"
+                      className="wizard-btn-back"
+                      style={{ color: "#16a34a", fontWeight: "600" }}
+                      onClick={() => jumpToStep(5)}
+                      title="Return to Review"
+                    >
+                      Review &rsaquo;
+                    </button>
+                  )}
+                  {currentStep === 1 && !editingRecord && (
                     <button type="button" className="wizard-btn-back" onClick={closeForm}>
                       Cancel
                     </button>
                   )}
                   {currentStep === 5 && (
-                    <button
-                      type="button"
-                      className="wizard-btn-save"
-                      disabled={saving}
-                      onClick={handleSubmit}
-                    >
-                      {saving ? "Saving..." : editingRecord ? "✓ Update Record" : "✓ Save Record"}
-                    </button>
+                    <>
+                      <button type="button" className="wizard-btn-back" onClick={closeForm}>
+                        Close
+                      </button>
+                      <button
+                        type="button"
+                        className="wizard-btn-save"
+                        disabled={saving}
+                        onClick={handleSubmit}
+                      >
+                        {saving ? "Saving..." : editingRecord ? "✓ Update Record" : "✓ Save Record"}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1522,67 +1601,6 @@ function BookingManagement() {
           </div>
         </div>
       ) : null}
-
-      {detailRecord ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
-          <div className="booking-detail-modal w-full max-w-[680px]">
-            <div className="booking-detail-header">
-              <div>
-                <h2>{detailRecord.full_name}</h2>
-                <p>{detailRecord.survey_id}</p>
-              </div>
-              <span className={`booking-badge ${statusClassNames[detailRecord.status] || "pending"}`}>
-                {statusLabels[detailRecord.status] || "Pending"}
-              </span>
-            </div>
-
-            <div className="booking-detail-grid">
-              <DetailItem label="Contact" value={detailRecord.contact_number} />
-              <DetailItem label="Email" value={detailRecord.email || "--"} />
-              <DetailItem label="Arrival Date" value={formatDate(detailRecord.arrival_date)} />
-              <DetailItem label="Resort" value={resolveLabel(referenceTables.resorts, detailRecord.resort_id, "resort_id", "resort_name")} />
-              <DetailItem label="Region" value={resolveLabel(referenceTables.regions, detailRecord.region_id)} />
-              <DetailItem label="Province" value={resolveLabel(referenceTables.provinces, detailRecord.province_id)} />
-              <DetailItem label="Travel Itinerary" value={resolveLabel(referenceTables.itineraries, detailRecord.itinerary_id)} />
-              <DetailItem label="Purpose" value={resolveLabel(referenceTables.visitPurposes, detailRecord.visit_purpose_id)} />
-              <DetailItem label="Vehicle" value={resolveLabel(referenceTables.travelModes, detailRecord.travel_mode_id)} />
-              <DetailItem label="Boat" value={resolveLabel(referenceTables.boatTypes, detailRecord.boat_type_id)} />
-              <DetailItem label="Boat Capacity/Fare" value={detailRecord.boat_capacity_fare || "--"} />
-              <DetailItem label="Parking" value={detailRecord.parking_space || "--"} />
-              <DetailItem label="Filipino" value={detailRecord.filipino_count} />
-              <DetailItem label="Foreigner" value={detailRecord.foreigner_count} />
-              <DetailItem label="Maubanin" value={detailRecord.maubanin_count} />
-              <DetailItem label="Total Visitors" value={detailRecord.total_visitors} />
-              <DetailItem label="Male" value={detailRecord.total_male} />
-              <DetailItem label="Female" value={detailRecord.total_female} />
-              <DetailItem label="Age 0-7" value={detailRecord.age_0_7} />
-              <DetailItem label="Age 8-59" value={detailRecord.age_8_59} />
-              <DetailItem label="Age 60+" value={detailRecord.age_60_above} />
-              <DetailItem label="Senior/PWD/7 below" value={detailRecord.special_group_count} />
-            </div>
-
-            <div className="tourist-record-actions">
-              <button
-                type="button"
-                className="tourist-record-cancel"
-                onClick={() => setDetailRecord(null)}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="tourist-record-save"
-                onClick={() => {
-                  openEditRecord(detailRecord);
-                  setDetailRecord(null);
-                }}
-              >
-                Edit Record
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1591,15 +1609,6 @@ function ImportStat({ label, value }) {
     <div>
       <span>{label}</span>
       <strong>{Number(value || 0).toLocaleString()}</strong>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }) {
-  return (
-    <div className="booking-detail-item">
-      <span>{label}</span>
-      <strong>{value || "--"}</strong>
     </div>
   );
 }

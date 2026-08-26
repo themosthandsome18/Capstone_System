@@ -827,7 +827,21 @@ def normalize_mobile_visit_payload(data):
     data["submitted_at"] = data.get("submitted_at") or timezone.now().isoformat()
     data["email"] = data.get("email") or ""
     data["consent_confirmed"] = data.get("consent_confirmed", True)
-    data["full_name"] = data.get("full_name") or data.get("name") or ""
+
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+    full_name = (data.get("full_name") or data.get("name") or "").strip()
+
+    if not first_name and not last_name and full_name:
+        parts = full_name.split(" ")
+        last_name = parts[-1] if len(parts) > 1 else ""
+        first_name = " ".join(parts[:-1]) if len(parts) > 1 else parts[0]
+    elif (first_name or last_name) and not full_name:
+        full_name = f"{first_name} {last_name}".strip()
+
+    data["first_name"] = first_name
+    data["last_name"] = last_name
+    data["full_name"] = full_name
     data["contact_number"] = data.get("contact_number") or data.get("contact") or ""
     data["arrival_date"] = (
         data.get("arrival_date")

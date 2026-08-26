@@ -1,0 +1,276 @@
+/* ==========================================================================
+   PageLoader — Modern, Premium Animated Loading System
+   ========================================================================== */
+
+.page-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  animation: pageLoaderFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fullscreen Mode (Module Switch & App Bootstrap) */
+.page-loader--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f1f5f9 100%);
+  backdrop-filter: blur(8px);
+}
+
+/* Content Mode (Inside Page Layout / Tab Switch) */
+.page-loader--content {
+  width: 100%;
+  min-height: 380px;
+  padding: 48px 24px;
+}
+
+/* Card Container */
+.page-loader__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 44px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 20px;
+  box-shadow:
+    0 10px 25px -5px rgba(15, 23, 42, 0.06),
+    0 20px 40px -15px rgba(15, 23, 42, 0.1);
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  animation: pageLoaderPopIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Ambient Glow behind the spinner */
+.page-loader__glow {
+  position: absolute;
+  top: 30px;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  filter: blur(28px);
+  opacity: 0.38;
+  pointer-events: none;
+  animation: pageLoaderPulse 2s ease-in-out infinite alternate;
+}
+
+/* Spinner Core Wrapper */
+.page-loader__spinner-wrap {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* Outer Gradient Ring */
+.page-loader__ring-outer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  animation: pageLoaderSpin 1.1s linear infinite;
+}
+
+/* Inner Counter-Rotating Ring */
+.page-loader__ring-inner {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  animation: pageLoaderSpinRev 0.85s linear infinite;
+  opacity: 0.85;
+}
+
+/* Center Glowing Pulse Dot */
+.page-loader__core-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 14px currentColor;
+  animation: pageLoaderHeartbeat 1.4s ease-in-out infinite;
+}
+
+/* Text Group */
+.page-loader__text-group {
+  margin-bottom: 18px;
+  z-index: 1;
+}
+
+.page-loader__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+.page-loader__subtext {
+  margin: 6px 0 0 0;
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Progress Shimmer Bar */
+.page-loader__progress {
+  width: 140px;
+  height: 4px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.page-loader__progress-bar {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  height: 100%;
+  width: 45%;
+  border-radius: 999px;
+  animation: pageLoaderShimmer 1.35s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Themes: Sanitation (Green/Emerald) vs Tourism (Teal/Cyan)
+   ========================================================================== */
+
+/* Sanitation Theme */
+.page-loader--sanitation .page-loader__glow {
+  background: #10b981;
+}
+
+.page-loader--sanitation .page-loader__ring-outer {
+  border-top-color: #15803d;
+  border-right-color: #22c55e;
+  border-bottom-color: rgba(34, 197, 94, 0.15);
+  border-left-color: rgba(21, 128, 61, 0.2);
+}
+
+.page-loader--sanitation .page-loader__ring-inner {
+  border-top-color: #10b981;
+  border-left-color: #059669;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.page-loader--sanitation .page-loader__core-dot {
+  background: #15803d;
+  color: #22c55e;
+}
+
+.page-loader--sanitation .page-loader__progress-bar {
+  background: linear-gradient(90deg, #15803d, #10b981, #22c55e);
+}
+
+/* Tourism Theme */
+.page-loader--tourism .page-loader__glow {
+  background: #06b6d4;
+}
+
+.page-loader--tourism .page-loader__ring-outer {
+  border-top-color: #0f766e;
+  border-right-color: #14b8a6;
+  border-bottom-color: rgba(20, 184, 166, 0.15);
+  border-left-color: rgba(15, 118, 110, 0.2);
+}
+
+.page-loader--tourism .page-loader__ring-inner {
+  border-top-color: #06b6d4;
+  border-left-color: #0284c7;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.page-loader--tourism .page-loader__core-dot {
+  background: #0f766e;
+  color: #14b8a6;
+}
+
+.page-loader--tourism .page-loader__progress-bar {
+  background: linear-gradient(90deg, #0f766e, #14b8a6, #06b6d4);
+}
+
+/* Neutral Theme */
+.page-loader--neutral .page-loader__glow {
+  background: #3b82f6;
+}
+
+.page-loader--neutral .page-loader__ring-outer {
+  border-top-color: #2563eb;
+  border-right-color: #60a5fa;
+  border-bottom-color: rgba(96, 165, 250, 0.2);
+}
+
+.page-loader--neutral .page-loader__ring-inner {
+  border-top-color: #3b82f6;
+  border-left-color: transparent;
+}
+
+.page-loader--neutral .page-loader__core-dot {
+  background: #2563eb;
+  color: #3b82f6;
+}
+
+.page-loader--neutral .page-loader__progress-bar {
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+
+/* ==========================================================================
+   Keyframes
+   ========================================================================== */
+
+@keyframes pageLoaderFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pageLoaderPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pageLoaderSpin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pageLoaderSpinRev {
+  0%   { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes pageLoaderPulse {
+  0%   { transform: scale(0.9); opacity: 0.25; }
+  100% { transform: scale(1.2); opacity: 0.45; }
+}
+
+@keyframes pageLoaderHeartbeat {
+  0%, 100% { transform: scale(0.85); opacity: 0.75; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes pageLoaderShimmer {
+  0%   { left: -50%; }
+  100% { left: 110%; }
+}

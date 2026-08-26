@@ -295,17 +295,434 @@ class SanitationReportPage extends StatefulWidget {
   State<SanitationReportPage> createState() => _SanitationReportPageState();
 }
 
+class SanitationCategoryMeta {
+  const SanitationCategoryMeta({
+    required this.name,
+    required this.group,
+    required this.priority,
+    required this.hint,
+  });
+
+  final String name;
+  final String group;
+  final String priority;
+  final String hint;
+}
+
+const sanitationReportCategoryDefinitions = [
+  SanitationCategoryMeta(
+    name: 'Contaminated Water Source',
+    group: 'Urgent (24–48h SLA)',
+    priority: 'high',
+    hint: 'Critical water safety & disease outbreak risk',
+  ),
+  SanitationCategoryMeta(
+    name: 'Hazardous / Medical Waste',
+    group: 'Urgent (24–48h SLA)',
+    priority: 'high',
+    hint: 'Toxic chemical, biological, or hospital waste',
+  ),
+  SanitationCategoryMeta(
+    name: 'Severe Sewage Overflow',
+    group: 'Urgent (24–48h SLA)',
+    priority: 'high',
+    hint: 'Open sewer leak / immediate community biohazard',
+  ),
+  SanitationCategoryMeta(
+    name: 'Food Establishment Hygiene',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Food sanitation / food handling violations',
+  ),
+  SanitationCategoryMeta(
+    name: 'Public Market Sanitation',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Market stall waste, meat section, odor',
+  ),
+  SanitationCategoryMeta(
+    name: 'Public Restroom Maintenance',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Public toilet unhygienic / broken plumbing',
+  ),
+  SanitationCategoryMeta(
+    name: 'Pest & Rodents Infestation',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Rats, cockroaches, severe vector breeding',
+  ),
+  SanitationCategoryMeta(
+    name: 'Stagnant Water / Mosquito Breeding',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Dengue hazard / blocked drainage canal',
+  ),
+  SanitationCategoryMeta(
+    name: 'Livestock / Poultry Odor',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Piggery, poultry, animal waste nuisance',
+  ),
+  SanitationCategoryMeta(
+    name: 'Open Burning of Waste',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Illegal burning of plastic & toxic trash',
+  ),
+  SanitationCategoryMeta(
+    name: 'Improper Garbage Disposal',
+    group: 'Standard (3–5 Days)',
+    priority: 'medium',
+    hint: 'Dumpsite on public road or empty lot',
+  ),
+  SanitationCategoryMeta(
+    name: 'Other Sanitation Concern',
+    group: 'Low (5–7 Days)',
+    priority: 'low',
+    hint: 'General community sanitation concern',
+  ),
+];
+
 const sanitationReportCategories = [
-  'Public restroom',
-  'Public market',
-  'Household surroundings',
-  'Water source',
-  'Garbage/Waste',
-  'Pest/Rodents',
-  'Other sanitation concern',
+  'Contaminated Water Source',
+  'Hazardous / Medical Waste',
+  'Severe Sewage Overflow',
+  'Food Establishment Hygiene',
+  'Public Market Sanitation',
+  'Public Restroom Maintenance',
+  'Pest & Rodents Infestation',
+  'Stagnant Water / Mosquito Breeding',
+  'Livestock / Poultry Odor',
+  'Open Burning of Waste',
+  'Improper Garbage Disposal',
+  'Other Sanitation Concern',
 ];
 
 const sanitationReportPriorities = ['low', 'medium', 'high'];
+
+void showSanitationScopeGuideDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 620),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 12, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.info_outline,
+                        color: Color(0xFF15803D),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Gabay sa Pag-uulat',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            'Ano-ano ang Sakop ng Sanitary Section?',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      color: const Color(0xFF64748B),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              // Body
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Sakop
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF86EFAC)),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 18),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Sakop na Pwedeng I-report (Sanitation):',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      color: Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            _GuideItem(
+                              icon: '🍲',
+                              title: 'Pagkain at Inumin: ',
+                              desc: 'Maruming paghawak ng pagkain, panis/kontaminado, walang permit.',
+                            ),
+                            _GuideItem(
+                              icon: '🚯',
+                              title: 'Basura at Dumi: ',
+                              desc: 'Tambak sa pampublikong lugar, illegal na tapunan.',
+                            ),
+                            _GuideItem(
+                              icon: '🦟',
+                              title: 'Kanal at Lamok: ',
+                              desc: 'Baradong kanal, stagnant water (Dengue hazard), masangsang.',
+                            ),
+                            _GuideItem(
+                              icon: '🚽',
+                              title: 'Poso Negro & Sewerage: ',
+                              desc: 'Umapaw o tumagas na septic tank sa kalsada.',
+                            ),
+                            _GuideItem(
+                              icon: '🐖',
+                              title: 'Amoy ng Alagang Hayop: ',
+                              desc: 'Masangsang na amoy mula sa babuyan o manukan malapit sa bahay.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Hindi Sakop
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFED7AA)),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.cancel, color: Color(0xFFEA580C), size: 18),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'HINDI Sakop (I-refer sa Tamang Tanggapan):',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      color: Color(0xFFEA580C),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            _GuideItem(
+                              icon: '👮',
+                              title: 'Krimen, away, o ingay: ',
+                              desc: 'I-report sa PNP Mauban o Barangay Lupon.',
+                            ),
+                            _GuideItem(
+                              icon: '🏗️',
+                              title: 'Boundary o sira sa gusali: ',
+                              desc: 'I-report sa Municipal Engineering Office.',
+                            ),
+                            _GuideItem(
+                              icon: '⚡',
+                              title: 'Putol na kuryente/brownout: ',
+                              desc: 'I-report sa Quezelco / Electric Provider.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              // Footer Button
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF15803D),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text(
+                    'Naintindihan Ko',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _SanitationScopeGuideTrigger extends StatelessWidget {
+  const _SanitationScopeGuideTrigger();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => showSanitationScopeGuideDialog(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          border: Border.all(color: const Color(0xFF86EFAC)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Color(0xFF15803D), size: 20),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Gabay sa Pag-uulat (Ano ang Sakop?)',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF15803D),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'I-tap para makita ang gabay sa pop-up',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Buksan',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF15803D),
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.open_in_new, size: 12, color: Color(0xFF15803D)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideItem extends StatelessWidget {
+  const _GuideItem({
+    required this.icon,
+    required this.title,
+    required this.desc,
+  });
+
+  final String icon;
+  final String title;
+  final String desc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 13)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                children: [
+                  TextSpan(
+                    text: title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  TextSpan(text: desc),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _SanitationReportPageState extends State<SanitationReportPage> {
   final TextEditingController _name = TextEditingController();
@@ -316,17 +733,19 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   final ImagePicker _imagePicker = ImagePicker();
   List<XFile> _photos = [];
   String _category = sanitationReportCategories.first;
-  String _priority = 'medium';
+  String _priority = 'high';
   late String _barangay;
   bool _submitting = false;
   bool _locating = false;
   bool _locationConfirmed = false;
   bool _consentConfirmed = false;
   bool _anonymous = false;
+  int _dailyCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadDailyCount();
     final draft = widget.initialDraft;
     _barangay =
         draft?.barangay ?? widget.barangays.firstOrNull?.name ?? 'Poblacion';
@@ -342,6 +761,37 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       _locationConfirmed =
           latLngFromText(draft.latitude, draft.longitude) != null;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        showSanitationScopeGuideDialog(context);
+      }
+    });
+  }
+
+  Future<void> _loadDailyCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'mauban_report_${DateTime.now().toIso8601String().substring(0, 10)}';
+      if (mounted) {
+        setState(() {
+          _dailyCount = prefs.getInt(todayKey) ?? 0;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _incrementDailyCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'mauban_report_${DateTime.now().toIso8601String().substring(0, 10)}';
+      final current = prefs.getInt(todayKey) ?? 0;
+      await prefs.setInt(todayKey, current + 1);
+      if (mounted) {
+        setState(() {
+          _dailyCount = current + 1;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -366,16 +816,44 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
     ];
 
     return FormPageScaffold(
-      title: 'Community Report',
-      subtitle: 'Household and public-area sanitation concern',
+      title: 'Report Unsanitary Conditions',
+      subtitle: 'Saw something concerning? Tell the Sanitary Section so they can inspect.',
       children: [
-        const DataSourceBanner(
-          icon: Icons.home_work_outlined,
-          title: 'Household-linked community report',
-          text:
-              'Use this for public or household-area concerns. Establishment compliance stays under inspections and permits.',
+        // Daily limit badge
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: _dailyCount >= 5 ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+            border: Border.all(
+              color: _dailyCount >= 5 ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 18,
+                color: _dailyCount >= 5 ? const Color(0xFFDC2626) : const Color(0xFF059669),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${(5 - _dailyCount).clamp(0, 5)} of 5 submissions left today',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _dailyCount >= 5 ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+
+        // Citizen Scope Guide Trigger (Opens Pop-up)
+        const _SanitationScopeGuideTrigger(),
+
+        const SizedBox(height: 6),
         CheckboxListTile(
           value: _anonymous,
           onChanged: (value) {
@@ -396,11 +874,39 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
               : 'Contact number for status tracking',
         ),
         DropdownTile<String>(
-          label: 'Category',
+          label: 'Category (Classified by Urgency)',
           value: _category,
           items: categoryItems,
-          itemLabel: (item) => item,
-          onChanged: (item) => setState(() => _category = item),
+          itemLabel: (item) {
+            final meta = sanitationReportCategoryDefinitions.firstWhere(
+              (m) => m.name == item,
+              orElse: () => SanitationCategoryMeta(
+                name: item,
+                group: '',
+                priority: 'medium',
+                hint: '',
+              ),
+            );
+            final tag = meta.priority == 'high' ? ' 🔴 [Urgent]' : '';
+            return '$item$tag';
+          },
+          onChanged: (item) {
+            final meta = sanitationReportCategoryDefinitions.firstWhere(
+              (m) => m.name == item,
+              orElse: () => SanitationCategoryMeta(
+                name: item,
+                group: '',
+                priority: 'medium',
+                hint: '',
+              ),
+            );
+            setState(() {
+              _category = item;
+              if (meta.priority.isNotEmpty) {
+                _priority = meta.priority;
+              }
+            });
+          },
         ),
         DropdownTile<String>(
           label: 'Urgency',
@@ -487,6 +993,14 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   Future<void> _submit() async {
     final contact = _contact.text.trim();
 
+    if (_dailyCount >= 5) {
+      showAppMessage(
+        context,
+        'Daily submission limit reached (5 of 5 used today). Ang patakarang ito ay upang maiwasan ang spam.',
+      );
+      return;
+    }
+
     if (!_anonymous && contact.isEmpty) {
       showAppMessage(
         context,
@@ -530,6 +1044,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       );
 
       if (mounted) {
+        await _incrementDailyCount();
+        if (!mounted) return;
         final receipt = MobileSanitationReceipt.fromResponse(
           response,
           category: _category,

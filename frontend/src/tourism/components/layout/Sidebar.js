@@ -3,7 +3,7 @@ import logo from "../../assets/Tourismlogo.jpg";
 
 const navigation = [
   { to: "/", label: "Dashboard" },
-  { to: "/tourist-data", label: "Tourist Records Management" },
+  { to: "/tourist-data", label: "Record Management" },
   { to: "/arrival-monitoring", label: "Arrival Monitoring" },
   { to: "/destinations", label: "Destination Management" },
   { to: "/feedback", label: "Feedback Monitoring" },

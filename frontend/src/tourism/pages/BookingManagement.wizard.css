@@ -57,12 +57,36 @@
   transition: background 0.15s;
 }
 
-.wizard-step-item.completed {
+.wizard-step-item.completed,
+.wizard-step-item.clickable {
   cursor: pointer;
+}
+
+.wizard-step-item.clickable:hover:not(.active),
+.wizard-step-item.completed:hover:not(.active) {
+  background: #e2f7eb;
 }
 
 .wizard-step-item.active {
   background: #d1fae5;
+}
+
+.wizard-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.wizard-close-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .wizard-step-bubble {

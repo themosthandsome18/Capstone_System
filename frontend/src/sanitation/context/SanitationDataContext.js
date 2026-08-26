@@ -88,6 +88,16 @@ export function SanitationDataProvider({ children }) {
       setError(requestError.message || "Unable to load sanitation data.");
     } finally {
       setLoading(false);
+
+      // Preload reportData in background so "Report & Analytics" page loads instantly
+      fetchSanitationReports()
+        .then((reportData) => {
+          setState((current) => ({
+            ...current,
+            reportData,
+          }));
+        })
+        .catch(() => {});
     }
   }
 

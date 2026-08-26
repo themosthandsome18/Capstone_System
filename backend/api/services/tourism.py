@@ -52,6 +52,8 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
     "submitted_at",
     "email",
     "consent_confirmed",
+    "first_name",
+    "last_name",
     "full_name",
     "contact_number",
     "country_id",
@@ -270,6 +272,8 @@ def build_booking_management_payload(params=None):
     if search:
         records = records.filter(
             Q(survey_id__icontains=search)
+            | Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
             | Q(full_name__icontains=search)
             | Q(contact_number__icontains=search)
             | Q(country__name__icontains=search)
@@ -316,6 +320,8 @@ def build_booking_management_payload(params=None):
             ),
             "email": record["email"],
             "consent_confirmed": record["consent_confirmed"],
+            "first_name": record["first_name"],
+            "last_name": record["last_name"],
             "full_name": record["full_name"],
             "contact_number": record["contact_number"],
             "country_id": record["country_id"],
@@ -356,6 +362,8 @@ def build_booking_management_payload(params=None):
             "submitted_at",
             "email",
             "consent_confirmed",
+            "first_name",
+            "last_name",
             "full_name",
             "contact_number",
             "country_id",

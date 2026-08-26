@@ -25,6 +25,7 @@ import {
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
+import PageLoader from "../../shared/PageLoader";
 
 ChartJS.register(
   CategoryScale,
@@ -106,6 +107,11 @@ function SanitaryReportAnalytics() {
     let isMounted = true;
 
     async function loadInitialReport() {
+      // If report data is already loaded in context, don't trigger full refetch
+      if (reportData) {
+        return;
+      }
+
       setReportLoading(true);
       setFilterError("");
 
@@ -127,10 +133,8 @@ function SanitaryReportAnalytics() {
     return () => {
       isMounted = false;
     };
-    // The context refresh function is recreated when data changes, so this
-    // initial report load intentionally runs once on page entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reportData]);
 
   const localEstablishments = useMemo(
     () => filterEstablishments(establishments, appliedFilters),
@@ -274,7 +278,16 @@ function SanitaryReportAnalytics() {
   }
 
   if (loading || (reportLoading && !reportData)) {
-    return <div className="sanitary-report-page">Loading sanitation reports...</div>;
+    return (
+      <div className="sanitary-report-page">
+        <PageLoader
+          message="Loading Business Report & Analytics..."
+          subtext="Analyzing sanitation compliance and permit records"
+          variant="content"
+          theme="sanitation"
+        />
+      </div>
+    );
   }
 
   return (

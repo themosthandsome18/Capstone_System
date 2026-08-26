@@ -1,0 +1,157 @@
+/* ==========================================================================
+   ErrorBoundary — Fault Isolation Fallback Styles
+   ========================================================================== */
+
+.feature-error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  width: 100%;
+  padding: 40px 20px;
+  box-sizing: border-box;
+  animation: errorFadeIn 0.3s ease-out;
+}
+
+.feature-error-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 560px;
+  width: 100%;
+  padding: 38px 34px;
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #fed7aa;
+  box-shadow:
+    0 10px 25px -5px rgba(249, 115, 22, 0.08),
+    0 20px 40px -15px rgba(15, 23, 42, 0.08);
+}
+
+.feature-error-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #fff7ed;
+  border: 2px solid #ffedd5;
+  color: #ea580c;
+  margin-bottom: 18px;
+}
+
+.feature-error-icon {
+  font-size: 1.85rem;
+}
+
+.feature-error-title {
+  margin: 0 0 10px 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: -0.01em;
+}
+
+.feature-error-desc {
+  margin: 0 0 24px 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.feature-error-desc strong {
+  color: #0f766e;
+}
+
+.feature-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.feature-error-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: none;
+}
+
+.feature-error-btn.primary {
+  background: #0f766e;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.25);
+}
+
+.feature-error-btn.primary:hover {
+  background: #115e59;
+  transform: translateY(-1px);
+}
+
+.feature-error-btn.outline {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.feature-error-btn.outline:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.btn-icon {
+  font-size: 0.95rem;
+}
+
+/* Collapsible technical details */
+.feature-error-details {
+  margin-top: 22px;
+  width: 100%;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.error-message {
+  margin: 0 0 8px 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-word;
+}
+
+.error-stack {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #64748b;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@keyframes errorFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
