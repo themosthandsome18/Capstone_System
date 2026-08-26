@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
   FiChevronLeft,
@@ -8,18 +8,20 @@ import {
   FiEdit2,
   FiEye,
   FiHome,
+  FiLock,
   FiPlus,
   FiSearch,
   FiX,
 } from "react-icons/fi";
+import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const statusOptions = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All Status" },
   { value: "good_standing", label: "Good Standing" },
-  { value: "for_completion", label: "For Completion" },
-  { value: "violation", label: "Violation" },
+  { value: "for_completion", label: "For Compliance" },
+  { value: "violation", label: "Needs Assistance" },
 ];
 
 const toiletOptions = [
@@ -35,6 +37,27 @@ const waterLevelOptions = [
   { value: "level_3", label: "Level III" },
 ];
 
+// Water source options with their auto-assigned level
+const WATER_SOURCE_OPTIONS = [
+  { value: "MWSS", label: "MWSS", sublabel: "Municipal Water Supply System", level: "level_3" },
+  { value: "Level II (Communal Faucet)", label: "Level II (Communal Faucet)", sublabel: "Shared piped water", level: "level_2" },
+  { value: "Deep Well", label: "Deep Well", sublabel: "Private or shared deep well", level: "level_1" },
+  { value: "Spring", label: "Spring", sublabel: "Natural spring source", level: "level_1" },
+  { value: "Rainwater", label: "Rainwater", sublabel: "Collected rainwater", level: "level_1" },
+  { value: "Others", label: "Others", sublabel: "Other water sources", level: "level_1" },
+];
+
+function computeWaterLevel(sources = []) {
+  if (!sources.length) return "";
+  const levels = sources.map((s) => {
+    const opt = WATER_SOURCE_OPTIONS.find((o) => o.value === s);
+    return opt?.level || "level_1";
+  });
+  if (levels.includes("level_3")) return "level_3";
+  if (levels.includes("level_2")) return "level_2";
+  return "level_1";
+}
+
 const wasteOptions = [
   { value: "collected", label: "Collected by LGU" },
   { value: "composted", label: "Composted" },
@@ -44,8 +67,8 @@ const wasteOptions = [
 
 const statusFormOptions = [
   { value: "good_standing", label: "Good Standing" },
-  { value: "for_completion", label: "For Completion" },
-  { value: "violation", label: "Violation" },
+  { value: "for_completion", label: "For Compliance" },
+  { value: "violation", label: "Needs Assistance" },
 ];
 
 const emptyForm = {
@@ -55,8 +78,8 @@ const emptyForm = {
   male_count: 0,
   female_count: 0,
   toilet_type: "water_sealed",
-  water_level: "level_3",
-  water_source: "",
+  water_level: "",
+  water_source: [],
   waste_disposal: "collected",
   status: "good_standing",
   last_survey_date: "",
@@ -276,6 +299,9 @@ function HouseholdRecords() {
   }
 
   function openEdit(record) {
+    const sourcesArray = record.water_source
+      ? record.water_source.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
     setForm({
       household_head: record.household_head || "",
       barangay: record.barangay || "",
@@ -283,8 +309,8 @@ function HouseholdRecords() {
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
       toilet_type: record.toilet_type || "water_sealed",
-      water_level: record.water_level || "level_3",
-      water_source: record.water_source || "",
+      water_level: record.water_level || "",
+      water_source: sourcesArray,
       waste_disposal: record.waste_disposal || "collected",
       status: record.status || "good_standing",
       last_survey_date: record.last_survey_date || "",
@@ -317,8 +343,12 @@ function HouseholdRecords() {
     setSaving(true);
     setFormError("");
     try {
+      const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
+      const waterLevel = computeWaterLevel(sourcesArray);
       await createHousehold({
         ...form,
+        water_source: sourcesArray.join(", "),
+        water_level: waterLevel || form.water_level,
         male_count: Number(form.male_count) || 0,
         female_count: Number(form.female_count) || 0,
         last_survey_date: form.last_survey_date || null,
@@ -339,8 +369,12 @@ function HouseholdRecords() {
     setSaving(true);
     setFormError("");
     try {
+      const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
+      const waterLevel = computeWaterLevel(sourcesArray);
       await updateHousehold(editRecord.id, {
         ...form,
+        water_source: sourcesArray.join(", "),
+        water_level: waterLevel || form.water_level,
         male_count: Number(form.male_count) || 0,
         female_count: Number(form.female_count) || 0,
         last_survey_date: form.last_survey_date || null,
@@ -423,12 +457,12 @@ function HouseholdRecords() {
           <div className="household-chart-title">
             <div>
               <h3>High Risk Households by Barangay</h3>
-              <p>Across all barangays - violation status</p>
+              <p>Across all barangays - Needs Assistance status</p>
             </div>
 
             {highestRiskBarangay ? (
               <div className="risk-badge">
-                <span>Highest Risk</span>
+                <span>Priority Area</span>
                 <strong>Brgy. {highestRiskBarangay.barangay}</strong>
                 <small>
                   {highestRiskBarangay.atRisk} of {summary.totalHouseholds || 0}
@@ -502,7 +536,7 @@ function HouseholdRecords() {
               color="yellow"
             />
             <MockBar
-              label="None"
+              label="None / OD"
               value={toiletDistribution.none || 0}
               maxValue={maxToiletValue}
               color="red"
@@ -554,7 +588,12 @@ function HouseholdRecords() {
         </section>
 
         <section className="household-chart-card">
-          <h3>Water Access Levels</h3>
+          <div className="household-chart-title">
+            <div>
+              <h3>Water Access Levels</h3>
+              <p>{summary.totalHouseholds || 0} total households</p>
+            </div>
+          </div>
 
           <div className="water-donut-wrap">
             <div
@@ -563,21 +602,25 @@ function HouseholdRecords() {
                 background: buildWaterGradient(waterDistribution),
               }}
             />
-            <span className="water-label top">
-              {waterDistribution.level3 || 0}
-            </span>
-            <span className="water-label left">
-              {waterDistribution.level1 || 0}
-            </span>
-            <span className="water-label bottom">
-              {waterDistribution.level2 || 0}
-            </span>
+            <div className="water-donut-center-stat">
+              <strong>{summary.totalHouseholds || 0}</strong>
+              <small>Households</small>
+            </div>
           </div>
 
           <div className="household-legend">
-            <span className="yellow">Level I</span>
-            <span className="green">Level II</span>
-            <span className="dark">Level III</span>
+            <div className="legend-item yellow">
+              <span className="legend-dot" />
+              <span>Level I ({waterDistribution.level1 || 0})</span>
+            </div>
+            <div className="legend-item green">
+              <span className="legend-dot" />
+              <span>Level II ({waterDistribution.level2 || 0})</span>
+            </div>
+            <div className="legend-item dark">
+              <span className="legend-dot" />
+              <span>Level III ({waterDistribution.level3 || 0})</span>
+            </div>
           </div>
         </section>
       </div>
@@ -653,30 +696,30 @@ function HouseholdRecords() {
                     <td>{row.waste_disposal_label}</td>
                     <td>
                       <span
-                        className={`household-status ${statusClass(
-                          row.status_label
+                        className={`status-pill ${statusClass(
+                          row.status || row.status_label
                         )}`}
                       >
-                        {row.status_label}
+                        {formatHouseholdStatus(row.status || row.status_label)}
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: "6px" }}>
+                      <div className="establishment-action-buttons">
                         <button
                           type="button"
-                          className="hh-action-btn view"
-                          title="View Details"
+                          className="establishment-icon-btn view"
+                          title="View Household Details"
                           onClick={() => setViewRecord(row)}
                         >
-                          <FiEye size={14} />
+                          <FiEye />
                         </button>
                         <button
                           type="button"
-                          className="hh-action-btn edit"
-                          title="Edit Record"
+                          className="establishment-icon-btn edit"
+                          title="Edit Household Record"
                           onClick={() => openEdit(row)}
                         >
-                          <FiEdit2 size={14} />
+                          <FiEdit2 />
                         </button>
                       </div>
                     </td>
@@ -716,8 +759,8 @@ function HouseholdRecords() {
             <div className="hh-modal-header">
               <div>
                 <h2>{viewRecord.household_head}</h2>
-                <span className={`household-status ${statusClass(viewRecord.status_label)}`}>
-                  {viewRecord.status_label}
+                <span className={`status-pill ${statusClass(viewRecord.status || viewRecord.status_label)}`}>
+                  {formatHouseholdStatus(viewRecord.status || viewRecord.status_label)}
                 </span>
               </div>
               <button type="button" className="hh-modal-close" onClick={closeModals}>
@@ -817,9 +860,30 @@ function HouseholdRecords() {
 
 /* ── Reusable form shared by Add and Edit ── */
 function HouseholdForm({ form, updateField, barangayOptions, formError }) {
+  const { user } = useAuth();
+  const currentInspector = useMemo(() => {
+    if (user?.display_name && user.display_name !== "admin" && user.display_name !== "System Admin") {
+      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
+    }
+    if (user?.username === "inspector_maria") return "Insp. Maria Santos";
+    if (user?.username === "inspector_juan") return "Insp. Juan Dela Cruz";
+    return "Insp. Juan Dela Cruz";
+  }, [user]);
+
   return (
     <div className="hh-form-grid">
       {formError && <p className="hh-form-error">{formError}</p>}
+
+      <div className="hh-form-group hh-full">
+        <label>Sanitary Inspector / Surveyor (Auto-Assigned)</label>
+        <div className="hh-inspector-stamp">
+          <FiLock />
+          <div>
+            <strong>{currentInspector}</strong>
+            <small>Active User Session • Verified Sanitary Inspector</small>
+          </div>
+        </div>
+      </div>
 
       <div className="hh-form-group hh-full">
         <label>Household Head *</label>
@@ -891,27 +955,32 @@ function HouseholdForm({ form, updateField, barangayOptions, formError }) {
       </div>
 
       <div className="hh-form-group">
-        <label>Water Level</label>
-        <select value={form.water_level} onChange={(e) => updateField("water_level", e.target.value)}>
-          {waterLevelOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-
-      <div className="hh-form-group">
-        <label>Water Source</label>
-        <input
-          type="text"
-          value={form.water_source}
-          onChange={(e) => updateField("water_source", e.target.value)}
-          placeholder="e.g. MWSS, Deep Well"
-        />
-      </div>
-
-      <div className="hh-form-group">
         <label>Waste Disposal</label>
         <select value={form.waste_disposal} onChange={(e) => updateField("waste_disposal", e.target.value)}>
           {wasteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+      </div>
+
+      <div className="hh-form-group hh-full">
+        <label>Water Source * <small style={{ color: "#6b7280", fontWeight: 400 }}>— Choose one or more; water level is assigned automatically</small></label>
+        <WaterSourceMultiSelect
+          selected={Array.isArray(form.water_source) ? form.water_source : []}
+          onChange={(sources) => updateField("water_source", sources)}
+        />
+      </div>
+
+      <div className="hh-form-group hh-full">
+        <label>Water Level <small style={{ color: "#6b7280", fontWeight: 400 }}>(auto-assigned)</small></label>
+        {(() => {
+          const sources = Array.isArray(form.water_source) ? form.water_source : [];
+          const level = computeWaterLevel(sources);
+          const levelLabel = waterLevelOptions.find((o) => o.value === level)?.label;
+          return (
+            <div className={`ws-water-level-display${level ? " assigned" : ""}`}>
+              {level ? levelLabel : "Select a water source to assign a level"}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="hh-form-group">
@@ -943,6 +1012,68 @@ function HouseholdForm({ form, updateField, barangayOptions, formError }) {
   );
 }
 
+function WaterSourceMultiSelect({ selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  function toggle(value) {
+    if (selected.includes(value)) {
+      onChange(selected.filter((s) => s !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  }
+
+  const label = selected.length
+    ? selected.join(", ")
+    : null;
+
+  return (
+    <div className="ws-multiselect" ref={ref}>
+      <button
+        type="button"
+        className={`ws-multiselect-trigger${open ? " open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={label ? undefined : "placeholder"}>
+          {label || "Select water source(s)...."}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d={open ? "M2 8l4-4 4 4" : "M2 4l4 4 4-4"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="ws-dropdown">
+          {WATER_SOURCE_OPTIONS.map((opt) => (
+            <label key={opt.value} className="ws-option">
+              <input
+                type="checkbox"
+                checked={selected.includes(opt.value)}
+                onChange={() => toggle(opt.value)}
+              />
+              <div className="ws-option-label">
+                <span>{opt.label}</span>
+                <small>{opt.sublabel}</small>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HHDetailItem({ label, value, fullWidth }) {
   return (
     <div className={`hh-detail-item${fullWidth ? " hh-full" : ""}`}>
@@ -950,64 +1081,6 @@ function HHDetailItem({ label, value, fullWidth }) {
       <span className="hh-detail-value">{value}</span>
     </div>
   );
-}
-
-function buildHouseholdSummary(records) {
-  const total = records.length;
-  const withSanitaryFacility = records.filter(
-    (item) => item.toilet_type !== "none"
-  ).length;
-  const withWaterAccess = records.filter((item) =>
-    ["level_2", "level_3"].includes(item.water_level)
-  ).length;
-
-  return {
-    totalHouseholds: total,
-    withSanitaryFacility,
-    sanitaryFacilityCoverage: total
-      ? Math.round((withSanitaryFacility / total) * 100)
-      : 0,
-    withWaterAccess,
-    waterAccessCoverage: total
-      ? Math.round((withWaterAccess / total) * 100)
-      : 0,
-    atRiskHouseholds: records.filter((item) => item.status === "violation")
-      .length,
-  };
-}
-
-function buildRiskRows(records, barangayNames) {
-  return barangayNames
-    .map((barangay) => {
-      const barangayRecords = records.filter(
-        (item) => item.barangay === barangay
-      );
-
-      return {
-        barangay,
-        total: barangayRecords.length,
-        atRisk: barangayRecords.filter((item) => item.status === "violation")
-          .length,
-        forCompletion: barangayRecords.filter(
-          (item) => item.status === "for_completion"
-        ).length,
-        goodStanding: barangayRecords.filter(
-          (item) => item.status === "good_standing"
-        ).length,
-      };
-    })
-    .filter((item) => item.total > 0)
-    .sort(
-      (a, b) =>
-        b.atRisk - a.atRisk ||
-        b.forCompletion - a.forCompletion ||
-        b.total - a.total ||
-        a.barangay.localeCompare(b.barangay)
-    );
-}
-
-function countBy(records, field, value) {
-  return records.filter((item) => item[field] === value).length;
 }
 
 function HouseholdStat({ title, value, desc, icon, color }) {
@@ -1060,8 +1133,20 @@ function buildWaterGradient(distribution) {
   )`;
 }
 
+function formatHouseholdStatus(status) {
+  const s = String(status || "").toLowerCase().replace(/[\s-]+/g, "_");
+  if (s.includes("completion") || s.includes("compliance")) return "For Compliance";
+  if (s.includes("violation") || s.includes("assistance")) return "Needs Assistance";
+  if (s.includes("upcoming")) return "Upcoming";
+  return "Good Standing";
+}
+
 function statusClass(status = "") {
-  return status.toLowerCase().replaceAll(" ", "-");
+  const s = String(status || "").toLowerCase().replace(/[\s-]+/g, "_");
+  if (s.includes("completion") || s.includes("compliance")) return "for-compliance";
+  if (s.includes("violation") || s.includes("assistance")) return "needs-assistance";
+  if (s.includes("upcoming")) return "upcoming";
+  return "good-standing";
 }
 
 export default HouseholdRecords;

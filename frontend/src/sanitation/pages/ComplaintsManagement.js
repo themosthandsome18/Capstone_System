@@ -1,39 +1,191 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  FiAlertCircle,
   FiAlertTriangle,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
   FiFilter,
   FiImage,
+  FiInfo,
   FiMapPin,
   FiSearch,
+  FiShield,
   FiTrash2,
-  FiClock,
-  FiTag,
   FiUser,
-  FiBell,
-  FiFileText,
+  FiX,
 } from "react-icons/fi";
+import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { API_BASE_URL } from "../../shared/apiClient";
 
-const reportCategories = [
-  "Public Restroom",
-  "Public Market",
-  "Food Establishment",
-  "Water Source",
-  "Garbage/Waste",
-  "Pest/Rodents",
-  "Other",
+export const REPORT_LIMIT_MAX = 5;
+
+export function getDailyReportCount() {
+  try {
+    const todayKey = `mauban_sanitation_report_count_${new Date().toISOString().slice(0, 10)}`;
+    const val = parseInt(localStorage.getItem(todayKey) || "0", 10);
+    return isNaN(val) ? 0 : val;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementDailyReportCount() {
+  try {
+    const todayKey = `mauban_sanitation_report_count_${new Date().toISOString().slice(0, 10)}`;
+    const current = getDailyReportCount();
+    localStorage.setItem(todayKey, String(current + 1));
+    return current + 1;
+  } catch {
+    return 1;
+  }
+}
+
+export const CATEGORY_DEFINITIONS = [
+  {
+    category: "Contaminated Water Source",
+    group: "Urgent (24–48h SLA)",
+    priority: "high",
+    maxDays: 1, // Today or Tomorrow
+    iconTone: "urgent",
+    hint: "Critical water safety & disease outbreak risk",
+  },
+  {
+    category: "Hazardous / Medical Waste",
+    group: "Urgent (24–48h SLA)",
+    priority: "high",
+    maxDays: 1,
+    iconTone: "urgent",
+    hint: "Toxic chemical, biological, or hospital waste",
+  },
+  {
+    category: "Severe Sewage Overflow",
+    group: "Urgent (24–48h SLA)",
+    priority: "high",
+    maxDays: 1,
+    iconTone: "urgent",
+    hint: "Open sewer leak / immediate community biohazard",
+  },
+  {
+    category: "Food Establishment Hygiene",
+    group: "Standard (3–5 Days)",
+    priority: "medium",
+    maxDays: 5,
+    iconTone: "standard",
+    hint: "Food sanitation / food handling violations",
+  },
+  {
+    category: "Public Market Sanitation",
+    group: "Standard (3–5 Days)",
+    priority: "medium",
+    maxDays: 5,
+    iconTone: "standard",
+    hint: "Market stall waste, meat section, odor",
+  },
+  {
+    category: "Public Restroom Maintenance",
+    group: "Standard (3–5 Days)",
+    priority: "medium",
+    maxDays: 5,
+    iconTone: "standard",
+    hint: "Public toilet unhygienic / broken plumbing",
+  },
+  {
+    category: "Pest & Rodents Infestation",
+    group: "Standard (3–5 Days)",
+    priority: "medium",
+    maxDays: 5,
+    iconTone: "standard",
+    hint: "Disease vectors (rats, flies, mosquitoes)",
+  },
+  {
+    category: "Garbage Collection Delay",
+    group: "Routine (7–14 Days)",
+    priority: "low",
+    maxDays: 14,
+    iconTone: "routine",
+    hint: "Uncollected neighborhood garbage pile",
+  },
+  {
+    category: "General Cleanliness / Other",
+    group: "Routine (7–14 Days)",
+    priority: "low",
+    maxDays: 14,
+    iconTone: "routine",
+    hint: "Minor inquiries or general sanitation concerns",
+  },
 ];
+
+export function getCategoryInfo(categoryName) {
+  if (!categoryName) return CATEGORY_DEFINITIONS[CATEGORY_DEFINITIONS.length - 1];
+  const found = CATEGORY_DEFINITIONS.find(
+    (c) => c.category.toLowerCase() === categoryName.toLowerCase()
+  );
+  if (found) return found;
+
+  const lower = categoryName.toLowerCase();
+  if (
+    lower.includes("water") ||
+    lower.includes("sewage") ||
+    lower.includes("hazard") ||
+    lower.includes("urgent")
+  ) {
+    return CATEGORY_DEFINITIONS[0]; // Contaminated Water Source
+  }
+  if (
+    lower.includes("food") ||
+    lower.includes("market") ||
+    lower.includes("restroom") ||
+    lower.includes("pest")
+  ) {
+    return CATEGORY_DEFINITIONS[3]; // Food Establishment
+  }
+  return CATEGORY_DEFINITIONS[CATEGORY_DEFINITIONS.length - 1]; // General Cleanliness / Other
+}
+
+export function getScheduleDateLimits(priority) {
+  const today = new Date();
+  const minDate = toDateKey(today);
+  const max = new Date(today);
+
+  if (priority === "high") {
+    max.setDate(today.getDate() + 1); // Today or Tomorrow (within 24-48 hrs)
+    return {
+      minDate,
+      maxDate: toDateKey(max),
+      ruleHint: "Restricted to Today or Tomorrow only (Max 48h limit).",
+      ruleType: "urgent",
+    };
+  }
+  if (priority === "medium") {
+    max.setDate(today.getDate() + 5);
+    return {
+      minDate,
+      maxDate: toDateKey(max),
+      ruleHint: "Must be scheduled within 5 days.",
+      ruleType: "standard",
+    };
+  }
+
+  max.setDate(today.getDate() + 14);
+  return {
+    minDate,
+    maxDate: toDateKey(max),
+    ruleHint: "Must be scheduled within 14 days.",
+    ruleType: "routine",
+  };
+}
 
 const emptyForm = {
   complainant_name: "",
   contact_number: "",
-  category: "Public Restroom",
+  category: "Contaminated Water Source",
   barangay: "",
   reported_date: new Date().toISOString().slice(0, 10),
   status: "pending",
-  priority: "medium",
+  priority: "high",
   description: "",
   action_taken: "",
   resolved_date: "",
@@ -43,7 +195,7 @@ const emptySchedule = {
   inspector: "Insp. J. Cruz",
   date: new Date().toISOString().slice(0, 10),
   time: "09:00",
-  priority: "medium",
+  priority: "high",
   note: "",
   notify: true,
 };
@@ -60,12 +212,30 @@ function ComplaintsManagement() {
     deleteComplaint,
   } = useSanitationData();
 
+  const { user } = useAuth();
+  const defaultInspectorName = useMemo(() => {
+    if (!user) return "Insp. Juan Dela Cruz";
+    if (user.display_name && user.display_name !== "admin") {
+      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
+    }
+    if (user.username === "inspector_maria") return "Insp. Maria Santos";
+    return "Insp. Juan Dela Cruz";
+  }, [user]);
+
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
     priority: "all",
     barangay: "all",
   });
+
+  const [calFilters, setCalFilters] = useState({
+    eventType: "all", // "all", "report", "inspection"
+    reporterType: "all", // "all", "named", "anonymous"
+    priority: "all", // "all", "high", "medium", "low"
+    status: "all", // "all", "pending", "investigating", "resolved"
+  });
+
   const [formOpen, setFormOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -77,10 +247,14 @@ function ComplaintsManagement() {
   const [pageError, setPageError] = useState("");
   const [dayModalData, setDayModalData] = useState(null);
   const [inspectionModalData, setInspectionModalData] = useState(null);
+  const [dailyCount, setDailyCount] = useState(() => getDailyReportCount());
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
-  const calendarEvents = useMemo(() => buildCalendarEvents(rows), [rows]);
+  const calendarEvents = useMemo(
+    () => buildCalendarEvents(rows, calFilters),
+    [rows, calFilters]
+  );
 
   const visibleRows = useMemo(() => {
     const needle = filters.search.trim().toLowerCase();
@@ -116,7 +290,7 @@ function ComplaintsManagement() {
       refreshComplaintData().catch((requestError) => {
         if (mounted) {
           setPageError(
-            requestError.message || "Unable to load community report records."
+            requestError.message || "Unable to load community concerns records."
           );
         }
       });
@@ -142,13 +316,35 @@ function ComplaintsManagement() {
   }, [selectedReport, visibleRows]);
 
   function openPublicForm() {
-    setForm(emptyForm);
+    const initialCategory = CATEGORY_DEFINITIONS[0];
+    setForm({
+      ...emptyForm,
+      category: initialCategory.category,
+      priority: initialCategory.priority,
+    });
     setAnonymous(false);
     setFormOpen(true);
   }
 
+  function handleFormCategoryChange(newCategory) {
+    const info = getCategoryInfo(newCategory);
+    setForm((current) => ({
+      ...current,
+      category: newCategory,
+      priority: info.priority,
+    }));
+  }
+
   async function handleSubmitReport(event) {
     event.preventDefault();
+
+    if (dailyCount >= REPORT_LIMIT_MAX) {
+      setPageError(
+        "Nakaabot ka na sa limit na 5 community reports para sa araw na ito. Upang maiwasan ang spam at masuri nang maayos ang mga naunang ulat, mangyaring maghintay bago magsumite muli."
+      );
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -162,11 +358,13 @@ function ComplaintsManagement() {
 
     try {
       const created = await createComplaint(payload);
+      incrementDailyReportCount();
+      setDailyCount(getDailyReportCount());
       setSelectedReport(created);
       setFormOpen(false);
       setPageError("");
     } catch (requestError) {
-      setPageError(requestError.message || "Unable to submit community report.");
+      setPageError(requestError.message || "Unable to submit community concern.");
     } finally {
       setSaving(false);
     }
@@ -185,16 +383,14 @@ function ComplaintsManagement() {
       setSelectedReport(updated);
       setPageError("");
     } catch (requestError) {
-      setPageError(requestError.message || "Unable to update community report.");
+      setPageError(requestError.message || "Unable to update community concern.");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(report) {
-    // Temporarily bypass window.confirm as it might be blocked by the browser
     const confirmed = true;
-
     if (!confirmed) return;
 
     try {
@@ -202,19 +398,26 @@ function ComplaintsManagement() {
       setSelectedReport(visibleRows.find((item) => item.id !== report.id) || null);
       setPageError("");
     } catch (requestError) {
-      setPageError(requestError.message || "Unable to delete community report.");
+      setPageError(requestError.message || "Unable to delete community concern.");
     }
   }
 
   function openSchedule(report) {
     setSelectedReport(report);
+    const effectivePriority = report.priority || "high";
+    const { minDate, maxDate } = getScheduleDateLimits(effectivePriority);
+
+    let initialDate = report.inspection_scheduled_date || minDate;
+    if (initialDate < minDate) initialDate = minDate;
+    if (initialDate > maxDate) initialDate = maxDate;
+
     setSchedule({
       ...emptySchedule,
-      inspector: report.assigned_inspector || emptySchedule.inspector,
-      date: report.inspection_scheduled_date || emptySchedule.date,
+      inspector: report.assigned_inspector || defaultInspectorName,
+      date: initialDate,
       time:
         (report.inspection_scheduled_time || emptySchedule.time).slice(0, 5),
-      priority: report.priority || "medium",
+      priority: effectivePriority,
       note: report.inspection_schedule_note || report.action_taken || "",
       notify:
         report.inspection_notify_reporter === undefined
@@ -224,10 +427,31 @@ function ComplaintsManagement() {
     setScheduleOpen(true);
   }
 
+  function handleSchedulePriorityChange(newPriority) {
+    const { minDate, maxDate } = getScheduleDateLimits(newPriority);
+    let clampedDate = schedule.date;
+    if (clampedDate < minDate) clampedDate = minDate;
+    if (clampedDate > maxDate) clampedDate = maxDate;
+
+    setSchedule((current) => ({
+      ...current,
+      priority: newPriority,
+      date: clampedDate,
+    }));
+  }
+
   async function handleScheduleInspection(event) {
     event.preventDefault();
 
     if (!selectedReport) return;
+
+    const { minDate, maxDate, ruleHint } = getScheduleDateLimits(schedule.priority);
+    if (schedule.date < minDate || schedule.date > maxDate) {
+      setPageError(
+        `Invalid Inspection Date: For ${schedule.priority.toUpperCase()} priority, inspection date must be between ${minDate} and ${maxDate}. (${ruleHint})`
+      );
+      return;
+    }
 
     const note = [
       `Inspection scheduled on ${schedule.date} at ${schedule.time}.`,
@@ -262,19 +486,21 @@ function ComplaintsManagement() {
   }
 
   if (loading) {
-    return <div className="community-report-page">Loading community reports...</div>;
+    return <div className="community-report-page">Loading community concerns...</div>;
   }
 
   return (
     <div className="community-report-page">
       <header className="community-report-header">
         <div>
-          <h1>Sanitary Community Report</h1>
-          <p>Track reports from residents, public areas, and household sanitation concerns.</p>
+          <h1>Community Concerns &amp; Inspection Schedules</h1>
+          <p>
+            Track public sanitation concerns from residents, assess urgency SLAs, and schedule on-site inspections.
+          </p>
         </div>
 
         <button type="button" className="community-primary-btn" onClick={openPublicForm}>
-          View Public Form
+          View Public Concern Form
         </button>
       </header>
 
@@ -283,9 +509,9 @@ function ComplaintsManagement() {
       ) : null}
 
       <section className="community-stat-grid">
-        <CommunityStat label="Total Reports" value={summary.total || 0} tone="blue" />
-        <CommunityStat label="New" value={summary.pending || 0} tone="blue" />
-        <CommunityStat label="Urgent" value={summary.highPriority || 0} tone="red" />
+        <CommunityStat label="Total Concerns" value={summary.total || 0} tone="blue" />
+        <CommunityStat label="New / Pending" value={summary.pending || 0} tone="blue" />
+        <CommunityStat label="Urgent (24–48h)" value={summary.highPriority || 0} tone="red" />
         <CommunityStat label="Resolved" value={summary.resolved || 0} tone="green" />
       </section>
 
@@ -297,13 +523,13 @@ function ComplaintsManagement() {
             onChange={(event) =>
               setFilters((current) => ({ ...current, search: event.target.value }))
             }
-            placeholder="Search by location, description, ref no..."
+            placeholder="Search by location, description, ref no, reporter..."
           />
         </label>
 
         <span className="community-filter-icon">
           <FiFilter />
-          Filter
+          Filter List
         </span>
 
         <select
@@ -313,8 +539,8 @@ function ComplaintsManagement() {
           }
         >
           <option value="all">All Status</option>
-          <option value="pending">New</option>
-          <option value="investigating">In Review</option>
+          <option value="pending">New / Pending</option>
+          <option value="investigating">In Review / Scheduled</option>
           <option value="resolved">Resolved</option>
           <option value="rejected">Dismissed</option>
         </select>
@@ -326,15 +552,20 @@ function ComplaintsManagement() {
           }
         >
           <option value="all">All Severity</option>
-          <option value="high">Urgent</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
+          <option value="high">🔴 Urgent (Within 24–48h)</option>
+          <option value="medium">🟡 Standard (Within 3–5d)</option>
+          <option value="low">🟢 Routine (Within 7–14d)</option>
         </select>
       </section>
 
       <CommunityCalendar
         month={calendarMonth}
         events={calendarEvents}
+        allRows={rows}
+        calFilters={calFilters}
+        onCalFilterChange={(field, value) =>
+          setCalFilters((current) => ({ ...current, [field]: value }))
+        }
         onMonthChange={setCalendarMonth}
         onSelectReport={(id) => {
           const report = rows.find((r) => r.id === id);
@@ -348,7 +579,7 @@ function ComplaintsManagement() {
       />
 
       <main className="community-report-grid">
-        <section className="community-report-list" aria-label="Community reports">
+        <section className="community-report-list" aria-label="Community concerns list">
           {visibleRows.length ? (
             visibleRows.map((item) => (
               <ReportListCard
@@ -359,7 +590,7 @@ function ComplaintsManagement() {
               />
             ))
           ) : (
-            <div className="community-empty">No community reports found.</div>
+            <div className="community-empty">No community concerns found.</div>
           )}
         </section>
 
@@ -373,10 +604,14 @@ function ComplaintsManagement() {
                 updateReportStatus(selectedReport, status, actionTaken)
               }
               onSchedule={() => openSchedule(selectedReport)}
-              onLocationClick={() => navigate("/sanitation/gis-map", { state: { mode: "community_reports", reportId: selectedReport.id } })}
+              onLocationClick={() =>
+                navigate("/sanitation/gis-map", {
+                  state: { mode: "community_reports", reportId: selectedReport.id },
+                })
+              }
             />
           ) : (
-            <div className="community-empty">Select a community report.</div>
+            <div className="community-empty">Select a concern to view full details.</div>
           )}
         </section>
       </main>
@@ -386,9 +621,11 @@ function ComplaintsManagement() {
           form={form}
           anonymous={anonymous}
           saving={saving}
+          dailyCount={dailyCount}
           onAnonymousChange={setAnonymous}
           onClose={() => setFormOpen(false)}
           onSubmit={handleSubmitReport}
+          onCategoryChange={handleFormCategoryChange}
           onChange={(field, value) =>
             setForm((current) => ({ ...current, [field]: value }))
           }
@@ -402,6 +639,7 @@ function ComplaintsManagement() {
           saving={saving}
           onClose={() => setScheduleOpen(false)}
           onSubmit={handleScheduleInspection}
+          onPriorityChange={handleSchedulePriorityChange}
           onChange={(field, value) =>
             setSchedule((current) => ({ ...current, [field]: value }))
           }
@@ -428,7 +666,11 @@ function ComplaintsManagement() {
         <InspectionDetailsModal
           report={inspectionModalData}
           onClose={() => setInspectionModalData(null)}
-          onLocationClick={() => navigate("/sanitation/gis-map", { state: { mode: "community_reports", reportId: inspectionModalData.id } })}
+          onLocationClick={() =>
+            navigate("/sanitation/gis-map", {
+              state: { mode: "community_reports", reportId: inspectionModalData.id },
+            })
+          }
         />
       ) : null}
     </div>
@@ -444,40 +686,127 @@ function CommunityStat({ label, value, tone }) {
   );
 }
 
-function CommunityCalendar({ month, events, onMonthChange, onSelectReport, onOpenDayEvents, onOpenInspection }) {
+function CommunityCalendar({
+  month,
+  events,
+  allRows = [],
+  calFilters,
+  onCalFilterChange,
+  onMonthChange,
+  onSelectReport,
+  onOpenDayEvents,
+  onOpenInspection,
+}) {
   const days = buildCalendarDays(month);
   const eventMap = events.reduce((map, event) => {
     map[event.date] = [...(map[event.date] || []), event];
     return map;
   }, {});
 
+  const totalReportsCount = allRows.filter((r) => Boolean(r.reported_date)).length;
+  const totalInspectionsCount = allRows.filter(
+    (r) => Boolean(r.inspection_scheduled_date)
+  ).length;
+
   return (
     <section className="community-calendar-card">
       <div className="community-calendar-header">
         <div>
-          <h2>Inspection Calendar</h2>
-          <p>Community report filing dates and scheduled inspection visits.</p>
+          <h2>Inspection &amp; Concern Calendar</h2>
+          <p>Filtered view of community report filing dates and scheduled inspection visits.</p>
         </div>
         <div className="community-calendar-actions">
           <button
             type="button"
             onClick={() => onMonthChange(shiftMonth(month, -1))}
           >
-            Prev
+            &larr; Prev
           </button>
           <strong>{formatMonth(month)}</strong>
           <button
             type="button"
             onClick={() => onMonthChange(shiftMonth(month, 1))}
           >
-            Next
+            Next &rarr;
           </button>
+        </div>
+      </div>
+
+      {/* ── Interactive Calendar Filter Toolbar ── */}
+      <div className="calendar-filter-toolbar">
+        <div className="calendar-filter-group">
+          <span className="cal-filter-label">
+            <FiCalendar /> View:
+          </span>
+          <div className="cal-filter-chips">
+            <button
+              type="button"
+              className={calFilters.eventType === "all" ? "active" : ""}
+              onClick={() => onCalFilterChange("eventType", "all")}
+            >
+              All Events ({events.length})
+            </button>
+            <button
+              type="button"
+              className={calFilters.eventType === "report" ? "active" : ""}
+              onClick={() => onCalFilterChange("eventType", "report")}
+            >
+              Reports Filed ({totalReportsCount})
+            </button>
+            <button
+              type="button"
+              className={calFilters.eventType === "inspection" ? "active" : ""}
+              onClick={() => onCalFilterChange("eventType", "inspection")}
+            >
+              Inspections ({totalInspectionsCount})
+            </button>
+          </div>
+        </div>
+
+        <div className="calendar-filter-dropdowns">
+          <label className="cal-dropdown-item">
+            <span>Reporter:</span>
+            <select
+              value={calFilters.reporterType}
+              onChange={(e) => onCalFilterChange("reporterType", e.target.value)}
+            >
+              <option value="all">All (Named &amp; Anon)</option>
+              <option value="named">Named Reporters Only</option>
+              <option value="anonymous">Anonymous Only</option>
+            </select>
+          </label>
+
+          <label className="cal-dropdown-item">
+            <span>Urgency:</span>
+            <select
+              value={calFilters.priority}
+              onChange={(e) => onCalFilterChange("priority", e.target.value)}
+            >
+              <option value="all">All Urgencies</option>
+              <option value="high">🔴 Urgent Only (24-48h)</option>
+              <option value="medium">🟡 Standard Only (3-5d)</option>
+              <option value="low">🟢 Routine Only (7-14d)</option>
+            </select>
+          </label>
+
+          <label className="cal-dropdown-item">
+            <span>Status:</span>
+            <select
+              value={calFilters.status}
+              onChange={(e) => onCalFilterChange("status", e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="pending">New / Pending</option>
+              <option value="investigating">In Review / Scheduled</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </label>
         </div>
       </div>
 
       <div className="community-calendar-legend">
         <span className="report">Report Filed</span>
-        <span className="inspection">Inspection</span>
+        <span className="inspection">Inspection Visit</span>
       </div>
 
       <div className="community-calendar-grid">
@@ -507,8 +836,8 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport, onOpe
                     key={`${event.type}-${event.reportId}-${event.date}`}
                     type="button"
                     className={event.type}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (event.type === "inspection") {
                         onOpenInspection(event.reportId);
                       } else {
@@ -522,10 +851,13 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport, onOpe
                   </button>
                 ))}
                 {dayEvents.length > 3 ? (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="community-more-btn"
-                    onClick={(e) => { e.stopPropagation(); onOpenDayEvents(day, dayEvents); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDayEvents(day, dayEvents);
+                    }}
                   >
                     +{dayEvents.length - 3} more
                   </button>
@@ -540,6 +872,9 @@ function CommunityCalendar({ month, events, onMonthChange, onSelectReport, onOpe
 }
 
 function ReportListCard({ item, active, onSelect }) {
+  const catInfo = getCategoryInfo(item.category);
+  const isUrgent = item.priority === "high" || catInfo.priority === "high";
+
   return (
     <button
       type="button"
@@ -558,6 +893,13 @@ function ReportListCard({ item, active, onSelect }) {
       <p>{item.description || "No description provided."}</p>
       <div className="community-card-meta">
         <small>{item.complaint_id}</small>
+        {isUrgent ? (
+          <span className="urgency-tag urgent">🔴 Urgent</span>
+        ) : item.priority === "medium" ? (
+          <span className="urgency-tag standard">🟡 Standard</span>
+        ) : (
+          <span className="urgency-tag routine">🟢 Routine</span>
+        )}
         <small>{relativeReportDate(item.reported_date)}</small>
       </div>
     </button>
@@ -565,6 +907,8 @@ function ReportListCard({ item, active, onSelect }) {
 }
 
 function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocationClick }) {
+  const catInfo = getCategoryInfo(report.category);
+
   return (
     <div className="community-detail-card">
       <div className="community-detail-title">
@@ -572,9 +916,27 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
           <small>{report.complaint_id}</small>
           <h2>{reportTitle(report)}</h2>
         </div>
-        <button type="button" className="community-icon-btn" onClick={onDelete}>
+        <button type="button" className="community-icon-btn" onClick={onDelete} title="Delete report">
           <FiTrash2 />
         </button>
+      </div>
+
+      {/* ── Category & Urgency Badge ── */}
+      <div className="concern-classification-banner">
+        <div className="classification-item">
+          <span>Category:</span>
+          <strong>{report.category}</strong>
+        </div>
+        <div className="classification-item">
+          <span>Inspection Urgency:</span>
+          <span className={`urgency-pill ${report.priority || catInfo.priority}`}>
+            {report.priority === "high"
+              ? "🔴 Urgent (Within 24–48h)"
+              : report.priority === "medium"
+              ? "🟡 Standard (Within 3–5 days)"
+              : "🟢 Routine (Within 7–14 days)"}
+          </span>
+        </div>
       </div>
 
       <section className="community-detail-section">
@@ -587,22 +949,31 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
         <div className="community-photo-grid">
           {report.photo_documentation ? (
             report.photo_documentation.split(",").map((photoUrl, index) => {
-              const fullUrl = photoUrl.startsWith("http") 
-                ? photoUrl 
-                : `${API_BASE_URL.replace("/api", "")}${photoUrl.startsWith("/") ? "" : "/"}${photoUrl}`;
-                
+              const fullUrl = photoUrl.startsWith("http")
+                ? photoUrl
+                : `${API_BASE_URL.replace("/api", "")}${
+                    photoUrl.startsWith("/") ? "" : "/"
+                  }${photoUrl}`;
+
               return (
                 <div key={index} className="community-photo-image">
-                  <img 
-                    src={fullUrl} 
-                    alt={`Complaint Evidence ${index + 1}`}
-                    style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0", backgroundColor: "#f8fafc" }}
+                  <img
+                    src={fullUrl}
+                    alt={`Concern Evidence ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      maxHeight: "300px",
+                      objectFit: "contain",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      backgroundColor: "#f8fafc",
+                    }}
                   />
                 </div>
               );
             })
           ) : (
-            <div className="community-photo-empty">None</div>
+            <div className="community-photo-empty">No photo attached</div>
           )}
         </div>
       </section>
@@ -611,14 +982,27 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
         <div>
           <span>Reporter</span>
           <strong>{report.complainant_name || "Anonymous"}</strong>
-          <small>{report.contact_number || "No contact number"}</small>
+          <small>{report.contact_number || "No contact number provided"}</small>
         </div>
-        <div 
+        <div
           onClick={onLocationClick}
           style={{ cursor: "pointer", transition: "all 0.2s" }}
           title="View exact location on GIS Map"
         >
-          <span>Location <small style={{ color: "#0ea5e9", marginLeft: "4px", fontWeight: "600", textTransform: "none", fontSize: "11px" }}>View on Map &rarr;</small></span>
+          <span>
+            Location{" "}
+            <small
+              style={{
+                color: "#0ea5e9",
+                marginLeft: "4px",
+                fontWeight: "600",
+                textTransform: "none",
+                fontSize: "11px",
+              }}
+            >
+              View on Map &rarr;
+            </small>
+          </span>
           <strong>{report.barangay || "Unspecified"}</strong>
           <small>{reportTitle(report)}</small>
         </div>
@@ -715,11 +1099,18 @@ function PublicReportModal({
   form,
   anonymous,
   saving,
+  dailyCount,
   onAnonymousChange,
   onClose,
   onSubmit,
+  onCategoryChange,
   onChange,
 }) {
+  const currentCategoryInfo = getCategoryInfo(form.category);
+  const [showGuide, setShowGuide] = useState(true);
+  const isLimitReached = dailyCount >= REPORT_LIMIT_MAX;
+  const remainingAllowance = Math.max(0, REPORT_LIMIT_MAX - dailyCount);
+
   return (
     <div className="community-modal-backdrop">
       <form className="community-public-modal" onSubmit={onSubmit}>
@@ -727,73 +1118,143 @@ function PublicReportModal({
           &larr; Back
         </button>
 
-        <h2>Report Unsanitary Conditions</h2>
-        <p>Saw something concerning? Tell the Sanitary Section so they can inspect.</p>
+        <div className="modal-header-with-badge">
+          <div>
+            <h2>Report Unsanitary Conditions</h2>
+            <p>Saw something concerning? Tell the Sanitary Section so they can inspect.</p>
+          </div>
+          <span className={`daily-limit-badge ${isLimitReached ? "limit-full" : "limit-ok"}`}>
+            <FiShield /> {remainingAllowance} of {REPORT_LIMIT_MAX} submissions left today
+          </span>
+        </div>
 
-        <label className="community-field-label">What are you reporting?</label>
-        <div className="community-chip-row">
-          {reportCategories.map((category) => (
+        {/* ── Anti-Spam Limit Blocking Banner ── */}
+        {isLimitReached && (
+          <div className="report-limit-reached-banner">
+            <FiAlertCircle />
+            <div>
+              <strong>Daily Submission Limit Reached (5 of 5 used)</strong>
+              <p>
+                Naabot mo na ang pinakamataas na limit na 5 reports ngayong araw. Ang patakarang ito ay upang maiwasan ang spam at masiguro na matutugunan ng Sanitary Inspectors ang bawat concern. Mangyaring maghintay muna sa update ng inyong mga naunang ulat.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Citizen Awareness & Scope Guide ── */}
+        <div className="sanitation-scope-guide-card">
+          <div
+            className="scope-guide-header"
+            onClick={() => setShowGuide(!showGuide)}
+            title="I-click para itago o ipakita ang gabay"
+          >
+            <div className="scope-guide-title">
+              <FiInfo />
+              <strong>Gabay sa Pag-uulat: Ano-ano ang Sakop ng Sanitary Section?</strong>
+            </div>
+            <button type="button" className="toggle-guide-btn">
+              {showGuide ? "Hide Guide ▲" : "Show Scope Guide ▼"}
+            </button>
+          </div>
+
+          {showGuide && (
+            <div className="guide-scope-grid">
+              <div className="scope-box allowed">
+                <h4><FiCheckCircle /> Sakop na Pwedeng I-report (Sanitation):</h4>
+                <ul>
+                  <li><strong>🍲 Pagkain at Inumin:</strong> Maruming paghawak ng pagkain sa mga kainan, panis/kontaminado, walang sanitary permit.</li>
+                  <li><strong>🚯 Basura at Dumi:</strong> Tambak na basura sa pampublikong lugar, pagsusunog, ilegal na tapunan.</li>
+                  <li><strong>🦟 Kanal at Lamok:</strong> Baradong kanal na may stagnant water (Dengue hazard), masangsang na tubig.</li>
+                  <li><strong>🚽 Poso Negro &amp; Sewerage:</strong> Umapaw o tumagas na septic tank, maruming tubig-kanal sa kalsada.</li>
+                  <li><strong>🐖 Amoy ng Alagang Hayop:</strong> Masangsang na amoy at langaw mula sa babuyan o manukan malapit sa bahay.</li>
+                </ul>
+              </div>
+
+              <div className="scope-box not-allowed">
+                <h4><FiX /> HINDI Sakop (I-refer sa Tamang Tanggapan):</h4>
+                <ul>
+                  <li><strong>👮 Krimen, away, o ingay sa gabi:</strong> I-report sa <em>PNP Mauban o Barangay Lupon</em>.</li>
+                  <li><strong>🏗️ Boundary ng lupa o sira sa gusali:</strong> I-report sa <em>Municipal Engineering Office</em>.</li>
+                  <li><strong>⚡ Putol na linya ng kuryente o brownout:</strong> I-report sa <em>Quezelco / Electric Provider</em>.</li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <label className="community-field-label">Select Category (Classified by Urgency)</label>
+        <div className="community-category-picker-grid">
+          {CATEGORY_DEFINITIONS.map((item) => (
             <button
-              key={category}
+              key={item.category}
               type="button"
-              className={form.category === category ? "active" : ""}
-              onClick={() => onChange("category", category)}
+              className={`community-category-btn ${
+                form.category === item.category ? "active" : ""
+              } ${item.iconTone}`}
+              onClick={() => onCategoryChange(item.category)}
             >
-              {category}
+              <div className="cat-btn-top">
+                <strong>{item.category}</strong>
+                <span className={`cat-priority-badge ${item.priority}`}>
+                  {item.priority === "high"
+                    ? "🔴 Urgent"
+                    : item.priority === "medium"
+                    ? "🟡 Standard"
+                    : "🟢 Routine"}
+                </span>
+              </div>
+              <small>{item.hint}</small>
             </button>
           ))}
         </div>
 
-        <label className="community-field-label">How urgent is it?</label>
-        <div className="community-segment-row">
-          {[
-            ["low", "Low"],
-            ["medium", "Medium"],
-            ["high", "Urgent"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={form.priority === value ? "active" : ""}
-              onClick={() => onChange("priority", value)}
-            >
-              {label}
-            </button>
-          ))}
+        {/* ── Auto Urgency Banner ── */}
+        <div className={`sla-urgency-notice ${currentCategoryInfo.iconTone}`}>
+          <FiInfo />
+          <div>
+            <strong>Inspection Response Target: {currentCategoryInfo.group}</strong>
+            <p>
+              {currentCategoryInfo.priority === "high"
+                ? "This issue is categorized as Urgent. Sanitary inspectors must conduct the inspection Today or Tomorrow."
+                : currentCategoryInfo.priority === "medium"
+                ? "This issue is categorized as Standard. Inspection will be scheduled within 3 to 5 days."
+                : "This issue is categorized as Routine. Inspection will be scheduled within 7 to 14 days."}
+            </p>
+          </div>
         </div>
 
         <label className="community-field-label" htmlFor="community-location">
-          Location / Address
+          Location / Address in Mauban
         </label>
         <div className="community-location-row">
           <input
             id="community-location"
             value={form.barangay}
             onChange={(event) => onChange("barangay", event.target.value)}
-            placeholder="e.g. Public Restroom, Mauban Public Market"
+            placeholder="e.g. Barangay Poblacion, Public Market near fish stall"
             required
           />
-          <button type="button">
+          <button type="button" title="Use current GPS location">
             <FiMapPin />
             GPS
           </button>
         </div>
 
         <label className="community-field-label" htmlFor="community-description">
-          Describe what you saw
+          Describe the situation
         </label>
         <textarea
           id="community-description"
           value={form.description}
           onChange={(event) => onChange("description", event.target.value)}
-          placeholder="e.g. The public restroom is overflowing, no running water, strong odor..."
+          placeholder="Describe what you observed (e.g. leaking sewer, contaminated well water, unpleasant odor)..."
           required
         />
 
-        <label className="community-field-label">Photo Evidence</label>
+        <label className="community-field-label">Photo Evidence (Optional)</label>
         <div className="community-upload-box">
           <FiImage />
-          <span>Upload</span>
+          <span>Upload photo evidence</span>
         </div>
 
         <div className="community-anonymous-box">
@@ -832,8 +1293,16 @@ function PublicReportModal({
           ) : null}
         </div>
 
-        <button type="submit" className="community-submit-btn" disabled={saving}>
-          {saving ? "Submitting..." : "Submit Report"}
+        <button
+          type="submit"
+          className="community-submit-btn"
+          disabled={saving || isLimitReached}
+        >
+          {isLimitReached
+            ? "Submission Limit Reached (Max 5 Today)"
+            : saving
+            ? "Submitting..."
+            : "Submit Concern Report"}
         </button>
       </form>
     </div>
@@ -846,8 +1315,12 @@ function ScheduleInspectionModal({
   saving,
   onClose,
   onSubmit,
+  onPriorityChange,
   onChange,
 }) {
+  const effectivePriority = schedule.priority || report.priority || "high";
+  const { minDate, maxDate, ruleHint, ruleType } = getScheduleDateLimits(effectivePriority);
+
   return (
     <div className="community-modal-backdrop">
       <form className="community-schedule-modal" onSubmit={onSubmit}>
@@ -855,20 +1328,36 @@ function ScheduleInspectionModal({
           &larr; Back
         </button>
 
-        <h2>Schedule Inspection</h2>
+        <h2>Schedule On-Site Inspection</h2>
         <p>
-          Assign an inspector and set a visit date for this community report. No
-          business report requirement needed.
+          Assign a health sanitary inspector and set the visit schedule. Date is locked within required urgency bounds.
         </p>
 
         <div className="community-linked-report">
-          <small>Linked Community Report</small>
+          <small>Linked Concern Record</small>
           <strong>Reference: {report.complaint_id}</strong>
           <span>Category: {report.category}</span>
           <span>
             <FiMapPin />
             {reportTitle(report)}
           </span>
+        </div>
+
+        {/* ── Strict Date Constraint Warning ── */}
+        <div className={`schedule-sla-constraint-box ${ruleType}`}>
+          <FiClock />
+          <div>
+            <strong>
+              {effectivePriority === "high"
+                ? "🔴 Urgent SLA: Inspection Restricted to Today or Tomorrow"
+                : effectivePriority === "medium"
+                ? "🟡 Standard SLA: Inspection within 5 Days"
+                : "🟢 Routine SLA: Inspection within 14 Days"}
+            </strong>
+            <p>
+              Allowed inspection dates: <strong>{minDate}</strong> to <strong>{maxDate}</strong>. ({ruleHint})
+            </p>
+          </div>
         </div>
 
         <div className="community-schedule-grid">
@@ -889,13 +1378,16 @@ function ScheduleInspectionModal({
               <option>Insp. J. Cruz</option>
               <option>Insp. M. Santos</option>
               <option>Insp. R. Dela Pena</option>
+              <option>Insp. E. Alcantara</option>
             </select>
           </label>
           <label>
-            Inspection Date
+            Inspection Date (Strict Constraint)
             <input
               type="date"
               value={schedule.date}
+              min={minDate}
+              max={maxDate}
               onChange={(event) => onChange("date", event.target.value)}
               required
             />
@@ -911,18 +1403,18 @@ function ScheduleInspectionModal({
           </label>
         </div>
 
-        <label className="community-field-label">Priority</label>
+        <label className="community-field-label">Inspection Priority / SLA Window</label>
         <div className="community-priority-row">
           {[
-            ["low", "Routine", "Within 7 days"],
-            ["medium", "Standard", "Within 48 hours"],
-            ["high", "Urgent", "Within 24 hours"],
+            ["high", "Urgent", "Today or Tomorrow (48h max)"],
+            ["medium", "Standard", "Within 5 days"],
+            ["low", "Routine", "Within 14 days"],
           ].map(([value, label, hint]) => (
             <button
               key={value}
               type="button"
-              className={schedule.priority === value ? "active" : ""}
-              onClick={() => onChange("priority", value)}
+              className={schedule.priority === value ? `active ${value}` : ""}
+              onClick={() => onPriorityChange(value)}
             >
               <strong>{label}</strong>
               <span>{hint}</span>
@@ -931,13 +1423,13 @@ function ScheduleInspectionModal({
         </div>
 
         <label className="community-field-label" htmlFor="inspection-note">
-          Inspection Note
+          Inspection Instructions &amp; Notes
         </label>
         <textarea
           id="inspection-note"
           value={schedule.note}
           onChange={(event) => onChange("note", event.target.value)}
-          placeholder="What to look for, equipment to bring, hazards to expect..."
+          placeholder="What to inspect, tools/kits to bring, immediate disinfection needed..."
         />
 
         <label className="community-notify-row">
@@ -946,20 +1438,22 @@ function ScheduleInspectionModal({
             checked={schedule.notify}
             onChange={(event) => onChange("notify", event.target.checked)}
           />
-          Notify the reporter once the inspection is scheduled.
+          Notify the reporter with the assigned schedule and inspector name.
         </label>
 
-        <div className="community-urgent-note">
-          <FiAlertTriangle />
-          Urgent priority - coordinate with Mauban Health Office supervisor before dispatch.
-        </div>
+        {effectivePriority === "high" ? (
+          <div className="community-urgent-note">
+            <FiAlertTriangle />
+            Urgent priority — coordinate with Mauban Health Officer supervisor for immediate dispatch.
+          </div>
+        ) : null}
 
         <div className="community-modal-actions">
           <button type="button" onClick={onClose}>
             Cancel
           </button>
           <button type="submit" disabled={saving}>
-            {saving ? "Scheduling..." : "Schedule Inspection"}
+            {saving ? "Scheduling..." : "Confirm Schedule"}
           </button>
         </div>
       </form>
@@ -981,7 +1475,7 @@ function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection
         <div className="community-day-modal-header">
           <div>
             <h2>{formattedDate}</h2>
-            <p>{events.length} Inspection and Report scheduled</p>
+            <p>{events.length} Scheduled Inspection(s) and Concern(s)</p>
           </div>
           <button type="button" onClick={onClose} className="community-close-btn">
             X
@@ -994,39 +1488,40 @@ function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection
             .map((evt, idx) => {
               const report = evt.raw;
               const isUrgent = report.priority === "high";
-            const isStandard = report.priority === "medium";
-            const priorityLabel = isUrgent ? "Urgent" : isStandard ? "Standard" : "Routine";
-            const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
+              const isStandard = report.priority === "medium";
+              const priorityLabel = isUrgent ? "Urgent" : isStandard ? "Standard" : "Routine";
+              const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
 
-            return (
-              <div
-                key={idx}
-                className={`community-day-event-card type-${evt.type}`}
-                onClick={() => {
-                  if (evt.type === "inspection" && onOpenInspection) {
-                    onOpenInspection(evt.reportId);
-                  } else {
-                    onSelectReport(evt.reportId);
-                  }
-                }}
-              >
-                <div className="community-day-event-time">{evt.time}</div>
-                <div className="community-day-event-info">
-                  <strong>{reportTitle(report)}</strong>
-                  <small>
-                    {report.category} {report.assigned_inspector ? `• ${report.assigned_inspector}` : ""}
-                  </small>
+              return (
+                <div
+                  key={idx}
+                  className={`community-day-event-card type-${evt.type}`}
+                  onClick={() => {
+                    if (evt.type === "inspection" && onOpenInspection) {
+                      onOpenInspection(evt.reportId);
+                    } else {
+                      onSelectReport(evt.reportId);
+                    }
+                  }}
+                >
+                  <div className="community-day-event-time">{evt.time}</div>
+                  <div className="community-day-event-info">
+                    <strong>{reportTitle(report)}</strong>
+                    <small>
+                      {report.category}{" "}
+                      {report.assigned_inspector ? `• ${report.assigned_inspector}` : ""}
+                    </small>
+                  </div>
+                  <div className="community-day-event-status">
+                    {evt.type === "inspection" && (
+                      <span className={`community-pill ${priorityClass}`}>
+                        {priorityLabel}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="community-day-event-status">
-                  {evt.type === "inspection" && (
-                    <span className={`community-pill ${priorityClass}`}>
-                      {priorityLabel}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
     </div>
@@ -1042,20 +1537,24 @@ function InspectionDetailsModal({ report, onClose, onLocationClick }) {
     weekday: "long",
     month: "long",
     day: "numeric",
-    year: "numeric"
+    year: "numeric",
   });
   const shortMonth = dateObj.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
   const day = dateObj.getDate();
 
   const isUrgent = report.priority === "high";
   const isStandard = report.priority === "medium";
-  const priorityLabel = isUrgent ? "Urgent" : isStandard ? "Standard" : "Routine";
+  const priorityLabel = isUrgent ? "Urgent (24–48h)" : isStandard ? "Standard" : "Routine";
   const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
   const priorityBorderColor = isUrgent ? "#ef4444" : isStandard ? "#f59e0b" : "#10b981";
 
   return (
     <div className="community-modal-backdrop" onClick={onClose}>
-      <div className="community-inspection-modal" onClick={(e) => e.stopPropagation()} style={{ borderTopColor: priorityBorderColor }}>
+      <div
+        className="community-inspection-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ borderTopColor: priorityBorderColor }}
+      >
         <div className="community-inspection-modal-header">
           <div>
             <h2>{reportTitle(report)}</h2>
@@ -1078,45 +1577,52 @@ function InspectionDetailsModal({ report, onClose, onLocationClick }) {
               <strong>{day}</strong>
             </div>
             <div className="community-inspection-schedule-info">
-              <small>SCHEDULED</small>
+              <small>SCHEDULED INSPECTION</small>
               <strong>{formattedDate}</strong>
               <span>
-                <FiClock /> {report.inspection_scheduled_time ? report.inspection_scheduled_time.slice(0, 5) : "TBD"}
+                <FiClock />{" "}
+                {report.inspection_scheduled_time
+                  ? report.inspection_scheduled_time.slice(0, 5)
+                  : "TBD"}
               </span>
             </div>
           </div>
 
           <div className="community-inspection-grid">
-            <div 
-              className="community-inspection-grid-item" 
-              onClick={onLocationClick} 
-              style={{ cursor: "pointer", transition: "all 0.2s" }} 
-              onMouseOver={(e) => e.currentTarget.style.borderColor = "#0ea5e9"} 
-              onMouseOut={(e) => e.currentTarget.style.borderColor = "#e2e8f0"}
+            <div
+              className="community-inspection-grid-item"
+              onClick={onLocationClick}
+              style={{ cursor: "pointer", transition: "all 0.2s" }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "#0ea5e9")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
               title="View exact location on GIS Map"
             >
-              <small><FiMapPin /> LOCATION</small>
-              <strong>{report.establishment_name || report.barangay || "Community location"}</strong>
-              <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>View on Map &rarr;</small>
+              <small>
+                <FiMapPin /> LOCATION
+              </small>
+              <strong>
+                {report.establishment_name || report.barangay || "Community location"}
+              </strong>
+              <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>
+                View on Map &rarr;
+              </small>
             </div>
+
             <div className="community-inspection-grid-item">
-              <small><FiTag /> CATEGORY</small>
-              <strong>{report.category.toUpperCase()}</strong>
-            </div>
-            <div className="community-inspection-grid-item">
-              <small><FiUser /> INSPECTOR ASSIGNED</small>
+              <small>
+                <FiUser /> ASSIGNED INSPECTOR
+              </small>
               <strong>{report.assigned_inspector || "Unassigned"}</strong>
-            </div>
-            <div className="community-inspection-grid-item">
-              <small><FiBell /> NOTIFY REPORTER</small>
-              <strong>{report.inspection_notify_reporter && report.contact_number ? "Yes" : "No"}</strong>
+              <small style={{ color: "#64748b" }}>Mauban Health Office</small>
             </div>
           </div>
 
-          <div className="community-inspection-notes">
-            <small><FiFileText /> INSPECTOR NOTES</small>
-            <p>{report.inspection_schedule_note || "No notes"}</p>
-          </div>
+          {report.inspection_schedule_note ? (
+            <div className="community-inspection-note-box">
+              <small>INSPECTION NOTE</small>
+              <p>{report.inspection_schedule_note}</p>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -1127,11 +1633,29 @@ function reportTitle(item) {
   return item.complainant_name || "Anonymous";
 }
 
-function buildCalendarEvents(rows) {
+function buildCalendarEvents(rows, calFilters = {}) {
+  const {
+    eventType = "all",
+    reporterType = "all",
+    priority = "all",
+    status = "all",
+  } = calFilters;
+
   return rows.flatMap((item) => {
+    // Reporter filter
+    const isNamed = Boolean(item.complainant_name && item.complainant_name.trim());
+    if (reporterType === "named" && !isNamed) return [];
+    if (reporterType === "anonymous" && isNamed) return [];
+
+    // Priority filter
+    if (priority !== "all" && item.priority !== priority) return [];
+
+    // Status filter
+    if (status !== "all" && item.status !== status) return [];
+
     const events = [];
 
-    if (item.reported_date) {
+    if (item.reported_date && (eventType === "all" || eventType === "report")) {
       events.push({
         date: item.reported_date,
         time: "09:00",
@@ -1143,7 +1667,9 @@ function buildCalendarEvents(rows) {
       });
     }
 
-    if (item.inspection_scheduled_date) {
+    if (
+      item.inspection_scheduled_date &&
+      (eventType === "all" || eventType === "inspection")) {
       events.push({
         date: item.inspection_scheduled_date,
         time: item.inspection_scheduled_time
@@ -1214,10 +1740,13 @@ function statusClass(status) {
 }
 
 function categoryClass(category = "") {
-  if (category.toLowerCase().includes("market")) return "market";
-  if (category.toLowerCase().includes("water")) return "water";
-  if (category.toLowerCase().includes("waste")) return "waste";
-  if (category.toLowerCase().includes("pest")) return "pest";
+  const lower = (category || "").toLowerCase();
+  if (lower.includes("water") || lower.includes("hazard") || lower.includes("sewage"))
+    return "water";
+  if (lower.includes("market")) return "market";
+  if (lower.includes("food")) return "food";
+  if (lower.includes("waste") || lower.includes("garbage")) return "waste";
+  if (lower.includes("pest")) return "pest";
   return "default";
 }
 

@@ -12,6 +12,15 @@ import {
   FiX,
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
+import LoadingOverlay from "../../shared/LoadingOverlay";
+
+function getNextStageLabel(currentStage) {
+  const idx = stageOptions.findIndex((s) => s.value === currentStage);
+  if (idx >= 0 && idx < stageOptions.length - 2) {
+    return `Proceed to: ${stageOptions[idx + 1].label}`;
+  }
+  return "Advance to Next Stage";
+}
 
 const stageOptions = [
   { value: "notice_sent", label: "Notice Sent" },
@@ -198,6 +207,7 @@ function PermitRenewal() {
 
   return (
     <div className="renewal-page">
+      <LoadingOverlay visible={saving} message="Updating permit renewal stage, please wait..." />
       <div className="renewal-header">
         <div>
           <h1>Sanitary Permit Renewal</h1>
@@ -315,9 +325,9 @@ function PermitRenewal() {
                   <td><span className={`renewal-payment ${row.payment_status}`}>{row.payment_status_label}</span></td>
                   <td>
                     <div className="renewal-actions">
-                      <button type="button" onClick={() => setDetail(row)} title="View"><FiEye /></button>
-                      <button type="button" onClick={() => handleAction(row, "advance_stage")} title="Advance Stage"><FiSend /></button>
-                      <button type="button" onClick={() => handleAction(row, "mark_released")} title="Mark Released"><FiPackage /></button>
+                      <button type="button" onClick={() => setDetail(row)} title="View Full Details" disabled={saving}><FiEye /></button>
+                      <button type="button" onClick={() => handleAction(row, "advance_stage")} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
+                      <button type="button" onClick={() => handleAction(row, "mark_released")} title="Mark as Released" disabled={saving}><FiPackage /></button>
                     </div>
                   </td>
                 </tr>
@@ -511,8 +521,14 @@ function RenewalDetailModal({
 
         <div className="renewal-modal-actions">
           <button type="button" className="renewal-cancel" onClick={onClose}>Cancel</button>
-          <button type="button" className="renewal-cancel" onClick={onAdvance} disabled={saving}>Advance Stage</button>
-          <button type="button" className="renewal-submit" onClick={onRelease} disabled={saving}><FiPackage /> Mark as Released</button>
+          {row.stage !== "released" && row.stage !== "lapsed" ? (
+            <button type="button" className="renewal-advance-btn" onClick={onAdvance} disabled={saving}>
+              <FiSend /> {getNextStageLabel(row.stage)}
+            </button>
+          ) : null}
+          <button type="button" className="renewal-submit" onClick={onRelease} disabled={saving}>
+            <FiPackage /> Mark as Released
+          </button>
         </div>
       </div>
     </div>

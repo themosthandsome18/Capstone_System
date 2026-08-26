@@ -30,6 +30,22 @@ DEFAULT_USERS = [
         "is_staff": True,
         "is_superuser": True,
     },
+    {
+        "username": "inspector_juan",
+        "password": "Inspector@123",
+        "first_name": "Juan",
+        "last_name": "Dela Cruz",
+        "role": ROLE_SANITATION,
+        "is_staff": True,
+    },
+    {
+        "username": "inspector_maria",
+        "password": "Inspector@123",
+        "first_name": "Maria",
+        "last_name": "Santos",
+        "role": ROLE_SANITATION,
+        "is_staff": True,
+    },
 ]
 
 

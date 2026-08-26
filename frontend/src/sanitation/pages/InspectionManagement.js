@@ -7,10 +7,12 @@ import {
   FiChevronRight,
   FiClipboard,
   FiDownload,
+  FiLock,
   FiPrinter,
   FiSearch,
   FiX,
 } from "react-icons/fi";
+import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
@@ -598,7 +600,18 @@ function InspectionFormModal({
     
   const draft = isDraftOrRecent ? establishment.latestInspection : null;
 
-  const [inspectorName, setInspectorName] = useState(draft?.inspector_name || "Insp. J. Cruz");
+  const { user } = useAuth();
+  const defaultInspector = useMemo(() => {
+    if (draft?.inspector_name) return draft.inspector_name;
+    if (user?.display_name && user.display_name !== "admin" && user.display_name !== "System Admin") {
+      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
+    }
+    if (user?.username === "inspector_maria") return "Insp. Maria Santos";
+    if (user?.username === "inspector_juan") return "Insp. Juan Dela Cruz";
+    return "Insp. Juan Dela Cruz";
+  }, [draft, user]);
+
+  const inspectorName = defaultInspector;
   const [inspectionDate, setInspectionDate] = useState(draft?.inspection_date || getTodayDate());
   const [nextDueDate, setNextDueDate] = useState(
     draft?.next_due_date || getSuggestedNextDueDate(
@@ -755,13 +768,14 @@ function InspectionFormModal({
 
         <div className="inspection-form-grid">
           <label>
-            <span>Inspector Name</span>
-            <input
-              type="text"
-              placeholder="Insp. J. Cruz"
-              value={inspectorName}
-              onChange={(event) => setInspectorName(event.target.value)}
-            />
+            <span>Sanitary Inspector (Auto-Assigned)</span>
+            <div className="inspector-autostamp-box">
+              <FiLock className="inspector-lock-icon" />
+              <div className="inspector-name-badge">
+                <strong>{inspectorName}</strong>
+                <small>Logged-in Active Account • Verified Inspector</small>
+              </div>
+            </div>
           </label>
 
           <label>

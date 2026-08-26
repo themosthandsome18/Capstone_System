@@ -121,6 +121,7 @@ const emptyBootstrap = {
 export function TourismDataProvider({ children }) {
   const [bootstrap, setBootstrap] = useState(emptyBootstrap);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -271,48 +272,64 @@ export function TourismDataProvider({ children }) {
   }
 
   async function createRecord(payload) {
-    const createdRecord = await tourismApi.createTouristRecord(payload);
-    setBootstrap((current) => ({
-      ...current,
-      touristRecords: [createdRecord, ...current.touristRecords],
-    }));
-    await refreshComputedData();
-    await refreshReferenceTables();
+    setActionLoading(true);
+    try {
+      const createdRecord = await tourismApi.createTouristRecord(payload);
+      setBootstrap((current) => ({
+        ...current,
+        touristRecords: [createdRecord, ...current.touristRecords],
+      }));
+      // Run computed data refresh in background — no need to await here
+      // so the overlay closes immediately after save
+      refreshComputedData().catch(() => {});
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateRecord(surveyId, payload, options = {}) {
-    const { refreshComputed = true } = options;
-    const updatedRecord = await tourismApi.updateTouristRecord(surveyId, payload);
-    setBootstrap((current) => ({
-      ...current,
-      touristRecords: current.touristRecords.map((record) =>
-        record.survey_id === surveyId ? { ...record, ...updatedRecord } : record
-      ),
-      bookingManagement: updateBookingManagementRecord(
-        current.bookingManagement,
-        surveyId,
-        updatedRecord
-      ),
-    }));
+    setActionLoading(true);
+    try {
+      const { refreshComputed = true } = options;
+      const updatedRecord = await tourismApi.updateTouristRecord(surveyId, payload);
+      setBootstrap((current) => ({
+        ...current,
+        touristRecords: current.touristRecords.map((record) =>
+          record.survey_id === surveyId ? { ...record, ...updatedRecord } : record
+        ),
+        bookingManagement: updateBookingManagementRecord(
+          current.bookingManagement,
+          surveyId,
+          updatedRecord
+        ),
+      }));
 
-    if (refreshComputed) {
-      await refreshComputedData();
+      if (refreshComputed) {
+        // Fire-and-forget: update charts/dashboard in background
+        refreshComputedData().catch(() => {});
+      }
+
+      return updatedRecord;
+    } finally {
+      setActionLoading(false);
     }
-    await refreshReferenceTables();
-
-    return updatedRecord;
   }
 
   async function deleteRecord(surveyId) {
-    await tourismApi.deleteTouristRecord(surveyId);
-    setBootstrap((current) => ({
-      ...current,
-      touristRecords: current.touristRecords.filter(
-        (record) => record.survey_id !== surveyId
-      ),
-    }));
-    await refreshComputedData();
-    await refreshReferenceTables();
+    setActionLoading(true);
+    try {
+      await tourismApi.deleteTouristRecord(surveyId);
+      setBootstrap((current) => ({
+        ...current,
+        touristRecords: current.touristRecords.filter(
+          (record) => record.survey_id !== surveyId
+        ),
+      }));
+      await refreshComputedData();
+      await refreshReferenceTables();
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function previewOnlineBookingImport(file, options = {}) {
@@ -323,70 +340,95 @@ export function TourismDataProvider({ children }) {
   }
 
   async function importOnlineBookingFile(file, options = {}) {
-    const result = await tourismApi.previewOnlineBookingImport(file, {
-      ...options,
-      action: "import",
-    });
-    const response = await tourismApi.getBootstrapData();
-    setBootstrap(response);
-    return result;
+    setActionLoading(true);
+    try {
+      const result = await tourismApi.previewOnlineBookingImport(file, {
+        ...options,
+        action: "import",
+      });
+      const response = await tourismApi.getBootstrapData();
+      setBootstrap(response);
+      return result;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function createResort(payload) {
-    const createdResort = await tourismApi.createResort(payload);
-    setBootstrap((current) => ({
-      ...current,
-      referenceTables: {
-        ...current.referenceTables,
-        resorts: [...current.referenceTables.resorts, createdResort],
-      },
-    }));
-    await refreshReportData(bootstrap.reportData.filters);
-    return createdResort;
+    setActionLoading(true);
+    try {
+      const createdResort = await tourismApi.createResort(payload);
+      setBootstrap((current) => ({
+        ...current,
+        referenceTables: {
+          ...current.referenceTables,
+          resorts: [...current.referenceTables.resorts, createdResort],
+        },
+      }));
+      await refreshReportData(bootstrap.reportData.filters);
+      return createdResort;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateResort(resortId, payload) {
-    const updatedResort = await tourismApi.updateResort(resortId, payload);
-    setBootstrap((current) => ({
-      ...current,
-      referenceTables: {
-        ...current.referenceTables,
-        resorts: current.referenceTables.resorts.map((resort) =>
-          resort.resort_id === resortId ? { ...resort, ...updatedResort } : resort
-        ),
-      },
-    }));
-    await refreshReportData(bootstrap.reportData.filters);
-    return updatedResort;
+    setActionLoading(true);
+    try {
+      const updatedResort = await tourismApi.updateResort(resortId, payload);
+      setBootstrap((current) => ({
+        ...current,
+        referenceTables: {
+          ...current.referenceTables,
+          resorts: current.referenceTables.resorts.map((resort) =>
+            resort.resort_id === resortId ? { ...resort, ...updatedResort } : resort
+          ),
+        },
+      }));
+      await refreshReportData(bootstrap.reportData.filters);
+      return updatedResort;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteResort(resortId) {
-    await tourismApi.deleteResort(resortId);
-    setBootstrap((current) => ({
-      ...current,
-      referenceTables: {
-        ...current.referenceTables,
-        resorts: current.referenceTables.resorts.filter(
-          (resort) => resort.resort_id !== resortId
-        ),
-      },
-    }));
-    await refreshReportData(bootstrap.reportData.filters);
+    setActionLoading(true);
+    try {
+      await tourismApi.deleteResort(resortId);
+      setBootstrap((current) => ({
+        ...current,
+        referenceTables: {
+          ...current.referenceTables,
+          resorts: current.referenceTables.resorts.filter(
+            (resort) => resort.resort_id !== resortId
+          ),
+        },
+      }));
+      await refreshReportData(bootstrap.reportData.filters);
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateFeedbackEntry(feedbackId, payload) {
-    const updatedFeedback = await tourismApi.updateFeedbackEntry(
-      feedbackId,
-      payload
-    );
-    setBootstrap((current) => ({
-      ...current,
-      feedbackEntries: current.feedbackEntries.map((entry) =>
-        entry.id === feedbackId ? { ...entry, ...updatedFeedback } : entry
-      ),
-    }));
-    await refreshReferenceTables();
-    return updatedFeedback;
+    setActionLoading(true);
+    try {
+      const updatedFeedback = await tourismApi.updateFeedbackEntry(
+        feedbackId,
+        payload
+      );
+      setBootstrap((current) => ({
+        ...current,
+        feedbackEntries: current.feedbackEntries.map((entry) =>
+          entry.id === feedbackId ? { ...entry, ...updatedFeedback } : entry
+        ),
+      }));
+      await refreshReferenceTables();
+      return updatedFeedback;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   return (
@@ -394,6 +436,7 @@ export function TourismDataProvider({ children }) {
       value={{
         ...bootstrap,
         loading,
+        actionLoading,
         error,
         createRecord,
         updateRecord,

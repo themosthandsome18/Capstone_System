@@ -1,0 +1,575 @@
+/* =========================================================
+   Tourist Record Add/Edit — 5-Step Wizard Styles
+   ========================================================= */
+
+.wizard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 32px 16px;
+}
+
+.wizard-shell {
+  display: flex;
+  width: 100%;
+  max-width: 900px;
+  min-height: 520px;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+  margin: auto;
+}
+
+/* ── Sidebar ── */
+.wizard-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #f0faf4;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid #d1fae5;
+}
+
+.wizard-sidebar-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.wizard-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.wizard-step-item.completed {
+  cursor: pointer;
+}
+
+.wizard-step-item.active {
+  background: #d1fae5;
+}
+
+.wizard-step-bubble {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid #e5e7eb;
+  background: #fff;
+  color: #9ca3af;
+  transition: all 0.2s;
+}
+
+.wizard-step-item.completed .wizard-step-bubble {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.wizard-step-item.active .wizard-step-bubble {
+  border-color: #16a34a;
+  color: #16a34a;
+  background: #fff;
+}
+
+.wizard-step-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wizard-step-label strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.3;
+}
+
+.wizard-step-item.active .wizard-step-label strong {
+  color: #15803d;
+}
+
+.wizard-step-label small {
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+/* ── Main content ── */
+.wizard-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.wizard-header {
+  padding: 22px 28px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.wizard-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wizard-step-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.wizard-progress-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.wizard-progress-track {
+  height: 5px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.wizard-progress-bar {
+  height: 100%;
+  background: #16a34a;
+  border-radius: 99px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Step body ── */
+.wizard-body {
+  flex: 1;
+  padding: 24px 28px;
+  overflow-y: auto;
+}
+
+.wizard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.wizard-grid .wizard-field-full {
+  grid-column: 1 / -1;
+}
+
+.wizard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wizard-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.wizard-field label span.req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.wizard-field input,
+.wizard-field select {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+.wizard-field input:focus,
+.wizard-field select:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.wizard-field input[type="date"] {
+  padding-right: 8px;
+}
+
+/* +63 contact prefix row */
+.wizard-contact-row {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.wizard-contact-row:focus-within {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.wizard-contact-prefix {
+  padding: 0 10px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  background: #f3f4f6;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  border-right: 1.5px solid #d1d5db;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.wizard-contact-row input {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  flex: 1;
+}
+
+
+/* ── Review step ── */
+.wizard-review-section {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  border: 1px solid #e5e7eb;
+}
+
+.wizard-review-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.wizard-review-section-header h4 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.wizard-review-edit-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #16a34a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.wizard-review-edit-btn:hover {
+  background: #d1fae5;
+}
+
+.wizard-review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
+.wizard-review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wizard-review-item span {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wizard-review-item strong {
+  font-size: 0.82rem;
+  color: #111827;
+}
+
+/* ── Footer ── */
+.wizard-footer {
+  padding: 16px 28px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wizard-footer-note {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.wizard-footer-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.wizard-btn-back {
+  padding: 8px 20px;
+  border: 1.5px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wizard-btn-back:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.wizard-btn-continue {
+  padding: 8px 22px;
+  background: #16a34a;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.wizard-btn-continue:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.wizard-btn-continue:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wizard-btn-save {
+  padding: 8px 22px;
+  background: #16a34a;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.wizard-btn-save:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.wizard-btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wizard-step-error {
+  color: #dc2626;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+}
+
+/* ── Number totals check (step 4) ── */
+.wizard-totals-check {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.wizard-total-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  padding: 4px 0;
+}
+
+.wizard-total-item span {
+  color: #6b7280;
+}
+
+.wizard-total-item strong.ok {
+  color: #16a34a;
+}
+
+.wizard-total-item strong.error {
+  color: #dc2626;
+}
+
+/* ── Water source multi-select ── */
+.ws-multiselect {
+  position: relative;
+}
+
+.ws-multiselect-trigger {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #111827;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: border-color 0.15s;
+  width: 100%;
+  text-align: left;
+  user-select: none;
+}
+
+.ws-multiselect-trigger:focus,
+.ws-multiselect-trigger.open {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.ws-multiselect-trigger span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ws-multiselect-trigger span.placeholder {
+  color: #9ca3af;
+}
+
+.ws-multiselect-trigger svg {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.ws-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  overflow: hidden;
+  animation: ws-drop-in 0.15s ease;
+}
+
+@keyframes ws-drop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ws-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.ws-option:hover {
+  background: #f0faf4;
+}
+
+.ws-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #16a34a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ws-option-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+
+.ws-option-label span {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.ws-option-label small {
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+/* Water level auto-assigned display */
+.ws-water-level-display {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.ws-water-level-display.assigned {
+  color: #15803d;
+  font-weight: 600;
+  font-style: normal;
+  background: #f0faf4;
+  border-color: #bbf7d0;
+}

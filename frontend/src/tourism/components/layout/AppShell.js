@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FiBell, FiLogOut } from "react-icons/fi";
 import { useAuth } from "../../../auth/AuthContext";
+import { useTourismData } from "../../context/TourismDataContext";
+import LoadingOverlay from "../../../shared/LoadingOverlay";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -10,7 +12,7 @@ const pageInfo = {
     showAdd: true,
   },
   "/tourist-data": {
-    title: "Booking Management",
+    title: "Tourist Records Management",
     showAdd: true,
   },
   "/arrival-monitoring": {
@@ -52,11 +54,22 @@ function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, role, user } = useAuth();
+  const { loading, actionLoading } = useTourismData();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
+
+  // Show full-page spinner while bootstrap data is loading
+  if (loading) {
+    return (
+      <div className="page-loading">
+        <div className="page-loading__ring" />
+        <p className="page-loading__text">Loading Tourism Data...</p>
+      </div>
+    );
+  }
 
   function handleAddEntry() {
     if (location.pathname !== "/tourist-data") {
@@ -73,6 +86,7 @@ function AppShell() {
 
   return (
     <div className="tourism-layout">
+      <LoadingOverlay visible={actionLoading} message="Please wait..." />
       {sidebarOpen && <Sidebar />}
 
       <main className="tourism-main">

@@ -14,7 +14,7 @@ const businessLinks = [
 
 const householdLinks = [
   { to: "/sanitation/households", label: "Households Records" },
-  { to: "/sanitation/community-report", label: "Community Report" },
+  { to: "/sanitation/community-report", label: "Community Concerns & Schedules" },
   { to: "/sanitation/gis-map", label: "GIS Map" },
   { to: "/sanitation/household-reports", label: "Report and Analytics" },
   { to: "/sanitation/activity-logs", label: "Activity Logs" },

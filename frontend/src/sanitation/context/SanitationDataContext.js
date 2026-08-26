@@ -50,6 +50,7 @@ const initialState = {
 export function SanitationDataProvider({ children }) {
   const [state, setState] = useState(initialState);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function loadSanitationData(options = {}) {
@@ -240,96 +241,172 @@ export function SanitationDataProvider({ children }) {
   }
 
   async function createEstablishment(payload) {
-    const created = await createSanitationEstablishment(payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return created;
+    setActionLoading(true);
+    try {
+      const created = await createSanitationEstablishment(payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return created;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateEstablishment(id, payload) {
-    const updated = await updateSanitationEstablishment(id, payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return updated;
+    setActionLoading(true);
+    try {
+      const updated = await updateSanitationEstablishment(id, payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return updated;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteEstablishment(id) {
-    await deleteSanitationEstablishment(id);
-    await loadSanitationData({ includeHouseholds: false });
+    setActionLoading(true);
+    try {
+      await deleteSanitationEstablishment(id);
+      await loadSanitationData({ includeHouseholds: false });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function createInspection(payload) {
-    const created = await createSanitationInspection(payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return created;
+    setActionLoading(true);
+    try {
+      const created = await createSanitationInspection(payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return created;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateInspection(id, payload) {
-    const updated = await updateSanitationInspection(id, payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return updated;
+    setActionLoading(true);
+    try {
+      const updated = await updateSanitationInspection(id, payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return updated;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteInspection(id) {
-    await deleteSanitationInspection(id);
-    await loadSanitationData({ includeHouseholds: false });
+    setActionLoading(true);
+    try {
+      await deleteSanitationInspection(id);
+      await loadSanitationData({ includeHouseholds: false });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function createRenewal(payload) {
-    const created = await createSanitationRenewal(payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return created;
+    setActionLoading(true);
+    try {
+      const created = await createSanitationRenewal(payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return created;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateRenewal(id, payload) {
-    const updated = await updateSanitationRenewal(id, payload);
-    await loadSanitationData({ includeHouseholds: false });
-    return updated;
+    setActionLoading(true);
+    try {
+      const updated = await updateSanitationRenewal(id, payload);
+      await loadSanitationData({ includeHouseholds: false });
+      return updated;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteRenewal(id) {
-    await deleteSanitationRenewal(id);
-    await loadSanitationData({ includeHouseholds: false });
+    setActionLoading(true);
+    try {
+      await deleteSanitationRenewal(id);
+      await loadSanitationData({ includeHouseholds: false });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function createComplaint(payload) {
-    const created = await createSanitationComplaint(payload);
-    await refreshComplaintData();
-    await refreshDashboardData();
-    return created;
+    setActionLoading(true);
+    try {
+      const created = await createSanitationComplaint(payload);
+      await refreshComplaintData();
+      await refreshDashboardData();
+      return created;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateComplaint(id, payload) {
-    const updated = await updateSanitationComplaint(id, payload);
-    await refreshComplaintData();
-    await refreshDashboardData();
-    return updated;
+    setActionLoading(true);
+    try {
+      const updated = await updateSanitationComplaint(id, payload);
+      await refreshComplaintData();
+      await refreshDashboardData();
+      return updated;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteComplaint(id) {
-    await deleteSanitationComplaint(id);
-    await refreshComplaintData();
-    await refreshDashboardData();
+    setActionLoading(true);
+    try {
+      await deleteSanitationComplaint(id);
+      await refreshComplaintData();
+      await refreshDashboardData();
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function createHousehold(payload) {
-    const created = await createHouseholdRecord(payload);
-    await loadHouseholdData();
-    return created;
+    setActionLoading(true);
+    try {
+      const created = await createHouseholdRecord(payload);
+      await loadHouseholdData();
+      return created;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function updateHousehold(id, payload) {
-    const updated = await updateHouseholdRecord(id, payload);
-    await loadHouseholdData();
-    return updated;
+    setActionLoading(true);
+    try {
+      const updated = await updateHouseholdRecord(id, payload);
+      await loadHouseholdData();
+      return updated;
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function deleteHousehold(id) {
-    await deleteHouseholdRecord(id);
-    await loadHouseholdData();
+    setActionLoading(true);
+    try {
+      await deleteHouseholdRecord(id);
+      await loadHouseholdData();
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   const value = {
     ...state,
     loading,
+    actionLoading,
     error,
     reload: loadSanitationData,
 

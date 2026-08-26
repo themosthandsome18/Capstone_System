@@ -562,8 +562,7 @@ def build_dashboard_payload(params=None):
             "arrivals": trend_values,
         },
         "classification": {
-            "filipino": arrived_summary["filipino"] or 0,
-            "maubanin": arrived_summary["maubanin"] or 0,
+            "filipino": (arrived_summary["filipino"] or 0) + (arrived_summary["maubanin"] or 0),
             "foreign": arrived_summary["foreign"] or 0,
         },
         "gender": {
@@ -942,19 +941,15 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "classification",
-            "question": "What is the breakdown of tourists by visitor classification: Filipino, foreigner, and Maubanin?",
+            "question": "What is the breakdown of tourists by visitor classification: Domestic (Filipino) vs Foreign (International)?",
             "answer": (
-                f"Filipino: {classification['filipino'] or 0}, "
-                f"Foreigner: {classification['foreign'] or 0}, "
-                f"Maubanin: {classification['maubanin'] or 0}."
+                f"Domestic (Filipino): {(classification['filipino'] or 0) + (classification['maubanin'] or 0)}, "
+                f"Foreign (International): {classification['foreign'] or 0}."
             ),
             "visual": {
-                "type": "stack",
-                "items": [
-                    {"label": "Filipino", "value": classification["filipino"] or 0},
-                    {"label": "Foreigner", "value": classification["foreign"] or 0},
-                    {"label": "Maubanin", "value": classification["maubanin"] or 0},
-                ],
+                "type": "split",
+                "left": {"label": "Domestic (Filipino)", "value": (classification["filipino"] or 0) + (classification["maubanin"] or 0)},
+                "right": {"label": "Foreign (International)", "value": classification["foreign"] or 0},
             },
         },
         {

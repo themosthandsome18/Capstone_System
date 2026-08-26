@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
+  FiArrowLeft,
   FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
@@ -10,6 +11,7 @@ import {
   FiFileText,
   FiPlus,
   FiPrinter,
+  FiRotateCcw,
   FiSearch,
   FiTrash2,
   FiX,
@@ -71,6 +73,7 @@ function EstablishmentRecords() {
   const [showModal, setShowModal] = useState(false);
   const [editingEstablishment, setEditingEstablishment] = useState(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -83,6 +86,23 @@ function EstablishmentRecords() {
   const [formError, setFormError] = useState("");
   const complaintRows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const renewalRows = useMemo(() => renewalData?.rows || [], [renewalData]);
+
+  const hasActiveFilters = Boolean(
+    search ||
+      statusFilter !== "all" ||
+      barangayFilter !== "all" ||
+      businessTypeFilter !== "all" ||
+      permitFilter !== "all"
+  );
+
+  function handleClearFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setBarangayFilter("all");
+    setBusinessTypeFilter("all");
+    setPermitFilter("all");
+    navigate("/sanitation/establishments", { replace: true });
+  }
   const barangayOptions = useMemo(
     () =>
       [...new Set(establishments.map((item) => item.barangay).filter(Boolean))].sort(),
@@ -380,9 +400,19 @@ function EstablishmentRecords() {
   return (
     <div className="establishment-page">
       <div className="establishment-header">
-        <div>
-          <h1>Establishment Records</h1>
-          <p>Manage and monitor all registered establishments</p>
+        <div className="establishment-header-left">
+          <button
+            type="button"
+            className="establishment-back-btn"
+            onClick={() => navigate(-1)}
+            title="Go back to previous page"
+          >
+            <FiArrowLeft /> Back
+          </button>
+          <div>
+            <h1>Establishment Records</h1>
+            <p>Manage and monitor all registered establishments</p>
+          </div>
         </div>
 
         <div className="sanitation-header-actions">
@@ -403,6 +433,24 @@ function EstablishmentRecords() {
           </button>
         </div>
       </div>
+
+      {hasActiveFilters ? (
+        <div className="active-filter-banner">
+          <div>
+            <strong>Active Filters:</strong>
+            {search ? <span> Search: <em>"{search}"</em></span> : null}
+            {statusFilter !== "all" ? <span> • Status: <em>{statusFilter}</em></span> : null}
+            {barangayFilter !== "all" ? <span> • Barangay: <em>{barangayFilter}</em></span> : null}
+            {businessTypeFilter !== "all" ? (
+              <span> • Type: <em>{businessTypes.find((t) => String(t.id) === String(businessTypeFilter))?.name}</em></span>
+            ) : null}
+            {permitFilter !== "all" ? <span> • Permit: <em>{permitFilter}</em></span> : null}
+          </div>
+          <button type="button" onClick={handleClearFilters}>
+            <FiRotateCcw /> Reset Filters
+          </button>
+        </div>
+      ) : null}
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
 
@@ -467,82 +515,86 @@ function EstablishmentRecords() {
           </select>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Business Name</th>
-              <th>Owner</th>
-              <th>Type</th>
-              <th>Permit</th>
-              <th>Address</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+        <div className="establishment-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: "22%" }}>Business Name</th>
+                <th style={{ width: "16%" }}>Owner / Proprietor</th>
+                <th style={{ width: "20%" }}>Business Type</th>
+                <th style={{ width: "10%", textAlign: "center" }}>Permit Size</th>
+                <th style={{ width: "18%" }}>Address</th>
+                <th style={{ width: "14%", textAlign: "center" }}>Status</th>
+                <th style={{ width: "10%", textAlign: "center" }}>Actions</th>
+              </tr>
+            </thead>
 
-          <tbody>
-            {filteredEstablishments.length ? (
-              filteredEstablishments.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.business_name}</td>
-                  <td>{item.owner_name}</td>
-                  <td>{item.business_type_name}</td>
-                  <td>
-                    <span className="permit-badge">
-                      {item.permit_size_label || item.permit_size?.toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{item.address}</td>
-                  <td>
-                    <span
-                      className={`status-pill ${statusClass(
-                        item.compliance_status_label
-                      )}`}
-                    >
-                      {item.compliance_status_label}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="establishment-action-buttons">
-                      <button
-                        type="button"
-                        className="establishment-icon-btn view"
-                        title="View establishment timeline"
-                        onClick={() => openDetailModal(item)}
+            <tbody>
+              {filteredEstablishments.length ? (
+                filteredEstablishments.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.business_name}</strong>
+                    </td>
+                    <td>{item.owner_name}</td>
+                    <td>{item.business_type_name}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <span className={`permit-size-badge ${(item.permit_size || "sp").toLowerCase()}`}>
+                        {item.permit_size_label || (item.permit_size === "large" ? "Large" : "SP")}
+                      </span>
+                    </td>
+                    <td>{item.address || `Brgy. ${item.barangay}, Mauban`}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <span
+                        className={`status-pill ${statusClass(
+                          item.compliance_status_label
+                        )}`}
                       >
-                        <FiEye />
-                      </button>
+                        {item.compliance_status_label}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <div className="establishment-action-buttons">
+                        <button
+                          type="button"
+                          className="establishment-icon-btn view"
+                          title="View establishment timeline"
+                          onClick={() => openDetailModal(item)}
+                        >
+                          <FiEye />
+                        </button>
 
-                      <button
-                        type="button"
-                        className="establishment-icon-btn edit"
-                        title="Edit establishment"
-                        onClick={() => openEditModal(item)}
-                      >
-                        <FiEdit2 />
-                      </button>
+                        <button
+                          type="button"
+                          className="establishment-icon-btn edit"
+                          title="Edit establishment"
+                          onClick={() => openEditModal(item)}
+                        >
+                          <FiEdit2 />
+                        </button>
 
-                      <button
-                        type="button"
-                        className="establishment-icon-btn delete"
-                        title="Delete establishment"
-                        onClick={() => handleDelete(item)}
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          className="establishment-icon-btn delete"
+                          title="Delete establishment"
+                          onClick={() => handleDelete(item)}
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="establishment-empty">
+                    No establishment records found.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="establishment-empty">
-                  No establishment records found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         <div className="establishment-pagination">
           <p>

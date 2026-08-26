@@ -50,6 +50,7 @@ export async function apiRequest(endpoint, options = {}) {
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Token ${token}` } : {}),
+        "Accept-Encoding": "gzip, deflate, br",
         ...(fetchOptions.headers || {}),
       },
       ...fetchOptions,

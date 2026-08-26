@@ -148,15 +148,14 @@ function Dashboard() {
   }), [dashboardData.trends.labels, dashboardData.trends.arrivals]);
 
   const touristClassificationData = useMemo(() => ({
-    labels: ["Filipino", "Maubanin", "Foreign"],
+    labels: ["Domestic (Filipino)", "Foreign (International)"],
     datasets: [
       {
         data: [
-          classification.filipino,
-          classification.maubanin,
-          classification.foreign,
+          (classification.filipino || 0) + (classification.maubanin || 0),
+          classification.foreign || 0,
         ],
-        backgroundColor: ["#60b8b5", "#8fdcda", "#ffc978"],
+        backgroundColor: ["#147c79", "#ffc978"],
         borderWidth: 0,
         cutout: "62%",
       },
@@ -226,9 +225,8 @@ function Dashboard() {
       ["No-show Rate", `${metrics.noShowRate || 0}%`],
       ["Top Resort This Month", metrics.topResortThisMonth],
       ["Top Origin This Month", metrics.topOriginThisMonth],
-      ["Filipino", classification.filipino],
-      ["Maubanin", classification.maubanin],
-      ["Foreign", classification.foreign],
+      ["Domestic (Filipino)", (classification.filipino || 0) + (classification.maubanin || 0)],
+      ["Foreign (International)", classification.foreign || 0],
       ["Male", gender.male],
       ["Female", gender.female],
       ["Day Tour", stayType.dayTour],
@@ -358,9 +356,8 @@ function Dashboard() {
               />
             </div>
 
-            <LegendRow color="#60b8b5" label="Filipino" value={classification.filipino} />
-            <LegendRow color="#8fdcda" label="Maubanin" value={classification.maubanin} />
-            <LegendRow color="#ffc978" label="Foreign" value={classification.foreign} />
+            <LegendRow color="#147c79" label="Domestic (Filipino)" value={(classification.filipino || 0) + (classification.maubanin || 0)} />
+            <LegendRow color="#ffc978" label="Foreign (International)" value={classification.foreign || 0} />
           </div>
         </section>
       </div>

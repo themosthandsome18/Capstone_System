@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./BookingManagement.wizard.css";
 import {
   FiChevronLeft,
   FiChevronRight,
@@ -19,25 +20,22 @@ import { useTourismData } from "../context/TourismDataContext";
 const pageSize = 10;
 
 const initialForm = {
-  full_name: "",
+  first_name: "",
+  last_name: "",
   email: "",
-  consent_confirmed: "true",
   contact_number: "",
   country_id: "",
   region_id: "",
   province_id: "",
-  country_of_origin: "",
   resort_id: "",
   itinerary_id: "",
   travel_mode_id: "",
   boat_type_id: "",
   boat_capacity_fare: "",
-  parking_space: "",
   visit_purpose_id: "",
   arrival_date: "",
   filipino_count: "0",
   foreigner_count: "0",
-  maubanin_count: "0",
   total_male: "0",
   total_female: "0",
   special_group_count: "0",
@@ -46,10 +44,14 @@ const initialForm = {
   age_60_above: "0",
 };
 
-const consentOptions = [
-  { id: "true", name: "Yes" },
-  { id: "false", name: "No" },
+const WIZARD_STEPS = [
+  { label: "Tourist Info", sub: "Who is visiting?" },
+  { label: "Location", sub: "Where are they going?" },
+  { label: "Travel Details", sub: "How and why" },
+  { label: "Head Count", sub: "How many people?" },
+  { label: "Review", sub: "Check and save" },
 ];
+
 
 const boatCapacityFareOptions = [
   { id: "1-2 pax (One-Way P1500, Two-way P2000)", name: "1-2 pax (One-Way P1500, Two-way P2000)" },
@@ -112,6 +114,8 @@ function BookingManagement() {
   const [formError, setFormError] = useState("");
   const [tableError, setTableError] = useState("");
   const [loadingRows, setLoadingRows] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [stepError, setStepError] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState("");
   const [filters, setFilters] = useState({
     year: currentReportingYear,
@@ -131,6 +135,7 @@ function BookingManagement() {
     if (addEntryRequestId) {
       openAddRecord();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addEntryRequestId]);
 
 
@@ -244,34 +249,51 @@ function BookingManagement() {
 
   function openAddRecord() {
     setEditingRecord(null);
-    setForm(initialForm);
+    // Default country to Philippines (find by name)
+    const philippinesId = referenceTables.countries.find(
+      (c) => c.name?.toLowerCase().includes("philippine")
+    )?.id || "";
+    setForm({ ...initialForm, country_id: String(philippinesId) });
     setFormError("");
+    setStepError("");
+    setCurrentStep(1);
     setIsAddOpen(true);
   }
 
   function openEditRecord(record) {
     setEditingRecord(record);
+    let firstName = record.first_name || "";
+    let lastName = record.last_name || "";
+    if (!firstName && !lastName && record.full_name) {
+      const parts = (record.full_name || "").trim().split(" ");
+      lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+      firstName = parts.length > 1 ? parts.slice(0, -1).join(" ") : parts[0] || "";
+    }
+
+    const rawContact = record.contact_number || "";
+    const contactDigits = rawContact.startsWith("+63")
+      ? rawContact.slice(3)
+      : rawContact.startsWith("0")
+      ? rawContact.slice(1)
+      : rawContact;
 
     setForm({
-      full_name: record.full_name || "",
+      first_name: firstName,
+      last_name: lastName,
       email: record.email || "",
-      consent_confirmed: String(record.consent_confirmed ?? true),
-      contact_number: record.contact_number || "",
+      contact_number: contactDigits,
       country_id: String(record.country_id || ""),
       region_id: String(record.region_id || ""),
       province_id: String(record.province_id || ""),
-      country_of_origin: record.country_of_origin || "",
       resort_id: String(record.resort_id || ""),
       itinerary_id: String(record.itinerary_id || ""),
       travel_mode_id: String(record.travel_mode_id || ""),
       boat_type_id: String(record.boat_type_id || ""),
       boat_capacity_fare: record.boat_capacity_fare || "",
-      parking_space: record.parking_space || "",
       visit_purpose_id: String(record.visit_purpose_id || ""),
       arrival_date: record.arrival_date || "",
       filipino_count: String(record.filipino_count || 0),
       foreigner_count: String(record.foreigner_count || 0),
-      maubanin_count: String(record.maubanin_count || 0),
       total_male: String(record.total_male || 0),
       total_female: String(record.total_female || 0),
       special_group_count: String(record.special_group_count || 0),
@@ -281,6 +303,8 @@ function BookingManagement() {
     });
 
     setFormError("");
+    setStepError("");
+    setCurrentStep(1);
     setIsAddOpen(true);
   }
 
@@ -289,6 +313,8 @@ function BookingManagement() {
     setEditingRecord(null);
     setForm(initialForm);
     setFormError("");
+    setStepError("");
+    setCurrentStep(1);
   }
 
   function updateField(field, value) {
@@ -316,29 +342,35 @@ function BookingManagement() {
   function buildPayload() {
     const filipinoCount = toInteger(form.filipino_count);
     const foreignerCount = toInteger(form.foreigner_count);
-    const maubaninCount = toInteger(form.maubanin_count);
     const totalVisitors = filipinoCount + foreignerCount;
+    // Store with +63 prefix
+    const contactNumber = form.contact_number.trim()
+      ? `+63${form.contact_number.trim()}`
+      : "";
 
     return {
-      full_name: form.full_name.trim(),
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      // full_name is sent for backward compatibility (mobile/booking importer)
+      full_name: [form.first_name.trim(), form.last_name.trim()].filter(Boolean).join(" "),
       email: form.email.trim(),
-      consent_confirmed: form.consent_confirmed === "true",
-      contact_number: form.contact_number.trim(),
+      consent_confirmed: true,
+      contact_number: contactNumber,
       country_id: Number(form.country_id),
       region_id: Number(form.region_id),
       province_id: Number(form.province_id),
-      country_of_origin: form.country_of_origin.trim(),
+      country_of_origin: "",
       resort_id: Number(form.resort_id),
       itinerary_id: Number(form.itinerary_id),
       travel_mode_id: Number(form.travel_mode_id),
       boat_type_id: Number(form.boat_type_id),
       boat_capacity_fare: form.boat_capacity_fare.trim(),
-      parking_space: form.parking_space.trim(),
+      parking_space: "",
       visit_purpose_id: Number(form.visit_purpose_id),
       arrival_date: form.arrival_date,
       filipino_count: filipinoCount,
       foreigner_count: foreignerCount,
-      maubanin_count: maubaninCount,
+      maubanin_count: 0,
       total_visitors: totalVisitors,
       total_male: toInteger(form.total_male),
       total_female: toInteger(form.total_female),
@@ -348,6 +380,56 @@ function BookingManagement() {
       age_60_above: toInteger(form.age_60_above),
       status: editingRecord?.status || "pending",
     };
+  }
+
+  function validateStep(step) {
+    switch (step) {
+      case 1:
+        if (!form.first_name.trim()) return "First Name is required.";
+        if (!form.last_name.trim()) return "Last Name is required.";
+        if (!form.email.trim()) return "Email is required.";
+        if (!form.contact_number.trim()) return "Contact Number is required.";
+        if (form.contact_number.trim().length !== 10) return "Contact Number must be exactly 10 digits (after +63).";
+        if (!form.country_id) return "Country is required.";
+        return "";
+      case 2:
+        if (!form.region_id) return "Region is required.";
+        if (!form.province_id) return "Province is required.";
+        if (!form.resort_id) return "Resort is required.";
+        if (!form.itinerary_id) return "Travel Itinerary is required.";
+        return "";
+      case 3:
+        if (!form.travel_mode_id) return "Vehicle Classification is required.";
+        if (!form.visit_purpose_id) return "Purpose of Travel is required.";
+        if (!form.arrival_date) return "Arrival Date is required.";
+        return "";
+      case 4: {
+        const payload = buildPayload();
+        return validateTotals(payload);
+      }
+      default:
+        return "";
+    }
+  }
+
+  function handleStepContinue() {
+    const err = validateStep(currentStep);
+    if (err) {
+      setStepError(err);
+      return;
+    }
+    setStepError("");
+    setCurrentStep((s) => Math.min(5, s + 1));
+  }
+
+  function handleStepBack() {
+    setStepError("");
+    setCurrentStep((s) => Math.max(1, s - 1));
+  }
+
+  function jumpToStep(step) {
+    setStepError("");
+    setCurrentStep(step);
   }
 
   function validateTotals(payload) {
@@ -416,9 +498,7 @@ function BookingManagement() {
     }
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
+  async function handleSubmit() {
     const payload = buildPayload();
     const totalsError = validateTotals(payload);
 
@@ -641,8 +721,8 @@ function BookingManagement() {
     <div className="booking-page">
       <div className="booking-header">
         <div>
-          <h1>Booking Management</h1>
-          <p>Replace manual Google Forms with automated booking tracking</p>
+          <h1>Tourist Records Management</h1>
+          <p>Track visitor registrations, verify tourist counts, and manage arrivals</p>
         </div>
 
         <div className="booking-actions">
@@ -955,267 +1035,341 @@ function BookingManagement() {
       </div>
 
       {isAddOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
-          <form
-            className="tourist-record-form w-full max-w-[760px]"
-            onSubmit={handleSubmit}
-          >
-            <h2 className="mb-6 text-xl font-extrabold text-black">
-              {editingRecord ? "Edit Tourist Record" : "Add Tourist Record"}
-            </h2>
+        <div className="wizard-overlay">
+          <div className="wizard-shell">
+            {/* ── Sidebar ── */}
+            <aside className="wizard-sidebar">
+              <p className="wizard-sidebar-title">Data Management Add Record</p>
+              {WIZARD_STEPS.map((step, idx) => {
+                const stepNum = idx + 1;
+                const isCompleted = stepNum < currentStep;
+                const isActive = stepNum === currentStep;
+                return (
+                  <div
+                    key={stepNum}
+                    className={`wizard-step-item${isCompleted ? " completed" : ""}${isActive ? " active" : ""}`}
+                    onClick={() => isCompleted && jumpToStep(stepNum)}
+                    title={isCompleted ? `Go back to ${step.label}` : undefined}
+                  >
+                    <div className="wizard-step-bubble">
+                      {isCompleted ? <FiCheck size={12} /> : stepNum}
+                    </div>
+                    <div className="wizard-step-label">
+                      <strong>{step.label}</strong>
+                      <small>{step.sub}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </aside>
 
-            <div className="tourist-record-grid">
-              <TextField
-                label="Full Name"
-                value={form.full_name}
-                onChange={(value) => updateField("full_name", value)}
-                required
-              />
+            {/* ── Main ── */}
+            <div className="wizard-main">
+              <div className="wizard-header">
+                <div className="wizard-header-top">
+                  <span className="wizard-step-title">
+                    Step {currentStep} of 5 &bull; {WIZARD_STEPS[currentStep - 1].label}
+                  </span>
+                  <span className="wizard-progress-label">{Math.round(((currentStep - 1) / 5) * 100)}% done</span>
+                </div>
+                <div className="wizard-progress-track">
+                  <div
+                    className="wizard-progress-bar"
+                    style={{ width: `${Math.round(((currentStep - 1) / 5) * 100)}%` }}
+                  />
+                </div>
+              </div>
 
-              <TextField
-                label="Email"
-                type="email"
-                value={form.email}
-                onChange={(value) => updateField("email", value)}
-              />
+              <div className="wizard-body">
+                {/* ── Step 1: Tourist Info ── */}
+                {currentStep === 1 && (
+                  <div className="wizard-grid">
+                    <WizardField label="First Name" required>
+                      <input
+                        type="text"
+                        value={form.first_name}
+                        placeholder="First name"
+                        onChange={(e) => updateField("first_name", e.target.value)}
+                      />
+                    </WizardField>
+                    <WizardField label="Last Name" required>
+                      <input
+                        type="text"
+                        value={form.last_name}
+                        placeholder="Last name"
+                        onChange={(e) => updateField("last_name", e.target.value)}
+                      />
+                    </WizardField>
+                    <WizardField label="Email" required>
+                      <input
+                        type="email"
+                        value={form.email}
+                        placeholder="email@example.com"
+                        onChange={(e) => updateField("email", e.target.value)}
+                      />
+                    </WizardField>
+                    <WizardField label="Contact Number" required>
+                      <div className="wizard-contact-row">
+                        <span className="wizard-contact-prefix">+63</span>
+                        <input
+                          type="tel"
+                          value={form.contact_number}
+                          placeholder="9XXXXXXXXX"
+                          maxLength={10}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                            updateField("contact_number", digits);
+                          }}
+                        />
+                      </div>
+                    </WizardField>
+                    <WizardField label="Country" required>
+                      <select
+                        value={form.country_id}
+                        onChange={(e) => updateField("country_id", e.target.value)}
+                      >
+                        <option value="">Select country</option>
+                        {referenceTables.countries.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                  </div>
+                )}
 
-              <SelectField
-                label="Consent Form"
-                value={form.consent_confirmed}
-                placeholder="Select consent"
-                options={consentOptions}
-                onChange={(value) => updateField("consent_confirmed", value)}
-                required
-              />
+                {/* ── Step 2: Location ── */}
+                {currentStep === 2 && (
+                  <div className="wizard-grid">
+                    <WizardField label="Region" required>
+                      <select
+                        value={form.region_id}
+                        onChange={(e) => updateField("region_id", e.target.value)}
+                      >
+                        <option value="">Select region</option>
+                        {referenceTables.regions.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Province" required>
+                      <select
+                        value={form.province_id}
+                        onChange={(e) => updateField("province_id", e.target.value)}
+                        disabled={!form.region_id}
+                      >
+                        <option value="">{form.region_id ? "Select province" : "Select region first"}</option>
+                        {provinceOptions.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Resort" required>
+                      <select
+                        value={form.resort_id}
+                        onChange={(e) => updateField("resort_id", e.target.value)}
+                      >
+                        <option value="">Select resort</option>
+                        {referenceTables.resorts.map((r) => (
+                          <option key={r.resort_id} value={r.resort_id}>{r.resort_name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Travel Itinerary" required>
+                      <select
+                        value={form.itinerary_id}
+                        onChange={(e) => updateField("itinerary_id", e.target.value)}
+                      >
+                        <option value="">Select itinerary</option>
+                        {referenceTables.itineraries.map((i) => (
+                          <option key={i.id} value={i.id}>{i.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                  </div>
+                )}
 
-              <TextField
-                label="Contact Number"
-                type="tel"
-                placeholder="+63..."
-                value={form.contact_number}
-                onChange={(value) => updateField("contact_number", value)}
-                required
-              />
+                {/* ── Step 3: Travel Details ── */}
+                {currentStep === 3 && (
+                  <div className="wizard-grid">
+                    <WizardField label="Vehicle Classification" required>
+                      <select
+                        value={form.travel_mode_id}
+                        onChange={(e) => updateField("travel_mode_id", e.target.value)}
+                      >
+                        <option value="">Select mode</option>
+                        {referenceTables.travelModes.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Boat Classification" required>
+                      <select
+                        value={form.boat_type_id}
+                        onChange={(e) => updateField("boat_type_id", e.target.value)}
+                      >
+                        <option value="">Select boat</option>
+                        {referenceTables.boatTypes.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Visit Purpose" required>
+                      <select
+                        value={form.visit_purpose_id}
+                        onChange={(e) => updateField("visit_purpose_id", e.target.value)}
+                      >
+                        <option value="">Select purpose</option>
+                        {referenceTables.visitPurposes.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                    <WizardField label="Arrival Date" required>
+                      <input
+                        type="date"
+                        value={form.arrival_date}
+                        onChange={(e) => updateField("arrival_date", e.target.value)}
+                      />
+                    </WizardField>
+                    <WizardField label="Boat Capacity and Fare">
+                      <select
+                        value={form.boat_capacity_fare}
+                        onChange={(e) => updateField("boat_capacity_fare", e.target.value)}
+                      >
+                        <option value="">Select capacity and fare</option>
+                        {boatCapacityFareOptions.map((o) => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </WizardField>
+                  </div>
+                )}
 
-              <SelectField
-                label="Country"
-                value={form.country_id}
-                placeholder="Select country"
-                options={referenceTables.countries}
-                onChange={(value) => updateField("country_id", value)}
-                required
-              />
+                {/* ── Step 4: Head Count ── */}
+                {currentStep === 4 && (
+                  <>
+                    <div className="wizard-grid">
+                      <WizardField label="Filipino Count" required>
+                        <input type="number" min="0" value={form.filipino_count} onChange={(e) => updateField("filipino_count", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Foreigner Count" required>
+                        <input type="number" min="0" value={form.foreigner_count} onChange={(e) => updateField("foreigner_count", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Total Male" required>
+                        <input type="number" min="0" value={form.total_male} onChange={(e) => updateField("total_male", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Total Female" required>
+                        <input type="number" min="0" value={form.total_female} onChange={(e) => updateField("total_female", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Age 0-7" required>
+                        <input type="number" min="0" value={form.age_0_7} onChange={(e) => updateField("age_0_7", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Age 8-59" required>
+                        <input type="number" min="0" value={form.age_8_59} onChange={(e) => updateField("age_8_59", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Age 60+" required>
+                        <input type="number" min="0" value={form.age_60_above} onChange={(e) => updateField("age_60_above", e.target.value)} />
+                      </WizardField>
+                      <WizardField label="Senior / PWD / 7 below">
+                        <input type="number" min="0" value={form.special_group_count} onChange={(e) => updateField("special_group_count", e.target.value)} />
+                      </WizardField>
+                    </div>
+                    <div className="wizard-totals-check">
+                      <div className="wizard-total-item">
+                        <span>Visitor total</span>
+                        <strong className="ok">{formTotals.classification}</strong>
+                      </div>
+                      <div className="wizard-total-item">
+                        <span>Male + Female</span>
+                        <strong className={formTotals.genderMatches ? "ok" : "error"}>{formTotals.gender}</strong>
+                      </div>
+                      <div className="wizard-total-item">
+                        <span>Age groups total</span>
+                        <strong className={formTotals.agesMatch ? "ok" : "error"}>{formTotals.ages}</strong>
+                      </div>
+                      <div className="wizard-total-item">
+                        <span>Senior/PWD/7 below</span>
+                        <strong className={formTotals.specialValid ? "ok" : "error"}>{formTotals.special}</strong>
+                      </div>
+                    </div>
+                    <div className="tourist-auto-fill-row" style={{ marginTop: 8 }}>
+                      <button type="button" onClick={fillGenderBalance}>Balance female count</button>
+                      <button type="button" onClick={fillAgeBalance}>Balance age 8-59</button>
+                    </div>
+                  </>
+                )}
 
-              <SelectField
-                label="Region"
-                value={form.region_id}
-                placeholder="Select region"
-                options={referenceTables.regions}
-                onChange={(value) => updateField("region_id", value)}
-                required
-              />
+                {/* ── Step 5: Review ── */}
+                {currentStep === 5 && (
+                  <>
+                    <WizardReviewSection title="Tourist Info" onEdit={() => jumpToStep(1)}>
+                      <WizardReviewItem label="Last Name" value={form.last_name || "—"} />
+                      <WizardReviewItem label="First Name" value={form.first_name || "—"} />
+                      <WizardReviewItem label="Email" value={form.email || "—"} />
+                      <WizardReviewItem label="Contact Number" value={form.contact_number || "—"} />
+                      <WizardReviewItem label="Country" value={resolveLabel(referenceTables.countries, form.country_id)} />
+                    </WizardReviewSection>
+                    <WizardReviewSection title="Location" onEdit={() => jumpToStep(2)}>
+                      <WizardReviewItem label="Region" value={resolveLabel(referenceTables.regions, form.region_id)} />
+                      <WizardReviewItem label="Province" value={resolveLabel(referenceTables.provinces, form.province_id)} />
+                      <WizardReviewItem label="Resort" value={resolveLabel(referenceTables.resorts, form.resort_id, "resort_id", "resort_name")} />
+                      <WizardReviewItem label="Itinerary" value={resolveLabel(referenceTables.itineraries, form.itinerary_id)} />
+                    </WizardReviewSection>
+                    <WizardReviewSection title="Travel Details" onEdit={() => jumpToStep(3)}>
+                      <WizardReviewItem label="Travel Mode" value={resolveLabel(referenceTables.travelModes, form.travel_mode_id)} />
+                      <WizardReviewItem label="Boat Type" value={resolveLabel(referenceTables.boatTypes, form.boat_type_id)} />
+                      <WizardReviewItem label="Visit Purpose" value={resolveLabel(referenceTables.visitPurposes, form.visit_purpose_id)} />
+                      <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
+                    </WizardReviewSection>
+                    <WizardReviewSection title="Head Count" onEdit={() => jumpToStep(4)}>
+                      <WizardReviewItem label="Filipino Count" value={form.filipino_count} />
+                      <WizardReviewItem label="Foreigner Count" value={form.foreigner_count} />
+                      <WizardReviewItem label="Total Male" value={form.total_male} />
+                      <WizardReviewItem label="Total Female" value={form.total_female} />
+                      <WizardReviewItem label="Age 0-7" value={form.age_0_7} />
+                      <WizardReviewItem label="Age 8-59" value={form.age_8_59} />
+                      <WizardReviewItem label="Age 60+" value={form.age_60_above} />
+                    </WizardReviewSection>
+                    {formError && <p className="wizard-step-error">{formError}</p>}
+                  </>
+                )}
 
-              <SelectField
-                label="Province"
-                value={form.province_id}
-                placeholder={
-                  form.region_id ? "Select province" : "Select region first"
-                }
-                options={provinceOptions}
-                onChange={(value) => updateField("province_id", value)}
-                required
-                disabled={!form.region_id}
-              />
+                {stepError && <p className="wizard-step-error">{stepError}</p>}
+              </div>
 
-              <TextField
-                label="Country of Origin"
-                value={form.country_of_origin}
-                onChange={(value) => updateField("country_of_origin", value)}
-              />
-
-              <SelectField
-                label="Resort"
-                value={form.resort_id}
-                placeholder="Select resort"
-                options={referenceTables.resorts}
-                optionKey="resort_id"
-                optionLabel="resort_name"
-                onChange={(value) => updateField("resort_id", value)}
-                required
-              />
-
-              <SelectField
-                label="Travel Itinerary"
-                value={form.itinerary_id}
-                placeholder="Select itinerary"
-                options={referenceTables.itineraries}
-                onChange={(value) => updateField("itinerary_id", value)}
-                required
-              />
-
-              <SelectField
-                label="Vehicle Classification"
-                value={form.travel_mode_id}
-                placeholder="Select mode"
-                options={referenceTables.travelModes}
-                onChange={(value) => updateField("travel_mode_id", value)}
-                required
-              />
-
-              <SelectField
-                label="Boat Classification"
-                value={form.boat_type_id}
-                placeholder="Select boat"
-                options={referenceTables.boatTypes}
-                onChange={(value) => updateField("boat_type_id", value)}
-                required
-              />
-
-              <SelectField
-                label="Boat Capacity and Fare"
-                value={form.boat_capacity_fare}
-                placeholder="Select capacity and fare"
-                options={boatCapacityFareOptions}
-                onChange={(value) => updateField("boat_capacity_fare", value)}
-              />
-
-              <TextField
-                label="Your Parking Space"
-                value={form.parking_space}
-                onChange={(value) => updateField("parking_space", value)}
-              />
-
-              <SelectField
-                label="Purpose of Travel"
-                value={form.visit_purpose_id}
-                placeholder="Select purpose"
-                options={referenceTables.visitPurposes}
-                onChange={(value) => updateField("visit_purpose_id", value)}
-                required
-              />
-
-              <TextField
-                label="Arrival Date"
-                type="date"
-                value={form.arrival_date}
-                onChange={(value) => updateField("arrival_date", value)}
-                required
-              />
-
-              <NumberField
-                label="How many Filipinos are in your Group?"
-                value={form.filipino_count}
-                onChange={(value) => updateField("filipino_count", value)}
-              />
-
-              <NumberField
-                label="How many Foreigners are in your Group?"
-                value={form.foreigner_count}
-                onChange={(value) => updateField("foreigner_count", value)}
-              />
-
-              <NumberField
-                label="How many Maubanin residents are in your Group?"
-                value={form.maubanin_count}
-                onChange={(value) => updateField("maubanin_count", value)}
-              />
-
-              <NumberField
-                label="Total Number of Male"
-                value={form.total_male}
-                onChange={(value) => updateField("total_male", value)}
-              />
-
-              <NumberField
-                label="Total Number of Female"
-                value={form.total_female}
-                onChange={(value) => updateField("total_female", value)}
-              />
-
-              <NumberField
-                label="Senior Citizen, PWD, and 7 years old and below"
-                value={form.special_group_count}
-                onChange={(value) => updateField("special_group_count", value)}
-              />
-
-              <NumberField
-                label="Age 0-7"
-                value={form.age_0_7}
-                onChange={(value) => updateField("age_0_7", value)}
-              />
-
-              <NumberField
-                label="Age 8-59"
-                value={form.age_8_59}
-                onChange={(value) => updateField("age_8_59", value)}
-              />
-
-              <NumberField
-                label="Age 60+"
-                value={form.age_60_above}
-                onChange={(value) => updateField("age_60_above", value)}
-              />
+              {/* ── Footer ── */}
+              <div className="wizard-footer">
+                <span className="wizard-footer-note">Progress saved automatically</span>
+                <div className="wizard-footer-actions">
+                  {currentStep > 1 && (
+                    <button type="button" className="wizard-btn-back" onClick={handleStepBack}>
+                      Back
+                    </button>
+                  )}
+                  {currentStep < 5 && (
+                    <button type="button" className="wizard-btn-continue" onClick={handleStepContinue}>
+                      Continue &rsaquo;
+                    </button>
+                  )}
+                  {currentStep === 1 && (
+                    <button type="button" className="wizard-btn-back" onClick={closeForm}>
+                      Cancel
+                    </button>
+                  )}
+                  {currentStep === 5 && (
+                    <button
+                      type="button"
+                      className="wizard-btn-save"
+                      disabled={saving}
+                      onClick={handleSubmit}
+                    >
+                      {saving ? "Saving..." : editingRecord ? "✓ Update Record" : "✓ Save Record"}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-
-            <div className="tourist-total-check">
-              <TotalCheckItem
-                label="Visitor classification"
-                value={`${formTotals.classification} total`}
-                ok
-              />
-              <TotalCheckItem
-                label="Male + Female"
-                value={`${formTotals.gender} total`}
-                ok={formTotals.genderMatches}
-              />
-              <TotalCheckItem
-                label="Age groups"
-                value={`${formTotals.ages} total`}
-                ok={formTotals.agesMatch}
-              />
-              <TotalCheckItem
-                label="Senior/PWD/7 below"
-                value={`${formTotals.special} total`}
-                ok={formTotals.specialValid}
-              />
-            </div>
-
-            <div className="tourist-auto-fill-row">
-              <button type="button" onClick={fillGenderBalance}>
-                Balance female count
-              </button>
-              <button type="button" onClick={fillAgeBalance}>
-                Balance age 8-59
-              </button>
-            </div>
-
-            {formError ? (
-              <p className="tourist-record-error">{formError}</p>
-            ) : null}
-
-            <div className="tourist-record-actions">
-              <button
-                type="button"
-                className="tourist-record-cancel"
-                disabled={saving}
-                onClick={closeForm}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="tourist-record-save"
-                disabled={saving}
-              >
-                {saving
-                  ? "Saving..."
-                  : editingRecord
-                  ? "Update Record"
-                  : "Save Record"}
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       ) : null}
 
@@ -1432,16 +1586,6 @@ function BookingManagement() {
     </div>
   );
 }
-
-function TotalCheckItem({ label, value, ok }) {
-  return (
-    <div className={`total-check-item ${ok ? "ok" : "error"}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function ImportStat({ label, value }) {
   return (
     <div>
@@ -1460,71 +1604,37 @@ function DetailItem({ label, value }) {
   );
 }
 
-function TextField({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  required = false,
-  min,
-}) {
+function WizardField({ label, required, children }) {
   return (
-    <label className="tourist-record-field">
-      <span>{label}</span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder || label}
-        required={required}
-        min={min}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <div className="wizard-field">
+      <label>
+        {label}{required && <span className="req"> *</span>}
+      </label>
+      {children}
+    </div>
   );
 }
 
-function NumberField({ label, value, onChange }) {
+function WizardReviewSection({ title, onEdit, children }) {
   return (
-    <TextField
-      label={label}
-      type="number"
-      value={value}
-      onChange={onChange}
-      required
-      min="0"
-    />
+    <div className="wizard-review-section">
+      <div className="wizard-review-section-header">
+        <h4>{title}</h4>
+        <button type="button" className="wizard-review-edit-btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+      <div className="wizard-review-grid">{children}</div>
+    </div>
   );
 }
 
-function SelectField({
-  label,
-  value,
-  placeholder,
-  options = [],
-  optionKey = "id",
-  optionLabel = "name",
-  onChange,
-  required = false,
-  disabled = false,
-}) {
+function WizardReviewItem({ label, value }) {
   return (
-    <label className="tourist-record-field">
+    <div className="wizard-review-item">
       <span>{label}</span>
-      <select
-        value={value}
-        required={required}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={option[optionKey]} value={option[optionKey]}>
-            {option[optionLabel]}
-          </option>
-        ))}
-      </select>
-    </label>
+      <strong>{value || "—"}</strong>
+    </div>
   );
 }
 
