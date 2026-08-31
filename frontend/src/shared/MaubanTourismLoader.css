@@ -1,0 +1,171 @@
+/* ==========================================================================
+   MaubanTourismLoader.css — Animated Tourism Logo Loading System
+   ========================================================================== */
+
+.mauban-tourism-loader {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Ambient Radial Glow Behind Logo */
+.mauban-tourism-loader__glow {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(216, 27, 96, 0.45) 0%,
+    rgba(0, 216, 246, 0.3) 50%,
+    rgba(15, 118, 110, 0.15) 75%,
+    transparent 100%
+  );
+  filter: blur(18px);
+  opacity: 0.85;
+  animation: maubanLogoGlow 2.8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+/* Responsive Vector Canvas */
+.mauban-tourism-loader__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 10px 24px rgba(194, 24, 91, 0.25))
+         drop-shadow(0 4px 10px rgba(15, 23, 42, 0.15));
+}
+
+/* ==========================================================================
+   ANIMATION 1: The Sailing Boat Sequence (Bobbing, Pitching, Sailing Across)
+   ========================================================================== */
+
+.mauban-sailing-boat {
+  animation: maubanSailLoop 5.2s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  transform-origin: 90px 270px;
+}
+
+@keyframes maubanSailLoop {
+  /* 0%: Still / Entrance from left */
+  0% {
+    transform: translateX(-190px) translateY(4px) rotate(-3deg);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  /* 25%: Cruising into the circle & rising on wave crest */
+  25% {
+    transform: translateX(30px) translateY(-9px) rotate(4.5deg);
+  }
+  /* 50%: Reaching center & dipping smoothly into wave trough */
+  50% {
+    transform: translateX(155px) translateY(5px) rotate(-3.5deg);
+  }
+  /* 75%: Crossing toward right & riding the next crest */
+  75% {
+    transform: translateX(280px) translateY(-8px) rotate(4deg);
+  }
+  /* 96%: Sailing gracefully off the right edge */
+  96% {
+    opacity: 1;
+  }
+  /* 100%: Exiting and seamlessly looping back to left */
+  100% {
+    transform: translateX(510px) translateY(3px) rotate(-2deg);
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   ANIMATION 2: Parallax Rolling Ocean Waves
+   ========================================================================== */
+
+.mauban-wave {
+  will-change: transform;
+}
+
+.wave-cyan {
+  animation: maubanWaveShiftCyan 3.2s linear infinite;
+}
+
+.wave-azure {
+  animation: maubanWaveShiftAzure 4.6s linear infinite;
+}
+
+.wave-deep {
+  animation: maubanWaveShiftDeep 6.4s linear infinite;
+}
+
+@keyframes maubanWaveShiftCyan {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-250px);
+  }
+}
+
+@keyframes maubanWaveShiftAzure {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-250px);
+  }
+}
+
+@keyframes maubanWaveShiftDeep {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-250px);
+  }
+}
+
+/* ==========================================================================
+   ANIMATION 3: Subtle Buntal Hat & Flower Sway
+   ========================================================================== */
+
+.mauban-buntal-hat {
+  animation: maubanHatGentleSway 4.5s ease-in-out infinite alternate;
+  transform-origin: 290px 200px;
+}
+
+@keyframes maubanHatGentleSway {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-3px) rotate(1.2deg);
+  }
+}
+
+.mauban-hat-flower {
+  animation: maubanFlowerPulse 3s ease-in-out infinite alternate;
+  transform-origin: 328px 218px;
+}
+
+@keyframes maubanFlowerPulse {
+  0% {
+    transform: translate(328px, 218px) scale(0.96);
+  }
+  100% {
+    transform: translate(328px, 218px) scale(1.05);
+  }
+}
+
+/* Ambient Glow Pulse */
+@keyframes maubanLogoGlow {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 0.95;
+  }
+}

@@ -23,7 +23,7 @@ function SanitationAppShell() {
 
   return (
     <div className="sanitation-layout">
-      <LoadingOverlay visible={actionLoading} message="Please wait..." />
+      <LoadingOverlay visible={actionLoading} message="Please wait..." theme="sanitation" />
       <SanitationSidebar />
 
       <div className="sanitation-main">

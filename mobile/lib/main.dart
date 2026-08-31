@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -10,6 +12,7 @@ import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter/services.dart';
 
 part 'constants/colors.dart';
@@ -17,10 +20,12 @@ part 'utils/helpers.dart';
 part 'models/models.dart';
 part 'services/api.dart';
 part 'widgets/widgets.dart';
+part 'widgets/tourism_loading_screen.dart';
 part 'screens/common_screens.dart';
 part 'screens/tourism_screens.dart';
 part 'screens/sanitation_screens.dart';
 part 'screens/qr_scanner_screen.dart';
+part 'screens/tourist_qr_checkin_screens.dart';
 part 'widgets/striped_polygon_layer.dart';
 
 void main() {
@@ -101,7 +106,15 @@ class _AppBootstrapState extends State<AppBootstrap> {
           );
         }
 
-        return MobileShell(api: _api, bootstrap: data);
+        return MobileShell(
+          api: _api,
+          bootstrap: data,
+          onSignOut: () {
+            setState(() {
+              _showLogin = true;
+            });
+          },
+        );
       },
     );
   }

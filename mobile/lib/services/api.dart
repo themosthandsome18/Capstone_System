@@ -47,6 +47,27 @@ class TourismApi {
     return PermitVerificationResult.fromJson(data);
   }
 
+  Future<Map<String, dynamic>> lookupTouristRecord(String query) async {
+    return _getWithQuery('/mobile/tourism/records/lookup/', {
+      'query': query.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> checkInTouristRecord(Map<String, dynamic> payload) async {
+    return _post('/mobile/tourism/records/check-in/', payload);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchTouristRecordHistory({
+    String? search,
+    int? resortId,
+  }) async {
+    final data = await _getWithQuery('/mobile/tourism/records/history/', {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (resortId != null) 'resort_id': resortId.toString(),
+    });
+    return (data['records'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, dynamic>> registerVisit({
     required String firstName,
     required String lastName,

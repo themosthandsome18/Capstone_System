@@ -158,6 +158,14 @@ String shortDate(DateTime date) {
   return '${date.month}/${date.day}/${date.year}';
 }
 
+String formatProperName(String? text) {
+  if (text == null || text.trim().isEmpty) return '';
+  return text.trim().split(RegExp(r'\s+')).map((word) {
+    if (word.isEmpty) return '';
+    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+
 String? cleanProfileValue(String? value) {
   final trimmed = value?.trim() ?? '';
   return trimmed.isEmpty ? null : trimmed;

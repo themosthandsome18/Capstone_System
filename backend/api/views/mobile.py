@@ -14,6 +14,8 @@ from rest_framework.response import Response
 
 from api.models import (
     ACTION_CREATE,
+    ACTION_UPDATE,
+    BOOKING_STATUS_ARRIVED,
     COMPLAINT_PRIORITY_MEDIUM,
     COMPLAINT_STATUS_PENDING,
     COMPLAINT_STATUS_REJECTED,
@@ -33,6 +35,7 @@ from api.models import (
     SanitaryComplaint,
     SanitaryEstablishment,
     SanitaryInspection,
+    TouristRecord,
     TravelMode,
     VisitPurpose,
 )
@@ -187,6 +190,123 @@ def mobile_tourist_registration(request):
     )
 
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+ 
+ 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_tourist_record_lookup(request):
+    """
+    Lookup a tourist record by survey_id or search query for the Staff QR Scanner.
+    """
+    ensure_mobile_reference_data()
+    survey_id = request.query_params.get("survey_id", "").strip()
+    query = request.query_params.get("query", "").strip() or survey_id
+
+    if not query:
+        return Response({"error": "Survey ID or search query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    record = TouristRecord.objects.select_related(
+        "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+    ).filter(
+        Q(survey_id__iexact=query) | Q(full_name__icontains=query) | Q(contact_number__icontains=query)
+    ).first()
+
+    if not record:
+        return Response({"error": f"No visitor registration found for '{query}'"}, status=status.HTTP_404_NOT_FOUND)
+
+    data = TouristRecordSerializer(record).data
+    data["resort_name"] = record.resort.resort_name if record.resort else ""
+    data["region_name"] = record.region.region_name if record.region else ""
+    data["province_name"] = record.province.province_name if record.province else ""
+    data["country_name"] = record.country.country_name if record.country else ""
+    data["itinerary_name"] = record.itinerary.name if record.itinerary else ""
+    data["travel_mode_name"] = record.travel_mode.mode if record.travel_mode else ""
+    data["boat_type_name"] = record.boat_type.type_name if record.boat_type else ""
+    data["visit_purpose_name"] = record.visit_purpose.purpose if record.visit_purpose else ""
+    return Response(data)
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+def mobile_tourist_record_check_in(request):
+    """
+    Resort Staff Check-In action: updates status to 'arrived' and saves verified visitor details.
+    """
+    ensure_mobile_reference_data()
+    survey_id = (request.data.get("survey_id") or request.data.get("surveyId") or "").strip()
+    if not survey_id:
+        return Response({"error": "Survey ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    record = get_object_or_404(TouristRecord, survey_id__iexact=survey_id)
+    record.status = BOOKING_STATUS_ARRIVED
+
+    if "total_visitors" in request.data:
+        record.total_visitors = parse_mobile_int(request.data.get("total_visitors"), record.total_visitors)
+    if "filipino_count" in request.data:
+        record.filipino_count = parse_mobile_int(request.data.get("filipino_count"), record.filipino_count)
+    if "foreigner_count" in request.data:
+        record.foreigner_count = parse_mobile_int(request.data.get("foreigner_count"), record.foreigner_count)
+    if "total_male" in request.data:
+        record.total_male = parse_mobile_int(request.data.get("total_male"), record.total_male)
+    if "total_female" in request.data:
+        record.total_female = parse_mobile_int(request.data.get("total_female"), record.total_female)
+    if "age_0_7" in request.data:
+        record.age_0_7 = parse_mobile_int(request.data.get("age_0_7"), record.age_0_7)
+    if "age_8_59" in request.data:
+        record.age_8_59 = parse_mobile_int(request.data.get("age_8_59"), record.age_8_59)
+    if "age_60_above" in request.data:
+        record.age_60_above = parse_mobile_int(request.data.get("age_60_above"), record.age_60_above)
+
+    record.save()
+
+    log_activity(
+        request,
+        MODULE_TOURISM,
+        ACTION_UPDATE,
+        record,
+        label=f"Verified check-in for {record.full_name}",
+        record_id=record.survey_id,
+    )
+
+    data = TouristRecordSerializer(record).data
+    data["resort_name"] = record.resort.resort_name if record.resort else ""
+    return Response({"message": "Tourist successfully checked in and recorded!", "record": data})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_tourist_record_history(request):
+    """
+    Returns list of checked-in / recent tourist records for the Staff History Log.
+    """
+    ensure_mobile_reference_data()
+    resort_id = request.query_params.get("resort_id")
+    search = request.query_params.get("search", "").strip()
+
+    records = TouristRecord.objects.select_related(
+        "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+    ).all()
+
+    if resort_id:
+        records = records.filter(resort_id=resort_id)
+
+    if search:
+        records = records.filter(
+            Q(survey_id__icontains=search) | Q(full_name__icontains=search) | Q(resort__resort_name__icontains=search)
+        )
+
+    records = records.order_by("-updated_at", "-arrival_date")[:40]
+
+    rows = []
+    for r in records:
+        d = TouristRecordSerializer(r).data
+        d["resort_name"] = r.resort.resort_name if r.resort else ""
+        d["region_name"] = r.region.region_name if r.region else ""
+        d["province_name"] = r.province.province_name if r.province else ""
+        rows.append(d)
+
+    return Response({"count": len(rows), "records": rows})
 
 
 @api_view(["POST"])

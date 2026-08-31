@@ -1,10 +1,16 @@
 part of '../main.dart';
 
 class MobileShell extends StatefulWidget {
-  const MobileShell({super.key, required this.api, required this.bootstrap});
+  const MobileShell({
+    super.key,
+    required this.api,
+    required this.bootstrap,
+    this.onSignOut,
+  });
 
   final TourismApi api;
   final MobileBootstrap bootstrap;
+  final VoidCallback? onSignOut;
 
   @override
   State<MobileShell> createState() => _MobileShellState();
@@ -43,6 +49,7 @@ class _MobileShellState extends State<MobileShell> {
         profile: _profile,
         visits: _visitHistory,
         feedbackHistory: _feedbackHistory,
+        onSignOut: widget.onSignOut,
       ),
     ];
 
@@ -135,7 +142,7 @@ class _MobileShellState extends State<MobileShell> {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.bootstrap,
@@ -152,109 +159,933 @@ class HomePage extends StatelessWidget {
   final VoidCallback onOpenNotifications;
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  String _selectedCategory = 'All';
+  String _search = '';
+
+  final List<Map<String, dynamic>> _categories = const [
+    {'name': 'All', 'icon': Icons.explore_outlined, 'label': 'All Places'},
+    {'name': 'Beach Resort', 'icon': Icons.beach_access_outlined, 'label': 'Beaches'},
+    {'name': 'Camping Resort', 'icon': Icons.cabin_outlined, 'label': 'Resorts'},
+    {'name': 'Hidden Gems', 'icon': Icons.diamond_outlined, 'label': 'Hidden Gems'},
+    {'name': 'Heritage', 'icon': Icons.account_balance_outlined, 'label': 'Heritage'},
+    {'name': 'Nature', 'icon': Icons.water_drop_outlined, 'label': 'Nature'},
+  ];
+
+  @override
   Widget build(BuildContext context) {
-    final featured = bootstrap.featuredDestinations.isNotEmpty
-        ? bootstrap.featuredDestinations
-        : bootstrap.destinations.take(6).toList();
-    final heroDestination =
-        featured.firstOrNull ?? bootstrap.destinations.firstOrNull;
+    // 1. Popular Resorts for the Slide Show (Top visited / featured)
+    final popularResorts = widget.bootstrap.featuredDestinations.isNotEmpty
+        ? widget.bootstrap.featuredDestinations
+        : widget.bootstrap.destinations.take(5).toList();
+
+    // 2. Hidden Gems & Lesser-Known / Emerging Spots (to promote quiet and emerging spots)
+    final hiddenGems = widget.bootstrap.destinations.where((d) {
+      final name = d.name.toLowerCase();
+      final type = d.type.toLowerCase();
+      return name.contains('tent') ||
+          name.contains('nilandingan') ||
+          name.contains('rio') ||
+          name.contains('jovencio') ||
+          name.contains('aguho') ||
+          name.contains('escaparde') ||
+          name.contains('pinay') ||
+          type.contains('falls') ||
+          type.contains('camp') ||
+          d.monthlyArrivals < 100;
+    }).take(6).toList();
+
+    // 3. Filter destinations by category & search query
+    final filteredDestinations = widget.bootstrap.destinations.where((d) {
+      final matchesSearch = _search.isEmpty ||
+          d.name.toLowerCase().contains(_search.toLowerCase()) ||
+          d.location.toLowerCase().contains(_search.toLowerCase()) ||
+          d.description.toLowerCase().contains(_search.toLowerCase());
+
+      final matchesCategory = _selectedCategory == 'All' ||
+          (_selectedCategory == 'Hidden Gems' && hiddenGems.any((h) => h.id == d.id)) ||
+          d.type.toLowerCase().contains(_selectedCategory.toLowerCase()) ||
+          (_selectedCategory == 'Nature' && (d.type.toLowerCase().contains('falls') || d.type.toLowerCase().contains('nature'))) ||
+          (_selectedCategory == 'Heritage' && (d.type.toLowerCase().contains('heritage') || d.type.toLowerCase().contains('historical')));
+
+      return matchesSearch && matchesCategory;
+    }).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
-        AppHeader(onOpenNotifications: onOpenNotifications),
-        Text(
-          profile.isGuest ? 'Welcome to' : 'Welcome back,',
-          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        // Top Header
+        AppHeader(
+          onOpenNotifications: widget.onOpenNotifications,
+          hasUnread: widget.bootstrap.notifications.isNotEmpty,
         ),
-        Text(
-          profile.displayName,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 12),
-        SearchBox(hint: 'Search destinations, resorts...'),
-        const SizedBox(height: 14),
-        if (heroDestination == null)
-          const EmptyState(
-            icon: Icons.cloud_off_outlined,
-            title: 'No destinations loaded from the web system',
-          )
-        else
-          AnimatedScaleButton(
-            onTap: () => onOpenDestination(heroDestination),
-            child: HeroCard(destination: heroDestination),
-          ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            QuickAction(
-              icon: Icons.explore_outlined,
-              label: 'Discover',
-              onTap: () => onOpenTab(1),
+
+        // Welcoming Hero Header
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0F766E), Color(0xFF115E59)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            QuickAction(
-              icon: Icons.map_outlined,
-              label: 'View Map',
-              onTap: () => onOpenTab(2),
-            ),
-            QuickAction(
-              icon: Icons.route_outlined,
-              label: 'Plan Visit',
-              onTap: () => onOpenTab(3),
-            ),
-          ],
-        ),
-        if (featured.isNotEmpty) ...[
-          SectionHeader(
-            title: 'Top 10 Most Visited',
-            action: 'See all',
-            onTap: () => onOpenTab(1),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F766E).withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome, size: 12, color: Color(0xFFFFD700)),
+                        SizedBox(width: 4),
+                        Text(
+                          'MUNICIPALITY OF MAUBAN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                widget.profile.isGuest
+                    ? 'Mabuhay, Explorer! 🌊'
+                    : 'Mabuhay, ${widget.profile.displayName}! 🌊',
+                style: const TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Welcome to the historic jewel of Lamon Bay — home to the white sandbars of Cagbalete Island, cascading waterfalls, and world-class Buntal weaving craftsmanship.',
+                style: TextStyle(
+                  color: Color(0xFFCCFBF1),
+                  fontSize: 12.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Search Box
+        SearchBox(
+          hint: 'Search resorts, beaches, waterfalls, heritage...',
+          onChanged: (value) => setState(() => _search = value.trim()),
+        ),
+        const SizedBox(height: 14),
+
+        // Category Filter Chips
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _categories.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final cat = _categories[index];
+              final isSelected = _selectedCategory == cat['name'];
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = cat['name'] as String;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.green : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isSelected ? AppColors.green : const Color(0xFFE2E8F0),
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.green.withValues(alpha: 0.28),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        cat['icon'] as IconData,
+                        size: 15,
+                        color: isSelected ? Colors.white : AppColors.muted,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        cat['label'] as String,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected ? Colors.white : AppColors.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Show Slide Show and Highlights only when not actively searching / when on 'All'
+        if (_search.isEmpty && _selectedCategory == 'All') ...[
+          // Section Title: Most Popular Resorts Slideshow
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '🔥 Most Popular Resorts',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+              ),
+              TextButton(
+                onPressed: () => widget.onOpenTab(1),
+                child: const Text('View all', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Auto-Sliding Featured Resorts Slideshow
+          FeaturedResortsSlideshow(
+            destinations: popularResorts,
+            onTapDestination: widget.onOpenDestination,
+          ),
+          const SizedBox(height: 24),
+
+          // Section: Discover the Beauty & Heritage of Mauban
+          const _MaubanTownHighlightsCard(),
+          const SizedBox(height: 24),
+
+          // Section: Hidden Gems & Peaceful Stays (Promoting lesser-known resorts)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '💎 Hidden Gems of Mauban',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Peaceful glamping, quiet beaches & eco-spots',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_forward, color: AppColors.green),
+                onPressed: () => widget.onOpenTab(1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           SizedBox(
-            height: 168,
+            height: 195,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemBuilder: (context, index) => DestinationTile(
-                destination: featured[index],
-                onTap: () => onOpenDestination(featured[index]),
-              ),
+              itemCount: hiddenGems.length,
               separatorBuilder: (context, index) => const SizedBox(width: 12),
-              itemCount: featured.length,
+              itemBuilder: (context, index) => _HiddenGemCard(
+                destination: hiddenGems[index],
+                onTap: () => widget.onOpenDestination(hiddenGems[index]),
+              ),
             ),
           ),
+          const SizedBox(height: 24),
+
+          // Section: Town Information & Travel Essentials
+          const _MaubanTownGuideSection(),
+          const SizedBox(height: 14),
         ],
 
+        // Filtered / All Destinations List Section
         SectionHeader(
-          title: 'Most Visited Resorts',
-          action: 'Map',
-          onTap: () => onOpenTab(2),
+          title: _selectedCategory == 'All'
+              ? (_search.isNotEmpty ? 'Search Results' : 'All Destinations & Resorts')
+              : '$_selectedCategory Spots',
+          action: 'View Map',
+          onTap: () => widget.onOpenTab(2),
         ),
-        if (bootstrap.destinations.isEmpty)
+        if (filteredDestinations.isEmpty)
           const EmptyState(
             icon: Icons.travel_explore_outlined,
-            title: 'Start the backend API to load ranked destinations',
+            title: 'No destinations match your search or filter',
           )
         else
-          ...bootstrap.destinations.map(
+          ...filteredDestinations.map(
             (destination) => DestinationListCard(
               destination: destination,
-              onTap: () => onOpenDestination(destination),
+              onTap: () => widget.onOpenDestination(destination),
             ),
           ),
+        const SizedBox(height: 12),
+
         const InfoBanner(
           icon: Icons.event_available_outlined,
-          title: 'Upcoming: Fiesta de Mauban',
-          text: 'Check official schedules and advisories before your trip.',
+          title: 'Upcoming: Fiesta de Mauban & Buntal Festival',
+          text: 'Celebrate the feast of San Buenaventura with colorful Buntal weaving and boat regatta.',
           color: Color(0xffd7efff),
         ),
         const InfoBanner(
-          icon: Icons.lightbulb_outline,
-          title: 'Travel Tip',
-          text:
-              'Bring water, sun protection, and follow local sanitation reminders.',
-          color: Color(0xfffff3bd),
+          icon: Icons.eco_outlined,
+          title: 'Clean Coast & Eco-Tourism Policy',
+          text: 'Please dispose of trash responsibly and support local community bangkeros and weavers.',
+          color: Color(0xffdcfce7),
         ),
       ],
+    );
+  }
+}
+
+/// Auto-Sliding and Interactive Carousel for Most Popular Resorts
+class FeaturedResortsSlideshow extends StatefulWidget {
+  const FeaturedResortsSlideshow({
+    super.key,
+    required this.destinations,
+    required this.onTapDestination,
+  });
+
+  final List<Destination> destinations;
+  final ValueChanged<Destination> onTapDestination;
+
+  @override
+  State<FeaturedResortsSlideshow> createState() => _FeaturedResortsSlideshowState();
+}
+
+class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
+  late PageController _pageController;
+  int _currentPage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.94);
+    _startAutoSlide();
+  }
+
+  void _startAutoSlide() {
+    _timer?.cancel();
+    if (widget.destinations.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted || !_pageController.hasClients) return;
+      final nextPage = (_currentPage + 1) % widget.destinations.length;
+      _pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.destinations.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 225,
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _currentPage = index);
+            },
+            itemCount: widget.destinations.length,
+            itemBuilder: (context, index) {
+              final destination = widget.destinations[index];
+              return AnimatedScaleButton(
+                onTap: () => widget.onTapDestination(destination),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.14),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          DestinationImage(destination: destination),
+                          const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                stops: [0.15, 0.55, 1.0],
+                                colors: [
+                                  Colors.transparent,
+                                  Color(0x44000000),
+                                  Color(0xEE000000),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Badge top left
+                          Positioned(
+                            top: 14,
+                            left: 14,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD81558),
+                                borderRadius: BorderRadius.circular(999),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFD81558).withValues(alpha: 0.4),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.local_fire_department, size: 13, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'POPULAR RESORT',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Rating top right
+                          Positioned(
+                            top: 14,
+                            right: 14,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star, size: 14, color: Color(0xFFFFD700)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    destination.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Info bottom
+                          Positioned(
+                            left: 16,
+                            right: 16,
+                            bottom: 16,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  destination.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.place_outlined, size: 13, color: Colors.white70),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        destination.location,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    VisitorPill(destination: destination, dark: true),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        destination.type,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Dots Indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            widget.destinations.length,
+            (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _currentPage == index ? 22 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: _currentPage == index ? AppColors.green : const Color(0xFFCBD5E1),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Highlight Card introducing the beauty and culture of Mauban
+class _MaubanTownHighlightsCard extends StatelessWidget {
+  const _MaubanTownHighlightsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDFA),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.stars_rounded, color: Color(0xFF0F766E), size: 22),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Why Visit Mauban, Quezon?',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'The historic coastal sanctuary of southern Luzon',
+                      style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Nestled along the Pacific coast of Lamon Bay, Mauban boasts powdery white sandbars with expansive tidal ripples, centuries-old ancestral trees, cascading mountain pools, and a proud cultural identity shaped by Gat Uban and palm artisans.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          // 4 Grid Highlight Pillars
+          Row(
+            children: [
+              Expanded(
+                child: _buildPillarItem(
+                  icon: Icons.beach_access,
+                  title: 'Cagbalete Island',
+                  sub: 'Pristine Sandbars',
+                  color: const Color(0xFF0284C7),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildPillarItem(
+                  icon: Icons.workspace_premium,
+                  title: 'Buntal Weaving',
+                  sub: 'Artisan Hats & Crafts',
+                  color: const Color(0xFFD97706),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPillarItem(
+                  icon: Icons.water_drop,
+                  title: 'Forest Cascades',
+                  sub: 'Dahican & Alitap Falls',
+                  color: const Color(0xFF059669),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildPillarItem(
+                  icon: Icons.restaurant_menu,
+                  title: 'Quezon Flavors',
+                  sub: 'Habhab & Fresh Seafood',
+                  color: const Color(0xFFDC2626),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPillarItem({
+    required IconData icon,
+    required String title,
+    required String sub,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5, color: color),
+                ),
+                Text(
+                  sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Hidden Gem / Lesser-Known Resort Card
+class _HiddenGemCard extends StatelessWidget {
+  const _HiddenGemCard({required this.destination, required this.onTap});
+
+  final Destination destination;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 165,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DestinationImage(destination: destination),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.2, 0.65, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      Color(0x44000000),
+                      Color(0xEE000000),
+                    ],
+                  ),
+                ),
+              ),
+              // Hidden Gem Tag
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F766E),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.diamond, size: 10, color: Color(0xFF5EEAD4)),
+                      SizedBox(width: 3),
+                      Text(
+                        'HIDDEN GEM',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      destination.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      destination.location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        destination.type.isNotEmpty ? destination.type : 'Quiet Stay',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Town Information & Travel Essentials Accordion / Grid
+class _MaubanTownGuideSection extends StatelessWidget {
+  const _MaubanTownGuideSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '📖 Mauban Travel Guide & Local Tips',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+        ),
+        const SizedBox(height: 10),
+        _buildGuideTile(
+          icon: Icons.directions_boat_outlined,
+          title: 'Cagbalete Island Boat Guide',
+          desc: 'Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. Environmental fee is paid at the tourism desk before boarding.',
+          color: const Color(0xFF0284C7),
+        ),
+        _buildGuideTile(
+          icon: Icons.festival_outlined,
+          title: 'Maubanin Buntal Festival (May)',
+          desc: 'A week-long celebration showcasing giant woven Buntal hats, street dancing, and the historical legacy of Gat Uban.',
+          color: const Color(0xFFD97706),
+        ),
+        _buildGuideTile(
+          icon: Icons.receipt_long_outlined,
+          title: 'Tourism Port & Environmental Fee',
+          desc: 'All tourists register at the Tourism Information Center. Receipts serve as your official entry pass to the island sanctuaries.',
+          color: const Color(0xFF059669),
+        ),
+        _buildGuideTile(
+          icon: Icons.delete_outline,
+          title: 'Solid Waste & Leave No Trace Policy',
+          desc: 'Help keep Cagbalete and Mauban pristine by avoiding single-use plastics and taking your trash back to mainland disposal points.',
+          color: const Color(0xFF7C3AED),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuideTile({
+    required IconData icon,
+    required String title,
+    required String desc,
+    required Color color,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  desc,
+                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -341,7 +1172,7 @@ class _DestinationListPageState extends State<DestinationListPage> {
   }
 }
 
-class TourismMapPage extends StatelessWidget {
+class TourismMapPage extends StatefulWidget {
   const TourismMapPage({
     super.key,
     required this.destinations,
@@ -351,137 +1182,227 @@ class TourismMapPage extends StatelessWidget {
   final List<Destination> destinations;
   final ValueChanged<Destination> onOpenDestination;
 
+  @override
+  State<TourismMapPage> createState() => _TourismMapPageState();
+}
+
+class _TourismMapPageState extends State<TourismMapPage> {
+  Destination? _selectedDestination;
+
   void _openFullscreenMap(BuildContext context, List<Destination> highlighted) {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            children: [
-              FlutterMap(
-                options: MapOptions(
-                  initialCenter: const LatLng(14.185, 121.731),
-                  initialZoom: 12.0,
-                  minZoom: 8,
-                  maxZoom: 18,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  ),
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog.fullscreen(
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              body: Stack(
                 children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'mauban_mobile_app',
-                  ),
-                  MarkerLayer(
-                    markers: highlighted
-                        .map(
-                          (destination) => Marker(
-                            point: LatLng(
-                              destination.latitude,
-                              destination.longitude,
-                            ),
-                            width: 46,
-                            height: 46,
+                  FlutterMap(
+                    options: MapOptions(
+                      initialCenter: _selectedDestination != null && _selectedDestination!.hasCoordinates
+                          ? LatLng(_selectedDestination!.latitude, _selectedDestination!.longitude)
+                          : const LatLng(14.185, 121.731),
+                      initialZoom: 12.0,
+                      minZoom: 8,
+                      maxZoom: 18,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
+                      onTap: (tapPosition, point) {
+                        setDialogState(() => _selectedDestination = null);
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'mauban_mobile_app',
+                      ),
+                      MarkerLayer(
+                        markers: highlighted.map((destination) {
+                          final isSelected = _selectedDestination?.id == destination.id;
+                          return Marker(
+                            point: LatLng(destination.latitude, destination.longitude),
+                            width: isSelected ? 54 : 44,
+                            height: isSelected ? 54 : 44,
                             child: GestureDetector(
                               onTap: () {
-                                Navigator.of(context).pop();
-                                onOpenDestination(destination);
+                                setDialogState(() => _selectedDestination = destination);
                               },
-                              child: const MapPin(),
+                              child: isSelected
+                                  ? const Icon(Icons.location_on, color: Color(0xFFD81558), size: 48)
+                                  : const MapPin(),
                             ),
-                          ),
-                        )
-                        .toList(),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              // Back button overlay
-              Positioned(
-                top: 48,
-                left: 16,
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                  // Back button overlay
+                  Positioned(
+                    top: 48,
+                    left: 16,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.arrow_back_ios_new_rounded,
-                            size: 14, color: Color(0xFF147c79)),
-                        SizedBox(width: 6),
-                        Text(
-                          'Back',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF147c79),
-                          ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF147c79)),
+                            SizedBox(width: 6),
+                            Text('Back', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF147c79))),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Title overlay
-              Positioned(
-                top: 48,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.92),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      'Mauban Tourism Map',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0f2e1f),
                       ),
                     ),
                   ),
+                  // Title overlay
+                  Positioned(
+                    top: 48,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Mauban Tourism GIS Map',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0f2e1f)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Bottom preview card if selected
+                  if (_selectedDestination != null)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 24,
+                      child: _buildMapPreviewCard(_selectedDestination!, onDetails: () {
+                        Navigator.of(context).pop();
+                        widget.onOpenDestination(_selectedDestination!);
+                      }, onClose: () {
+                        setDialogState(() => _selectedDestination = null);
+                      }),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMapPreviewCard(Destination destination, {required VoidCallback onDetails, required VoidCallback onClose}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: DestinationImage(destination: destination, width: 72, height: 72),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  destination.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  destination.location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    RatingPill(rating: destination.rating),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        destination.type,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.deepGreen, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                onPressed: onClose,
+              ),
+              FilledButton(
+                onPressed: onDetails,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('View', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final mappedDestinations = destinations
+    final mappedDestinations = widget.destinations
         .where((item) => item.hasCoordinates)
         .toList();
     final highlighted = mappedDestinations.take(80).toList();
@@ -509,50 +1430,61 @@ class TourismMapPage extends StatelessWidget {
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     ),
+                    onTap: (tapPosition, point) => setState(() => _selectedDestination = null),
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'mauban_mobile_app',
                     ),
                     MarkerLayer(
-                      markers: highlighted
-                          .map(
-                            (destination) => Marker(
-                              point: LatLng(
-                                destination.latitude,
-                                destination.longitude,
-                              ),
-                              width: 46,
-                              height: 46,
-                              child: GestureDetector(
-                                onTap: () => onOpenDestination(destination),
-                                child: const MapPin(),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                      markers: highlighted.map((destination) {
+                        final isSelected = _selectedDestination?.id == destination.id;
+                        return Marker(
+                          point: LatLng(destination.latitude, destination.longitude),
+                          width: isSelected ? 50 : 44,
+                          height: isSelected ? 50 : 44,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() => _selectedDestination = destination);
+                            },
+                            child: isSelected
+                                ? const Icon(Icons.location_on, color: Color(0xFFD81558), size: 44)
+                                : const MapPin(),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
               ),
             ),
-            // Expand button — tapping only this opens fullscreen
+            // Floating Preview Card when pin is tapped
+            if (_selectedDestination != null)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 50,
+                child: _buildMapPreviewCard(
+                  _selectedDestination!,
+                  onDetails: () => widget.onOpenDestination(_selectedDestination!),
+                  onClose: () => setState(() => _selectedDestination = null),
+                ),
+              ),
+            // Expand button
             Positioned(
               bottom: 12,
               right: 12,
               child: GestureDetector(
                 onTap: () => _openFullscreenMap(context, highlighted),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     color: const Color(0xFF147c79),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 6,
                       ),
                     ],
@@ -560,8 +1492,7 @@ class TourismMapPage extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.fullscreen_rounded,
-                          color: Colors.white, size: 16),
+                      Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
                       SizedBox(width: 5),
                       Text(
                         'Full Screen',
@@ -579,19 +1510,18 @@ class TourismMapPage extends StatelessWidget {
           ],
         ),
         SectionHeader(title: 'Nearby Places'),
-        ...destinations
-            .map(
-              (destination) => DestinationListCard(
-                destination: destination,
-                onTap: () => onOpenDestination(destination),
-              ),
-            ),
+        ...widget.destinations.map(
+          (destination) => DestinationListCard(
+            destination: destination,
+            onTap: () => widget.onOpenDestination(destination),
+          ),
+        ),
       ],
     );
   }
 }
 
-class VisitPlannerPage extends StatelessWidget {
+class VisitPlannerPage extends StatefulWidget {
   const VisitPlannerPage({
     super.key,
     required this.bootstrap,
@@ -604,32 +1534,652 @@ class VisitPlannerPage extends StatelessWidget {
   final VoidCallback onRegisterVisit;
 
   @override
+  State<VisitPlannerPage> createState() => _VisitPlannerPageState();
+}
+
+class _VisitPlannerPageState extends State<VisitPlannerPage> {
+  // Interactive Packing checklist state
+  final Map<String, bool> _packingItems = {
+    'Valid ID & Digital QR Pass': true,
+    'Cash in PHP (No ATMs on Cagbalete Island)': true,
+    'Aqua Shoes (For Yang-in low-tide sandbar)': false,
+    'Power Bank & Waterproof Phone Pouch': false,
+    'Trash Bag / Eco-Pouch (Leave No Trace)': false,
+  };
+
+  int _selectedItineraryIndex = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final latestVisit = widget.visits.firstOrNull;
+    final totalPacked = _packingItems.values.where((v) => v).length;
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
       children: [
+        // Page Title
         const PageTitle(
-          title: 'My Visit',
-          subtitle: 'Plan and register your trip',
+          title: 'My Visit & Travel Wallet',
+          subtitle: 'Active passes, smart itinerary, and island guide',
         ),
-        TripSummaryCard(
-          destination:
-              visits.firstOrNull?.destination ??
-              bootstrap.destinations.firstOrNull,
+        const SizedBox(height: 6),
+
+        // SECTION 1: DIGITAL TRAVEL WALLET (HERO PASS)
+        if (latestVisit != null)
+          _buildActivePassHero(context, latestVisit)
+        else
+          _buildNoPassHero(context),
+
+        const SizedBox(height: 20),
+
+        // Quick Action Row
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: widget.onRegisterVisit,
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text(
+                  'Register / Get Pass',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF14532D),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 14),
-        FilledButton.icon(
-          onPressed: onRegisterVisit,
-          icon: const Icon(Icons.send_outlined),
-          label: const Text('Register another visit'),
-        ),
-        if (visits.isNotEmpty) ...[
-          SectionHeader(title: 'Submitted Visits'),
-          ...visits.map((visit) => VisitReceiptCard(receipt: visit)),
+
+        const SizedBox(height: 24),
+
+        // SECTION 2: INTERACTIVE PACKING CHECKLIST
+        _buildPackingChecklist(totalPacked),
+
+        const SizedBox(height: 24),
+
+        // SECTION 3: CURATED MAUBAN ITINERARIES
+        _buildItinerarySection(),
+
+        const SizedBox(height: 24),
+
+        // SECTION 4: MAUBAN PORT BOAT SCHEDULE & GUIDE
+        _buildPortGuideCard(),
+
+        if (widget.visits.length > 1) ...[
+          const SizedBox(height: 24),
+          SectionHeader(title: 'All Saved Passes (${widget.visits.length})'),
+          ...widget.visits.map((v) => VisitReceiptCard(receipt: v)),
         ],
-        SectionHeader(title: 'Plan Your Stay'),
-        PlanVisitForm(destinations: bootstrap.destinations),
       ],
+    );
+  }
+
+  // Hero Card for Active Digital Pass
+  Widget _buildActivePassHero(BuildContext context, MobileVisitReceipt visit) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF064E3B), Color(0xFF0F766E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F766E).withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => showDialog(
+            context: context,
+            builder: (context) => TouristDigitalPassModal(receipt: visit),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Header Pill Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.confirmation_number_outlined, size: 13, color: Color(0xFF86EFAC)),
+                          SizedBox(width: 5),
+                          Text(
+                            'ACTIVE ENTRY PASS',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: Color(0xFF86EFAC),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF86EFAC),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'READY TO SCAN',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF064E3B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Destination & Tourist Name
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            visit.destination.name,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            visit.fullName.isNotEmpty ? formatProperName(visit.fullName) : 'Registered Tourist',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFFCCFBF1),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 13, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              Text(
+                                shortDate(visit.arrivalDate),
+                                style: const TextStyle(fontSize: 12, color: Colors.white),
+                              ),
+                              const SizedBox(width: 14),
+                              const Icon(Icons.people_outline, size: 15, color: Colors.white70),
+                              const SizedBox(width: 5),
+                              Text(
+                                '${visit.totalVisitors} Pax',
+                                style: const TextStyle(fontSize: 12, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // High-contrast mini QR preview with tap prompt
+                    Container(
+                      width: 78,
+                      height: 78,
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: QrImageView(
+                              data: visit.reference,
+                              version: QrVersions.auto,
+                              eyeStyle: const QrEyeStyle(
+                                eyeShape: QrEyeShape.square,
+                                color: Color(0xFF064E3B),
+                              ),
+                              dataModuleStyle: const QrDataModuleStyle(
+                                dataModuleShape: QrDataModuleShape.square,
+                                color: Color(0xFF064E3B),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'TAP TO EXPAND',
+                            style: TextStyle(
+                              fontSize: 6.5,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F766E),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Divider(color: Colors.white24, height: 1),
+                const SizedBox(height: 10),
+
+                // Monospace Pass Reference
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'PASS ID: ${visit.reference}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFCCFBF1),
+                      ),
+                    ),
+                    const Row(
+                      children: [
+                        Text(
+                          'View Full Pass',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 3),
+                        Icon(Icons.chevron_right, size: 16, color: Colors.white),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Welcoming State when no pass is registered yet
+  Widget _buildNoPassHero(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFD1E7DD), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF14532D).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.confirmation_number_outlined, size: 32, color: Color(0xFF14532D)),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Ready for your Mauban Getaway?',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Register your visit now to receive an instant Digital QR Pass for seamless entry at the port and resort check-in.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF64748B),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Interactive Packing Checklist Widget
+  Widget _buildPackingChecklist(int totalPacked) {
+    final totalItems = _packingItems.length;
+    final progress = totalItems > 0 ? totalPacked / totalItems : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.backpack_outlined, size: 20, color: Color(0xFFB45309)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Island Packing Checklist',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      '$totalPacked of $totalItems items ready',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFF1F5F9),
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ..._packingItems.entries.map((entry) {
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _packingItems[entry.key] = !entry.value;
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      entry.value ? Icons.check_box : Icons.check_box_outline_blank,
+                      color: entry.value ? const Color(0xFF14532D) : const Color(0xFF94A3B8),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry.key,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: entry.value ? FontWeight.w700 : FontWeight.w500,
+                          color: entry.value ? const Color(0xFF0F172A) : const Color(0xFF475569),
+                          decoration: entry.value ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // Curated Itineraries Section
+  Widget _buildItinerarySection() {
+    final itineraries = [
+      {
+        'title': '🏝️ Cagbalete Island & Sandbars Loop',
+        'duration': '1 to 2 Days',
+        'highlight': 'Yang-in Sandbar, Bonsai Island, Balete Tree',
+        'stops': [
+          '07:00 AM — Public Boat from Mauban Port to Sabang/Mappit',
+          '09:00 AM — Yang-in Sandbar Walk & Low Tide Swimming',
+          '01:00 PM — Fresh Seafood Lunch at Beachfront Resort',
+          '03:30 PM — Bonsai Island rock formations & photo op',
+          '05:30 PM — Golden Hour Sunset by the century-old Balete Tree',
+        ],
+      },
+      {
+        'title': '🌿 Eco-Waterfalls & Heritage Trail',
+        'duration': 'Day Tour (Town Proper)',
+        'highlight': 'Dahican Falls, Rizal Hill, Spanish Bath',
+        'stops': [
+          '08:00 AM — Refreshing swim at Dahican Cascading Falls',
+          '11:30 AM — Panoramic Lamon Bay view at Rizal Hill Park',
+          '01:00 PM — Authentic Pansit Habhab lunch along Quezon St.',
+          '02:30 PM — Historic 17th-Century Spanish Public Bath & Buntal craft shopping',
+        ],
+      },
+      {
+        'title': '🍲 Quezon Food & Local Delicacies',
+        'duration': 'Half-Day Trail',
+        'highlight': 'Pansit Habhab, Tikoy Mauban, Fresh Fish',
+        'stops': [
+          '07:30 AM — Morning catch browsing at Mauban Fish Port',
+          '09:00 AM — Tikoy Mauban & Buntal souvenir tasting',
+          '12:00 PM — Traditional Lucban / Mauban Longganisa feast',
+        ],
+      },
+    ];
+
+    final current = itineraries[_selectedItineraryIndex];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F2FE),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.explore_outlined, size: 20, color: Color(0xFF0284C7)),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Curated Mauban Itineraries',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'Recommended routes by local guides',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Itinerary Segment Selector
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(itineraries.length, (idx) {
+                final isSelected = _selectedItineraryIndex == idx;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      idx == 0 ? '🏝️ Cagbalete Loop' : idx == 1 ? '🌿 Falls & Heritage' : '🍲 Food & Culture',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                        color: isSelected ? Colors.white : const Color(0xFF334155),
+                      ),
+                    ),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF14532D),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    onSelected: (_) => setState(() => _selectedItineraryIndex = idx),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Selected Itinerary Content
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  current['title'] as String,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.schedule, size: 13, color: Color(0xFF0F766E)),
+                    const SizedBox(width: 5),
+                    Text(
+                      current['duration'] as String,
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F766E)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                ...((current['stops'] as List<String>).map((stop) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Icon(Icons.circle, size: 6, color: Color(0xFF14532D)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            stop,
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155), height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                })),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Port Guide & Boat Schedule
+  Widget _buildPortGuideCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.directions_boat_outlined, color: Color(0xFF14532D), size: 22),
+              SizedBox(width: 10),
+              Text(
+                'Mauban Port ↔ Cagbalete Boats',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF14532D)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            '• Standard boat departures from Mauban Port: 07:00 AM, 10:00 AM, 01:00 PM, and 04:00 PM.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '• Island Port Arrival: Sabang Port (during high tide) or Mappit Port (during low tide).',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '• Environmental & Tourism Fee: ₱50 per tourist payable at the passenger terminal.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -640,11 +2190,48 @@ class ProfilePage extends StatelessWidget {
     required this.profile,
     required this.visits,
     required this.feedbackHistory,
+    this.onSignOut,
   });
 
   final MobileUserProfile profile;
   final List<MobileVisitReceipt> visits;
   final List<MobileFeedbackReceipt> feedbackHistory;
+  final VoidCallback? onSignOut;
+
+  void _confirmSignOut(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: Colors.red),
+            SizedBox(width: 10),
+            Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w900)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to sign out of Mauban Tourism? You will return to the welcome screen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.muted)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.of(context).pop();
+              if (onSignOut != null) {
+                onSignOut!();
+              }
+            },
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -653,30 +2240,72 @@ class ProfilePage extends StatelessWidget {
       children: [
         const PageTitle(title: 'Profile', subtitle: 'Tourist guide services'),
         const SizedBox(height: 8),
-        CircleAvatar(
-          radius: 42,
-          backgroundColor: const Color(0xffd8f5e4),
-          child: Text(
-            profile.initials,
-            style: const TextStyle(
-              color: AppColors.green,
-              fontWeight: FontWeight.w900,
-              fontSize: 24,
-            ),
+        Center(
+          child: Stack(
+            children: [
+              CircleAvatar(
+                radius: 44,
+                backgroundColor: const Color(0xffd8f5e4),
+                child: Text(
+                  profile.initials,
+                  style: const TextStyle(
+                    color: AppColors.green,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 26,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: AppColors.deepGreen,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.verified_user, color: Colors.white, size: 14),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
         Text(
           profile.displayName,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
         ),
         const Text(
-          'Tourist - Guide Explorer',
+          'Registered Tourist Explorer • Mauban, Quezon',
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted),
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
         ),
         const SizedBox(height: 20),
+
+        // Activity Links
+        ProfileLink(
+          icon: Icons.route_outlined,
+          label: 'Visit History & Entry Passes (${visits.length})',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => VisitHistoryPage(visits: visits),
+            ),
+          ),
+        ),
+        ProfileLink(
+          icon: Icons.feedback_outlined,
+          label: 'My Submitted Feedback (${feedbackHistory.length})',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  FeedbackHistoryPage(feedbackHistory: feedbackHistory),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Contact Info
         ProfileTile(
           icon: Icons.email_outlined,
           label: 'Email',
@@ -689,33 +2318,108 @@ class ProfilePage extends StatelessWidget {
               ? 'Not provided yet'
               : profile.contactNumber,
         ),
-        ProfileLink(
-          icon: Icons.route_outlined,
-          label: 'Visit History (${visits.length})',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => VisitHistoryPage(visits: visits),
-            ),
-          ),
+        const SizedBox(height: 16),
+
+        // Emergency Hotlines & Tourist Assistance
+        SectionHeader(title: 'Emergency Hotlines & Helpdesk'),
+        _EmergencyContactCard(
+          icon: Icons.local_hospital_outlined,
+          title: 'Mauban MDRRMO / Rescue 24/7',
+          number: '0998-598-8422 / (042) 784-0123',
+          color: const Color(0xFFEF4444),
         ),
-        ProfileLink(
-          icon: Icons.feedback_outlined,
-          label: 'My Feedback (${feedbackHistory.length})',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) =>
-                  FeedbackHistoryPage(feedbackHistory: feedbackHistory),
-            ),
-          ),
+        _EmergencyContactCard(
+          icon: Icons.local_police_outlined,
+          title: 'Mauban Municipal Police (PNP)',
+          number: '0998-598-5777 / (042) 784-0200',
+          color: const Color(0xFF2563EB),
         ),
-        const SizedBox(height: 18),
+        _EmergencyContactCard(
+          icon: Icons.directions_boat_outlined,
+          title: 'Coast Guard Sub-Station Mauban',
+          number: '0917-842-7643',
+          color: const Color(0xFF0D9488),
+        ),
+        _EmergencyContactCard(
+          icon: Icons.support_agent_outlined,
+          title: 'Mauban Tourism Information Desk',
+          number: '(042) 784-0555 • tourism@mauban.gov.ph',
+          color: AppColors.deepGreen,
+        ),
+        const SizedBox(height: 20),
+
         OutlinedButton.icon(
-          onPressed: () {},
+          onPressed: () => _confirmSignOut(context),
           icon: const Icon(Icons.logout),
           label: const Text('Sign Out'),
-          style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            side: const BorderSide(color: Color(0xFFFECDD3)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _EmergencyContactCard extends StatelessWidget {
+  const _EmergencyContactCard({
+    required this.icon,
+    required this.title,
+    required this.number,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String title;
+  final String number;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  number,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -876,62 +2580,16 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   ],
                   SectionHeader(title: 'Tourism Record'),
                   DestinationFactsPanel(destination: widget.destination),
-                  SectionHeader(title: 'Amenities'),
+                  SectionHeader(title: 'Amenities & Facilities'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: const [
-                      AmenityChip(icon: Icons.water, label: 'Beachfront huts'),
-                      AmenityChip(
-                        icon: Icons.directions_boat,
-                        label: 'Boat tours',
-                      ),
-                      AmenityChip(icon: Icons.restaurant, label: 'Food stalls'),
-                      AmenityChip(icon: Icons.shower, label: 'Comfort rooms'),
-                    ],
+                    children: _buildAmenityChips(widget.destination),
                   ),
-                  SectionHeader(title: 'Location'),
+                  SectionHeader(title: 'Location & Map'),
                   LocationCard(destination: widget.destination),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: () async {
-                      final receipt = await Navigator.of(context)
-                          .push<MobileVisitReceipt>(
-                            MaterialPageRoute(
-                              builder: (context) => TouristRegistrationPage(
-                                api: widget.api,
-                                bootstrap: widget.bootstrap,
-                                initialDestination: widget.destination,
-                              ),
-                            ),
-                          );
-                      if (receipt != null) widget.onVisitSubmitted(receipt);
-                    },
-                    icon: const Icon(Icons.send_outlined),
-                    label: const Text('Register Visit'),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final receipt = await Navigator.of(context)
-                          .push<MobileFeedbackReceipt>(
-                            MaterialPageRoute(
-                              builder: (context) => FeedbackPage(
-                                api: widget.api,
-                                destination: widget.destination,
-                              ),
-                            ),
-                          );
-                      if (receipt != null) {
-                        widget.onFeedbackSubmitted(receipt);
-                        _fetchDetail();
-                      }
-                    },
-                    icon: const Icon(Icons.star_border),
-                    label: const Text('Share Feedback'),
-                  ),
                   const SizedBox(height: 24),
-                  SectionHeader(title: 'Ratings & Reviews'),
+                  SectionHeader(title: 'Tourist Ratings & Reviews'),
                   if (_loading)
                     const Center(
                       child: Padding(
@@ -946,18 +2604,19 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: const Column(
                         children: [
                           Icon(Icons.rate_review_outlined, color: Colors.grey, size: 32),
                           SizedBox(height: 8),
-                          Text('No reviews yet. Be the first!', style: TextStyle(color: Colors.grey)),
+                          Text('No reviews yet. Be the first explorer to review!', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     )
                   else
                     ..._recentFeedback.map((feedback) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.only(bottom: 14),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -965,7 +2624,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.grey.shade200),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2)),
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
                           ],
                         ),
                         child: Column(
@@ -1025,13 +2684,131 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                         ),
                       ),
                     )),
+                  const SizedBox(height: 80), // Padding for sticky bottom bar
                 ],
               ),
             ),
           ),
         ],
       ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              OutlinedButton(
+                onPressed: () async {
+                  final receipt = await Navigator.of(context).push<MobileFeedbackReceipt>(
+                    MaterialPageRoute(
+                      builder: (context) => FeedbackPage(
+                        api: widget.api,
+                        destination: widget.destination,
+                      ),
+                    ),
+                  );
+                  if (receipt != null) {
+                    widget.onFeedbackSubmitted(receipt);
+                    _fetchDetail();
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.star_outline, size: 18),
+                    SizedBox(width: 4),
+                    Text('Review'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final receipt = await Navigator.of(context).push<MobileVisitReceipt>(
+                      MaterialPageRoute(
+                        builder: (context) => TouristRegistrationPage(
+                          api: widget.api,
+                          bootstrap: widget.bootstrap,
+                          initialDestination: widget.destination,
+                        ),
+                      ),
+                    );
+                    if (receipt != null) widget.onVisitSubmitted(receipt);
+                  },
+                  icon: const Icon(Icons.confirmation_number_outlined),
+                  label: const Text('Plan Visit / Get Pass', style: TextStyle(fontWeight: FontWeight.w900)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  List<Widget> _buildAmenityChips(Destination destination) {
+    final type = destination.type.toLowerCase();
+    final List<Map<String, dynamic>> items = [];
+
+    if (type.contains('beach') || type.contains('island') || type.contains('cagbalete')) {
+      items.addAll([
+        {'icon': Icons.beach_access, 'label': 'White Sand Beach'},
+        {'icon': Icons.pool, 'label': 'Swimming / Snorkeling'},
+        {'icon': Icons.directions_boat, 'label': 'Boat Island Hop'},
+        {'icon': Icons.cabin, 'label': 'Cottages & Huts'},
+        {'icon': Icons.wifi, 'label': 'Wi-Fi Area'},
+        {'icon': Icons.restaurant, 'label': 'Food & Drinks'},
+        {'icon': Icons.shower, 'label': 'Clean Restrooms'},
+      ]);
+    } else if (type.contains('camp') || type.contains('resort')) {
+      items.addAll([
+        {'icon': Icons.cabin, 'label': 'Glamping & Tents'},
+        {'icon': Icons.local_fire_department, 'label': 'Bonfire Area'},
+        {'icon': Icons.wifi, 'label': 'Wi-Fi Available'},
+        {'icon': Icons.local_parking, 'label': 'Vehicle Parking'},
+        {'icon': Icons.restaurant, 'label': 'Grill / Dining'},
+        {'icon': Icons.solar_power, 'label': '24/7 Electricity'},
+      ]);
+    } else if (type.contains('falls') || type.contains('nature')) {
+      items.addAll([
+        {'icon': Icons.water_drop, 'label': 'Freshwater Pool'},
+        {'icon': Icons.hiking, 'label': 'Eco Trail Trek'},
+        {'icon': Icons.photo_camera, 'label': 'Scenic Views'},
+        {'icon': Icons.table_restaurant, 'label': 'Picnic Sheds'},
+      ]);
+    } else {
+      items.addAll([
+        {'icon': Icons.account_balance, 'label': 'Historical Marker'},
+        {'icon': Icons.camera_alt, 'label': 'Photo Spot'},
+        {'icon': Icons.directions_walk, 'label': 'Walking Tour'},
+        {'icon': Icons.info_outline, 'label': 'Tourism Guide'},
+      ]);
+    }
+
+    return items
+        .map((item) => AmenityChip(
+              icon: item['icon'] as IconData,
+              label: item['label'] as String,
+            ))
+        .toList();
   }
 }
 
@@ -1259,8 +3036,16 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       children: [
         // ── 1. Tourist Info (Katulad sa Web System) ──
         const FormSectionTitle('1. Tourist Info'),
-        AppTextField(controller: _firstName, label: 'First name *'),
-        AppTextField(controller: _lastName, label: 'Last name *'),
+        AppTextField(
+          controller: _firstName,
+          label: 'First name *',
+          textCapitalization: TextCapitalization.words,
+        ),
+        AppTextField(
+          controller: _lastName,
+          label: 'Last name *',
+          textCapitalization: TextCapitalization.words,
+        ),
         AppTextField(
           controller: _contact,
           label: 'Contact number *',
@@ -1520,8 +3305,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
     setState(() => _submitting = true);
 
-    final firstName = _firstName.text.trim();
-    final lastName = _lastName.text.trim();
+    final firstName = formatProperName(_firstName.text);
+    final lastName = formatProperName(_lastName.text);
     final fullName = '$firstName $lastName'.trim();
 
     try {
@@ -1563,20 +3348,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           arrivalDate: _arrivalDate,
           totalVisitors: _visitors,
         );
-        await showSubmissionDialog(
-          context,
-          title: 'Visit registered',
-          referenceLabel: 'Survey ID',
-          referenceValue: receipt.reference,
-          message:
-              'This record was saved to the Tourism Web System and can be checked in Booking Management.',
-          details: [
-            'Tourist: ${receipt.fullName}',
-            'Destination: ${receipt.destination.name}',
-            'Visitors: ${receipt.totalVisitors}',
-            'Arrival date: ${shortDate(receipt.arrivalDate)}',
-            'Status: ${receipt.displayStatus}',
-          ],
+        await showDialog(
+          context: context,
+          builder: (context) => TouristDigitalPassModal(receipt: receipt),
         );
         if (mounted) Navigator.of(context).pop(receipt);
       }

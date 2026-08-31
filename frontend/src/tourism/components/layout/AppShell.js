@@ -90,7 +90,7 @@ function AppShell() {
 
   return (
     <div className="tourism-layout">
-      <LoadingOverlay visible={actionLoading} message="Please wait..." />
+      <LoadingOverlay visible={actionLoading} message="Please wait..." theme="tourism" />
       {sidebarOpen && <Sidebar />}
 
       <main className="tourism-main">

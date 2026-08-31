@@ -175,13 +175,36 @@ class IntroSlide extends StatelessWidget {
   }
 }
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.onContinue});
 
   final VoidCallback onContinue;
 
   @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  bool _isLoading = false;
+
+  void _handleLogin() {
+    setState(() => _isLoading = true);
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) {
+        widget.onContinue();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const TourismLoadingScreen(
+        message: 'Signing In to Mauban Tourism...',
+        subtext: 'Synchronizing tourist profile and destinations...',
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -189,7 +212,7 @@ class LoginPage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/tourism_logo.jpg', width: 80, height: 80),
+              Image.asset('assets/tourism_logo.jpg', width: 88, height: 88),
               const SizedBox(height: 20),
               const Text(
                 'Welcome Back',
@@ -201,28 +224,93 @@ class LoginPage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.muted),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 32),
               LoginButton(
                 icon: Icons.g_mobiledata,
                 label: 'Continue with Google',
-                onTap: onContinue,
+                onTap: _handleLogin,
               ),
               LoginButton(
                 icon: Icons.facebook,
                 label: 'Continue with Facebook',
-                onTap: onContinue,
+                onTap: _handleLogin,
               ),
-              LoginButton(
-                icon: Icons.apple,
-                label: 'Continue with Apple',
-                onTap: onContinue,
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'OR RESORT STAFF',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+                ],
               ),
-              LoginButton(
-                icon: Icons.person_outline,
-                label: 'Continue as Guest',
-                onTap: onContinue,
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    openStaffQrPortalWithAuth(
+                      context,
+                      api: const TourismApi(),
+                      bootstrap: MobileBootstrap.fallback(),
+                    );
+                  },
+                  icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF14532D)),
+                  label: const Text(
+                    'Resort Staff QR Portal',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF14532D),
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Color(0xFF14532D), width: 1.5),
+                    backgroundColor: const Color(0xFFF0FDF4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const SanitationStandaloneBootstrap(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.health_and_safety_outlined, color: Color(0xFF0F766E)),
+                  label: const Text(
+                    'LGU Sanitary Inspector Portal',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F766E),
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Color(0xFF0F766E), width: 1.5),
+                    backgroundColor: const Color(0xFFF0FDFA),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               const Text(
                 'By continuing, you agree to our Terms of Service and Privacy Policy.',
                 textAlign: TextAlign.center,

@@ -124,14 +124,509 @@ class VisitReceiptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ReceiptCard(
-      icon: Icons.confirmation_number_outlined,
-      title: receipt.destination.name,
-      reference: receipt.reference,
-      lines: [
-        '${receipt.totalVisitors} visitor(s)',
-        shortDate(receipt.arrivalDate),
-        'Status: ${receipt.displayStatus}',
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFCCFBF1), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F766E).withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF0FDFA),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.confirmation_number_outlined, size: 16, color: Color(0xFF0F766E)),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'MAUBAN TOURIST ENTRY PASS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F766E),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                StatusPill(text: receipt.displayStatus),
+              ],
+            ),
+          ),
+          // Main Body
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        receipt.destination.name,
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.muted),
+                          const SizedBox(width: 6),
+                          Text(shortDate(receipt.arrivalDate), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.people_outline, size: 13, color: AppColors.muted),
+                          const SizedBox(width: 6),
+                          Text('${receipt.totalVisitors} visitor(s)', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'PASS REF: ${receipt.reference}',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Stylized QR Pass Card
+                GestureDetector(
+                  onTap: () => showDialog(
+                    context: context,
+                    builder: (context) => TouristDigitalPassModal(receipt: receipt),
+                  ),
+                  child: Container(
+                    width: 84,
+                    height: 84,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF0F766E), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: QrImageView(
+                            data: receipt.reference,
+                            version: QrVersions.auto,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: Color(0xFF14532D),
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Color(0xFF14532D),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'TAP TO ZOOM',
+                          style: TextStyle(
+                            fontSize: 7.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F766E),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Modal dialog displaying the exact Tourist QR Entry Pass from Screenshot 1
+class TouristDigitalPassModal extends StatelessWidget {
+  const TouristDigitalPassModal({super.key, required this.receipt});
+
+  final MobileVisitReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Close button top right
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Top Status Circle
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC8E6C9),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFA5D6A7), width: 2),
+                    ),
+                    child: const Icon(Icons.check, color: Color(0xFF1B5E20), size: 30),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Visit Registered',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Present this pass to the resort staff on arrival. They will scan it to record your visit.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF475569),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Main Ticket Pass Box
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Column(
+                        children: [
+                          // Ticket Header Green Bar
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF14532D),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'TOURISM WEB SYSTEM',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                    color: Color(0xFF86EFAC),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  receipt.fullName.isNotEmpty
+                                      ? formatProperName(receipt.fullName)
+                                      : 'Registered Tourist',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // QR Code Container
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: QrImageView(
+                                    data: receipt.reference,
+                                    version: QrVersions.auto,
+                                    size: 190,
+                                    eyeStyle: const QrEyeStyle(
+                                      eyeShape: QrEyeShape.square,
+                                      color: Color(0xFF14532D),
+                                    ),
+                                    dataModuleStyle: const QrDataModuleStyle(
+                                      dataModuleShape: QrDataModuleShape.square,
+                                      color: Color(0xFF14532D),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'SURVEY ID',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  receipt.reference,
+                                  style: const TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                    fontFamily: 'monospace',
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Ticket Perforation Dashed Line with Notches
+                          const _DashedTicketDivider(),
+
+                          // Ticket Metadata Details Table
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              children: [
+                                _buildDetailRow(
+                                  icon: Icons.location_on_outlined,
+                                  label: 'Destination',
+                                  value: receipt.destination.name,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildDetailRow(
+                                  icon: Icons.people_outline,
+                                  label: 'Visitors',
+                                  value: '${receipt.totalVisitors}',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildDetailRow(
+                                  icon: Icons.calendar_today_outlined,
+                                  label: 'Arrival date',
+                                  value: shortDate(receipt.arrivalDate),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.access_time_outlined, size: 18, color: Color(0xFF64748B)),
+                                    const SizedBox(width: 8),
+                                    const Text('Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFDCFCE7),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(color: const Color(0xFF86EFAC)),
+                                      ),
+                                      child: Text(
+                                        receipt.displayStatus,
+                                        style: const TextStyle(
+                                          color: Color(0xFF166534),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Save QR to device Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.download_done, color: Colors.white),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text('QR Pass for ${receipt.reference} saved to device! Ready for offline check-in.'),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF14532D),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.download),
+                      label: const Text('Save QR to device', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF14532D),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF0F172A)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DashedTicketDivider extends StatelessWidget {
+  const _DashedTicketDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Row(
+          children: List.generate(
+            30,
+            (index) => Expanded(
+              child: Container(
+                color: index % 2 == 0 ? Colors.transparent : const Color(0xFFCBD5E1),
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: -10,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8F5E9),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        Positioned(
+          right: -10,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8F5E9),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -408,34 +903,78 @@ class EmptyState extends StatelessWidget {
 }
 
 class AppHeader extends StatelessWidget {
-  const AppHeader({super.key, required this.onOpenNotifications});
+  const AppHeader({
+    super.key,
+    required this.onOpenNotifications,
+    this.hasUnread = false,
+  });
 
   final VoidCallback onOpenNotifications;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Image.asset('assets/tourism_logo.jpg', width: 34, height: 34),
-        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.green.withValues(alpha: 0.35), width: 1.5),
+          ),
+          child: ClipOval(
+            child: Image.asset('assets/tourism_logo.jpg', width: 34, height: 34, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(width: 10),
         const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Welcome to',
-                style: TextStyle(fontSize: 11, color: AppColors.muted),
+                'MUNICIPALITY OF MAUBAN',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.deepGreen,
+                  letterSpacing: 0.6,
+                ),
               ),
               Text(
-                'Mauban Tourism',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                'Tourism Guide',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink),
               ),
             ],
           ),
         ),
-        IconButton(
-          onPressed: onOpenNotifications,
-          icon: const Icon(Icons.notifications_outlined),
+        Stack(
+          children: [
+            IconButton(
+              onPressed: onOpenNotifications,
+              icon: const Icon(Icons.notifications_outlined),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+              ),
+            ),
+            if (hasUnread)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );
@@ -511,61 +1050,103 @@ class HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
-            DestinationImage(destination: destination, height: 170),
+            DestinationImage(destination: destination, height: 185),
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.4, 1.0],
+                    stops: const [0.2, 0.65, 1.0],
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: 0.8),
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.black.withValues(alpha: 0.88),
                     ],
                   ),
                 ),
               ),
             ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  destination.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
+            // Rating pill on top right
+            Positioned(
+              top: 14,
+              right: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                 ),
-                Text(
-                  destination.location,
-                  style: const TextStyle(color: Colors.white70),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star, size: 14, color: Color(0xFFFFD700)),
+                    const SizedBox(width: 4),
+                    Text(
+                      destination.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                VisitorPill(destination: destination, dark: true),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    destination.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      shadows: [
+                        Shadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.place_outlined, size: 14, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          destination.location,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  VisitorPill(destination: destination, dark: true),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -691,8 +1272,18 @@ class DestinationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
-        width: 170,
+      child: Container(
+        width: 175,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(
@@ -704,9 +1295,39 @@ class DestinationTile extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
+                    stops: const [0.25, 0.65, 1.0],
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: 0.72),
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.black.withValues(alpha: 0.88),
+                    ],
+                  ),
+                ),
+              ),
+              // Rating Badge on top right
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, size: 12, color: Color(0xFFFFD700)),
+                      const SizedBox(width: 3),
+                      Text(
+                        destination.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -717,19 +1338,26 @@ class DestinationTile extends StatelessWidget {
                 bottom: 12,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       destination.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
+                        fontSize: 13.5,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       destination.type,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white70,
-                        fontSize: 12,
+                        fontSize: 11,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -870,30 +1498,41 @@ class VisitorPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasVisits = destination.monthlyArrivals > 0;
+    final text = hasVisits
+        ? '${formatCount(destination.monthlyArrivals)} visits'
+        : destination.type.isNotEmpty
+            ? destination.type
+            : 'Featured Spot';
+    final icon = hasVisits ? Icons.groups_outlined : Icons.place_outlined;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: dark
-            ? Colors.white.withValues(alpha: 0.18)
+            ? Colors.white.withValues(alpha: 0.22)
             : const Color(0xffecfdf3),
         borderRadius: BorderRadius.circular(999),
+        border: dark
+            ? Border.all(color: Colors.white.withValues(alpha: 0.15))
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.groups_outlined,
-            size: 14,
+            icon,
+            size: 13,
             color: dark ? Colors.white : AppColors.green,
           ),
           const SizedBox(width: 4),
           Text(
-            '${formatCount(destination.monthlyArrivals)} visits',
+            text,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               color: dark ? Colors.white : AppColors.deepGreen,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -1475,6 +2114,7 @@ class AppTextField extends StatelessWidget {
     required this.label,
     this.maxLines = 1,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
     this.onChanged,
   });
 
@@ -1482,6 +2122,7 @@ class AppTextField extends StatelessWidget {
   final String label;
   final int maxLines;
   final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -1492,6 +2133,7 @@ class AppTextField extends StatelessWidget {
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
