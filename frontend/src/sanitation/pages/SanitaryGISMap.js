@@ -61,6 +61,26 @@ const communityReportStatusFilters = [
   { value: "investigating", label: "In Review" },
 ];
 
+function getCategoryMeta(category) {
+  const cat = (category || "").toLowerCase();
+  if (cat.includes("garbage") || cat.includes("waste") || cat.includes("dump") || cat.includes("solid")) {
+    return { icon: "🗑️", label: "Solid Waste", bg: "#fee2e2", color: "#991b1b" };
+  }
+  if (cat.includes("drain") || cat.includes("canal") || cat.includes("clog") || cat.includes("water") || cat.includes("flood")) {
+    return { icon: "💧", label: "Drainage", bg: "#e0f2fe", color: "#0369a1" };
+  }
+  if (cat.includes("septic") || cat.includes("sewage") || cat.includes("toilet") || cat.includes("odor") || cat.includes("leak")) {
+    return { icon: "⚠️", label: "Septic / Odor", bg: "#fef3c7", color: "#92400e" };
+  }
+  if (cat.includes("animal") || cat.includes("stray") || cat.includes("mosquito") || cat.includes("pest") || cat.includes("dengue")) {
+    return { icon: "🦟", label: "Vector / Pest", bg: "#f3e8ff", color: "#6b21a8" };
+  }
+  if (cat.includes("food") || cat.includes("canteen") || cat.includes("restaurant") || cat.includes("hygiene")) {
+    return { icon: "🍽️", label: "Food Hygiene", bg: "#dcfce7", color: "#166534" };
+  }
+  return { icon: "📢", label: category || "Concern", bg: "#f1f5f9", color: "#334155" };
+}
+
 function SanitaryGISMap() {
   const location = useLocation();
   const { establishments, householdRecords, complaintData, loading, error, refreshComplaintData } =
@@ -71,6 +91,14 @@ function SanitaryGISMap() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("All Barangays");
   const [selectedItemId, setSelectedItemId] = useState(location.state?.reportId || null);
+  const [resetKey, setResetKey] = useState(0);
+
+  function handleResetView() {
+    setSelectedItemId(null);
+    setBarangayFilter("All Barangays");
+    setStatusFilter("all");
+    setResetKey((prev) => prev + 1);
+  }
 
   useEffect(() => {
     if (location.state?.mode) {
@@ -390,6 +418,15 @@ function SanitaryGISMap() {
         <div className="gis-layer-toggle">
           <button
             type="button"
+            className="gis-reset-btn"
+            title="Reset map view to whole Mauban center"
+            onClick={handleResetView}
+          >
+            📍 Center Mauban
+          </button>
+
+          <button
+            type="button"
             className={mapLayer === "street" ? "active" : ""}
             onClick={() => setMapLayer("street")}
           >
@@ -453,7 +490,7 @@ function SanitaryGISMap() {
               url={tileLayer.url}
             />
 
-            <FitMapToItems items={filteredItems} selectedItemId={selectedItemId} />
+            <FitMapToItems items={filteredItems} selectedItemId={selectedItemId} resetKey={resetKey} />
 
             {/* Dynamic SVG Gradients for Barangay Polygons */}
             <svg style={{ width: 0, height: 0, position: "absolute" }}>
@@ -490,24 +527,64 @@ function SanitaryGISMap() {
                 onEachFeature={onEachFeature}
               />
             ) : (
-              filteredItems.map((item) => (
-                <Marker key={`${mapMode}-marker-${item.id}`} position={item.position}>
-                  <Popup>
-                    <div style={{ padding: "4px" }}>
-                      <strong style={{ fontSize: "14px", color: "#0f172a", display: "block" }}>
-                        {isCommunityMode
-                          ? item.complainant_name || "Anonymous"
-                          : item.business_name}
-                      </strong>
-                      <div style={{ fontSize: "12px", marginTop: "4px", color: "#64748b" }}>
-                        {isCommunityMode
-                          ? `${item.complaint_id} | ${item.barangay}`
-                          : `${item.business_type_name} | ${item.barangay}`}
+              filteredItems.map((item) => {
+                const catMeta = isCommunityMode ? getCategoryMeta(item.category) : null;
+                return (
+                  <Marker key={`${mapMode}-marker-${item.id}`} position={item.position}>
+                    <Popup>
+                      <div style={{ padding: "6px", minWidth: "170px" }}>
+                        {isCommunityMode ? (
+                          <>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                              <span style={{ 
+                                fontSize: "11px", 
+                                fontWeight: "800", 
+                                padding: "2px 8px", 
+                                borderRadius: "999px",
+                                background: catMeta.bg,
+                                color: catMeta.color
+                              }}>
+                                {catMeta.icon} {catMeta.label}
+                              </span>
+                              <span style={{
+                                fontSize: "10px",
+                                fontWeight: "900",
+                                textTransform: "uppercase",
+                                color: item.priority === "high" ? "#dc2626" : "#d97706"
+                              }}>
+                                [{item.priority || "Medium"}]
+                              </span>
+                            </div>
+                            <strong style={{ fontSize: "14px", color: "#0f172a", display: "block" }}>
+                              {item.complainant_name || "Anonymous Citizen"}
+                            </strong>
+                            <div style={{ fontSize: "12px", marginTop: "4px", color: "#475569" }}>
+                              {item.complaint_id} • Brgy. {item.barangay}
+                            </div>
+                            {item.description ? (
+                              <div style={{ fontSize: "11.5px", marginTop: "6px", color: "#64748b", fontStyle: "italic", borderTop: "1px solid #e2e8f0", paddingTop: "4px" }}>
+                                "{item.description.length > 70 ? item.description.substring(0, 70) + '...' : item.description}"
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <strong style={{ fontSize: "14px", color: "#0f172a", display: "block" }}>
+                              {item.business_name}
+                            </strong>
+                            <div style={{ fontSize: "12px", marginTop: "4px", color: "#475569" }}>
+                              {item.business_type_name} • Brgy. {item.barangay}
+                            </div>
+                            <div style={{ fontSize: "11.5px", marginTop: "4px", color: "#166534", fontWeight: "700" }}>
+                              Status: {item.compliance_status_label}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))
+                    </Popup>
+                  </Marker>
+                );
+              })
             )}
           </MapContainer>
 
@@ -663,10 +740,15 @@ function MapSummaryCard({ label, value, color }) {
 
 
 
-function FitMapToItems({ items, selectedItemId }) {
+function FitMapToItems({ items, selectedItemId, resetKey }) {
   const map = useMap();
 
   useEffect(() => {
+    if (resetKey > 0) {
+      map.flyTo(maubanCenter, 14, { duration: 0.6 });
+      return;
+    }
+
     if (selectedItemId) {
       const selected = items.find((i) => i.id === selectedItemId);
       if (selected && selected.position) {
@@ -687,7 +769,7 @@ function FitMapToItems({ items, selectedItemId }) {
 
     const bounds = items.map((item) => item.position);
     map.fitBounds(bounds, { padding: [36, 36] });
-  }, [items, map, selectedItemId]);
+  }, [items, map, selectedItemId, resetKey]);
 
   return null;
 }

@@ -3,6 +3,10 @@ import {
   FiCheckCircle,
   FiClipboard,
   FiHome,
+  FiPlusCircle,
+  FiMapPin,
+  FiFileText,
+  FiFlag,
 } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import { useSanitationData } from "../context/SanitationDataContext";
@@ -54,6 +58,22 @@ function SanitationDashboard() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+
+      {/* Quick Action Toolbar */}
+      <div className="sanitation-quick-toolbar">
+        <Link to="/sanitation/inspections" className="sanitation-quick-btn primary">
+          <FiPlusCircle /> New Inspection
+        </Link>
+        <Link to="/sanitation/establishments" className="sanitation-quick-btn">
+          <FiFileText /> Register Establishment
+        </Link>
+        <Link to="/sanitation/gis-map" className="sanitation-quick-btn">
+          <FiMapPin /> Open GIS Map
+        </Link>
+        <Link to="/sanitation/community-report" className="sanitation-quick-btn">
+          <FiFlag /> Community Concerns
+        </Link>
+      </div>
 
       <div className="sanitation-stat-grid">
         <StatCard
@@ -228,7 +248,7 @@ function SanitationDashboard() {
 
         <AlertPanel
           title="Complaint Follow-ups"
-          link="/sanitation/complaints"
+          link="/sanitation/community-report"
           items={(alerts.complaints || []).map((item) => ({
             id: item.id,
             title: item.establishment_name || item.barangay,

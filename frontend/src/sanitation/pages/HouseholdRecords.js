@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiAlertTriangle,
   FiChevronLeft,
@@ -8,14 +9,169 @@ import {
   FiEdit2,
   FiEye,
   FiHome,
-  FiLock,
+  FiMapPin,
   FiPlus,
+  FiPrinter,
   FiSearch,
   FiX,
 } from "react-icons/fi";
-import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
+
+export const OFFICIAL_MAUBAN_BARANGAYS = [
+  "Abo-abo",
+  "Alitap",
+  "Baao",
+  "Bagong Bayan",
+  "Balaybalay",
+  "Bato",
+  "Cagbalete I",
+  "Cagbalete II",
+  "Cagsiay I",
+  "Cagsiay II",
+  "Cagsiay III",
+  "Concepcion",
+  "Daungan",
+  "Liwayway",
+  "Lual",
+  "Lual Rural",
+  "Lucutan",
+  "Luya-luya",
+  "Mabato",
+  "Macasin",
+  "Polo",
+  "Remedios I",
+  "Remedios II",
+  "Rizaliana",
+  "Rosario",
+  "Sadsaran",
+  "San Gabriel",
+  "San Isidro",
+  "San Jose",
+  "San Lorenzo",
+  "San Miguel",
+  "San Rafael",
+  "San Roque",
+  "San Vicente",
+  "Santa Lucia",
+  "Santo Angel",
+  "Santo Niño",
+  "Santol",
+  "Soledad",
+  "Tapucan",
+];
+
+function toTitleCase(str) {
+  if (!str) return "";
+  return str.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function printHouseholdProfile(record) {
+  if (!record) return;
+
+  const printedAt = new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+  }).format(new Date());
+
+  const printWindow = window.open("", "_blank", "width=750,height=850");
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Household Sanitation Survey Profile - ${record.household_code}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; line-height: 1.4; }
+          .header { text-align: center; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 20px; }
+          .header p { margin: 2px 0; font-size: 12px; color: #475569; }
+          .header h1 { margin: 4px 0 2px; font-size: 19px; text-transform: uppercase; color: #065f46; letter-spacing: 0.5px; }
+          .header h2 { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: #1e293b; }
+          .title-strip { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px 14px; border-radius: 6px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+          .title-strip strong { font-size: 15px; color: #065f46; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+          .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; background: #fafafa; }
+          .box span { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .box strong { font-size: 13px; color: #0f172a; }
+          .section { border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 16px; }
+          .section h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 60px; }
+          .sig-line { border-top: 1px solid #0f172a; text-align: center; padding-top: 6px; font-size: 12px; }
+          .sig-line small { display: block; font-size: 10px; color: #64748b; margin-top: 2px; }
+          @media print { body { margin: 16px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <p>Republic of the Philippines • Province of Quezon</p>
+          <h1>Municipality of Mauban</h1>
+          <h2>Municipal Health Office — Sanitation Section</h2>
+          <p style="margin-top: 4px; font-size: 11px;">Document Generated: ${printedAt}</p>
+        </div>
+
+        <div class="title-strip">
+          <strong>HOUSEHOLD ENVIRONMENTAL SANITATION & WATER PROFILE</strong>
+          <span>ID: ${record.household_code || "N/A"}</span>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <span>Household Head</span>
+            <strong>${record.household_head}</strong>
+          </div>
+          <div class="box">
+            <span>Barangay & Address</span>
+            <strong>Brgy. ${record.barangay} ${record.address ? "• " + record.address : ""}</strong>
+          </div>
+          <div class="box">
+            <span>Total Family Members</span>
+            <strong>${record.total_members} (Male: ${record.male_count}, Female: ${record.female_count})</strong>
+          </div>
+          <div class="box">
+            <span>Toilet Facility (ZOD Standard)</span>
+            <strong>${record.toilet_type_label || record.toilet_type}</strong>
+          </div>
+          <div class="box">
+            <span>Water Access Level</span>
+            <strong>${record.water_level_label || record.water_level}</strong>
+          </div>
+          <div class="box">
+            <span>Water Sources</span>
+            <strong>${record.water_source || "None recorded"}</strong>
+          </div>
+          <div class="box">
+            <span>Waste Disposal System</span>
+            <strong>${record.waste_disposal_label || record.waste_disposal}</strong>
+          </div>
+          <div class="box">
+            <span>Compliance Classification</span>
+            <strong>${record.status_label || record.status}</strong>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Sanitary Inspector Survey & Assessment Remarks</h3>
+          <p>${record.remarks || "Standard residential sanitation survey profile recorded under DOH and LGU Mauban Zero Open Defecation guidelines."}</p>
+        </div>
+
+        <div class="signatures">
+          <div class="sig-line">
+            <strong>Sanitary Inspector / Barangay Health Worker</strong>
+            <small>Field Surveyor</small>
+          </div>
+          <div class="sig-line">
+            <strong>Municipal Health Officer (MHO)</strong>
+            <small>Attested & Verified</small>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+}
 
 const statusOptions = [
   { value: "all", label: "All Status" },
@@ -72,21 +228,24 @@ const statusFormOptions = [
 ];
 
 const emptyForm = {
+  first_name: "",
+  last_name: "",
   household_head: "",
   barangay: "",
   address: "",
   male_count: 0,
   female_count: 0,
-  toilet_type: "water_sealed",
+  toilet_type: "none",
   water_level: "",
   water_source: [],
   waste_disposal: "collected",
   status: "good_standing",
-  last_survey_date: "",
+  last_survey_date: new Date().toISOString().slice(0, 10),
   remarks: "",
 };
 
 function HouseholdRecords() {
+  const navigate = useNavigate();
   const { barangays, householdRecords, householdDashboardData, loading, error, createHousehold, updateHousehold } =
     useSanitationData();
 
@@ -302,13 +461,34 @@ function HouseholdRecords() {
     const sourcesArray = record.water_source
       ? record.water_source.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
+
+    let firstName = "";
+    let lastName = "";
+    if (record.household_head) {
+      if (record.household_head.includes(",")) {
+        const parts = record.household_head.split(",");
+        lastName = parts[0].trim();
+        firstName = parts[1].trim();
+      } else {
+        const parts = record.household_head.trim().split(" ");
+        if (parts.length > 1) {
+          lastName = parts.pop();
+          firstName = parts.join(" ");
+        } else {
+          firstName = record.household_head;
+        }
+      }
+    }
+
     setForm({
+      first_name: firstName,
+      last_name: lastName,
       household_head: record.household_head || "",
       barangay: record.barangay || "",
       address: record.address || "",
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
-      toilet_type: record.toilet_type || "water_sealed",
+      toilet_type: record.toilet_type || "none",
       water_level: record.water_level || "",
       water_source: sourcesArray,
       waste_disposal: record.waste_disposal || "collected",
@@ -332,8 +512,15 @@ function HouseholdRecords() {
   }
 
   async function handleSaveAdd() {
-    if (!form.household_head.trim()) {
-      setFormError("Household Head is required.");
+    let finalHead = form.household_head.trim();
+    if (form.last_name.trim() && form.first_name.trim()) {
+      finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
+    } else if (form.last_name.trim() || form.first_name.trim()) {
+      finalHead = (form.last_name.trim() + " " + form.first_name.trim()).trim();
+    }
+
+    if (!finalHead) {
+      setFormError("Household Head Last name or First name is required.");
       return;
     }
     if (!form.barangay.trim()) {
@@ -347,6 +534,7 @@ function HouseholdRecords() {
       const waterLevel = computeWaterLevel(sourcesArray);
       await createHousehold({
         ...form,
+        household_head: finalHead,
         water_source: sourcesArray.join(", "),
         water_level: waterLevel || form.water_level,
         male_count: Number(form.male_count) || 0,
@@ -362,7 +550,14 @@ function HouseholdRecords() {
   }
 
   async function handleSaveEdit() {
-    if (!form.household_head.trim()) {
+    let finalHead = form.household_head.trim();
+    if (form.last_name.trim() && form.first_name.trim()) {
+      finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
+    } else if (form.last_name.trim() || form.first_name.trim()) {
+      finalHead = (form.last_name.trim() + " " + form.first_name.trim()).trim();
+    }
+
+    if (!finalHead) {
       setFormError("Household Head is required.");
       return;
     }
@@ -373,6 +568,7 @@ function HouseholdRecords() {
       const waterLevel = computeWaterLevel(sourcesArray);
       await updateHousehold(editRecord.id, {
         ...form,
+        household_head: finalHead,
         water_source: sourcesArray.join(", "),
         water_level: waterLevel || form.water_level,
         male_count: Number(form.male_count) || 0,
@@ -707,6 +903,18 @@ function HouseholdRecords() {
                       <div className="establishment-action-buttons">
                         <button
                           type="button"
+                          className="establishment-icon-btn locate"
+                          title="Locate on GIS Map"
+                          onClick={() =>
+                            navigate("/sanitation/gis-map", {
+                              state: { mode: "households", reportId: row.id },
+                            })
+                          }
+                        >
+                          <FiMapPin />
+                        </button>
+                        <button
+                          type="button"
                           className="establishment-icon-btn view"
                           title="View Household Details"
                           onClick={() => setViewRecord(row)}
@@ -763,9 +971,20 @@ function HouseholdRecords() {
                   {formatHouseholdStatus(viewRecord.status || viewRecord.status_label)}
                 </span>
               </div>
-              <button type="button" className="hh-modal-close" onClick={closeModals}>
-                <FiX />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="hh-modal-close"
+                  style={{ color: "#065f46" }}
+                  onClick={() => printHouseholdProfile(viewRecord)}
+                  title="Print Household Sanitation Profile Slip"
+                >
+                  <FiPrinter />
+                </button>
+                <button type="button" className="hh-modal-close" onClick={closeModals}>
+                  <FiX />
+                </button>
+              </div>
             </div>
 
             <div className="hh-modal-body">
@@ -793,7 +1012,12 @@ function HouseholdRecords() {
         <div className="hh-modal-overlay" onClick={closeModals}>
           <div className="hh-modal hh-modal-form" onClick={(e) => e.stopPropagation()}>
             <div className="hh-modal-header">
-              <h2>Add Household Record</h2>
+              <div>
+                <h2>Add Household Record</h2>
+                <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
+                  Sanitation and water access profile for the household survey.
+                </p>
+              </div>
               <button type="button" className="hh-modal-close" onClick={closeModals}>
                 <FiX />
               </button>
@@ -803,7 +1027,6 @@ function HouseholdRecords() {
               <HouseholdForm
                 form={form}
                 updateField={updateField}
-                barangayOptions={barangayOptions.filter((b) => b !== "all")}
                 formError={formError}
               />
             </div>
@@ -838,7 +1061,6 @@ function HouseholdRecords() {
               <HouseholdForm
                 form={form}
                 updateField={updateField}
-                barangayOptions={barangayOptions.filter((b) => b !== "all")}
                 formError={formError}
               />
             </div>
@@ -858,119 +1080,138 @@ function HouseholdRecords() {
   );
 }
 
-/* ── Reusable form shared by Add and Edit ── */
-function HouseholdForm({ form, updateField, barangayOptions, formError }) {
-  const { user } = useAuth();
-  const currentInspector = useMemo(() => {
-    if (user?.display_name && user.display_name !== "admin" && user.display_name !== "System Admin") {
-      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
-    }
-    if (user?.username === "inspector_maria") return "Insp. Maria Santos";
-    if (user?.username === "inspector_juan") return "Insp. Juan Dela Cruz";
-    return "Insp. Juan Dela Cruz";
-  }, [user]);
-
+/* ── Reusable form matching groupmate's exact UI design ── */
+function HouseholdForm({ form, updateField, formError }) {
   return (
     <div className="hh-form-grid">
       {formError && <p className="hh-form-error">{formError}</p>}
 
-      <div className="hh-form-group hh-full">
-        <label>Sanitary Inspector / Surveyor (Auto-Assigned)</label>
-        <div className="hh-inspector-stamp">
-          <FiLock />
-          <div>
-            <strong>{currentInspector}</strong>
-            <small>Active User Session • Verified Sanitary Inspector</small>
-          </div>
-        </div>
-      </div>
-
-      <div className="hh-form-group hh-full">
-        <label>Household Head *</label>
+      {/* Row 1: Household Head Last Name & First Name */}
+      <div className="hh-form-group">
+        <label>Household Head Last name *</label>
         <input
           type="text"
-          value={form.household_head}
-          onChange={(e) => updateField("household_head", e.target.value)}
-          placeholder="Full name of household head"
+          value={form.last_name}
+          onChange={(e) => {
+            const val = toTitleCase(e.target.value);
+            updateField("last_name", val);
+            updateField(
+              "household_head",
+              form.first_name ? `${val}, ${form.first_name}` : val
+            );
+          }}
+          placeholder="Last name"
         />
       </div>
 
       <div className="hh-form-group">
-        <label>Barangay *</label>
-        {barangayOptions.length > 0 ? (
-          <select
-            value={form.barangay}
-            onChange={(e) => updateField("barangay", e.target.value)}
-          >
-            <option value="">Select barangay...</option>
-            {barangayOptions.map((b) => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={form.barangay}
-            onChange={(e) => updateField("barangay", e.target.value)}
-            placeholder="Barangay name"
-          />
-        )}
+        <label>Household Head First name *</label>
+        <input
+          type="text"
+          value={form.first_name}
+          onChange={(e) => {
+            const val = toTitleCase(e.target.value);
+            updateField("first_name", val);
+            updateField(
+              "household_head",
+              form.last_name ? `${form.last_name}, ${val}` : val
+            );
+          }}
+          placeholder="First name"
+        />
       </div>
 
-      <div className="hh-form-group hh-full">
-        <label>Address</label>
+      {/* Row 2: Barangay & Address */}
+      <div className="hh-form-group">
+        <label>Barangay *</label>
+        <select
+          value={form.barangay}
+          onChange={(e) => updateField("barangay", e.target.value)}
+        >
+          <option value="">Select barangay...</option>
+          {OFFICIAL_MAUBAN_BARANGAYS.map((bgy) => (
+            <option key={bgy} value={bgy}>
+              {bgy}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="hh-form-group">
+        <label>Address *</label>
         <input
           type="text"
           value={form.address}
-          onChange={(e) => updateField("address", e.target.value)}
-          placeholder="House no., street, sitio"
+          onChange={(e) => updateField("address", toTitleCase(e.target.value))}
+          placeholder="House no., Street, sitio"
         />
       </div>
 
+      {/* Row 3: Male & Female Members */}
       <div className="hh-form-group">
-        <label>Male Members</label>
+        <label>Male Members *</label>
         <input
           type="number"
           min="0"
           value={form.male_count}
-          onChange={(e) => updateField("male_count", e.target.value)}
+          onChange={(e) => updateField("male_count", parseInt(e.target.value, 10) || 0)}
         />
       </div>
 
       <div className="hh-form-group">
-        <label>Female Members</label>
+        <label>Female Members *</label>
         <input
           type="number"
           min="0"
           value={form.female_count}
-          onChange={(e) => updateField("female_count", e.target.value)}
+          onChange={(e) => updateField("female_count", parseInt(e.target.value, 10) || 0)}
         />
       </div>
 
+      {/* Row 4: Toilet Type & Waste Disposal */}
       <div className="hh-form-group">
-        <label>Toilet Type</label>
-        <select value={form.toilet_type} onChange={(e) => updateField("toilet_type", e.target.value)}>
-          {toiletOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <label>Toilet Type *</label>
+        <select
+          value={form.toilet_type}
+          onChange={(e) => updateField("toilet_type", e.target.value)}
+        >
+          {toiletOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </div>
 
       <div className="hh-form-group">
-        <label>Waste Disposal</label>
-        <select value={form.waste_disposal} onChange={(e) => updateField("waste_disposal", e.target.value)}>
-          {wasteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <label>Waste Disposal*</label>
+        <select
+          value={form.waste_disposal}
+          onChange={(e) => updateField("waste_disposal", e.target.value)}
+        >
+          {wasteOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </div>
 
+      {/* Row 5: Water Source Multi-select */}
       <div className="hh-form-group hh-full">
-        <label>Water Source * <small style={{ color: "#6b7280", fontWeight: 400 }}>— Choose one or more; water level is assigned automatically</small></label>
+        <label>Water Source *</label>
         <WaterSourceMultiSelect
           selected={Array.isArray(form.water_source) ? form.water_source : []}
           onChange={(sources) => updateField("water_source", sources)}
         />
+        <small style={{ color: "#6b7280", marginTop: "4px", display: "block" }}>
+          Choose one or more source - the water level is assigned automatically.
+        </small>
       </div>
 
+      {/* Row 6: Water Level Display */}
       <div className="hh-form-group hh-full">
-        <label>Water Level <small style={{ color: "#6b7280", fontWeight: 400 }}>(auto-assigned)</small></label>
+        <label>Water Level (auto-assigned)</label>
         {(() => {
           const sources = Array.isArray(form.water_source) ? form.water_source : [];
           const level = computeWaterLevel(sources);
@@ -983,15 +1224,9 @@ function HouseholdForm({ form, updateField, barangayOptions, formError }) {
         })()}
       </div>
 
+      {/* Row 7: Survey Date & Status */}
       <div className="hh-form-group">
-        <label>Status</label>
-        <select value={form.status} onChange={(e) => updateField("status", e.target.value)}>
-          {statusFormOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-
-      <div className="hh-form-group">
-        <label>Last Survey Date</label>
+        <label>Survey Date</label>
         <input
           type="date"
           value={form.last_survey_date}
@@ -999,10 +1234,25 @@ function HouseholdForm({ form, updateField, barangayOptions, formError }) {
         />
       </div>
 
+      <div className="hh-form-group">
+        <label>Status</label>
+        <select
+          value={form.status}
+          onChange={(e) => updateField("status", e.target.value)}
+        >
+          {statusFormOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Row 8: Remarks */}
       <div className="hh-form-group hh-full">
         <label>Remarks</label>
         <textarea
-          rows={3}
+          rows={4}
           value={form.remarks}
           onChange={(e) => updateField("remarks", e.target.value)}
           placeholder="Additional notes..."

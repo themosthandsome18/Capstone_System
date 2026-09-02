@@ -381,7 +381,7 @@ class TouristDigitalPassModal extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'TOURISM WEB SYSTEM',
+                                  'LGU MAUBAN • TOURIST ENTRY PASS',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,

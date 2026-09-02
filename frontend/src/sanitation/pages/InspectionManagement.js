@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiBell,
   FiCalendar,
@@ -8,6 +9,7 @@ import {
   FiClipboard,
   FiDownload,
   FiLock,
+  FiMapPin,
   FiPrinter,
   FiSearch,
   FiX,
@@ -24,6 +26,7 @@ const statusOptions = [
 ];
 
 function InspectionManagement() {
+  const navigate = useNavigate();
   const {
     establishments,
     inspections,
@@ -423,6 +426,20 @@ function InspectionManagement() {
 
                       <td className="inspection-action-cell">
                         <div className="inspection-row-actions">
+                          <button
+                            type="button"
+                            className="inspection-icon-action locate"
+                            onClick={() =>
+                              navigate("/sanitation/gis-map", {
+                                state: { mode: "establishments", reportId: row.id },
+                              })
+                            }
+                            aria-label={`Locate ${row.business_name} on GIS Map`}
+                            title="Locate on GIS Map"
+                            data-tooltip="Locate on GIS Map"
+                          >
+                            <FiMapPin />
+                          </button>
                           <button
                             type="button"
                             className="inspection-icon-action print"

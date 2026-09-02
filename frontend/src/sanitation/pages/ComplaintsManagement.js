@@ -6,6 +6,7 @@ import {
   FiClock,
   FiFilter,
   FiMapPin,
+  FiPrinter,
   FiSearch,
   FiTrash2,
   FiUser,
@@ -807,6 +808,129 @@ function ReportListCard({ item, active, onSelect }) {
   );
 }
 
+export function printFieldworkActionSlip(report) {
+  if (!report) return;
+
+  const printedAt = new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+
+  const priorityLabel =
+    report.priority === "high"
+      ? "🔴 URGENT (24–48h SLA)"
+      : report.priority === "medium"
+      ? "🟡 STANDARD (3–5 Days)"
+      : "🟢 ROUTINE (7–14 Days)";
+
+  const printWindow = window.open("", "_blank", "width=750,height=850");
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Fieldwork Inspection Order - ${report.complaint_id}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 30px; color: #0f172a; line-height: 1.4; }
+          .header { text-align: center; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 20px; }
+          .header p { margin: 2px 0; font-size: 12px; color: #475569; }
+          .header h1 { margin: 6px 0 2px; font-size: 19px; text-transform: uppercase; color: #065f46; letter-spacing: 0.5px; }
+          .header h2 { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: #1e293b; }
+          .title-strip { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px 14px; border-radius: 6px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+          .title-strip strong { font-size: 15px; color: #065f46; }
+          .title-strip span { font-size: 12px; font-weight: 700; color: #334155; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+          .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; background: #fafafa; }
+          .box span { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .box strong { font-size: 13px; color: #0f172a; }
+          .section { border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 16px; }
+          .section h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px; }
+          .section p { margin: 0; font-size: 13px; white-space: pre-wrap; }
+          .fieldwork-checklist { margin-top: 14px; border-top: 1px dashed #94a3b8; padding-top: 12px; }
+          .fieldwork-checklist h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: #065f46; }
+          .notes-lines { border: 1px solid #cbd5e1; height: 110px; border-radius: 4px; margin-top: 6px; background: #fff; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 50px; }
+          .sig-line { border-top: 1px solid #0f172a; text-align: center; padding-top: 6px; font-size: 12px; }
+          .sig-line small { display: block; font-size: 10px; color: #64748b; margin-top: 2px; }
+          @media print { body { margin: 16px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <p>Republic of the Philippines • Province of Quezon</p>
+          <h1>Municipality of Mauban</h1>
+          <h2>Municipal Health Office — Sanitary Section</h2>
+          <p style="margin-top: 4px; font-size: 11px;">Document Generated: ${printedAt}</p>
+        </div>
+
+        <div class="title-strip">
+          <strong>FIELDWORK INSPECTION & ACTION ORDER SLIP</strong>
+          <span>REF: ${report.complaint_id || "N/A"}</span>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <span>Location / Barangay</span>
+            <strong>Brgy. ${report.barangay || "Unspecified"}</strong>
+          </div>
+          <div class="box">
+            <span>Inspection Urgency SLA</span>
+            <strong>${priorityLabel}</strong>
+          </div>
+          <div class="box">
+            <span>Category</span>
+            <strong>${report.category || "General Cleanliness"}</strong>
+          </div>
+          <div class="box">
+            <span>Assigned Sanitary Inspector</span>
+            <strong>${report.assigned_inspector || "Insp. Juan Dela Cruz"}</strong>
+          </div>
+          <div class="box">
+            <span>Scheduled Date & Time</span>
+            <strong>${report.inspection_scheduled_date || "Immediate"} ${report.inspection_scheduled_time ? "at " + report.inspection_scheduled_time : ""}</strong>
+          </div>
+          <div class="box">
+            <span>Complainant</span>
+            <strong>${report.complainant_name || "Anonymous Resident"} ${report.contact_number ? "(" + report.contact_number + ")" : ""}</strong>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Concern Description / Resident Statement</h3>
+          <p>${report.description || "No narrative description provided."}</p>
+        </div>
+
+        <div class="section">
+          <h3>Dispatcher & Triage Notes</h3>
+          <p>${report.action_taken || report.inspection_schedule_note || "Conduct on-site sanitation verification, photographic evidence gathering, and issue Sanitary Notice of Violation if applicable."}</p>
+        </div>
+
+        <div class="fieldwork-checklist">
+          <h4>Inspector On-Site Verification Findings & Corrective Orders:</h4>
+          <div class="notes-lines"></div>
+        </div>
+
+        <div class="signatures">
+          <div class="sig-line">
+            <strong>${report.assigned_inspector || "Sanitary Inspector"}</strong>
+            <small>Fieldwork Sanitary Inspector</small>
+          </div>
+          <div class="sig-line">
+            <strong>Municipal Health Officer (MHO)</strong>
+            <small>Approved by / Sanitary Division</small>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
 function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocationClick }) {
   const catInfo = getCategoryInfo(report.category);
 
@@ -817,9 +941,25 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
           <small>{report.complaint_id}</small>
           <h2>{reportTitle(report)}</h2>
         </div>
-        <button type="button" className="community-icon-btn" onClick={onDelete} title="Delete report">
-          <FiTrash2 />
-        </button>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            type="button"
+            className="community-icon-btn"
+            style={{ color: "#065f46", background: "#f0fdf4", borderColor: "#a7f3d0" }}
+            onClick={() => printFieldworkActionSlip(report)}
+            title="Print Fieldwork Inspection Order Slip"
+          >
+            <FiPrinter />
+          </button>
+          <button
+            type="button"
+            className="community-icon-btn"
+            onClick={onDelete}
+            title="Delete report"
+          >
+            <FiTrash2 />
+          </button>
+        </div>
       </div>
 
       {/* ── Category & Urgency Badge ── */}

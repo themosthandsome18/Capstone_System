@@ -282,34 +282,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SanitationStandaloneBootstrap(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.health_and_safety_outlined, color: Color(0xFF0F766E)),
-                  label: const Text(
-                    'LGU Sanitary Inspector Portal',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F766E),
-                      fontSize: 15,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Color(0xFF0F766E), width: 1.5),
-                    backgroundColor: const Color(0xFFF0FDFA),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
               const SizedBox(height: 20),
               const Text(
                 'By continuing, you agree to our Terms of Service and Privacy Policy.',

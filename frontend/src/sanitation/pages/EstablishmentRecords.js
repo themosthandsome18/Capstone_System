@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  FiAlertTriangle,
   FiArrowLeft,
   FiCheckCircle,
   FiChevronLeft,
@@ -20,6 +21,54 @@ import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { QRCodeSVG } from "qrcode.react";
+
+export const OFFICIAL_MAUBAN_BARANGAYS = [
+  "Abo-abo",
+  "Alitap",
+  "Baao",
+  "Bagong Bayan",
+  "Balaybalay",
+  "Bato",
+  "Cagbalete I",
+  "Cagbalete II",
+  "Cagsiay I",
+  "Cagsiay II",
+  "Cagsiay III",
+  "Concepcion",
+  "Daungan",
+  "Liwayway",
+  "Lual",
+  "Lual Rural",
+  "Lucutan",
+  "Luya-luya",
+  "Mabato",
+  "Macasin",
+  "Polo",
+  "Remedios I",
+  "Remedios II",
+  "Rizaliana",
+  "Rosario",
+  "Sadsaran",
+  "San Gabriel",
+  "San Isidro",
+  "San Jose",
+  "San Lorenzo",
+  "San Miguel",
+  "San Rafael",
+  "San Roque",
+  "San Vicente",
+  "Santa Lucia",
+  "Santo Angel",
+  "Santo Niño",
+  "Santol",
+  "Soledad",
+  "Tapucan",
+];
+
+function toTitleCase(str) {
+  if (!str) return "";
+  return str.replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 const initialForm = {
   business_name: "",
@@ -815,9 +864,11 @@ function RegisterEstablishmentModal({
           <span>Business Name</span>
           <input
             type="text"
-            placeholder="e.g. IOT MOTO"
+            placeholder="e.g. Cagbalete Bay Resort & Restaurant"
             value={form.business_name}
-            onChange={(event) => onChange("business_name", event.target.value)}
+            onChange={(event) =>
+              onChange("business_name", toTitleCase(event.target.value))
+            }
           />
         </label>
 
@@ -826,26 +877,27 @@ function RegisterEstablishmentModal({
             <span>Owner / Proprietor</span>
             <input
               type="text"
-              placeholder="Full Name"
+              placeholder="e.g. Juan C. Dela Cruz"
               value={form.owner_name}
-              onChange={(event) => onChange("owner_name", event.target.value)}
+              onChange={(event) =>
+                onChange("owner_name", toTitleCase(event.target.value))
+              }
             />
           </label>
 
           <label className="modal-field">
             <span>Barangay</span>
-            <input
-              list="establishment-barangay-options"
-              type="text"
-              placeholder="Select or type barangay"
+            <select
               value={form.barangay}
               onChange={(event) => onChange("barangay", event.target.value)}
-            />
-            <datalist id="establishment-barangay-options">
-              {barangayOptions.map((barangay) => (
-                <option key={barangay} value={barangay} />
+            >
+              <option value="">Select Barangay</option>
+              {OFFICIAL_MAUBAN_BARANGAYS.map((bgy) => (
+                <option key={bgy} value={bgy}>
+                  {bgy}
+                </option>
               ))}
-            </datalist>
+            </select>
           </label>
         </div>
 
@@ -853,9 +905,11 @@ function RegisterEstablishmentModal({
           <span>Complete Address</span>
           <input
             type="text"
-            placeholder="Complete business address"
+            placeholder="e.g. Gomez St., Brgy. Daungan, Mauban, Quezon"
             value={form.address}
-            onChange={(event) => onChange("address", event.target.value)}
+            onChange={(event) =>
+              onChange("address", toTitleCase(event.target.value))
+            }
           />
         </label>
 
@@ -864,7 +918,7 @@ function RegisterEstablishmentModal({
             <span>Contact Number</span>
             <input
               type="text"
-              placeholder="0917..."
+              placeholder="0917 123 4567"
               value={form.contact_number}
               onChange={(event) => onChange("contact_number", event.target.value)}
             />
@@ -893,8 +947,8 @@ function RegisterEstablishmentModal({
               value={form.permit_size}
               onChange={(event) => onChange("permit_size", event.target.value)}
             >
-              <option value="sp">SP</option>
-              <option value="large">Large</option>
+              <option value="sp">Small / Micro (SP)</option>
+              <option value="large">Large / Commercial</option>
             </select>
           </label>
 
@@ -920,6 +974,32 @@ function RegisterEstablishmentModal({
             </select>
           </label>
         </div>
+
+        {!form.has_permit ? (
+          <div
+            style={{
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              borderRadius: "8px",
+              padding: "10px 14px",
+              marginBottom: "14px",
+              fontSize: "12.5px",
+              color: "#92400e",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <FiAlertTriangle
+              style={{ flexShrink: 0, fontSize: "16px", color: "#d97706" }}
+            />
+            <span>
+              This establishment will be flagged as{" "}
+              <strong>"No Permit / For Immediate Inspection"</strong> in
+              Sanitary GIS Map and Dashboard.
+            </span>
+          </div>
+        ) : null}
 
         <label className="modal-field full">
           <span>Permit Number</span>
