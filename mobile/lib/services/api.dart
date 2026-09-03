@@ -141,15 +141,22 @@ class TourismApi {
     required String message,
     required int cleanlinessRating,
     required String sanitationComment,
+    List<XFile> photos = const [],
   }) {
-    return _post('/mobile/tourism/feedback/', {
-      'destination_id': destinationId,
+    final fields = {
+      'destination_id': '$destinationId',
       'reviewer': reviewer,
-      'rating': rating,
+      'rating': '$rating',
       'message': message,
-      'cleanliness_rating': cleanlinessRating,
+      'cleanliness_rating': '$cleanlinessRating',
       'sanitation_comment': sanitationComment,
-    });
+    };
+
+    if (photos.isNotEmpty) {
+      return _multipartPost('/mobile/tourism/feedback/', fields, photos);
+    }
+
+    return _post('/mobile/tourism/feedback/', fields);
   }
 
   Future<Map<String, dynamic>> submitSanitationReport({

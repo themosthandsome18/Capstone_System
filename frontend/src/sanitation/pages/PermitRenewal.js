@@ -190,14 +190,111 @@ function PermitRenewal() {
     }
   }
 
-  async function handleAction(row, action) {
+  async function handleAdvance(row) {
     setSaving(true);
-
     try {
-      await updateRenewal(row.id, { action });
-      setDetail(null);
+      const updated = await updateRenewal(row.id, { action: "advance_stage" });
+      if (updated) {
+        setDetail((current) => (current && current.id === row.id ? { ...current, ...updated } : updated));
+      }
+      await refreshRenewalData(filters);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRelease(row) {
+    setSaving(true);
+    try {
+      const updated = await updateRenewal(row.id, { action: "mark_released" });
+      if (updated) {
+        setDetail((current) =>
+          current && current.id === row.id
+            ? { ...current, ...updated, stage: "released", stage_label: "Released" }
+            : updated
+        );
+      }
+      await refreshRenewalData(filters);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMarkPaid(row, paymentMethod, orNumber) {
+    setSaving(true);
+    try {
+      const updated = await updateRenewal(row.id, {
+        action: "mark_paid",
+        payment_method: paymentMethod,
+        or_number: orNumber,
+      });
+      if (updated) {
+        setDetail((current) =>
+          current && current.id === row.id
+            ? { ...current, ...updated, payment_status: "paid", payment_status_label: "Paid" }
+            : updated
+        );
+      }
+      await refreshRenewalData(filters);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMarkUnpaid(row) {
+    setSaving(true);
+    try {
+      const updated = await updateRenewal(row.id, { action: "mark_unpaid" });
+      if (updated) {
+        setDetail((current) =>
+          current && current.id === row.id
+            ? { ...current, ...updated, payment_status: "unpaid", payment_status_label: "Unpaid" }
+            : updated
+        );
+      }
+      await refreshRenewalData(filters);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleResolveOverdue(row) {
+    setSaving(true);
+    try {
+      const updated = await updateRenewal(row.id, { action: "resolve_overdue" });
+      if (updated) {
+        setDetail((current) =>
+          current && current.id === row.id ? { ...current, ...updated } : updated
+        );
+      }
+      await refreshRenewalData(filters);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleRequirementInDetail(row, requirement) {
+    const currentSubmitted = row.submitted_requirements || [];
+    const exists = currentSubmitted.includes(requirement);
+    const nextSubmitted = exists
+      ? currentSubmitted.filter((r) => r !== requirement)
+      : [...currentSubmitted, requirement];
+
+    setDetail((current) => ({
+      ...current,
+      submitted_requirements: nextSubmitted,
+    }));
+
+    try {
+      await updateRenewal(row.id, {
+        submitted_requirements: nextSubmitted,
+      });
+      await refreshRenewalData(filters);
+    } catch {
+      setDetail((current) => ({
+        ...current,
+        submitted_requirements: currentSubmitted,
+      }));
     }
   }
 
@@ -207,7 +304,7 @@ function PermitRenewal() {
 
   return (
     <div className="renewal-page">
-      <LoadingOverlay visible={saving} message="Updating permit renewal stage, please wait..." />
+      <LoadingOverlay visible={saving && isNewOpen} message="Filing permit renewal, please wait..." />
       <div className="renewal-header">
         <div>
           <h1>Sanitary Permit Renewal</h1>
@@ -326,8 +423,8 @@ function PermitRenewal() {
                   <td>
                     <div className="renewal-actions">
                       <button type="button" onClick={() => setDetail(row)} title="View Full Details" disabled={saving}><FiEye /></button>
-                      <button type="button" onClick={() => handleAction(row, "advance_stage")} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
-                      <button type="button" onClick={() => handleAction(row, "mark_released")} title="Mark as Released" disabled={saving}><FiPackage /></button>
+                      <button type="button" onClick={() => handleAdvance(row)} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
+                      <button type="button" onClick={() => handleRelease(row)} title="Mark as Released" disabled={saving}><FiPackage /></button>
                     </div>
                   </td>
                 </tr>
@@ -422,8 +519,12 @@ function PermitRenewal() {
           establishments={establishments}
           businessTypes={businessTypes}
           onClose={() => setDetail(null)}
-          onAdvance={() => handleAction(detail, "advance_stage")}
-          onRelease={() => handleAction(detail, "mark_released")}
+          onAdvance={() => handleAdvance(detail)}
+          onRelease={() => handleRelease(detail)}
+          onMarkPaid={(r, method, or) => handleMarkPaid(r, method, or)}
+          onMarkUnpaid={(r) => handleMarkUnpaid(r)}
+          onResolveOverdue={(r) => handleResolveOverdue(r)}
+          onToggleRequirement={(r, req) => handleToggleRequirementInDetail(r, req)}
           saving={saving}
         />
       ) : null}
@@ -450,41 +551,128 @@ function RenewalDetailModal({
   onClose,
   onAdvance,
   onRelease,
+  onMarkPaid,
+  onMarkUnpaid,
+  onResolveOverdue,
+  onToggleRequirement,
   saving,
 }) {
+  const [paymentMethod, setPaymentMethod] = useState("Cash (Treasury)");
+  const [orNumber, setOrNumber] = useState("");
+
+  const daysLeft = getDaysLeft(row.expiration_date);
+  const isOverdue = daysLeft < 0 || row.stage === "lapsed";
+
   const submitted = row.submitted_requirements || [];
-  const requirementOptions = getEstablishmentRequirements(
-    row.establishment,
+  const baseRequirements = getEstablishmentRequirements(
+    row,
     establishments,
     businessTypes
   );
 
+  // Union of baseRequirements and submitted (no requirement is ever omitted or mismatched)
+  const allRequirements = Array.from(
+    new Set([...baseRequirements, ...submitted])
+  );
+
+  const compliedCount = allRequirements.filter((r) => submitted.includes(r)).length;
+  const progressPercent = allRequirements.length
+    ? Math.round((compliedCount / allRequirements.length) * 100)
+    : 100;
+
+  const isPaid = row.payment_status === "paid";
+  const isPartial = row.payment_status === "partial";
+
   return (
-    <div className="renewal-modal-backdrop">
-      <div className="renewal-detail-modal">
+    <div className="renewal-modal-backdrop" onClick={onClose}>
+      <div className="renewal-detail-modal" onClick={(e) => e.stopPropagation()}>
         <div className="renewal-detail-title">
           <div>
             <h2>{row.establishment_name}</h2>
-            <p>{row.renewal_id} - Permit {row.permit_number}</p>
+            <p>
+              {row.renewal_id} • Permit #{row.permit_number} • {row.business_type_name}
+            </p>
           </div>
-          <button type="button" onClick={onClose}><FiX /></button>
+          <button type="button" onClick={onClose}>
+            <FiX />
+          </button>
         </div>
 
+        {/* OVERDUE ALERT BANNER */}
+        {isOverdue && (
+          <div className="renewal-overdue-banner">
+            <div className="renewal-overdue-info">
+              <FiAlertTriangle />
+              <div>
+                <strong>Overdue Application Warning</strong>
+                <p>
+                  Permit expired on {formatDate(row.expiration_date)} ({Math.abs(daysLeft)} days overdue).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="renewal-overdue-btn"
+              onClick={() => onResolveOverdue(row)}
+              disabled={saving}
+              title="Reset expiration to next year and restore good standing"
+            >
+              <FiRefreshCw /> ⚡ Clear Overdue &amp; Extend +1 Yr
+            </button>
+          </div>
+        )}
+
+        {/* DETAILS INFO GRID */}
         <div className="renewal-detail-info">
           <Info label="Establishment" value={row.establishment_name} />
           <Info label="Owner" value={row.owner_name} />
           <Info label="Barangay" value={row.barangay} />
-          <Info label="Business Type" value={row.business_type_name} />
+          <Info
+            label="Business Type"
+            value={`${row.business_type_name} (${row.permit_size_label || "SP"})`}
+          />
           <Info label="Expiration" value={formatDate(row.expiration_date)} />
-          <Info label="Days Remaining" value={formatDaysLeft(row.expiration_date)} />
+          <Info
+            label="Days Remaining"
+            value={
+              isOverdue ? (
+                <span style={{ color: "#e11d48", fontWeight: "800" }}>
+                  {Math.abs(daysLeft)}d overdue
+                </span>
+              ) : (
+                <span style={{ color: "#059669", fontWeight: "700" }}>
+                  {daysLeft}d left
+                </span>
+              )
+            }
+          />
         </div>
 
-        <h3>Renewal Timeline</h3>
+        {/* TIMELINE */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            margin: "16px 0 8px",
+          }}
+        >
+          <h3 style={{ margin: 0 }}>Renewal Pipeline Timeline</h3>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#047857" }}>
+            Stage {stageOptions.findIndex((s) => s.value === row.stage) + 1} of{" "}
+            {stageOptions.length - 1}
+          </span>
+        </div>
         <ol className="renewal-timeline">
           {stageOptions.map((stage, index) => {
-            const currentIndex = stageOptions.findIndex((item) => item.value === row.stage);
+            const currentIndex = stageOptions.findIndex(
+              (item) => item.value === row.stage
+            );
             return (
-              <li key={stage.value} className={index <= currentIndex ? "done" : ""}>
+              <li
+                key={stage.value}
+                className={index <= currentIndex ? "done" : ""}
+              >
                 <span>{index + 1}</span>
                 {stage.label}
               </li>
@@ -492,67 +680,234 @@ function RenewalDetailModal({
           })}
         </ol>
 
-        <h3>Submitted Requirements</h3>
+        {/* REQUIREMENTS CHECKLIST REDESIGNED */}
+        <div className="renewal-req-header-row">
+          <h3>📋 Documentary Requirements Checklist</h3>
+          <span
+            className={`renewal-req-progress-badge ${
+              compliedCount === allRequirements.length ? "" : "incomplete"
+            }`}
+          >
+            {compliedCount} of {allRequirements.length} Completed ({progressPercent}%)
+          </span>
+        </div>
+        <div className="renewal-req-progress-bar">
+          <div
+            className="renewal-req-progress-bar-fill"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
         <div className="renewal-detail-requirements">
-          {requirementOptions.map((requirement) => (
-            <span key={requirement} className={submitted.includes(requirement) ? "done" : ""}>
-              <FiCheckCircle />
-              {requirement}
+          {allRequirements.map((requirement) => {
+            const isComplied = submitted.includes(requirement);
+            return (
+              <div
+                key={requirement}
+                className={`renewal-req-item ${isComplied ? "complied" : ""}`}
+                onClick={() => onToggleRequirement(row, requirement)}
+                title="Click to toggle requirement status"
+              >
+                <div className="renewal-req-item-left">
+                  <input
+                    type="checkbox"
+                    className="renewal-req-checkbox"
+                    checked={isComplied}
+                    onChange={() => onToggleRequirement(row, requirement)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="renewal-req-name">{requirement}</span>
+                </div>
+                <span
+                  className={`renewal-req-status-pill ${
+                    isComplied ? "submitted" : "pending"
+                  }`}
+                >
+                  {isComplied ? "✅ Complied" : "⏳ Pending"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* PAYMENT & OFFICIAL RECEIPT CARD */}
+        <div className="renewal-payment-card">
+          <div className="renewal-payment-header">
+            <strong>💳 Renewal Fee &amp; Payment Processing</strong>
+            <span
+              className={`renewal-payment-status-tag ${
+                isPaid ? "paid" : isPartial ? "partial" : "unpaid"
+              }`}
+            >
+              {isPaid ? "✅ Paid" : isPartial ? "🟡 Partial" : "🔴 Unpaid"}
             </span>
-          ))}
+          </div>
+
+          <div className="renewal-payment-inputs-grid">
+            <div className="renewal-pay-field">
+              <span>Renewal Fee</span>
+              <input type="text" readOnly value={formatMoney(row.renewal_fee)} />
+            </div>
+            <div className="renewal-pay-field">
+              <span>Payment Method</span>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                disabled={isPaid}
+              >
+                <option value="Cash (Treasury)">Cash (Treasury Cashier)</option>
+                <option value="GCash / E-Wallet">GCash / E-Wallet</option>
+                <option value="Landbank / Online">Landbank / Online</option>
+                <option value="Bank Deposit">Direct Bank Deposit</option>
+              </select>
+            </div>
+            <div className="renewal-pay-field">
+              <span>Official Receipt (O.R. #)</span>
+              <input
+                type="text"
+                placeholder="e.g. OR-2026-0034"
+                value={orNumber}
+                onChange={(e) => setOrNumber(e.target.value)}
+                disabled={isPaid}
+              />
+            </div>
+          </div>
+
+          <div className="renewal-payment-actions">
+            {!isPaid ? (
+              <button
+                type="button"
+                className="renewal-pay-btn"
+                onClick={() => onMarkPaid(row, paymentMethod, orNumber)}
+                disabled={saving}
+              >
+                <FiCheckCircle /> Confirm Payment &amp; Mark as Paid
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="renewal-unpay-btn"
+                onClick={() => onMarkUnpaid(row)}
+                disabled={saving}
+              >
+                ↩️ Revert to Unpaid
+              </button>
+            )}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "#64748b",
+                marginLeft: "auto",
+              }}
+            >
+              {isPaid
+                ? "Payment verified. Status is updated in records."
+                : "Awaiting payment settlement from applicant."}
+            </span>
+          </div>
         </div>
 
-        <div className="renewal-detail-bottom">
-          <div>
-            <strong>Inspection Status</strong>
-            <p>{row.inspection_status || "No inspection status yet."}</p>
-          </div>
-          <div>
-            <strong>Payment Details</strong>
-            <p>Renewal Fee: {formatMoney(row.renewal_fee)}</p>
-            <p>Status: {row.payment_status_label}</p>
-          </div>
-        </div>
+        {/* REMARKS */}
+        {row.remarks ? (
+          <label className="renewal-field full" style={{ marginTop: "14px" }}>
+            <span>Remarks &amp; Audit Log</span>
+            <textarea value={row.remarks} readOnly style={{ minHeight: "58px" }} />
+          </label>
+        ) : null}
 
-        <label className="renewal-field full">
-          <span>Remarks</span>
-          <textarea value={row.remarks || ""} readOnly />
-        </label>
-
-        <div className="renewal-modal-actions">
-          <button type="button" className="renewal-cancel" onClick={onClose}>Cancel</button>
+        {/* MODAL FOOTER ACTIONS */}
+        <div className="renewal-modal-actions" style={{ marginTop: "20px" }}>
+          <button type="button" className="renewal-cancel" onClick={onClose}>
+            Close
+          </button>
           {row.stage !== "released" && row.stage !== "lapsed" ? (
-            <button type="button" className="renewal-advance-btn" onClick={onAdvance} disabled={saving}>
-              <FiSend /> {getNextStageLabel(row.stage)}
+            <button
+              type="button"
+              className="renewal-advance-btn"
+              onClick={onAdvance}
+              disabled={saving}
+            >
+              <FiSend /> {saving ? "Advancing..." : getNextStageLabel(row.stage)}
             </button>
           ) : null}
-          <button type="button" className="renewal-submit" onClick={onRelease} disabled={saving}>
-            <FiPackage /> Mark as Released
-          </button>
+          {row.stage !== "released" && (
+            <button
+              type="button"
+              className="renewal-submit"
+              onClick={onRelease}
+              disabled={saving}
+            >
+              <FiPackage /> Mark as Released
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function getEstablishmentRequirements(establishmentId, establishments, businessTypes) {
-  const establishment = establishments.find(
-    (item) => String(item.id) === String(establishmentId)
-  );
+export function getEstablishmentRequirements(
+  establishmentIdOrRow,
+  establishments = [],
+  businessTypes = []
+) {
+  let establishment = null;
+  let businessTypeId = null;
+  let permitSize = "sp";
 
-  if (!establishment) {
-    return [];
+  if (typeof establishmentIdOrRow === "object" && establishmentIdOrRow !== null) {
+    const row = establishmentIdOrRow;
+    establishment = establishments.find(
+      (item) => String(item.id) === String(row.establishment)
+    );
+    businessTypeId =
+      row.business_type_id ||
+      establishment?.business_type ||
+      row.establishment_business_type;
+    permitSize = String(
+      row.permit_size || establishment?.permit_size || "sp"
+    ).toLowerCase();
+  } else {
+    establishment = establishments.find(
+      (item) => String(item.id) === String(establishmentIdOrRow)
+    );
+    businessTypeId = establishment?.business_type;
+    permitSize = String(establishment?.permit_size || "sp").toLowerCase();
   }
 
   const businessType = businessTypes.find(
-    (item) => String(item.id) === String(establishment.business_type)
+    (item) =>
+      String(item.id) === String(businessTypeId) ||
+      (establishment?.business_type_name &&
+        item.name?.toLowerCase() === establishment.business_type_name.toLowerCase())
   );
 
-  return (businessType?.requirements || [])
-    .filter(
-      (requirement) => requirement.permit_size === establishment.permit_size
-    )
-    .map((requirement) => requirement.requirement_name);
+  const matched = (businessType?.requirements || [])
+    .filter((req) => {
+      const reqSize = String(req.permit_size || "sp").toLowerCase();
+      if (permitSize === "large" || permitSize === "bp") {
+        return reqSize === "large" || reqSize === "bp";
+      }
+      return reqSize === "sp" || reqSize === "small";
+    })
+    .map((req) => req.requirement_name);
+
+  if (matched.length > 0) {
+    return matched;
+  }
+
+  if (businessType?.requirements?.length) {
+    return businessType.requirements.map((req) => req.requirement_name);
+  }
+
+  return [
+    "Xerox copy of DTI/SEC/CDA",
+    "Barangay Clearance of owner",
+    "Chest X-ray Results (Owner & employees)",
+    "CTC/Cedula of owner and employees",
+    "1x1 picture of owner and employees",
+    "Potability of Water Supply - Physical/Chemical Examination",
+    "Potability of Water Supply - Microbiological Examination",
+  ];
 }
 
 function Info({ label, value }) {

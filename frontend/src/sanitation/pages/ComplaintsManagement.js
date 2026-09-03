@@ -4,6 +4,8 @@ import {
   FiAlertTriangle,
   FiCalendar,
   FiClock,
+  FiEye,
+  FiFileText,
   FiFilter,
   FiMapPin,
   FiPrinter,
@@ -225,6 +227,7 @@ function ComplaintsManagement() {
   const [pageError, setPageError] = useState("");
   const [dayModalData, setDayModalData] = useState(null);
   const [inspectionModalData, setInspectionModalData] = useState(null);
+  const [summaryModalReport, setSummaryModalReport] = useState(null);
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
@@ -489,6 +492,10 @@ function ComplaintsManagement() {
           const report = rows.find((r) => r.id === id);
           if (report) setSelectedReport(report);
         }}
+        onOpenReportSummary={(id) => {
+          const report = rows.find((r) => r.id === id);
+          if (report) setSummaryModalReport(report);
+        }}
         onOpenDayEvents={(day, events) => setDayModalData({ day, events })}
         onOpenInspection={(id) => {
           const report = rows.find((r) => r.id === id);
@@ -505,6 +512,7 @@ function ComplaintsManagement() {
                 item={item}
                 active={selectedReport?.id === item.id}
                 onSelect={() => setSelectedReport(item)}
+                onOpenSummary={() => setSummaryModalReport(item)}
               />
             ))
           ) : (
@@ -557,6 +565,11 @@ function ComplaintsManagement() {
             setSelectedReport(rows.find((r) => r.id === id));
             setDayModalData(null);
           }}
+          onOpenReportSummary={(id) => {
+            const report = rows.find((r) => r.id === id);
+            if (report) setSummaryModalReport(report);
+            setDayModalData(null);
+          }}
           onOpenInspection={(id) => {
             setInspectionModalData(rows.find((r) => r.id === id));
             setDayModalData(null);
@@ -573,6 +586,31 @@ function ComplaintsManagement() {
               state: { mode: "community_reports", reportId: inspectionModalData.id },
             })
           }
+        />
+      ) : null}
+
+      {summaryModalReport ? (
+        <ReportSummaryModal
+          report={summaryModalReport}
+          onClose={() => setSummaryModalReport(null)}
+          onLocationClick={() =>
+            navigate("/sanitation/gis-map", {
+              state: { mode: "community_reports", reportId: summaryModalReport.id },
+            })
+          }
+          onOpenSchedule={() => {
+            const rep = summaryModalReport;
+            setSummaryModalReport(null);
+            openSchedule(rep);
+          }}
+          onOpenFullDetail={() => {
+            setSelectedReport(summaryModalReport);
+            setSummaryModalReport(null);
+            document
+              .querySelector(".community-detail-panel")
+              ?.scrollIntoView({ behavior: "smooth" });
+          }}
+          onPrintSlip={() => printFieldworkActionSlip(summaryModalReport)}
         />
       ) : null}
     </div>
@@ -596,6 +634,7 @@ function CommunityCalendar({
   onCalFilterChange,
   onMonthChange,
   onSelectReport,
+  onOpenReportSummary,
   onOpenDayEvents,
   onOpenInspection,
 }) {
@@ -742,11 +781,13 @@ function CommunityCalendar({
                       e.stopPropagation();
                       if (event.type === "inspection") {
                         onOpenInspection(event.reportId);
+                      } else if (onOpenReportSummary) {
+                        onOpenReportSummary(event.reportId);
                       } else {
                         onSelectReport(event.reportId);
                       }
                     }}
-                    title={`${event.label}: ${event.title}`}
+                    title={`${event.label}: ${event.title} (Click for brief summary)`}
                   >
                     <strong>{event.label}</strong>
                     <small>{event.title}</small>
@@ -773,23 +814,38 @@ function CommunityCalendar({
   );
 }
 
-function ReportListCard({ item, active, onSelect }) {
+function ReportListCard({ item, active, onSelect, onOpenSummary }) {
   const catInfo = getCategoryInfo(item.category);
   const isUrgent = item.priority === "high" || catInfo.priority === "high";
 
   return (
-    <button
-      type="button"
+    <div
       className={`community-report-card ${active ? "active" : ""}`}
       onClick={onSelect}
+      style={{ cursor: "pointer" }}
     >
       <div className="community-card-top">
         <span className={`community-category ${categoryClass(item.category)}`}>
           {item.category}
         </span>
-        <span className={`community-status ${statusClass(item.status)}`}>
-          {displayStatus(item.status, item.status_label)}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {onOpenSummary && (
+            <button
+              type="button"
+              className="community-card-summary-btn"
+              title="Click to view brief summary popup"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSummary();
+              }}
+            >
+              <FiEye /> Brief Summary
+            </button>
+          )}
+          <span className={`community-status ${statusClass(item.status)}`}>
+            {displayStatus(item.status, item.status_label)}
+          </span>
+        </div>
       </div>
       <strong>{reportTitle(item)}</strong>
       <p>{item.description || "No description provided."}</p>
@@ -804,7 +860,7 @@ function ReportListCard({ item, active, onSelect }) {
         )}
         <small>{relativeReportDate(item.reported_date)} • {formatReportTime12h(item)}</small>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -1293,7 +1349,14 @@ function ScheduleInspectionModal({
   );
 }
 
-function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection }) {
+function DayEventsModal({
+  day,
+  events,
+  onClose,
+  onSelectReport,
+  onOpenReportSummary,
+  onOpenInspection,
+}) {
   const formattedDate = day.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -1331,10 +1394,17 @@ function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection
                   onClick={() => {
                     if (evt.type === "inspection" && onOpenInspection) {
                       onOpenInspection(evt.reportId);
+                    } else if (onOpenReportSummary) {
+                      onOpenReportSummary(evt.reportId);
                     } else {
                       onSelectReport(evt.reportId);
                     }
                   }}
+                  title={
+                    evt.type === "inspection"
+                      ? "Click to view scheduled inspection details"
+                      : "Click to view report brief summary"
+                  }
                 >
                   <div className="community-day-event-time">{evt.time}</div>
                   <div className="community-day-event-info">
@@ -1345,9 +1415,13 @@ function DayEventsModal({ day, events, onClose, onSelectReport, onOpenInspection
                     </small>
                   </div>
                   <div className="community-day-event-status">
-                    {evt.type === "inspection" && (
+                    {evt.type === "inspection" ? (
                       <span className={`community-pill ${priorityClass}`}>
                         {priorityLabel}
+                      </span>
+                    ) : (
+                      <span className={`community-status ${statusClass(report.status)}`}>
+                        {displayStatus(report.status, report.status_label)}
                       </span>
                     )}
                   </div>
@@ -1455,6 +1529,204 @@ function InspectionDetailsModal({ report, onClose, onLocationClick }) {
               <p>{report.inspection_schedule_note}</p>
             </div>
           ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportSummaryModal({
+  report,
+  onClose,
+  onLocationClick,
+  onOpenSchedule,
+  onOpenFullDetail,
+  onPrintSlip,
+}) {
+  if (!report) return null;
+
+  const dateStr = report.reported_date || new Date().toISOString().slice(0, 10);
+  const dateObj = new Date(dateStr);
+  const formattedDate = dateObj.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeStr = formatReportTime12h(report);
+
+  const isUrgent = report.priority === "high";
+  const isStandard = report.priority === "medium";
+  const priorityLabel = isUrgent
+    ? "🔴 Urgent (24–48h SLA)"
+    : isStandard
+    ? "🟡 Standard (3–5d)"
+    : "🟢 Routine (7–14d)";
+  const priorityClass = isUrgent ? "urgent" : isStandard ? "standard" : "routine";
+  const priorityBorderColor = isUrgent ? "#ef4444" : isStandard ? "#f59e0b" : "#10b981";
+
+  const reporterName = report.complainant_name || "Anonymous Resident";
+  const reporterContact = report.contact_number || "Not provided";
+
+  return (
+    <div className="community-modal-backdrop" onClick={onClose}>
+      <div
+        className="community-inspection-modal community-report-summary-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ borderTopColor: priorityBorderColor }}
+      >
+        <div className="community-inspection-modal-header">
+          <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "6px",
+                flexWrap: "wrap",
+              }}
+            >
+              <span className="community-summary-ref-tag">
+                {report.complaint_id || "REF-REPORT"}
+              </span>
+              <span className={`community-pill ${priorityClass}`}>
+                {priorityLabel}
+              </span>
+              <span className={`community-status ${statusClass(report.status)}`}>
+                {displayStatus(report.status, report.status_label)}
+              </span>
+            </div>
+            <h2>{reportTitle(report)}</h2>
+            <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: "13.5px" }}>
+              Category: <strong>{report.category || "General Cleanliness"}</strong>
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="community-close-btn">
+            X
+          </button>
+        </div>
+
+        <div className="community-inspection-modal-body">
+          {/* Quick Info Grid */}
+          <div className="community-inspection-grid">
+            <div
+              className="community-inspection-grid-item"
+              onClick={onLocationClick}
+              style={{ cursor: "pointer", transition: "all 0.2s" }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "#0ea5e9")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
+              title="Click to view exact spot on GIS Map"
+            >
+              <small>
+                <FiMapPin /> BARANGAY &amp; LOCATION
+              </small>
+              <strong>
+                Brgy. {report.barangay || "Mauban"}
+                {report.establishment_name ? ` (${report.establishment_name})` : ""}
+              </strong>
+              <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>
+                View on GIS Map &rarr;
+              </small>
+            </div>
+
+            <div className="community-inspection-grid-item">
+              <small>
+                <FiClock /> DATE &amp; TIME FILED
+              </small>
+              <strong>{formattedDate}</strong>
+              <small style={{ color: "#64748b" }}>Time: {timeStr}</small>
+            </div>
+
+            <div className="community-inspection-grid-item">
+              <small>
+                <FiUser /> REPORTER DETAILS
+              </small>
+              <strong>{reporterName}</strong>
+              <small style={{ color: "#64748b" }}>Contact: {reporterContact}</small>
+            </div>
+
+            <div className="community-inspection-grid-item">
+              <small>
+                <FiCalendar /> INSPECTION SCHEDULE
+              </small>
+              <strong>
+                {report.inspection_scheduled_date
+                  ? `${report.inspection_scheduled_date}${
+                      report.inspection_scheduled_time
+                        ? ` @ ${formatTime12h(report.inspection_scheduled_time)}`
+                        : ""
+                    }`
+                  : "Not yet scheduled"}
+              </strong>
+              <small
+                style={{
+                  color: report.assigned_inspector ? "#059669" : "#94a3b8",
+                  fontWeight: report.assigned_inspector ? "700" : "400",
+                }}
+              >
+                {report.assigned_inspector
+                  ? `Inspector: ${report.assigned_inspector}`
+                  : "Awaiting dispatch"}
+              </small>
+            </div>
+          </div>
+
+          {/* Resident's Concern Summary Statement */}
+          <div className="community-summary-statement-box">
+            <div className="community-summary-statement-header">
+              <FiFileText />
+              <strong>Resident's Concern Summary:</strong>
+            </div>
+            <p className="community-summary-statement-text">
+              {report.description || "No specific narrative was provided for this report."}
+            </p>
+          </div>
+
+          {/* Action Taken or Dispatch Notes */}
+          {report.action_taken || report.inspection_schedule_note ? (
+            <div className="community-inspection-note-box">
+              <small>MHO ACTIONS &amp; DISPATCH NOTES</small>
+              <p>{report.action_taken || report.inspection_schedule_note}</p>
+            </div>
+          ) : null}
+
+          {/* Modal Action Buttons */}
+          <div className="community-summary-modal-actions">
+            <button
+              type="button"
+              className="summary-act-btn gis"
+              onClick={onLocationClick}
+              title="Pinpoint location on Sanitary GIS Map"
+            >
+              <FiMapPin /> View on Map
+            </button>
+            <button
+              type="button"
+              className="summary-act-btn print"
+              onClick={onPrintSlip}
+              title="Print Fieldwork Inspection Order Slip"
+            >
+              <FiPrinter /> Print Action Slip
+            </button>
+            {report.status !== "resolved" && onOpenSchedule && (
+              <button
+                type="button"
+                className="summary-act-btn schedule"
+                onClick={onOpenSchedule}
+                title="Schedule an on-site sanitary inspection"
+              >
+                <FiCalendar /> Schedule Inspection
+              </button>
+            )}
+            <button
+              type="button"
+              className="summary-act-btn full-view"
+              onClick={onOpenFullDetail}
+              title="Scroll to full management panel below"
+            >
+              📋 Open Full Detail View
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import time
+from django.core.files.storage import default_storage
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -275,6 +277,48 @@ def resort_detail(request, resort_id):
         record_id=resort.resort_id,
     )
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@parser_classes([MultiPartParser])
+@module_required("tourism")
+def resort_image_upload(request):
+    files = (
+        request.FILES.getlist("image")
+        or request.FILES.getlist("images")
+        or request.FILES.getlist("photo")
+        or request.FILES.getlist("photos")
+        or request.FILES.getlist("file")
+    )
+    if not files:
+        single = (
+            request.FILES.get("image")
+            or request.FILES.get("photo")
+            or request.FILES.get("file")
+        )
+        if single:
+            files = [single]
+
+    if not files:
+        return Response(
+            {"detail": "No image file provided."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    urls = []
+    for file in files:
+        safe_name = file.name.replace(" ", "_")
+        filename = f"resorts/{int(time.time())}_{safe_name}"
+        saved_path = default_storage.save(filename, file)
+        urls.append(f"/media/{saved_path}")
+
+    return Response(
+        {
+            "url": urls[0] if urls else None,
+            "urls": urls,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["GET", "POST"])

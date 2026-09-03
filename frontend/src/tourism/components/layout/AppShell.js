@@ -22,11 +22,11 @@ const pageInfo = {
     showAdd: true,
   },
   "/destinations": {
-    title: "Destination Management",
+    title: "Destinations & Feedback",
     showAdd: false,
   },
   "/feedback": {
-    title: "Feedback Monitoring",
+    title: "Destinations & Feedback",
     showAdd: false,
   },
   "/analytics-reports": {
@@ -76,11 +76,12 @@ function AppShell() {
   }
 
   function handleAddEntry() {
+    const timestamp = Date.now();
     if (location.pathname !== "/tourist-data") {
-      navigate("/tourist-data");
+      navigate("/tourist-data", { state: { openAddModal: true, ts: timestamp } });
+    } else {
+      setAddEntryRequestId(timestamp);
     }
-
-    setAddEntryRequestId((value) => value + 1);
   }
 
   async function handleLogout() {

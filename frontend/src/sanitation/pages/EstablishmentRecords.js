@@ -70,6 +70,24 @@ function toTitleCase(str) {
   return str.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+export function generatePermitNumber(establishments = [], permitSize = "sp") {
+  const currentYear = new Date().getFullYear();
+  const prefix = (permitSize || "").toLowerCase() === "large" ? "LG" : "SP";
+  const regex = new RegExp(`^${prefix}-${currentYear}-(\\d+)$`, "i");
+  let maxSeq = 0;
+
+  (establishments || []).forEach((est) => {
+    const match = String(est.permit_number || "").match(regex);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  });
+
+  const nextSeq = String(maxSeq + 1).padStart(3, "0");
+  return `${prefix}-${currentYear}-${nextSeq}`;
+}
+
 const initialForm = {
   business_name: "",
   owner_name: "",
@@ -228,8 +246,35 @@ function EstablishmentRecords() {
     setShowModal(true);
   }
 
-  function openEditModal(establishment) {
+  function openEditModal(establishment, options = {}) {
+    const { forceEnablePermit = false } = options;
     setEditingEstablishment(establishment);
+
+    const hasPermit = forceEnablePermit || Boolean(establishment.has_permit);
+    let permitNum = establishment.permit_number || "";
+    let compliance = establishment.compliance_status || "good_standing";
+    let permitStat = establishment.permit_status || "active";
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const endOfYearStr = `${new Date().getFullYear()}-12-31`;
+
+    if (hasPermit) {
+      if (
+        !permitNum ||
+        permitNum.trim() === "" ||
+        permitNum.toLowerCase().includes("no permit")
+      ) {
+        permitNum = generatePermitNumber(
+          establishments,
+          establishment.permit_size || "sp"
+        );
+      }
+      if (compliance === "no_permit") {
+        compliance = "good_standing";
+      }
+      if (permitStat === "no_permit") {
+        permitStat = "active";
+      }
+    }
 
     setForm({
       business_name: establishment.business_name || "",
@@ -239,12 +284,14 @@ function EstablishmentRecords() {
       barangay: establishment.barangay || "",
       address: establishment.address || "",
       contact_number: establishment.contact_number || "",
-      has_permit: Boolean(establishment.has_permit),
-      permit_number: establishment.permit_number || "",
-      permit_issued_date: establishment.permit_issued_date || "",
-      permit_expiry_date: establishment.permit_expiry_date || "",
-      compliance_status: establishment.compliance_status || "good_standing",
-      permit_status: establishment.permit_status || "active",
+      has_permit: hasPermit,
+      permit_number: permitNum,
+      permit_issued_date:
+        establishment.permit_issued_date || (hasPermit ? todayStr : ""),
+      permit_expiry_date:
+        establishment.permit_expiry_date || (hasPermit ? endOfYearStr : ""),
+      compliance_status: compliance,
+      permit_status: permitStat,
       latitude: establishment.latitude ?? "",
       longitude: establishment.longitude ?? "",
       remarks: establishment.remarks || "",
@@ -262,13 +309,13 @@ function EstablishmentRecords() {
     setSelectedEstablishment(null);
   }
 
-  function editSelectedEstablishment() {
+  function editSelectedEstablishment(forceEnablePermit = false) {
     const target = selectedEstablishment;
 
     setSelectedEstablishment(null);
 
     if (target) {
-      openEditModal(target);
+      openEditModal(target, { forceEnablePermit });
     }
   }
 
@@ -316,6 +363,25 @@ function EstablishmentRecords() {
 
   function buildPayload() {
     const hasPermit = Boolean(form.has_permit);
+    let complianceStatus = form.compliance_status;
+    let permitStatus = form.permit_status;
+    let permitNumber = form.permit_number.trim();
+
+    if (!hasPermit) {
+      complianceStatus = "no_permit";
+      permitStatus = "no_permit";
+      permitNumber = "";
+    } else {
+      if (complianceStatus === "no_permit") {
+        complianceStatus = "good_standing";
+      }
+      if (permitStatus === "no_permit") {
+        permitStatus = "active";
+      }
+      if (!permitNumber || permitNumber.toLowerCase().includes("no permit")) {
+        permitNumber = generatePermitNumber(establishments, form.permit_size);
+      }
+    }
 
     return {
       business_name: form.business_name.trim(),
@@ -326,13 +392,13 @@ function EstablishmentRecords() {
       address: form.address.trim(),
       contact_number: form.contact_number.trim(),
       has_permit: hasPermit,
-      permit_number: hasPermit ? form.permit_number.trim() : "",
+      permit_number: hasPermit ? permitNumber : "",
       permit_issued_date:
         hasPermit && form.permit_issued_date ? form.permit_issued_date : null,
       permit_expiry_date:
         hasPermit && form.permit_expiry_date ? form.permit_expiry_date : null,
-      compliance_status: hasPermit ? form.compliance_status : "no_permit",
-      permit_status: hasPermit ? form.permit_status : "no_permit",
+      compliance_status: complianceStatus,
+      permit_status: permitStatus,
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
       remarks: form.remarks.trim(),
@@ -665,6 +731,7 @@ function EstablishmentRecords() {
       {showModal ? (
         <RegisterEstablishmentModal
           form={form}
+          establishments={establishments}
           businessTypes={businessTypes}
           barangayOptions={barangayOptions}
           saving={saving}
@@ -726,11 +793,15 @@ function EstablishmentDetailModal({
             <button
               type="button"
               className="sanitation-export-btn"
-              onClick={() => printEstablishmentReport(establishment, timeline)}
+              onClick={() => {
+                const qrSvgEl = document.getElementById("establishment-detail-qr-svg");
+                const qrSvgHtml = qrSvgEl ? qrSvgEl.outerHTML : "";
+                printEstablishmentReport(establishment, timeline, qrSvgHtml);
+              }}
             >
               <FiPrinter /> Print
             </button>
-            <button type="button" className="add-establishment-btn" onClick={onEdit}>
+            <button type="button" className="add-establishment-btn" onClick={() => onEdit(false)}>
               <FiEdit2 /> Edit
             </button>
           </div>
@@ -767,30 +838,50 @@ function EstablishmentDetailModal({
           </div>
         </div>
 
-        {establishment.has_permit && (
-          <div className="establishment-detail-note" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', backgroundColor: '#f8fafc' }}>
+        <div className="establishment-detail-qr-card">
+          <div className="qr-box">
             <QRCodeSVG 
+              id="establishment-detail-qr-svg"
               value={`${window.location.origin}/verify-permit/${establishment.id}`} 
-              size={120} 
+              size={130} 
               level="H"
               includeMargin={true}
             />
-            <div>
-              <strong style={{ display: 'block', fontSize: '1.1rem', marginBottom: '0.5rem' }}>Official Permit QR Code</strong>
-              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
-                Tourists and inspectors can scan this code using the Mauban Mobile App or any smartphone camera to instantly verify the compliance status of this establishment.
-              </p>
+          </div>
+          <div className="qr-info">
+            <div className="qr-badge-row">
+              <span className="qr-badge official">Official Sanitary Permit QR Code</span>
+              {establishment.has_permit ? (
+                <span className="qr-badge valid">Permit: {establishment.permit_number || "Active"}</span>
+              ) : (
+                <span className="qr-badge unissued">Unissued / No Permit</span>
+              )}
+            </div>
+            <h4>Official Permit Verification QR Code</h4>
+            <p>
+              Tourists, inspectors, and LGU officials can scan this QR code using the Mauban Mobile App or any smartphone camera to instantly verify the legitimate compliance status of this establishment.
+            </p>
+            <div className="qr-actions">
               <a 
                 href={`/verify-permit/${establishment.id}`} 
                 target="_blank" 
                 rel="noreferrer"
-                style={{ display: 'inline-block', marginTop: '0.75rem', fontWeight: 600, color: '#2563eb' }}
+                className="qr-test-link"
               >
-                Test Verification Page &rarr;
+                Open Verification Page &rarr;
               </a>
+              {!establishment.has_permit && (
+                <button
+                  type="button"
+                  className="qr-issue-btn"
+                  onClick={() => onEdit(true)}
+                >
+                  + Issue & Generate Permit Now
+                </button>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         <div className="establishment-timeline-panel">
           <div className="establishment-timeline-title">
@@ -836,6 +927,7 @@ function InfoTile({ label, value }) {
 
 function RegisterEstablishmentModal({
   form,
+  establishments = [],
   businessTypes,
   barangayOptions,
   saving,
@@ -966,6 +1058,27 @@ function RegisterEstablishmentModal({
                   onChange("permit_number", "");
                   onChange("permit_issued_date", "");
                   onChange("permit_expiry_date", "");
+                } else {
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const endOfYearStr = `${new Date().getFullYear()}-12-31`;
+                  onChange("compliance_status", "good_standing");
+                  onChange("permit_status", "active");
+                  if (
+                    !form.permit_number ||
+                    form.permit_number.trim() === "" ||
+                    form.permit_number.toLowerCase().includes("no permit")
+                  ) {
+                    onChange(
+                      "permit_number",
+                      generatePermitNumber(establishments, form.permit_size)
+                    );
+                  }
+                  if (!form.permit_issued_date) {
+                    onChange("permit_issued_date", todayStr);
+                  }
+                  if (!form.permit_expiry_date) {
+                    onChange("permit_expiry_date", endOfYearStr);
+                  }
                 }
               }}
             >
@@ -1002,7 +1115,22 @@ function RegisterEstablishmentModal({
         ) : null}
 
         <label className="modal-field full">
-          <span>Permit Number</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>Permit Number</span>
+            {form.has_permit && (
+              <button
+                type="button"
+                className="permit-gen-btn"
+                title="Generate new sequential permit number"
+                onClick={() => {
+                  const newNum = generatePermitNumber(establishments, form.permit_size);
+                  onChange("permit_number", newNum);
+                }}
+              >
+                ⚡ Auto-Generate
+              </button>
+            )}
+          </div>
           <input
             type="text"
             placeholder="SP-2026-000"
@@ -1022,11 +1150,13 @@ function RegisterEstablishmentModal({
                 onChange("compliance_status", event.target.value)
               }
             >
-              {statusOptions.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
+              {statusOptions
+                .filter((s) => !form.has_permit || s.value !== "no_permit")
+                .map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
             </select>
           </label>
 
@@ -1037,11 +1167,13 @@ function RegisterEstablishmentModal({
               disabled={!form.has_permit}
               onChange={(event) => onChange("permit_status", event.target.value)}
             >
-              {permitStatusOptions.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
+              {permitStatusOptions
+                .filter((s) => !form.has_permit || s.value !== "no_permit")
+                .map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
             </select>
           </label>
         </div>
@@ -1304,12 +1436,14 @@ function formatDisplayDate(value) {
   }).format(date);
 }
 
-function printEstablishmentReport(establishment, timeline) {
+function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
   const printedAt = new Intl.DateTimeFormat("en-PH", {
     year: "numeric",
     month: "long",
     day: "2-digit",
   }).format(new Date());
+
+  const verifyUrl = `${window.location.origin}/verify-permit/${establishment.id}`;
 
   const timelineRows = timeline.length
     ? timeline
@@ -1334,13 +1468,72 @@ function printEstablishmentReport(establishment, timeline) {
     <!doctype html>
     <html>
       <head>
-        <title>Sanitary Establishment Record</title>
+        <title>Sanitary Establishment Record - ${escapeHtml(establishment.business_name)}</title>
         <style>
           body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
-          .office { text-align: center; border-bottom: 2px solid #0f6b3f; padding-bottom: 14px; margin-bottom: 22px; }
+          .office { text-align: center; border-bottom: 2px solid #0f6b3f; padding-bottom: 14px; margin-bottom: 20px; }
           .office h1 { margin: 6px 0 2px; font-size: 20px; text-transform: uppercase; }
           .office p { margin: 2px 0; font-size: 12px; }
           h2 { margin: 0 0 14px; font-size: 18px; }
+          
+          .print-qr-banner {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            border: 2px solid #0f6b3f;
+            border-radius: 8px;
+            padding: 14px 18px;
+            background: #f0fdf4;
+            margin-bottom: 20px;
+          }
+          .print-qr-code {
+            flex-shrink: 0;
+            background: #ffffff;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid #cbd5d1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .print-qr-code svg, .print-qr-code img {
+            width: 115px;
+            height: 115px;
+            display: block;
+          }
+          .print-qr-details {
+            flex: 1;
+          }
+          .print-qr-tag {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #065f46;
+            letter-spacing: 0.5px;
+          }
+          .print-qr-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 2px 0 4px;
+          }
+          .print-qr-permit {
+            font-size: 13px;
+            color: #1e293b;
+            margin-bottom: 4px;
+          }
+          .print-qr-details p {
+            margin: 2px 0;
+            font-size: 11px;
+            color: #475569;
+          }
+          .print-qr-url {
+            font-size: 10.5px;
+            font-family: monospace;
+            color: #0284c7;
+            margin-top: 4px;
+          }
+
           table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
           th, td { border: 1px solid #cbd5d1; padding: 9px 10px; font-size: 12px; vertical-align: top; }
           th { background: #edf7f1; text-align: left; }
@@ -1363,6 +1556,29 @@ function printEstablishmentReport(establishment, timeline) {
         </div>
 
         <h2>Sanitary Establishment Record</h2>
+
+        <div class="print-qr-banner">
+          <div class="print-qr-code">
+            ${
+              qrSvgHtml ||
+              `<img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(
+                verifyUrl
+              )}" width="115" height="115" alt="Permit QR Code" />`
+            }
+          </div>
+          <div class="print-qr-details">
+            <div class="print-qr-tag">Official Sanitary Verification QR Code</div>
+            <div class="print-qr-title">${escapeHtml(establishment.business_name)}</div>
+            <div class="print-qr-permit">
+              Permit Number: <strong>${escapeHtml(
+                establishment.permit_number ||
+                  (establishment.has_permit ? "Active" : "No Permit on File")
+              )}</strong>
+            </div>
+            <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
+            <div class="print-qr-url">${escapeHtml(verifyUrl)}</div>
+          </div>
+        </div>
 
         <div class="grid">
           <div class="box"><span>Business Name</span><strong>${escapeHtml(

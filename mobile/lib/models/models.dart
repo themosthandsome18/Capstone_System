@@ -443,6 +443,7 @@ class Destination {
     required this.access,
     required this.latitude,
     required this.longitude,
+    this.images = const [],
   });
 
   final int id;
@@ -457,6 +458,7 @@ class Destination {
   final String access;
   final double latitude;
   final double longitude;
+  final List<String> images;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
   String get permitLabel =>
@@ -482,6 +484,12 @@ class Destination {
       access: '${json['access'] ?? ''}',
       latitude: jsonDouble(json['latitude'], 14.18),
       longitude: jsonDouble(json['longitude'], 121.73),
+      images: json['images'] is List
+          ? (json['images'] as List)
+              .map((e) => '$e'.trim())
+              .where((e) => e.isNotEmpty)
+              .toList()
+          : const [],
     );
   }
 
@@ -499,6 +507,7 @@ class Destination {
       access: '',
       latitude: 14.185,
       longitude: 121.731,
+      images: [],
     );
   }
 }
@@ -651,6 +660,7 @@ class MobileFeedbackReceipt {
     required this.message,
     required this.reply,
     required this.date,
+    this.photos = const [],
   });
 
   final String reference;
@@ -660,6 +670,7 @@ class MobileFeedbackReceipt {
   final String message;
   final String reply;
   final String date;
+  final List<String> photos;
 
   factory MobileFeedbackReceipt.fromResponse(
     Map<String, dynamic> json, {
@@ -667,6 +678,11 @@ class MobileFeedbackReceipt {
     required String reviewer,
     required int rating,
   }) {
+    final rawPhotos = json['photos'];
+    final List<String> photos = rawPhotos is List
+        ? rawPhotos.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList()
+        : const [];
+
     return MobileFeedbackReceipt(
       reference: '${json['id'] ?? 'Pending sync'}',
       destination: destination,
@@ -675,6 +691,7 @@ class MobileFeedbackReceipt {
       message: '${json['message'] ?? ''}',
       reply: '${json['reply'] ?? ''}',
       date: '${json['date'] ?? ''}',
+      photos: photos,
     );
   }
 }

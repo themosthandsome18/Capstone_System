@@ -177,6 +177,7 @@ class ResortSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "coordinates",
+            "images",
         ]
 
     def get_coordinates(self, obj):
@@ -232,6 +233,7 @@ class FeedbackEntrySerializer(serializers.ModelSerializer):
             "title",
             "message",
             "reply",
+            "photos",
         ]
 
 
@@ -594,6 +596,18 @@ class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
         source="establishment.business_type.name",
         read_only=True,
     )
+    business_type_id = serializers.IntegerField(
+        source="establishment.business_type.id",
+        read_only=True,
+    )
+    permit_size = serializers.CharField(
+        source="establishment.permit_size",
+        read_only=True,
+    )
+    permit_size_label = serializers.CharField(
+        source="establishment.get_permit_size_display",
+        read_only=True,
+    )
     barangay = serializers.CharField(source="establishment.barangay", read_only=True)
     stage_label = serializers.CharField(source="get_stage_display", read_only=True)
     payment_status_label = serializers.CharField(
@@ -610,6 +624,9 @@ class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
             "establishment_name",
             "owner_name",
             "business_type_name",
+            "business_type_id",
+            "permit_size",
+            "permit_size_label",
             "barangay",
             "permit_number",
             "permit_type",

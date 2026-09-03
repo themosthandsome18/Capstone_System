@@ -189,21 +189,47 @@ function SanitaryReportAnalytics() {
   const typeChartData = buildTypeChartData(byType);
   const permitChartData = buildPermitChartData(totalLarge, totalSp);
 
+  const [sortConfig, setSortConfig] = useState({
+    key: "total",
+    direction: "desc",
+  });
+
+  const sortedByType = useMemo(() => {
+    const list = [...byType];
+    const { key, direction } = sortConfig;
+    list.sort((a, b) => {
+      let valA = a[key] ?? 0;
+      let valB = b[key] ?? 0;
+      if (typeof valA === "string") {
+        const cmp = valA.localeCompare(valB);
+        return direction === "asc" ? cmp : -cmp;
+      }
+      return direction === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+    });
+    return list;
+  }, [byType, sortConfig]);
+
+  function handleSort(key) {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: key === "name" ? "asc" : "desc" };
+    });
+  }
+
   async function loadReport(nextFilters) {
-    setReportLoading(true);
     setFilterError("");
 
     try {
       await refreshReportData(cleanReportFilters(nextFilters));
     } catch (requestError) {
       setFilterError(requestError.message || "Unable to load sanitation report.");
-    } finally {
-      setReportLoading(false);
     }
   }
 
   async function handleApplyFilters(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
     setAppliedFilters(filters);
     await loadReport(filters);
   }
@@ -215,10 +241,12 @@ function SanitaryReportAnalytics() {
   }
 
   function handleFilterChange(field, value) {
-    setFilters((current) => ({
-      ...current,
+    const nextFilters = {
+      ...filters,
       [field]: value,
-    }));
+    };
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters); // Instant client-side response in 0ms!
   }
 
   function handlePrint() {
@@ -863,27 +891,139 @@ function SanitaryReportAnalytics() {
               <p>Total, permit coverage, permit size, and compliance status</p>
             </div>
           </div>
+
+          <div className="report-sort-controls">
+            <span className="report-sort-label">Sort Table:</span>
+            <select
+              className="report-sort-select"
+              value={sortConfig.key}
+              onChange={(e) =>
+                setSortConfig((prev) => ({ ...prev, key: e.target.value }))
+              }
+            >
+              <option value="total">Highest Total Establishments</option>
+              <option value="violators">Most Violations / Needs Attention</option>
+              <option value="withoutPermit">Most Without Permit</option>
+              <option value="withPermit">Most With Permit</option>
+              <option value="goodStanding">Most in Good Standing</option>
+              <option value="name">Business Type (A-Z)</option>
+            </select>
+            <button
+              type="button"
+              className="report-sort-dir-btn"
+              onClick={() =>
+                setSortConfig((prev) => ({
+                  ...prev,
+                  direction: prev.direction === "asc" ? "desc" : "asc",
+                }))
+              }
+              title="Toggle Ascending / Descending"
+            >
+              {sortConfig.direction === "asc" ? "▲ Asc" : "▼ Desc"}
+            </button>
+          </div>
         </div>
 
         <div className="sanitary-report-table-wrap">
           <table className="sanitary-report-table">
             <thead>
               <tr>
-                <th>Business Type</th>
-                <th>Total</th>
-                <th>With Permit</th>
-                <th>No Permit</th>
-                <th>SP</th>
-                <th>Large</th>
-                <th>Good</th>
-                <th>For Completion</th>
-                <th>Violators</th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "name" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("name")}
+                  title="Click to sort by Business Type Name"
+                >
+                  Business Type
+                  <span className="sort-indicator">
+                    {sortConfig.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "total" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("total")}
+                  title="Click to sort by Total Establishments"
+                >
+                  Total
+                  <span className="sort-indicator">
+                    {sortConfig.key === "total" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "withPermit" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("withPermit")}
+                  title="Click to sort by With Permit"
+                >
+                  With Permit
+                  <span className="sort-indicator">
+                    {sortConfig.key === "withPermit" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "withoutPermit" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("withoutPermit")}
+                  title="Click to sort by No Permit"
+                >
+                  No Permit
+                  <span className="sort-indicator">
+                    {sortConfig.key === "withoutPermit" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "sp" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("sp")}
+                  title="Click to sort by SP Size"
+                >
+                  SP
+                  <span className="sort-indicator">
+                    {sortConfig.key === "sp" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "large" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("large")}
+                  title="Click to sort by Large Size"
+                >
+                  Large
+                  <span className="sort-indicator">
+                    {sortConfig.key === "large" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "goodStanding" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("goodStanding")}
+                  title="Click to sort by Good Standing"
+                >
+                  Good
+                  <span className="sort-indicator">
+                    {sortConfig.key === "goodStanding" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "forCompletion" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("forCompletion")}
+                  title="Click to sort by For Completion"
+                >
+                  For Completion
+                  <span className="sort-indicator">
+                    {sortConfig.key === "forCompletion" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "violators" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("violators")}
+                  title="Click to sort by Violators"
+                >
+                  Violators
+                  <span className="sort-indicator">
+                    {sortConfig.key === "violators" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {byType.length ? (
-                byType.map((item) => (
+              {sortedByType.length ? (
+                sortedByType.map((item) => (
                   <tr key={item.id || item.name}>
                     <td>
                       <strong>{item.name}</strong>

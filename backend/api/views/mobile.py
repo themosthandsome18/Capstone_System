@@ -332,6 +332,25 @@ def mobile_feedback_submit(request):
         data,
     )
 
+    photos = []
+    uploads = (
+        request.FILES.getlist("photo")
+        or request.FILES.getlist("photos")
+        or request.FILES.getlist("image")
+        or request.FILES.getlist("images")
+    )
+    if uploads:
+        from django.core.files.storage import default_storage
+        for upload in uploads:
+            safe_name = upload.name.replace(" ", "_")
+            filename = f"feedback/{int(time.time())}_{safe_name}"
+            saved_path = default_storage.save(filename, upload)
+            photos.append(default_storage.url(saved_path))
+    elif data.get("photos") and isinstance(data.get("photos"), list):
+        photos = data.get("photos")
+
+    data["photos"] = photos
+
     serializer = FeedbackEntrySerializer(data=data)
     serializer.is_valid(raise_exception=True)
     entry = serializer.save()

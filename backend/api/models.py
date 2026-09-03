@@ -261,6 +261,7 @@ class Resort(models.Model):
     monthly_arrivals = models.PositiveIntegerField(default=0)
     latitude = models.FloatField()
     longitude = models.FloatField()
+    images = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["resort_id"]
@@ -296,6 +297,7 @@ class FeedbackEntry(models.Model):
     title = models.CharField(max_length=160)
     message = models.TextField()
     reply = models.TextField(blank=True)
+    photos = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-id"]

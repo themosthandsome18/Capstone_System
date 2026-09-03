@@ -246,6 +246,35 @@ function AnalyticsAndReport() {
     }));
   }
 
+  const [sortConfig, setSortConfig] = useState({
+    key: "visitors",
+    direction: "desc",
+  });
+
+  const sortedRows = useMemo(() => {
+    const list = [...rows];
+    const { key, direction } = sortConfig;
+    list.sort((a, b) => {
+      let valA = a[key] ?? 0;
+      let valB = b[key] ?? 0;
+      if (typeof valA === "string") {
+        const cmp = valA.localeCompare(valB);
+        return direction === "asc" ? cmp : -cmp;
+      }
+      return direction === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+    });
+    return list;
+  }, [rows, sortConfig]);
+
+  function handleSort(key) {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: key === "name" ? "asc" : "desc" };
+    });
+  }
+
   async function changeReportType(type) {
     setReportType(type);
     setLoadingReport(true);
@@ -480,7 +509,130 @@ function AnalyticsAndReport() {
 
       {reportError ? <p className="tourist-record-error">{reportError}</p> : null}
 
-      <div className="analytics-question-title-row" style={{ marginTop: "12px", marginBottom: "16px" }}>
+      {/* ── Main Report: Chart & Table (Moved to top so it's not obscured) ── */}
+      <div className="report-print-area">
+        <div className="report-chart-card">
+          <div className="report-card-title">
+            <h3>{getReportTitle(reportType)}</h3>
+            <p>{getReportSubtitle(reportType)}</p>
+          </div>
+
+          <div className="report-chart-area">
+            <Bar
+              data={chartData}
+              options={mainReportChartOptions}
+            />
+          </div>
+        </div>
+
+        <div className="report-table-card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            <h4 style={{ margin: 0, fontSize: "15px", fontWeight: "800", color: "#1e293b" }}>Table Data Breakdown</h4>
+            <div className="report-sort-controls">
+              <span className="report-sort-label">Sort Table:</span>
+              <select
+                className="report-sort-select"
+                value={sortConfig.key}
+                onChange={(e) => setSortConfig((prev) => ({ ...prev, key: e.target.value }))}
+              >
+                <option value="visitors">Most Visitors</option>
+                <option value="revenue">Highest Revenue</option>
+                <option value="avg">Highest Avg / Visitor</option>
+                <option value="name">Name (A-Z)</option>
+              </select>
+              <button
+                type="button"
+                className="report-sort-dir-btn"
+                onClick={() =>
+                  setSortConfig((prev) => ({
+                    ...prev,
+                    direction: prev.direction === "asc" ? "desc" : "asc",
+                  }))
+                }
+                title="Toggle Ascending / Descending"
+              >
+                {sortConfig.direction === "asc" ? "▲ Asc" : "▼ Desc"}
+              </button>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th
+                  className={`sortable-th ${sortConfig.key === "name" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("name")}
+                  title="Click to sort by Name"
+                >
+                  {getFirstColumnLabel(reportType)}
+                  <span className="sort-indicator">
+                    {sortConfig.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "visitors" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("visitors")}
+                  title="Click to sort by Total Visitors"
+                >
+                  Total Visitors
+                  <span className="sort-indicator">
+                    {sortConfig.key === "visitors" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "revenue" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("revenue")}
+                  title="Click to sort by Total Revenue"
+                >
+                  Total Revenue
+                  <span className="sort-indicator">
+                    {sortConfig.key === "revenue" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+                <th
+                  className={`sortable-th ${sortConfig.key === "avg" ? "active-sort" : ""}`}
+                  onClick={() => handleSort("avg")}
+                  title="Click to sort by Average Per Visitor"
+                >
+                  Avg / Visitor
+                  <span className="sort-indicator">
+                    {sortConfig.key === "avg" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
+                  </span>
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedRows.length ? (
+                sortedRows.map((row) => (
+                  <tr key={row.id || row.resort_id || row.name}>
+                    <td>{row.name}</td>
+                    <td>{Number(row.visitors || 0).toLocaleString()}</td>
+                    <td>{formatCurrency(row.revenue)}</td>
+                    <td>{formatCurrency(row.avg)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: "center" }}>
+                    No report data found.
+                  </td>
+                </tr>
+              )}
+
+              <tr className="total-row">
+                <td>Total</td>
+                <td>{Number(totalVisitors || 0).toLocaleString()}</td>
+                <td>{formatCurrency(totalRevenue)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Key Insights & Analysis (Moved below main report) ── */}
+      <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
         <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
         <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Computed from tourist records, selected filters, and arrival status</p>
       </div>
@@ -508,61 +660,6 @@ function AnalyticsAndReport() {
         ) : (
           <p className="analytics-question-empty">No insights available.</p>
         )}
-      </div>
-
-      <div className="report-print-area">
-        <div className="report-chart-card">
-          <div className="report-card-title">
-            <h3>{getReportTitle(reportType)}</h3>
-            <p>{getReportSubtitle(reportType)}</p>
-          </div>
-
-          <div className="report-chart-area">
-            <Bar
-              data={chartData}
-              options={mainReportChartOptions}
-            />
-          </div>
-        </div>
-
-        <div className="report-table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>{getFirstColumnLabel(reportType)}</th>
-                <th>Total Visitors</th>
-                <th>Total Revenue</th>
-                <th>Avg / Visitor</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {rows.length ? (
-                rows.map((row) => (
-                  <tr key={row.id || row.resort_id || row.name}>
-                    <td>{row.name}</td>
-                    <td>{Number(row.visitors || 0).toLocaleString()}</td>
-                    <td>{formatCurrency(row.revenue)}</td>
-                    <td>{formatCurrency(row.avg)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="4" style={{ textAlign: "center" }}>
-                    No report data found.
-                  </td>
-                </tr>
-              )}
-
-              <tr className="total-row">
-                <td>Total</td>
-                <td>{Number(totalVisitors || 0).toLocaleString()}</td>
-                <td>{formatCurrency(totalRevenue)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );

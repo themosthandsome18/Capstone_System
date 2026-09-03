@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiAlertTriangle, FiClock, FiFileText, FiSearch } from "react-icons/fi";
+import {
+  FiAlertCircle,
+  FiAlertOctagon,
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiClock,
+  FiSearch,
+} from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const permitStatusOptions = [
@@ -12,6 +19,33 @@ const permitStatusOptions = [
   { value: "no_permit", label: "No Permit" },
 ];
 
+const SEVERITY_CONFIG = {
+  suspended: {
+    rank: 1,
+    level: "critical",
+    badgeLabel: "Critical • Suspended",
+    desc: "Major sanitary violation or official MHO closure order.",
+  },
+  no_permit: {
+    rank: 2,
+    level: "high",
+    badgeLabel: "Urgent • No Permit",
+    desc: "Operating without permit. Subject to immediate sanitary inspection.",
+  },
+  conditional: {
+    rank: 3,
+    level: "medium",
+    badgeLabel: "Moderate • Conditional",
+    desc: "Permit issued with pending sanitary requirements to complete.",
+  },
+  renewal_due: {
+    rank: 4,
+    level: "low",
+    badgeLabel: "Notice • Renewal Due",
+    desc: "Permit expiring soon within standard 30-day period.",
+  },
+};
+
 function PermitMonitoring() {
   const navigate = useNavigate();
   const { establishments, inspections, permitData, loading, error } =
@@ -19,6 +53,7 @@ function PermitMonitoring() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [alertFilter, setAlertFilter] = useState("all");
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -71,12 +106,26 @@ function PermitMonitoring() {
     noPermit: rows.filter((row) => row.permit_status === "no_permit").length,
   };
 
-  const alertRows = rows.filter(
-    (row) =>
-      row.permit_status === "suspended" ||
-      row.permit_status === "conditional" ||
-      row.permit_status === "no_permit"
-  );
+  const allAlertRows = useMemo(() => {
+    return rows
+      .filter(
+        (row) =>
+          row.permit_status === "suspended" ||
+          row.permit_status === "no_permit" ||
+          row.permit_status === "conditional" ||
+          row.permit_status === "renewal_due"
+      )
+      .sort((a, b) => {
+        const rankA = SEVERITY_CONFIG[a.permit_status]?.rank ?? 99;
+        const rankB = SEVERITY_CONFIG[b.permit_status]?.rank ?? 99;
+        return rankA - rankB;
+      });
+  }, [rows]);
+
+  const filteredAlertRows = useMemo(() => {
+    if (alertFilter === "all") return allAlertRows;
+    return allAlertRows.filter((r) => r.permit_status === alertFilter);
+  }, [allAlertRows, alertFilter]);
 
   if (loading) {
     return <div className="permit-page">Loading permit records...</div>;
@@ -95,7 +144,7 @@ function PermitMonitoring() {
         <PermitStat
           title="Active Permits"
           value={summary.active || 0}
-          icon={<FiFileText />}
+          icon={<FiCheckCircle />}
           color="green"
         />
         <PermitStat
@@ -107,39 +156,108 @@ function PermitMonitoring() {
         <PermitStat
           title="Conditional"
           value={summary.conditional || 0}
-          icon={<FiFileText />}
+          icon={<FiAlertCircle />}
           color="orange"
         />
         <PermitStat
           title="Suspended"
           value={summary.suspended || 0}
-          icon={<FiFileText />}
+          icon={<FiAlertOctagon />}
           color="red"
+        />
+        <PermitStat
+          title="No Permit"
+          value={summary.noPermit || 0}
+          icon={<FiAlertTriangle />}
+          color="rose"
         />
       </div>
 
-      <div className="permit-alert-grid">
-        {alertRows.length ? (
-          alertRows.slice(0, 4).map((row) => (
-            <PermitAlert
-              key={row.id}
-              title={row.business_name}
-              desc={`${row.business_type_name} | ${row.permit_size_label}`}
-              permitNumber={row.permit_number}
-              status={row.permit_status_label}
-              onClick={() => navigate("/sanitation/establishments?search=" + encodeURIComponent(row.business_name))}
-            />
-          ))
-        ) : (
-          <div className="permit-alert-card permit-alert-good">
-            <FiFileText />
-            <div>
-              <h3>No critical permit alerts</h3>
-              <p>All monitored permits are currently in acceptable condition.</p>
-              <strong>Good standing</strong>
-            </div>
+      <div className="permit-alert-section">
+        <div className="permit-alert-section-header">
+          <div>
+            <h2>Permit Warnings & Action Alerts</h2>
+            <p>
+              Categorized by severity: Malalang kaso (Suspended &amp; No Permit) hanggang sa katamtamang babala (Conditional &amp; Renewal)
+            </p>
           </div>
-        )}
+
+          <div className="permit-alert-filter-bar">
+            <button
+              type="button"
+              className={`permit-alert-filter-btn ${
+                alertFilter === "all" ? "active" : ""
+              }`}
+              onClick={() => setAlertFilter("all")}
+            >
+              All Warnings ({allAlertRows.length})
+            </button>
+            <button
+              type="button"
+              className={`permit-alert-filter-btn filter--critical ${
+                alertFilter === "suspended" ? "active" : ""
+              }`}
+              onClick={() => setAlertFilter("suspended")}
+            >
+              🔴 Suspended ({summary.suspended || 0})
+            </button>
+            <button
+              type="button"
+              className={`permit-alert-filter-btn filter--high ${
+                alertFilter === "no_permit" ? "active" : ""
+              }`}
+              onClick={() => setAlertFilter("no_permit")}
+            >
+              🟣 No Permit ({summary.noPermit || 0})
+            </button>
+            <button
+              type="button"
+              className={`permit-alert-filter-btn filter--medium ${
+                alertFilter === "conditional" ? "active" : ""
+              }`}
+              onClick={() => setAlertFilter("conditional")}
+            >
+              🟠 Conditional ({summary.conditional || 0})
+            </button>
+            <button
+              type="button"
+              className={`permit-alert-filter-btn filter--low ${
+                alertFilter === "renewal_due" ? "active" : ""
+              }`}
+              onClick={() => setAlertFilter("renewal_due")}
+            >
+              🟡 Renewal Due ({summary.renewalDue || 0})
+            </button>
+          </div>
+        </div>
+
+        <div className="permit-alert-grid">
+          {filteredAlertRows.length ? (
+            filteredAlertRows.slice(0, 6).map((row) => (
+              <PermitAlert
+                key={row.id}
+                establishment={row}
+                onClick={() =>
+                  navigate(
+                    "/sanitation/establishments?search=" +
+                      encodeURIComponent(row.business_name)
+                  )
+                }
+              />
+            ))
+          ) : (
+            <div className="permit-alert-card permit-alert-good">
+              <FiCheckCircle />
+              <div>
+                <h3>No warnings found</h3>
+                <p>
+                  All monitored establishments in this category are in good compliance standing.
+                </p>
+                <strong>Good standing</strong>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <section className="permit-table-card">
@@ -249,15 +367,47 @@ function PermitStat({ title, value, icon, color }) {
   );
 }
 
-function PermitAlert({ title, desc, status, permitNumber, onClick }) {
-  return (
-    <div className="permit-alert-card" onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
-      <FiAlertTriangle />
+function PermitAlert({ establishment, onClick }) {
+  const statusKey = establishment.permit_status || "conditional";
+  const config = SEVERITY_CONFIG[statusKey] || SEVERITY_CONFIG.conditional;
 
-      <div>
-        <h3>{title}</h3>
-        <p>{permitNumber ? `Permit #: ${permitNumber} | ` : ""}{desc}</p>
-        <strong>{status}</strong>
+  return (
+    <div
+      className={`permit-alert-card permit-alert--${config.level}`}
+      onClick={onClick}
+      style={{ cursor: onClick ? "pointer" : "default" }}
+      title="Click to view establishment record"
+    >
+      <div className={`permit-alert-icon permit-alert-icon--${config.level}`}>
+        {config.level === "critical" && <FiAlertOctagon />}
+        {config.level === "high" && <FiAlertTriangle />}
+        {config.level === "medium" && <FiAlertCircle />}
+        {config.level === "low" && <FiClock />}
+      </div>
+
+      <div className="permit-alert-content">
+        <div className="permit-alert-header">
+          <h3>{establishment.business_name}</h3>
+          <span className={`permit-severity-tag tag--${config.level}`}>
+            {config.badgeLabel}
+          </span>
+        </div>
+
+        <p className="permit-alert-meta">
+          {establishment.permit_number ? (
+            <span>Permit #: <strong>{establishment.permit_number}</strong> • </span>
+          ) : null}
+          <span>{establishment.business_type_name || "Commercial"}</span>
+          <span> | {establishment.permit_size_label || establishment.permit_size || "SP"}</span>
+          <span> | Brgy. {establishment.barangay}</span>
+        </p>
+
+        <div className="permit-alert-footer">
+          <span className={`permit-status-badge badge--${config.level}`}>
+            ● {establishment.permit_status_label || establishment.permit_status}
+          </span>
+          <span className="permit-alert-desc-note">{config.desc}</span>
+        </div>
       </div>
     </div>
   );

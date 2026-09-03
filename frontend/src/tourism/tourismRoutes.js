@@ -4,7 +4,6 @@ import Dashboard from "./pages/Dashboard";
 import BookingManagement from "./pages/BookingManagement";
 import ArrivalMonitoring from "./pages/ArrivalMonitoring";
 import DestinationManagement from "./pages/DestinationManagement";
-import FeedbackMonitoring from "./pages/FeedbackMonitoring";
 import AnalyticsAndReport from "./pages/AnalyticsAndReport";
 import GISMap from "./pages/GISMap";
 import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
@@ -30,11 +29,13 @@ export const tourismRoutes = [
   },
   {
     path: "/destinations",
-    element: React.createElement(withErrorBoundary(DestinationManagement, "Destination Management")),
+    element: React.createElement(withErrorBoundary(DestinationManagement, "Destinations & Feedback")),
   },
   {
     path: "/feedback",
-    element: React.createElement(withErrorBoundary(FeedbackMonitoring, "Feedback Monitoring")),
+    element: React.createElement(
+      withErrorBoundary(() => <DestinationManagement initialTab="feedback" />, "Destinations & Feedback")
+    ),
   },
   {
     path: "/analytics-reports",

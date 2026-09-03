@@ -64,6 +64,18 @@
   background: radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(52, 211, 153, 0.3) 70%, transparent 100%);
 }
 
+/* Center Content Wrap */
+.page-loader__content-wrap {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+
 /* Logo Center Wrapper */
 .page-loader__logo-wrap {
   position: relative;
@@ -71,7 +83,82 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: plPopLogo 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: plPopLogo 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Text and Status Wrap */
+.page-loader__text-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 440px;
+  animation: plFadeIn 0.3s ease forwards;
+}
+
+.page-loader__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.page-loader--sanitation .page-loader__title {
+  color: #064e3b;
+}
+
+.page-loader__subtext {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.page-loader--sanitation .page-loader__subtext {
+  color: #047857;
+  opacity: 0.85;
+}
+
+/* Smooth Indeterminate Progress Bar */
+.page-loader__progress-bar {
+  width: 180px;
+  height: 4px;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+  position: relative;
+}
+
+.page-loader--sanitation .page-loader__progress-bar {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.page-loader__progress-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, #10b981, #059669);
+  border-radius: 999px;
+  animation: plProgressBar 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes plProgressBar {
+  0% {
+    left: -40%;
+    width: 30%;
+  }
+  50% {
+    left: 30%;
+    width: 60%;
+  }
+  100% {
+    left: 100%;
+    width: 30%;
+  }
 }
 
 /* ==========================================================================
@@ -104,4 +191,65 @@
   .page-loader__logo-wrap {
     transform: scale(0.9);
   }
+}
+
+/* ================= NORMAL SANITATION LOADER ================= */
+
+.sanitation-normal-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 10px;
+}
+
+.sanitation-normal-loader__ring-outer {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sanitation-normal-loader__ring-outer::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 3.5px solid rgba(16, 185, 129, 0.2);
+  border-top-color: #059669;
+  border-right-color: #10b981;
+  animation: snlSpin 0.9s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+}
+
+.sanitation-normal-loader__ring-inner {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 2px dashed rgba(16, 185, 129, 0.35);
+  animation: snlSpinRev 6s linear infinite;
+  pointer-events: none;
+}
+
+.sanitation-normal-loader__logo {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  z-index: 1;
+}
+
+@keyframes snlSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes snlSpinRev {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
 }

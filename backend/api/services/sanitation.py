@@ -349,20 +349,37 @@ def build_sanitation_submissions_payload(params=None):
 
     rows = []
     for establishment in establishments:
+        submitted_date = ""
+        if establishment.permit_issued_date:
+            submitted_date = establishment.permit_issued_date.isoformat()
+        elif establishment.created_at:
+            submitted_date = establishment.created_at.date().isoformat()
+
         rows.append(
             {
                 "id": establishment.id,
                 "business_name": establishment.business_name,
                 "owner_name": establishment.owner_name,
                 "business_type": establishment.business_type.name,
+                "business_type_id": establishment.business_type_id,
                 "permit_size": establishment.permit_size,
                 "permit_size_label": establishment.get_permit_size_display(),
                 "barangay": establishment.barangay,
-                "date_submitted": (
+                "address": establishment.address,
+                "contact_number": establishment.contact_number,
+                "has_permit": establishment.has_permit,
+                "permit_number": establishment.permit_number,
+                "permit_issued_date": (
                     establishment.permit_issued_date.isoformat()
                     if establishment.permit_issued_date
                     else ""
                 ),
+                "permit_expiry_date": (
+                    establishment.permit_expiry_date.isoformat()
+                    if establishment.permit_expiry_date
+                    else ""
+                ),
+                "date_submitted": submitted_date,
                 "compliance_status": establishment.compliance_status,
                 "compliance_status_label": STATUS_LABELS.get(
                     establishment.compliance_status,
@@ -394,7 +411,8 @@ def build_sanitation_submissions_payload(params=None):
 
 
 def build_sanitation_reports_payload(params=None):
-    ensure_initial_sanitation_data()
+    if not SanitaryEstablishment.objects.exists():
+        ensure_initial_sanitation_data()
 
     params = params or {}
     business_type_id = params.get("business_type_id")
@@ -1179,6 +1197,63 @@ def advance_renewal_stage(renewal):
         renewal.payment_status = RENEWAL_PAYMENT_PAID
         renewal.released_at = timezone.localdate()
     renewal.save()
+
+    if renewal.stage == RENEWAL_STAGE_RELEASED:
+        sync_establishment_after_renewal_release(renewal)
+
+    return renewal
+
+
+def mark_renewal_paid(renewal, payment_method="", or_number=""):
+    renewal.payment_status = RENEWAL_PAYMENT_PAID
+    note_parts = []
+    if payment_method:
+        note_parts.append(f"Method: {payment_method}")
+    if or_number:
+        note_parts.append(f"OR#: {or_number}")
+    if note_parts:
+        renewal.remarks = (
+            (renewal.remarks or "").strip()
+            + f"\n[Payment Confirmed: {', '.join(note_parts)} on {timezone.localdate()}]"
+        ).strip()
+
+    # If currently at payment_pending, advance automatically to approved!
+    if renewal.stage == RENEWAL_STAGE_PAYMENT_PENDING:
+        renewal.stage = RENEWAL_STAGE_APPROVED
+        renewal.progress = RENEWAL_STAGE_PROGRESS.get(renewal.stage, 86)
+
+    renewal.save()
+    return renewal
+
+
+def mark_renewal_unpaid(renewal):
+    renewal.payment_status = RENEWAL_PAYMENT_UNPAID
+    renewal.save()
+    return renewal
+
+
+def resolve_overdue_renewal(renewal):
+    today = timezone.localdate()
+    renewal.expiration_date = add_one_year(today)
+    if renewal.stage == RENEWAL_STAGE_LAPSED:
+        renewal.stage = RENEWAL_STAGE_APPLICATION_FILED
+    renewal.progress = RENEWAL_STAGE_PROGRESS.get(renewal.stage, 29)
+    renewal.remarks = (
+        (renewal.remarks or "").strip()
+        + f"\n[Overdue Cleared & Validity Extended to {renewal.expiration_date} on {today}]"
+    ).strip()
+    renewal.save()
+
+    establishment = renewal.establishment
+    establishment.permit_expiry_date = renewal.expiration_date
+    if establishment.compliance_status in [
+        SANITARY_STATUS_VIOLATION,
+        SANITARY_STATUS_NO_PERMIT,
+        SANITARY_STATUS_FOR_COMPLETION,
+    ]:
+        establishment.compliance_status = SANITARY_STATUS_GOOD
+    establishment.permit_status = PERMIT_STATUS_ACTIVE
+    establishment.save()
     return renewal
 
 

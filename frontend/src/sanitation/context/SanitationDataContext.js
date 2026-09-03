@@ -59,10 +59,16 @@ export function SanitationDataProvider({ children }) {
     setError("");
 
     try {
-      const [data, householdData] = await Promise.all([
-        fetchSanitationBootstrap(),
-        includeHouseholds ? fetchHouseholdBootstrap() : Promise.resolve(null),
-      ]);
+      const sanitationPromise = fetchSanitationBootstrap();
+      const householdPromise = includeHouseholds
+        ? fetchHouseholdBootstrap().catch((err) => {
+            console.warn("Deferred household bootstrap warning:", err);
+            return null;
+          })
+        : Promise.resolve(null);
+
+      // Await core sanitation data first to display dashboard/establishments quickly
+      const data = await sanitationPromise;
 
       setState((current) => ({
         ...current,
@@ -75,20 +81,27 @@ export function SanitationDataProvider({ children }) {
         complaintData: data.complaintData || null,
         submissionData: data.submissionData || null,
         reportData: data.reportData || null,
-        ...(householdData
-          ? {
-              barangays: householdData.barangays || [],
-              householdRecords: householdData.householdRecords || [],
-              householdDashboardData:
-                householdData.householdDashboardData || null,
-            }
-          : {}),
       }));
-    } catch (requestError) {
-      setError(requestError.message || "Unable to load sanitation data.");
-    } finally {
+
+      // Release loading screen immediately so user can interact with the app right away
       setLoading(false);
 
+      // When household data finishes in background, merge smoothly into state
+      householdPromise.then((householdData) => {
+        if (householdData) {
+          setState((current) => ({
+            ...current,
+            barangays: householdData.barangays || [],
+            householdRecords: householdData.householdRecords || [],
+            householdDashboardData:
+              householdData.householdDashboardData || null,
+          }));
+        }
+      });
+    } catch (requestError) {
+      setError(requestError.message || "Unable to load sanitation data.");
+      setLoading(false);
+    } finally {
       // Preload reportData in background so "Report & Analytics" page loads instantly
       fetchSanitationReports()
         .then((reportData) => {

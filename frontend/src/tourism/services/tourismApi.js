@@ -91,7 +91,7 @@ const emptyReportData = {
 };
 
 const emptyArrivalMonitoring = {
-  filters: { year: currentReportingYear, from: "", to: "" },
+  filters: { year: currentReportingYear, date: "", resort_id: "all", from: "", to: "" },
   feePerVisitor: 300,
   reportDate: "",
   summary: {
@@ -144,10 +144,17 @@ const emptyBookingManagement = {
 
 function addResortImage(resort) {
   const imageKey = resort.image_key || getImageKeyFromName(resort.resort_name);
+  const defaultImage = resortImagesByKey[imageKey] || "";
+  const uploadedImages = Array.isArray(resort.images) ? resort.images : [];
+  const allImages = [...uploadedImages];
+  if (defaultImage && !allImages.includes(defaultImage)) {
+    allImages.unshift(defaultImage);
+  }
 
   return {
     ...resort,
-    image: resort.image || resortImagesByKey[imageKey] || "",
+    image: uploadedImages[0] || defaultImage || "",
+    images: allImages.length > 0 ? allImages : (defaultImage ? [defaultImage] : []),
   };
 }
 
@@ -277,6 +284,8 @@ export const tourismApi = {
   async getArrivalMonitoringData(params = {}) {
     const query = buildQueryString({
       year: params.year,
+      date: params.date,
+      resort_id: params.resort_id,
       from: params.from,
       to: params.to,
     });
@@ -361,6 +370,16 @@ export const tourismApi = {
       body: JSON.stringify(payload),
     });
     return addResortImage(created);
+  },
+
+  async uploadResortImage(file) {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    return apiRequest("/resorts/upload-image/", {
+      method: "POST",
+      body: formData,
+    });
   },
 
   async updateResort(id, payload) {

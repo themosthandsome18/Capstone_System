@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./BookingManagement.wizard.css";
 import {
   FiChevronLeft,
@@ -11,7 +11,7 @@ import {
   FiX,
   FiUpload,
 } from "react-icons/fi";
-import { useOutletContext } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
 import { useTourismData } from "../context/TourismDataContext";
@@ -41,6 +41,7 @@ const initialForm = {
   age_0_7: "0",
   age_8_59: "0",
   age_60_above: "0",
+  status: "arrived",
 };
 
 const WIZARD_STEPS = [
@@ -162,12 +163,31 @@ function BookingManagement() {
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const lastHandledTsRef = useRef(0);
+
   useEffect(() => {
-    if (addEntryRequestId) {
+    if (
+      location.state?.openAddModal &&
+      location.state?.ts &&
+      location.state.ts !== lastHandledTsRef.current
+    ) {
+      lastHandledTsRef.current = location.state.ts;
+      openAddRecord();
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
+
+    if (
+      addEntryRequestId &&
+      addEntryRequestId !== lastHandledTsRef.current
+    ) {
+      lastHandledTsRef.current = addEntryRequestId;
       openAddRecord();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addEntryRequestId]);
+  }, [addEntryRequestId, location.state, location.pathname, navigate]);
 
 
   useEffect(() => {
@@ -284,7 +304,7 @@ function BookingManagement() {
     const philippinesId = referenceTables.countries.find(
       (c) => c.name?.toLowerCase().includes("philippine")
     )?.id || "";
-    setForm({ ...initialForm, country_id: String(philippinesId) });
+    setForm({ ...initialForm, country_id: String(philippinesId), status: "arrived" });
     setFormError("");
     setStepError("");
     setCurrentStep(1);
@@ -331,6 +351,7 @@ function BookingManagement() {
       age_0_7: String(record.age_0_7 || 0),
       age_8_59: String(record.age_8_59 || 0),
       age_60_above: String(record.age_60_above || 0),
+      status: record.status || "arrived",
     });
 
     setFormError("");
@@ -426,7 +447,7 @@ function BookingManagement() {
       age_0_7: toInteger(form.age_0_7),
       age_8_59: toInteger(form.age_8_59),
       age_60_above: toInteger(form.age_60_above),
-      status: editingRecord?.status || "pending",
+      status: form.status || editingRecord?.status || "arrived",
     };
   }
 
@@ -779,6 +800,13 @@ function BookingManagement() {
         </div>
 
         <div className="booking-actions">
+          <button
+            type="button"
+            className="primary-action"
+            onClick={openAddRecord}
+          >
+            + Add Record
+          </button>
           <button type="button" className="outline-action" onClick={handleExport}>
             Export CSV
           </button>
@@ -1294,6 +1322,15 @@ function BookingManagement() {
                         onChange={(e) => updateField("arrival_date", e.target.value)}
                       />
                     </WizardField>
+                    <WizardField label="Arrival Status" required>
+                      <select
+                        value={form.status}
+                        onChange={(e) => updateField("status", e.target.value)}
+                      >
+                        <option value="arrived">Arrived (Confirmed)</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </WizardField>
                     <WizardField label="Boat Capacity and Fare">
                       <select
                         value={form.boat_capacity_fare}
@@ -1383,6 +1420,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Boat Type" value={resolveLabel(referenceTables.boatTypes, form.boat_type_id)} />
                       <WizardReviewItem label="Visit Purpose" value={resolveLabel(referenceTables.visitPurposes, form.visit_purpose_id)} />
                       <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
+                      <WizardReviewItem label="Arrival Status" value={form.status === "pending" ? "Pending" : "Arrived (Confirmed)"} />
                     </WizardReviewSection>
                     <WizardReviewSection title="Head Count" onEdit={() => jumpToStep(4)}>
                       <WizardReviewItem label="Filipino Count" value={form.filipino_count} />

@@ -94,7 +94,7 @@ const emptyBootstrap = {
     executiveSummaryRows: [],
   },
   arrivalMonitoring: {
-    filters: { year: currentReportingYear, from: "", to: "" },
+    filters: { year: currentReportingYear, date: "", resort_id: "all", from: "", to: "" },
     feePerVisitor: 300,
     reportDate: "",
     summary: {
@@ -246,9 +246,12 @@ export function TourismDataProvider({ children }) {
 
   async function refreshComputedData() {
     const [arrivalMonitoring, dashboardData, reportData] = await Promise.all([
-      tourismApi.getArrivalMonitoringData(bootstrap.arrivalMonitoring.filters),
-      tourismApi.getDashboardData(bootstrap.dashboardData.filters),
-      tourismApi.getReportsData(bootstrap.reportData.filters),
+      tourismApi.getArrivalMonitoringData(bootstrap.arrivalMonitoring?.filters || {}),
+      tourismApi.getDashboardData(bootstrap.dashboardData?.filters || {}),
+      tourismApi.getReportsData({
+        ...(bootstrap.reportData?.filters || {}),
+        include_questions: true,
+      }),
     ]);
 
     setBootstrap((current) => ({
@@ -450,6 +453,7 @@ export function TourismDataProvider({ children }) {
         createResort,
         updateResort,
         deleteResort,
+        uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
       }}
     >

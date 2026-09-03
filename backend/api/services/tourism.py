@@ -161,19 +161,39 @@ def build_arrival_monitoring_payload(params=None):
     reporting_year = get_reporting_year(params)
     date_from = (params.get("from") or "").strip()
     date_to = (params.get("to") or "").strip()
+    specific_date = (params.get("date") or "").strip()
+    resort_id = (params.get("resort_id") or "").strip()
 
-    records = apply_reporting_year(
-        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
-        reporting_year,
-    ).select_related("itinerary", "resort")
+    records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
 
-    if date_from:
-        records = records.filter(arrival_date__gte=date_from)
+    today_iso = timezone.localdate().isoformat()
+    active_date = None
 
-    if date_to:
-        records = records.filter(arrival_date__lte=date_to)
+    if specific_date:
+        if specific_date.lower() == "all":
+            records = apply_reporting_year(records, reporting_year)
+            active_date = "all"
+        else:
+            records = records.filter(arrival_date=specific_date)
+            active_date = specific_date
+    elif date_from or date_to:
+        records = apply_reporting_year(records, reporting_year)
+        if date_from:
+            records = records.filter(arrival_date__gte=date_from)
+        if date_to:
+            records = records.filter(arrival_date__lte=date_to)
+        active_date = ""
+    else:
+        records = records.filter(arrival_date=today_iso)
+        active_date = today_iso
 
-    records = records.order_by("-updated_at", "-arrival_date")
+    if resort_id and resort_id.lower() != "all":
+        try:
+            records = records.filter(resort_id=int(resort_id))
+        except (ValueError, TypeError):
+            pass
+
+    records = records.select_related("itinerary", "resort").order_by("-updated_at", "-arrival_date")
 
     rows = []
     totals = {
@@ -232,11 +252,13 @@ def build_arrival_monitoring_payload(params=None):
     return {
         "filters": {
             "year": reporting_year,
+            "date": active_date or "",
+            "resort_id": resort_id if resort_id else "all",
             "from": date_from,
             "to": date_to,
         },
         "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
-        "reportDate": latest_arrival_date_str,
+        "reportDate": active_date if (active_date and active_date != "all") else (latest_arrival_date_str or today_iso),
         "summary": totals,
         "rows": rows,
         "dailyTotals": {
@@ -601,14 +623,14 @@ def build_reports_payload(params=None):
     if isinstance(include_questions, str):
         include_questions = include_questions.lower() not in {"0", "false", "no"}
 
-    records = apply_reporting_year(
-        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
-        reporting_year,
-    ).select_related("province", "resort", "travel_mode", "visit_purpose")
-
     if report_type == "no_show":
         records = apply_reporting_year(
             TouristRecord.objects.filter(status=BOOKING_STATUS_NO_SHOW),
+            reporting_year,
+        ).select_related("province", "resort", "travel_mode", "visit_purpose")
+    else:
+        records = apply_reporting_year(
+            TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW),
             reporting_year,
         ).select_related("province", "resort", "travel_mode", "visit_purpose")
 
@@ -832,7 +854,7 @@ def build_tourism_question_answers(params=None):
     date_to = params.get("to")
 
     arrived = apply_reporting_year(
-        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
+        TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW),
         reporting_year,
     ).select_related("itinerary", "province", "region", "country", "resort", "visit_purpose")
     all_records = apply_reporting_year(
@@ -1116,7 +1138,7 @@ def format_top_answer(item, denominator, unit):
 
 def get_month_comparison(arrived_records=None):
     if arrived_records is None:
-        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return {"label": "Previous month", "total": 0}, {"label": "Current month", "total": 0}
@@ -1154,7 +1176,7 @@ def get_peak_month(arrived_records=None):
     records = (
         arrived_records
         if arrived_records is not None
-        else TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+        else TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
     )
 
     for val in records.values("arrival_date", "total_visitors"):
@@ -1173,7 +1195,7 @@ def get_peak_month(arrived_records=None):
 
 def get_recent_demand_signal(arrived_records=None):
     if arrived_records is None:
-        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return "No recent arrival trend is available yet."
@@ -1203,7 +1225,7 @@ def get_recent_demand_signal(arrived_records=None):
 
 def get_recent_demand_visual(arrived_records=None):
     if arrived_records is None:
-        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return {"type": "comparison", "items": []}

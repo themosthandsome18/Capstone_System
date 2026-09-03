@@ -2019,6 +2019,139 @@
   line-height: 1.5;
 }
 
+/* ================= ESTABLISHMENT DETAIL QR CARD ================= */
+
+.establishment-detail-qr-card {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+}
+
+.establishment-detail-qr-card .qr-box {
+  flex-shrink: 0;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.establishment-detail-qr-card .qr-info {
+  flex: 1;
+}
+
+.establishment-detail-qr-card .qr-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.establishment-detail-qr-card .qr-badge {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.establishment-detail-qr-card .qr-badge.official {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.establishment-detail-qr-card .qr-badge.valid {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.establishment-detail-qr-card .qr-badge.unissued {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.establishment-detail-qr-card h4 {
+  margin: 0 0 5px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #064e3b;
+}
+
+.establishment-detail-qr-card p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.establishment-detail-qr-card .qr-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.establishment-detail-qr-card .qr-test-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: #059669;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.establishment-detail-qr-card .qr-test-link:hover {
+  text-decoration: underline;
+  color: #047857;
+}
+
+.establishment-detail-qr-card .qr-issue-btn {
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.establishment-detail-qr-card .qr-issue-btn:hover {
+  background: #047857;
+}
+
+.permit-gen-btn {
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid #10b981;
+  background: #ecfdf5;
+  color: #065f46;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.permit-gen-btn:hover {
+  background: #10b981;
+  color: #ffffff;
+}
+
 .establishment-timeline-panel {
   margin-top: 18px;
   border: 1px solid #d7e0dc;
@@ -3180,8 +3313,8 @@
 
 .permit-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
 }
 
 .permit-stat-card {
@@ -3193,20 +3326,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
 }
 
 .permit-stat-card p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 800;
   text-transform: uppercase;
   color: #777;
 }
 
 .permit-stat-card h2 {
-  margin: 8px 0 0;
-  font-size: 23.5px;
+  margin: 6px 0 0;
+  font-size: 22px;
   font-weight: 800;
   color: #111;
 }
@@ -3217,65 +3350,300 @@
 }
 
 .permit-stat-icon.green {
-  color: #28c95f;
+  color: #16a34a;
 }
 
 .permit-stat-icon.yellow {
-  color: #ffbd2e;
+  color: #ca8a04;
 }
 
 .permit-stat-icon.orange {
-  color: #f59e0b;
+  color: #ea580c;
 }
 
 .permit-stat-icon.red {
-  color: #ff3b30;
+  color: #dc2626;
 }
 
-/* ===================== PERMIT ALERTS ===================== */
+.permit-stat-icon.rose {
+  color: #e11d48;
+}
+
+/* ===================== PERMIT ALERTS (SEVERITY GRADED) ===================== */
+
+.permit-alert-section {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.permit-alert-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.permit-alert-section-header h2 {
+  margin: 0;
+  font-size: 17.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.permit-alert-section-header p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.permit-alert-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permit-alert-filter-btn {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #4b5563;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.permit-alert-filter-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.permit-alert-filter-btn.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.permit-alert-filter-btn.filter--critical.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+.permit-alert-filter-btn.filter--high.active {
+  background: #e11d48;
+  border-color: #e11d48;
+  color: #ffffff;
+}
+
+.permit-alert-filter-btn.filter--medium.active {
+  background: #d97706;
+  border-color: #d97706;
+  color: #ffffff;
+}
+
+.permit-alert-filter-btn.filter--low.active {
+  background: #ca8a04;
+  border-color: #ca8a04;
+  color: #ffffff;
+}
 
 .permit-alert-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  gap: 16px;
 }
 
 .permit-alert-card {
-  min-height: 76px;
-  border: 1px solid #aeb7b1;
-  border-left: 7px solid #ff2e2e;
-  border-radius: 8px;
+  min-height: 82px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   background: #ffffff;
   padding: 13px 16px;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.2);
+  gap: 13px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.permit-alert-card svg {
-  margin-top: 4px;
-  color: #ff2e2e;
-  font-size: 18.5px;
+.permit-alert-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+.permit-alert-icon {
+  font-size: 21px;
+  line-height: 1;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.permit-alert-card h3 {
+.permit-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.permit-alert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.permit-alert-header h3 {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 800;
-  color: #111;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.permit-alert-card p {
-  margin: 3px 0;
-  font-size: 12.5px;
-  color: #666;
+.permit-severity-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.permit-alert-card strong {
-  font-size: 12.5px;
-  color: #ff2e2e;
+.permit-alert-meta {
+  margin: 3px 0 6px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.permit-alert-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+  flex-wrap: wrap;
+}
+
+.permit-status-badge {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.permit-alert-desc-note {
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 🔴 CRITICAL / MALALA: Suspended */
+.permit-alert-card.permit-alert--critical {
+  border-left: 7px solid #dc2626;
+  background: #fffafa;
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
+.permit-alert-icon--critical {
+  color: #dc2626;
+}
+.tag--critical {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+.badge--critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* 🟣 HIGH / MATINDING BABALA: No Permit */
+.permit-alert-card.permit-alert--high {
+  border-left: 7px solid #e11d48;
+  background: #fff5f6;
+  border-color: #fecdd3;
+  border-left-color: #e11d48;
+}
+.permit-alert-icon--high {
+  color: #e11d48;
+}
+.tag--high {
+  background: #ffe4e6;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
+}
+.badge--high {
+  background: #ffe4e6;
+  color: #9f1239;
+}
+
+/* 🟠 MODERATE / HINDI GANON KALALA: Conditional */
+.permit-alert-card.permit-alert--medium {
+  border-left: 7px solid #f59e0b;
+  background: #fffdf5;
+  border-color: #fde68a;
+  border-left-color: #f59e0b;
+}
+.permit-alert-icon--medium {
+  color: #d97706;
+}
+.tag--medium {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.badge--medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* 🟡 NOTICE / PAALALA: Renewal Due */
+.permit-alert-card.permit-alert--low {
+  border-left: 7px solid #eab308;
+  background: #fefce8;
+  border-color: #fef08a;
+  border-left-color: #eab308;
+}
+.permit-alert-icon--low {
+  color: #ca8a04;
+}
+.tag--low {
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fde047;
+}
+.badge--low {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.permit-alert-good {
+  border-left: 7px solid #10b981;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.permit-alert-good svg {
+  color: #10b981;
+}
+.permit-alert-good strong {
+  color: #059669;
 }
 
 /* ===================== PERMIT TABLE ===================== */
@@ -3475,9 +3843,9 @@
 
 .permit-status.no-permit,
 .permit-compliance.no-permit {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
+  background: #ffe4e6;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
 }
 
 .permit-empty {
@@ -4891,8 +5259,10 @@
 }
 
 .renewal-detail-modal {
-  width: min(460px, 100%);
-  padding: 18px;
+  width: min(780px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
 }
 
 .renewal-modal-title,
@@ -5070,49 +5440,469 @@
   color: #ffffff;
 }
 
+/* ── RENEWAL OVERDUE BANNER ── */
+.renewal-overdue-banner {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-left: 6px solid #e11d48;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.renewal-overdue-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.renewal-overdue-info svg {
+  font-size: 22px;
+  color: #e11d48;
+  flex-shrink: 0;
+}
+
+.renewal-overdue-info strong {
+  display: block;
+  font-size: 13.5px;
+  color: #9f1239;
+}
+
+.renewal-overdue-info p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #881337;
+}
+
+.renewal-overdue-btn {
+  background: #e11d48;
+  color: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.renewal-overdue-btn:hover {
+  background: #be123c;
+  transform: translateY(-1px);
+}
+
+/* ── REQUIREMENTS CHECKLIST REDESIGN ── */
+.renewal-req-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 0 8px;
+}
+
+.renewal-req-header-row h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.renewal-req-progress-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.renewal-req-progress-badge.incomplete {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.renewal-req-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.renewal-req-progress-bar-fill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s ease;
+}
+
 .renewal-detail-requirements {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.renewal-detail-requirements span {
-  min-height: 28px;
-  border: 1px solid #b9c3bd;
-  border-radius: 7px;
+.renewal-req-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 8px;
-  font-size: 12.5px;
+  justify-content: space-between;
+  gap: 8px;
+  background: #ffffff;
+  transition: all 0.15s ease;
+  cursor: pointer;
 }
 
-.renewal-detail-requirements .done svg {
-  color: #16a34a;
+.renewal-req-item:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
 }
 
-.renewal-detail-bottom {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.renewal-req-item.complied {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.renewal-req-item-left {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  flex: 1;
 }
 
-.renewal-detail-bottom div {
-  border: 1px solid #b9c3bd;
+.renewal-req-checkbox {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: #059669;
+  flex-shrink: 0;
+}
+
+.renewal-req-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.35;
+}
+
+.renewal-req-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.renewal-req-status-pill.submitted {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.renewal-req-status-pill.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ── PAYMENT CARD REDESIGN ── */
+.renewal-payment-card {
+  margin-top: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.renewal-payment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.renewal-payment-header strong {
+  font-size: 13.5px;
+  color: #0f172a;
+}
+
+.renewal-payment-status-tag {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.renewal-payment-status-tag.paid {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.renewal-payment-status-tag.unpaid {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.renewal-payment-status-tag.partial {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.renewal-payment-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.renewal-pay-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.renewal-pay-field span {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.renewal-pay-field input,
+.renewal-pay-field select {
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  background: #ffffff;
+}
+
+.renewal-payment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.renewal-pay-btn {
+  background: #059669;
+  color: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.renewal-pay-btn:hover {
+  background: #047857;
+}
+
+.renewal-unpay-btn {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.renewal-unpay-btn:hover {
+  background: #e2e8f0;
+}
+
+/* ── ADVANCE STAGE BUTTON ── */
+.renewal-advance-btn {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #ffffff;
+  border: 0;
   border-radius: 7px;
-  background: #f7faf8;
-  padding: 10px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+  transition: all 0.15s ease;
 }
 
-.renewal-detail-bottom strong {
-  font-size: 12.5px;
+.renewal-advance-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3);
 }
 
-.renewal-detail-bottom p {
-  margin: 5px 0 0;
+.renewal-advance-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ── SUBMISSION TRACKING CLICKABLE ESTABLISHMENT & DATES ── */
+.submission-est-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+}
+
+.submission-est-btn strong {
+  display: block;
+  font-size: 13.5px;
+  color: #047857;
+  transition: color 0.15s ease;
+}
+
+.submission-est-btn:hover strong {
+  color: #065f46;
+  text-decoration: underline;
+}
+
+.submission-est-btn small {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.submission-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
-  color: #4b5563;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.submission-date-badge svg {
+  color: #059669;
+}
+
+.submission-date-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 10px;
+}
+
+/* ── INSTANT TABLE SORTING STYLES ── */
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.sortable-th:hover {
+  background: rgba(15, 122, 69, 0.08) !important;
+  color: #0f7a45 !important;
+}
+
+.sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  font-size: 11px;
+  opacity: 0.45;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.sortable-th.active-sort {
+  color: #0f7a45 !important;
+  background: rgba(15, 122, 69, 0.07) !important;
+  font-weight: 800;
+}
+
+.sortable-th.active-sort .sort-indicator {
+  opacity: 1;
+  color: #0f7a45;
+}
+
+.report-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.report-sort-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.report-sort-select {
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.report-sort-select:focus {
+  border-color: #0f7a45;
+}
+
+.report-sort-dir-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.report-sort-dir-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 @media (max-width: 1200px) {
@@ -9704,6 +10494,136 @@
   font-size: 15.5px;
   color: #334155;
   line-height: 1.5;
+}
+
+/* ── REPORT BRIEF SUMMARY MODAL ── */
+.community-report-summary-modal {
+  width: 680px;
+  max-width: 92vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.community-summary-ref-tag {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 800;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.community-summary-statement-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 5px solid #059669;
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.community-summary-statement-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.community-summary-statement-header svg {
+  font-size: 16px;
+}
+
+.community-summary-statement-text {
+  margin: 0;
+  font-size: 13.5px;
+  color: #1e293b;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.community-summary-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.summary-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.summary-act-btn.gis {
+  background: #f0f9ff;
+  color: #0284c7;
+  border-color: #bae6fd;
+}
+.summary-act-btn.gis:hover {
+  background: #e0f2fe;
+}
+
+.summary-act-btn.print {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+.summary-act-btn.print:hover {
+  background: #dcfce7;
+}
+
+.summary-act-btn.schedule {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+.summary-act-btn.schedule:hover {
+  background: #fef3c7;
+}
+
+.summary-act-btn.full-view {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+  margin-left: auto;
+}
+.summary-act-btn.full-view:hover {
+  background: #1e293b;
+}
+
+.community-card-summary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f0fdf4;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.community-card-summary-btn:hover {
+  background: #10b981;
+  color: #ffffff;
 }
 
 .community-detail-panel {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiCalendar, FiCheckCircle, FiPlus } from "react-icons/fi";
+import { FiCalendar, FiCheckCircle } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
 
 const STANDARD_REQUIREMENT_NAMES = [
@@ -110,10 +110,6 @@ function TypesAndRequirements() {
         <section className="requirements-card business-type-card">
           <div className="requirements-card-header">
             <h2>Business Types</h2>
-            <button type="button" title="Business type setup is managed in admin">
-              <FiPlus />
-              Add
-            </button>
           </div>
 
           <div className="business-type-list">

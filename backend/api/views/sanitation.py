@@ -46,6 +46,9 @@ from api.services.sanitation import (
     build_sanitation_submissions_payload,
     generate_complaint_id,
     generate_renewal_id,
+    mark_renewal_paid,
+    mark_renewal_unpaid,
+    resolve_overdue_renewal,
     sync_establishment_after_inspection,
     sync_renewal_progress,
     with_establishment_rollups,
@@ -304,6 +307,16 @@ def sanitation_renewal_detail(request, renewal_id):
     elif action == "mark_released":
         renewal.stage = "released"
         renewal = sync_renewal_progress(renewal)
+    elif action == "mark_paid":
+        renewal = mark_renewal_paid(
+            renewal,
+            payment_method=request.data.get("payment_method", ""),
+            or_number=request.data.get("or_number", ""),
+        )
+    elif action == "mark_unpaid":
+        renewal = mark_renewal_unpaid(renewal)
+    elif action in ["resolve_overdue", "extend_validity"]:
+        renewal = resolve_overdue_renewal(renewal)
     else:
         serializer = SanitaryPermitRenewalSerializer(
             renewal,

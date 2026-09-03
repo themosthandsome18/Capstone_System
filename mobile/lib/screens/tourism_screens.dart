@@ -2424,6 +2424,150 @@ class _EmergencyContactCard extends StatelessWidget {
   }
 }
 
+class DestinationImageSlideshow extends StatefulWidget {
+  const DestinationImageSlideshow({
+    super.key,
+    required this.destination,
+    this.height,
+  });
+
+  final Destination destination;
+  final double? height;
+
+  @override
+  State<DestinationImageSlideshow> createState() =>
+      _DestinationImageSlideshowState();
+}
+
+class _DestinationImageSlideshowState
+    extends State<DestinationImageSlideshow> {
+  late final PageController _pageController;
+  int _currentPage = 0;
+  Timer? _timer;
+
+  List<String> get _images {
+    final list = <String>[];
+    for (final img in widget.destination.images) {
+      if (img.trim().isNotEmpty && !list.contains(img.trim())) {
+        list.add(img.trim());
+      }
+    }
+    final defaultAsset = imageAssetFor(widget.destination.imageKey);
+    if (!list.contains(defaultAsset)) {
+      list.add(defaultAsset);
+    }
+    return list;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (_images.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_currentPage + 1) % _images.length;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildImage(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            DestinationImage(destination: widget.destination),
+      );
+    }
+    if (path.startsWith('/media/')) {
+      final fullUrl = '$apiBaseUrl$path';
+      return Image.network(
+        fullUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            DestinationImage(destination: widget.destination),
+      );
+    }
+    return Image.asset(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) =>
+          DestinationImage(destination: widget.destination),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = _images;
+    if (images.isEmpty) {
+      return DestinationImage(
+        destination: widget.destination,
+        height: widget.height,
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          onPageChanged: (idx) => setState(() => _currentPage = idx),
+          itemCount: images.length,
+          itemBuilder: (context, index) => _buildImage(images[index]),
+        ),
+        if (images.length > 1)
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.photo_library_outlined,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_currentPage + 1} / ${images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class DestinationDetailPage extends StatefulWidget {
   const DestinationDetailPage({
     super.key,
@@ -2505,7 +2649,9 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  DestinationImage(destination: widget.destination),
+                  DestinationImageSlideshow(
+                    destination: widget.destination,
+                  ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -2658,6 +2804,38 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(feedback.message, style: const TextStyle(fontSize: 13, height: 1.4)),
+                              ),
+                            if (feedback.photos.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: SizedBox(
+                                  height: 68,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: feedback.photos.length,
+                                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                                    itemBuilder: (context, idx) {
+                                      final photoUrl = feedback.photos[idx];
+                                      final fullUrl = photoUrl.startsWith('http')
+                                          ? photoUrl
+                                          : '$apiBaseUrl$photoUrl';
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          fullUrl,
+                                          width: 68,
+                                          height: 68,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => const Icon(
+                                            Icons.image_not_supported,
+                                            size: 24,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
                             if (feedback.reply.isNotEmpty)
                               Container(
@@ -2825,6 +3003,8 @@ class FeedbackPage extends StatefulWidget {
 class _FeedbackPageState extends State<FeedbackPage> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _comment = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+  List<XFile> _photos = [];
   int _rating = 5;
   int _cleanliness = 5;
   bool _submitting = false;
@@ -2834,6 +3014,43 @@ class _FeedbackPageState extends State<FeedbackPage> {
     _name.dispose();
     _comment.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      if (source == ImageSource.gallery) {
+        final picked = await _imagePicker.pickMultiImage(
+          imageQuality: 80,
+          maxWidth: 1600,
+        );
+        if (picked.isNotEmpty) {
+          setState(() {
+            _photos.addAll(picked);
+            if (_photos.length > 5) {
+              _photos = _photos.sublist(0, 5);
+              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            }
+          });
+        }
+      } else {
+        final picked = await _imagePicker.pickImage(
+          source: source,
+          imageQuality: 80,
+          maxWidth: 1600,
+        );
+        if (picked != null) {
+          setState(() {
+            _photos.add(picked);
+            if (_photos.length > 5) {
+              _photos = _photos.sublist(0, 5);
+              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            }
+          });
+        }
+      }
+    } catch (error) {
+      if (mounted) showAppMessage(context, 'Photo selection failed: $error');
+    }
   }
 
   @override
@@ -2858,6 +3075,81 @@ class _FeedbackPageState extends State<FeedbackPage> {
           label: 'What did you like?',
           maxLines: 4,
         ),
+        const FormSectionTitle('Attach Photos (Optional)'),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _photos.length >= 5 ? null : () => _pickPhoto(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: const Text('Gallery'),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: _photos.length >= 5 ? null : () => _pickPhoto(ImageSource.camera),
+              icon: const Icon(Icons.camera_alt_outlined, size: 18),
+              label: const Text('Camera'),
+            ),
+          ],
+        ),
+        if (_photos.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: SizedBox(
+              height: 75,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _photos.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final photo = _photos[index];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: FutureBuilder<Uint8List>(
+                          future: photo.readAsBytes(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return Container(
+                                width: 75,
+                                height: 75,
+                                color: Colors.grey.shade200,
+                              );
+                            }
+                            return Image.memory(
+                              snapshot.data!,
+                              width: 75,
+                              height: 75,
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _photos.removeAt(index)),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 13,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         SubmitButton(
           label: 'Submit Feedback',
           loading: _submitting,
@@ -2885,6 +3177,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
         message: _comment.text.trim(),
         cleanlinessRating: _cleanliness,
         sanitationComment: '',
+        photos: _photos,
       );
 
       if (mounted) {
