@@ -219,6 +219,7 @@ class SanitationEstablishment {
     required this.permitStatusLabel,
     required this.latitude,
     required this.longitude,
+    this.contactNumber = '',
   });
 
   final int id;
@@ -237,8 +238,13 @@ class SanitationEstablishment {
   final String permitStatusLabel;
   final double latitude;
   final double longitude;
+  final String contactNumber;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
+  bool get hasPermit =>
+      permitNumber.trim().isNotEmpty &&
+      !permitNumber.toLowerCase().contains('unissued') &&
+      permitStatus.toLowerCase() != 'unissued';
 
   factory SanitationEstablishment.fromJson(Map<String, dynamic> json) {
     return SanitationEstablishment(
@@ -258,6 +264,7 @@ class SanitationEstablishment {
       permitStatusLabel: '${json['permit_status_label'] ?? 'Renewal Due'}',
       latitude: jsonDouble(json['latitude']),
       longitude: jsonDouble(json['longitude']),
+      contactNumber: '${json['contact_number'] ?? ''}',
     );
   }
 
@@ -279,6 +286,7 @@ class SanitationEstablishment {
       permitStatusLabel: 'Renewal Due',
       latitude: 0,
       longitude: 0,
+      contactNumber: '',
     );
   }
 }
@@ -353,6 +361,9 @@ class HouseholdSanitationItem {
     required this.status,
     required this.latitude,
     required this.longitude,
+    this.surveyDate = '',
+    this.waterAccessLevel = 'Level I',
+    this.sanitaryToiletType = 'Pour Flush',
   });
 
   final String householdCode;
@@ -361,6 +372,9 @@ class HouseholdSanitationItem {
   final String status;
   final double latitude;
   final double longitude;
+  final String surveyDate;
+  final String waterAccessLevel;
+  final String sanitaryToiletType;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
 
@@ -372,6 +386,11 @@ class HouseholdSanitationItem {
       status: '${json['status'] ?? 'good_standing'}',
       latitude: jsonDouble(json['latitude']),
       longitude: jsonDouble(json['longitude']),
+      surveyDate: '${json['survey_date'] ?? json['date'] ?? ''}',
+      waterAccessLevel:
+          '${json['water_access_level'] ?? json['water_source'] ?? 'Level I'}',
+      sanitaryToiletType:
+          '${json['sanitary_toilet_type'] ?? json['toilet_type'] ?? 'Pour Flush'}',
     );
   }
 }
@@ -571,12 +590,14 @@ class AppNotification {
   final String type;
 
   IconData get icon {
+    if (type == 'approval') return Icons.verified_outlined;
     if (type == 'sanitation') return Icons.health_and_safety_outlined;
     if (type == 'tourism') return Icons.explore_outlined;
     return Icons.info_outline;
   }
 
   Color get color {
+    if (type == 'approval') return const Color(0xFF10B981);
     if (type == 'sanitation') return Colors.orange;
     if (type == 'tourism') return AppColors.green;
     return Colors.blue;
@@ -952,6 +973,58 @@ class MobileSanitationInspectionReceipt {
       inspectorName: '${json['inspector_name'] ?? inspectorName}',
       inspectionDate: '${json['inspection_date'] ?? inspectionDate}',
       status: '${json['status_after_inspection'] ?? status}',
+    );
+  }
+}
+
+class MobileHouseholdSurveyReceipt {
+  const MobileHouseholdSurveyReceipt({
+    required this.householdCode,
+    required this.householdHead,
+    required this.barangay,
+    required this.status,
+    required this.inspectionDate,
+    required this.waterSource,
+    required this.toiletType,
+  });
+
+  final String householdCode;
+  final String householdHead;
+  final String barangay;
+  final String status;
+  final String inspectionDate;
+  final String waterSource;
+  final String toiletType;
+
+  factory MobileHouseholdSurveyReceipt.fromResponse(
+    Map<String, dynamic> json, {
+    required String head,
+    required String barangay,
+    required String waterSource,
+    required String toiletType,
+  }) {
+    final now = DateTime.now();
+    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return MobileHouseholdSurveyReceipt(
+      householdCode: '${json['household_code'] ?? 'HH-SAVED'}',
+      householdHead: head,
+      barangay: barangay,
+      status: '${json['status'] ?? 'good_standing'}',
+      inspectionDate: dateStr,
+      waterSource: waterSource,
+      toiletType: toiletType,
+    );
+  }
+
+  factory MobileHouseholdSurveyReceipt.fromRecord(HouseholdSanitationItem record) {
+    return MobileHouseholdSurveyReceipt(
+      householdCode: record.householdCode,
+      householdHead: record.householdHead,
+      barangay: record.barangay,
+      status: record.status,
+      inspectionDate: record.surveyDate,
+      waterSource: record.waterAccessLevel,
+      toiletType: record.sanitaryToiletType,
     );
   }
 }

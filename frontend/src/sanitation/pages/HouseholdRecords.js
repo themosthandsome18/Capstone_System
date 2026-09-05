@@ -8,11 +8,13 @@ import {
   FiDroplet,
   FiEdit2,
   FiEye,
+  FiFilter,
   FiHome,
   FiMapPin,
   FiPlus,
   FiPrinter,
   FiSearch,
+  FiShield,
   FiX,
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
@@ -265,20 +267,13 @@ function HouseholdRecords() {
     const officialBarangays = (barangays || [])
       .map((item) => item.name || item)
       .filter(Boolean);
-    const recordBarangays = Array.from(
-      new Set(
-        householdRecords.map((item) => item.barangay).filter(Boolean)
-      )
-    ).sort();
-    const combined = [...officialBarangays];
-
-    recordBarangays.forEach((barangay) => {
-      if (!combined.includes(barangay)) {
-        combined.push(barangay);
-      }
-    });
-
-    return ["all", ...combined];
+    const set = new Set([
+      ...OFFICIAL_MAUBAN_BARANGAYS,
+      ...officialBarangays,
+      ...householdRecords.map((item) => item.barangay).filter(Boolean),
+    ]);
+    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
+    return ["all", ...sorted];
   }, [barangays, householdRecords]);
 
   const barangayRecords = useMemo(() => {
@@ -289,25 +284,64 @@ function HouseholdRecords() {
     return householdRecords.filter((item) => item.barangay === barangayFilter);
   }, [householdRecords, barangayFilter]);
 
-  const summary = householdDashboardData?.summary || {
-    totalHouseholds: 0,
-    withSanitaryFacility: 0,
-    sanitaryFacilityCoverage: 0,
-    withWaterAccess: 0,
-    waterAccessCoverage: 0,
-    atRiskHouseholds: 0,
-  };
+  const summary = useMemo(() => {
+    const total = barangayRecords.length;
+    const withSanitaryFacility = barangayRecords.filter(
+      (item) => item.toilet_type && item.toilet_type !== "none"
+    ).length;
+    const withWaterAccess = barangayRecords.filter((item) =>
+      ["level_2", "level_3"].includes(item.water_level)
+    ).length;
+    const atRiskHouseholds = barangayRecords.filter(
+      (item) => item.status === "violation"
+    ).length;
+
+    // Fallback to pre-aggregated dashboard data if "all" is active and records aren't loaded yet
+    if (barangayFilter === "all" && householdDashboardData?.summary && !total) {
+      return householdDashboardData.summary;
+    }
+
+    return {
+      totalHouseholds: total,
+      withSanitaryFacility,
+      sanitaryFacilityCoverage: total
+        ? Math.round((withSanitaryFacility / total) * 100)
+        : 0,
+      withWaterAccess,
+      waterAccessCoverage: total
+        ? Math.round((withWaterAccess / total) * 100)
+        : 0,
+      atRiskHouseholds,
+    };
+  }, [barangayFilter, householdDashboardData, barangayRecords]);
 
   const riskByBarangay = useMemo(() => {
-    let globalRisk = householdDashboardData?.riskByBarangay || [];
     if (barangayFilter !== "all") {
-      globalRisk = globalRisk.filter((item) => item.barangay === barangayFilter);
+      const atRisk = barangayRecords.filter(
+        (item) => item.status === "violation"
+      ).length;
+      const forCompletion = barangayRecords.filter(
+        (item) => item.status === "for_completion"
+      ).length;
+      const goodStanding = barangayRecords.filter(
+        (item) => item.status === "good_standing"
+      ).length;
+      return [
+        {
+          barangay: barangayFilter,
+          total: barangayRecords.length,
+          atRisk,
+          forCompletion,
+          goodStanding,
+        },
+      ];
     }
+    let globalRisk = householdDashboardData?.riskByBarangay || [];
     // Filter out barangays with 0 risk and sort descending
     return globalRisk
       .filter((item) => item.atRisk > 0)
       .sort((a, b) => b.atRisk - a.atRisk);
-  }, [householdDashboardData, barangayFilter]);
+  }, [householdDashboardData, barangayFilter, barangayRecords]);
 
   const toiletDistribution = useMemo(() => {
     let waterSealed = 0;
@@ -616,16 +650,48 @@ function HouseholdRecords() {
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
 
+      {/* ── Barangay Filter Selector Toolbar ── */}
+      <div className="household-barangay-filter-bar">
+        <div className="hh-filter-left">
+          <label htmlFor="hh-top-barangay-select">
+            <FiFilter /> Filter by Barangay:
+          </label>
+          <select
+            id="hh-top-barangay-select"
+            value={barangayFilter}
+            onChange={(event) => setBarangayFilter(event.target.value)}
+          >
+            {barangayOptions.map((barangay) => (
+              <option key={barangay} value={barangay}>
+                {barangay === "all"
+                  ? "All Mauban Barangays (Municipal Total)"
+                  : `Brgy. ${barangay}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {barangayFilter !== "all" ? (
+          <div className="hh-filter-badge">
+            <FiMapPin /> Showing data strictly for <strong>Brgy. {barangayFilter}</strong> ({barangayRecords.length} households)
+          </div>
+        ) : (
+          <div className="hh-filter-badge municipal">
+            <FiShield /> Showing consolidated data across <strong>{barangayOptions.length > 1 ? barangayOptions.length - 1 : 0} Barangays</strong> ({householdRecords.length} total households)
+          </div>
+        )}
+      </div>
+
       <div className="household-stat-grid">
         <HouseholdStat
-          title="Total Households"
+          title={barangayFilter !== "all" ? `Total Households (Brgy. ${barangayFilter})` : "Total Households"}
           value={summary.totalHouseholds || 0}
           icon={<FiHome />}
           color="green"
         />
 
         <HouseholdStat
-          title="With Sanitary Facility"
+          title={barangayFilter !== "all" ? `With Sanitary Facility (Brgy. ${barangayFilter})` : "With Sanitary Facility"}
           value={summary.withSanitaryFacility || 0}
           desc={`${summary.sanitaryFacilityCoverage || 0}% coverage`}
           icon={<FiHome />}
@@ -633,7 +699,7 @@ function HouseholdRecords() {
         />
 
         <HouseholdStat
-          title="With Water Access"
+          title={barangayFilter !== "all" ? `With Water Access (Brgy. ${barangayFilter})` : "With Water Access"}
           value={summary.withWaterAccess || 0}
           desc={`${summary.waterAccessCoverage || 0}% level II & III`}
           icon={<FiDroplet />}
@@ -641,7 +707,7 @@ function HouseholdRecords() {
         />
 
         <HouseholdStat
-          title="At-Risk Households"
+          title={barangayFilter !== "all" ? `At-Risk Households (Brgy. ${barangayFilter})` : "At-Risk Households"}
           value={summary.atRiskHouseholds || 0}
           icon={<FiAlertTriangle />}
           color="red"
@@ -652,8 +718,8 @@ function HouseholdRecords() {
         <section className="household-chart-card">
           <div className="household-chart-title">
             <div>
-              <h3>High Risk Households by Barangay</h3>
-              <p>Across all barangays - Needs Assistance status</p>
+              <h3>High Risk Households {barangayFilter !== "all" ? `(Brgy. ${barangayFilter})` : "by Barangay"}</h3>
+              <p>{barangayFilter !== "all" ? `Brgy. ${barangayFilter} - Needs Assistance status` : "Across all barangays - Needs Assistance status"}</p>
             </div>
 
             {highestRiskBarangay ? (
@@ -700,8 +766,11 @@ function HouseholdRecords() {
         <section className="household-chart-card">
           <div className="household-chart-title">
             <div>
-              <h3>Toilet Type Distribution</h3>
-              <p>{summary.totalHouseholds || 0} households</p>
+              <h3>Toilet Type Distribution {barangayFilter !== "all" ? `(Brgy. ${barangayFilter})` : ""}</h3>
+              <p>
+                {summary.totalHouseholds || 0} households
+                {barangayFilter !== "all" ? ` in Brgy. ${barangayFilter}` : ""}
+              </p>
             </div>
           </div>
 
@@ -743,8 +812,11 @@ function HouseholdRecords() {
         <section className="household-chart-card">
           <div className="household-chart-title">
             <div>
-              <h3>Waste Disposal Methods</h3>
-              <p>{summary.totalHouseholds || 0} households</p>
+              <h3>Waste Disposal Methods {barangayFilter !== "all" ? `(Brgy. ${barangayFilter})` : ""}</h3>
+              <p>
+                {summary.totalHouseholds || 0} households
+                {barangayFilter !== "all" ? ` in Brgy. ${barangayFilter}` : ""}
+              </p>
             </div>
           </div>
 
@@ -786,8 +858,11 @@ function HouseholdRecords() {
         <section className="household-chart-card">
           <div className="household-chart-title">
             <div>
-              <h3>Water Access Levels</h3>
-              <p>{summary.totalHouseholds || 0} total households</p>
+              <h3>Water Access Levels {barangayFilter !== "all" ? `(Brgy. ${barangayFilter})` : ""}</h3>
+              <p>
+                {summary.totalHouseholds || 0} total households
+                {barangayFilter !== "all" ? ` in Brgy. ${barangayFilter}` : ""}
+              </p>
             </div>
           </div>
 
@@ -829,7 +904,9 @@ function HouseholdRecords() {
           >
             {barangayOptions.map((barangay) => (
               <option key={barangay} value={barangay}>
-                {barangay === "all" ? "All Mauban Barangays" : barangay}
+                {barangay === "all"
+                  ? "All Mauban Barangays (Municipal Total)"
+                  : `Brgy. ${barangay}`}
               </option>
             ))}
           </select>

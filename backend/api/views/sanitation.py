@@ -481,7 +481,8 @@ def household_bootstrap_data(request):
 @api_view(["GET"])
 @module_required("sanitation")
 def household_dashboard_data(request):
-    return Response(build_household_dashboard_payload())
+    barangay = request.query_params.get("barangay")
+    return Response(build_household_dashboard_payload(barangay=barangay))
 
 
 @api_view(["GET", "POST"])
@@ -495,12 +496,8 @@ def household_record_list(request):
 
     data = request.data.copy()
     if not data.get("household_code"):
-        count = HouseholdSanitationRecord.objects.count()
-        new_code = f"H-{count + 1:04d}"
-        while HouseholdSanitationRecord.objects.filter(household_code=new_code).exists():
-            count += 1
-            new_code = f"H-{count + 1:04d}"
-        data["household_code"] = new_code
+        from api.views.mobile import generate_household_code
+        data["household_code"] = generate_household_code()
 
     serializer = HouseholdSanitationRecordSerializer(data=data)
     serializer.is_valid(raise_exception=True)

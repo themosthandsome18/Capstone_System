@@ -318,11 +318,11 @@ String householdToiletLabel(String value) {
 String householdWaterLabel(String value) {
   switch (value) {
     case 'level_1':
-      return 'Level I';
+      return 'Level I (Point Source / Deep Well / Spring)';
     case 'level_2':
-      return 'Level II';
+      return 'Level II (Communal Faucet / Standpost)';
     case 'level_3':
-      return 'Level III';
+      return 'Level III (Individual Piped Connection / MWSS)';
     default:
       return value;
   }

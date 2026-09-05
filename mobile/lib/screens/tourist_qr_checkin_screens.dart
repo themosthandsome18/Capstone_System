@@ -207,10 +207,17 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   }
 
   Future<void> _handleLookup(String query) async {
-    final clean = query.trim();
+    var clean = query.trim();
+    if (clean.startsWith('#')) {
+      clean = clean.substring(1).trim();
+    }
     if (clean.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a Survey ID or tourist name')),
+        const SnackBar(
+          content: Text(
+            'Please enter a Survey ID, tourist name, or contact number',
+          ),
+        ),
       );
       return;
     }
@@ -231,13 +238,17 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Record "$clean" not found in database. Please check the Survey ID.'),
+                  child: Text(
+                    'Record "$clean" not found. Please verify the ID or tourist name.',
+                  ),
                 ),
               ],
             ),
             backgroundColor: const Color(0xFFDC2626),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -353,7 +364,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                   controller: _searchController,
                   onSubmitted: _handleLookup,
                   decoration: InputDecoration(
-                    hintText: 'e.g. SURV-2026-0001',
+                    hintText: 'Enter ID (e.g. TR-2026...), Name, or Mobile',
                     hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                     prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
                     suffixIcon: Padding(

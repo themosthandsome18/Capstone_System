@@ -3,10 +3,12 @@ from ..models import HouseholdSanitationRecord
 from ..seeders import ensure_initial_household_data
 
 
-def build_household_dashboard_payload():
+def build_household_dashboard_payload(barangay=None):
     ensure_initial_household_data()
 
     records = HouseholdSanitationRecord.objects.all()
+    if barangay and barangay != "all":
+        records = records.filter(barangay=barangay)
 
     # Consolidate all distribution and summary counts into a single aggregate query
     agg = records.aggregate(

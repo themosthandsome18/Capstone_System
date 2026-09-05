@@ -79,7 +79,7 @@ def mobile_tourism_bootstrap(request):
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": BarangaySerializer(Barangay.objects.filter(is_active=True), many=True).data,
-            "notifications": build_mobile_notifications(),
+            "notifications": build_mobile_notifications(request),
         }
     )
 
@@ -197,6 +197,7 @@ def mobile_tourist_registration(request):
 def mobile_tourist_record_lookup(request):
     """
     Lookup a tourist record by survey_id or search query for the Staff QR Scanner.
+    Supports exact ID, partial ID, names, contact, email, and raw QR scan data.
     """
     ensure_mobile_reference_data()
     survey_id = request.query_params.get("survey_id", "").strip()
@@ -205,24 +206,75 @@ def mobile_tourist_record_lookup(request):
     if not query:
         return Response({"error": "Survey ID or search query is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+    raw_query = query.strip()
+    clean_id = raw_query.replace("#", "").strip()
+
+    # If scanned QR is JSON payload
+    if (clean_id.startswith("{") and clean_id.endswith("}")) or ("survey_id" in clean_id):
+        try:
+            parsed = json.loads(clean_id)
+            if isinstance(parsed, dict):
+                extracted = parsed.get("survey_id") or parsed.get("reference") or parsed.get("id")
+                if extracted:
+                    clean_id = str(extracted).strip()
+        except Exception:
+            pass
+
+    # If scanned QR is a URL with query string
+    if "survey_id=" in clean_id or "id=" in clean_id:
+        try:
+            parsed_url = urlparse(clean_id)
+            qs = parse_qs(parsed_url.query)
+            if "survey_id" in qs and qs["survey_id"]:
+                clean_id = qs["survey_id"][0].strip()
+            elif "id" in qs and qs["id"]:
+                clean_id = qs["id"][0].strip()
+        except Exception:
+            pass
+
+    # Try exact / direct match first
     record = TouristRecord.objects.select_related(
         "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
     ).filter(
-        Q(survey_id__iexact=query) | Q(full_name__icontains=query) | Q(contact_number__icontains=query)
+        Q(survey_id__iexact=raw_query)
+        | Q(survey_id__iexact=clean_id)
+        | Q(survey_id__icontains=clean_id)
+        | Q(full_name__icontains=raw_query)
+        | Q(first_name__icontains=raw_query)
+        | Q(last_name__icontains=raw_query)
+        | Q(contact_number__icontains=raw_query)
+        | Q(email__icontains=raw_query)
     ).first()
+
+    # If still not found and query has numbers, try matching digits at end of survey_id
+    if not record:
+        digits = "".join(filter(str.isdigit, clean_id))
+        if digits:
+            record = TouristRecord.objects.select_related(
+                "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+            ).filter(survey_id__icontains=digits).first()
+            if not record and len(digits) >= 5:
+                hyphenated = f"{digits[:4]}-{digits[4:]}"
+                record = TouristRecord.objects.select_related(
+                    "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+                ).filter(survey_id__icontains=hyphenated).first()
+            if not record and len(digits) <= 4:
+                record = TouristRecord.objects.select_related(
+                    "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+                ).filter(survey_id__endswith=digits).first()
 
     if not record:
         return Response({"error": f"No visitor registration found for '{query}'"}, status=status.HTTP_404_NOT_FOUND)
 
     data = TouristRecordSerializer(record).data
     data["resort_name"] = record.resort.resort_name if record.resort else ""
-    data["region_name"] = record.region.region_name if record.region else ""
-    data["province_name"] = record.province.province_name if record.province else ""
-    data["country_name"] = record.country.country_name if record.country else ""
-    data["itinerary_name"] = record.itinerary.name if record.itinerary else ""
-    data["travel_mode_name"] = record.travel_mode.mode if record.travel_mode else ""
-    data["boat_type_name"] = record.boat_type.type_name if record.boat_type else ""
-    data["visit_purpose_name"] = record.visit_purpose.purpose if record.visit_purpose else ""
+    data["region_name"] = getattr(record.region, "name", "") if record.region else ""
+    data["province_name"] = getattr(record.province, "name", "") if record.province else ""
+    data["country_name"] = getattr(record.country, "name", "") if record.country else ""
+    data["itinerary_name"] = getattr(record.itinerary, "name", "") if record.itinerary else ""
+    data["travel_mode_name"] = getattr(record.travel_mode, "name", "") if record.travel_mode else ""
+    data["boat_type_name"] = getattr(record.boat_type, "name", "") if record.boat_type else ""
+    data["visit_purpose_name"] = getattr(record.visit_purpose, "name", "") if record.visit_purpose else ""
     return Response(data)
 
 
@@ -371,50 +423,90 @@ def mobile_feedback_submit(request):
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([AllowAny])
 def mobile_sanitation_report_submit(request):
-    ensure_mobile_barangays()
+    try:
+        ensure_mobile_barangays()
 
-    data = request.data.copy()
-    uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
+        data = request.data.copy()
+        uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
 
-    data["complaint_id"] = generate_complaint_id()
-    data["complainant_name"] = (
-        data.get("complainant_name") or data.get("full_name") or data.get("name") or ""
-    )
-    data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
-    data["status"] = COMPLAINT_STATUS_PENDING
-    data["priority"] = data.get("priority") or COMPLAINT_PRIORITY_MEDIUM
-    data["category"] = data.get("category") or "Community sanitation concern"
-    data["barangay"] = data.get("barangay") or "Unspecified"
-    data["description"] = data.get("description") or data.get("message") or ""
+        data["complaint_id"] = generate_complaint_id()
+        data["complainant_name"] = (
+            data.get("complainant_name") or data.get("full_name") or data.get("name") or ""
+        ).strip()
+        data["contact_number"] = (
+            data.get("contact_number") or data.get("contact") or ""
+        ).strip()
+        data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
+        data["status"] = COMPLAINT_STATUS_PENDING
+        data["priority"] = data.get("priority") or COMPLAINT_PRIORITY_MEDIUM
+        data["category"] = data.get("category") or "Community sanitation concern"
+        data["barangay"] = data.get("barangay") or "Unspecified"
+        data["description"] = (
+            data.get("description") or data.get("message") or ""
+        ).strip()
 
-    if uploads and not data.get("photo_documentation"):
-        from django.core.files.storage import default_storage
-        import time
-        saved_urls = []
-        for upload in uploads:
-            filename = f"complaints/{int(time.time())}_{upload.name.replace(' ', '_')}"
-            saved_path = default_storage.save(filename, upload)
-            saved_urls.append(default_storage.url(saved_path))
-        data["photo_documentation"] = ",".join(saved_urls)
+        if uploads and not data.get("photo_documentation"):
+            try:
+                from django.core.files.storage import default_storage
+                import time
+                saved_urls = []
+                for upload in uploads:
+                    safe_name = upload.name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+                    filename = f"complaints/{int(time.time())}_{safe_name}"
+                    saved_path = default_storage.save(filename, upload)
+                    saved_urls.append(default_storage.url(saved_path))
+                data["photo_documentation"] = ",".join(saved_urls)
+            except Exception as photo_err:
+                import logging
+                logging.getLogger(__name__).warning("Failed to save report photo: %s", photo_err)
 
-    for field in ["latitude", "longitude"]:
-        if data.get(field) in ("", None):
-            data.pop(field, None)
+        # Clean and validate coordinates
+        for field in ["latitude", "longitude"]:
+            val = data.get(field)
+            if val in ("", None, "null", "undefined"):
+                data.pop(field, None)
+            else:
+                try:
+                    fval = float(val)
+                    if abs(fval) < 0.0001:
+                        data.pop(field, None)
+                    else:
+                        data[field] = fval
+                except (ValueError, TypeError):
+                    data.pop(field, None)
 
-    serializer = SanitaryComplaintSerializer(data=data)
-    serializer.is_valid(raise_exception=True)
-    complaint = serializer.save()
+        serializer = SanitaryComplaintSerializer(data=data)
+        if not serializer.is_valid():
+            error_msgs = []
+            for field, errs in serializer.errors.items():
+                if isinstance(errs, list):
+                    error_msgs.append(f"{field}: {', '.join(str(e) for e in errs)}")
+                else:
+                    error_msgs.append(f"{field}: {errs}")
+            return Response(
+                {"detail": "Validation error: " + "; ".join(error_msgs), "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    log_activity(
-        request,
-        MODULE_SANITATION,
-        ACTION_CREATE,
-        complaint,
-        label=complaint.category,
-        record_id=complaint.complaint_id,
-    )
+        complaint = serializer.save()
 
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+        log_activity(
+            request,
+            MODULE_SANITATION,
+            ACTION_CREATE,
+            complaint,
+            label=complaint.category,
+            record_id=complaint.complaint_id,
+        )
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Error in mobile_sanitation_report_submit: %s", exc)
+        return Response(
+            {"detail": f"Failed to submit report: {str(exc)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @api_view(["GET"])
@@ -815,10 +907,65 @@ def mobile_household_survey_submit(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-def build_mobile_notifications():
+def build_mobile_notifications(request=None):
+    notifications = []
+
+    # 1. Query approved tourist records (status == arrived)
+    # When admin checks / verifies a record in Record Management, status becomes BOOKING_STATUS_ARRIVED
+    approved_query = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED).select_related("resort")
+
+    contact = ""
+    reference = ""
+    if request:
+        contact = (request.query_params.get("contact") or "").strip()
+        reference = (request.query_params.get("reference") or "").strip()
+
+    if reference:
+        user_approved = approved_query.filter(survey_id__iexact=reference).first()
+        if user_approved:
+            resort_title = user_approved.resort.resort_name if user_approved.resort else "Mauban Destination"
+            notifications.append({
+                "id": f"approved-{user_approved.survey_id}",
+                "type": "approval",
+                "title": "Registration Approved!",
+                "message": (
+                    f"Hello {user_approved.full_name or 'Visitor'}! Na-check at naaprubahan na ng Admin sa Record Management "
+                    f"ang inyong tourist registration ({user_approved.survey_id}) para sa {resort_title}. Welcome to Mauban!"
+                ),
+            })
+    elif contact:
+        user_approved = approved_query.filter(contact_number__icontains=contact).first()
+        if user_approved:
+            resort_title = user_approved.resort.resort_name if user_approved.resort else "Mauban Destination"
+            notifications.append({
+                "id": f"approved-{user_approved.survey_id}",
+                "type": "approval",
+                "title": "Registration Approved!",
+                "message": (
+                    f"Hello {user_approved.full_name or 'Visitor'}! Na-check at naaprubahan na ng Admin sa Record Management "
+                    f"ang inyong tourist registration ({user_approved.survey_id}) para sa {resort_title}. Welcome to Mauban!"
+                ),
+            })
+
+    # Include recent approved records so any tourist in the mobile app sees the official approval notices
+    recent_approved = approved_query.order_by("-arrival_date", "-created_at")[:4]
+    for rec in recent_approved:
+        rec_id = f"approved-{rec.survey_id}"
+        if not any(n["id"] == rec_id for n in notifications):
+            resort_title = rec.resort.resort_name if rec.resort else "Mauban Destination"
+            notifications.append({
+                "id": rec_id,
+                "type": "approval",
+                "title": "Registration Approved!",
+                "message": (
+                    f"Ang tourist record ({rec.survey_id}) ni {rec.full_name or 'Visitor'} para sa {resort_title} "
+                    f"ay opisyal nang na-verify at naaprubahan ng Admin sa Record Management."
+                ),
+            })
+
     top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
 
-    notifications = [
+    notifications.extend([
         {
             "id": "welcome",
             "type": "info",
@@ -829,9 +976,9 @@ def build_mobile_notifications():
             "id": "sanitation-reporting",
             "type": "sanitation",
             "title": "Community Reporting Available",
-            "message": "Residents may submit sanitation concerns with location details.",
+            "message": "Residents and visitors may submit sanitation concerns with location details.",
         },
-    ]
+    ])
 
     if top_destination:
         arrivals = getattr(
@@ -901,8 +1048,12 @@ def generate_household_code():
     prefix = f"HH-{today:%Y%m%d}"
     count = HouseholdSanitationRecord.objects.filter(
         household_code__startswith=prefix,
-    ).count()
-    return f"{prefix}-{count + 1:04d}"
+    ).count() + 1
+    code = f"{prefix}-{count:04d}"
+    while HouseholdSanitationRecord.objects.filter(household_code=code).exists():
+        count += 1
+        code = f"{prefix}-{count:04d}"
+    return code
 
 
 def household_status_from_payload(data):

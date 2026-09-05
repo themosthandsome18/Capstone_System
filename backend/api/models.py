@@ -1,16 +1,70 @@
+import random
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
 
+MAUBAN_BARANGAY_CENTERS = {
+    "Abo-abo": (14.225, 121.670),
+    "Alitap": (14.140, 121.715),
+    "Baao": (14.160, 121.680),
+    "Bagong Bayan": (14.185, 121.731),
+    "Balaybalay": (14.110, 121.660),
+    "Bato": (14.200, 121.680),
+    "Cagbalete I": (14.230, 121.820),
+    "Cagbalete II": (14.220, 121.830),
+    "Cagsiay I": (14.260, 121.710),
+    "Cagsiay II": (14.250, 121.715),
+    "Cagsiay III": (14.240, 121.720),
+    "Concepcion": (14.190, 121.690),
+    "Daungan": (14.187, 121.735),
+    "Liwayway": (14.140, 121.690),
+    "Lual": (14.190, 121.728),
+    "Lual Rural": (14.195, 121.725),
+    "Lucutan": (14.175, 121.670),
+    "Luya-luya": (14.130, 121.680),
+    "Mabato": (14.080, 121.630),
+    "Macasin": (14.180, 121.680),
+    "Polo": (14.175, 121.730),
+    "Remedios I": (14.230, 121.660),
+    "Remedios II": (14.235, 121.650),
+    "Rizaliana": (14.184, 121.730),
+    "Rosario": (14.183, 121.729),
+    "Sadsaran": (14.186, 121.732),
+    "San Gabriel": (14.100, 121.650),
+    "San Isidro": (14.160, 121.725),
+    "San Jose": (14.130, 121.710),
+    "San Lorenzo": (14.210, 121.720),
+    "San Miguel": (14.170, 121.690),
+    "San Rafael": (14.090, 121.640),
+    "San Roque": (14.240, 121.690),
+    "San Vicente": (14.188, 121.733),
+    "Santa Lucia": (14.182, 121.734),
+    "Santol": (14.120, 121.670),
+    "Santo Angel": (14.181, 121.735),
+    "Santo Niño": (14.095, 121.800),
+    "Soledad": (14.070, 121.620),
+    "Tapucan": (14.150, 121.720),
+}
+
+
+def resolve_barangay_coordinates(barangay_name):
+    base = MAUBAN_BARANGAY_CENTERS.get(barangay_name, (14.185, 121.731))
+    offset_lat = random.uniform(-0.004, 0.004)
+    offset_lng = random.uniform(-0.004, 0.004)
+    return round(base[0] + offset_lat, 6), round(base[1] + offset_lng, 6)
+
+
 ROLE_ADMIN = "admin"
 ROLE_TOURISM = "tourism"
 ROLE_SANITATION = "sanitation"
+ROLE_ESTABLISHMENT = "establishment"
 
 USER_ROLE_CHOICES = [
     (ROLE_ADMIN, "System Admin"),
     (ROLE_TOURISM, "Tourism Office"),
     (ROLE_SANITATION, "Sanitary Section"),
+    (ROLE_ESTABLISHMENT, "Establishment Owner"),
 ]
 
 MODULE_TOURISM = "tourism"
@@ -262,6 +316,13 @@ class Resort(models.Model):
     latitude = models.FloatField()
     longitude = models.FloatField()
     images = models.JSONField(default=list, blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resorts",
+    )
 
     class Meta:
         ordering = ["resort_id"]
@@ -641,6 +702,13 @@ class SanitaryEstablishment(models.Model):
     barangay = models.CharField(max_length=120)
     address = models.CharField(max_length=240)
     contact_number = models.CharField(max_length=60, blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sanitary_establishments",
+    )
 
     has_permit = models.BooleanField(default=True)
     permit_number = models.CharField(max_length=80, blank=True)
@@ -677,6 +745,11 @@ class SanitaryEstablishment(models.Model):
 
     def __str__(self):
         return self.business_name
+
+    def save(self, *args, **kwargs):
+        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
+            self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
+        super().save(*args, **kwargs)
 
     @property
     def inspection_frequency(self):
@@ -750,7 +823,7 @@ class SanitaryComplaint(models.Model):
         default=COMPLAINT_PRIORITY_MEDIUM,
     )
     description = models.TextField()
-    photo_documentation = models.CharField(max_length=500, blank=True)
+    photo_documentation = models.TextField(blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     assigned_inspector = models.CharField(max_length=160, blank=True)
@@ -776,6 +849,11 @@ class SanitaryComplaint(models.Model):
     def __str__(self):
         target = self.establishment.business_name if self.establishment_id else self.barangay
         return f"{self.complaint_id} - {target}"
+
+    def save(self, *args, **kwargs):
+        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
+            self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
+        super().save(*args, **kwargs)
 
 
 class SanitaryInspection(models.Model):
@@ -966,6 +1044,9 @@ class HouseholdSanitationRecord(models.Model):
             self.status = "for_completion"
         else:
             self.status = "violation"
+
+        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
+            self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
 
         super().save(*args, **kwargs)
 

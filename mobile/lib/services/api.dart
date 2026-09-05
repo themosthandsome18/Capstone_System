@@ -17,6 +17,24 @@ class TourismApi {
     return _get('/mobile/tourism/destinations/$resortId/');
   }
 
+  Future<Map<String, dynamic>> registerTourist({
+    required String fullName,
+    required String email,
+    required String password,
+    String? username,
+    String? contactNumber,
+  }) async {
+    return _post('/mobile/tourism/register/', {
+      'full_name': fullName.trim(),
+      'email': email.trim(),
+      'password': password,
+      if (username != null && username.trim().isNotEmpty)
+        'username': username.trim(),
+      if (contactNumber != null && contactNumber.trim().isNotEmpty)
+        'contact_number': contactNumber.trim(),
+    });
+  }
+
   Future<SanitationBootstrap> fetchSanitationBootstrap() async {
     try {
       final data = await _get('/mobile/sanitation/bootstrap/');

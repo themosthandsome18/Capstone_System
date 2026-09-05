@@ -1,4 +1,4 @@
-﻿part of '../main.dart';
+part of '../main.dart';
 
 class AppColors {
   static const green = Color(0xff28a84a);
@@ -7,4 +7,6 @@ class AppColors {
   static const ink = Color(0xff111827);
   static const muted = Color(0xff6b7280);
   static const border = Color(0xffd8e1dc);
+  static const red = Color(0xffd32f2f);
+  static const amber = Color(0xffd59b00);
 }

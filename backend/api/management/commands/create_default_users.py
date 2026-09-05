@@ -1,7 +1,15 @@
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from api.models import ROLE_ADMIN, ROLE_SANITATION, ROLE_TOURISM, UserProfile
+from api.models import (
+    ROLE_ADMIN,
+    ROLE_ESTABLISHMENT,
+    ROLE_SANITATION,
+    ROLE_TOURISM,
+    Resort,
+    SanitaryEstablishment,
+    UserProfile,
+)
 
 
 DEFAULT_USERS = [
@@ -46,6 +54,22 @@ DEFAULT_USERS = [
         "role": ROLE_SANITATION,
         "is_staff": True,
     },
+    {
+        "username": "establishment_owner",
+        "password": "Establishment@123",
+        "first_name": "Establishment",
+        "last_name": "Owner",
+        "role": ROLE_ESTABLISHMENT,
+        "is_staff": False,
+    },
+    {
+        "username": "resort_owner",
+        "password": "Resort@123",
+        "first_name": "Resort",
+        "last_name": "Owner",
+        "role": ROLE_ESTABLISHMENT,
+        "is_staff": False,
+    },
 ]
 
 
@@ -79,6 +103,20 @@ class Command(BaseCommand):
                 user=user,
                 defaults={"role": role},
             )
+
+            # Link demo establishment owner if available
+            if username == "establishment_owner":
+                sample_est = SanitaryEstablishment.objects.filter(permit_number__gt="").first() or SanitaryEstablishment.objects.first()
+                if sample_est:
+                    sample_est.user = user
+                    sample_est.save()
+
+            # Link demo resort owner if available
+            if username == "resort_owner":
+                sample_resort = Resort.objects.first()
+                if sample_resort:
+                    sample_resort.user = user
+                    sample_resort.save()
 
             action = "created" if created else "updated"
             self.stdout.write(

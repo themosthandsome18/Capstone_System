@@ -1,6 +1,12 @@
 from django.urls import path
 
-from .auth_views import current_user_view, login_view, logout_view
+from .auth_views import (
+    current_user_view,
+    establishment_register_view,
+    login_view,
+    logout_view,
+    tourist_register_view,
+)
 from .views.shared import (
     activity_log_list,
     bootstrap_data,
@@ -62,12 +68,15 @@ from .views.mobile import (
 urlpatterns = [
     path("health/", health_check),
     path("auth/login/", login_view),
+    path("auth/register/", tourist_register_view),
+    path("auth/register-establishment/", establishment_register_view),
     path("auth/me/", current_user_view),
     path("auth/logout/", logout_view),
     path("activity-logs/", activity_log_list),
     path("bootstrap/", bootstrap_data),
 
     # Public mobile app routes
+    path("mobile/tourism/register/", tourist_register_view),
     path("mobile/tourism/bootstrap/", mobile_tourism_bootstrap),
     path("mobile/tourism/destinations/", mobile_destination_list),
     path("mobile/tourism/destinations/<int:resort_id>/", mobile_destination_detail),
@@ -82,6 +91,7 @@ urlpatterns = [
     path("mobile/sanitation/reports/history/", mobile_sanitation_report_history),
     path("mobile/sanitation/permits/verify/", mobile_sanitation_permit_verify),
     path("mobile/sanitation/household-surveys/", mobile_household_survey_submit),
+    path("mobile/sanitation/register-establishment/", establishment_register_view),
 
     # Tourism routes
     path("reference-tables/", reference_tables),

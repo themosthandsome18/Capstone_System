@@ -6,7 +6,7 @@ import random
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from api.models import HouseholdSanitationRecord, SanitaryEstablishment
+from api.models import HouseholdSanitationRecord, SanitaryEstablishment, SanitaryComplaint
 
 # Approximate centers for Mauban Barangays to make mock data realistic
 BARANGAY_CENTERS = {
@@ -102,4 +102,17 @@ for est in establishments:
 SanitaryEstablishment.objects.bulk_update(to_update, ['latitude', 'longitude'])
 print(f"Fixed {len(to_update)} establishments.")
 
+print("Fixing coordinates for SanitaryComplaint...")
+complaints = list(SanitaryComplaint.objects.all())
+to_update_comp = []
+for comp in complaints:
+    lat, lng = get_realistic_coordinates(comp.barangay)
+    comp.latitude = lat
+    comp.longitude = lng
+    to_update_comp.append(comp)
+
+SanitaryComplaint.objects.bulk_update(to_update_comp, ['latitude', 'longitude'])
+print(f"Fixed {len(to_update_comp)} complaints.")
+
 print("All coordinates have been successfully re-mapped to their proper barangays!")
+

@@ -8,9 +8,28 @@ import {
   FiShield,
   FiUserCheck,
 } from "react-icons/fi";
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from "chart.js";
+import { Bar, Doughnut } from "react-chartjs-2";
 import { useSanitationData } from "../context/SanitationDataContext";
 import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
 import PageLoader from "../../shared/PageLoader";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 function formatHouseholdStatus(status) {
   if (status === "for_completion" || status === "For Completion") return "For Compliance";
@@ -84,10 +103,247 @@ function HouseholdReportAnalytics() {
     [activeRecords]
   );
 
-  const maxBarangayTotal = Math.max(
-    ...barangayData.map((item) => item.totalHouseholds || 0),
-    1
-  );
+  const topBarangaysForChart = useMemo(() => {
+    const list = [...barangayData].filter((b) => (b.totalHouseholds || 0) > 0);
+    if (list.length === 0) return barangayData.slice(0, 8);
+    return list
+      .sort((a, b) => (b.totalHouseholds || 0) - (a.totalHouseholds || 0))
+      .slice(0, 8);
+  }, [barangayData]);
+
+  const barangayBarChartData = useMemo(() => {
+    return {
+      labels: topBarangaysForChart.map((b) => b.barangay),
+      datasets: [
+        {
+          label: "Good Standing",
+          data: topBarangaysForChart.map((b) => b.goodStanding || 0),
+          backgroundColor: "#10b981",
+          borderRadius: 4,
+          maxBarThickness: 26,
+        },
+        {
+          label: "For Compliance",
+          data: topBarangaysForChart.map((b) => b.forCompletion || 0),
+          backgroundColor: "#f59e0b",
+          borderRadius: 4,
+          maxBarThickness: 26,
+        },
+        {
+          label: "Needs Assistance",
+          data: topBarangaysForChart.map((b) => b.atRisk || 0),
+          backgroundColor: "#ef4444",
+          borderRadius: 4,
+          maxBarThickness: 26,
+        },
+      ],
+    };
+  }, [topBarangaysForChart]);
+
+  const barangayBarChartOptions = useMemo(() => {
+    const maxVal = Math.max(
+      ...topBarangaysForChart.map((b) =>
+        Math.max(b.goodStanding || 0, b.forCompletion || 0, b.atRisk || 0)
+      ),
+      5
+    );
+
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "top",
+          align: "end",
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: { size: 11, weight: "600" },
+            color: "#475569",
+            padding: 10,
+          },
+        },
+        tooltip: {
+          backgroundColor: "#0f172a",
+          padding: 10,
+          cornerRadius: 8,
+          titleFont: { size: 12, weight: "bold" },
+          bodyFont: { size: 11.5 },
+          callbacks: {
+            label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} households`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: 11.5, weight: "600" },
+            color: "#475569",
+            maxRotation: 25,
+            minRotation: 0,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          suggestedMax: Math.ceil(maxVal * 1.15),
+          grid: { color: "#f1f5f9" },
+          ticks: {
+            precision: 0,
+            font: { size: 11 },
+            color: "#64748b",
+            stepSize: 1,
+          },
+        },
+      },
+    };
+  }, [topBarangaysForChart]);
+
+  const wasteChartData = useMemo(() => {
+    return {
+      labels: ["Collected by LGU", "Composted", "Burned", "Dumped"],
+      datasets: [
+        {
+          data: [
+            wasteDistribution.collected || 0,
+            wasteDistribution.composted || 0,
+            wasteDistribution.burned || 0,
+            wasteDistribution.dumped || 0,
+          ],
+          backgroundColor: ["#10b981", "#0d9488", "#f59e0b", "#ef4444"],
+          borderWidth: 2,
+          borderColor: "#ffffff",
+          hoverOffset: 6,
+        },
+      ],
+    };
+  }, [wasteDistribution]);
+
+  const wasteDonutOptions = useMemo(() => {
+    const total =
+      (wasteDistribution.collected || 0) +
+      (wasteDistribution.composted || 0) +
+      (wasteDistribution.burned || 0) +
+      (wasteDistribution.dumped || 0);
+
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "66%",
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: { size: 11.5, weight: "600" },
+            color: "#334155",
+            padding: 10,
+            generateLabels: (chart) => {
+              const data = chart.data;
+              return data.labels.map((label, i) => {
+                const val = data.datasets[0].data[i] || 0;
+                const pct = total ? Math.round((val / total) * 100) : 0;
+                return {
+                  text: `${label}: ${val} (${pct}%)`,
+                  fillStyle: data.datasets[0].backgroundColor[i],
+                  strokeStyle: data.datasets[0].backgroundColor[i],
+                  lineWidth: 0,
+                  index: i,
+                };
+              });
+            },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = ctx.parsed || 0;
+              const pct = total ? Math.round((val / total) * 100) : 0;
+              return ` ${ctx.label}: ${val} households (${pct}%)`;
+            },
+          },
+        },
+      },
+    };
+  }, [wasteDistribution]);
+
+  const waterChartData = useMemo(() => {
+    return {
+      labels: [
+        "Level I (Spring/Well/Rain)",
+        "Level II (Communal Faucet)",
+        "Level III (Piped MWSS)",
+      ],
+      datasets: [
+        {
+          data: [
+            waterDistribution.level1 || 0,
+            waterDistribution.level2 || 0,
+            waterDistribution.level3 || 0,
+          ],
+          backgroundColor: ["#f59e0b", "#0d9488", "#10b981"],
+          borderWidth: 2,
+          borderColor: "#ffffff",
+          hoverOffset: 6,
+        },
+      ],
+    };
+  }, [waterDistribution]);
+
+  const waterDonutOptions = useMemo(() => {
+    const total =
+      (waterDistribution.level1 || 0) +
+      (waterDistribution.level2 || 0) +
+      (waterDistribution.level3 || 0);
+
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "66%",
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: { size: 11.5, weight: "600" },
+            color: "#334155",
+            padding: 10,
+            generateLabels: (chart) => {
+              const data = chart.data;
+              return data.labels.map((label, i) => {
+                const val = data.datasets[0].data[i] || 0;
+                const pct = total ? Math.round((val / total) * 100) : 0;
+                return {
+                  text: `${label}: ${val} (${pct}%)`,
+                  fillStyle: data.datasets[0].backgroundColor[i],
+                  strokeStyle: data.datasets[0].backgroundColor[i],
+                  lineWidth: 0,
+                  index: i,
+                };
+              });
+            },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = ctx.parsed || 0;
+              const pct = total ? Math.round((val / total) * 100) : 0;
+              return ` ${ctx.label}: ${val} households (${pct}%)`;
+            },
+          },
+        },
+      },
+    };
+  }, [waterDistribution]);
 
   function handlePrint() {
     window.print();
@@ -282,87 +538,56 @@ function HouseholdReportAnalytics() {
         />
       </div>
 
-      {/* ── Charts Grid ── */}
+      {/* ── Charts Grid (Evenly Balanced with Chart.js) ── */}
       <div className="household-report-chart-grid">
-        {/* If municipal view: show per-barangay comparison; if specific barangay: show water access breakdown */}
         {!isSpecificBarangay ? (
           <section className="household-report-card">
-            <h3>Households per Barangay</h3>
-            <div className="hr-bar-chart">
-              {barangayData.length ? (
-                barangayData.slice(0, 6).map((item) => (
-                  <div className="hr-bar-group" key={item.barangay}>
-                    <div className="hr-bars">
-                      <span
-                        className="compliant"
-                        style={{
-                          height: `${getBarHeight(item.goodStanding, maxBarangayTotal)}px`,
-                        }}
-                      />
-                      <span
-                        className="atrisk"
-                        style={{
-                          height: `${getBarHeight(item.atRisk, maxBarangayTotal)}px`,
-                        }}
-                      />
-                    </div>
-                    <small>{item.barangay}</small>
-                  </div>
-                ))
+            <div className="household-report-card-header">
+              <h3>Households per Barangay</h3>
+              <small className="hh-chart-subtitle">
+                Comparative compliance and risk monitoring across top {topBarangaysForChart.length} barangays
+              </small>
+            </div>
+            <div className="hh-chart-container">
+              {topBarangaysForChart.length ? (
+                <Bar data={barangayBarChartData} options={barangayBarChartOptions} />
               ) : (
                 <p className="household-empty-text">No barangay data found.</p>
               )}
             </div>
-
-            <div className="household-chart-legend">
-              <span className="red">Needs Assistance</span>
-              <span className="green">Good Standing</span>
-            </div>
           </section>
         ) : (
           <section className="household-report-card">
-            <h3>Water Access Levels (Brgy. {selectedBarangay})</h3>
-            <div className="water-donut-wrap">
-              <div
-                className="water-donut"
-                style={{
-                  background: buildWaterGradient(waterDistribution),
-                }}
-              />
-              <span className="water-label top">{waterDistribution.level3 || 0}</span>
-              <span className="water-label left">{waterDistribution.level1 || 0}</span>
-              <span className="water-label bottom">{waterDistribution.level2 || 0}</span>
+            <div className="household-report-card-header">
+              <h3>Water Access Levels (Brgy. {selectedBarangay})</h3>
+              <small className="hh-chart-subtitle">
+                {summary.totalHouseholds || 0} total households in Brgy. {selectedBarangay}
+              </small>
             </div>
-
-            <div className="household-legend">
-              <span className="yellow">Level I (Spring/Well/Rain): {waterDistribution.level1 || 0}</span>
-              <span className="green">Level II (Communal Faucet): {waterDistribution.level2 || 0}</span>
-              <span className="dark">Level III (Piped MWSS): {waterDistribution.level3 || 0}</span>
+            <div className="hh-chart-container hh-donut-container">
+              <Doughnut data={waterChartData} options={waterDonutOptions} />
+              <div className="hh-donut-center-stat">
+                <strong>{summary.totalHouseholds || 0}</strong>
+                <small>Households</small>
+              </div>
             </div>
           </section>
         )}
 
         <section className="household-report-card">
-          <h3>Waste Disposal Methods {isSpecificBarangay ? `(Brgy. ${selectedBarangay})` : ""}</h3>
-
-          <div className="waste-donut-wrap">
-            <div
-              className="waste-donut"
-              style={{
-                background: buildWasteGradient(wasteDistribution),
-              }}
-            />
-            <span className="waste-label top-left">{wasteDistribution.burned || 0}</span>
-            <span className="waste-label top-right">{wasteDistribution.collected || 0}</span>
-            <span className="waste-label bottom-left">{wasteDistribution.composted || 0}</span>
-            <span className="waste-label bottom-right">{wasteDistribution.dumped || 0}</span>
+          <div className="household-report-card-header">
+            <h3>Waste Disposal Methods {isSpecificBarangay ? `(Brgy. ${selectedBarangay})` : ""}</h3>
+            <small className="hh-chart-subtitle">
+              Sanitary solid waste management and collection distribution
+            </small>
           </div>
 
-          <div className="household-chart-legend">
-            <span className="yellow">Burned: {wasteDistribution.burned || 0}</span>
-            <span className="green">Collected by LGU: {wasteDistribution.collected || 0}</span>
-            <span className="teal">Composted: {wasteDistribution.composted || 0}</span>
-            <span className="red">Dumped: {wasteDistribution.dumped || 0}</span>
+          <div className="hh-chart-container hh-donut-container">
+            <Doughnut data={wasteChartData} options={wasteDonutOptions} />
+            <div className="hh-donut-center-stat">
+              <strong>{summary.totalHouseholds || 0}</strong>
+              <small>Households</small>
+            </div>
           </div>
         </section>
       </div>
@@ -386,80 +611,119 @@ function HouseholdReportAnalytics() {
             </div>
           </div>
 
-          <table className="infra-table">
-            <thead>
-              <tr>
-                <th>Barangay</th>
-                <th>Total Households</th>
-                <th>Safe Toilet</th>
-                <th>Piped Water</th>
-                <th>Proper Waste</th>
-                <th>Status Breakdown</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {barangayData.length ? (
-                barangayData.map((item) => {
-                  const toiletPercent = getPercent(item.safeToilet, item.totalHouseholds);
-                  const waterPercent = getPercent(item.pipedWater, item.totalHouseholds);
-                  const wastePercent = getPercent(item.properWaste, item.totalHouseholds);
-
-                  return (
-                    <tr key={item.barangay}>
-                      <td>
-                        <button
-                          type="button"
-                          className="link-style-btn"
-                          onClick={() => setSelectedBarangay(item.barangay)}
-                          title={`Click to filter strictly for Brgy. ${item.barangay}`}
-                        >
-                          <strong>{item.barangay}</strong> &rarr;
-                        </button>
-                      </td>
-                      <td>{item.totalHouseholds}</td>
-
-                      <td>
-                        <Progress
-                          color="green"
-                          percent={toiletPercent}
-                          value={`${item.safeToilet} (${toiletPercent}%)`}
-                        />
-                      </td>
-
-                      <td>
-                        <Progress
-                          color="orange"
-                          percent={waterPercent}
-                          value={`${item.pipedWater} (${waterPercent}%)`}
-                        />
-                      </td>
-
-                      <td>
-                        <Progress
-                          color="red"
-                          percent={wastePercent}
-                          value={`${item.properWaste} (${wastePercent}%)`}
-                        />
-                      </td>
-
-                      <td>
-                        <span className="risk-flag">
-                          {item.goodStanding} Good Standing | {item.forCompletion} For Compliance | {item.atRisk} Needs Assistance
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+          <div className="infra-table-container">
+            <table className="infra-table">
+              <thead>
                 <tr>
-                  <td colSpan="6" className="household-empty">
-                    No household infrastructure records found.
-                  </td>
+                  <th style={{ width: "18%" }}>Barangay</th>
+                  <th style={{ width: "11%" }}>Total Households</th>
+                  <th style={{ width: "17%" }}>Safe Toilet</th>
+                  <th style={{ width: "17%" }}>Piped Water</th>
+                  <th style={{ width: "17%" }}>Proper Waste</th>
+                  <th style={{ width: "20%" }}>Status Breakdown</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {barangayData.length ? (
+                  barangayData.map((item) => {
+                    const toiletPercent = getPercent(item.safeToilet, item.totalHouseholds);
+                    const waterPercent = getPercent(item.pipedWater, item.totalHouseholds);
+                    const wastePercent = getPercent(item.properWaste, item.totalHouseholds);
+
+                    return (
+                      <tr key={item.barangay}>
+                        <td>
+                          <button
+                            type="button"
+                            className="link-style-btn"
+                            onClick={() => setSelectedBarangay(item.barangay)}
+                            title={`Click to filter strictly for Brgy. ${item.barangay}`}
+                          >
+                            <strong>{item.barangay}</strong> &rarr;
+                          </button>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>
+                            {item.totalHouseholds}
+                          </span>
+                        </td>
+
+                        <td>
+                          <Progress
+                            color="green"
+                            percent={toiletPercent}
+                            value={`${item.safeToilet} (${toiletPercent}%)`}
+                          />
+                        </td>
+
+                        <td>
+                          <Progress
+                            color="orange"
+                            percent={waterPercent}
+                            value={`${item.pipedWater} (${waterPercent}%)`}
+                          />
+                        </td>
+
+                        <td>
+                          <Progress
+                            color="red"
+                            percent={wastePercent}
+                            value={`${item.properWaste} (${wastePercent}%)`}
+                          />
+                        </td>
+
+                        <td className="hh-breakdown-td">
+                          <div className="hh-breakdown-cell">
+                            {item.totalHouseholds > 0 && (
+                              <div className="hh-breakdown-bar">
+                                <span
+                                  className="hh-seg-good"
+                                  style={{ width: `${getPercent(item.goodStanding, item.totalHouseholds)}%` }}
+                                  title={`Good Standing: ${item.goodStanding} (${getPercent(item.goodStanding, item.totalHouseholds)}%)`}
+                                />
+                                <span
+                                  className="hh-seg-comp"
+                                  style={{ width: `${getPercent(item.forCompletion, item.totalHouseholds)}%` }}
+                                  title={`For Compliance: ${item.forCompletion} (${getPercent(item.forCompletion, item.totalHouseholds)}%)`}
+                                />
+                                <span
+                                  className="hh-seg-risk"
+                                  style={{ width: `${getPercent(item.atRisk, item.totalHouseholds)}%` }}
+                                  title={`Needs Assistance: ${item.atRisk} (${getPercent(item.atRisk, item.totalHouseholds)}%)`}
+                                />
+                              </div>
+                            )}
+
+                            <div className="hh-breakdown-chips">
+                              <span className="hh-chip hh-chip-good" title="Good Standing">
+                                <span className="hh-chip-dot" />
+                                <strong>{item.goodStanding}</strong> Good
+                              </span>
+                              <span className="hh-chip hh-chip-comp" title="For Compliance">
+                                <span className="hh-chip-dot" />
+                                <strong>{item.forCompletion}</strong> Compliance
+                              </span>
+                              <span className="hh-chip hh-chip-risk" title="Needs Assistance">
+                                <span className="hh-chip-dot" />
+                                <strong>{item.atRisk}</strong> Assistance
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="household-empty">
+                      No household infrastructure records found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : (
         /* Specific Barangay Detailed Household Roster */
@@ -482,50 +746,52 @@ function HouseholdReportAnalytics() {
             </button>
           </div>
 
-          <table className="infra-table specific-roster">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Household Head</th>
-                <th>Members</th>
-                <th>Toilet Facility</th>
-                <th>Water Source</th>
-                <th>Waste Disposal</th>
-                <th>Sanitation Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeRecords.length ? (
-                activeRecords.map((r) => (
-                  <tr key={r.id}>
-                    <td><code>{r.household_code || "--"}</code></td>
-                    <td>
-                      <strong>{r.household_head}</strong>
-                      <small style={{ display: "block", color: "#64748b" }}>{r.address || `Brgy. ${r.barangay}`}</small>
-                    </td>
-                    <td>{r.total_members}</td>
-                    <td>{r.toilet_type_label || r.toilet_type}</td>
-                    <td>
-                      {r.water_level_label || r.water_level}
-                      {r.water_source ? ` (${r.water_source})` : ""}
-                    </td>
-                    <td>{r.waste_disposal_label || r.waste_disposal}</td>
-                    <td>
-                      <span className={`household-status ${statusClass(r.status)}`}>
-                        {formatHouseholdStatus(r.status)}
-                      </span>
+          <div className="infra-table-container">
+            <table className="infra-table specific-roster">
+              <thead>
+                <tr>
+                  <th style={{ width: "13%" }}>Code</th>
+                  <th style={{ width: "22%" }}>Household Head</th>
+                  <th style={{ width: "8%" }}>Members</th>
+                  <th style={{ width: "17%" }}>Toilet Facility</th>
+                  <th style={{ width: "15%" }}>Water Source</th>
+                  <th style={{ width: "13%" }}>Waste Disposal</th>
+                  <th style={{ width: "12%" }}>Sanitation Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeRecords.length ? (
+                  activeRecords.map((r) => (
+                    <tr key={r.id}>
+                      <td><code>{r.household_code || "--"}</code></td>
+                      <td>
+                        <strong>{r.household_head}</strong>
+                        <small style={{ display: "block", color: "#64748b" }}>{r.address || `Brgy. ${r.barangay}`}</small>
+                      </td>
+                      <td>{r.total_members}</td>
+                      <td>{r.toilet_type_label || r.toilet_type}</td>
+                      <td>
+                        {r.water_level_label || r.water_level}
+                        {r.water_source ? ` (${r.water_source})` : ""}
+                      </td>
+                      <td>{r.waste_disposal_label || r.waste_disposal}</td>
+                      <td>
+                        <span className={`household-status ${statusClass(r.status)}`}>
+                          {formatHouseholdStatus(r.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="household-empty">
+                      No household records found in Brgy. {selectedBarangay}.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7" className="household-empty">
-                    No household records found in Brgy. {selectedBarangay}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
@@ -726,57 +992,7 @@ function buildBarangayInfrastructure(records) {
   return Object.values(grouped).sort((a, b) => a.barangay.localeCompare(b.barangay));
 }
 
-function buildWasteGradient(distribution) {
-  const burned = distribution.burned || 0;
-  const collected = distribution.collected || 0;
-  const composted = distribution.composted || 0;
-  const dumped = distribution.dumped || 0;
 
-  const total = burned + collected + composted + dumped;
-
-  if (!total) {
-    return "conic-gradient(#d1d5db 0 100%)";
-  }
-
-  const burnedEnd = (burned / total) * 100;
-  const collectedEnd = burnedEnd + (collected / total) * 100;
-  const compostedEnd = collectedEnd + (composted / total) * 100;
-
-  return `conic-gradient(
-    #f7c318 0 ${burnedEnd}%,
-    #27a56a ${burnedEnd}% ${collectedEnd}%,
-    #0f766e ${collectedEnd}% ${compostedEnd}%,
-    #ef2222 ${compostedEnd}% 100%
-  )`;
-}
-
-function buildWaterGradient(distribution) {
-  const level1 = distribution.level1 || 0;
-  const level2 = distribution.level2 || 0;
-  const level3 = distribution.level3 || 0;
-  const total = level1 + level2 + level3;
-
-  if (!total) {
-    return "conic-gradient(#d1d5db 0 100%)";
-  }
-
-  const level1End = (level1 / total) * 100;
-  const level2End = level1End + (level2 / total) * 100;
-
-  return `conic-gradient(
-    #f7c318 0 ${level1End}%,
-    #27a56a ${level1End}% ${level2End}%,
-    #1f7655 ${level2End}% 100%
-  )`;
-}
-
-function getBarHeight(value, maxValue) {
-  if (!value) {
-    return 0;
-  }
-
-  return Math.max(24, Math.round((value / maxValue) * 165));
-}
 
 function getPercent(value, total) {
   if (!total) {

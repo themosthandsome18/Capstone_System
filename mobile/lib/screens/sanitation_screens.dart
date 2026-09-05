@@ -17,15 +17,25 @@ class HouseholdSurveyPage extends StatefulWidget {
 }
 
 class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
+  static const _waterSourceOptions = [
+    'MWSS',
+    'Level II (Communal Faucet)',
+    'Deep Well',
+    'Spring',
+    'Rainwater',
+    'Others',
+  ];
+
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
-  final TextEditingController _waterSource = TextEditingController();
+  final TextEditingController _waterSourceCustom = TextEditingController();
   final TextEditingController _remarks = TextEditingController();
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
   String _toiletType = 'water_sealed';
   String _waterLevel = 'level_3';
+  String _waterSourceSelection = 'MWSS';
   String _wasteDisposal = 'collected';
   int _male = 1;
   int _female = 1;
@@ -43,15 +53,29 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       if (widget.household!.hasCoordinates) {
         _latitude.text = widget.household!.latitude.toString();
         _longitude.text = widget.household!.longitude.toString();
+        _locationConfirmed = true;
       }
     }
+  }
+
+  void _setWaterSource(String source) {
+    setState(() {
+      _waterSourceSelection = source;
+      if (source == 'MWSS') {
+        _waterLevel = 'level_3';
+      } else if (source == 'Level II (Communal Faucet)') {
+        _waterLevel = 'level_2';
+      } else {
+        _waterLevel = 'level_1';
+      }
+    });
   }
 
   @override
   void dispose() {
     _head.dispose();
     _address.dispose();
-    _waterSource.dispose();
+    _waterSourceCustom.dispose();
     _remarks.dispose();
     _latitude.dispose();
     _longitude.dispose();
@@ -107,13 +131,42 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           onChanged: (item) => setState(() => _toiletType = item),
         ),
         DropdownTile<String>(
+          label: 'Water source',
+          value: _waterSourceSelection,
+          items: _waterSourceOptions,
+          itemLabel: (item) {
+            switch (item) {
+              case 'MWSS':
+                return 'MWSS (Municipal Water Supply System)';
+              case 'Level II (Communal Faucet)':
+                return 'Level II (Communal Faucet / Standpost)';
+              case 'Deep Well':
+                return 'Deep Well (Protected)';
+              case 'Spring':
+                return 'Spring (Natural source)';
+              case 'Rainwater':
+                return 'Rainwater Collection';
+              case 'Others':
+                return 'Others (Specify custom source)';
+              default:
+                return item;
+            }
+          },
+          onChanged: _setWaterSource,
+        ),
+        if (_waterSourceSelection == 'Others')
+          AppTextField(
+            controller: _waterSourceCustom,
+            label: 'Specify other water source',
+            textCapitalization: TextCapitalization.words,
+          ),
+        DropdownTile<String>(
           label: 'Water access level',
           value: _waterLevel,
           items: const ['level_1', 'level_2', 'level_3'],
           itemLabel: householdWaterLabel,
           onChanged: (item) => setState(() => _waterLevel = item),
         ),
-        AppTextField(controller: _waterSource, label: 'Water source'),
         DropdownTile<String>(
           label: 'Waste disposal',
           value: _wasteDisposal,
@@ -203,6 +256,12 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     setState(() => _submitting = true);
 
     try {
+      final finalWaterSource = _waterSourceSelection == 'Others'
+          ? (_waterSourceCustom.text.trim().isEmpty
+              ? 'Others'
+              : _waterSourceCustom.text.trim())
+          : _waterSourceSelection;
+
       final response = await widget.api.submitHouseholdSurvey(
         householdCode: widget.household?.householdCode,
         householdHead: formatProperName(_head.text),
@@ -212,7 +271,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         femaleCount: _female,
         toiletType: _toiletType,
         waterLevel: _waterLevel,
-        waterSource: _waterSource.text.trim(),
+        waterSource: finalWaterSource,
         wasteDisposal: _wasteDisposal,
         remarks: _remarks.text.trim(),
         latitude: _latitude.text.trim(),
@@ -232,7 +291,14 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
           ],
         );
-        if (mounted) Navigator.of(context).pop(true);
+        final receipt = MobileHouseholdSurveyReceipt.fromResponse(
+          response,
+          head: formatProperName(_head.text),
+          barangay: _barangay,
+          waterSource: finalWaterSource,
+          toiletType: _toiletType,
+        );
+        if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
       if (mounted) showAppMessage(context, error.toString());
@@ -756,6 +822,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   List<XFile> _photos = [];
   String _category = sanitationReportCategories.first;
   String _priority = 'high';
+  bool _isUrgentLocked = false;
   late String _barangay;
   bool _submitting = false;
   bool _locating = false;
@@ -782,6 +849,19 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       _anonymous = draft.isAnonymous;
       _locationConfirmed =
           latLngFromText(draft.latitude, draft.longitude) != null;
+    }
+    final initialMeta = sanitationReportCategoryDefinitions.firstWhere(
+      (m) => m.name == _category,
+      orElse: () => SanitationCategoryMeta(
+        name: _category,
+        group: '',
+        priority: _priority,
+        hint: '',
+      ),
+    );
+    if (_priority == 'high' || initialMeta.priority == 'high') {
+      _priority = 'high';
+      _isUrgentLocked = true;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -929,19 +1009,66 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             );
             setState(() {
               _category = item;
-              if (meta.priority.isNotEmpty) {
+              if (meta.priority == 'high') {
+                _priority = 'high';
+                _isUrgentLocked = true;
+              } else if (!_isUrgentLocked && meta.priority.isNotEmpty) {
                 _priority = meta.priority;
               }
             });
           },
         ),
-        DropdownTile<String>(
-          label: 'Urgency',
-          value: _priority,
-          items: priorityItems,
-          itemLabel: sanitationPriorityLabel,
-          onChanged: (item) => setState(() => _priority = item),
-        ),
+        if (_isUrgentLocked || _priority == 'high')
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock, color: Color(0xFFDC2626), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Urgency: Urgent (High Priority) 🔒',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Naka-lock bilang Urgent dahil sa critical public health hazard (24–48h SLA response). Hindi na maaaring baguhin.',
+                        style: TextStyle(fontSize: 11, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          DropdownTile<String>(
+            label: 'Urgency',
+            value: _priority,
+            items: priorityItems,
+            itemLabel: sanitationPriorityLabel,
+            onChanged: (item) {
+              setState(() {
+                _priority = item;
+                if (item == 'high') {
+                  _isUrgentLocked = true;
+                }
+              });
+            },
+          ),
         DropdownTile<String>(
           label: 'Barangay',
           value: _barangay,
@@ -1102,7 +1229,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       if (mounted) {
         showAppMessage(
           context,
-          'Submission failed. Draft saved for pending sync.',
+          'Submission failed: ${conciseError(error)}. Draft saved for pending sync.',
         );
       }
     } finally {
@@ -1239,18 +1366,146 @@ class SanitationMobileShell extends StatefulWidget {
 }
 
 class _SanitationMobileShellState extends State<SanitationMobileShell> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final List<MobileSanitationReceipt> _reports = [];
   final List<MobileSanitationInspectionReceipt> _inspections = [];
+  final List<MobileHouseholdSurveyReceipt> _householdSurveys = [];
   List<SanitationReportDraft> _drafts = [];
   late SanitationBootstrap _bootstrap;
   int _index = 0;
   bool _refreshing = false;
+  String _establishmentFilterStatus = 'All Status';
+  String _establishmentFilterPermit = 'All Permits';
 
   @override
   void initState() {
     super.initState();
     _bootstrap = widget.bootstrap;
     _loadDrafts();
+  }
+
+  void _filterEstablishments({String? status, String? permit}) {
+    setState(() {
+      _establishmentFilterStatus = status ?? 'All Status';
+      _establishmentFilterPermit = permit ?? 'All Permits';
+      _index = 1;
+    });
+  }
+
+  Widget _buildSanitationDrawer(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              decoration: const BoxDecoration(
+                color: AppColors.deepGreen,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    child: const Icon(
+                      Icons.health_and_safety_outlined,
+                      size: 32,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Sanitary Inspector',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Mauban RHU / Sanitation Unit',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.fact_check_outlined, color: AppColors.deepGreen),
+              title: const Text('New Establishment Inspection', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openInspection(null);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.badge_outlined, color: AppColors.deepGreen),
+              title: const Text('Sanitary Permits', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openPermits();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.qr_code_scanner_outlined, color: AppColors.deepGreen),
+              title: const Text('Verify QR Permit', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openPermitVerification();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.manage_search_outlined, color: AppColors.deepGreen),
+              title: const Text('Track Community Report', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openReportTracker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.assignment_outlined, color: AppColors.deepGreen),
+              title: const Text('Household Survey', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openHouseholdSurvey();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined, color: AppColors.deepGreen),
+              title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openNotifications();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_outlined, color: AppColors.deepGreen),
+              title: const Text('Submitted Inspections & Surveys', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                setState(() => _index = 4);
+              },
+            ),
+            const Divider(),
+            if (widget.onLogout != null)
+              ListTile(
+                leading: const Icon(Icons.logout_outlined, color: AppColors.red),
+                title: const Text('Sign out', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onLogout!();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -1265,18 +1520,24 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenPermits: _openPermits,
         onOpenTab: (index) => setState(() => _index = index),
+        onFilterEstablishments: _filterEstablishments,
+        onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
       ),
       SanitationEstablishmentsPage(
         establishments: _bootstrap.establishments,
         onOpenInspection: _openInspection,
+        onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
+        initialComplianceStatus: _establishmentFilterStatus,
+        initialPermitStatus: _establishmentFilterPermit,
       ),
       SanitationMapPage(
         establishments: _bootstrap.establishments,
         householdRecords: _bootstrap.householdRecords,
+        onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
         onEditHousehold: _openHouseholdSurvey,
@@ -1292,18 +1553,21 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         onRetryDraft: _retryReportDraft,
         onDeleteDraft: _deleteReportDraft,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
       ),
       SanitationActionsPage(
         bootstrap: _bootstrap,
         inspections: _inspections,
+        householdSurveys: _householdSurveys,
         onOpenInspection: _openInspection,
         onOpenPermits: _openPermits,
         onOpenPermitVerification: _openPermitVerification,
         onOpenReportTracker: _openReportTracker,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenNotifications: _openNotifications,
+        onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onLogout: widget.onLogout,
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -1311,6 +1575,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     ];
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: _buildSanitationDrawer(context),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshBootstrap,
@@ -1428,7 +1694,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   }
 
   Future<void> _openHouseholdSurvey([HouseholdSanitationItem? household]) async {
-    final submitted = await Navigator.of(context).push<bool>(
+    final receipt = await Navigator.of(context).push<MobileHouseholdSurveyReceipt>(
       MaterialPageRoute(
         builder: (context) => HouseholdSurveyPage(
           api: widget.api,
@@ -1438,7 +1704,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       ),
     );
 
-    if (submitted == true) {
+    if (receipt != null) {
+      setState(() => _householdSurveys.insert(0, receipt));
       await _refreshBootstrap(silent: true);
     }
   }
@@ -1516,6 +1783,8 @@ class SanitationDashboardPage extends StatelessWidget {
     required this.onOpenHouseholdSurvey,
     required this.onOpenPermits,
     required this.onOpenTab,
+    this.onFilterEstablishments,
+    this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
   });
@@ -1528,6 +1797,8 @@ class SanitationDashboardPage extends StatelessWidget {
   final VoidCallback onOpenHouseholdSurvey;
   final VoidCallback onOpenPermits;
   final ValueChanged<int> onOpenTab;
+  final void Function({String? status, String? permit})? onFilterEstablishments;
+  final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
@@ -1545,6 +1816,7 @@ class SanitationDashboardPage extends StatelessWidget {
       children: [
         SanitationTopBar(
           title: 'Dashboard',
+          onMenuTap: onOpenMenu,
           onRefresh: onRefresh,
           refreshing: refreshing,
           onNotifications: () {
@@ -1587,6 +1859,10 @@ class SanitationDashboardPage extends StatelessWidget {
                 label: 'Establishments',
                 value: '${bootstrap.establishments.length}',
                 icon: Icons.apartment_outlined,
+                onTap: () => onFilterEstablishments?.call(
+                  status: 'All Status',
+                  permit: 'All Permits',
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1595,6 +1871,10 @@ class SanitationDashboardPage extends StatelessWidget {
                 label: 'Inspections',
                 value: '${bootstrap.inspections.length + inspections.length}',
                 icon: Icons.fact_check_outlined,
+                onTap: () => onFilterEstablishments?.call(
+                  status: 'upcoming',
+                  permit: 'All Permits',
+                ),
               ),
             ),
           ],
@@ -1607,6 +1887,10 @@ class SanitationDashboardPage extends StatelessWidget {
                 label: 'Violations',
                 value: '$violationCount',
                 icon: Icons.warning_amber_outlined,
+                onTap: () => onFilterEstablishments?.call(
+                  status: 'violation',
+                  permit: 'All Permits',
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1615,6 +1899,10 @@ class SanitationDashboardPage extends StatelessWidget {
                 label: 'Permit Follow-up',
                 value: '$pendingPermitCount',
                 icon: Icons.badge_outlined,
+                onTap: () => onFilterEstablishments?.call(
+                  status: 'All Status',
+                  permit: 'renewal_due',
+                ),
               ),
             ),
           ],
@@ -1693,14 +1981,20 @@ class SanitationEstablishmentsPage extends StatefulWidget {
     super.key,
     required this.establishments,
     required this.onOpenInspection,
+    this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
+    this.initialComplianceStatus = 'All Status',
+    this.initialPermitStatus = 'All Permits',
   });
 
   final List<SanitationEstablishment> establishments;
   final ValueChanged<SanitationEstablishment> onOpenInspection;
+  final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
+  final String initialComplianceStatus;
+  final String initialPermitStatus;
 
   @override
   State<SanitationEstablishmentsPage> createState() =>
@@ -1712,8 +2006,26 @@ class _SanitationEstablishmentsPageState
   String _search = '';
   String _type = 'All Types';
   String _barangay = 'All Barangays';
-  String _status = 'All Status';
-  String _permit = 'All Permits';
+  late String _status;
+  late String _permit;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = widget.initialComplianceStatus;
+    _permit = widget.initialPermitStatus;
+  }
+
+  @override
+  void didUpdateWidget(SanitationEstablishmentsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialComplianceStatus != widget.initialComplianceStatus) {
+      _status = widget.initialComplianceStatus;
+    }
+    if (oldWidget.initialPermitStatus != widget.initialPermitStatus) {
+      _permit = widget.initialPermitStatus;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1727,10 +2039,12 @@ class _SanitationEstablishmentsPageState
     ];
     final query = _search.toLowerCase().trim();
     final filtered = widget.establishments.where((item) {
-      final matchesSearch =
+      final matchesSearch = query.isEmpty ||
           item.businessName.toLowerCase().contains(query) ||
           item.barangay.toLowerCase().contains(query) ||
-          item.businessTypeName.toLowerCase().contains(query);
+          item.businessTypeName.toLowerCase().contains(query) ||
+          item.permitNumber.toLowerCase().contains(query) ||
+          item.ownerName.toLowerCase().contains(query);
       final matchesType =
           _type == 'All Types' || item.businessTypeName == _type;
       final matchesBarangay =
@@ -1746,16 +2060,23 @@ class _SanitationEstablishmentsPageState
           matchesPermit;
     }).toList();
 
+    final hasActiveFilter = _status != 'All Status' ||
+        _permit != 'All Permits' ||
+        _type != 'All Types' ||
+        _barangay != 'All Barangays' ||
+        _search.isNotEmpty;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         SanitationTopBar(
           title: 'Establishments',
+          onMenuTap: widget.onOpenMenu,
           onRefresh: widget.onRefresh,
           refreshing: widget.refreshing,
         ),
         SearchBox(
-          hint: 'Search establishments...',
+          hint: 'Search by name, permit no., or owner...',
           onChanged: (value) => setState(() => _search = value),
         ),
         const SizedBox(height: 12),
@@ -1803,9 +2124,31 @@ class _SanitationEstablishmentsPageState
               item == 'All Permits' ? item : permitStatusLabel(item),
           onChanged: (item) => setState(() => _permit = item),
         ),
-        Text(
-          '${filtered.length} establishment(s) found',
-          style: const TextStyle(color: AppColors.muted),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '${filtered.length} establishment(s) found',
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (hasActiveFilter)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _search = '';
+                    _type = 'All Types';
+                    _barangay = 'All Barangays';
+                    _status = 'All Status';
+                    _permit = 'All Permits';
+                  });
+                },
+                icon: const Icon(Icons.clear_all, size: 16),
+                label: const Text('Reset', style: TextStyle(fontSize: 12)),
+              ),
+          ],
         ),
         const SizedBox(height: 10),
         if (filtered.isEmpty)
@@ -1832,6 +2175,7 @@ class SanitationMapPage extends StatefulWidget {
     super.key,
     required this.establishments,
     required this.householdRecords,
+    this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
     this.onEditHousehold,
@@ -1839,6 +2183,7 @@ class SanitationMapPage extends StatefulWidget {
 
   final List<SanitationEstablishment> establishments;
   final List<HouseholdSanitationItem> householdRecords;
+  final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
   final ValueChanged<HouseholdSanitationItem>? onEditHousehold;
@@ -2030,6 +2375,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
       children: [
         SanitationTopBar(
           title: 'GIS Map',
+          onMenuTap: widget.onOpenMenu,
           onRefresh: widget.onRefresh,
           refreshing: widget.refreshing,
         ),
@@ -2081,24 +2427,86 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                     hitNotifier: _hitNotifier,
                   ),
                 MarkerLayer(
-                  markers:
-                      (_showHouseholds
-                              ? <Marker>[]
-                              : establishmentPins.map(
-                                  (item) => Marker(
-                                    point: LatLng(
-                                      item.latitude,
-                                      item.longitude,
-                                    ),
-                                    width: 42,
-                                    height: 42,
-                                    child: const MapPin(),
-                                  ),
-                                ))
+                  markers: _showHouseholds
+                      ? householdPins
+                          .map(
+                            (item) => Marker(
+                              point: LatLng(
+                                item.latitude,
+                                item.longitude,
+                              ),
+                              width: 42,
+                              height: 42,
+                              child: MapPin(
+                                color: sanitationStatusColor(item.status),
+                              ),
+                            ),
+                          )
+                          .toList()
+                      : establishmentPins
+                          .map(
+                            (item) => Marker(
+                              point: LatLng(
+                                item.latitude,
+                                item.longitude,
+                              ),
+                              width: 42,
+                              height: 42,
+                              child: MapPin(
+                                color: sanitationStatusColor(
+                                  item.complianceStatus,
+                                ),
+                              ),
+                            ),
+                          )
                           .toList(),
                 ),
               ],
             ),
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xffe2e8f0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _showHouseholds
+                    ? 'Household GIS Status Legend'
+                    : 'Establishment GIS Status Legend',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.muted,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 16,
+                runSpacing: 6,
+                children: [
+                  _buildLegendItem(AppColors.green, 'Good Standing'),
+                  _buildLegendItem(
+                    const Color(0xffd59b00),
+                    _showHouseholds
+                        ? 'For Compliance'
+                        : 'Upcoming / For Completion',
+                  ),
+                  _buildLegendItem(
+                    AppColors.red,
+                    _showHouseholds
+                        ? 'Needs Assistance'
+                        : 'Violation / No Permit',
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         SectionHeader(
@@ -2136,6 +2544,27 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
       ],
     );
   }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
 }
 
 class SanitationReportsPage extends StatelessWidget {
@@ -2151,6 +2580,7 @@ class SanitationReportsPage extends StatelessWidget {
     required this.onRetryDraft,
     required this.onDeleteDraft,
     required this.onOpenHouseholdSurvey,
+    this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
   });
@@ -2165,6 +2595,7 @@ class SanitationReportsPage extends StatelessWidget {
   final ValueChanged<SanitationReportDraft> onRetryDraft;
   final ValueChanged<SanitationReportDraft> onDeleteDraft;
   final VoidCallback onOpenHouseholdSurvey;
+  final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
@@ -2175,6 +2606,7 @@ class SanitationReportsPage extends StatelessWidget {
       children: [
         SanitationTopBar(
           title: 'Community Reports',
+          onMenuTap: onOpenMenu,
           onRefresh: onRefresh,
           refreshing: refreshing,
         ),
@@ -2636,17 +3068,19 @@ class PermitDetailRow extends StatelessWidget {
   }
 }
 
-class SanitationActionsPage extends StatelessWidget {
+class SanitationActionsPage extends StatefulWidget {
   const SanitationActionsPage({
     super.key,
     required this.bootstrap,
     required this.inspections,
+    this.householdSurveys = const [],
     required this.onOpenInspection,
     required this.onOpenPermits,
     required this.onOpenPermitVerification,
     required this.onOpenReportTracker,
     required this.onOpenHouseholdSurvey,
     required this.onOpenNotifications,
+    this.onOpenMenu,
     this.onLogout,
     required this.onRefresh,
     required this.refreshing,
@@ -2654,81 +3088,140 @@ class SanitationActionsPage extends StatelessWidget {
 
   final SanitationBootstrap bootstrap;
   final List<MobileSanitationInspectionReceipt> inspections;
+  final List<MobileHouseholdSurveyReceipt> householdSurveys;
   final ValueChanged<SanitationEstablishment?> onOpenInspection;
   final VoidCallback onOpenPermits;
   final VoidCallback onOpenPermitVerification;
   final VoidCallback onOpenReportTracker;
   final VoidCallback onOpenHouseholdSurvey;
   final VoidCallback onOpenNotifications;
+  final VoidCallback? onOpenMenu;
   final VoidCallback? onLogout;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
   @override
+  State<SanitationActionsPage> createState() => _SanitationActionsPageState();
+}
+
+class _SanitationActionsPageState extends State<SanitationActionsPage> {
+  String _filter = 'all';
+
+  @override
   Widget build(BuildContext context) {
+    final totalCount = widget.inspections.length + widget.householdSurveys.length;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         SanitationTopBar(
           title: 'Sanitary Monitor',
-          onRefresh: onRefresh,
-          refreshing: refreshing,
+          onMenuTap: widget.onOpenMenu,
+          onRefresh: widget.onRefresh,
+          refreshing: widget.refreshing,
         ),
         ProfileLink(
           icon: Icons.fact_check_outlined,
           label: 'New Establishment Inspection',
-          onTap: () => onOpenInspection(null),
+          onTap: () => widget.onOpenInspection(null),
         ),
         ProfileLink(
           icon: Icons.badge_outlined,
           label: 'Sanitary Permits',
-          onTap: onOpenPermits,
+          onTap: widget.onOpenPermits,
         ),
         ProfileLink(
           icon: Icons.qr_code_scanner_outlined,
           label: 'Verify QR Permit',
-          onTap: onOpenPermitVerification,
+          onTap: widget.onOpenPermitVerification,
         ),
         ProfileLink(
           icon: Icons.manage_search_outlined,
           label: 'Track Community Report',
-          onTap: onOpenReportTracker,
+          onTap: widget.onOpenReportTracker,
         ),
         ProfileLink(
           icon: Icons.assignment_outlined,
           label: 'Household Survey',
-          onTap: onOpenHouseholdSurvey,
+          onTap: widget.onOpenHouseholdSurvey,
         ),
         ProfileLink(
           icon: Icons.notifications_outlined,
           label: 'Notifications',
-          onTap: onOpenNotifications,
+          onTap: widget.onOpenNotifications,
         ),
-        if (onLogout != null)
+        if (widget.onLogout != null)
           ProfileLink(
             icon: Icons.logout_outlined,
             label: 'Sign out',
-            onTap: onLogout!,
+            onTap: widget.onLogout!,
           ),
-        SectionHeader(title: 'Submitted Inspections'),
-        if (inspections.isEmpty)
-          const EmptyState(
-            icon: Icons.fact_check_outlined,
-            title: 'No mobile inspections submitted yet',
-          )
-        else
-          ...inspections.map(
-            (item) => ReceiptCard(
-              icon: Icons.fact_check_outlined,
-              title: item.establishmentName,
-              reference: item.reference,
-              lines: [
-                'Inspector: ${item.inspectorName}',
-                'Date: ${item.inspectionDate}',
-                'Status: ${sanitationStatusLabel(item.status)}',
+        const SizedBox(height: 8),
+        SectionHeader(title: 'Submitted Inspections & Surveys'),
+        if (totalCount > 0) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('All ($totalCount)'),
+                  selected: _filter == 'all',
+                  onSelected: (_) => setState(() => _filter = 'all'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Establishments (${widget.inspections.length})'),
+                  selected: _filter == 'inspections',
+                  onSelected: (_) => setState(() => _filter = 'inspections'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Households (${widget.householdSurveys.length})'),
+                  selected: _filter == 'households',
+                  onSelected: (_) => setState(() => _filter = 'households'),
+                ),
               ],
             ),
           ),
+          const SizedBox(height: 12),
+        ],
+        if (totalCount == 0)
+          const EmptyState(
+            icon: Icons.fact_check_outlined,
+            title: 'No mobile inspections or household surveys submitted yet',
+          )
+        else ...[
+          if (_filter == 'all' || _filter == 'inspections')
+            ...widget.inspections.map(
+              (item) => ReceiptCard(
+                icon: Icons.apartment_outlined,
+                title: item.establishmentName,
+                reference: item.reference,
+                lines: [
+                  'Record: Establishment Inspection',
+                  'Inspector: ${item.inspectorName}',
+                  'Date: ${item.inspectionDate}',
+                  'Status: ${sanitationStatusLabel(item.status)}',
+                ],
+              ),
+            ),
+          if (_filter == 'all' || _filter == 'households')
+            ...widget.householdSurveys.map(
+              (item) => ReceiptCard(
+                icon: Icons.family_restroom_outlined,
+                title: 'Household: ${item.householdHead}',
+                reference: item.householdCode,
+                lines: [
+                  'Record: Household Survey',
+                  'Barangay: ${item.barangay}',
+                  'Date: ${item.inspectionDate}',
+                  'Status: ${householdStatusLabel(item.status)}',
+                  'Water Access: ${item.waterSource}',
+                  'Toilet: ${item.toiletType.replaceAll('_', ' ')}',
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -2741,12 +3234,14 @@ class SanitationTopBar extends StatelessWidget {
     this.onRefresh,
     this.refreshing = false,
     this.onNotifications,
+    this.onMenuTap,
   });
 
   final String title;
   final Future<void> Function()? onRefresh;
   final bool refreshing;
   final VoidCallback? onNotifications;
+  final VoidCallback? onMenuTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2754,8 +3249,14 @@ class SanitationTopBar extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
-          const Icon(Icons.menu, color: AppColors.deepGreen),
-          const SizedBox(width: 10),
+          IconButton(
+            icon: const Icon(Icons.menu, color: AppColors.deepGreen),
+            onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            tooltip: 'Menu',
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               title,
@@ -2796,31 +3297,175 @@ class SanitationEstablishmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = sanitationStatusColor(establishment.complianceStatus);
+    final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
+    final isViolation = establishment.complianceStatus == 'violation';
+    final isForCompletion = establishment.complianceStatus == 'for_completion';
+
     return Card(
       elevation: 0,
       color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: (isViolation || isForCompletion)
+              ? statusColor.withValues(alpha: 0.35)
+              : const Color(0xffe2e8f0),
+          width: (isViolation || isForCompletion) ? 1.5 : 1,
+        ),
+      ),
       margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: sanitationStatusColor(
-            establishment.complianceStatus,
-          ).withValues(alpha: 0.14),
-          child: Icon(
-            Icons.apartment_outlined,
-            color: sanitationStatusColor(establishment.complianceStatus),
-          ),
-        ),
-        title: Text(
-          establishment.businessName,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(
-          '${establishment.businessTypeName}\n${establishment.barangay} - ${establishment.ownerName}',
-        ),
-        isThreeLine: true,
-        trailing: FilledButton.tonal(
-          onPressed: onInspection,
-          child: const Text('Inspect'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  backgroundColor: statusColor.withValues(alpha: 0.14),
+                  child: Icon(
+                    Icons.apartment_outlined,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        establishment.businessName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${establishment.businessTypeName} • ${establishment.barangay}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      if (establishment.ownerName.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Owner: ${establishment.ownerName}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                FilledButton.tonal(
+                  onPressed: onInspection,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    minimumSize: const Size(60, 36),
+                  ),
+                  child: const Text('Inspect'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.badge_outlined,
+                  size: 14,
+                  color: establishment.permitNumber.isNotEmpty
+                      ? AppColors.deepGreen
+                      : AppColors.red,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    establishment.permitNumber.isNotEmpty
+                        ? 'Permit: ${establishment.permitNumber}'
+                        : 'No Permit Issued',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: establishment.permitNumber.isNotEmpty
+                          ? const Color(0xff334155)
+                          : AppColors.red,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (isViolation || isForCompletion) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isViolation
+                      ? '⚠️ Critical requirements uncomplied / violation recorded'
+                      : '⏳ Incomplete requirements pending compliance',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: statusColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -3020,7 +3665,15 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         SanitationEstablishment.placeholder();
     _inspectionDate = DateTime.now();
     _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
+    _status = _establishment.complianceStatus.isNotEmpty
+        ? _establishment.complianceStatus
+        : 'good_standing';
     _checks = _defaultChecksFor(_establishment);
+    if (_status == 'violation') {
+      _findings.text = 'Critical requirements uncomplied / violation recorded.';
+    } else if (_status == 'for_completion') {
+      _findings.text = 'Incomplete sanitary requirements pending compliance.';
+    }
   }
 
   @override
@@ -3046,9 +3699,19 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             setState(() {
               _establishment = item;
               _nextDueDate = _suggestedDueDate(_inspectionDate, item);
+              _status = item.complianceStatus.isNotEmpty
+                  ? item.complianceStatus
+                  : 'good_standing';
               _checks = _defaultChecksFor(item);
-              _findings.clear();
-              _status = 'good_standing';
+              if (_status == 'violation') {
+                _findings.text =
+                    'Critical requirements uncomplied / violation recorded.';
+              } else if (_status == 'for_completion') {
+                _findings.text =
+                    'Incomplete sanitary requirements pending compliance.';
+              } else {
+                _findings.clear();
+              }
             });
           },
         ),
@@ -3105,19 +3768,50 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     );
     final requirements = businessType?.requirements ?? const [];
 
-    if (requirements.isEmpty) {
-      return const [
-        InspectionChecklistDraft('Proper waste disposal system', true),
-        InspectionChecklistDraft('Clean water supply available', true),
-        InspectionChecklistDraft('Functional toilet facilities', true),
-        InspectionChecklistDraft('Food handling area is clean', true),
-        InspectionChecklistDraft('Valid sanitary permit displayed', true),
-      ];
-    }
+    final list = requirements.isNotEmpty
+        ? requirements.map((item) => item.requirementName).toList()
+        : const [
+            'Proper waste disposal system',
+            'Clean water supply available',
+            'Functional toilet facilities',
+            'Food handling area is clean',
+            'Valid sanitary permit displayed',
+          ];
 
-    return requirements
-        .map((item) => InspectionChecklistDraft(item.requirementName, true))
-        .toList();
+    final isViolation = establishment.complianceStatus == 'violation';
+    final isForCompletion = establishment.complianceStatus == 'for_completion';
+    final isNoPermit = establishment.complianceStatus == 'no_permit' ||
+        establishment.permitStatus == 'no_permit';
+
+    return list.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final name = entry.value;
+      final lower = name.toLowerCase();
+
+      bool isComplied = true;
+      if (isViolation) {
+        // Red: critical deficiencies/violations
+        if (lower.contains('permit') ||
+            lower.contains('waste') ||
+            lower.contains('toilet') ||
+            idx == 0 ||
+            idx == list.length - 1) {
+          isComplied = false;
+        }
+      } else if (isForCompletion) {
+        // Yellow: incomplete pending requirement
+        if (lower.contains('water') ||
+            lower.contains('health') ||
+            idx == list.length - 1) {
+          isComplied = false;
+        }
+      } else if (isNoPermit) {
+        if (lower.contains('permit')) {
+          isComplied = false;
+        }
+      }
+      return InspectionChecklistDraft(name, isComplied);
+    }).toList();
   }
 
   DateTime _suggestedDueDate(
@@ -3425,13 +4119,21 @@ class SanitationAccessGateway extends StatefulWidget {
 class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _estUsername = TextEditingController();
+  final TextEditingController _estPassword = TextEditingController();
+
+  int _gatewayTab = 0; // 0: Admin / Staff, 1: Establishment Account
   bool _signedIn = false;
+  bool _signedInEstablishment = false;
   bool _signingIn = false;
+  SanitationEstablishment? _activeEstablishment;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _estUsername.dispose();
+    _estPassword.dispose();
     super.dispose();
   }
 
@@ -3443,6 +4145,14 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         bootstrap: widget.bootstrap,
         onRefresh: widget.onRefresh,
         onLogout: _signOut,
+      );
+    }
+
+    if (_signedInEstablishment && _activeEstablishment != null) {
+      return SanitationEstablishmentPortalPage(
+        establishment: _activeEstablishment!,
+        onLogout: _signOutEstablishment,
+        onRefresh: widget.onRefresh,
       );
     }
 
@@ -3467,9 +4177,9 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                         top: Radius.circular(18),
                       ),
                     ),
-                    child: const Text(
-                      'Login Page',
-                      style: TextStyle(
+                    child: Text(
+                      _gatewayTab == 0 ? 'Sanitary Inspector Gateway' : 'Establishment Account Portal',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                       ),
@@ -3504,46 +4214,158 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                 ?.copyWith(fontWeight: FontWeight.w900),
                           ),
                           const Text(
-                            'Sign in to continue',
+                            'Choose your account type to continue',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.muted,
                               fontSize: 12,
                             ),
                           ),
-                          const SizedBox(height: 18),
-                          _GatewaySection(
-                            icon: Icons.admin_panel_settings_outlined,
-                            title: 'Admin Login',
-                            children: [
-                              TextField(
-                                controller: _email,
-                                keyboardType: TextInputType.emailAddress,
-                                decoration: const InputDecoration(
-                                  labelText: 'Email',
-                                  hintText: 'admin@example.com',
+                          const SizedBox(height: 16),
+
+                          // Role Selector Tab
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _gatewayTab = 0),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: _gatewayTab == 0 ? AppColors.deepGreen : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        'Staff / Inspector',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _gatewayTab == 0 ? Colors.white : AppColors.muted,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              TextField(
-                                controller: _password,
-                                obscureText: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Password',
-                                  hintText: 'Password',
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _gatewayTab = 1),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: _gatewayTab == 1 ? AppColors.deepGreen : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        'Establishment',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _gatewayTab == 1 ? Colors.white : AppColors.muted,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              FilledButton(
-                                onPressed: _signingIn ? null : _signIn,
-                                child: Text(
-                                  _signingIn
-                                      ? 'Signing in...'
-                                      : 'Sign in as Admin',
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          const SizedBox(height: 18),
+
+                          // TAB 0: Admin / Staff Login
+                          if (_gatewayTab == 0) ...[
+                            _GatewaySection(
+                              icon: Icons.admin_panel_settings_outlined,
+                              title: 'Inspector / Staff Login',
+                              children: [
+                                TextField(
+                                  controller: _email,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Username or Email',
+                                    hintText: 'sanitation_admin or inspector_juan',
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                TextField(
+                                  controller: _password,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Password',
+                                    hintText: 'Sanitation@123',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _signingIn ? null : _signIn,
+                                  child: Text(
+                                    _signingIn ? 'Signing in...' : 'Sign in as Inspector / Admin',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // TAB 1: Establishment Account Login
+                          if (_gatewayTab == 1) ...[
+                            _GatewaySection(
+                              icon: Icons.storefront_outlined,
+                              title: 'Establishment Account',
+                              text: 'View active sanitary permit, QR code, inspection checklist & violations.',
+                              children: [
+                                TextField(
+                                  controller: _estUsername,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Username or Permit No.',
+                                    hintText: 'establishment_owner or LG-2026-002',
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                TextField(
+                                  controller: _estPassword,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Password',
+                                    hintText: 'Establishment@123',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: ActionChip(
+                                    avatar: const Icon(Icons.bolt, size: 14, color: AppColors.deepGreen),
+                                    label: const Text('Use Demo: establishment_owner / Establishment@123', style: TextStyle(fontSize: 11)),
+                                    onPressed: () {
+                                      setState(() {
+                                        _estUsername.text = 'establishment_owner';
+                                        _estPassword.text = 'Establishment@123';
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _signingIn ? null : _signInEstablishment,
+                                  child: Text(
+                                    _signingIn ? 'Signing in...' : 'Sign in to Establishment Portal',
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextButton(
+                                  onPressed: _showEstablishmentRegistrationDialog,
+                                  child: const Text('Register or Claim Business Account'),
+                                ),
+                              ],
+                            ),
+                          ],
+
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 16),
                             child: Row(
@@ -3576,16 +4398,6 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                               ),
                             ],
                           ),
-                          // Removed offline warning banner as requested for the presentation
-                          // if (widget.bootstrap.isOffline) ...[
-                          //   const SizedBox(height: 14),
-                          //   DataSourceBanner(
-                          //     icon: Icons.cloud_off_outlined,
-                          //     title: 'Backend not reachable',
-                          //     text: widget.bootstrap.offlineMessage,
-                          //     warning: true,
-                          //   ),
-                          // ],
                         ],
                       ),
                     ),
@@ -3615,6 +4427,132 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     showAppMessage(context, 'Signed in to sanitation staff mode.');
   }
 
+  Future<void> _signInEstablishment() async {
+    final user = _estUsername.text.trim();
+    final pass = _estPassword.text.trim();
+
+    if (user.isEmpty || pass.isEmpty) {
+      showAppMessage(context, 'Enter establishment username or permit number and password.');
+      return;
+    }
+
+    setState(() => _signingIn = true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
+    // Search matching establishment from bootstrap
+    SanitationEstablishment? match;
+    final lowerUser = user.toLowerCase();
+
+    for (final est in widget.bootstrap.establishments) {
+      if (est.permitNumber.toLowerCase() == lowerUser ||
+          est.businessName.toLowerCase().contains(lowerUser) ||
+          est.ownerName.toLowerCase().contains(lowerUser)) {
+        match = est;
+        break;
+      }
+    }
+
+    // Default fallback to first establishment with valid permit for demo account
+    if (match == null && (user == 'establishment_owner' || user.toLowerCase().contains('owner') || user.toLowerCase().contains('demo'))) {
+      match = widget.bootstrap.establishments.firstWhere(
+        (e) => e.permitNumber.isNotEmpty,
+        orElse: () => widget.bootstrap.establishments.first,
+      );
+    }
+
+    setState(() => _signingIn = false);
+
+    if (match != null) {
+      setState(() {
+        _activeEstablishment = match;
+        _signedInEstablishment = true;
+      });
+      showAppMessage(context, 'Welcome, ${match.businessName}!');
+    } else {
+      showAppMessage(context, 'No matching establishment account found. Please check credentials or register.');
+    }
+  }
+
+  void _signOutEstablishment() {
+    setState(() {
+      _signedInEstablishment = false;
+      _activeEstablishment = null;
+      _estPassword.clear();
+    });
+    showAppMessage(context, 'Signed out of establishment account.');
+  }
+
+  void _showEstablishmentRegistrationDialog() {
+    final nameCtrl = TextEditingController();
+    final permitCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Register Establishment Account'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Link your business to access your sanitary permit QR code and inspection records.',
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Business Name',
+                  hintText: 'e.g. Golden Egg Poultry',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: permitCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Sanitary Permit Number',
+                  hintText: 'e.g. LG-2026-002',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'New Password',
+                  hintText: 'Min. 6 characters',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (nameCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) {
+                showAppMessage(context, 'Business name and password are required.');
+                return;
+              }
+              Navigator.of(ctx).pop();
+              setState(() {
+                _estUsername.text = permitCtrl.text.trim().isNotEmpty ? permitCtrl.text.trim() : nameCtrl.text.trim();
+                _estPassword.text = passCtrl.text.trim();
+              });
+              _signInEstablishment();
+            },
+            child: const Text('Register Account'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _signOut() {
     setState(() {
       _signedIn = false;
@@ -3635,6 +4573,376 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     if (receipt != null && mounted) {
       showAppMessage(context, 'Community report ${receipt.reference} sent.');
     }
+  }
+}
+
+class SanitationEstablishmentPortalPage extends StatelessWidget {
+  const SanitationEstablishmentPortalPage({
+    super.key,
+    required this.establishment,
+    required this.onLogout,
+    required this.onRefresh,
+  });
+
+  final SanitationEstablishment establishment;
+  final VoidCallback onLogout;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = sanitationStatusColor(establishment.complianceStatus);
+    final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
+    final permitStatus = permitStatusLabel(establishment.permitStatus);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          establishment.businessName,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+        ),
+        backgroundColor: AppColors.deepGreen,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => onRefresh(),
+            tooltip: 'Refresh Records',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_outlined),
+            onPressed: onLogout,
+            tooltip: 'Sign Out',
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            // Business Header Card
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.deepGreen.withValues(alpha: 0.12),
+                          child: const Icon(Icons.storefront_outlined, color: AppColors.deepGreen),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                establishment.businessName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Owner: ${establishment.ownerName}',
+                                style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    _portalInfoRow('Permit Number', establishment.permitNumber.isEmpty ? 'Pending Issuance' : establishment.permitNumber),
+                    _portalInfoRow('Business Type', establishment.businessTypeName),
+                    _portalInfoRow('Barangay & Address', '${establishment.address}, ${establishment.barangay}'),
+                    _portalInfoRow('Contact Number', establishment.contactNumber.isEmpty ? 'N/A' : establishment.contactNumber),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Sanitary Status Banner Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.shield_outlined, color: statusColor, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            statusLabel,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          permitStatus.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    establishment.permitExpiryDate.isEmpty
+                        ? 'Inspection schedule: Every ${establishment.inspectionFrequency} months'
+                        : 'Permit valid until: ${establishment.permitExpiryDate} (${establishment.complianceStatus == 'good_standing' ? 'Compliant with Sanitation Code' : 'Action Required'})',
+                    style: TextStyle(color: statusColor, fontSize: 12.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // QR Code Verification Card
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Official Sanitary Permit QR Code',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Display this QR code at your establishment entrance or counter for quick inspection scanning.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: QrImageView(
+                        data: establishment.permitNumber.isNotEmpty
+                            ? establishment.permitNumber
+                            : 'EST-${establishment.id}',
+                        version: QrVersions.auto,
+                        size: 160,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: AppColors.deepGreen,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: AppColors.deepGreen,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      establishment.permitNumber.isNotEmpty
+                          ? 'Permit: ${establishment.permitNumber}'
+                          : 'Establishment ID: ${establishment.id}',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Requirements & Inspection Compliance Card
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sanitary Compliance Checklist',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 12),
+                    _complianceItem(
+                      'Official Sanitary Clearance',
+                      establishment.hasPermit,
+                    ),
+                    _complianceItem(
+                      'Employee Health Certificates & Chest X-Ray',
+                      establishment.complianceStatus != 'violation',
+                    ),
+                    _complianceItem(
+                      'Water Potability & Microbiological Test',
+                      establishment.complianceStatus == 'good_standing' || establishment.complianceStatus == 'upcoming',
+                    ),
+                    _complianceItem(
+                      'Solid Waste Management & Grease Trap',
+                      establishment.complianceStatus != 'violation',
+                    ),
+                    _complianceItem(
+                      'Insect & Vermin Control Program',
+                      establishment.complianceStatus == 'good_standing',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // Actions
+            FilledButton.icon(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Request Re-Inspection'),
+                    content: Text(
+                      'Submit a formal request for sanitary inspector visit for ${establishment.businessName}?\n\nThe RHU Sanitary Section will receive this request for scheduling within 2-3 business days.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          showAppMessage(context, 'Re-inspection request submitted to Sanitary Section.');
+                        },
+                        child: const Text('Confirm Request'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              icon: const Icon(Icons.assignment_turned_in_outlined),
+              label: const Text('Request Re-Inspection'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.deepGreen,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout_outlined),
+              label: const Text('Sign Out of Establishment Account'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.red,
+                side: const BorderSide(color: AppColors.red),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _portalInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _complianceItem(String title, bool compliant) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            compliant ? Icons.check_circle : Icons.warning_amber_rounded,
+            color: compliant ? AppColors.green : AppColors.red,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: compliant ? FontWeight.normal : FontWeight.bold,
+                color: compliant ? Colors.black87 : AppColors.red,
+              ),
+            ),
+          ),
+          Text(
+            compliant ? 'COMPLIANT' : 'ACTION NEEDED',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: compliant ? AppColors.green : AppColors.red,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -353,6 +353,15 @@ function ComplaintsManagement() {
   }
 
   function handleSchedulePriorityChange(newPriority) {
+    const isUrgentLocked =
+      selectedReport?.priority === "high" ||
+      String(selectedReport?.priority).toLowerCase() === "urgent";
+
+    if (isUrgentLocked && newPriority !== "high") {
+      setPageError("Urgent reports are permanently locked to Urgent SLA priority and cannot be downgraded.");
+      return;
+    }
+
     const { minDate, maxDate } = getScheduleDateLimits(newPriority);
     let clampedDate = schedule.date;
     if (clampedDate < minDate) clampedDate = minDate;
@@ -370,10 +379,15 @@ function ComplaintsManagement() {
 
     if (!selectedReport) return;
 
-    const { minDate, maxDate, ruleHint } = getScheduleDateLimits(schedule.priority);
+    const isUrgentLocked =
+      selectedReport.priority === "high" ||
+      String(selectedReport.priority).toLowerCase() === "urgent";
+    const targetPriority = isUrgentLocked ? "high" : schedule.priority;
+
+    const { minDate, maxDate, ruleHint } = getScheduleDateLimits(targetPriority);
     if (schedule.date < minDate || schedule.date > maxDate) {
       setPageError(
-        `Invalid Inspection Date: For ${schedule.priority.toUpperCase()} priority, inspection date must be between ${minDate} and ${maxDate}. (${ruleHint})`
+        `Invalid Inspection Date: For ${targetPriority.toUpperCase()} priority, inspection date must be between ${minDate} and ${maxDate}. (${ruleHint})`
       );
       return;
     }
@@ -392,7 +406,7 @@ function ComplaintsManagement() {
     try {
       const updated = await updateComplaint(selectedReport.id, {
         status: "investigating",
-        priority: schedule.priority,
+        priority: targetPriority,
         assigned_inspector: schedule.inspector,
         inspection_scheduled_date: schedule.date,
         inspection_scheduled_time: schedule.time,
@@ -1027,8 +1041,8 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
         <div className="classification-item">
           <span>Inspection Urgency:</span>
           <span className={`urgency-pill ${report.priority || catInfo.priority}`}>
-            {report.priority === "high"
-              ? "🔴 Urgent (Within 24–48h)"
+            {report.priority === "high" || String(report.priority).toLowerCase() === "urgent"
+              ? "🔴 Urgent (Within 24–48h) • 🔒 Locked"
               : report.priority === "medium"
               ? "🟡 Standard (Within 3–5 days)"
               : "🟢 Routine (Within 7–14 days)"}
@@ -1206,7 +1220,10 @@ function ScheduleInspectionModal({
   onPriorityChange,
   onChange,
 }) {
-  const effectivePriority = schedule.priority || report.priority || "high";
+  const isUrgentLocked =
+    report.priority === "high" ||
+    String(report.priority).toLowerCase() === "urgent";
+  const effectivePriority = isUrgentLocked ? "high" : (schedule.priority || report.priority || "high");
   const { minDate, maxDate, ruleHint, ruleType } = getScheduleDateLimits(effectivePriority);
 
   return (
@@ -1292,22 +1309,52 @@ function ScheduleInspectionModal({
         </div>
 
         <label className="community-field-label">Inspection Priority / SLA Window</label>
+        {isUrgentLocked ? (
+          <div
+            style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              padding: "10px 14px",
+              marginBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              color: "#991b1b",
+              fontSize: "13px",
+            }}
+          >
+            <span style={{ fontSize: "1.25rem" }}>🔒</span>
+            <div>
+              <strong>Locked as Urgent (24–48h SLA Priority)</strong>
+              <div>This report was submitted as Urgent. Per health sanitation protocol, urgency cannot be downgraded.</div>
+            </div>
+          </div>
+        ) : null}
         <div className="community-priority-row">
           {[
             ["high", "Urgent", "Today or Tomorrow (48h max)"],
             ["medium", "Standard", "Within 5 days"],
             ["low", "Routine", "Within 14 days"],
-          ].map(([value, label, hint]) => (
-            <button
-              key={value}
-              type="button"
-              className={schedule.priority === value ? `active ${value}` : ""}
-              onClick={() => onPriorityChange(value)}
-            >
-              <strong>{label}</strong>
-              <span>{hint}</span>
-            </button>
-          ))}
+          ].map(([value, label, hint]) => {
+            const isBlocked = isUrgentLocked && value !== "high";
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`${schedule.priority === value ? `active ${value}` : ""} ${isBlocked ? "disabled-locked" : ""}`}
+                onClick={() => {
+                  if (!isBlocked) onPriorityChange(value);
+                }}
+                disabled={isBlocked}
+                style={isBlocked ? { opacity: 0.45, cursor: "not-allowed" } : {}}
+                title={isBlocked ? "Cannot downgrade Urgent report" : ""}
+              >
+                <strong>{label}</strong>
+                <span>{hint}</span>
+              </button>
+            );
+          })}
         </div>
 
         <label className="community-field-label" htmlFor="inspection-note">

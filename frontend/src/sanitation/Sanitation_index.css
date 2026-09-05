@@ -7316,6 +7316,114 @@
   line-height: 1.5;
 }
 
+.gis-pin-marker {
+  background: transparent !important;
+  border: 0 !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gis-pin-marker:hover {
+  transform: translateY(-4px) scale(1.1);
+  z-index: 9999 !important;
+}
+
+.gis-pin-marker.selected {
+  transform: translateY(-6px) scale(1.2);
+  z-index: 10000 !important;
+}
+
+.gis-popup-card {
+  min-width: 210px;
+  max-width: 270px;
+  padding: 4px 2px;
+  font-family: inherit;
+}
+
+.gis-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gis-popup-code {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.gis-popup-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.gis-popup-meta {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.gis-popup-address {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.gis-popup-details {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+}
+
+.gis-popup-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.gis-popup-details span {
+  color: #64748b;
+}
+
+.gis-popup-details strong {
+  color: #0f172a;
+}
+
+.gis-popup-desc {
+  margin: 6px 0 0;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 6px;
+  font-size: 11.5px;
+  font-style: italic;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.gis-popup-scheduled {
+  margin-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 6px;
+  font-size: 11.5px;
+  color: #0369a1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
 @media (max-width: 1120px) {
   .gis-toolbar {
     align-items: flex-start;
@@ -7989,23 +8097,85 @@
 .household-report-card {
   height: auto;
   min-height: 260px;
-  border: 1px solid #aeb7b1;
-  border-radius: 10px;
+  border: 1px solid #d7e5e1;
+  border-radius: 12px;
   background: white;
-  padding: 18px 20px;
+  padding: 20px 22px;
   box-sizing: border-box;
   overflow: visible;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 14px rgba(15, 75, 45, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 385px;
+}
+
+.household-report-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
 .household-report-card h3 {
-  margin: 0 0 18px;
-  font-size: 16.5px;
+  margin: 0;
+  font-size: 17px;
   font-weight: 800;
-  color: #111;
+  color: #0f172a;
+  line-height: 1.3;
 }
 
-/* BAR CHART */
+.hh-chart-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.hh-chart-container {
+  position: relative;
+  flex: 1;
+  min-height: 285px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hh-donut-container {
+  position: relative;
+  width: 100%;
+  height: 285px;
+}
+
+.hh-donut-center-stat {
+  position: absolute;
+  top: 50%;
+  left: 28%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.hh-donut-center-stat strong {
+  font-size: 26px;
+  font-weight: 900;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.hh-donut-center-stat small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* BAR CHART FALLBACKS */
 
 .hr-bar-chart {
   position: relative;
@@ -8165,18 +8335,18 @@
 /* INFRA TABLE */
 
 .infra-card {
-  border: 1px solid #aeb7b1;
-  border-radius: 10px;
+  border: 1px solid #d7e5e1;
+  border-radius: 12px;
   background: white;
   overflow: hidden;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 14px rgba(15, 75, 45, 0.08);
 }
 
 .infra-card-header {
   min-height: 70px;
   padding: 0 20px;
-  background: #f7faf8;
-  border-bottom: 1px solid #bfc6c1;
+  background: #f8faf9;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -8189,57 +8359,72 @@
 }
 
 .infra-title svg {
-  font-size: 35.5px;
-  color: #111;
+  font-size: 32px;
+  color: #0f7a45;
 }
 
 .infra-title h3 {
   margin: 0;
   font-size: 17.5px;
   font-weight: 800;
-  color: #111;
+  color: #0f172a;
 }
 
 .infra-title p {
   margin: 3px 0 0;
-  font-size: 13.5px;
-  color: #666;
+  font-size: 13px;
+  color: #64748b;
 }
 
 .infra-legend {
   display: flex;
   gap: 18px;
-  font-size: 13.5px;
-  color: #444;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.infra-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .infra-table {
   width: 100%;
+  min-width: 960px;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 14.5px;
+  font-size: 14px;
 }
 
 .infra-table th {
-  padding: 14px;
+  padding: 13px 14px;
   text-align: left;
   text-transform: uppercase;
-  font-size: 15.5px;
+  font-size: 12px;
   font-weight: 800;
-  color: #666;
-  border-bottom: 2px solid #111;
+  color: #475569;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #cbd5e1;
+  background: #f8fafc;
 }
 
 .infra-table td {
-  padding: 16px 14px;
-  border-bottom: 1px solid #111;
-  color: #333;
+  padding: 14px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.infra-table tr:hover td {
+  background: #f8fafc;
 }
 
 .infra-table td:first-child {
-  font-size: 16.5px;
-  font-weight: 800;
-  color: #111;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .infra-progress-wrap {
@@ -8250,34 +8435,137 @@
 
 .infra-progress {
   width: 78px;
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
-  background: #e5ece8;
+  background: #e2e8f0;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .infra-progress span {
   display: block;
   height: 100%;
-  width: 50%;
 }
 
 .infra-progress span.green {
-  background: #22a851;
+  background: #10b981;
 }
 
 .infra-progress span.orange {
-  width: 33%;
-  background: #ff8b2b;
+  background: #f59e0b;
 }
 
 .infra-progress span.red {
-  background: #ef2222;
+  background: #ef4444;
 }
 
 .infra-progress-wrap strong {
-  font-size: 14.5px;
-  color: #333;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
+}
+
+/* STATUS BREAKDOWN IN TABLE (No Overflow, Clean Chips & Segmented Bar) */
+
+.hh-breakdown-td {
+  vertical-align: middle;
+}
+
+.hh-breakdown-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.hh-breakdown-bar {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.hh-breakdown-bar .hh-seg-good {
+  background: #10b981;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.hh-breakdown-bar .hh-seg-comp {
+  background: #f59e0b;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.hh-breakdown-bar .hh-seg-risk {
+  background: #ef4444;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.hh-breakdown-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.hh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.hh-chip strong {
+  font-weight: 800;
+  font-size: 11.5px;
+}
+
+.hh-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.hh-chip-good {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.hh-chip-good .hh-chip-dot {
+  background: #10b981;
+}
+
+.hh-chip-comp {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.hh-chip-comp .hh-chip-dot {
+  background: #f59e0b;
+}
+
+.hh-chip-risk {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.hh-chip-risk .hh-chip-dot {
+  background: #ef4444;
 }
 
 .risk-flag {
@@ -8286,10 +8574,11 @@
   border-radius: 999px;
   background: #ffd5d5;
   color: #ff2e2e;
-  padding: 5px 12px;
-  font-size: 12.5px;
-  font-weight: 800;
-  white-space: nowrap;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: normal;
+  max-width: 100%;
 }
 
 .sanitary-insight-grid {

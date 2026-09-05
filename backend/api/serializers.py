@@ -416,6 +416,13 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
         source="get_permit_size_display",
         read_only=True,
     )
+    account_username = serializers.CharField(
+        source="user.username",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+    is_account_linked = serializers.SerializerMethodField()
     coordinates = serializers.SerializerMethodField()
     risk_score = serializers.SerializerMethodField()
     risk_level = serializers.SerializerMethodField()
@@ -450,9 +457,14 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "risk_level",
             "open_complaints",
             "remarks",
+            "account_username",
+            "is_account_linked",
             "created_at",
             "updated_at",
         ]
+
+    def get_is_account_linked(self, obj):
+        return bool(getattr(obj, "user_id", None))
 
     def get_coordinates(self, obj):
         return {

@@ -650,6 +650,25 @@ function EstablishmentRecords() {
                   <tr key={item.id}>
                     <td>
                       <strong>{item.business_name}</strong>
+                      {item.account_username ? (
+                        <small
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            color: "#16a34a",
+                            fontSize: "11px",
+                            marginTop: "3px",
+                            background: "#f0fdf4",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            border: "1px solid #bbf7d0",
+                          }}
+                          title={`Linked Owner Account: @${item.account_username}`}
+                        >
+                          📱 @{item.account_username}
+                        </small>
+                      ) : null}
                     </td>
                     <td>{item.owner_name}</td>
                     <td>{item.business_type_name}</td>
@@ -827,7 +846,62 @@ function EstablishmentDetailModal({
             label="Compliance Status"
             value={establishment.compliance_status_label}
           />
+          <InfoTile
+            label="Mobile Portal Account"
+            value={
+              establishment.account_username ? (
+                <span style={{ color: "#16a34a", fontWeight: "600" }}>
+                  🟢 Linked (@{establishment.account_username})
+                </span>
+              ) : (
+                <span style={{ color: "#64748b" }}>
+                  ⚪ Not Linked (Register via Mobile)
+                </span>
+              )
+            }
+          />
           <InfoTile label="Map Coordinates" value={coordinateText} />
+        </div>
+
+        <div
+          style={{
+            margin: "14px 0",
+            padding: "12px 16px",
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div>
+            <strong style={{ color: "#166534", display: "block" }}>
+              📱 Mobile Establishment Portal
+            </strong>
+            <span style={{ fontSize: "13px", color: "#15803d" }}>
+              {establishment.account_username
+                ? `Owner account active (@${establishment.account_username}). Can log in to view live permit, checklist & request re-inspection.`
+                : "Owner can register an account in the Mobile Sanitation Portal using their Permit / Business Name, or use demo account (establishment_owner / Establishment@123)."}
+            </span>
+          </div>
+          <span
+            style={{
+              fontSize: "12px",
+              fontWeight: "600",
+              padding: "4px 10px",
+              borderRadius: "9999px",
+              background: establishment.account_username ? "#dcfce7" : "#f8fafc",
+              color: establishment.account_username ? "#15803d" : "#475569",
+              border: `1px solid ${
+                establishment.account_username ? "#86efac" : "#cbd5e1"
+              }`,
+            }}
+          >
+            {establishment.account_username ? "Account Linked" : "Mobile Portal Ready"}
+          </span>
         </div>
 
         <div className="establishment-detail-note">

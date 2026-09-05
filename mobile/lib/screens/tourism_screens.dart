@@ -1549,6 +1549,167 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
 
   int _selectedItineraryIndex = 0;
 
+  void _showAddPackingItemDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.add_task, color: AppColors.deepGreen),
+                SizedBox(width: 10),
+                Text(
+                  'Add Packing Item',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter an item you need to pack for your island trip:',
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Extra beach towel, Sunscreen SPF50',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final text = controller.text.trim();
+                  if (text.isNotEmpty) {
+                    setState(() {
+                      _packingItems[text] = false;
+                    });
+                  }
+                  Navigator.of(ctx).pop();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.deepGreen,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Add to List'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showReadyToLeaveDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            title: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.beach_access_rounded,
+                    color: Color(0xFFD97706),
+                    size: 52,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'You are ready to leave!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Lahat ng gamit sa iyong Island Packing Checklist ay kumpleto at naka-impake na! Handa ka na para sa iyong biyahe sa Cagbalete Island at Mauban.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                SizedBox(height: 14),
+                Text(
+                  'Have a safe, memorable, and fun journey! 🌊✨',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF15803D),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.deepGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Let\'s Go!',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final latestVisit = widget.visits.firstOrNull;
@@ -1906,7 +2067,11 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   color: const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.backpack_outlined, size: 20, color: Color(0xFFB45309)),
+                child: const Icon(
+                  Icons.backpack_outlined,
+                  size: 20,
+                  color: Color(0xFFB45309),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1915,13 +2080,45 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   children: [
                     const Text(
                       'Island Packing Checklist',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                     Text(
                       '$totalPacked of $totalItems items ready',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _showAddPackingItemDialog,
+                icon: const Icon(Icons.add, size: 15, color: Color(0xFF14532D)),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF14532D),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  side: const BorderSide(color: Color(0xFF14532D)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],
@@ -1933,24 +2130,44 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               value: progress,
               minHeight: 6,
               backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF10B981),
+              ),
             ),
           ),
           const SizedBox(height: 12),
           ..._packingItems.entries.map((entry) {
-            return GestureDetector(
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
               onTap: () {
+                final newValue = !entry.value;
                 setState(() {
-                  _packingItems[entry.key] = !entry.value;
+                  _packingItems[entry.key] = newValue;
                 });
+                if (newValue) {
+                  final allChecked =
+                      _packingItems.isNotEmpty &&
+                      _packingItems.values.every((v) => v);
+                  if (allChecked) {
+                    _showReadyToLeaveDialog();
+                  }
+                }
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 4,
+                ),
                 child: Row(
                   children: [
                     Icon(
-                      entry.value ? Icons.check_box : Icons.check_box_outline_blank,
-                      color: entry.value ? const Color(0xFF14532D) : const Color(0xFF94A3B8),
+                      entry.value
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
+                      color:
+                          entry.value
+                              ? const Color(0xFF14532D)
+                              : const Color(0xFF94A3B8),
                       size: 22,
                     ),
                     const SizedBox(width: 10),
@@ -1959,68 +2176,207 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         entry.key,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: entry.value ? FontWeight.w700 : FontWeight.w500,
-                          color: entry.value ? const Color(0xFF0F172A) : const Color(0xFF475569),
-                          decoration: entry.value ? TextDecoration.lineThrough : null,
+                          fontWeight:
+                              entry.value ? FontWeight.w700 : FontWeight.w500,
+                          color:
+                              entry.value
+                                  ? const Color(0xFF0F172A)
+                                  : const Color(0xFF475569),
+                          decoration:
+                              entry.value ? TextDecoration.lineThrough : null,
                         ),
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 15,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Remove Item',
+                      onPressed: () {
+                        setState(() {
+                          _packingItems.remove(entry.key);
+                        });
+                      },
                     ),
                   ],
                 ),
               ),
             );
           }),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: _showAddPackingItemDialog,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFFCBD5E1),
+                  style: BorderStyle.solid,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFF8FAFC),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(
+                    Icons.add_circle_outline,
+                    size: 17,
+                    color: Color(0xFF166534),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    '+ Magdagdag ng Item sa Checklist',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // Curated Itineraries Section
+  // Curated Itineraries Section (Spacious Modern Timeline)
   Widget _buildItinerarySection() {
     final itineraries = [
       {
         'title': '🏝️ Cagbalete Island & Sandbars Loop',
         'duration': '1 to 2 Days',
+        'badge': 'Top Recommended',
         'highlight': 'Yang-in Sandbar, Bonsai Island, Balete Tree',
         'stops': [
-          '07:00 AM — Public Boat from Mauban Port to Sabang/Mappit',
-          '09:00 AM — Yang-in Sandbar Walk & Low Tide Swimming',
-          '01:00 PM — Fresh Seafood Lunch at Beachfront Resort',
-          '03:30 PM — Bonsai Island rock formations & photo op',
-          '05:30 PM — Golden Hour Sunset by the century-old Balete Tree',
+          {
+            'time': '07:00 AM',
+            'title': 'Port Departure to Cagbalete',
+            'description':
+                'Board public or private boat from Mauban Port to Sabang/Mappit Port.',
+            'icon': Icons.directions_boat_outlined,
+          },
+          {
+            'time': '09:00 AM',
+            'title': 'Yang-in Sandbar Walk & Swimming',
+            'description':
+                'Witness the vast low-tide white sand ripples and shallow crystal emerald waters.',
+            'icon': Icons.water_outlined,
+          },
+          {
+            'time': '01:00 PM',
+            'title': 'Beachfront Seafood Feast',
+            'description':
+                'Enjoy fresh fish, squid, and grilled local delicacies at the beachfront resort.',
+            'icon': Icons.restaurant_outlined,
+          },
+          {
+            'time': '03:30 PM',
+            'title': 'Bonsai Island Exploration',
+            'description':
+                'Unique dwarf mangrove trees and ancient coral rock formations ideal for photography.',
+            'icon': Icons.park_outlined,
+          },
+          {
+            'time': '05:30 PM',
+            'title': 'Golden Hour by Balete Tree',
+            'description':
+                'Century-old mystical Balete tree sunset photography session with sea breeze.',
+            'icon': Icons.wb_twilight_outlined,
+          },
         ],
       },
       {
         'title': '🌿 Eco-Waterfalls & Heritage Trail',
         'duration': 'Day Tour (Town Proper)',
+        'badge': 'Nature & Culture',
         'highlight': 'Dahican Falls, Rizal Hill, Spanish Bath',
         'stops': [
-          '08:00 AM — Refreshing swim at Dahican Cascading Falls',
-          '11:30 AM — Panoramic Lamon Bay view at Rizal Hill Park',
-          '01:00 PM — Authentic Pansit Habhab lunch along Quezon St.',
-          '02:30 PM — Historic 17th-Century Spanish Public Bath & Buntal craft shopping',
+          {
+            'time': '08:00 AM',
+            'title': 'Dahican Cascading Falls',
+            'description':
+                'Cool off and swim in crystal-clear freshwater pools surrounded by lush forest.',
+            'icon': Icons.pool_outlined,
+          },
+          {
+            'time': '11:30 AM',
+            'title': 'Rizal Hill Park Panoramic View',
+            'description':
+                'Overlooking scenic Lamon Bay and the historic town landscape from the gazebo.',
+            'icon': Icons.landscape_outlined,
+          },
+          {
+            'time': '01:00 PM',
+            'title': 'Authentic Habhab Experience',
+            'description':
+                'Traditional leaf-wrapped Pansit Habhab dining along historic Quezon Street.',
+            'icon': Icons.lunch_dining_outlined,
+          },
+          {
+            'time': '02:30 PM',
+            'title': '17th-Century Spanish Public Bath',
+            'description':
+                'Historical landmark visit and authentic Buntal handicraft souvenir shopping.',
+            'icon': Icons.account_balance_outlined,
+          },
         ],
       },
       {
         'title': '🍲 Quezon Food & Local Delicacies',
         'duration': 'Half-Day Trail',
+        'badge': 'Culinary Tour',
         'highlight': 'Pansit Habhab, Tikoy Mauban, Fresh Fish',
         'stops': [
-          '07:30 AM — Morning catch browsing at Mauban Fish Port',
-          '09:00 AM — Tikoy Mauban & Buntal souvenir tasting',
-          '12:00 PM — Traditional Lucban / Mauban Longganisa feast',
+          {
+            'time': '07:30 AM',
+            'title': 'Mauban Fish Port Market',
+            'description':
+                'Fresh morning catch direct from Lamon Bay local fishermen.',
+            'icon': Icons.set_meal_outlined,
+          },
+          {
+            'time': '09:00 AM',
+            'title': 'Tikoy & Buntal Craft Workshop',
+            'description':
+                'Taste warm, authentic sweet Tikoy Mauban and watch master local weavers.',
+            'icon': Icons.bakery_dining_outlined,
+          },
+          {
+            'time': '12:00 PM',
+            'title': 'Longganisa Heritage Lunch',
+            'description':
+                'Savory garlicky local longganisa served with hot native garlic rice.',
+            'icon': Icons.dinner_dining_outlined,
+          },
         ],
       },
     ];
 
     final current = itineraries[_selectedItineraryIndex];
+    final stops = current['stops'] as List<Map<String, dynamic>>;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2028,113 +2384,280 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.explore_outlined, size: 20, color: Color(0xFF0284C7)),
+                child: const Icon(
+                  Icons.map_outlined,
+                  size: 22,
+                  color: Color(0xFF0284C7),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Curated Mauban Itineraries',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 17,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
+                    SizedBox(height: 2),
                     Text(
-                      'Recommended routes by local guides',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      'Handpicked routes and schedules by local guides',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
 
-          // Itinerary Segment Selector
+          // Itinerary Segment Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: List.generate(itineraries.length, (idx) {
                 final isSelected = _selectedItineraryIndex == idx;
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: FilterChip(
                     label: Text(
-                      idx == 0 ? '🏝️ Cagbalete Loop' : idx == 1 ? '🌿 Falls & Heritage' : '🍲 Food & Culture',
+                      idx == 0
+                          ? '🏝️ Cagbalete Loop'
+                          : idx == 1
+                          ? '🌿 Waterfalls & Heritage'
+                          : '🍲 Food & Culture',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                        color: isSelected ? Colors.white : const Color(0xFF334155),
+                        fontSize: 13,
+                        fontWeight:
+                            isSelected ? FontWeight.w900 : FontWeight.w600,
+                        color:
+                            isSelected ? Colors.white : const Color(0xFF334155),
                       ),
                     ),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF14532D),
+                    selectedColor: AppColors.deepGreen,
                     backgroundColor: const Color(0xFFF1F5F9),
-                    onSelected: (_) => setState(() => _selectedItineraryIndex = idx),
+                    checkmarkColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onSelected:
+                        (_) => setState(() => _selectedItineraryIndex = idx),
                   ),
                 );
               }),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
 
-          // Selected Itinerary Content
+          // Header Card for Active Itinerary
           Container(
-            padding: const EdgeInsets.all(14),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF0FDF4), Color(0xFFDCFCE7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  current['title'] as String,
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 4),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.schedule, size: 13, color: Color(0xFF0F766E)),
-                    const SizedBox(width: 5),
-                    Text(
-                      current['duration'] as String,
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F766E)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Divider(height: 1),
-                const SizedBox(height: 10),
-                ...((current['stops'] as List<String>).map((stop) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Icon(Icons.circle, size: 6, color: Color(0xFF14532D)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF166534),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        current['badge'] as String,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            stop,
-                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155), height: 1.3),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 15,
+                          color: Color(0xFF15803D),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          current['duration'] as String,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF15803D),
                           ),
                         ),
                       ],
                     ),
-                  );
-                })),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  current['title'] as String,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16.5,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Highlights: ${current['highlight']}',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF334155),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: 20),
+
+          // Spacious Modern Timeline (Hindi na Siksikan)
+          Column(
+            children: List.generate(stops.length, (idx) {
+              final stop = stops[idx];
+              final isLast = idx == stops.length - 1;
+
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Timeline indicator column
+                    SizedBox(
+                      width: 40,
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF16A34A),
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(
+                              stop['icon'] as IconData,
+                              size: 18,
+                              color: const Color(0xFF166534),
+                            ),
+                          ),
+                          if (!isLast)
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: const Color(0xFFCBD5E1),
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // Content Card
+                    Expanded(
+                      child: Container(
+                        margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE2E8F0),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    stop['time'] as String,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  'Stop ${idx + 1}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              stop['title'] as String,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              stop['description'] as String,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(0xFF475569),
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ),
         ],
       ),
