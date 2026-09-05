@@ -18,6 +18,7 @@ mobile/*.png
 .vscode/
 
 # Temporary / Scratch scripts & files
+scratch/
 backend/add_metrics.py
 backend/add_top_n.py
 backend/fetch_error.py
