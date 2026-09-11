@@ -64,6 +64,11 @@ from .views.mobile import (
     mobile_tourist_record_lookup,
     mobile_tourist_registration,
 )
+from .views.notifications import (
+    notification_list,
+    notification_mark_all_read,
+    notification_mark_read,
+)
 
 urlpatterns = [
     path("health/", health_check),
@@ -131,4 +136,9 @@ urlpatterns = [
     path("households/dashboard/", household_dashboard_data),
     path("households/records/", household_record_list),
     path("households/records/<int:household_id>/", household_record_detail),
+
+    # Notification routes
+    path("notifications/", notification_list),
+    path("notifications/mark-all-read/", notification_mark_all_read),
+    path("notifications/<int:notification_id>/read/", notification_mark_read),
 ]

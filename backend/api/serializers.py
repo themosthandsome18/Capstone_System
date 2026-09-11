@@ -25,6 +25,7 @@ from .models import (
     SanitaryPermitRenewal,
     SanitaryComplaint,
     HouseholdSanitationRecord,
+    Notification,
     UserProfile,
 )
 
@@ -872,3 +873,21 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
         if score >= 35:
             return "Medium Risk"
         return "Low Risk"
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "message",
+            "notification_type",
+            "severity",
+            "module",
+            "is_read",
+            "read_at",
+            "action_url",
+            "created_at",
+        ]
+        read_only_fields = fields

@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
@@ -534,5 +535,169 @@ class NotificationViolationTriggerTests(TestCase):
         self.assertEqual(
             Notification.objects.filter(related_object_id=str(self.establishment.id)).count(),
             2,
+        )
+
+
+class NotificationStaffApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        # User A (Admin)
+        self.user_a = User.objects.create_user(
+            username="notif_api_user_a",
+            password="Password@123",
+            email="user_a@test.local",
+        )
+        UserProfile.objects.create(user=self.user_a, role=ROLE_ADMIN)
+        self.token_a = Token.objects.create(user=self.user_a)
+
+        # User B (Sanitation)
+        self.user_b = User.objects.create_user(
+            username="notif_api_user_b",
+            password="Password@123",
+            email="user_b@test.local",
+        )
+        UserProfile.objects.create(user=self.user_b, role=ROLE_SANITATION)
+        self.token_b = Token.objects.create(user=self.user_b)
+
+        # Create notifications for User A: mix of read/unread and modules
+        self.notif_a1 = Notification.objects.create(
+            title="User A Sanitation Unread",
+            message="Message A1",
+            notification_type="violation_alert",
+            severity="critical",
+            module="sanitation",
+            audience_type="user",
+            recipient_user=self.user_a,
+            is_read=False,
+            action_url="/sanitation/establishments/1",
+        )
+        self.notif_a2 = Notification.objects.create(
+            title="User A Tourism Unread",
+            message="Message A2",
+            notification_type="permit_due",
+            severity="warning",
+            module="tourism",
+            audience_type="user",
+            recipient_user=self.user_a,
+            is_read=False,
+            action_url="/tourism/resorts/1",
+        )
+        self.notif_a3 = Notification.objects.create(
+            title="User A General Read",
+            message="Message A3",
+            notification_type="system",
+            severity="info",
+            module="general",
+            audience_type="user",
+            recipient_user=self.user_a,
+            is_read=True,
+            read_at=timezone.now(),
+            action_url="/general/announcements/1",
+        )
+
+        # Create notifications for User B: mix of read/unread and modules
+        self.notif_b1 = Notification.objects.create(
+            title="User B Sanitation Unread",
+            message="Message B1",
+            notification_type="violation_alert",
+            severity="critical",
+            module="sanitation",
+            audience_type="user",
+            recipient_user=self.user_b,
+            is_read=False,
+            action_url="/sanitation/establishments/2",
+        )
+        self.notif_b2 = Notification.objects.create(
+            title="User B Tourism Read",
+            message="Message B2",
+            notification_type="inspection_due",
+            severity="warning",
+            module="tourism",
+            audience_type="user",
+            recipient_user=self.user_b,
+            is_read=True,
+            read_at=timezone.now(),
+            action_url="/tourism/resorts/2",
+        )
+
+    def test_notification_endpoints_lifecycle(self):
+        # Authenticate as User A
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token_a.key}")
+
+        # b) Hits GET /api/notifications/ as user A:
+        #    Asserts: only user A's notifications are returned, unread_count matches (2),
+        #    and user B's notifications never appear.
+        response = self.client.get("/api/notifications/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["unread_count"], 2)
+        results = data["results"]
+        self.assertEqual(len(results), 3)
+
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {self.notif_a1.id, self.notif_a2.id, self.notif_a3.id})
+        self.assertNotIn(self.notif_b1.id, result_ids)
+        self.assertNotIn(self.notif_b2.id, result_ids)
+
+        # Test filter: ?unread_only=true
+        res_unread = self.client.get("/api/notifications/?unread_only=true")
+        self.assertEqual(res_unread.status_code, status.HTTP_200_OK)
+        data_unread = res_unread.json()
+        self.assertEqual(data_unread["unread_count"], 2)  # unread_count unchanged by filter
+        self.assertEqual(len(data_unread["results"]), 2)
+        self.assertEqual({r["id"] for r in data_unread["results"]}, {self.notif_a1.id, self.notif_a2.id})
+
+        # Test filter: ?module=sanitation
+        res_module = self.client.get("/api/notifications/?module=sanitation")
+        self.assertEqual(res_module.status_code, status.HTTP_200_OK)
+        data_module = res_module.json()
+        self.assertEqual(data_module["unread_count"], 2)
+        self.assertEqual(len(data_module["results"]), 1)
+        self.assertEqual(data_module["results"][0]["id"], self.notif_a1.id)
+
+        # c) Hits PATCH /api/notifications/<id>/read/ on one of user A's notifications
+        #    and asserts is_read/read_at are set, and unread_count drops by 1 on a follow-up GET.
+        patch_res = self.client.patch(f"/api/notifications/{self.notif_a1.id}/read/")
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.notif_a1.refresh_from_db()
+        self.assertTrue(self.notif_a1.is_read)
+        self.assertIsNotNone(self.notif_a1.read_at)
+
+        # Follow-up GET: unread_count should now be 1
+        res_after_read = self.client.get("/api/notifications/")
+        self.assertEqual(res_after_read.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_after_read.json()["unread_count"], 1)
+
+        # d) Attempts PATCH /api/notifications/<id>/read/ on one of user B's
+        #    notification IDs while authenticated as user A, and asserts it returns 404 (not 403)
+        cross_res = self.client.patch(f"/api/notifications/{self.notif_b1.id}/read/")
+        self.assertEqual(cross_res.status_code, status.HTTP_404_NOT_FOUND)
+        self.notif_b1.refresh_from_db()
+        self.assertFalse(self.notif_b1.is_read)
+        self.assertIsNone(self.notif_b1.read_at)
+
+        # e) Hits POST /api/notifications/mark-all-read/ as user A and
+        #    asserts all of user A's notifications are now read and user B's are untouched.
+        mark_all_res = self.client.post("/api/notifications/mark-all-read/")
+        self.assertEqual(mark_all_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(mark_all_res.json()["updated_count"], 1)  # only notif_a2 was unread
+
+        # All of User A's notifications are now read
+        self.assertEqual(
+            Notification.objects.filter(recipient_user=self.user_a, is_read=False).count(),
+            0,
+        )
+        self.notif_a2.refresh_from_db()
+        self.assertTrue(self.notif_a2.is_read)
+        self.assertIsNotNone(self.notif_a2.read_at)
+
+        # User B's notifications remain untouched (notif_b1 still unread)
+        self.notif_b1.refresh_from_db()
+        self.assertFalse(self.notif_b1.is_read)
+        self.assertIsNone(self.notif_b1.read_at)
+        self.assertEqual(
+            Notification.objects.filter(recipient_user=self.user_b, is_read=False).count(),
+            1,
         )
 
