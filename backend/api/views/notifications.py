@@ -16,7 +16,7 @@ from api.models import (
     ROLE_TOURISM,
     Notification,
 )
-from api.permissions import get_user_role
+from django.core.exceptions import ObjectDoesNotExist
 from api.serializers import NotificationPublicSerializer, NotificationSerializer
 
 VALID_MODULES = {code for code, _ in NOTIFICATION_MODULE_CHOICES}
@@ -27,7 +27,11 @@ def is_advisory_staff(user):
     """Returns True if the user is authenticated and has an admin, tourism, or sanitation role."""
     if not user or not user.is_authenticated:
         return False
-    return get_user_role(user) in STAFF_ADVISORY_ROLES
+    try:
+        profile = user.profile
+    except ObjectDoesNotExist:
+        return False
+    return getattr(profile, "role", "") in STAFF_ADVISORY_ROLES
 
 
 @api_view(["GET"])
@@ -187,7 +191,7 @@ def public_notification_list(request):
         queryset = queryset.filter(module=module_filter)
 
     serializer = NotificationPublicSerializer(queryset, many=True)
-    return Response(serializer.data)
+    return Response({"results": serializer.data})
 
 
 @api_view(["PATCH"])

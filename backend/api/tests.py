@@ -1086,7 +1086,8 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         self.client.credentials()  # Unauthenticated
         response = self.client.get("/api/notifications/public/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        results = response.data
+        self.assertIn("results", response.data)
+        results = response.data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], valid_advisory.id)
         self.assertEqual(results[0]["title"], "Valid Advisory")
@@ -1095,8 +1096,10 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.establishment_token.key}")
         est_response = self.client.get("/api/notifications/public/")
         self.assertEqual(est_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(est_response.data), 1)
-        self.assertEqual(est_response.data[0]["id"], valid_advisory.id)
+        self.assertIn("results", est_response.data)
+        est_results = est_response.data["results"]
+        self.assertEqual(len(est_results), 1)
+        self.assertEqual(est_results[0]["id"], valid_advisory.id)
 
     def test_authenticated_admin_get_sees_all_advisories(self):
         """
@@ -1136,7 +1139,8 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
         response = self.client.get("/api/notifications/public/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        results = response.data
+        self.assertIn("results", response.data)
+        results = response.data["results"]
         self.assertEqual(len(results), 3)
         returned_ids = {item["id"] for item in results}
         self.assertEqual(returned_ids, {valid.id, expired.id, inactive.id})
@@ -1144,8 +1148,9 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         # Test module filter for staff
         tourism_resp = self.client.get("/api/notifications/public/?module=tourism")
         self.assertEqual(tourism_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(tourism_resp.data), 1)
-        self.assertEqual(tourism_resp.data[0]["id"], expired.id)
+        self.assertIn("results", tourism_resp.data)
+        self.assertEqual(len(tourism_resp.data["results"]), 1)
+        self.assertEqual(tourism_resp.data["results"][0]["id"], expired.id)
 
     def test_patch_deactivates_without_deleting(self):
         """
@@ -1181,7 +1186,8 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         self.client.credentials()
         get_resp = self.client.get("/api/notifications/public/")
         self.assertEqual(get_resp.status_code, status.HTTP_200_OK)
-        ids = [item["id"] for item in get_resp.data]
+        self.assertIn("results", get_resp.data)
+        ids = [item["id"] for item in get_resp.data["results"]]
         self.assertNotIn(advisory.id, ids)
 
     def test_patch_non_public_advisory_returns_404(self):
@@ -1211,4 +1217,20 @@ class NotificationPublicAdvisoryApiTests(TestCase):
         staff_notif.refresh_from_db()
         self.assertEqual(staff_notif.title, "Internal Violation Warning")
         self.assertTrue(staff_notif.is_active)
+
+    def test_user_without_profile_gets_403(self):
+        """Asserts a user with no profile gets 403 on POST."""
+        user_no_profile = User.objects.create_user(
+            username="user_no_profile",
+            password="Password@123",
+            email="no_profile@test.local",
+        )
+        token = Token.objects.create(user=user_no_profile)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        response = self.client.post(
+            "/api/notifications/public/",
+            {"title": "Test", "message": "Test", "module": "general"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
