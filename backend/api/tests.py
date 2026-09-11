@@ -21,6 +21,7 @@ from .models import (
     Itinerary,
     Notification,
     ROLE_ADMIN,
+    ROLE_ESTABLISHMENT,
     ROLE_SANITATION,
     ROLE_TOURISM,
     Province,
@@ -954,4 +955,260 @@ class NotificationDueDateScanningTests(TestCase):
         self.assertEqual(sanit_notif.severity, "warning")
         self.assertEqual(admin_insp_notifs.first().severity, "warning")
         self.assertEqual(sanit_insp_notifs.first().severity, "warning")
+
+
+class NotificationPublicAdvisoryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.admin_user = User.objects.create_user(
+            username="notif_pub_admin",
+            password="Password@123",
+            email="pub_admin@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+        self.admin_token = Token.objects.create(user=self.admin_user)
+
+        self.tourism_user = User.objects.create_user(
+            username="notif_pub_tourism",
+            password="Password@123",
+            email="pub_tourism@test.local",
+        )
+        UserProfile.objects.create(user=self.tourism_user, role=ROLE_TOURISM)
+        self.tourism_token = Token.objects.create(user=self.tourism_user)
+
+        self.sanitation_user = User.objects.create_user(
+            username="notif_pub_sanit",
+            password="Password@123",
+            email="pub_sanit@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+        self.sanitation_token = Token.objects.create(user=self.sanitation_user)
+
+        self.establishment_user = User.objects.create_user(
+            username="notif_pub_est",
+            password="Password@123",
+            email="pub_est@test.local",
+        )
+        UserProfile.objects.create(user=self.establishment_user, role=ROLE_ESTABLISHMENT)
+        self.establishment_token = Token.objects.create(user=self.establishment_user)
+
+    def test_establishment_role_cannot_post_advisory(self):
+        """a) Asserts a user with role 'establishment' gets 403 on POST."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.establishment_token.key}")
+        response = self.client.post(
+            "/api/notifications/public/",
+            {
+                "title": "Establishment Advisory",
+                "message": "Should not be allowed",
+                "module": "general",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            Notification.objects.filter(title="Establishment Advisory").count(),
+            0,
+        )
+
+    def test_tourism_role_can_create_advisory(self):
+        """b) Asserts a user with role 'tourism' CAN create an advisory."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        payload = {
+            "title": "Storm Warning Advisory",
+            "message": "Heavy rains expected. Tourism activities suspended.",
+            "module": "tourism",
+            "severity": "warning",
+        }
+        response = self.client.post(
+            "/api/notifications/public/",
+            payload,
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.data
+        self.assertEqual(data["title"], payload["title"])
+        self.assertEqual(data["message"], payload["message"])
+        self.assertEqual(data["module"], "tourism")
+        self.assertEqual(data["severity"], "warning")
+        self.assertEqual(data["notification_type"], "public_advisory")
+        self.assertTrue(data["is_active"])
+
+        # Responses must NOT include recipient_user, target_role, is_read, read_at
+        self.assertNotIn("recipient_user", data)
+        self.assertNotIn("target_role", data)
+        self.assertNotIn("is_read", data)
+        self.assertNotIn("read_at", data)
+
+        # Confirm in DB
+        advisory = Notification.objects.get(title=payload["title"])
+        self.assertEqual(advisory.audience_type, "public")
+        self.assertEqual(advisory.notification_type, "public_advisory")
+        self.assertIsNone(advisory.recipient_user)
+        self.assertEqual(advisory.target_role, "")
+        self.assertTrue(advisory.is_active)
+
+    def test_unauthenticated_get_only_sees_active_non_expired(self):
+        """
+        c) Asserts an unauthenticated GET only sees is_active=True, non-expired advisories
+        (create one expired, one inactive, one valid — confirm only the valid one appears).
+        """
+        now = timezone.now()
+
+        valid_advisory = Notification.objects.create(
+            title="Valid Advisory",
+            message="Valid message",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="general",
+            is_active=True,
+            expires_at=now + timedelta(days=2),
+        )
+        expired_advisory = Notification.objects.create(
+            title="Expired Advisory",
+            message="Expired message",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="general",
+            is_active=True,
+            expires_at=now - timedelta(days=2),
+        )
+        inactive_advisory = Notification.objects.create(
+            title="Inactive Advisory",
+            message="Inactive message",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="general",
+            is_active=False,
+            expires_at=now + timedelta(days=2),
+        )
+
+        self.client.credentials()  # Unauthenticated
+        response = self.client.get("/api/notifications/public/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], valid_advisory.id)
+        self.assertEqual(results[0]["title"], "Valid Advisory")
+
+        # Also confirm an establishment user gets the same public view
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.establishment_token.key}")
+        est_response = self.client.get("/api/notifications/public/")
+        self.assertEqual(est_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(est_response.data), 1)
+        self.assertEqual(est_response.data[0]["id"], valid_advisory.id)
+
+    def test_authenticated_admin_get_sees_all_advisories(self):
+        """
+        d) Asserts an authenticated admin GET sees all three (active, inactive, and expired)
+        in the management view.
+        """
+        now = timezone.now()
+
+        valid = Notification.objects.create(
+            title="Active Valid Advisory",
+            message="Valid",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="sanitation",
+            is_active=True,
+            expires_at=now + timedelta(days=5),
+        )
+        expired = Notification.objects.create(
+            title="Expired Advisory",
+            message="Expired",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="tourism",
+            is_active=True,
+            expires_at=now - timedelta(days=1),
+        )
+        inactive = Notification.objects.create(
+            title="Inactive Advisory",
+            message="Inactive",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="general",
+            is_active=False,
+            expires_at=now + timedelta(days=10),
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        response = self.client.get("/api/notifications/public/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data
+        self.assertEqual(len(results), 3)
+        returned_ids = {item["id"] for item in results}
+        self.assertEqual(returned_ids, {valid.id, expired.id, inactive.id})
+
+        # Test module filter for staff
+        tourism_resp = self.client.get("/api/notifications/public/?module=tourism")
+        self.assertEqual(tourism_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(tourism_resp.data), 1)
+        self.assertEqual(tourism_resp.data[0]["id"], expired.id)
+
+    def test_patch_deactivates_without_deleting(self):
+        """
+        e) Asserts PATCH with is_active=False removes it from the public
+        unauthenticated view but the row still exists in the DB
+        (query it directly to confirm it wasn't deleted).
+        """
+        advisory = Notification.objects.create(
+            title="Water Quality Advisory",
+            message="Boil water advisory in effect",
+            notification_type="public_advisory",
+            audience_type="public",
+            module="sanitation",
+            is_active=True,
+        )
+
+        # Authenticated staff (sanitation) deactivates it
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.sanitation_token.key}")
+        patch_resp = self.client.patch(
+            f"/api/notifications/public/{advisory.id}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(patch_resp.data["is_active"])
+
+        # Row still exists in DB
+        advisory.refresh_from_db()
+        self.assertFalse(advisory.is_active)
+        self.assertTrue(Notification.objects.filter(id=advisory.id).exists())
+
+        # Unauthenticated GET no longer sees it
+        self.client.credentials()
+        get_resp = self.client.get("/api/notifications/public/")
+        self.assertEqual(get_resp.status_code, status.HTTP_200_OK)
+        ids = [item["id"] for item in get_resp.data]
+        self.assertNotIn(advisory.id, ids)
+
+    def test_patch_non_public_advisory_returns_404(self):
+        """
+        f) Asserts PATCH on a non-public_advisory notification id (e.g. one
+        created by notify_violation) returns 404, not 200 — this
+        endpoint must not be able to edit staff notifications.
+        """
+        staff_notif = Notification.objects.create(
+            title="Internal Violation Warning",
+            message="Internal alert for inspector",
+            notification_type="violation_alert",
+            audience_type="user",
+            recipient_user=self.admin_user,
+            module="sanitation",
+            is_active=True,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        patch_resp = self.client.patch(
+            f"/api/notifications/public/{staff_notif.id}/",
+            {"title": "Tampered Title", "is_active": False},
+            format="json",
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_404_NOT_FOUND)
+
+        staff_notif.refresh_from_db()
+        self.assertEqual(staff_notif.title, "Internal Violation Warning")
+        self.assertTrue(staff_notif.is_active)
 

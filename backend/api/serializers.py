@@ -891,3 +891,21 @@ class NotificationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class NotificationPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "message",
+            "notification_type",
+            "severity",
+            "module",
+            "action_url",
+            "is_active",
+            "created_at",
+            "expires_at",
+        ]
+        read_only_fields = ["id", "notification_type", "created_at"]

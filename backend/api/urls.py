@@ -68,6 +68,8 @@ from .views.notifications import (
     notification_list,
     notification_mark_all_read,
     notification_mark_read,
+    public_notification_detail,
+    public_notification_list,
 )
 
 urlpatterns = [
@@ -141,4 +143,6 @@ urlpatterns = [
     path("notifications/", notification_list),
     path("notifications/mark-all-read/", notification_mark_all_read),
     path("notifications/<int:notification_id>/read/", notification_mark_read),
+    path("notifications/public/", public_notification_list),
+    path("notifications/public/<int:notification_id>/", public_notification_detail),
 ]
