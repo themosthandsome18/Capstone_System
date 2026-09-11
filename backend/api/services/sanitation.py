@@ -1303,13 +1303,20 @@ def add_one_year(value):
 
 def sync_establishment_after_inspection(inspection):
     establishment = inspection.establishment
-    establishment.compliance_status = inspection.status_after_inspection
+    previous_status = establishment.compliance_status
+    new_status = inspection.status_after_inspection
 
-    permit_status = PERMIT_STATUS_BY_COMPLIANCE.get(inspection.status_after_inspection)
+    establishment.compliance_status = new_status
+
+    permit_status = PERMIT_STATUS_BY_COMPLIANCE.get(new_status)
     if permit_status:
         establishment.permit_status = permit_status
 
     establishment.save()
+
+    if new_status == SANITARY_STATUS_VIOLATION and previous_status != SANITARY_STATUS_VIOLATION:
+        from .notifications import notify_violation
+        notify_violation(establishment, inspection=inspection)
 
 
 def build_sanitation_question_answers(establishments):

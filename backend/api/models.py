@@ -1053,3 +1053,112 @@ class HouseholdSanitationRecord(models.Model):
     @property
     def total_members(self):
         return self.male_count + self.female_count
+
+
+# ============================================================
+# NOTIFICATION MODULE MODELS
+# ============================================================
+
+NOTIFICATION_TYPE_PERMIT_DUE = "permit_due"
+NOTIFICATION_TYPE_INSPECTION_DUE = "inspection_due"
+NOTIFICATION_TYPE_VIOLATION_ALERT = "violation_alert"
+NOTIFICATION_TYPE_PUBLIC_ADVISORY = "public_advisory"
+NOTIFICATION_TYPE_SYSTEM = "system"
+
+NOTIFICATION_TYPE_CHOICES = [
+    (NOTIFICATION_TYPE_PERMIT_DUE, "Permit Due"),
+    (NOTIFICATION_TYPE_INSPECTION_DUE, "Inspection Due"),
+    (NOTIFICATION_TYPE_VIOLATION_ALERT, "Violation Alert"),
+    (NOTIFICATION_TYPE_PUBLIC_ADVISORY, "Public Advisory"),
+    (NOTIFICATION_TYPE_SYSTEM, "System"),
+]
+
+NOTIFICATION_SEVERITY_INFO = "info"
+NOTIFICATION_SEVERITY_WARNING = "warning"
+NOTIFICATION_SEVERITY_CRITICAL = "critical"
+
+NOTIFICATION_SEVERITY_CHOICES = [
+    (NOTIFICATION_SEVERITY_INFO, "Info"),
+    (NOTIFICATION_SEVERITY_WARNING, "Warning"),
+    (NOTIFICATION_SEVERITY_CRITICAL, "Critical"),
+]
+
+NOTIFICATION_MODULE_SANITATION = "sanitation"
+NOTIFICATION_MODULE_TOURISM = "tourism"
+NOTIFICATION_MODULE_GENERAL = "general"
+
+NOTIFICATION_MODULE_CHOICES = [
+    (NOTIFICATION_MODULE_SANITATION, "Sanitation"),
+    (NOTIFICATION_MODULE_TOURISM, "Tourism"),
+    (NOTIFICATION_MODULE_GENERAL, "General"),
+]
+
+NOTIFICATION_AUDIENCE_USER = "user"
+NOTIFICATION_AUDIENCE_ROLE = "role"
+NOTIFICATION_AUDIENCE_PUBLIC = "public"
+
+NOTIFICATION_AUDIENCE_CHOICES = [
+    (NOTIFICATION_AUDIENCE_USER, "User"),
+    (NOTIFICATION_AUDIENCE_ROLE, "Role"),
+    (NOTIFICATION_AUDIENCE_PUBLIC, "Public"),
+]
+
+
+class Notification(models.Model):
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    notification_type = models.CharField(
+        max_length=30,
+        choices=NOTIFICATION_TYPE_CHOICES,
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_SEVERITY_CHOICES,
+        default=NOTIFICATION_SEVERITY_INFO,
+    )
+    module = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_MODULE_CHOICES,
+    )
+    audience_type = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_AUDIENCE_CHOICES,
+    )
+    recipient_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    target_role = models.CharField(
+        max_length=20,
+        choices=USER_ROLE_CHOICES,
+        blank=True,
+    )
+    related_model = models.CharField(max_length=60, blank=True)
+    related_object_id = models.CharField(max_length=60, blank=True)
+    related_due_date = models.DateField(null=True, blank=True)
+    action_url = models.CharField(max_length=255, blank=True)
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["audience_type", "target_role", "is_read", "-created_at"],
+                name="notif_aud_role_read_idx",
+            ),
+            models.Index(
+                fields=["recipient_user", "is_read", "-created_at"],
+                name="notif_user_read_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"[{self.notification_type}] {self.title}"
+

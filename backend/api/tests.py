@@ -15,11 +15,14 @@ from .models import (
     FeedbackEntry,
     HouseholdSanitationRecord,
     Itinerary,
+    Notification,
+    ROLE_ADMIN,
     ROLE_SANITATION,
     ROLE_TOURISM,
     Province,
     Region,
     Resort,
+    SanitaryBusinessType,
     SanitaryComplaint,
     SanitaryEstablishment,
     SanitaryInspection,
@@ -426,3 +429,110 @@ class MobilePublicApiTests(TestCase):
         self.assertTrue(record.household_code.startswith("HH-"))
         self.assertEqual(record.total_members, 5)
         self.assertEqual(record.status, "violation")
+
+
+class NotificationViolationTriggerTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        # Create active admin user
+        self.admin_user = User.objects.create_user(
+            username="notif_test_admin",
+            password="Password@123",
+            email="admin@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+
+        # Create active sanitation user
+        self.sanitation_user = User.objects.create_user(
+            username="notif_test_sanitation",
+            password="Password@123",
+            email="sanitation@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+
+        # Authenticate client as sanitation user
+        self.token = Token.objects.create(user=self.sanitation_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+        # Create test business type and establishment in good_standing
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Violation Test Bakery",
+            inspection_frequency="monthly",
+        )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Sweet Treats Bakery",
+            owner_name="Baker Bob",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="100 Rizal St",
+            compliance_status="good_standing",
+            permit_status="active",
+        )
+
+    def test_inspection_violation_triggers_notifications_and_prevents_duplicates(self):
+        # 1. Submit a SanitaryInspection with status_after_inspection="violation" via the actual view
+        response = self.client.post(
+            "/api/sanitation/inspections/",
+            {
+                "establishment": self.establishment.id,
+                "inspector_name": "Inspector Test",
+                "inspection_date": "2026-09-11",
+                "status_after_inspection": "violation",
+                "findings": "Pest infestation and improper food storage",
+                "remarks": "Immediate closure order recommended",
+                "checklist_items": [
+                    {"requirement_name": "Sanitary Permit", "is_complied": True},
+                    {"requirement_name": "Pest Control", "is_complied": False},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        inspection_id = response.json()["id"]
+
+        # a) Assert exactly one Notification exists for the admin user and one for the sanitation user,
+        #    both with notification_type="violation_alert"
+        admin_notifs = Notification.objects.filter(recipient_user=self.admin_user)
+        self.assertEqual(admin_notifs.count(), 1)
+        admin_notif = admin_notifs.first()
+        self.assertEqual(admin_notif.notification_type, "violation_alert")
+        self.assertEqual(admin_notif.severity, "critical")
+        self.assertEqual(admin_notif.module, "sanitation")
+        self.assertIn("Sweet Treats Bakery", admin_notif.title)
+
+        sanitation_notifs = Notification.objects.filter(recipient_user=self.sanitation_user)
+        self.assertEqual(sanitation_notifs.count(), 1)
+        sanitation_notif = sanitation_notifs.first()
+        self.assertEqual(sanitation_notif.notification_type, "violation_alert")
+        self.assertEqual(sanitation_notif.severity, "critical")
+        self.assertEqual(sanitation_notif.module, "sanitation")
+        self.assertIn("Sweet Treats Bakery", sanitation_notif.title)
+
+        # b) Assert related_object_id matches the establishment's id
+        self.assertEqual(admin_notif.related_object_id, str(self.establishment.id))
+        self.assertEqual(sanitation_notif.related_object_id, str(self.establishment.id))
+        self.assertEqual(admin_notif.related_model, "SanitaryEstablishment")
+        self.assertEqual(sanitation_notif.related_model, "SanitaryEstablishment")
+        self.assertEqual(admin_notif.action_url, f"/sanitation/establishments/{self.establishment.id}")
+
+        # Refresh establishment to verify its compliance_status is now "violation"
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "violation")
+
+        # c) Calling sync_establishment_after_inspection again with the establishment
+        #    already in "violation" status does NOT create additional notifications (no duplicates)
+        inspection = SanitaryInspection.objects.get(id=inspection_id)
+        from api.services.sanitation import sync_establishment_after_inspection
+
+        sync_establishment_after_inspection(inspection)
+
+        # Assert notification count has NOT increased
+        self.assertEqual(Notification.objects.filter(recipient_user=self.admin_user).count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient_user=self.sanitation_user).count(), 1)
+        self.assertEqual(
+            Notification.objects.filter(related_object_id=str(self.establishment.id)).count(),
+            2,
+        )
+
