@@ -55,7 +55,7 @@ def bool_config(name, default=False):
 # Core
 SECRET_KEY = config("SECRET_KEY")
 
-DEBUG = bool_config("DEBUG", default=True)
+DEBUG = bool_config("DEBUG", default=False)
 
 USE_SEED_DATA = bool_config("USE_SEED_DATA", default=True)
 
@@ -177,7 +177,7 @@ USE_TZ = True
 
 
 # API / CORS
-CORS_ALLOW_ALL_ORIGINS = bool_config("CORS_ALLOW_ALL_ORIGINS", default=True)
+CORS_ALLOW_ALL_ORIGINS = bool_config("CORS_ALLOW_ALL_ORIGINS", default=False)
 
 CORS_ALLOWED_ORIGINS = csv_config(
     "CORS_ALLOWED_ORIGINS",
