@@ -408,6 +408,15 @@ class MobilePublicApiTests(TestCase):
         )
 
     def test_mobile_household_survey_creates_household_record(self):
+        sanitation_user = User.objects.create_user(
+            username="test_mobile_survey_sanitation",
+            password="Password@123",
+            email="mobile_survey_sanitation@test.local",
+        )
+        UserProfile.objects.create(user=sanitation_user, role=ROLE_SANITATION)
+        token = Token.objects.create(user=sanitation_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
         response = self.client.post(
             "/api/mobile/sanitation/household-surveys/",
             {
@@ -1233,4 +1242,156 @@ class NotificationPublicAdvisoryApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MobileSanitationAuthTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        # Create active admin user
+        self.admin_user = User.objects.create_user(
+            username="test_admin_auth",
+            password="Password@123",
+            email="admin_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+
+        # Create active sanitation user
+        self.sanitation_user = User.objects.create_user(
+            username="test_sanitation_auth",
+            password="Password@123",
+            email="sanitation_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+        self.sanitation_token = Token.objects.create(user=self.sanitation_user)
+
+        # Create active establishment user
+        self.establishment_user = User.objects.create_user(
+            username="test_establishment_auth",
+            password="Password@123",
+            email="establishment_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.establishment_user, role=ROLE_ESTABLISHMENT)
+        self.establishment_token = Token.objects.create(user=self.establishment_user)
+
+        # Create test establishment
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Auth Test Business",
+            inspection_frequency="monthly",
+        )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Auth Test Establishment",
+            owner_name="Test Owner",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="123 Test St",
+            compliance_status="good_standing",
+            permit_status="active",
+        )
+
+        self.inspection_payload = {
+            "establishment": self.establishment.id,
+            "inspector_name": "Inspector Auth",
+            "inspection_date": "2026-09-11",
+            "next_due_date": "2026-10-11",
+            "findings": "All compliant.",
+            "remarks": "Regular inspection.",
+            "status_after_inspection": "good_standing",
+            "checklist_items": [
+                {"requirement_name": "Sanitary Permit", "is_complied": True, "notes": ""}
+            ],
+        }
+
+        self.survey_payload = {
+            "household_head": "Auth Test Household",
+            "barangay": "Poblacion",
+            "address": "Zone 1",
+            "male_count": 2,
+            "female_count": 2,
+            "toilet_type": "water_sealed",
+            "water_level": "level_3",
+            "water_source": "MWSS",
+            "waste_disposal": "collected",
+            "remarks": "Normal condition.",
+            "latitude": "14.186",
+            "longitude": "121.73",
+        }
+
+    def test_unauthenticated_post_returns_401_with_zero_db_writes(self):
+        self.client.credentials()  # No auth
+        initial_inspections = SanitaryInspection.objects.count()
+        initial_surveys = HouseholdSanitationRecord.objects.count()
+
+        # 1. Inspection endpoint
+        resp_insp = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            self.inspection_payload,
+            format="json",
+        )
+        self.assertEqual(resp_insp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(SanitaryInspection.objects.count(), initial_inspections)
+
+        # 2. Household survey endpoint
+        resp_surv = self.client.post(
+            "/api/mobile/sanitation/household-surveys/",
+            self.survey_payload,
+            format="json",
+        )
+        self.assertEqual(resp_surv.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(HouseholdSanitationRecord.objects.count(), initial_surveys)
+
+    def test_establishment_role_post_returns_403_with_zero_db_writes(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.establishment_token.key}")
+        initial_inspections = SanitaryInspection.objects.count()
+        initial_surveys = HouseholdSanitationRecord.objects.count()
+
+        # 1. Inspection endpoint
+        resp_insp = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            self.inspection_payload,
+            format="json",
+        )
+        self.assertEqual(resp_insp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", resp_insp.json())
+        self.assertEqual(SanitaryInspection.objects.count(), initial_inspections)
+
+        # 2. Household survey endpoint
+        resp_surv = self.client.post(
+            "/api/mobile/sanitation/household-surveys/",
+            self.survey_payload,
+            format="json",
+        )
+        self.assertEqual(resp_surv.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", resp_surv.json())
+        self.assertEqual(HouseholdSanitationRecord.objects.count(), initial_surveys)
+
+    def test_sanitation_role_post_succeeds_201(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.sanitation_token.key}")
+        initial_inspections = SanitaryInspection.objects.count()
+        initial_surveys = HouseholdSanitationRecord.objects.count()
+
+        # 1. Inspection endpoint
+        resp_insp = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            self.inspection_payload,
+            format="json",
+        )
+        self.assertEqual(resp_insp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(SanitaryInspection.objects.count(), initial_inspections + 1)
+        self.assertTrue(
+            SanitaryInspection.objects.filter(inspector_name="Inspector Auth").exists()
+        )
+
+        # 2. Household survey endpoint
+        resp_surv = self.client.post(
+            "/api/mobile/sanitation/household-surveys/",
+            self.survey_payload,
+            format="json",
+        )
+        self.assertEqual(resp_surv.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(HouseholdSanitationRecord.objects.count(), initial_surveys + 1)
+        self.assertTrue(
+            HouseholdSanitationRecord.objects.filter(household_head="Auth Test Household").exists()
+        )
+
 

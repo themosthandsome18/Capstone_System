@@ -6,11 +6,15 @@ class HouseholdSurveyPage extends StatefulWidget {
     required this.api,
     required this.barangays,
     this.household,
+    this.onLogout,
+    this.onSessionExpired,
   });
 
   final TourismApi api;
   final List<BarangayItem> barangays;
   final HouseholdSanitationItem? household;
+  final VoidCallback? onLogout;
+  final VoidCallback? onSessionExpired;
 
   @override
   State<HouseholdSurveyPage> createState() => _HouseholdSurveyPageState();
@@ -301,7 +305,32 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
-      if (mounted) showAppMessage(context, error.toString());
+      if (!mounted) return;
+      if (error is ApiException && error.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        if (widget.onSessionExpired != null) {
+          widget.onSessionExpired!();
+        } else {
+          showAppMessage(context, 'Your session expired, please sign in again.');
+          widget.onLogout?.call();
+        }
+        return;
+      }
+
+      if (error is ApiException && error.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to submit inspections.",
+        );
+        return;
+      }
+
+      showAppMessage(context, conciseError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -1354,12 +1383,14 @@ class SanitationMobileShell extends StatefulWidget {
     required this.bootstrap,
     required this.onRefresh,
     this.onLogout,
+    this.onSessionExpired,
   });
 
   final TourismApi api;
   final SanitationBootstrap bootstrap;
   final Future<SanitationBootstrap> Function() onRefresh;
   final VoidCallback? onLogout;
+  final VoidCallback? onSessionExpired;
 
   @override
   State<SanitationMobileShell> createState() => _SanitationMobileShellState();
@@ -1683,6 +1714,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
               api: widget.api,
               bootstrap: _bootstrap,
               initialEstablishment: establishment,
+              onLogout: widget.onLogout,
+              onSessionExpired: widget.onSessionExpired,
             ),
           ),
         );
@@ -1700,6 +1733,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           api: widget.api,
           barangays: _bootstrap.barangays,
           household: household,
+          onLogout: widget.onLogout,
+          onSessionExpired: widget.onSessionExpired,
         ),
       ),
     );
@@ -3634,11 +3669,15 @@ class SanitationInspectionPage extends StatefulWidget {
     required this.api,
     required this.bootstrap,
     this.initialEstablishment,
+    this.onLogout,
+    this.onSessionExpired,
   });
 
   final TourismApi api;
   final SanitationBootstrap bootstrap;
   final SanitationEstablishment? initialEstablishment;
+  final VoidCallback? onLogout;
+  final VoidCallback? onSessionExpired;
 
   @override
   State<SanitationInspectionPage> createState() =>
@@ -3924,7 +3963,32 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
-      if (mounted) showAppMessage(context, error.toString());
+      if (!mounted) return;
+      if (error is ApiException && error.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        if (widget.onSessionExpired != null) {
+          widget.onSessionExpired!();
+        } else {
+          showAppMessage(context, 'Your session expired, please sign in again.');
+          widget.onLogout?.call();
+        }
+        return;
+      }
+
+      if (error is ApiException && error.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to submit inspections.",
+        );
+        return;
+      }
+
+      showAppMessage(context, conciseError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -4169,6 +4233,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         bootstrap: widget.bootstrap,
         onRefresh: widget.onRefresh,
         onLogout: _signOut,
+        onSessionExpired: _handleSessionExpired,
       );
     }
 
@@ -4617,6 +4682,21 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       _password.clear();
     });
     showAppMessage(context, 'Signed out of staff mode.');
+  }
+
+  Future<void> _handleSessionExpired() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(staffAuthTokenKey);
+      await prefs.remove(staffAuthRoleKey);
+      await prefs.remove(staffAuthUsernameKey);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _signedIn = false;
+      _password.clear();
+    });
+    showAppMessage(context, 'Your session expired, please sign in again.');
   }
 
   Future<void> _openCommunityReport() async {

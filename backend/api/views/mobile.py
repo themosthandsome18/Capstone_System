@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import AllowAny
+from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from api.models import (
@@ -816,8 +817,25 @@ def date_to_iso(value):
 
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mobile_sanitation_inspection_submit(request):
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        user_role = getattr(request.user.profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        user_role = ""
+
+    if user_role not in {"admin", "sanitation"}:
+        return Response(
+            {"detail": "Only sanitation inspectors and administrators can submit inspections."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     ensure_initial_sanitation_data()
 
     data = request.data.copy()
@@ -860,8 +878,25 @@ def mobile_sanitation_inspection_submit(request):
 
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mobile_household_survey_submit(request):
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        user_role = getattr(request.user.profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        user_role = ""
+
+    if user_role not in {"admin", "sanitation"}:
+        return Response(
+            {"detail": "Only sanitation inspectors and administrators can submit household surveys."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     ensure_mobile_barangays()
 
     data = request.data.copy()

@@ -380,17 +380,21 @@ class TourismApi {
   }
 
   Map<String, dynamic> _decode(http.Response response) {
-    final decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body);
+    } catch (_) {
+      decoded = null;
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return decoded as Map<String, dynamic>;
+      return (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
     }
 
+    String? errorMessage;
     if (decoded is Map<String, dynamic> && decoded['detail'] != null) {
-      throw Exception(decoded['detail']);
-    }
-
-    if (decoded is Map<String, dynamic>) {
+      errorMessage = decoded['detail'].toString();
+    } else if (decoded is Map<String, dynamic>) {
       final errors = decoded.entries
           .map((entry) {
             final value = entry.value;
@@ -398,10 +402,32 @@ class TourismApi {
             return '${entry.key}: $value';
           })
           .join('\n');
-
-      if (errors.isNotEmpty) throw Exception(errors);
+      if (errors.isNotEmpty) {
+        errorMessage = errors;
+      }
     }
 
-    throw Exception('Request failed with status ${response.statusCode}.');
+    errorMessage ??= 'Request failed with status ${response.statusCode}.';
+
+    throw ApiException(
+      statusCode: response.statusCode,
+      message: errorMessage,
+    );
   }
+}
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const ApiException({
+    required this.statusCode,
+    required this.message,
+  });
+
+  bool get isUnauthorized => statusCode == 401;
+  bool get isForbidden => statusCode == 403;
+
+  @override
+  String toString() => message;
 }
