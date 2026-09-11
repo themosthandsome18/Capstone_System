@@ -4126,7 +4126,31 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   bool _signedIn = false;
   bool _signedInEstablishment = false;
   bool _signingIn = false;
+  bool _checkingSavedAuth = true;
   SanitationEstablishment? _activeEstablishment;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStoredAuth();
+  }
+
+  Future<void> _checkStoredAuth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(staffAuthTokenKey);
+      if (token != null && token.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _signedIn = true;
+          _checkingSavedAuth = false;
+        });
+        return;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _checkingSavedAuth = false);
+  }
 
   @override
   void dispose() {
@@ -4146,6 +4170,10 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         onRefresh: widget.onRefresh,
         onLogout: _signOut,
       );
+    }
+
+    if (_checkingSavedAuth) {
+      return const SanitationLoadingScreen();
     }
 
     if (_signedInEstablishment && _activeEstablishment != null) {
@@ -4412,19 +4440,42 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   }
 
   Future<void> _signIn() async {
-    if (_email.text.trim().isEmpty || _password.text.trim().isEmpty) {
-      showAppMessage(context, 'Enter admin email and password.');
+    final username = _email.text.trim();
+    final password = _password.text;
+    if (username.isEmpty || password.isEmpty) {
+      showAppMessage(context, 'Enter username and password.');
       return;
     }
 
     setState(() => _signingIn = true);
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    setState(() {
-      _signingIn = false;
-      _signedIn = true;
-    });
-    showAppMessage(context, 'Signed in to sanitation staff mode.');
+    try {
+      final res = await widget.api.login(username: username, password: password);
+      final token = res['token'] as String?;
+      final userObj = res['user'] as Map<String, dynamic>? ?? {};
+      final profileObj = userObj['profile'] as Map<String, dynamic>? ?? {};
+      final role = profileObj['role'] as String? ?? '';
+      final userDisplay = userObj['display_name'] ?? username;
+
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token returned by server.');
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(staffAuthTokenKey, token);
+      await prefs.setString(staffAuthRoleKey, role);
+      await prefs.setString(staffAuthUsernameKey, username);
+
+      if (!mounted) return;
+      setState(() {
+        _signingIn = false;
+        _signedIn = true;
+      });
+      showAppMessage(context, 'Signed in as $userDisplay ($role).');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _signingIn = false);
+      showAppMessage(context, conciseError(e));
+    }
   }
 
   Future<void> _signInEstablishment() async {
@@ -4553,11 +4604,19 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     );
   }
 
-  void _signOut() {
+  Future<void> _signOut() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(staffAuthTokenKey);
+      await prefs.remove(staffAuthRoleKey);
+      await prefs.remove(staffAuthUsernameKey);
+    } catch (_) {}
+    if (!mounted) return;
     setState(() {
       _signedIn = false;
       _password.clear();
     });
+    showAppMessage(context, 'Signed out of staff mode.');
   }
 
   Future<void> _openCommunityReport() async {

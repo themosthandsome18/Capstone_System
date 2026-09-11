@@ -35,6 +35,16 @@ class TourismApi {
     });
   }
 
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    return _post('/auth/login/', {
+      'username': username.trim(),
+      'password': password,
+    });
+  }
+
   Future<SanitationBootstrap> fetchSanitationBootstrap() async {
     try {
       final data = await _get('/mobile/sanitation/bootstrap/');
@@ -235,7 +245,7 @@ class TourismApi {
     required String remarks,
     required String latitude,
     required String longitude,
-  }) {
+  }) async {
     final body = <String, dynamic>{
       'household_head': householdHead,
       'barangay': barangay,
@@ -253,7 +263,14 @@ class TourismApi {
     if (householdCode != null) {
       body['household_code'] = householdCode;
     }
-    return _post('/mobile/sanitation/household-surveys/', body);
+    final token = await _getStaffAuthToken();
+    return _post(
+      '/mobile/sanitation/household-surveys/',
+      body,
+      headers: (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Token $token'}
+          : null,
+    );
   }
 
   Future<Map<String, dynamic>> submitSanitationInspection({
@@ -265,26 +282,42 @@ class TourismApi {
     required String remarks,
     required String statusAfterInspection,
     required List<InspectionChecklistDraft> checklistItems,
-  }) {
-    return _post('/mobile/sanitation/inspections/', {
-      'establishment': establishmentId,
-      'inspector_name': inspectorName,
-      'inspection_date': inspectionDate,
-      'next_due_date': nextDueDate,
-      'findings': findings,
-      'remarks': remarks,
-      'status_after_inspection': statusAfterInspection,
-      'is_draft': false,
-      'checklist_items': checklistItems
-          .map(
-            (item) => {
-              'requirement_name': item.requirementName,
-              'is_complied': item.isComplied,
-              'notes': '',
-            },
-          )
-          .toList(),
-    });
+  }) async {
+    final token = await _getStaffAuthToken();
+    return _post(
+      '/mobile/sanitation/inspections/',
+      {
+        'establishment': establishmentId,
+        'inspector_name': inspectorName,
+        'inspection_date': inspectionDate,
+        'next_due_date': nextDueDate,
+        'findings': findings,
+        'remarks': remarks,
+        'status_after_inspection': statusAfterInspection,
+        'is_draft': false,
+        'checklist_items': checklistItems
+            .map(
+              (item) => {
+                'requirement_name': item.requirementName,
+                'is_complied': item.isComplied,
+                'notes': '',
+              },
+            )
+            .toList(),
+      },
+      headers: (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Token $token'}
+          : null,
+    );
+  }
+
+  Future<String?> _getStaffAuthToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(staffAuthTokenKey);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> _get(String path) async {
@@ -305,12 +338,16 @@ class TourismApi {
 
   Future<Map<String, dynamic>> _post(
     String path,
-    Map<String, Object?> body,
-  ) async {
+    Map<String, Object?> body, {
+    Map<String, String>? headers,
+  }) async {
     final response = await http
         .post(
           Uri.parse('$apiBaseUrl$path'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            ...?headers,
+          },
           body: jsonEncode(body),
         )
         .timeout(_requestTimeout);
