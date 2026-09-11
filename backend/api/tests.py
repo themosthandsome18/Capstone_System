@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
@@ -700,4 +703,255 @@ class NotificationStaffApiTests(TestCase):
             Notification.objects.filter(recipient_user=self.user_b, is_read=False).count(),
             1,
         )
+
+
+class NotificationDueDateScanningTests(TestCase):
+    def setUp(self):
+        # Create active admin user
+        self.admin_user = User.objects.create_user(
+            username="notif_scan_admin",
+            password="Password@123",
+            email="admin_scan@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+
+        # Create active sanitation user
+        self.sanitation_user = User.objects.create_user(
+            username="notif_scan_sanitation",
+            password="Password@123",
+            email="sanitation_scan@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+
+        # Business type
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Due Date Bakery",
+            inspection_frequency="monthly",
+        )
+
+        # a) Creates an establishment with permit_expiry_date = today + 10 days, has_permit=True
+        self.today = timezone.localdate()
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Sunshine Bakery",
+            owner_name="Sunny Day",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="123 Sunny St",
+            compliance_status="good_standing",
+            permit_status="active",
+            has_permit=True,
+            permit_expiry_date=self.today + timedelta(days=10),
+        )
+
+    def test_due_date_scanning_lifecycle_and_idempotency(self):
+        # b) Calls the command (call_command('evaluate_due_notifications')),
+        #    asserts exactly one permit_due notification was created for each of the two users,
+        #    with related_due_date matching.
+        call_command("evaluate_due_notifications")
+
+        admin_notifs = Notification.objects.filter(
+            recipient_user=self.admin_user,
+            notification_type="permit_due",
+        )
+        self.assertEqual(admin_notifs.count(), 1)
+        admin_notif = admin_notifs.first()
+        self.assertEqual(admin_notif.related_due_date, self.today + timedelta(days=10))
+        self.assertEqual(admin_notif.related_object_id, str(self.establishment.id))
+        self.assertEqual(admin_notif.severity, "warning")
+        self.assertEqual(admin_notif.module, "sanitation")
+
+        sanit_notifs = Notification.objects.filter(
+            recipient_user=self.sanitation_user,
+            notification_type="permit_due",
+        )
+        self.assertEqual(sanit_notifs.count(), 1)
+        sanit_notif = sanit_notifs.first()
+        self.assertEqual(sanit_notif.related_due_date, self.today + timedelta(days=10))
+        self.assertEqual(sanit_notif.related_object_id, str(self.establishment.id))
+
+        # c) Calls the command AGAIN immediately and asserts no new notifications were created
+        #    (still exactly 1 each) — proves idempotency.
+        call_command("evaluate_due_notifications")
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient_user=self.admin_user,
+                notification_type="permit_due",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient_user=self.sanitation_user,
+                notification_type="permit_due",
+            ).count(),
+            1,
+        )
+
+        # d) Changes the establishment's permit_expiry_date to a new date (simulating a renewal)
+        #    and calls the command again — asserts a NEW notification is created (proves idempotency
+        #    is keyed to the due date value, not just existence).
+        new_expiry_date = self.today + timedelta(days=20)
+        self.establishment.permit_expiry_date = new_expiry_date
+        self.establishment.save()
+
+        call_command("evaluate_due_notifications")
+
+        admin_notifs_after = Notification.objects.filter(
+            recipient_user=self.admin_user,
+            notification_type="permit_due",
+        )
+        self.assertEqual(admin_notifs_after.count(), 2)
+        admin_due_dates = set(admin_notifs_after.values_list("related_due_date", flat=True))
+        self.assertEqual(admin_due_dates, {self.today + timedelta(days=10), new_expiry_date})
+
+        sanit_notifs_after = Notification.objects.filter(
+            recipient_user=self.sanitation_user,
+            notification_type="permit_due",
+        )
+        self.assertEqual(sanit_notifs_after.count(), 2)
+
+        # e) Creates a SanitaryInspection with next_due_date = today + 3 days on an establishment
+        #    with compliance_status NOT "violation", calls the command, and asserts an inspection_due
+        #    notification was created for each staff user.
+        inspection_due_date = self.today + timedelta(days=3)
+        SanitaryInspection.objects.create(
+            establishment=self.establishment,
+            next_due_date=inspection_due_date,
+            inspector_name="Inspector Valid",
+            inspection_date=self.today,
+            status_after_inspection="good_standing",
+        )
+
+        call_command("evaluate_due_notifications")
+
+        admin_insp_notifs = Notification.objects.filter(
+            recipient_user=self.admin_user,
+            notification_type="inspection_due",
+            related_object_id=str(self.establishment.id),
+        )
+        self.assertEqual(admin_insp_notifs.count(), 1)
+        self.assertEqual(admin_insp_notifs.first().related_due_date, inspection_due_date)
+
+        sanit_insp_notifs = Notification.objects.filter(
+            recipient_user=self.sanitation_user,
+            notification_type="inspection_due",
+            related_object_id=str(self.establishment.id),
+        )
+        self.assertEqual(sanit_insp_notifs.count(), 1)
+        self.assertEqual(sanit_insp_notifs.first().related_due_date, inspection_due_date)
+
+        # f) Creates a second inspection with next_due_date = today + 3 days but on an
+        #    establishment with compliance_status="violation", and asserts NO inspection_due
+        #    notification is created for that one (violation already covers it).
+        est_violation = SanitaryEstablishment.objects.create(
+            business_name="Violating Cafe",
+            owner_name="Bad Actor",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="456 Danger Rd",
+            compliance_status="violation",
+            permit_status="revoked",
+        )
+        SanitaryInspection.objects.create(
+            establishment=est_violation,
+            next_due_date=inspection_due_date,
+            inspector_name="Inspector Strict",
+            inspection_date=self.today,
+            status_after_inspection="violation",
+        )
+
+        call_command("evaluate_due_notifications")
+
+        self.assertEqual(
+            Notification.objects.filter(
+                related_object_id=str(est_violation.id),
+                notification_type="inspection_due",
+            ).count(),
+            0,
+        )
+
+        # g) Overdue Permit: establishment with permit_expiry_date = today - 5 days, has_permit=True
+        expired_date = self.today - timedelta(days=5)
+        est_expired = SanitaryEstablishment.objects.create(
+            business_name="Expired Permit Diner",
+            owner_name="Late Larry",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="789 Overdue Ave",
+            compliance_status="good_standing",
+            permit_status="active",
+            has_permit=True,
+            permit_expiry_date=expired_date,
+        )
+
+        call_command("evaluate_due_notifications")
+
+        admin_expired_notifs = Notification.objects.filter(
+            recipient_user=self.admin_user,
+            notification_type="permit_due",
+            related_object_id=str(est_expired.id),
+        )
+        self.assertEqual(admin_expired_notifs.count(), 1)
+        admin_expired = admin_expired_notifs.first()
+        self.assertEqual(admin_expired.severity, "critical")
+        self.assertEqual(admin_expired.related_due_date, expired_date)
+        self.assertIn("EXPIRED", admin_expired.message)
+
+        sanit_expired_notifs = Notification.objects.filter(
+            recipient_user=self.sanitation_user,
+            notification_type="permit_due",
+            related_object_id=str(est_expired.id),
+        )
+        self.assertEqual(sanit_expired_notifs.count(), 1)
+        sanit_expired = sanit_expired_notifs.first()
+        self.assertEqual(sanit_expired.severity, "critical")
+        self.assertEqual(sanit_expired.related_due_date, expired_date)
+
+        # h) Overdue Inspection: inspection with next_due_date = today - 2 days on a non-violation establishment
+        overdue_insp_date = self.today - timedelta(days=2)
+        est_overdue_insp = SanitaryEstablishment.objects.create(
+            business_name="Overdue Inspection Cafe",
+            owner_name="Forgetful Fred",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="321 Tardy Rd",
+            compliance_status="good_standing",
+            permit_status="active",
+        )
+        SanitaryInspection.objects.create(
+            establishment=est_overdue_insp,
+            next_due_date=overdue_insp_date,
+            inspector_name="Inspector Check",
+            inspection_date=self.today - timedelta(days=30),
+            status_after_inspection="good_standing",
+        )
+
+        call_command("evaluate_due_notifications")
+
+        admin_overdue_insp = Notification.objects.filter(
+            recipient_user=self.admin_user,
+            notification_type="inspection_due",
+            related_object_id=str(est_overdue_insp.id),
+        )
+        self.assertEqual(admin_overdue_insp.count(), 1)
+        admin_oi = admin_overdue_insp.first()
+        self.assertEqual(admin_oi.severity, "critical")
+        self.assertEqual(admin_oi.related_due_date, overdue_insp_date)
+        self.assertIn("OVERDUE", admin_oi.message)
+
+        sanit_overdue_insp = Notification.objects.filter(
+            recipient_user=self.sanitation_user,
+            notification_type="inspection_due",
+            related_object_id=str(est_overdue_insp.id),
+        )
+        self.assertEqual(sanit_overdue_insp.count(), 1)
+        sanit_oi = sanit_overdue_insp.first()
+        self.assertEqual(sanit_oi.severity, "critical")
+        self.assertEqual(sanit_oi.related_due_date, overdue_insp_date)
+
+        # i) Confirm the original in-window (future due date) cases still have severity="warning" (not critical)
+        self.assertEqual(admin_notif.severity, "warning")
+        self.assertEqual(sanit_notif.severity, "warning")
+        self.assertEqual(admin_insp_notifs.first().severity, "warning")
+        self.assertEqual(sanit_insp_notifs.first().severity, "warning")
 

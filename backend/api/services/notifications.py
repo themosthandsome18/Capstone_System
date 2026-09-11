@@ -13,6 +13,63 @@ from ..models import (
 User = get_user_model()
 
 
+def notify_staff_users(
+    title,
+    message,
+    notification_type,
+    severity,
+    module,
+    related_model="",
+    related_object_id="",
+    related_due_date=None,
+    action_url="",
+    roles=(ROLE_ADMIN, ROLE_SANITATION),
+    check_idempotency=False,
+):
+    """
+    Creates one Notification per currently-active user matching the specified roles.
+    If check_idempotency is True, skips creation for any user where a Notification
+    already exists with the exact same (recipient_user, notification_type, related_object_id, related_due_date).
+    """
+    target_users = User.objects.filter(
+        is_active=True,
+        profile__role__in=roles,
+    ).distinct()
+
+    notifications = []
+    for user in target_users:
+        if check_idempotency:
+            filter_kwargs = {
+                "recipient_user": user,
+                "notification_type": notification_type,
+                "related_object_id": str(related_object_id),
+            }
+            if related_due_date is not None:
+                filter_kwargs["related_due_date"] = related_due_date
+
+            if Notification.objects.filter(**filter_kwargs).exists():
+                continue
+
+        user_role = getattr(getattr(user, "profile", None), "role", "")
+        notification = Notification.objects.create(
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            severity=severity,
+            module=module,
+            audience_type=NOTIFICATION_AUDIENCE_USER,
+            recipient_user=user,
+            target_role=user_role,
+            related_model=related_model,
+            related_object_id=str(related_object_id),
+            related_due_date=related_due_date,
+            action_url=action_url,
+        )
+        notifications.append(notification)
+
+    return notifications
+
+
 def notify_violation(establishment, inspection=None):
     """
     Creates one Notification per currently-active user with role
@@ -25,11 +82,6 @@ def notify_violation(establishment, inspection=None):
     Title/message should name the establishment and reference the
     inspection if provided.
     """
-    target_users = User.objects.filter(
-        is_active=True,
-        profile__role__in=[ROLE_ADMIN, ROLE_SANITATION],
-    ).distinct()
-
     title = f"Sanitary Violation: {establishment.business_name}"
 
     if inspection:
@@ -45,22 +97,14 @@ def notify_violation(establishment, inspection=None):
             f"A sanitary violation was recorded for {establishment.business_name}."
         )
 
-    notifications = []
-    for user in target_users:
-        user_role = getattr(getattr(user, "profile", None), "role", "")
-        notification = Notification.objects.create(
-            title=title,
-            message=message,
-            notification_type=NOTIFICATION_TYPE_VIOLATION_ALERT,
-            severity=NOTIFICATION_SEVERITY_CRITICAL,
-            module=NOTIFICATION_MODULE_SANITATION,
-            audience_type=NOTIFICATION_AUDIENCE_USER,
-            recipient_user=user,
-            target_role=user_role,
-            related_model="SanitaryEstablishment",
-            related_object_id=str(establishment.id),
-            action_url=f"/sanitation/establishments/{establishment.id}",
-        )
-        notifications.append(notification)
-
-    return notifications
+    return notify_staff_users(
+        title=title,
+        message=message,
+        notification_type=NOTIFICATION_TYPE_VIOLATION_ALERT,
+        severity=NOTIFICATION_SEVERITY_CRITICAL,
+        module=NOTIFICATION_MODULE_SANITATION,
+        related_model="SanitaryEstablishment",
+        related_object_id=str(establishment.id),
+        action_url=f"/sanitation/establishments/{establishment.id}",
+        check_idempotency=False,
+    )
