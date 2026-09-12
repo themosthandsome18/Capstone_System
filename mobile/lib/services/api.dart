@@ -76,23 +76,42 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> lookupTouristRecord(String query) async {
-    return _getWithQuery('/mobile/tourism/records/lookup/', {
-      'query': query.trim(),
-    });
+    final token = await _getStaffAuthToken();
+    return _getWithQuery(
+      '/mobile/tourism/records/lookup/',
+      {'query': query.trim()},
+      headers: (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Token $token'}
+          : null,
+    );
   }
 
   Future<Map<String, dynamic>> checkInTouristRecord(Map<String, dynamic> payload) async {
-    return _post('/mobile/tourism/records/check-in/', payload);
+    final token = await _getStaffAuthToken();
+    return _post(
+      '/mobile/tourism/records/check-in/',
+      payload,
+      headers: (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Token $token'}
+          : null,
+    );
   }
 
   Future<List<Map<String, dynamic>>> fetchTouristRecordHistory({
     String? search,
     int? resortId,
   }) async {
-    final data = await _getWithQuery('/mobile/tourism/records/history/', {
-      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
-      if (resortId != null) 'resort_id': resortId.toString(),
-    });
+    final token = await _getStaffAuthToken();
+    final data = await _getWithQuery(
+      '/mobile/tourism/records/history/',
+      {
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        if (resortId != null) 'resort_id': resortId.toString(),
+      },
+      headers: (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Token $token'}
+          : null,
+    );
     return (data['records'] as List? ?? []).cast<Map<String, dynamic>>();
   }
 
@@ -329,10 +348,13 @@ class TourismApi {
 
   Future<Map<String, dynamic>> _getWithQuery(
     String path,
-    Map<String, String> query,
-  ) async {
+    Map<String, String> query, {
+    Map<String, String>? headers,
+  }) async {
     final uri = Uri.parse('$apiBaseUrl$path').replace(queryParameters: query);
-    final response = await http.get(uri).timeout(_requestTimeout);
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(_requestTimeout);
     return _decode(response);
   }
 

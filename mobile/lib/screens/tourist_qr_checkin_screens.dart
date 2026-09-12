@@ -1,14 +1,34 @@
 part of '../main.dart';
 
-/// Opens the Resort Staff QR Portal protected by a Security PIN Gate
-void openStaffQrPortalWithAuth(
+/// Opens the Resort Staff QR Portal protected by Staff Authentication
+Future<void> openStaffQrPortalWithAuth(
   BuildContext context, {
   required TourismApi api,
   required MobileBootstrap bootstrap,
-}) {
+}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(staffAuthTokenKey);
+    final role = prefs.getString(staffAuthRoleKey);
+    if (token != null && token.isNotEmpty && (role == 'admin' || role == 'tourism')) {
+      if (!context.mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => TouristQrCheckInScreen(
+            api: api,
+            bootstrap: bootstrap,
+          ),
+        ),
+      );
+      return;
+    }
+  } catch (_) {}
+
+  if (!context.mounted) return;
   showDialog(
     context: context,
     builder: (context) => StaffAuthGateDialog(
+      api: api,
       onAuthenticated: () {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -23,35 +43,85 @@ void openStaffQrPortalWithAuth(
   );
 }
 
-/// Security PIN Gate Modal for Resort Staff Authentication
+/// Security Gate Modal for Resort Staff Authentication
 class StaffAuthGateDialog extends StatefulWidget {
-  const StaffAuthGateDialog({super.key, required this.onAuthenticated});
+  const StaffAuthGateDialog({
+    super.key,
+    required this.onAuthenticated,
+    this.api = const TourismApi(),
+  });
 
   final VoidCallback onAuthenticated;
+  final TourismApi api;
 
   @override
   State<StaffAuthGateDialog> createState() => _StaffAuthGateDialogState();
 }
 
 class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
-  final TextEditingController _pinController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   String? _errorMessage;
   bool _obscure = true;
+  bool _loading = false;
 
   @override
   void dispose() {
-    _pinController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  void _verifyPin() {
-    final pin = _pinController.text.trim();
-    if (pin == '2026' || pin == '1234' || pin.toLowerCase() == 'mauban' || pin == '0000') {
-      Navigator.of(context).pop();
-      widget.onAuthenticated();
-    } else {
+  Future<void> _verifyLogin() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    if (username.isEmpty || password.isEmpty) {
       setState(() {
-        _errorMessage = 'Invalid Staff PIN. Access restricted to authorized personnel.';
+        _errorMessage = 'Please enter both username and password.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final res = await widget.api.login(username: username, password: password);
+      final token = res['token'] as String?;
+      final userObj = res['user'] as Map<String, dynamic>? ?? {};
+      final profileObj = userObj['profile'] as Map<String, dynamic>? ?? {};
+      final role = profileObj['role'] as String? ?? '';
+      final userDisplay = userObj['display_name'] ?? username;
+
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token returned by server.');
+      }
+
+      if (role != 'admin' && role != 'tourism') {
+        setState(() {
+          _loading = false;
+          _errorMessage =
+              'Access restricted to Tourism Staff or Administrators only. Your account role is "$role".';
+        });
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(staffAuthTokenKey, token);
+      await prefs.setString(staffAuthRoleKey, role);
+      await prefs.setString(staffAuthUsernameKey, username);
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showAppMessage(context, 'Signed in as $userDisplay ($role).');
+      widget.onAuthenticated();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _errorMessage = conciseError(e);
       });
     }
   }
@@ -97,40 +167,38 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter your 4-digit Resort Staff PIN to access the QR Check-In Scanner and visitor records.',
+              'Sign in with your Tourism Staff or Admin account to access the QR Check-In Scanner and visitor records.',
               style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
             ),
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _errorMessage != null ? Colors.red : const Color(0xFFCBD5E1),
-                ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _usernameController,
+              decoration: InputDecoration(
+                labelText: 'Username',
+                prefixIcon: const Icon(Icons.person_outline),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
-              child: TextField(
-                controller: _pinController,
-                keyboardType: TextInputType.number,
-                obscureText: _obscure,
-                autofocus: true,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 4),
-                textAlign: TextAlign.center,
-                onSubmitted: (_) => _verifyPin(),
-                decoration: InputDecoration(
-                  hintText: '• • • •',
-                  hintStyle: const TextStyle(letterSpacing: 4, color: Color(0xFF94A3B8)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: const Color(0xFF64748B)),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscure,
+              onSubmitted: (_) => _verifyLogin(),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: const Color(0xFF64748B)),
+                  onPressed: () => setState(() => _obscure = !_obscure),
                 ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
             if (_errorMessage != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -145,36 +213,27 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
                 ],
               ),
             ],
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, size: 13, color: Color(0xFF166534)),
-                  SizedBox(width: 6),
-                  Text('Demo Staff PIN: 2026', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF166534))),
-                ],
-              ),
-            ),
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel / I am a Tourist', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
         ),
         FilledButton(
-          onPressed: _verifyPin,
+          onPressed: _loading ? null : _verifyLogin,
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF14532D),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          child: const Text('Unlock Scanner', style: TextStyle(fontWeight: FontWeight.w900)),
+          child: _loading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Sign In & Unlock Scanner', style: TextStyle(fontWeight: FontWeight.w900)),
         ),
       ],
     );
@@ -230,6 +289,24 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
         _openRecordSheet(record);
       }
     } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && e.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        showAppMessage(context, 'Your session expired, please sign in again.');
+        return;
+      }
+      if (e is ApiException && e.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to access visitor records.",
+        );
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -254,6 +331,38 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
       }
     } finally {
       if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Sign Out Staff', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to sign out of the Staff QR Portal?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(staffAuthTokenKey);
+      await prefs.remove(staffAuthRoleKey);
+      await prefs.remove(staffAuthUsernameKey);
+      if (mounted) {
+        Navigator.of(context).pop();
+        showAppMessage(context, 'Signed out of staff mode.');
+      }
     }
   }
 
@@ -293,6 +402,13 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
           'Tourist Qr Check-In',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign Out Staff',
+            onPressed: _handleSignOut,
+          ),
+        ],
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -527,7 +643,25 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
           _loading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && e.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        Navigator.of(context).pop();
+        showAppMessage(context, 'Your session expired, please sign in again.');
+        return;
+      }
+      if (e is ApiException && e.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to view tourist history.",
+        );
+      }
       if (mounted) {
         setState(() {
           _records = [];
@@ -872,9 +1006,28 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && e.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        Navigator.of(context).pop();
+        showAppMessage(context, 'Your session expired, please sign in again.');
+        return;
+      }
+      if (e is ApiException && e.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to check in tourists.",
+        );
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved locally: ${e.toString()}')),
+          SnackBar(content: Text('Failed: ${conciseError(e)}')),
         );
         Navigator.of(context).pop();
       }
