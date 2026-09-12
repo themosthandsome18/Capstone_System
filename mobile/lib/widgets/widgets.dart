@@ -279,13 +279,96 @@ class VisitReceiptCard extends StatelessWidget {
 }
 
 /// Modal dialog displaying the exact Tourist QR Entry Pass from Screenshot 1
-class TouristDigitalPassModal extends StatelessWidget {
+class TouristDigitalPassModal extends StatefulWidget {
   const TouristDigitalPassModal({super.key, required this.receipt});
 
   final MobileVisitReceipt receipt;
 
   @override
+  State<TouristDigitalPassModal> createState() => _TouristDigitalPassModalState();
+}
+
+class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
+  final GlobalKey _passKey = GlobalKey();
+  bool _saving = false;
+
+  Future<void> _handleSaveOrSharePass() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+
+    try {
+      // Ensure layout and painting is complete
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final boundary = _passKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null || !boundary.hasSize) {
+        throw Exception('Pass card is not ready for export.');
+      }
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw Exception('Failed to encode pass image to PNG.');
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
+      final cleanRef = widget.receipt.reference.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+      final fileName = 'mauban_qr_$cleanRef.png';
+
+      final file = await saveBytesToTempFile(pngBytes, fileName);
+
+      final result = await shareFile(
+        file: file,
+        subject: 'Mauban Tourist Entry Pass - ${widget.receipt.reference}',
+        text: 'Official Tourist Entry Pass for ${widget.receipt.fullName.isNotEmpty ? widget.receipt.fullName : "Tourist"} (${widget.receipt.reference}) at ${widget.receipt.destination.name}.',
+      );
+
+      if (!mounted) return;
+      setState(() => _saving = false);
+
+      if (result.status == ShareResultStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('QR Pass for ${widget.receipt.reference} shared successfully!'),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF14532D),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Could not export pass: ${conciseError(e)}'),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final receipt = widget.receipt;
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
@@ -354,197 +437,191 @@ class TouristDigitalPassModal extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // Main Ticket Pass Box
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Column(
-                        children: [
-                          // Ticket Header Green Bar
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF14532D),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'LGU MAUBAN • TOURIST ENTRY PASS',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1,
-                                    color: Color(0xFF86EFAC),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  receipt.fullName.isNotEmpty
-                                      ? formatProperName(receipt.fullName)
-                                      : 'Registered Tourist',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
+                  RepaintBoundary(
+                    key: _passKey,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
                           ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Column(
+                          children: [
+                            // Ticket Header Green Bar
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF14532D),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'LGU MAUBAN • TOURIST ENTRY PASS',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1,
+                                      color: Color(0xFF86EFAC),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    receipt.fullName.isNotEmpty
+                                        ? formatProperName(receipt.fullName)
+                                        : 'Registered Tourist',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                          // QR Code Container
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                            child: Column(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.04),
-                                        blurRadius: 8,
+                            // QR Code Container
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.04),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                    child: QrImageView(
+                                      data: receipt.reference,
+                                      version: QrVersions.auto,
+                                      size: 190,
+                                      eyeStyle: const QrEyeStyle(
+                                        eyeShape: QrEyeShape.square,
+                                        color: Color(0xFF14532D),
+                                      ),
+                                      dataModuleStyle: const QrDataModuleStyle(
+                                        dataModuleShape: QrDataModuleShape.square,
+                                        color: Color(0xFF14532D),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'SURVEY ID',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    receipt.reference,
+                                    style: const TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                      fontFamily: 'monospace',
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Ticket Perforation Dashed Line with Notches
+                            const _DashedTicketDivider(),
+
+                            // Ticket Metadata Details Table
+                            Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                children: [
+                                  _buildDetailRow(
+                                    icon: Icons.location_on_outlined,
+                                    label: 'Destination',
+                                    value: receipt.destination.name,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildDetailRow(
+                                    icon: Icons.people_outline,
+                                    label: 'Visitors',
+                                    value: '${receipt.totalVisitors}',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildDetailRow(
+                                    icon: Icons.calendar_today_outlined,
+                                    label: 'Arrival date',
+                                    value: shortDate(receipt.arrivalDate),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.access_time_outlined, size: 18, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 8),
+                                      const Text('Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(999),
+                                          border: Border.all(color: const Color(0xFF86EFAC)),
+                                        ),
+                                        child: Text(
+                                          receipt.displayStatus,
+                                          style: const TextStyle(
+                                            color: Color(0xFF166534),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 11,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  child: QrImageView(
-                                    data: receipt.reference,
-                                    version: QrVersions.auto,
-                                    size: 190,
-                                    eyeStyle: const QrEyeStyle(
-                                      eyeShape: QrEyeShape.square,
-                                      color: Color(0xFF14532D),
-                                    ),
-                                    dataModuleStyle: const QrDataModuleStyle(
-                                      dataModuleShape: QrDataModuleShape.square,
-                                      color: Color(0xFF14532D),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'SURVEY ID',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  receipt.reference,
-                                  style: const TextStyle(
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                    fontFamily: 'monospace',
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-
-                          // Ticket Perforation Dashed Line with Notches
-                          const _DashedTicketDivider(),
-
-                          // Ticket Metadata Details Table
-                          Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              children: [
-                                _buildDetailRow(
-                                  icon: Icons.location_on_outlined,
-                                  label: 'Destination',
-                                  value: receipt.destination.name,
-                                ),
-                                const SizedBox(height: 12),
-                                _buildDetailRow(
-                                  icon: Icons.people_outline,
-                                  label: 'Visitors',
-                                  value: '${receipt.totalVisitors}',
-                                ),
-                                const SizedBox(height: 12),
-                                _buildDetailRow(
-                                  icon: Icons.calendar_today_outlined,
-                                  label: 'Arrival date',
-                                  value: shortDate(receipt.arrivalDate),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time_outlined, size: 18, color: Color(0xFF64748B)),
-                                    const SizedBox(width: 8),
-                                    const Text('Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                                    const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFDCFCE7),
-                                        borderRadius: BorderRadius.circular(999),
-                                        border: Border.all(color: const Color(0xFF86EFAC)),
-                                      ),
-                                      child: Text(
-                                        receipt.displayStatus,
-                                        style: const TextStyle(
-                                          color: Color(0xFF166534),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 18),
 
-                  // Save QR to device Button
+                  // Save / Share QR Pass Button
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                const Icon(Icons.download_done, color: Colors.white),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text('QR Pass for ${receipt.reference} saved to device! Ready for offline check-in.'),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: const Color(0xFF14532D),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.download),
-                      label: const Text('Save QR to device', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                      onPressed: _saving ? null : _handleSaveOrSharePass,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.share),
+                      label: Text(
+                        _saving ? 'Preparing QR Pass...' : 'Save / Share QR Pass',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      ),
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF14532D),
                         padding: const EdgeInsets.symmetric(vertical: 14),

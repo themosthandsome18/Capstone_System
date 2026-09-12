@@ -258,6 +258,7 @@ class TouristQrCheckInScreen extends StatefulWidget {
 class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
+  bool _exporting = false;
 
   @override
   void dispose() {
@@ -376,6 +377,104 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleExportRecords() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final records = await widget.api.fetchTouristRecordHistory();
+      if (!mounted) return;
+
+      if (records.isEmpty) {
+        setState(() => _exporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('No tourist arrival records found to export.')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF0F172A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        return;
+      }
+
+      final csvData = buildTouristArrivalsCsv(records);
+      final dateStr = DateTime.now().toIso8601String().split('T').first;
+      final file = await saveStringToTempFile(
+        csvData,
+        'mauban_tourist_arrivals_$dateStr.csv',
+      );
+
+      final result = await shareFile(
+        file: file,
+        subject: 'Mauban Tourist Arrivals - $dateStr',
+        text: 'Exported ${records.length} tourism arrival record(s) from LGU Mauban Tourism.',
+      );
+
+      if (!mounted) return;
+      setState(() => _exporting = false);
+
+      if (result.status == ShareResultStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Exported and shared ${records.length} arrival record(s)!')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF14532D),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _exporting = false);
+
+      if (e is ApiException && e.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        showAppMessage(context, 'Your session expired, please sign in again.');
+        return;
+      }
+      if (e is ApiException && e.isForbidden) {
+        showAppMessage(
+          context,
+          "You don't have permission to export visitor records.",
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Failed to export records: ${conciseError(e)}')),
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
   }
 
   Future<void> _openCameraScanner() async {
@@ -564,26 +663,24 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Row(
-                          children: [
-                            Icon(Icons.file_download_done, color: Colors.white),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Tourism Arrival Records exported to Excel/CSV format!')),
-                          ],
-                        ),
-                        backgroundColor: const Color(0xFF14532D),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.download, size: 20, color: Color(0xFF0F172A)),
-                  label: const Text(
-                    'Export / Download Records',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
+                  onPressed: _exporting ? null : _handleExportRecords,
+                  icon: _exporting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF0F172A),
+                          ),
+                        )
+                      : const Icon(Icons.download, size: 20, color: Color(0xFF0F172A)),
+                  label: Text(
+                    _exporting ? 'Exporting Records...' : 'Export / Download Records',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                   style: OutlinedButton.styleFrom(
                     backgroundColor: const Color(0xFFD1E7DD).withValues(alpha: 0.6),
@@ -620,6 +717,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
   final TextEditingController _search = TextEditingController();
   List<Map<String, dynamic>> _records = [];
   bool _loading = true;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -671,6 +769,82 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
     }
   }
 
+  Future<void> _handleExportHistory(List<Map<String, dynamic>> recordsToExport) async {
+    if (_exporting) return;
+
+    if (recordsToExport.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(child: Text('No records to export in the current view.')),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0F172A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _exporting = true);
+
+    try {
+      final csvData = buildTouristArrivalsCsv(recordsToExport);
+      final dateStr = DateTime.now().toIso8601String().split('T').first;
+      final file = await saveStringToTempFile(
+        csvData,
+        'mauban_tourist_arrivals_$dateStr.csv',
+      );
+
+      final result = await shareFile(
+        file: file,
+        subject: 'Mauban Tourist Arrivals - $dateStr',
+        text: 'Exported ${recordsToExport.length} tourism arrival record(s) from LGU Mauban Tourism.',
+      );
+
+      if (!mounted) return;
+      setState(() => _exporting = false);
+
+      if (result.status == ShareResultStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Exported and shared ${recordsToExport.length} record(s) to CSV!')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF14532D),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _exporting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Failed to export history: ${conciseError(e)}')),
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _records.where((r) {
@@ -705,17 +879,21 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Exported ${filtered.length} tourist record(s) to CSV!'),
-                    backgroundColor: const Color(0xFF14532D),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-              icon: const Icon(Icons.download, size: 16),
-              label: const Text('Export', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              onPressed: _exporting ? null : () => _handleExportHistory(filtered),
+              icon: _exporting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.download, size: 16),
+              label: Text(
+                _exporting ? 'Exporting...' : 'Export',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF14532D),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
