@@ -70,6 +70,7 @@ from .views.notifications import (
     notification_mark_read,
     public_notification_detail,
     public_notification_list,
+    trigger_due_notifications_scan,
 )
 
 urlpatterns = [
@@ -145,4 +146,5 @@ urlpatterns = [
     path("notifications/<int:notification_id>/read/", notification_mark_read),
     path("notifications/public/", public_notification_list),
     path("notifications/public/<int:notification_id>/", public_notification_detail),
+    path("notifications/evaluate-due/", trigger_due_notifications_scan, name="evaluate-due-notifications"),
 ]

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
@@ -1764,3 +1765,47 @@ class MobileBootstrapNotificationTests(TestCase):
         self.assertNotIn(f"advisory-{self.tourism_advisory.id}", notif_ids)
         self.assertNotIn(f"advisory-{self.inactive_advisory.id}", notif_ids)
         self.assertNotIn(f"advisory-{self.expired_advisory.id}", notif_ids)
+
+
+class NotificationWebhookCronTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/notifications/evaluate-due/"
+        self.secret = "super_secret_cron_key_987"
+
+    @patch("api.views.notifications.config")
+    def test_post_without_key_returns_403(self, mock_config):
+        mock_config.side_effect = lambda key, default="": self.secret if key == "CRON_SECRET_KEY" else default
+        resp = self.client.post(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.json()["detail"], "Invalid or missing cron key.")
+
+    @patch("api.views.notifications.config")
+    def test_post_with_invalid_key_returns_403(self, mock_config):
+        mock_config.side_effect = lambda key, default="": self.secret if key == "CRON_SECRET_KEY" else default
+        resp = self.client.post(self.url, HTTP_X_CRON_KEY="wrong_secret")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.json()["detail"], "Invalid or missing cron key.")
+
+    @patch("api.views.notifications.config")
+    def test_post_with_valid_key_triggers_evaluation_and_returns_200(self, mock_config):
+        mock_config.side_effect = lambda key, default="": self.secret if key == "CRON_SECRET_KEY" else default
+
+        # Test with X-Cron-Key header
+        resp1 = self.client.post(self.url, HTTP_X_CRON_KEY=self.secret)
+        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp1.json()["status"], "success")
+        self.assertEqual(resp1.json()["message"], "Due notifications evaluated.")
+
+        # Test with Authorization Bearer header
+        resp2 = self.client.post(self.url, HTTP_AUTHORIZATION=f"Bearer {self.secret}")
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp2.json()["status"], "success")
+        self.assertEqual(resp2.json()["message"], "Due notifications evaluated.")
+
+    @patch("api.views.notifications.config")
+    def test_post_when_unconfigured_returns_503(self, mock_config):
+        mock_config.side_effect = lambda key, default="": "" if key == "CRON_SECRET_KEY" else default
+        resp = self.client.post(self.url, HTTP_X_CRON_KEY="some_key")
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(resp.json()["detail"], "Cron trigger is not configured on this server.")

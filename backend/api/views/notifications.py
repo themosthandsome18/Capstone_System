@@ -1,3 +1,6 @@
+import hmac
+from decouple import config
+from django.core.management import call_command
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -230,3 +233,36 @@ def public_notification_detail(request, notification_id):
 
     serializer.save()
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def trigger_due_notifications_scan(request):
+    """
+    Authenticated webhook endpoint for triggering evaluate_due_notifications.
+    Gated by CRON_SECRET_KEY via 'X-Cron-Key' header or 'Authorization: Bearer <key>'.
+    """
+    cron_secret = config("CRON_SECRET_KEY", default="").strip()
+    if not cron_secret:
+        return Response(
+            {"detail": "Cron trigger is not configured on this server."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    provided_key = request.headers.get("X-Cron-Key", "").strip()
+    if not provided_key:
+        auth_header = request.headers.get("Authorization", "").strip()
+        if auth_header.startswith("Bearer "):
+            provided_key = auth_header[7:].strip()
+
+    if not provided_key or not hmac.compare_digest(provided_key, cron_secret):
+        return Response(
+            {"detail": "Invalid or missing cron key."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    call_command("evaluate_due_notifications")
+    return Response(
+        {"status": "success", "message": "Due notifications evaluated."},
+        status=status.HTTP_200_OK,
+    )
