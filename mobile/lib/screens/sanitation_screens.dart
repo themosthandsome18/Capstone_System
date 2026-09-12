@@ -4163,6 +4163,12 @@ class _SanitationStandaloneBootstrapState
   }
 }
 
+enum SanitationGatewayScreen {
+  chooser,
+  staffLogin,
+  establishmentLogin,
+}
+
 class SanitationAccessGateway extends StatefulWidget {
   const SanitationAccessGateway({
     super.key,
@@ -4186,7 +4192,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   final TextEditingController _estUsername = TextEditingController();
   final TextEditingController _estPassword = TextEditingController();
 
-  int _gatewayTab = 0; // 0: Admin / Staff, 1: Establishment Account
+  SanitationGatewayScreen _currentScreen = SanitationGatewayScreen.chooser;
   bool _signedIn = false;
   bool _signedInEstablishment = false;
   bool _signingIn = false;
@@ -4249,6 +4255,17 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       );
     }
 
+    switch (_currentScreen) {
+      case SanitationGatewayScreen.chooser:
+        return _buildChooserScreen();
+      case SanitationGatewayScreen.staffLogin:
+        return _buildStaffLoginScreen();
+      case SanitationGatewayScreen.establishmentLogin:
+        return _buildEstablishmentLoginScreen();
+    }
+  }
+
+  Widget _buildChooserScreen() {
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -4270,9 +4287,9 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                         top: Radius.circular(18),
                       ),
                     ),
-                    child: Text(
-                      _gatewayTab == 0 ? 'Sanitary Inspector Gateway' : 'Establishment Account Portal',
-                      style: const TextStyle(
+                    child: const Text(
+                      'Mauban Sanitation & Community Portal',
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                       ),
@@ -4294,96 +4311,241 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                         children: [
                           Center(
                             child: Image.asset(
-                              'assets/tourism_logo.jpg',
+                              'assets/sanitary_logo.jpg',
                               width: 76,
                               height: 76,
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           Text(
-                            'Sanitation Section',
+                            'What do you need today?',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w900),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 17,
+                                ),
                           ),
+                          const SizedBox(height: 4),
                           const Text(
-                            'Choose your account type to continue',
+                            'Choose a service or transaction to continue',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.muted,
                               fontSize: 12,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
 
-                          // Role Selector Tab
-                          Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _gatewayTab = 0),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 9),
-                                      decoration: BoxDecoration(
-                                        color: _gatewayTab == 0 ? AppColors.deepGreen : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        'Staff / Inspector',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: _gatewayTab == 0 ? Colors.white : AppColors.muted,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _gatewayTab = 1),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 9),
-                                      decoration: BoxDecoration(
-                                        color: _gatewayTab == 1 ? AppColors.deepGreen : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        'Establishment',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: _gatewayTab == 1 ? Colors.white : AppColors.muted,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          // Option A: Inspector / Staff
+                          _buildChooserCard(
+                            icon: Icons.shield_outlined,
+                            title: "I'm an Inspector / Staff",
+                            subtitle: 'Sign in for inspections and official records',
+                            onTap: () {
+                              setState(() => _currentScreen = SanitationGatewayScreen.staffLogin);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Option B: Establishment Owner
+                          _buildChooserCard(
+                            icon: Icons.storefront_outlined,
+                            title: 'I Have an Establishment',
+                            subtitle: 'Access your sanitary permit, QR code, and compliance status',
+                            onTap: () {
+                              setState(() => _currentScreen = SanitationGatewayScreen.establishmentLogin);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Option C: Guest Community Report
+                          _buildChooserCard(
+                            icon: Icons.flag_outlined,
+                            title: 'I Want to Report a Concern',
+                            subtitle: 'Submit a sanitation concern (no login needed)',
+                            onTap: _openCommunityReport,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChooserCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.border, width: 1.2),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        splashColor: AppColors.green.withValues(alpha: 0.12),
+        highlightColor: AppColors.green.withValues(alpha: 0.06),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.deepGreen, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.muted,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: AppColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaffLoginScreen() {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(18),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: AppColors.green,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(18),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            onPressed: () {
+                              setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+                            },
+                            tooltip: 'Back to Options',
+                          ),
+                          const SizedBox(width: 4),
+                          const Expanded(
+                            child: Text(
+                              'Sanitary Inspector Gateway',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 18),
-
-                          // TAB 0: Admin / Staff Login
-                          if (_gatewayTab == 0) ...[
+                        ],
+                      ),
+                    ),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(18),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Image.asset(
+                                'assets/sanitary_logo.jpg',
+                                width: 70,
+                                height: 70,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Inspector / Staff Login',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const Text(
+                              'Sign in with your authorized Sanitation Inspector or Admin account',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
                             _GatewaySection(
                               icon: Icons.admin_panel_settings_outlined,
-                              title: 'Inspector / Staff Login',
+                              title: 'Inspector / Staff Credentials',
                               children: [
                                 TextField(
                                   controller: _email,
                                   keyboardType: TextInputType.emailAddress,
                                   decoration: const InputDecoration(
                                     labelText: 'Username or Email',
-                                    hintText: 'sanitation_admin or inspector_juan',
+                                    hintText: 'Enter your username',
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -4392,22 +4554,132 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                   obscureText: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Password',
-                                    hintText: 'Sanitation@123',
                                   ),
                                 ),
                                 const SizedBox(height: 12),
                                 FilledButton(
                                   onPressed: _signingIn ? null : _signIn,
                                   child: Text(
-                                    _signingIn ? 'Signing in...' : 'Sign in as Inspector / Admin',
+                                    _signingIn
+                                        ? 'Signing in...'
+                                        : 'Sign in as Inspector / Admin',
                                   ),
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 14),
+                            Center(
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+                                },
+                                icon: const Icon(Icons.arrow_back, size: 16),
+                                label: const Text('Back to Options'),
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                          // TAB 1: Establishment Account Login
-                          if (_gatewayTab == 1) ...[
+  Widget _buildEstablishmentLoginScreen() {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(18),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: AppColors.green,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(18),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            onPressed: () {
+                              setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+                            },
+                            tooltip: 'Back to Options',
+                          ),
+                          const SizedBox(width: 4),
+                          const Expanded(
+                            child: Text(
+                              'Establishment Account Portal',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(18),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Image.asset(
+                                'assets/sanitary_logo.jpg',
+                                width: 70,
+                                height: 70,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Establishment Account',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const Text(
+                              'View active sanitary permit, QR code, inspection checklist & violations.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
                             _GatewaySection(
                               icon: Icons.storefront_outlined,
                               title: 'Establishment Account',
@@ -4417,7 +4689,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                   controller: _estUsername,
                                   decoration: const InputDecoration(
                                     labelText: 'Username or Permit No.',
-                                    hintText: 'establishment_owner or LG-2026-002',
+                                    hintText: 'Enter username or permit number',
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -4426,28 +4698,15 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                   obscureText: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Password',
-                                    hintText: 'Establishment@123',
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: ActionChip(
-                                    avatar: const Icon(Icons.bolt, size: 14, color: AppColors.deepGreen),
-                                    label: const Text('Use Demo: establishment_owner / Establishment@123', style: TextStyle(fontSize: 11)),
-                                    onPressed: () {
-                                      setState(() {
-                                        _estUsername.text = 'establishment_owner';
-                                        _estPassword.text = 'Establishment@123';
-                                      });
-                                    },
                                   ),
                                 ),
                                 const SizedBox(height: 12),
                                 FilledButton(
                                   onPressed: _signingIn ? null : _signInEstablishment,
                                   child: Text(
-                                    _signingIn ? 'Signing in...' : 'Sign in to Establishment Portal',
+                                    _signingIn
+                                        ? 'Signing in...'
+                                        : 'Sign in to Establishment Portal',
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -4457,45 +4716,22 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                 ),
                               ],
                             ),
-                          ],
-
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Row(
-                              children: [
-                                Expanded(child: Divider()),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
-                                  child: Text(
-                                    'OR',
-                                    style: TextStyle(
-                                      color: AppColors.muted,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(child: Divider()),
-                              ],
-                            ),
-                          ),
-                          _GatewaySection(
-                            icon: Icons.flag_outlined,
-                            title: 'Community Concern',
-                            text:
-                                'No account needed. Report unsanitary conditions right away.',
-                            children: [
-                              OutlinedButton(
-                                onPressed: _openCommunityReport,
-                                child: const Text('Continue as Guest'),
+                            const SizedBox(height: 14),
+                            Center(
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  setState(() => _currentScreen = SanitationGatewayScreen.chooser);
+                                },
+                                icon: const Icon(Icons.arrow_back, size: 16),
+                                label: const Text('Back to Options'),
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -4595,6 +4831,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       _signedInEstablishment = false;
       _activeEstablishment = null;
       _estPassword.clear();
+      _currentScreen = SanitationGatewayScreen.chooser;
     });
     showAppMessage(context, 'Signed out of establishment account.');
   }
@@ -4629,7 +4866,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                 controller: permitCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Sanitary Permit Number',
-                  hintText: 'e.g. LG-2026-002',
+                  hintText: 'Enter permit number',
                 ),
               ),
               const SizedBox(height: 10),
@@ -4680,6 +4917,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     setState(() {
       _signedIn = false;
       _password.clear();
+      _currentScreen = SanitationGatewayScreen.chooser;
     });
     showAppMessage(context, 'Signed out of staff mode.');
   }
@@ -4695,6 +4933,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     setState(() {
       _signedIn = false;
       _password.clear();
+      _currentScreen = SanitationGatewayScreen.chooser;
     });
     showAppMessage(context, 'Your session expired, please sign in again.');
   }
