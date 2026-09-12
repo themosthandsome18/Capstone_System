@@ -9,6 +9,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .seeders import ensure_initial_reference_data
+from .seed_data import INITIAL_TOURIST_RECORDS, REFERENCE_TABLES
 from .models import (
     ACTION_UPDATE,
     BOOKING_STATUS_ARRIVED,
@@ -73,16 +74,51 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+def ensure_test_reference_tables():
+    if not Country.objects.exists():
+        Country.objects.bulk_create([Country(**c) for c in REFERENCE_TABLES["countries"]], ignore_conflicts=True)
+    if not Region.objects.exists():
+        Region.objects.bulk_create([Region(**r) for r in REFERENCE_TABLES["regions"]], ignore_conflicts=True)
+    if not Province.objects.exists():
+        reg_calabarzon = Region.objects.filter(code="04").first() or Region.objects.first()
+        reg_ncr = Region.objects.filter(code="13").first() or reg_calabarzon
+        provinces = []
+        for p in REFERENCE_TABLES["provinces"]:
+            reg = reg_ncr if p["name"] == "Metro Manila" else reg_calabarzon
+            provinces.append(Province(id=p["id"], name=p["name"], region=reg))
+        Province.objects.bulk_create(provinces, ignore_conflicts=True)
+    if not Itinerary.objects.exists():
+        Itinerary.objects.bulk_create([Itinerary(**it) for it in REFERENCE_TABLES["itineraries"]], ignore_conflicts=True)
+    if not TravelMode.objects.exists():
+        TravelMode.objects.bulk_create([TravelMode(**tm) for tm in REFERENCE_TABLES["travel_modes"]], ignore_conflicts=True)
+    if not BoatType.objects.exists():
+        BoatType.objects.bulk_create([BoatType(**bt) for bt in REFERENCE_TABLES["boat_types"]], ignore_conflicts=True)
+    if not VisitPurpose.objects.exists():
+        VisitPurpose.objects.bulk_create([VisitPurpose(**vp) for vp in REFERENCE_TABLES["visit_purposes"]], ignore_conflicts=True)
+    if not Resort.objects.exists():
+        Resort.objects.bulk_create([Resort(**res) for res in REFERENCE_TABLES["resorts"]], ignore_conflicts=True)
+
+
 class BookingManagementApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.user = User.objects.create_user(
             username="tourism_admin",
             password="Tourism@123",
         )
-        UserProfile.objects.create(user=self.user, role=ROLE_TOURISM)
-        token = Token.objects.create(user=self.user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        UserProfile.objects.create(user=cls.user, role=ROLE_TOURISM)
+        cls.token = Token.objects.create(user=cls.user)
+
+        ensure_test_reference_tables()
+        TouristRecord.objects.bulk_create(
+            [TouristRecord(**record) for record in INITIAL_TOURIST_RECORDS],
+            ignore_conflicts=True,
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
 
         from unittest.mock import patch
         import datetime
@@ -148,8 +184,44 @@ class BookingManagementApiTests(TestCase):
 
 
 class MobilePublicApiTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ensure_test_reference_tables()
+        cls.btype, _ = SanitaryBusinessType.objects.get_or_create(
+            name="Food Establishment",
+            defaults={"inspection_frequency": "quarterly"},
+        )
+        cls.establishment, _ = SanitaryEstablishment.objects.get_or_create(
+            permit_number="LG-2026-001",
+            defaults={
+                "business_name": "Test Mobile Establishment",
+                "owner_name": "Test Owner",
+                "business_type": cls.btype,
+                "barangay": "Poblacion",
+                "address": "123 Main St",
+                "has_permit": True,
+                "compliance_status": "good_standing",
+                "permit_status": "active",
+            },
+        )
+        cls.sanitation_user = User.objects.create_user(
+            username="test_mobile_sanitation_inspector",
+            password="Password@123",
+            email="inspector@test.local",
+        )
+        UserProfile.objects.create(user=cls.sanitation_user, role=ROLE_SANITATION)
+        cls.sanitation_token = Token.objects.create(user=cls.sanitation_user)
+
     def setUp(self):
         self.client = APIClient()
+        from unittest.mock import patch
+        import datetime
+        self.localdate_patcher = patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 4, 1))
+        self.mock_localdate = self.localdate_patcher.start()
+
+    def tearDown(self):
+        self.localdate_patcher.stop()
 
     def test_mobile_bootstrap_is_public(self):
         response = self.client.get("/api/mobile/tourism/bootstrap/")
@@ -375,6 +447,7 @@ class MobilePublicApiTests(TestCase):
         self.assertIn("barangays", data)
 
     def test_mobile_sanitation_inspection_creates_establishment_inspection(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.sanitation_token.key}")
         self.client.get("/api/mobile/sanitation/bootstrap/")
         establishment = SanitaryEstablishment.objects.first()
 
