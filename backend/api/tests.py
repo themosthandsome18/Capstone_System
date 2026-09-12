@@ -21,6 +21,11 @@ from .models import (
     HouseholdSanitationRecord,
     Itinerary,
     Notification,
+    NOTIFICATION_AUDIENCE_PUBLIC,
+    NOTIFICATION_MODULE_GENERAL,
+    NOTIFICATION_MODULE_SANITATION,
+    NOTIFICATION_MODULE_TOURISM,
+    NOTIFICATION_TYPE_PUBLIC_ADVISORY,
     ROLE_ADMIN,
     ROLE_ESTABLISHMENT,
     ROLE_SANITATION,
@@ -1690,4 +1695,72 @@ class MobileTourismAuthTests(TestCase):
         self.assertEqual(resp_admin_lookup.json()["survey_id"], self.survey_id)
 
 
+class MobileBootstrapNotificationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        now = timezone.now()
 
+        # 1. Active public advisories
+        self.tourism_advisory = Notification.objects.create(
+            title="Tourism Advisory Test",
+            message="Active public advisory for tourists",
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            module=NOTIFICATION_MODULE_TOURISM,
+            is_active=True,
+        )
+        self.sanitation_advisory = Notification.objects.create(
+            title="Sanitation Advisory Test",
+            message="Active public advisory for sanitation",
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            module=NOTIFICATION_MODULE_SANITATION,
+            is_active=True,
+        )
+
+        # 2. Inactive advisory and expired advisory
+        self.inactive_advisory = Notification.objects.create(
+            title="Inactive Advisory",
+            message="Should not appear in bootstrap",
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            module=NOTIFICATION_MODULE_TOURISM,
+            is_active=False,
+        )
+        self.expired_advisory = Notification.objects.create(
+            title="Expired Advisory",
+            message="Should not appear in bootstrap",
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            module=NOTIFICATION_MODULE_TOURISM,
+            is_active=True,
+            expires_at=now - timedelta(days=1),
+        )
+
+    def test_mobile_tourism_bootstrap_dynamic_advisories(self):
+        resp = self.client.get("/api/mobile/tourism/bootstrap/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notifications = resp.json().get("notifications", [])
+        notif_ids = [n["id"] for n in notifications]
+
+        # Includes active tourism advisory
+        self.assertIn(f"advisory-{self.tourism_advisory.id}", notif_ids)
+
+        # Does NOT include sanitation advisory, inactive advisory, or expired advisory
+        self.assertNotIn(f"advisory-{self.sanitation_advisory.id}", notif_ids)
+        self.assertNotIn(f"advisory-{self.inactive_advisory.id}", notif_ids)
+        self.assertNotIn(f"advisory-{self.expired_advisory.id}", notif_ids)
+
+    def test_mobile_sanitation_bootstrap_dynamic_advisories(self):
+        resp = self.client.get("/api/mobile/sanitation/bootstrap/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notifications = resp.json().get("notifications", [])
+        notif_ids = [n["id"] for n in notifications]
+
+        # Includes active sanitation advisory
+        self.assertIn(f"advisory-{self.sanitation_advisory.id}", notif_ids)
+
+        # Does NOT include tourism-only advisory, inactive advisory, or expired advisory
+        self.assertNotIn(f"advisory-{self.tourism_advisory.id}", notif_ids)
+        self.assertNotIn(f"advisory-{self.inactive_advisory.id}", notif_ids)
+        self.assertNotIn(f"advisory-{self.expired_advisory.id}", notif_ids)

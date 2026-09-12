@@ -347,25 +347,61 @@ class NotificationPage extends StatelessWidget {
     return FormPageScaffold(
       title: 'Notifications',
       subtitle: 'Tourism and community updates',
-      children: notifications
-          .map(
-            (item) => Card(
-              elevation: 0,
-              color: Colors.white,
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: item.color.withValues(alpha: 0.14),
-                  child: Icon(item.icon, color: item.color),
+      children: notifications.isEmpty
+          ? [
+              const Card(
+                elevation: 0,
+                color: Colors.white,
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.notifications_off_outlined,
+                        size: 38,
+                        color: AppColors.muted,
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'No new advisories',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Check back later for official announcements.',
+                        style: TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-                title: Text(
-                  item.title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                subtitle: Text(item.message),
               ),
-            ),
-          )
-          .toList(),
+            ]
+          : notifications
+              .map(
+                (item) => Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: item.color.withValues(alpha: 0.14),
+                      child: Icon(item.icon, color: item.color),
+                    ),
+                    title: Text(
+                      item.title,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: Text(item.message),
+                  ),
+                ),
+              )
+              .toList(),
     );
   }
 }

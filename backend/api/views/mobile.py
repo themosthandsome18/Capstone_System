@@ -24,12 +24,18 @@ from api.models import (
     COMPLAINT_STATUS_RESOLVED,
     MODULE_SANITATION,
     MODULE_TOURISM,
+    NOTIFICATION_AUDIENCE_PUBLIC,
+    NOTIFICATION_MODULE_GENERAL,
+    NOTIFICATION_MODULE_SANITATION,
+    NOTIFICATION_MODULE_TOURISM,
+    NOTIFICATION_TYPE_PUBLIC_ADVISORY,
     Barangay,
     BoatType,
     Country,
     FeedbackEntry,
     HouseholdSanitationRecord,
     Itinerary,
+    Notification,
     Province,
     Region,
     Resort,
@@ -1060,23 +1066,30 @@ def build_mobile_notifications(request=None):
                 ),
             })
 
+    now = timezone.now()
+    advisories = (
+        Notification.objects.filter(
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            is_active=True,
+        )
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=now))
+        .filter(module__in=[NOTIFICATION_MODULE_TOURISM, NOTIFICATION_MODULE_GENERAL])
+        .order_by("-created_at", "-id")
+    )
+    for advisory in advisories:
+        notifications.append(
+            {
+                "id": f"advisory-{advisory.id}",
+                "type": advisory.module or "info",
+                "title": advisory.title,
+                "message": advisory.message,
+                "severity": advisory.severity,
+                "created_at": advisory.created_at.isoformat(),
+            }
+        )
+
     top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
-
-    notifications.extend([
-        {
-            "id": "welcome",
-            "type": "info",
-            "title": "Welcome to Mauban",
-            "message": "Start exploring local destinations, maps, and travel guides.",
-        },
-        {
-            "id": "sanitation-reporting",
-            "type": "sanitation",
-            "title": "Community Reporting Available",
-            "message": "Residents and visitors may submit sanitation concerns with location details.",
-        },
-    ])
-
     if top_destination:
         arrivals = getattr(
             top_destination,
@@ -1100,6 +1113,7 @@ def build_mobile_notifications(request=None):
 
 def build_mobile_sanitation_notifications():
     today = timezone.localdate()
+    now = timezone.now()
     expiring_permits = SanitaryEstablishment.objects.filter(
         permit_expiry_date__gte=today,
         permit_expiry_date__lte=today + timedelta(days=30),
@@ -1108,14 +1122,29 @@ def build_mobile_sanitation_notifications():
         status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
     ).order_by("-reported_date", "-id")[:3]
 
-    notifications = [
-        {
-            "id": "sanitation-dashboard",
-            "type": "sanitation",
-            "title": "Sanitary monitoring active",
-            "message": "Review establishments, inspections, permits, reports, and household surveys.",
-        }
-    ]
+    notifications = []
+
+    advisories = (
+        Notification.objects.filter(
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            is_active=True,
+        )
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=now))
+        .filter(module__in=[NOTIFICATION_MODULE_SANITATION, NOTIFICATION_MODULE_GENERAL])
+        .order_by("-created_at", "-id")
+    )
+    for advisory in advisories:
+        notifications.append(
+            {
+                "id": f"advisory-{advisory.id}",
+                "type": advisory.module or "info",
+                "title": advisory.title,
+                "message": advisory.message,
+                "severity": advisory.severity,
+                "created_at": advisory.created_at.isoformat(),
+            }
+        )
 
     for complaint in open_complaints:
         notifications.append(
