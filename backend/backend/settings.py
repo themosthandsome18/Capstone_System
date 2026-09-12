@@ -1,12 +1,16 @@
 from pathlib import Path
 
-from decouple import Config, RepositoryEnv
+from decouple import Config, RepositoryEnv, config as default_config
+import dj_database_url
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENV_FILE = BASE_DIR / ".env"
-config = Config(RepositoryEnv(str(ENV_FILE)))
+if ENV_FILE.exists():
+    config = Config(RepositoryEnv(str(ENV_FILE)))
+else:
+    config = default_config
 
 
 def csv_config(name, default):
@@ -90,6 +94,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -120,9 +125,18 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 
 # Database
+DATABASE_URL = config("DATABASE_URL", default="").strip()
 DB_ENGINE = config("DB_ENGINE", default="postgresql").strip().lower()
 
-if DB_ENGINE == "sqlite":
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True,
+        )
+    }
+elif DB_ENGINE == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -198,6 +212,16 @@ REST_FRAMEWORK = {
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Media files (Uploads)
 MEDIA_URL = "/media/"
