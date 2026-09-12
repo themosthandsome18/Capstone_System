@@ -186,23 +186,6 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
-  bool _isRegisterMode = false;
-  bool _obscurePassword = true;
-
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _contactController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _contactController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
 
   void _handleLogin() {
     setState(() => _isLoading = true);
@@ -213,150 +196,11 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  Future<void> _handleRegister() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-    try {
-      final api = const TourismApi();
-      final result = await api.registerTourist(
-        fullName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        contactNumber: _contactController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      final userName =
-          result['user']?['full_name'] ?? _nameController.text.trim();
-      _showRegistrationSuccessDialog(userName);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void _showRegistrationSuccessDialog(String name) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Color(0xFFDCFCE7),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle_outline_rounded,
-                color: Color(0xFF16A34A),
-                size: 52,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Registration Successful!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 21,
-                color: AppColors.ink,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Welcome to Mauban, $name! Your Tourist Account has been successfully created. You are now ready to explore and apply for travel permits.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.muted,
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-              ),
-              child: Row(
-                children: const [
-                  Icon(
-                    Icons.notifications_active_outlined,
-                    color: Color(0xFF16A34A),
-                    size: 22,
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'You will receive an in-app notification once your record is reviewed or approved in Record Management.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF166534),
-                        fontWeight: FontWeight.w600,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                widget.onContinue();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.deepGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Start Exploring Mauban',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return TourismLoadingScreen(
-        message: _isRegisterMode
-            ? 'Creating Your Tourist Account...'
-            : 'Signing In to Mauban Tourism...',
+      return const TourismLoadingScreen(
+        message: 'Signing In to Mauban Tourism...',
         subtext: 'Synchronizing tourist profile and destinations...',
       );
     }
@@ -372,10 +216,10 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 10),
               Image.asset('assets/tourism_logo.jpg', width: 80, height: 80),
               const SizedBox(height: 16),
-              Text(
-                _isRegisterMode ? 'Create Tourist Account' : 'Welcome to Mauban',
+              const Text(
+                'Welcome to Mauban',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 23,
                   fontWeight: FontWeight.w900,
                   color: AppColors.ink,
@@ -383,309 +227,33 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                _isRegisterMode
-                    ? 'Register your tourist profile to explore destinations and track travel records'
-                    : 'Choose your portal to continue',
+              const Text(
+                "Choose how you'd like to continue",
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, fontSize: 13.5),
-              ),
-              const SizedBox(height: 22),
-
-              // Segmented switcher
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _isRegisterMode = false),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color:
-                                !_isRegisterMode
-                                    ? Colors.white
-                                    : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow:
-                                !_isRegisterMode
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.08),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color:
-                                  !_isRegisterMode
-                                      ? AppColors.deepGreen
-                                      : Colors.grey.shade600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _isRegisterMode = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color:
-                                _isRegisterMode
-                                    ? Colors.white
-                                    : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow:
-                                _isRegisterMode
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.08),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Create Account',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color:
-                                  _isRegisterMode
-                                      ? AppColors.deepGreen
-                                      : Colors.grey.shade600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                style: TextStyle(color: AppColors.muted, fontSize: 13.5),
               ),
               const SizedBox(height: 24),
-
-              if (!_isRegisterMode) ...[
-                _buildOptionCard(
-                  icon: Icons.travel_explore_outlined,
-                  title: "I'm a Tourist / Visitor",
-                  subtitle:
-                      'Explore destinations, resorts, and travel guidelines',
-                  onTap: _handleLogin,
-                ),
-                const SizedBox(height: 12),
-                _buildOptionCard(
-                  icon: Icons.badge_outlined,
-                  title: "I'm Tourism Staff",
-                  subtitle:
-                      'Scan tourist QR passes and verify resort bookings',
-                  onTap: () {
-                    openStaffQrPortalWithAuth(
-                      context,
-                      api: const TourismApi(),
-                      bootstrap: MobileBootstrap.fallback(),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Don't have an account yet? ",
-                      style: TextStyle(color: AppColors.muted, fontSize: 13),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _isRegisterMode = true),
-                      child: const Text(
-                        'Create Account',
-                        style: TextStyle(
-                          color: AppColors.deepGreen,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                // Registration Form
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _nameController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.person_outline),
-                          labelText: 'Full Name *',
-                          hintText: 'e.g. Maria Santos',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter your full name';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          labelText: 'Email Address *',
-                          hintText: 'e.g. maria@example.com',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter your email address';
-                          }
-                          if (!value.contains('@') || !value.contains('.')) {
-                            return 'Please enter a valid email address';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _contactController,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.phone_outlined),
-                          labelText: 'Contact Number',
-                          hintText: 'e.g. 09171234567',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed:
-                                () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                          ),
-                          labelText: 'Password *',
-                          hintText: 'At least 6 characters',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a password';
-                          }
-                          if (value.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _handleRegister,
-                          icon: const Icon(Icons.person_add_alt_1),
-                          label: const Text(
-                            'Register Account',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.deepGreen,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Already have an account? ',
-                            style: TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 13,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap:
-                                () => setState(() => _isRegisterMode = false),
-                            child: const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                color: AppColors.deepGreen,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
+              _buildOptionCard(
+                icon: Icons.travel_explore_outlined,
+                title: "I'm a Tourist / Visitor",
+                subtitle:
+                    'Explore destinations, resorts, and travel guidelines',
+                onTap: _handleLogin,
+              ),
+              const SizedBox(height: 12),
+              _buildOptionCard(
+                icon: Icons.badge_outlined,
+                title: "I'm Tourism Staff",
+                subtitle:
+                    'Scan tourist QR passes and verify resort bookings',
+                onTap: () {
+                  openStaffQrPortalWithAuth(
+                    context,
+                    api: const TourismApi(),
+                    bootstrap: MobileBootstrap.fallback(),
+                  );
+                },
+              ),
               const SizedBox(height: 24),
               const Text(
                 'By continuing, you agree to our Terms of Service and Privacy Policy.',
