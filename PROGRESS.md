@@ -59,6 +59,15 @@ This project is being developed with a Claude-based planner/reviewer working alo
     - Created clean standalone helpers: `buildCsv` (RFC 4180 escaping), `buildTouristArrivalsCsv`, `saveStringToTempFile`, `saveBytesToTempFile`, and `shareFile`.
     - Declared and resolved dependencies `path_provider: ^2.1.5` and `share_plus: ^10.1.4` in `mobile/pubspec.yaml` with 0 analyzer issues.
 
+- **Test suite isolation & self-contained fixtures** (`386497b`)
+  - Resolved all 10 baseline test failures/errors caused by clean-slate database state post-purge:
+    - Added `ensure_test_reference_tables()` batch-seeding helper using `bulk_create(..., ignore_conflicts=True)` for `Country`, `Region`, `Province`, `Itinerary`, `TravelMode`, `BoatType`, `VisitPurpose`, and `Resort`.
+    - Added `setUpTestData` to `BookingManagementApiTests` to instantiate required test reference tables and 12 initial `TouristRecord` fixtures in single batch queries, resolving `test_booking_management_returns_summary_and_rows` and `test_booking_management_filters_by_search_and_status`.
+    - Investigated and resolved the 404 in `test_booking_status_can_be_updated`: confirmed routing and view logic (`tourist-records/<str:survey_id>/`) are correct; the 404 was due to missing `SURV-2026-002` row post-purge, now satisfied by test fixtures.
+    - Added `setUpTestData` to `MobilePublicApiTests` with reference tables, mock `SanitaryEstablishment` (`LG-2026-001`), and sanitation test user credentials.
+    - Updated `test_mobile_sanitation_inspection_creates_establishment_inspection` to authenticate with the sanitation test token per role-based security requirements.
+    - All 33 tests across all 9 test classes in `backend/api/tests.py` now pass cleanly (`Ran 33 tests ... OK`) with zero reliance on seed data and zero modifications to production logic.
+
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
   - Backed up all existing rows to `backend/data_backups/demo_data_backup_full.json` (gitignored, not tracked in git).
@@ -87,29 +96,14 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - **Reference Tables**: `Country`: 6, `Region`: 17, `Province`: 84, `Resort`: 16, `Itinerary`: 12, `TravelMode`: 5, `BoatType`: 7, `VisitPurpose`: 10, `SanitaryBusinessType`: 15, `SanitaryRequirement`: 243, `Barangay`: 40.
   - **Transactional Tables**: `TouristRecord`: 0, `FeedbackEntry`: 0, `SanitaryComplaint`: 0, `SanitaryInspection`: 0, `SanitaryInspectionChecklistItem`: 0, `SanitaryPermitRenewal`: 0, `SanitaryEstablishment`: 0, `HouseholdSanitationRecord`: 0.
 - **Full Test Suite Status**:
-  - Ran `python manage.py test api --keepdb`: exactly 33 tests ran, 5 failures + 5 errors (identically matching the established baseline).
+  - Ran `python manage.py test api --keepdb`: all 33 tests passed (`33/33 passed, 0 failures, 0 errors, OK`).
 
-## Known Pre-Existing Test Failures (baseline, NOT caused by this work)
-Exactly 5 errors + 5 failures across the 33-test suite (`manage.py test api --keepdb`), all pre-dating any notification/security work (with all 3 new tourism auth tests passing cleanly):
-- **Seed-data dependency issues in `MobilePublicApiTests` (5 errors + 2 failures)**:
-  - `ERROR: test_mobile_bootstrap_prioritizes_high_visitor_destinations` (Missing "Orlan Beach Resort" fixture in DB)
-  - `ERROR: test_mobile_feedback_creates_feedback_entry` (`AttributeError: 'NoneType' object has no attribute 'resort_id'`)
-  - `ERROR: test_mobile_sanitation_inspection_creates_establishment_inspection` (`AttributeError: 'NoneType' object has no attribute 'id'`)
-  - `ERROR: test_mobile_sanitation_permit_verify_by_permit_number` (`StopIteration` finding permit number in bootstrap)
-  - `ERROR: test_mobile_tourist_registration_accepts_full_web_record_fields` (`AttributeError: 'NoneType' object has no attribute 'id'`)
-  - `FAIL: test_mobile_bootstrap_shows_ranked_mauban_destinations_only` (`AssertionError: 'Dona Choleng Camping Resort' not found in []`)
-  - `FAIL: test_mobile_tourist_registration_creates_booking_record` (`AssertionError: 400 != 201`)
-- **Booking Management issues in `BookingManagementApiTests` (3 failures)**:
-  - `FAIL: test_booking_management_filters_by_search_and_status` (`AssertionError: 0 != 1`)
-  - `FAIL: test_booking_management_returns_summary_and_rows` (`AssertionError: 0 != 12`)
-  - `FAIL: test_booking_status_can_be_updated` (`AssertionError: 404 != 200` — looks like a real bug in the lookup/update logic worth investigating, not just missing data)
-
-*Note: These pre-existing failures have not yet been triaged or fixed; they are queued for a separate task.*
+## Pre-Existing Test Failures (RESOLVED)
+~~All 5 errors + 5 failures previously documented here are now fully resolved via self-contained test fixtures in `backend/api/tests.py` (`386497b`). All 33 tests pass cleanly.~~
 
 ## Pending / Not Started Yet
 - **Daily scheduler mechanism for `evaluate_due_notifications`**: Wire automated execution (cron vs. host-specific scheduled worker/task depending on deployment host selection).
 - **Mobile bootstrap public notices**: Swap mobile bootstrap's hardcoded notice items over to real calls against `/api/notifications/public/`.
 - **Database configuration**: Staying on Supabase (confirmed working; Render does not require Aiven, so no database migration planned). Need to verify which Supabase connection string variant (pooler vs. direct) is configured prior to production deployment.
 - **Deployment host selection**: Final hosting platform not yet finalized (Render currently under consideration).
-- **Baseline test suite cleanup**: The 10 pre-existing test failures/errors documented above are queued for a dedicated cleanup pass.
 
