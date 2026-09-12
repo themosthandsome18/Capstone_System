@@ -4209,13 +4209,33 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(staffAuthTokenKey);
+      final role = prefs.getString(staffAuthRoleKey) ?? '';
       if (token != null && token.isNotEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _signedIn = true;
-          _checkingSavedAuth = false;
-        });
-        return;
+        if (role == 'establishment') {
+          final estJson = prefs.getString(establishmentDataKey);
+          if (estJson != null && estJson.isNotEmpty) {
+            try {
+              final estMap = jsonDecode(estJson) as Map<String, dynamic>;
+              final est = SanitationEstablishment.fromJson(estMap);
+              if (!mounted) return;
+              setState(() {
+                _activeEstablishment = est;
+                _signedInEstablishment = true;
+                _checkingSavedAuth = false;
+              });
+              return;
+            } catch (_) {
+              // Failed to parse stored establishment JSON, fall back to login screen
+            }
+          }
+        } else {
+          if (!mounted) return;
+          setState(() {
+            _signedIn = true;
+            _checkingSavedAuth = false;
+          });
+          return;
+        }
       }
     } catch (_) {}
     if (!mounted) return;
@@ -4784,49 +4804,68 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     final pass = _estPassword.text.trim();
 
     if (user.isEmpty || pass.isEmpty) {
-      showAppMessage(context, 'Enter establishment username or permit number and password.');
+      showAppMessage(context, 'Enter establishment username and password.');
       return;
     }
 
     setState(() => _signingIn = true);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
+    try {
+      final res = await widget.api.login(username: user, password: pass);
+      final token = res['token'] as String?;
+      final userObj = res['user'] as Map<String, dynamic>? ?? {};
+      final profileObj = userObj['profile'] as Map<String, dynamic>? ?? {};
+      final role = profileObj['role'] as String? ?? '';
 
-    // Search matching establishment from bootstrap
-    SanitationEstablishment? match;
-    final lowerUser = user.toLowerCase();
-
-    for (final est in widget.bootstrap.establishments) {
-      if (est.permitNumber.toLowerCase() == lowerUser ||
-          est.businessName.toLowerCase().contains(lowerUser) ||
-          est.ownerName.toLowerCase().contains(lowerUser)) {
-        match = est;
-        break;
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token returned by server.');
       }
-    }
 
-    // Default fallback to first establishment with valid permit for demo account
-    if (match == null && (user == 'establishment_owner' || user.toLowerCase().contains('owner') || user.toLowerCase().contains('demo'))) {
-      match = widget.bootstrap.establishments.firstWhere(
-        (e) => e.permitNumber.isNotEmpty,
-        orElse: () => widget.bootstrap.establishments.first,
-      );
-    }
+      if (role != 'establishment') {
+        if (!mounted) return;
+        setState(() => _signingIn = false);
+        showAppMessage(context, 'This login is for establishment accounts only. Staff and inspectors should use the Staff / Inspector sign-in.');
+        return;
+      }
 
-    setState(() => _signingIn = false);
+      final estObj = res['establishment'] as Map<String, dynamic>?;
+      if (estObj == null) {
+        if (!mounted) return;
+        setState(() => _signingIn = false);
+        showAppMessage(context, "Your account isn't linked to a business yet. Please register or claim your business account.");
+        return;
+      }
 
-    if (match != null) {
+      final activeEst = SanitationEstablishment.fromJson(estObj);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(staffAuthTokenKey, token);
+      await prefs.setString(staffAuthRoleKey, role);
+      await prefs.setString(staffAuthUsernameKey, user);
+      await prefs.setString(establishmentDataKey, jsonEncode(estObj));
+
+      if (!mounted) return;
       setState(() {
-        _activeEstablishment = match;
+        _signingIn = false;
+        _activeEstablishment = activeEst;
         _signedInEstablishment = true;
       });
-      showAppMessage(context, 'Welcome, ${match.businessName}!');
-    } else {
-      showAppMessage(context, 'No matching establishment account found. Please check credentials or register.');
+      showAppMessage(context, 'Welcome, ${activeEst.businessName}!');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _signingIn = false);
+      showAppMessage(context, conciseError(e));
     }
   }
 
-  void _signOutEstablishment() {
+  Future<void> _signOutEstablishment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(staffAuthTokenKey);
+      await prefs.remove(staffAuthRoleKey);
+      await prefs.remove(staffAuthUsernameKey);
+      await prefs.remove(establishmentDataKey);
+    } catch (_) {}
+    if (!mounted) return;
     setState(() {
       _signedInEstablishment = false;
       _activeEstablishment = null;
@@ -4837,71 +4876,135 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   }
 
   void _showEstablishmentRegistrationDialog() {
+    final userCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final permitCtrl = TextEditingController();
     final passCtrl = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Register Establishment Account'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Link your business to access your sanitary permit QR code and inspection records.',
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Business Name',
-                  hintText: 'e.g. Golden Egg Poultry',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Register Establishment Account'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Create an account and link your business to access your sanitary permit QR code and inspection records.',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: permitCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Sanitary Permit Number',
-                  hintText: 'Enter permit number',
+                const SizedBox(height: 12),
+                TextField(
+                  controller: userCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    hintText: 'Choose a username',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: passCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'New Password',
-                  hintText: 'Min. 6 characters',
+                const SizedBox(height: 10),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Business Name',
+                    hintText: 'Enter business name',
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                TextField(
+                  controller: permitCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Sanitary Permit Number',
+                    hintText: 'Enter permit number',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Min. 6 characters',
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final username = userCtrl.text.trim();
+                      final busName = nameCtrl.text.trim();
+                      final permit = permitCtrl.text.trim();
+                      final pass = passCtrl.text;
+
+                      if (username.isEmpty) {
+                        showAppMessage(context, 'Username is required.');
+                        return;
+                      }
+                      if (pass.length < 6) {
+                        showAppMessage(context, 'Password must be at least 6 characters.');
+                        return;
+                      }
+
+                      setDialogState(() => isSubmitting = true);
+                      try {
+                        final res = await widget.api.registerEstablishment(
+                          username: username,
+                          password: pass,
+                          businessName: busName,
+                          permitNumber: permit,
+                        );
+
+                        if (!ctx.mounted) return;
+                        Navigator.of(ctx).pop();
+
+                        final token = res['token'] as String?;
+                        final userObj = res['user'] as Map<String, dynamic>? ?? {};
+                        final profileObj = userObj['profile'] as Map<String, dynamic>? ?? {};
+                        final role = profileObj['role'] as String? ?? 'establishment';
+                        final estObj = res['establishment'] as Map<String, dynamic>?;
+
+                        if (token != null && token.isNotEmpty) {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString(staffAuthTokenKey, token);
+                          await prefs.setString(staffAuthRoleKey, role);
+                          await prefs.setString(staffAuthUsernameKey, username);
+
+                          if (estObj != null) {
+                            await prefs.setString(establishmentDataKey, jsonEncode(estObj));
+                            final est = SanitationEstablishment.fromJson(estObj);
+                            if (!mounted) return;
+                            setState(() {
+                              _activeEstablishment = est;
+                              _signedInEstablishment = true;
+                            });
+                            showAppMessage(context, 'Account created and linked to ${est.businessName}!');
+                          } else {
+                            if (!mounted) return;
+                            showAppMessage(context, 'Account registered, but not yet linked to an establishment. Please sign in or contact the Sanitary Office.');
+                          }
+                        } else {
+                          if (!mounted) return;
+                          showAppMessage(context, 'Account created. Please sign in.');
+                        }
+                      } catch (e) {
+                        if (!ctx.mounted) return;
+                        setDialogState(() => isSubmitting = false);
+                        showAppMessage(context, conciseError(e));
+                      }
+                    },
+              child: Text(isSubmitting ? 'Registering...' : 'Register Account'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) {
-                showAppMessage(context, 'Business name and password are required.');
-                return;
-              }
-              Navigator.of(ctx).pop();
-              setState(() {
-                _estUsername.text = permitCtrl.text.trim().isNotEmpty ? permitCtrl.text.trim() : nameCtrl.text.trim();
-                _estPassword.text = passCtrl.text.trim();
-              });
-              _signInEstablishment();
-            },
-            child: const Text('Register Account'),
-          ),
-        ],
       ),
     );
   }
@@ -4912,6 +5015,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       await prefs.remove(staffAuthTokenKey);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
+      await prefs.remove(establishmentDataKey);
     } catch (_) {}
     if (!mounted) return;
     setState(() {
@@ -4928,11 +5032,15 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       await prefs.remove(staffAuthTokenKey);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
+      await prefs.remove(establishmentDataKey);
     } catch (_) {}
     if (!mounted) return;
     setState(() {
       _signedIn = false;
+      _signedInEstablishment = false;
+      _activeEstablishment = null;
       _password.clear();
+      _estPassword.clear();
       _currentScreen = SanitationGatewayScreen.chooser;
     });
     showAppMessage(context, 'Your session expired, please sign in again.');

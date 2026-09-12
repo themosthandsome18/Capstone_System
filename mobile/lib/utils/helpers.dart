@@ -10,6 +10,7 @@ const sanitationReportDraftsKey = 'sanitation_report_drafts';
 const staffAuthTokenKey = 'staff_auth_token';
 const staffAuthRoleKey = 'staff_auth_role';
 const staffAuthUsernameKey = 'staff_auth_username';
+const establishmentDataKey = 'establishment_data';
 
 String conciseError(Object error) {
   final message = error.toString().replaceFirst('Exception: ', '');

@@ -45,6 +45,34 @@ class TourismApi {
     });
   }
 
+  Future<Map<String, dynamic>> registerEstablishment({
+    required String username,
+    required String password,
+    String? businessName,
+    String? permitNumber,
+    String? ownerName,
+    String? contactNumber,
+    String? email,
+    String? barangay,
+  }) async {
+    return _post('/auth/register-establishment/', {
+      'username': username.trim(),
+      'password': password,
+      if (businessName != null && businessName.trim().isNotEmpty)
+        'business_name': businessName.trim(),
+      if (permitNumber != null && permitNumber.trim().isNotEmpty)
+        'permit_number': permitNumber.trim(),
+      if (ownerName != null && ownerName.trim().isNotEmpty)
+        'owner_name': ownerName.trim(),
+      if (contactNumber != null && contactNumber.trim().isNotEmpty)
+        'contact_number': contactNumber.trim(),
+      if (email != null && email.trim().isNotEmpty)
+        'email': email.trim(),
+      if (barangay != null && barangay.trim().isNotEmpty)
+        'barangay': barangay.trim(),
+    });
+  }
+
   Future<SanitationBootstrap> fetchSanitationBootstrap() async {
     try {
       final data = await _get('/mobile/sanitation/bootstrap/');
