@@ -281,7 +281,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Maligayang pagdating sa Mauban, $name! Matagumpay na nagawa ang iyong Tourist Account. Handa ka na mag-explore at mag-apply ng iyong travel permits.',
+              'Welcome to Mauban, $name! Your Tourist Account has been successfully created. You are now ready to explore and apply for travel permits.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.muted,
@@ -307,7 +307,7 @@ class _LoginPageState extends State<LoginPage> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Makakatanggap ka ng in-app notification kapag na-check o naaprubahan ng Admin ang iyong record sa Record Management.',
+                      'You will receive an in-app notification once your record is reviewed or approved in Record Management.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Color(0xFF166534),
@@ -373,7 +373,7 @@ class _LoginPageState extends State<LoginPage> {
               Image.asset('assets/tourism_logo.jpg', width: 80, height: 80),
               const SizedBox(height: 16),
               Text(
-                _isRegisterMode ? 'Gumawa ng Sariling Account' : 'Welcome Back',
+                _isRegisterMode ? 'Create Tourist Account' : 'Welcome to Mauban',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 23,
@@ -385,8 +385,8 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 6),
               Text(
                 _isRegisterMode
-                    ? 'Mag-rehistro ng iyong Tourist Account para sa pag-explore at approvals'
-                    : 'Sign in with your existing account to continue',
+                    ? 'Register your tourist profile to explore destinations and track travel records'
+                    : 'Choose your portal to continue',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.muted, fontSize: 13.5),
               ),
@@ -482,41 +482,28 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 24),
 
               if (!_isRegisterMode) ...[
-                LoginButton(
-                  icon: Icons.g_mobiledata,
-                  label: 'Continue with Google',
-                  onTap: _handleLogin,
-                ),
-                LoginButton(
-                  icon: Icons.facebook,
-                  label: 'Continue with Facebook',
+                _buildOptionCard(
+                  icon: Icons.travel_explore_outlined,
+                  title: "I'm a Tourist / Visitor",
+                  subtitle:
+                      'Explore destinations, resorts, and travel guidelines',
                   onTap: _handleLogin,
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _handleLogin,
-                    icon: const Icon(Icons.login),
-                    label: const Text(
-                      'Sign In as Guest / Tourist',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14.5,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                  ),
+                _buildOptionCard(
+                  icon: Icons.badge_outlined,
+                  title: "I'm Tourism Staff",
+                  subtitle:
+                      'Scan tourist QR passes and verify resort bookings',
+                  onTap: () {
+                    openStaffQrPortalWithAuth(
+                      context,
+                      api: const TourismApi(),
+                      bootstrap: MobileBootstrap.fallback(),
+                    );
+                  },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -700,61 +687,6 @@ class _LoginPageState extends State<LoginPage> {
               ],
 
               const SizedBox(height: 24),
-              Row(
-                children: [
-                  const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text(
-                      'OR RESORT STAFF',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ),
-                  const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    openStaffQrPortalWithAuth(
-                      context,
-                      api: const TourismApi(),
-                      bootstrap: MobileBootstrap.fallback(),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.qr_code_scanner,
-                    color: Color(0xFF14532D),
-                  ),
-                  label: const Text(
-                    'Resort Staff QR Portal',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF14532D),
-                      fontSize: 15,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(
-                      color: Color(0xFF14532D),
-                      width: 1.5,
-                    ),
-                    backgroundColor: const Color(0xFFF0FDF4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
               const Text(
                 'By continuing, you agree to our Terms of Service and Privacy Policy.',
                 textAlign: TextAlign.center,
@@ -766,35 +698,70 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
-}
 
-class LoginButton extends StatelessWidget {
-  const LoginButton({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          alignment: Alignment.centerLeft,
-          foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+  Widget _buildOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.border, width: 1.2),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        splashColor: AppColors.green.withValues(alpha: 0.12),
+        highlightColor: AppColors.green.withValues(alpha: 0.06),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.deepGreen, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.muted,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: AppColors.muted,
+              ),
+            ],
           ),
         ),
       ),
