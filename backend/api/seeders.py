@@ -102,7 +102,7 @@ REGION_DISPLAY_ORDER = [
 def ensure_initial_reference_data():
     global _REFERENCE_DATA_READY
 
-    if not getattr(settings, "USE_SEED_DATA", True):
+    if not getattr(settings, "USE_SEED_DATA", False):
         _REFERENCE_DATA_READY = True
         return
 
@@ -167,6 +167,9 @@ def has_initial_reference_data():
 
 
 def ensure_initial_barangays():
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     if (
         Barangay.objects.filter(name__in=MAUBAN_BARANGAYS, is_active=True).count()
         == len(MAUBAN_BARANGAYS)
@@ -335,6 +338,9 @@ def normalize_location_label(value):
 
 
 def ensure_initial_tourist_records():
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     if TouristRecord.objects.exists():
         return
 
@@ -344,6 +350,9 @@ def ensure_initial_tourist_records():
 
 
 def ensure_initial_feedback_entries():
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     if FeedbackEntry.objects.exists():
         return
 
@@ -353,6 +362,9 @@ def ensure_initial_feedback_entries():
 
 
 def ensure_initial_data():
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     ensure_initial_tourism_data()
     ensure_initial_sanitation_data()
     ensure_initial_household_data()
@@ -361,7 +373,7 @@ def ensure_initial_data():
 def ensure_initial_tourism_data():
     global _TOURISM_DATA_READY
 
-    if not getattr(settings, "USE_SEED_DATA", True):
+    if not getattr(settings, "USE_SEED_DATA", False):
         _TOURISM_DATA_READY = True
         return
 
@@ -388,7 +400,7 @@ def ensure_initial_tourism_data():
 def ensure_initial_sanitation_data():
     global _SANITATION_DATA_READY
 
-    if not getattr(settings, "USE_SEED_DATA", True):
+    if not getattr(settings, "USE_SEED_DATA", False):
         _SANITATION_DATA_READY = True
         return
 
@@ -643,7 +655,7 @@ def ensure_initial_sanitary_complaints():
 
 
 def ensure_initial_household_data():
-    if not getattr(settings, "USE_SEED_DATA", True):
+    if not getattr(settings, "USE_SEED_DATA", False):
         return
 
     ensure_initial_barangays()

@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
+from django.conf import settings
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -1167,6 +1168,9 @@ def household_status_from_payload(data):
 
 
 def ensure_mobile_reference_data(include_barangays=False):
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     if not Resort.objects.exists() or not Country.objects.exists():
         ensure_initial_reference_data()
 
@@ -1175,6 +1179,9 @@ def ensure_mobile_reference_data(include_barangays=False):
 
 
 def ensure_mobile_barangays():
+    if not getattr(settings, "USE_SEED_DATA", False):
+        return
+
     if not Barangay.objects.exists():
         ensure_initial_barangays()
 
