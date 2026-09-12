@@ -194,12 +194,29 @@ def mobile_tourist_registration(request):
  
  
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mobile_tourist_record_lookup(request):
     """
     Lookup a tourist record by survey_id or search query for the Staff QR Scanner.
     Supports exact ID, partial ID, names, contact, email, and raw QR scan data.
     """
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        user_role = getattr(request.user.profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        user_role = ""
+
+    if user_role not in {"admin", "tourism"}:
+        return Response(
+            {"detail": "Only tourism staff and administrators can look up visitor records."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     ensure_mobile_reference_data()
     survey_id = request.query_params.get("survey_id", "").strip()
     query = request.query_params.get("query", "").strip() or survey_id
@@ -281,11 +298,28 @@ def mobile_tourist_record_lookup(request):
 
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mobile_tourist_record_check_in(request):
     """
     Resort Staff Check-In action: updates status to 'arrived' and saves verified visitor details.
     """
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        user_role = getattr(request.user.profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        user_role = ""
+
+    if user_role not in {"admin", "tourism"}:
+        return Response(
+            {"detail": "Only tourism staff and administrators can check in tourists."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     ensure_mobile_reference_data()
     survey_id = (request.data.get("survey_id") or request.data.get("surveyId") or "").strip()
     if not survey_id:
@@ -328,11 +362,28 @@ def mobile_tourist_record_check_in(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mobile_tourist_record_history(request):
     """
     Returns list of checked-in / recent tourist records for the Staff History Log.
     """
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        user_role = getattr(request.user.profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        user_role = ""
+
+    if user_role not in {"admin", "tourism"}:
+        return Response(
+            {"detail": "Only tourism staff and administrators can view tourist history."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     ensure_mobile_reference_data()
     resort_id = request.query_params.get("resort_id")
     search = request.query_params.get("search", "").strip()
@@ -355,8 +406,18 @@ def mobile_tourist_record_history(request):
     for r in records:
         d = TouristRecordSerializer(r).data
         d["resort_name"] = r.resort.resort_name if r.resort else ""
-        d["region_name"] = r.region.region_name if r.region else ""
-        d["province_name"] = r.province.province_name if r.province else ""
+        d["region_name"] = (
+            getattr(r.region, "region_name", None)
+            or getattr(r.region, "name", "")
+            if r.region
+            else ""
+        )
+        d["province_name"] = (
+            getattr(r.province, "province_name", None)
+            or getattr(r.province, "name", "")
+            if r.province
+            else ""
+        )
         rows.append(d)
 
     return Response({"count": len(rows), "records": rows})

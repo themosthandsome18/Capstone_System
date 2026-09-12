@@ -1395,3 +1395,226 @@ class MobileSanitationAuthTests(TestCase):
         )
 
 
+class MobileTourismAuthTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        # Explicit reference models needed for TouristRecord
+        self.country, _ = Country.objects.get_or_create(id=991, defaults={"name": "Philippines"})
+        self.region, _ = Region.objects.get_or_create(id=991, defaults={"name": "CALABARZON", "code": "04"})
+        self.province, _ = Province.objects.get_or_create(id=991, defaults={"name": "Quezon", "region": self.region, "code": "QUE"})
+        self.itinerary, _ = Itinerary.objects.get_or_create(id=991, defaults={"name": "Day Tour"})
+        self.travel_mode, _ = TravelMode.objects.get_or_create(id=991, defaults={"name": "Private"})
+        self.boat_type, _ = BoatType.objects.get_or_create(id=991, defaults={"name": "Motorized"})
+        self.visit_purpose, _ = VisitPurpose.objects.get_or_create(id=991, defaults={"name": "Pleasure / Vacation"})
+        self.resort, _ = Resort.objects.get_or_create(
+            resort_id=991,
+            defaults={
+                "resort_name": "Test Auth Resort",
+                "type": "beach",
+                "location": "Mauban",
+                "short_description": "Test",
+                "access": "boat",
+                "latitude": 14.18,
+                "longitude": 121.73,
+            },
+        )
+
+        # Admin user
+        self.admin_user = User.objects.create_user(
+            username="test_tourism_admin_auth",
+            password="Password@123",
+            email="admin_tourism_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+        self.admin_token = Token.objects.create(user=self.admin_user)
+
+        # Tourism user
+        self.tourism_user = User.objects.create_user(
+            username="test_tourism_staff_auth",
+            password="Password@123",
+            email="staff_tourism_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.tourism_user, role=ROLE_TOURISM)
+        self.tourism_token = Token.objects.create(user=self.tourism_user)
+
+        # Sanitation user
+        self.sanitation_user = User.objects.create_user(
+            username="test_sanitation_role_auth",
+            password="Password@123",
+            email="sanitation_role_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+        self.sanitation_token = Token.objects.create(user=self.sanitation_user)
+
+        # Establishment user
+        self.establishment_user = User.objects.create_user(
+            username="test_establishment_role_auth",
+            password="Password@123",
+            email="establishment_role_auth@test.local",
+        )
+        UserProfile.objects.create(user=self.establishment_user, role=ROLE_ESTABLISHMENT)
+        self.establishment_token = Token.objects.create(user=self.establishment_user)
+
+        # Test Tourist Record with sensitive PII
+        self.tourist_name = "Jane Sensitive Tourist"
+        self.tourist_email = "jane.sensitive@privatemail.local"
+        self.tourist_phone = "09179988776"
+        self.survey_id = "MOB-SEC-2026-99"
+
+        self.record = TouristRecord.objects.create(
+            survey_id=self.survey_id,
+            first_name="Jane",
+            last_name="Sensitive Tourist",
+            full_name=self.tourist_name,
+            email=self.tourist_email,
+            contact_number=self.tourist_phone,
+            country=self.country,
+            region=self.region,
+            province=self.province,
+            arrival_date=timezone.localdate(),
+            resort=self.resort,
+            itinerary=self.itinerary,
+            travel_mode=self.travel_mode,
+            boat_type=self.boat_type,
+            visit_purpose=self.visit_purpose,
+            total_visitors=2,
+            filipino_count=2,
+            foreigner_count=0,
+            total_male=1,
+            total_female=1,
+            age_8_59=2,
+            status="pending",
+        )
+
+        self.check_in_payload = {
+            "survey_id": self.survey_id,
+            "status": "arrived",
+            "total_visitors": 2,
+            "filipino_count": 2,
+            "foreigner_count": 0,
+            "total_male": 1,
+            "total_female": 1,
+            "age_8_59": 2,
+        }
+
+    def test_unauthenticated_requests_return_401_and_contain_no_tourist_pii(self):
+        self.client.credentials()  # No auth
+
+        # 1. Lookup endpoint
+        resp_lookup = self.client.get(
+            f"/api/mobile/tourism/records/lookup/?query={self.survey_id}"
+        )
+        self.assertEqual(resp_lookup.status_code, status.HTTP_401_UNAUTHORIZED)
+        lookup_body = resp_lookup.content.decode("utf-8")
+        self.assertNotIn(self.tourist_name, lookup_body)
+        self.assertNotIn(self.tourist_email, lookup_body)
+        self.assertNotIn(self.tourist_phone, lookup_body)
+
+        # 2. Check-in endpoint
+        resp_checkin = self.client.post(
+            "/api/mobile/tourism/records/check-in/",
+            self.check_in_payload,
+            format="json",
+        )
+        self.assertEqual(resp_checkin.status_code, status.HTTP_401_UNAUTHORIZED)
+        checkin_body = resp_checkin.content.decode("utf-8")
+        self.assertNotIn(self.tourist_name, checkin_body)
+        self.assertNotIn(self.tourist_email, checkin_body)
+        self.assertNotIn(self.tourist_phone, checkin_body)
+
+        # Verify zero DB mutation on record status
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.status, "pending")
+
+        # 3. History endpoint
+        resp_history = self.client.get(
+            f"/api/mobile/tourism/records/history/?search={self.survey_id}"
+        )
+        self.assertEqual(resp_history.status_code, status.HTTP_401_UNAUTHORIZED)
+        history_body = resp_history.content.decode("utf-8")
+        self.assertNotIn(self.tourist_name, history_body)
+        self.assertNotIn(self.tourist_email, history_body)
+        self.assertNotIn(self.tourist_phone, history_body)
+
+    def test_disallowed_roles_return_403_with_zero_db_mutation(self):
+        for role_name, token in [
+            ("establishment", self.establishment_token),
+            ("sanitation", self.sanitation_token),
+        ]:
+            self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+            # 1. Lookup
+            resp_lookup = self.client.get(
+                f"/api/mobile/tourism/records/lookup/?query={self.survey_id}"
+            )
+            self.assertEqual(
+                resp_lookup.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"Role {role_name} should be rejected with 403 on lookup",
+            )
+            self.assertIn("detail", resp_lookup.json())
+
+            # 2. Check-in
+            resp_checkin = self.client.post(
+                "/api/mobile/tourism/records/check-in/",
+                self.check_in_payload,
+                format="json",
+            )
+            self.assertEqual(
+                resp_checkin.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"Role {role_name} should be rejected with 403 on check-in",
+            )
+            self.assertIn("detail", resp_checkin.json())
+            self.record.refresh_from_db()
+            self.assertEqual(self.record.status, "pending")
+
+            # 3. History
+            resp_history = self.client.get(
+                f"/api/mobile/tourism/records/history/?search={self.survey_id}"
+            )
+            self.assertEqual(
+                resp_history.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"Role {role_name} should be rejected with 403 on history",
+            )
+            self.assertIn("detail", resp_history.json())
+
+    def test_tourism_and_admin_roles_succeed(self):
+        # 1. Test tourism role succeeds on lookup, check-in, and history
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+
+        resp_lookup = self.client.get(
+            f"/api/mobile/tourism/records/lookup/?query={self.survey_id}"
+        )
+        self.assertEqual(resp_lookup.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_lookup.json()["survey_id"], self.survey_id)
+        self.assertEqual(resp_lookup.json()["full_name"], self.tourist_name)
+
+        resp_checkin = self.client.post(
+            "/api/mobile/tourism/records/check-in/",
+            self.check_in_payload,
+            format="json",
+        )
+        self.assertEqual(resp_checkin.status_code, status.HTTP_200_OK)
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.status, BOOKING_STATUS_ARRIVED)
+
+        resp_history = self.client.get(
+            f"/api/mobile/tourism/records/history/?search={self.survey_id}"
+        )
+        self.assertEqual(resp_history.status_code, status.HTTP_200_OK)
+        records = resp_history.json().get("records", [])
+        self.assertTrue(any(r["survey_id"] == self.survey_id for r in records))
+
+        # 2. Test admin role also succeeds
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        resp_admin_lookup = self.client.get(
+            f"/api/mobile/tourism/records/lookup/?query={self.survey_id}"
+        )
+        self.assertEqual(resp_admin_lookup.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_admin_lookup.json()["survey_id"], self.survey_id)
+
+
+
