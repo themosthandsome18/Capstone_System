@@ -810,12 +810,7 @@ function SanitaryReportAnalytics() {
 
         <div className="summary-report-body">
           <div className="summary-left">
-            <div
-              className="summary-progress-bar"
-              style={{
-                gridTemplateColumns: buildProgressColumns(summary),
-              }}
-            >
+            <div className="summary-progress-bar">
               <span className="green" />
               <span className="yellow" />
               <span className="orange" />
@@ -1442,20 +1437,6 @@ function buildLocalByType(establishments) {
   return Object.values(grouped);
 }
 
-function buildProgressColumns(summary) {
-  const total = summary.totalEstablishments || 0;
-
-  if (!total) {
-    return "1fr 1fr 1fr 1fr";
-  }
-
-  const good = Math.max(summary.goodStanding || 0, 0.1);
-  const upcoming = Math.max(summary.upcoming || 0, 0.1);
-  const completion = Math.max(summary.forCompletion || 0, 0.1);
-  const violators = Math.max(summary.violators || 0, 0.1);
-
-  return `${good}fr ${upcoming}fr ${completion}fr ${violators}fr`;
-}
 
 function formatFrequency(value = "") {
   if (value === "monthly") return "Monthly";

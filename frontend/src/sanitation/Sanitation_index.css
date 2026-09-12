@@ -4871,7 +4871,8 @@
   border-radius: 10px;
   background: #fff;
   padding: 22px 24px;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
 }
 
 /* REPORT TABLE */
@@ -6121,20 +6122,42 @@
 }
 
 .summary-report-body {
-  margin-top: 26px;
-  border-top: 1px solid #cfcfcf;
-  padding-top: 30px;
+  margin-top: 24px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 24px;
   display: grid;
-  grid-template-columns: 1.45fr 1fr;
-  gap: 26px;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .summary-report-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  gap: 16px;
 }
 
 .summary-progress-bar {
-  height: 28px;
-  border-radius: 999px;
-  overflow: hidden;
+  height: 14px;
   display: grid;
-  grid-template-columns: 48% 17% 18% 17%;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.summary-progress-bar span {
+  height: 100%;
+  border-radius: 999px;
+  display: block;
 }
 
 .summary-progress-bar span.green {
@@ -6154,31 +6177,53 @@
 }
 
 .summary-mini-grid {
-  margin-top: 18px;
+  margin-top: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .summary-mini-grid,
+  .summary-progress-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .summary-mini-grid,
+  .summary-progress-bar {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mini-summary-card {
-  height: 125px;
+  min-height: 120px;
   border: 1px solid #bfc6c1;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #f6faf8;
-  padding: 12px;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .mini-summary-card p {
   margin: 0;
   display: flex;
   justify-content: space-between;
-  color: #777;
+  align-items: center;
+  color: #64748b;
   font-size: 13.5px;
-  font-weight: 800;
+  font-weight: 700;
+  gap: 8px;
 }
 
 .mini-summary-card p svg {
-  font-size: 17.5px;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .mini-summary-card.green p svg {
@@ -6186,11 +6231,11 @@
 }
 
 .mini-summary-card.yellow p svg {
-  color: #facc15;
+  color: #eab308;
 }
 
 .mini-summary-card.orange p svg {
-  color: #fb923c;
+  color: #f97316;
 }
 
 .mini-summary-card.red p svg {
@@ -6198,10 +6243,12 @@
 }
 
 .mini-summary-card h2 {
-  margin: 48px 0 0;
-  font-size: 35.5px;
+  margin: 0;
+  margin-top: 14px;
+  font-size: 32px;
+  line-height: 1.1;
   font-weight: 800;
-  color: #000;
+  color: #0f172a;
 }
 
 .generated-brief-box {
@@ -6209,65 +6256,74 @@
   border-radius: 10px;
   background: #f6faf8;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .generated-brief-box h3 {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   text-transform: uppercase;
-  font-size: 16.5px;
+  font-size: 15px;
   font-weight: 800;
-  color: #666;
+  color: #64748b;
+  letter-spacing: 0.5px;
 }
 
 .generated-brief-box p {
   margin: 0;
-  font-size: 18.5px;
-  line-height: 1.45;
-  color: #333;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #334155;
 }
 
 .green-text {
-  color: #22c55e;
+  color: #16a34a;
   font-weight: 800;
 }
 
 .red-text {
-  color: #ef4444;
+  color: #dc2626;
   font-weight: 800;
 }
 
 .brief-mini-grid {
-  margin-top: 28px;
+  margin-top: auto;
+  padding-top: 18px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
 .brief-mini-grid div {
-  height: 82px;
-  border: 1px solid #bfc6c1;
+  min-height: 82px;
+  border: 1px solid #cbd5e1;
   border-radius: 9px;
-  background: white;
-  padding: 12px;
+  background: #ffffff;
+  padding: 12px 14px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 }
 
 .brief-mini-grid p {
   margin: 0;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: #777;
-  line-height: 1.2;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1.25;
 }
 
 .brief-mini-grid h2 {
-  margin: auto 0 0;
-  font-size: 25.5px;
+  margin: 0;
+  margin-top: 8px;
+  font-size: 26px;
   line-height: 1;
   font-weight: 800;
-  color: #f59e0b;
+  color: #0f7a45;
 }
 
 /* ============================================================== SANITARY HOUSEHOLD RECORDS ======================================================== */
@@ -8585,14 +8641,19 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
+  align-items: stretch;
 }
 
 .sanitary-insight-card {
   border: 1px solid #aeb7b1;
   border-radius: 10px;
   background: #fff;
-  padding: 18px 20px;
-  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.18);
+  padding: 20px 22px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .sanitary-insight-card h3 {
@@ -8600,6 +8661,9 @@
   font-size: 16.5px;
   font-weight: 800;
   color: #111;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
 }
 
 .insight-bars {
@@ -8636,6 +8700,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+  flex: 1;
 }
 
 .hotspot-list {
