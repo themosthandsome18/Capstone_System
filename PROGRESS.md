@@ -75,6 +75,20 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Added `MobileBootstrapNotificationTests` covering active, module-filtered, inactive, and expired advisory assertions.
   - Test suite passing cleanly at 35/35 tests (`Ran 35 tests ... OK`).
 
+- **Production deployment readiness & WhiteNoise static serving** (`05748f9`)
+  - Added production dependencies: `gunicorn>=23.0.0`, `whitenoise>=6.8.0`, and `dj-database-url>=2.3.0`.
+  - Hardened `settings.py` decouple environment loader to safely fall back to `os.environ` when `.env` is absent on container hosts.
+  - Added `DATABASE_URL` parsing with connection pooling (`conn_max_age=600`, `ssl_require=True`) and fallback to discrete `DB_*` settings.
+  - Configured WhiteNoise middleware, `STATIC_ROOT = BASE_DIR / "staticfiles"`, and `CompressedManifestStaticFilesStorage`.
+  - Created executable build script `backend/build.sh` (`collectstatic` + `migrate`).
+
+- **Authenticated webhook endpoint for scheduled due notifications** (`2cb400b`)
+  - Created secure webhook endpoint `/api/notifications/evaluate-due/` (`POST`) to enable free automated daily cron triggering (via GitHub Actions or external cron) without requiring a paid Render Cron worker.
+  - Gated by shared secret `CRON_SECRET_KEY` validated via `X-Cron-Key` header or `Authorization: Bearer <key>` using timing-safe `hmac.compare_digest`.
+  - Returns 503 if unconfigured, 403 on invalid/missing key, and 200 on successful scan trigger.
+  - Added `NotificationWebhookCronTests` covering all authorization branches (unauthorized, invalid key, valid header/bearer, unconfigured).
+  - All 39 tests passing cleanly (`Ran 39 tests ... OK`).
+
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
   - Backed up all existing rows to `backend/data_backups/demo_data_backup_full.json` (gitignored, not tracked in git).
@@ -103,13 +117,12 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - **Reference Tables**: `Country`: 6, `Region`: 17, `Province`: 84, `Resort`: 16, `Itinerary`: 12, `TravelMode`: 5, `BoatType`: 7, `VisitPurpose`: 10, `SanitaryBusinessType`: 15, `SanitaryRequirement`: 243, `Barangay`: 40.
   - **Transactional Tables**: `TouristRecord`: 0, `FeedbackEntry`: 0, `SanitaryComplaint`: 0, `SanitaryInspection`: 0, `SanitaryInspectionChecklistItem`: 0, `SanitaryPermitRenewal`: 0, `SanitaryEstablishment`: 0, `HouseholdSanitationRecord`: 0.
 - **Full Test Suite Status**:
-  - Ran `python manage.py test api --keepdb`: all 35 tests passed (`35/35 passed, 0 failures, 0 errors, OK`).
+  - Ran `python manage.py test api --keepdb`: all 39 tests passed (`39/39 passed, 0 failures, 0 errors, OK`).
 
 ## Pre-Existing Test Failures (RESOLVED)
 ~~All 5 errors + 5 failures previously documented here are now fully resolved via self-contained test fixtures in `backend/api/tests.py` (`386497b`). All 33 tests pass cleanly.~~
 
 ## Pending / Not Started Yet
-- **Daily scheduler mechanism for `evaluate_due_notifications`**: Wire automated execution (cron vs. host-specific scheduled worker/task depending on deployment host selection).
 - **Database configuration**: Staying on Supabase (confirmed working; Render does not require Aiven, so no database migration planned). Need to verify which Supabase connection string variant (pooler vs. direct) is configured prior to production deployment.
 - **Deployment host selection**: Final hosting platform not yet finalized (Render currently under consideration).
 
