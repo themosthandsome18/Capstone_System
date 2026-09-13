@@ -102,6 +102,11 @@ This project is being developed with a Claude-based planner/reviewer working alo
     - Reduced query count from 23 down to 5 on warm cache (8 on cold cache), database execution time from 9.04s to 2.01s, and total request time from 11.34s to 4.7s–5.5s.
     - Verified byte-for-byte and field-by-field response body equivalence against baseline with zero payload divergence.
   - All 39 automated tests continue to pass cleanly (`Ran 39 tests ... OK`).
+- **Mobile UI Overflow Fixes & Sanitation Web Loader Modernization** (`a5f5d9d`)
+  - Fixed horizontal RenderFlex overflow (28px) on itinerary duration row (`mobile/lib/screens/tourism_screens.dart`) using `Flexible` with `maxLines: 1` and `TextOverflow.ellipsis`, and added smooth scroll physics and vertical padding to filter chips.
+  - Fixed packing checklist dialog keyboard overflow in `_showAddPackingItemDialog` by wrapping inner `Column` in `SingleChildScrollView`.
+  - Replaced heavy sanitation loader with modern minimalist circular spinner and frosted overlay across `PageLoader.js`, `PageLoader.css`, `LoadingOverlay.css`, `Sanitation_index.css`, `SanitationDashboard.js`, and `EstablishmentRecords.js`.
+  - Flutter analysis confirmed 0 issues; all 39 automated backend tests continue to pass cleanly (`39/39 passed, OK`).
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
