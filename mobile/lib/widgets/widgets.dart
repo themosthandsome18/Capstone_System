@@ -902,7 +902,12 @@ class ReceiptCard extends StatelessWidget {
           backgroundColor: const Color(0xffdcfce7),
           child: Icon(icon, color: AppColors.green),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(['Ref: $reference', ...lines].join('\n')),
@@ -1221,6 +1226,8 @@ class HeroCard extends StatelessWidget {
                 children: [
                   Text(
                     destination.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -1526,11 +1533,15 @@ class DestinationListCard extends StatelessWidget {
                   children: [
                     Text(
                       destination.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       destination.location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.muted,
                         fontSize: 12,

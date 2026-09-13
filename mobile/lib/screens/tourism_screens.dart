@@ -1867,6 +1867,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         children: [
                           Text(
                             visit.destination.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -1877,6 +1879,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                           const SizedBox(height: 4),
                           Text(
                             visit.fullName.isNotEmpty ? formatProperName(visit.fullName) : 'Registered Tourist',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13,
                               color: Color(0xFFCCFBF1),
@@ -2537,6 +2541,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                 const SizedBox(height: 10),
                 Text(
                   current['title'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 16.5,
@@ -2649,6 +2655,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                             const SizedBox(height: 8),
                             Text(
                               stop['title'] as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
@@ -3170,6 +3178,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               title: Text(
                 widget.destination.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,

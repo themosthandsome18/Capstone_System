@@ -2751,10 +2751,14 @@ class SanitationDraftCard extends StatelessWidget {
                     children: [
                       Text(
                         draft.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                       Text(
                         '${draft.barangay} - ${sanitationPriorityLabel(draft.priority)} - Pending sync',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AppColors.muted),
                       ),
                     ],
@@ -3019,10 +3023,14 @@ class PermitVerificationCard extends StatelessWidget {
                     children: [
                       Text(
                         establishment.businessName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                       Text(
                         establishment.businessTypeName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AppColors.muted),
                       ),
                     ],
@@ -3372,6 +3380,8 @@ class SanitationEstablishmentCard extends StatelessWidget {
                     children: [
                       Text(
                         establishment.businessName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 15,
@@ -3380,6 +3390,8 @@ class SanitationEstablishmentCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         '${establishment.businessTypeName} • ${establishment.barangay}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.muted,
@@ -3389,6 +3401,8 @@ class SanitationEstablishmentCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           'Owner: ${establishment.ownerName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.muted,
@@ -3528,7 +3542,12 @@ class SanitationAlertCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: Icon(Icons.warning_amber_outlined, color: color),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: StatusPill(text: sanitationStatusLabel(status)),
       ),
@@ -3608,6 +3627,8 @@ class SanitationPermitsPage extends StatelessWidget {
                                 children: [
                                   Text(
                                     item.businessName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w900,
                                     ),
@@ -5084,6 +5105,8 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           establishment.businessName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
         ),
         backgroundColor: AppColors.deepGreen,
@@ -5131,6 +5154,8 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
                             children: [
                               Text(
                                 establishment.businessName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 16,
@@ -5138,6 +5163,8 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
                               ),
                               Text(
                                 'Owner: ${establishment.ownerName}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(color: AppColors.muted, fontSize: 13),
                               ),
                             ],
@@ -5170,19 +5197,26 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.shield_outlined, color: statusColor, size: 22),
-                          const SizedBox(width: 8),
-                          Text(
-                            statusLabel,
-                            style: TextStyle(
-                              color: statusColor,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.shield_outlined, color: statusColor, size: 22),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                statusLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
