@@ -120,6 +120,10 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * Tourism: destination names, tourist names, and itinerary stop titles in `_VisitCard`, `_buildItinerarySection`, `DestinationDetailPage`, `HeroCard`, and `DestinationListCard`.
     * Sanitation: establishment names, draft titles, permit monitoring rows, alert cards, and portal header in `SanitationEstablishmentCard`, `SanitationDraftCard`, `PermitVerificationCard`, `SanitationAlertCard`, `SanitationPermitsPage`, and `SanitationEstablishmentPortalPage`.
   - Flutter analysis confirmed 0 issues across all modified files; all 39 automated backend tests continue to pass cleanly (`Ran 39 tests ... OK`).
+- **Dynamic Browser Tab & Favicon Branding for Web and Mobile** (`7479c47`)
+  - Updated React Web Portal with Mauban LGU title (`Mauban LGU | Tourism & Sanitary Compliance Portal`), official seal favicon (`favicon.ico`, `favicon.png`), and 192px PNG assets.
+  - Implemented dynamic pre-render JS bridge and conditional Dart interop in Flutter web to dynamically serve distinct titles and favicons for Tourism ("Mauban Tourism & Travel Pass" with sailboat emblem) and Sanitation ("Mauban Sanitation & Health Portal" with municipal seal).
+  - Verified with 0 Flutter analysis issues and 39/39 backend tests passing cleanly.
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
