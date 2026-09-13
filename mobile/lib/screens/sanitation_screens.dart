@@ -1609,6 +1609,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       key: _scaffoldKey,
       drawer: _buildSanitationDrawer(context),
       body: SafeArea(
+        top: true,
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: _refreshBootstrap,
           child: pages[_index],
@@ -1621,7 +1623,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
           NavigationDestination(
             icon: Icon(Icons.apartment_outlined),
-            label: 'Establish',
+            label: 'Records',
           ),
           NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
           NavigationDestination(
@@ -1845,23 +1847,35 @@ class SanitationDashboardPage extends StatelessWidget {
     final pendingPermitCount = bootstrap.establishments
         .where((item) => item.permitStatus != 'active')
         .length;
+    final urgentAlerts = bootstrap.establishments
+        .where(
+          (item) =>
+              item.complianceStatus == 'violation' ||
+              item.permitStatus != 'active',
+        )
+        .take(3)
+        .toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       children: [
-        SanitationTopBar(
-          title: 'Dashboard',
-          onMenuTap: onOpenMenu,
-          onRefresh: onRefresh,
-          refreshing: refreshing,
-          onNotifications: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) =>
-                    NotificationPage(notifications: bootstrap.notifications),
-              ),
-            );
-          },
+        SafeArea(
+          top: true,
+          bottom: false,
+          child: SanitationTopBar(
+            title: 'Dashboard',
+            onMenuTap: onOpenMenu,
+            onRefresh: onRefresh,
+            refreshing: refreshing,
+            onNotifications: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) =>
+                      NotificationPage(notifications: bootstrap.notifications),
+                ),
+              );
+            },
+          ),
         ),
         Text(
           'Welcome, Sanitary Inspector',
@@ -1968,20 +1982,43 @@ class SanitationDashboardPage extends StatelessWidget {
           ],
         ),
         SectionHeader(title: 'Urgent Alerts'),
-        ...bootstrap.establishments
-            .where(
-              (item) =>
-                  item.complianceStatus == 'violation' ||
-                  item.permitStatus != 'active',
-            )
-            .take(3)
-            .map(
-              (item) => SanitationAlertCard(
-                title: item.businessName,
-                subtitle: '${item.barangay} - ${item.statusLabel}',
-                status: item.complianceStatus,
-              ),
+        if (urgentAlerts.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  color: Color(0xFF16A34A),
+                  size: 20,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No urgent sanitation alerts',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF15803D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...urgentAlerts.map(
+            (item) => SanitationAlertCard(
+              title: item.businessName,
+              subtitle: '${item.barangay} - ${item.statusLabel}',
+              status: item.complianceStatus,
+            ),
+          ),
         SectionHeader(title: 'Recent Activity'),
         if (inspections.isEmpty && reports.isEmpty)
           const EmptyState(
@@ -3288,41 +3325,45 @@ class SanitationTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: AppColors.deepGreen),
-            onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: 'Menu',
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.menu, color: AppColors.deepGreen),
+              onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Menu',
             ),
-          ),
-          if (onRefresh != null)
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+              ),
+            ),
+            if (onRefresh != null)
+              IconButton.filledTonal(
+                onPressed: refreshing ? null : () => onRefresh?.call(),
+                icon: refreshing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+            if (onRefresh != null) const SizedBox(width: 8),
             IconButton.filledTonal(
-              onPressed: refreshing ? null : () => onRefresh?.call(),
-              icon: refreshing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
+              onPressed: onNotifications,
+              icon: const Icon(Icons.notifications_outlined),
             ),
-          if (onRefresh != null) const SizedBox(width: 8),
-          IconButton.filledTonal(
-            onPressed: onNotifications,
-            icon: const Icon(Icons.notifications_outlined),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -4224,6 +4265,10 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   @override
   void initState() {
     super.initState();
+    if (kDebugMode) {
+      _email.text = 'sanitary_admin';
+      _password.text = 'Sanitation@123';
+    }
     _checkStoredAuth();
   }
 
@@ -4605,6 +4650,79 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                     _signingIn
                                         ? 'Signing in...'
                                         : 'Sign in as Inspector / Admin',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.bolt, size: 16, color: Color(0xFF14532D)),
+                                          const SizedBox(width: 4),
+                                          const Text(
+                                            'Quick Demo Access',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF14532D),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _email.text = 'sanitary_admin';
+                                                _password.text = 'Sanitation@123';
+                                              });
+                                            },
+                                            child: const Text(
+                                              'Auto-Fill',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF0284C7),
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Inspector credentials: sanitary_admin / Sanitation@123',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: OutlinedButton.icon(
+                                          onPressed: () {
+                                            setState(() {
+                                              _signedIn = true;
+                                            });
+                                          },
+                                          icon: const Icon(Icons.shield_outlined, size: 15),
+                                          label: const Text(
+                                            'Direct Preview Inspector Shell (Bypass Login)',
+                                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                                          ),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: const Color(0xFF14532D),
+                                            side: const BorderSide(color: Color(0xFF14532D)),
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
