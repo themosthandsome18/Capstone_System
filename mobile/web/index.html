@@ -34,14 +34,30 @@
 
   <script>
     function updateWebBranding(moduleName) {
+      if (typeof moduleName === 'string' && (moduleName === 'sanitation' || moduleName === 'tourism')) {
+        window._activeWebBrandingModule = moduleName;
+        try {
+          window.sessionStorage.setItem('active_web_branding_module', moduleName);
+        } catch (e) {}
+      }
+
+      var active = window._activeWebBrandingModule;
+      if (!active) {
+        try {
+          active = window.sessionStorage.getItem('active_web_branding_module');
+        } catch (e) {}
+      }
+
       var isSanitation = false;
-      if (moduleName === 'sanitation') {
+      if (active === 'sanitation') {
         isSanitation = true;
-      } else if (moduleName === 'tourism') {
+      } else if (active === 'tourism') {
         isSanitation = false;
       } else {
         var href = (window.location.href || '').toLowerCase();
         isSanitation = href.indexOf('sanitation') !== -1;
+        var initial = isSanitation ? 'sanitation' : 'tourism';
+        window._activeWebBrandingModule = initial;
       }
 
       var title = isSanitation
@@ -65,6 +81,15 @@
       link.href = favicon;
     }
     window.updateWebBranding = updateWebBranding;
+    window.getActiveWebBranding = function() {
+      var mod = window._activeWebBrandingModule;
+      if (!mod) {
+        try {
+          mod = window.sessionStorage.getItem('active_web_branding_module');
+        } catch (e) {}
+      }
+      return mod || null;
+    };
     try {
       updateWebBranding();
     } catch (e) {}

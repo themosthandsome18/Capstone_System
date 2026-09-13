@@ -338,15 +338,25 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class NotificationPage extends StatelessWidget {
-  const NotificationPage({super.key, required this.notifications});
+  const NotificationPage({
+    super.key,
+    required this.notifications,
+    this.subtitle = 'Sanitary advisories and compliance updates',
+  });
 
   final List<AppNotification> notifications;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
     return FormPageScaffold(
       title: 'Notifications',
-      subtitle: 'Tourism and community updates',
+      subtitle: subtitle,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
       children: notifications.isEmpty
           ? [
               const Card(

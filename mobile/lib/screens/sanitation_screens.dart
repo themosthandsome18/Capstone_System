@@ -1,5 +1,9 @@
 part of '../main.dart';
 
+typedef NewInspectionPage = SanitationInspectionPage;
+typedef VerifyPermitPage = PermitVerificationPage;
+typedef TrackReportStatusPage = ReportTrackerPage;
+
 class HouseholdSurveyPage extends StatefulWidget {
   const HouseholdSurveyPage({
     super.key,
@@ -91,6 +95,11 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     return FormPageScaffold(
       title: 'Household Survey',
       subtitle: 'Submit household sanitation profile',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
       children: [
         AppTextField(
           controller: _head,
@@ -1411,6 +1420,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   @override
   void initState() {
     super.initState();
+    setWebBranding(WebBrandingModule.sanitation);
     _bootstrap = widget.bootstrap;
     _loadDrafts();
   }
@@ -1541,15 +1551,19 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.sanitation);
     final pages = [
       SanitationDashboardPage(
         bootstrap: _bootstrap,
+        api: widget.api,
         reports: _reports,
         inspections: _inspections,
         onOpenInspection: _openInspection,
         onOpenReport: _openReport,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenPermits: _openPermits,
+        onOpenPermitVerification: _openPermitVerification,
+        onOpenReportTracker: _openReportTracker,
         onOpenTab: (index) => setState(() => _index = index),
         onFilterEstablishments: _filterEstablishments,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
@@ -1712,7 +1726,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     final receipt = await Navigator.of(context)
         .push<MobileSanitationInspectionReceipt>(
           MaterialPageRoute(
-            builder: (context) => SanitationInspectionPage(
+            builder: (context) => NewInspectionPage(
               api: widget.api,
               bootstrap: _bootstrap,
               initialEstablishment: establishment,
@@ -1759,7 +1773,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   Future<void> _openPermitVerification() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => PermitVerificationPage(api: widget.api),
+        builder: (context) => VerifyPermitPage(api: widget.api),
       ),
     );
   }
@@ -1767,7 +1781,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   Future<void> _openReportTracker() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ReportTrackerPage(api: widget.api),
+        builder: (context) => TrackReportStatusPage(api: widget.api),
       ),
     );
   }
@@ -1775,8 +1789,10 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   Future<void> _openNotifications() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            NotificationPage(notifications: _bootstrap.notifications),
+        builder: (context) => NotificationPage(
+          notifications: _bootstrap.notifications,
+          subtitle: 'Sanitary advisories and compliance updates',
+        ),
       ),
     );
   }
@@ -1813,12 +1829,15 @@ class SanitationDashboardPage extends StatelessWidget {
   const SanitationDashboardPage({
     super.key,
     required this.bootstrap,
+    this.api = const TourismApi(),
     required this.reports,
     required this.inspections,
     required this.onOpenInspection,
     required this.onOpenReport,
     required this.onOpenHouseholdSurvey,
     required this.onOpenPermits,
+    this.onOpenPermitVerification,
+    this.onOpenReportTracker,
     required this.onOpenTab,
     this.onFilterEstablishments,
     this.onOpenMenu,
@@ -1827,12 +1846,15 @@ class SanitationDashboardPage extends StatelessWidget {
   });
 
   final SanitationBootstrap bootstrap;
+  final TourismApi api;
   final List<MobileSanitationReceipt> reports;
   final List<MobileSanitationInspectionReceipt> inspections;
   final ValueChanged<SanitationEstablishment?> onOpenInspection;
   final VoidCallback onOpenReport;
   final VoidCallback onOpenHouseholdSurvey;
   final VoidCallback onOpenPermits;
+  final VoidCallback? onOpenPermitVerification;
+  final VoidCallback? onOpenReportTracker;
   final ValueChanged<int> onOpenTab;
   final void Function({String? status, String? permit})? onFilterEstablishments;
   final VoidCallback? onOpenMenu;
@@ -1870,8 +1892,10 @@ class SanitationDashboardPage extends StatelessWidget {
             onNotifications: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) =>
-                      NotificationPage(notifications: bootstrap.notifications),
+                  builder: (context) => NotificationPage(
+                    notifications: bootstrap.notifications,
+                    subtitle: 'Sanitary advisories and compliance updates',
+                  ),
                 ),
               );
             },
@@ -1960,14 +1984,22 @@ class SanitationDashboardPage extends StatelessWidget {
         Row(
           children: [
             QuickAction(
-              icon: Icons.add_task_outlined,
+              icon: Icons.fact_check_outlined,
               label: 'Inspection',
               onTap: () => onOpenInspection(null),
             ),
             QuickAction(
-              icon: Icons.flag_outlined,
-              label: 'Community',
-              onTap: onOpenReport,
+              icon: Icons.qr_code_scanner,
+              label: 'Verify QR',
+              onTap: onOpenPermitVerification ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            VerifyPermitPage(api: api),
+                      ),
+                    );
+                  },
             ),
             QuickAction(
               icon: Icons.assignment_outlined,
@@ -1975,9 +2007,17 @@ class SanitationDashboardPage extends StatelessWidget {
               onTap: onOpenHouseholdSurvey,
             ),
             QuickAction(
-              icon: Icons.map_outlined,
-              label: 'GIS Map',
-              onTap: () => onOpenTab(2),
+              icon: Icons.manage_search_outlined,
+              label: 'Track Report',
+              onTap: onOpenReportTracker ??
+                  () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            TrackReportStatusPage(api: api),
+                      ),
+                    );
+                  },
             ),
           ],
         ),
@@ -2868,6 +2908,11 @@ class _ReportTrackerPageState extends State<ReportTrackerPage> {
     return FormPageScaffold(
       title: 'Track Status',
       subtitle: 'Search community sanitation reports',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
       children: [
         DataSourceBanner(
           icon: Icons.manage_search_outlined,
@@ -2957,6 +3002,11 @@ class _PermitVerificationPageState extends State<PermitVerificationPage> {
     return FormPageScaffold(
       title: 'Verify Permit',
       subtitle: 'QR/manual sanitary permit authentication',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
       children: [
         DataSourceBanner(
           icon: Icons.qr_code_scanner_outlined,
@@ -3790,6 +3840,11 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     return FormPageScaffold(
       title: 'New Inspection',
       subtitle: 'Establishment inspection only',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
       children: [
         DropdownTile<SanitationEstablishment>(
           label: 'Select Establishment',
@@ -4199,11 +4254,13 @@ class _SanitationStandaloneBootstrapState
   @override
   void initState() {
     super.initState();
+    setWebBranding(WebBrandingModule.sanitation);
     _bootstrapFuture = _api.fetchSanitationBootstrap();
   }
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.sanitation);
     return FutureBuilder<SanitationBootstrap>(
       future: _bootstrapFuture,
       initialData: SanitationBootstrap.fallback(
@@ -4265,6 +4322,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   @override
   void initState() {
     super.initState();
+    setWebBranding(WebBrandingModule.sanitation);
     if (kDebugMode) {
       _email.text = 'sanitary_admin';
       _password.text = 'Sanitation@123';
@@ -4320,6 +4378,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.sanitation);
     if (_signedIn) {
       return SanitationMobileShell(
         api: widget.api,
@@ -4570,7 +4629,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                             onPressed: () {
                               setState(() => _currentScreen = SanitationGatewayScreen.chooser);
                             },
-                            tooltip: 'Back to Options',
+                            tooltip: '',
                           ),
                           const SizedBox(width: 4),
                           const Expanded(
@@ -4787,7 +4846,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                             onPressed: () {
                               setState(() => _currentScreen = SanitationGatewayScreen.chooser);
                             },
-                            tooltip: 'Back to Options',
+                            tooltip: '',
                           ),
                           const SizedBox(width: 4),
                           const Expanded(
@@ -5216,6 +5275,7 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.sanitation);
     final statusColor = sanitationStatusColor(establishment.complianceStatus);
     final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
     final permitStatus = permitStatusLabel(establishment.permitStatus);

@@ -41,7 +41,14 @@ bool isSanitationModule() {
   if (appModule == 'sanitation') {
     return true;
   }
+  if (currentBrandingModule == WebBrandingModule.sanitation) {
+    return true;
+  }
   if (kIsWeb) {
+    final active = getActiveWebBrandingModule();
+    if (active == 'sanitation') {
+      return true;
+    }
     final uri = Uri.base;
     final moduleParam =
         (uri.queryParameters['module'] ??
@@ -76,20 +83,27 @@ class MaubanMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    setWebBranding(WebBrandingModule.tourism);
+    final isSanitation = isSanitationModule();
+    if (!isSanitation) {
+      setWebBranding(WebBrandingModule.tourism);
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mauban Tourism & Travel Pass',
+      title: isSanitation
+          ? 'Mauban Sanitation & Health Portal'
+          : 'Mauban Tourism & Travel Pass',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.green,
+          seedColor: isSanitation ? AppColors.deepGreen : AppColors.green,
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.canvas,
         textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
         useMaterial3: true,
       ),
-      home: const AppBootstrap(),
+      home: isSanitation
+          ? const SanitationStandaloneBootstrap()
+          : const AppBootstrap(),
     );
   }
 }
@@ -110,11 +124,17 @@ class _AppBootstrapState extends State<AppBootstrap> {
   @override
   void initState() {
     super.initState();
+    if (!isSanitationModule()) {
+      setWebBranding(WebBrandingModule.tourism);
+    }
     _bootstrapFuture = _api.fetchBootstrap();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!isSanitationModule()) {
+      setWebBranding(WebBrandingModule.tourism);
+    }
     return FutureBuilder<MobileBootstrap>(
       future: _bootstrapFuture,
       builder: (context, snapshot) {

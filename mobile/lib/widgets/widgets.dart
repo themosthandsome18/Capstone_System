@@ -2194,16 +2194,28 @@ class FormPageScaffold extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.children,
+    this.leading,
   });
 
   final String title;
   final String subtitle;
   final List<Widget> children;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        leading: leading ??
+            (Navigator.of(context).canPop()
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: '',
+                    onPressed: () => Navigator.of(context).pop(),
+                  )
+                : null),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
