@@ -107,6 +107,12 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Fixed packing checklist dialog keyboard overflow in `_showAddPackingItemDialog` by wrapping inner `Column` in `SingleChildScrollView`.
   - Replaced heavy sanitation loader with modern minimalist circular spinner and frosted overlay across `PageLoader.js`, `PageLoader.css`, `LoadingOverlay.css`, `Sanitation_index.css`, `SanitationDashboard.js`, and `EstablishmentRecords.js`.
   - Flutter analysis confirmed 0 issues; all 39 automated backend tests continue to pass cleanly (`39/39 passed, OK`).
+- **Phase 1 Web UI Polish: Table Layouts & Card Overflow Safety** (`94842c7`)
+  - Adjusted `.sanitation-stat-card` to dynamic height (`min-height: 118px; height: auto;`) with flex vertical distribution to eliminate text clipping on browser zoom and multi-line labels.
+  - Wrapped Tourism Arrival Monitoring table in a responsive horizontal scroll container (`<div className="table-responsive overflow-x-auto">`) with `min-width: 850px` to prevent clipping on viewports narrower than 1200px.
+  - Added touch-friendly scrolling wrappers and clean border/shadow styling for Sanitation Establishment Records (`.establishment-table-card`, `.establishment-table-wrap`).
+  - Switched Inspection Management table from rigid `table-layout: fixed` to `table-layout: auto` with `min-width: 820px` and responsive column minimums, giving establishment names and notes ample breathing room.
+  - Verified with zero syntax errors and zero backend test regressions.
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
