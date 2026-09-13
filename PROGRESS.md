@@ -124,6 +124,12 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Updated React Web Portal with Mauban LGU title (`Mauban LGU | Tourism & Sanitary Compliance Portal`), official seal favicon (`favicon.ico`, `favicon.png`), and 192px PNG assets.
   - Implemented dynamic pre-render JS bridge and conditional Dart interop in Flutter web to dynamically serve distinct titles and favicons for Tourism ("Mauban Tourism & Travel Pass" with sailboat emblem) and Sanitation ("Mauban Sanitation & Health Portal" with municipal seal).
   - Verified with 0 Flutter analysis issues and 39/39 backend tests passing cleanly.
+- **Sanitary Inspector Dashboard UI Polish** (`aa95e8e`)
+  - Wrapped inspector top bar in `SafeArea(top: true, bottom: false)` across `SanitationTopBar`, `SanitationDashboardPage`, and `SanitationMobileShell` to eliminate device clock / notch / battery status bar collision.
+  - Renamed bottom navigation bar tab label from "Establish" to "Records" to prevent awkward label truncation.
+  - Extended dashboard `ListView` padding to 100px bottom clearance (`padding: const EdgeInsets.fromLTRB(16, 12, 16, 100)`) so the "Recent Activity" card and last action buttons remain fully visible and unobscured by the bottom navigation bar.
+  - Added clean empty-state card for the Urgent Alerts section when no active violations or permit follow-ups exist.
+  - Verified with 0 Flutter analysis issues.
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
