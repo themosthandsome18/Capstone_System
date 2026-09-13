@@ -145,6 +145,19 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - **Web Tooltip Artifacts Suppressed**: Configured `tooltip: ''` across back `IconButton` widgets in `NewInspectionPage`, `HouseholdSurveyPage`, `VerifyPermitPage`, `TrackReportStatusPage`, and `FormPageScaffold` to prevent dangling gray web tooltip popovers from hovering over form headers in browser environments.
   - **Web Branding Resilience**: Fixed module reversion in web simulator/responsive preview by guarding `MaubanMobileApp` against overwriting active sanitation branding, asserting sanitation branding in active screen trees, and persisting active module in the JS bridge.
   - Verified with 0 Flutter analysis issues and all unit/widget tests passing cleanly.
+- **Security Audit & Unauthenticated Bypass Removal** (`d057bde`)
+  - **Incident Summary**: An unauthenticated "Quick Demo Access" bypass-login pattern containing plain-text credentials, auto-fill shortcuts, and unauthenticated state bypass buttons was introduced across 3 mobile gateway screens:
+    1. *Establishment Account Login* (`mobile/lib/screens/sanitation_screens.dart`): Caught during code review and entirely discarded before committing.
+    2. *Sanitary Inspector / Staff Login* (`mobile/lib/screens/sanitation_screens.dart`): Introduced in commit `aa95e8e`; identified and completely removed in `d057bde`.
+    3. *Resort Staff QR Gate Dialog* (`mobile/lib/screens/tourist_qr_checkin_screens.dart`): Introduced in commit `2e186ab`; identified and completely removed in `d057bde`.
+  - **Remediation**:
+    * Removed all "Quick Demo Access" containers, clear-text credential labels, and unauthenticated bypass buttons (`Direct Preview Inspector Shell (Bypass Login)` and `Direct Preview Scanner (Bypass Login)`).
+    * Restored exact form spacing and layout to pre-incident state.
+    * Removed all `kDebugMode` controller auto-prefills (`sanitary_admin / Sanitation@123` and `tourism_admin / Tourism@123`) from `initState`.
+    * Conducted repository-wide audit confirming zero bypass buttons, zero credential reveals, and zero demo shortcuts remain in the app.
+    * Re-verified database hygiene: deleted temporary preview establishment (`id=445`, `Mauban Seafood & Grill (Preview)`) created for UI verification, returning `SanitaryEstablishment` count back to clean 0.
+  - **Policy Reaffirmed**: Real authentication only across all roles (Tourist, Resort Staff, Sanitary Inspector, Establishment Owner, Admin) with full server validation — no bypasses or shortcuts.
+
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
