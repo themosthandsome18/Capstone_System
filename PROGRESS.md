@@ -157,6 +157,15 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * Conducted repository-wide audit confirming zero bypass buttons, zero credential reveals, and zero demo shortcuts remain in the app.
     * Re-verified database hygiene: deleted temporary preview establishment (`id=445`, `Mauban Seafood & Grill (Preview)`) created for UI verification, returning `SanitaryEstablishment` count back to clean 0.
   - **Policy Reaffirmed**: Real authentication only across all roles (Tourist, Resort Staff, Sanitary Inspector, Establishment Owner, Admin) with full server validation — no bypasses or shortcuts.
+- **Rich Establishment Account Portal UI Enhancements** (`2156cbf`)
+  - Enhanced `SanitationEstablishmentPortalPage` in `mobile/lib/screens/sanitation_screens.dart` with structured operational sections:
+    * **Renewal Notice Banner**: Dynamic warning card with `Icons.warning_amber_rounded` displaying permit expiration dates and countdowns when expiring within 60 days or expired.
+    * **Official Permit & QR Card**: Preserved official business name, permit details, and scannable `QrImageView` permit code with clean elevation and card styling.
+    * **Permits & Deadlines**: Comprehensive overview of Sanitary Permit and Environmental & Health Clearance with status badges (`Active`, `Expiring Soon`, `Expired`) and days remaining.
+    * **Requirements Checklist with Filter Tabs**: Categorized filter tabs (`[All (X)]`, `[Need Action (Y)]`, `[Completed (Z)]`) tracking compliance documents (Barangay Clearance, Health Cards, Water Potability, Waste & Grease Trap, Pest Abatement) with status badges (`SUBMITTED` / `PENDING`) and a completion progress bar (`LinearProgressIndicator`).
+    * **Record Timeline**: Vertical timeline tracking recent inspection events, inspector remarks, and timestamps with color-coded status indicator dots (green = compliant/passed, amber = notice issued, red = violation).
+  - Maintained strict account-based authentication with no unauthenticated bypasses, credential disclosures, or mock shortcuts.
+  - Verified 0 issues via `flutter analyze` and all widget/unit tests passing cleanly.
 
 
 ## Database Cleaned for Deployment (Sept 2026)
