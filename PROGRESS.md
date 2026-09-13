@@ -113,6 +113,13 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Added touch-friendly scrolling wrappers and clean border/shadow styling for Sanitation Establishment Records (`.establishment-table-card`, `.establishment-table-wrap`).
   - Switched Inspection Management table from rigid `table-layout: fixed` to `table-layout: auto` with `min-width: 820px` and responsive column minimums, giving establishment names and notes ample breathing room.
   - Verified with zero syntax errors and zero backend test regressions.
+- **Phase 2 & 3 UI Harmonization: Mobile Card Ellipsis & Web Sidebar Alignment** (`5c2e1e8`)
+  - Harmonized `.sanitation-sidebar` width from 400px down to 280px standard width (`min-width: 280px; max-width: 280px; box-sizing: border-box;`) with proportional typography (`13.5px` title, `12px` subtitle, `44px` logo) and synchronized `.sanitation-main` offset to `margin-left: 280px; width: calc(100% - 280px);`.
+  - Scaled navigation links with `min-height: 38px; height: auto; padding: 8px 14px; font-size: 13.5px; line-height: 1.3; white-space: normal;` to comfortably host long labels like "Community Concerns & Schedules" without horizontal clipping or awkward breaks.
+  - Added `maxLines` and `TextOverflow.ellipsis` across mobile cards in Flutter:
+    * Tourism: destination names, tourist names, and itinerary stop titles in `_VisitCard`, `_buildItinerarySection`, `DestinationDetailPage`, `HeroCard`, and `DestinationListCard`.
+    * Sanitation: establishment names, draft titles, permit monitoring rows, alert cards, and portal header in `SanitationEstablishmentCard`, `SanitationDraftCard`, `PermitVerificationCard`, `SanitationAlertCard`, `SanitationPermitsPage`, and `SanitationEstablishmentPortalPage`.
+  - Flutter analysis confirmed 0 issues across all modified files; all 39 automated backend tests continue to pass cleanly (`Ran 39 tests ... OK`).
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
