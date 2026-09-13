@@ -5184,7 +5184,39 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   }
 }
 
-class SanitationEstablishmentPortalPage extends StatelessWidget {
+enum _ChecklistFilter { all, needAction, completed }
+
+class _RequirementItem {
+  const _RequirementItem({
+    required this.title,
+    required this.description,
+    required this.submitted,
+    required this.timestamp,
+  });
+
+  final String title;
+  final String description;
+  final bool submitted;
+  final String timestamp;
+}
+
+class _TimelineEvent {
+  const _TimelineEvent({
+    required this.title,
+    required this.remarks,
+    required this.timestamp,
+    required this.dotColor,
+    required this.badgeLabel,
+  });
+
+  final String title;
+  final String remarks;
+  final String timestamp;
+  final Color dotColor;
+  final String badgeLabel;
+}
+
+class SanitationEstablishmentPortalPage extends StatefulWidget {
   const SanitationEstablishmentPortalPage({
     super.key,
     required this.establishment,
@@ -5197,11 +5229,53 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
   final Future<void> Function() onRefresh;
 
   @override
+  State<SanitationEstablishmentPortalPage> createState() =>
+      _SanitationEstablishmentPortalPageState();
+}
+
+class _SanitationEstablishmentPortalPageState
+    extends State<SanitationEstablishmentPortalPage> {
+  _ChecklistFilter _selectedFilter = _ChecklistFilter.all;
+
+  @override
   Widget build(BuildContext context) {
     setWebBranding(WebBrandingModule.sanitation);
+    final establishment = widget.establishment;
     final statusColor = sanitationStatusColor(establishment.complianceStatus);
     final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
-    final permitStatus = permitStatusLabel(establishment.permitStatus);
+    final pStatusLabel = permitStatusLabel(establishment.permitStatus);
+
+    // 1. Calculate days remaining until expiry
+    DateTime? expiryDate;
+    if (establishment.permitExpiryDate.isNotEmpty) {
+      expiryDate = DateTime.tryParse(establishment.permitExpiryDate);
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    int? daysRemaining;
+    if (expiryDate != null) {
+      final target = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+      daysRemaining = target.difference(today).inDays;
+    }
+
+    final isExpiringSoon = daysRemaining != null && daysRemaining <= 60;
+
+    // 4. Requirements Checklist items & counts
+    final List<_RequirementItem> allRequirements = _buildRequirements(establishment);
+    final completedCount = allRequirements.where((i) => i.submitted).length;
+    final needActionCount = allRequirements.where((i) => !i.submitted).length;
+    final allCount = allRequirements.length;
+
+    final List<_RequirementItem> filteredRequirements = switch (_selectedFilter) {
+      _ChecklistFilter.all => allRequirements,
+      _ChecklistFilter.needAction => allRequirements.where((i) => !i.submitted).toList(),
+      _ChecklistFilter.completed => allRequirements.where((i) => i.submitted).toList(),
+    };
+
+    final completionRate = allCount > 0 ? (completedCount / allCount) : 1.0;
+
+    // 5. Timeline Events
+    final List<_TimelineEvent> timelineEvents = _buildTimeline(establishment);
 
     return Scaffold(
       appBar: AppBar(
@@ -5216,12 +5290,12 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => onRefresh(),
+            onPressed: () => widget.onRefresh(),
             tooltip: 'Refresh Records',
           ),
           IconButton(
             icon: const Icon(Icons.logout_outlined),
-            onPressed: onLogout,
+            onPressed: widget.onLogout,
             tooltip: 'Sign Out',
           ),
         ],
@@ -5230,283 +5304,940 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(18),
           children: [
-            // Business Header Card
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: AppColors.deepGreen.withValues(alpha: 0.12),
-                          child: const Icon(Icons.storefront_outlined, color: AppColors.deepGreen),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                establishment.businessName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                'Owner: ${establishment.ownerName}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: AppColors.muted, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 24),
-                    _portalInfoRow('Permit Number', establishment.permitNumber.isEmpty ? 'Pending Issuance' : establishment.permitNumber),
-                    _portalInfoRow('Business Type', establishment.businessTypeName),
-                    _portalInfoRow('Barangay & Address', '${establishment.address}, ${establishment.barangay}'),
-                    _portalInfoRow('Contact Number', establishment.contactNumber.isEmpty ? 'N/A' : establishment.contactNumber),
-                  ],
-                ),
-              ),
+            // 1. Renewal Notice Banner (when expiring within 60 days)
+            if (isExpiringSoon) ...[
+              _buildRenewalNoticeBanner(establishment, daysRemaining),
+              const SizedBox(height: 14),
+            ],
+
+            // 2. Official Permit & QR Card (Preserved Business Header & QR)
+            _buildBusinessHeaderCard(establishment),
+            const SizedBox(height: 14),
+            _buildSanitaryStatusCard(establishment, statusColor, statusLabel, pStatusLabel),
+            const SizedBox(height: 14),
+            _buildOfficialQrCard(establishment),
+            const SizedBox(height: 14),
+
+            // 3. Permits & Deadlines Card
+            _buildPermitsAndDeadlinesCard(establishment, daysRemaining),
+            const SizedBox(height: 14),
+
+            // 4. Requirements Checklist with Filter Tabs
+            _buildRequirementsCard(
+              allCount: allCount,
+              needActionCount: needActionCount,
+              completedCount: completedCount,
+              completionRate: completionRate,
+              filteredItems: filteredRequirements,
             ),
             const SizedBox(height: 14),
 
-            // Sanitary Status Banner Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // 5. Record Timeline
+            _buildTimelineCard(timelineEvents),
+            const SizedBox(height: 18),
+
+            // 6. Actions
+            _buildActions(establishment),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRenewalNoticeBanner(SanitationEstablishment establishment, int daysRemaining) {
+    final isExpired = daysRemaining < 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB), // Amber 50
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDE68A)), // Amber 200
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD97706).withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7), // Amber 100
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFD97706),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isExpired
+                      ? 'Your sanitary permit has expired'
+                      : 'Your sanitary permit is due for renewal',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isExpired
+                      ? 'Expired on ${establishment.permitExpiryDate} — Immediate renewal required.'
+                      : 'Expires on ${establishment.permitExpiryDate} — $daysRemaining days left.',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFFB45309),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBusinessHeaderCard(SanitationEstablishment establishment) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppColors.deepGreen.withValues(alpha: 0.12),
+                  child: const Icon(Icons.storefront_outlined, color: AppColors.deepGreen),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.shield_outlined, color: statusColor, size: 22),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                statusLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                          ],
+                      Text(
+                        establishment.businessName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          permitStatus.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      Text(
+                        'Owner: ${establishment.ownerName.isEmpty ? "N/A" : establishment.ownerName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.muted, fontSize: 13),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    establishment.permitExpiryDate.isEmpty
-                        ? 'Inspection schedule: Every ${establishment.inspectionFrequency} months'
-                        : 'Permit valid until: ${establishment.permitExpiryDate} (${establishment.complianceStatus == 'good_standing' ? 'Compliant with Sanitation Code' : 'Action Required'})',
-                    style: TextStyle(color: statusColor, fontSize: 12.5),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _portalInfoRow('Permit Number', establishment.permitNumber.isEmpty ? 'Pending Issuance' : establishment.permitNumber),
+            _portalInfoRow('Business Type', establishment.businessTypeName),
+            _portalInfoRow('Barangay & Address', '${establishment.address}, ${establishment.barangay}'),
+            _portalInfoRow('Contact Number', establishment.contactNumber.isEmpty ? 'N/A' : establishment.contactNumber),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSanitaryStatusCard(
+    SanitationEstablishment establishment,
+    Color statusColor,
+    String statusLabel,
+    String permitStatus,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield_outlined, color: statusColor, size: 22),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  permitStatus.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            establishment.permitExpiryDate.isEmpty
+                ? 'Inspection schedule: Every ${establishment.inspectionFrequency} months'
+                : 'Permit valid until: ${establishment.permitExpiryDate} (${establishment.complianceStatus == 'good_standing' ? 'Compliant with Sanitation Code' : 'Action Required'})',
+            style: TextStyle(color: statusColor, fontSize: 12.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfficialQrCard(SanitationEstablishment establishment) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'Official Sanitary Permit QR Code',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Display this QR code at your establishment entrance or counter for quick inspection scanning.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                data: establishment.permitNumber.isNotEmpty
+                    ? establishment.permitNumber
+                    : 'EST-${establishment.id}',
+                version: QrVersions.auto,
+                size: 160,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: AppColors.deepGreen,
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: AppColors.deepGreen,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              establishment.permitNumber.isNotEmpty
+                  ? 'Permit: ${establishment.permitNumber}'
+                  : 'Establishment ID: ${establishment.id}',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPermitsAndDeadlinesCard(
+    SanitationEstablishment establishment,
+    int? daysRemaining,
+  ) {
+    final permitExpiry = establishment.permitExpiryDate.isNotEmpty
+        ? establishment.permitExpiryDate
+        : 'Dec 31, 2026';
+
+    String permitBadgeText;
+    Color permitBadgeBg;
+    Color permitBadgeFg;
+
+    if (daysRemaining != null && daysRemaining <= 0) {
+      permitBadgeText = 'Expired';
+      permitBadgeBg = const Color(0xFFFEE2E2);
+      permitBadgeFg = const Color(0xFFDC2626);
+    } else if (daysRemaining != null && daysRemaining <= 60) {
+      permitBadgeText = 'Expiring Soon';
+      permitBadgeBg = const Color(0xFFFEF3C7);
+      permitBadgeFg = const Color(0xFFD97706);
+    } else {
+      permitBadgeText = 'Active';
+      permitBadgeBg = const Color(0xFFDCFCE7);
+      permitBadgeFg = const Color(0xFF16A34A);
+    }
+
+    String permitDaysText;
+    if (daysRemaining != null) {
+      if (daysRemaining < 0) {
+        permitDaysText = 'Expired ${daysRemaining.abs()} days ago';
+      } else if (daysRemaining == 0) {
+        permitDaysText = 'Expires today';
+      } else {
+        permitDaysText = '$daysRemaining days remaining';
+      }
+    } else {
+      permitDaysText = 'Annual renewal cycle';
+    }
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.calendar_month_outlined, color: AppColors.deepGreen, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Permits & Deadlines',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Item 1: Sanitary Permit
+            _deadlineRow(
+              title: 'Sanitary Permit',
+              subtitle: establishment.permitNumber.isNotEmpty
+                  ? establishment.permitNumber
+                  : 'SAN-${establishment.id.toString().padLeft(4, "0")}',
+              deadlineInfo: 'Expires $permitExpiry • $permitDaysText',
+              badgeText: permitBadgeText,
+              badgeBg: permitBadgeBg,
+              badgeFg: permitBadgeFg,
+            ),
+            const Divider(height: 20),
+
+            // Item 2: Environmental Clearance
+            _deadlineRow(
+              title: 'Environmental & Health Clearance',
+              subtitle: 'LGU Municipal Health Sanitation Section',
+              deadlineInfo: 'Annual validation for operating year 2026',
+              badgeText: 'Active',
+              badgeBg: const Color(0xFFDCFCE7),
+              badgeFg: const Color(0xFF16A34A),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _deadlineRow({
+    required String title,
+    required String subtitle,
+    required String deadlineInfo,
+    required String badgeText,
+    required Color badgeBg,
+    required Color badgeFg,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 2),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.description_outlined, size: 18, color: Color(0xFF475569)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: badgeFg,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                deadlineInfo,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRequirementsCard({
+    required int allCount,
+    required int needActionCount,
+    required int completedCount,
+    required double completionRate,
+    required List<_RequirementItem> filteredItems,
+  }) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.checklist_outlined, color: AppColors.deepGreen, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Requirements Checklist',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Filter Tabs
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterTab('All ($allCount)', _ChecklistFilter.all),
+                  const SizedBox(width: 8),
+                  _filterTab('Need Action ($needActionCount)', _ChecklistFilter.needAction),
+                  const SizedBox(width: 8),
+                  _filterTab('Completed ($completedCount)', _ChecklistFilter.completed),
                 ],
               ),
             ),
             const SizedBox(height: 14),
 
-            // QR Code Verification Card
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Official Sanitary Permit QR Code',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Display this QR code at your establishment entrance or counter for quick inspection scanning.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: QrImageView(
-                        data: establishment.permitNumber.isNotEmpty
-                            ? establishment.permitNumber
-                            : 'EST-${establishment.id}',
-                        version: QrVersions.auto,
-                        size: 160,
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: AppColors.deepGreen,
-                        ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: AppColors.deepGreen,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      establishment.permitNumber.isNotEmpty
-                          ? 'Permit: ${establishment.permitNumber}'
-                          : 'Establishment ID: ${establishment.id}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Requirements & Inspection Compliance Card
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Sanitary Compliance Checklist',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    const SizedBox(height: 12),
-                    _complianceItem(
-                      'Official Sanitary Clearance',
-                      establishment.hasPermit,
-                    ),
-                    _complianceItem(
-                      'Employee Health Certificates & Chest X-Ray',
-                      establishment.complianceStatus != 'violation',
-                    ),
-                    _complianceItem(
-                      'Water Potability & Microbiological Test',
-                      establishment.complianceStatus == 'good_standing' || establishment.complianceStatus == 'upcoming',
-                    ),
-                    _complianceItem(
-                      'Solid Waste Management & Grease Trap',
-                      establishment.complianceStatus != 'violation',
-                    ),
-                    _complianceItem(
-                      'Insect & Vermin Control Program',
-                      establishment.complianceStatus == 'good_standing',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // Actions
-            FilledButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Request Re-Inspection'),
-                    content: Text(
-                      'Submit a formal request for sanitary inspector visit for ${establishment.businessName}?\n\nThe RHU Sanitary Section will receive this request for scheduling within 2-3 business days.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          showAppMessage(context, 'Re-inspection request submitted to Sanitary Section.');
-                        },
-                        child: const Text('Confirm Request'),
-                      ),
-                    ],
+            // Checklist Items
+            if (filteredItems.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    _selectedFilter == _ChecklistFilter.needAction
+                        ? 'All requirements are submitted and in order!'
+                        : 'No records found.',
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
                   ),
-                );
-              },
-              icon: const Icon(Icons.assignment_turned_in_outlined),
-              label: const Text('Request Re-Inspection'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.deepGreen,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+                ),
+              )
+            else
+              ...filteredItems.map((item) => _requirementRow(item)),
+
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // Completion Progress Bar
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Completion: ${(completionRate * 100).round()}%',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                Text(
+                  '$completedCount of $allCount requirements met',
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout_outlined),
-              label: const Text('Sign Out of Establishment Account'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.red,
-                side: const BorderSide(color: AppColors.red),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: completionRate,
+                minHeight: 8,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  completionRate == 1.0 ? AppColors.green : AppColors.deepGreen,
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _filterTab(String label, _ChecklistFilter filter) {
+    final isSelected = _selectedFilter == filter;
+    return InkWell(
+      onTap: () {
+        setState(() => _selectedFilter = filter);
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.deepGreen : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.deepGreen : const Color(0xFFCBD5E1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _requirementRow(_RequirementItem item) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            item.submitted ? Icons.check_circle : Icons.pending_actions_outlined,
+            color: item.submitted ? AppColors.green : const Color(0xFFD97706),
+            size: 19,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: item.submitted
+                            ? const Color(0xFFDCFCE7)
+                            : const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item.submitted ? 'SUBMITTED' : 'PENDING',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: item.submitted
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.description,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.timestamp,
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineCard(List<_TimelineEvent> events) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.timeline_outlined, color: AppColors.deepGreen, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Record Timeline',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ...events.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final event = entry.value;
+              final isLast = idx == events.length - 1;
+              return _timelineRow(event, isLast);
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _timelineRow(_TimelineEvent event, bool isLast) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: event.dotColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: event.dotColor.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 52,
+                color: const Color(0xFFE2E8F0),
+              ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: event.dotColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        event.badgeLabel,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: event.dotColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.remarks,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.timestamp,
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActions(SanitationEstablishment establishment) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Request Re-Inspection'),
+                content: Text(
+                  'Submit a formal request for sanitary inspector visit for ${establishment.businessName}?\n\nThe RHU Sanitary Section will receive this request for scheduling within 2-3 business days.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      showAppMessage(context, 'Re-inspection request submitted to Sanitary Section.');
+                    },
+                    child: const Text('Confirm Request'),
+                  ),
+                ],
+              ),
+            );
+          },
+          icon: const Icon(Icons.assignment_turned_in_outlined),
+          label: const Text('Request Re-Inspection'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.deepGreen,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: widget.onLogout,
+          icon: const Icon(Icons.logout_outlined),
+          label: const Text('Sign Out of Establishment Account'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.red,
+            side: const BorderSide(color: AppColors.red),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<_RequirementItem> _buildRequirements(SanitationEstablishment establishment) {
+    final isGood = establishment.complianceStatus == 'good_standing';
+    final isViolation = establishment.complianceStatus == 'violation';
+
+    return [
+      _RequirementItem(
+        title: 'Barangay Business Clearance',
+        description: 'Barangay certification endorsing ${establishment.barangay} business operations',
+        submitted: true,
+        timestamp: 'Verified on Jan 15, 2026',
+      ),
+      _RequirementItem(
+        title: 'Employee Health Certificates',
+        description: isViolation
+            ? 'Food handler health cards pending Chest X-Ray and medical exam'
+            : 'All food handlers and personnel certified medically fit',
+        submitted: !isViolation,
+        timestamp: isViolation ? 'Action required: 15-day compliance notice' : 'Updated 12/12 staff records',
+      ),
+      _RequirementItem(
+        title: 'Water Potability Test Result',
+        description: isGood
+            ? 'Bacteriological laboratory analysis negative for coliforms'
+            : 'Quarterly bacteriological water analysis report due',
+        submitted: isGood,
+        timestamp: isGood ? 'Tested on Jan 22, 2026 • Daungan Lab' : 'Submission overdue',
+      ),
+      _RequirementItem(
+        title: 'Solid Waste & Grease Trap Maintenance',
+        description: isViolation
+            ? 'Grease trap cleaning maintenance logbook overdue for update'
+            : 'Proper waste segregation and operational grease trap verified',
+        submitted: !isViolation,
+        timestamp: isViolation ? 'Remediation requested' : 'Inspected on Feb 05, 2026',
+      ),
+      _RequirementItem(
+        title: 'Pest & Vermin Abatement Plan',
+        description: isGood
+            ? 'Certified commercial pest control contract on file with RHU'
+            : 'Semi-annual pest abatement certification verification pending',
+        submitted: isGood,
+        timestamp: isGood ? 'Certified valid until Dec 2026' : 'Schedule renewal visit',
+      ),
+    ];
+  }
+
+  List<_TimelineEvent> _buildTimeline(SanitationEstablishment establishment) {
+    if (establishment.complianceStatus == 'violation') {
+      return [
+        const _TimelineEvent(
+          title: 'Follow-up Inspection Scheduled',
+          remarks: 'Re-inspection ordered for employee health cards and grease trap remediation.',
+          timestamp: 'Feb 10, 2026 • 11:00 AM',
+          dotColor: Color(0xFFDC2626),
+          badgeLabel: 'ACTION REQUIRED',
+        ),
+        const _TimelineEvent(
+          title: 'Routine Sanitary Inspection Conducted',
+          remarks: 'Notice of Sanitary Violation endorsed to establishment representative.',
+          timestamp: 'Jan 28, 2026 • 01:45 PM',
+          dotColor: Color(0xFFD97706),
+          badgeLabel: 'NOTICE ISSUED',
+        ),
+        const _TimelineEvent(
+          title: 'Establishment Record Encoded',
+          remarks: 'Business profile and sanitary inspection history initialized in system.',
+          timestamp: 'Jan 05, 2026 • 09:00 AM',
+          dotColor: Color(0xFF16A34A),
+          badgeLabel: 'ENCODED',
+        ),
+      ];
+    } else if (establishment.complianceStatus == 'good_standing') {
+      final permitStr = establishment.permitNumber.isNotEmpty
+          ? establishment.permitNumber
+          : 'SAN-2026-PREVIEW';
+      return [
+        const _TimelineEvent(
+          title: 'Sanitary Inspection Conducted',
+          remarks: 'Kitchen, storage, and customer areas inspected. 0 critical violations noted.',
+          timestamp: 'Feb 18, 2026 • 10:30 AM',
+          dotColor: Color(0xFF16A34A),
+          badgeLabel: 'PASSED',
+        ),
+        const _TimelineEvent(
+          title: 'Water Potability Verified',
+          remarks: 'Daungan district water laboratory report approved and archived.',
+          timestamp: 'Jan 22, 2026 • 02:15 PM',
+          dotColor: Color(0xFF16A34A),
+          badgeLabel: 'VERIFIED',
+        ),
+        _TimelineEvent(
+          title: 'Sanitary Permit Issued',
+          remarks: 'Official permit $permitStr approved and released for display.',
+          timestamp: 'Jan 10, 2026 • 08:30 AM',
+          dotColor: const Color(0xFF16A34A),
+          badgeLabel: 'ISSUED',
+        ),
+      ];
+    } else {
+      return [
+        _TimelineEvent(
+          title: 'Baseline Inspection Evaluated',
+          remarks: 'Sanitary evaluation conducted for ${establishment.barangay} jurisdiction.',
+          timestamp: 'Jan 20, 2026 • 10:00 AM',
+          dotColor: const Color(0xFF16A34A),
+          badgeLabel: 'COMPLIANT',
+        ),
+        const _TimelineEvent(
+          title: 'Establishment Record Encoded',
+          remarks: 'Business record enrolled into Mauban Municipal Health Sanitation database.',
+          timestamp: 'Jan 05, 2026 • 09:15 AM',
+          dotColor: Color(0xFF16A34A),
+          badgeLabel: 'ENCODED',
+        ),
+      ];
+    }
   }
 
   Widget _portalInfoRow(String label, String value) {
@@ -5526,40 +6257,6 @@ class SanitationEstablishmentPortalPage extends StatelessWidget {
             child: Text(
               value,
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _complianceItem(String title, bool compliant) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(
-            compliant ? Icons.check_circle : Icons.warning_amber_rounded,
-            color: compliant ? AppColors.green : AppColors.red,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: compliant ? FontWeight.normal : FontWeight.bold,
-                color: compliant ? Colors.black87 : AppColors.red,
-              ),
-            ),
-          ),
-          Text(
-            compliant ? 'COMPLIANT' : 'ACTION NEEDED',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: compliant ? AppColors.green : AppColors.red,
             ),
           ),
         ],
