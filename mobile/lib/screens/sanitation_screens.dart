@@ -4323,10 +4323,6 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   void initState() {
     super.initState();
     setWebBranding(WebBrandingModule.sanitation);
-    if (kDebugMode) {
-      _email.text = 'sanitary_admin';
-      _password.text = 'Sanitation@123';
-    }
     _checkStoredAuth();
   }
 
@@ -4709,79 +4705,6 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                     _signingIn
                                         ? 'Signing in...'
                                         : 'Sign in as Inspector / Admin',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.bolt, size: 16, color: Color(0xFF14532D)),
-                                          const SizedBox(width: 4),
-                                          const Text(
-                                            'Quick Demo Access',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
-                                              color: Color(0xFF14532D),
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          InkWell(
-                                            onTap: () {
-                                              setState(() {
-                                                _email.text = 'sanitary_admin';
-                                                _password.text = 'Sanitation@123';
-                                              });
-                                            },
-                                            child: const Text(
-                                              'Auto-Fill',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF0284C7),
-                                                decoration: TextDecoration.underline,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Inspector credentials: sanitary_admin / Sanitation@123',
-                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            setState(() {
-                                              _signedIn = true;
-                                            });
-                                          },
-                                          icon: const Icon(Icons.shield_outlined, size: 15),
-                                          label: const Text(
-                                            'Direct Preview Inspector Shell (Bypass Login)',
-                                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor: const Color(0xFF14532D),
-                                            side: const BorderSide(color: Color(0xFF14532D)),
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ],
