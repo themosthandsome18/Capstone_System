@@ -733,6 +733,25 @@ def mobile_sanitation_permit_verify(request):
     )
 
 
+MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY = "mobile_sanitation_business_types_v1"
+MOBILE_SANITATION_BUSINESS_TYPES_CACHE_TIMEOUT = 900  # 15 minutes
+
+
+def get_cached_sanitary_business_types():
+    data = cache.get(MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY)
+    if data is None:
+        data = SanitaryBusinessTypeSerializer(
+            SanitaryBusinessType.objects.prefetch_related("requirements").all(),
+            many=True,
+        ).data
+        cache.set(
+            MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY,
+            data,
+            timeout=MOBILE_SANITATION_BUSINESS_TYPES_CACHE_TIMEOUT,
+        )
+    return data
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mobile_sanitation_bootstrap(request):
@@ -740,26 +759,55 @@ def mobile_sanitation_bootstrap(request):
     ensure_initial_household_data()
     ensure_mobile_barangays()
 
-    establishments = with_establishment_rollups(
-        SanitaryEstablishment.objects.select_related("business_type").all()
+    today = timezone.localdate()
+
+    establishments = list(
+        with_establishment_rollups(
+            SanitaryEstablishment.objects.select_related("business_type").all()
+        )
     )
     inspections = SanitaryInspection.objects.select_related(
         "establishment",
         "establishment__business_type",
     ).prefetch_related("checklist_items")[:25]
     household_records = HouseholdSanitationRecord.objects.all()
-    complaints = SanitaryComplaint.objects.exclude(
-        status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
-    ).order_by("-reported_date", "-id")[:50]
-    all_establishments = SanitaryEstablishment.objects.all()
-    all_complaints = SanitaryComplaint.objects.all()
+
+    all_complaints = list(
+        SanitaryComplaint.objects.order_by("-reported_date", "-id")
+    )
+    open_complaints = [
+        c for c in all_complaints
+        if c.status not in (COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED)
+    ]
+    complaints = open_complaints[:50]
+    notification_open_complaints = open_complaints[:3]
+
+    thirty_days_later = today + timedelta(days=30)
+    expiring_establishments = [
+        e for e in establishments
+        if e.permit_expiry_date and today <= e.permit_expiry_date <= thirty_days_later
+    ]
+    expiring_establishments.sort(key=lambda e: (e.permit_expiry_date, e.id))
+    notification_expiring_permits = expiring_establishments[:3]
+
+    total_establishments = len(establishments)
+    good_standing_count = sum(1 for e in establishments if e.compliance_status == "good_standing")
+    for_completion_count = sum(1 for e in establishments if e.compliance_status == "for_completion")
+    violators_count = sum(1 for e in establishments if e.compliance_status == "violation")
+    no_permit_count = sum(1 for e in establishments if e.permit_status == "no_permit")
+
+    active_permits_count = sum(1 for e in establishments if e.permit_status == "active")
+    renewal_due_count = sum(1 for e in establishments if e.permit_status == "renewal_due")
+    conditional_permits_count = sum(1 for e in establishments if e.permit_status == "conditional")
+    suspended_permits_count = sum(1 for e in establishments if e.permit_status == "suspended")
+
+    total_complaints = len(all_complaints)
+    pending_complaints = sum(1 for c in all_complaints if c.status == COMPLAINT_STATUS_PENDING)
+    open_complaints_count = len(open_complaints)
 
     return Response(
         {
-            "businessTypes": SanitaryBusinessTypeSerializer(
-                SanitaryBusinessType.objects.prefetch_related("requirements").all(),
-                many=True,
-            ).data,
+            "businessTypes": get_cached_sanitary_business_types(),
             "establishments": [
                 serialize_mobile_sanitation_establishment(item)
                 for item in establishments
@@ -769,53 +817,28 @@ def mobile_sanitation_bootstrap(request):
             ],
             "dashboardData": {
                 "summary": {
-                    "totalEstablishments": all_establishments.count(),
-                    "goodStanding": all_establishments.filter(
-                        compliance_status="good_standing"
-                    ).count(),
-                    "forCompletion": all_establishments.filter(
-                        compliance_status="for_completion"
-                    ).count(),
-                    "violators": all_establishments.filter(
-                        compliance_status="violation"
-                    ).count(),
-                    "noPermit": all_establishments.filter(
-                        permit_status="no_permit"
-                    ).count(),
+                    "totalEstablishments": total_establishments,
+                    "goodStanding": good_standing_count,
+                    "forCompletion": for_completion_count,
+                    "violators": violators_count,
+                    "noPermit": no_permit_count,
                 }
             },
             "permitData": {
                 "summary": {
-                    "active": all_establishments.filter(
-                        permit_status="active"
-                    ).count(),
-                    "renewalDue": all_establishments.filter(
-                        permit_status="renewal_due"
-                    ).count(),
-                    "conditional": all_establishments.filter(
-                        permit_status="conditional"
-                    ).count(),
-                    "suspended": all_establishments.filter(
-                        permit_status="suspended"
-                    ).count(),
-                    "noPermit": all_establishments.filter(
-                        permit_status="no_permit"
-                    ).count(),
+                    "active": active_permits_count,
+                    "renewalDue": renewal_due_count,
+                    "conditional": conditional_permits_count,
+                    "suspended": suspended_permits_count,
+                    "noPermit": no_permit_count,
                 },
                 "rows": [],
             },
             "complaintData": {
                 "summary": {
-                    "total": all_complaints.count(),
-                    "pending": all_complaints.filter(
-                        status=COMPLAINT_STATUS_PENDING
-                    ).count(),
-                    "open": all_complaints.exclude(
-                        status__in=[
-                            COMPLAINT_STATUS_RESOLVED,
-                            COMPLAINT_STATUS_REJECTED,
-                        ]
-                    ).count(),
+                    "total": total_complaints,
+                    "pending": pending_complaints,
+                    "open": open_complaints_count,
                 },
                 "rows": [
                     serialize_mobile_sanitation_complaint(item)
@@ -825,11 +848,11 @@ def mobile_sanitation_bootstrap(request):
             "householdRecords": [
                 serialize_mobile_household_record(item) for item in household_records
             ],
-            "barangays": BarangaySerializer(
-                Barangay.objects.filter(is_active=True),
-                many=True,
-            ).data,
-            "notifications": build_mobile_sanitation_notifications(),
+            "barangays": get_cached_active_barangays(),
+            "notifications": build_mobile_sanitation_notifications(
+                expiring_permits=notification_expiring_permits,
+                open_complaints=notification_open_complaints,
+            ),
         }
     )
 
@@ -1165,16 +1188,26 @@ def build_mobile_notifications(request=None, top_destination=_TOP_DESTINATION_UN
     return notifications
 
 
-def build_mobile_sanitation_notifications():
+_SANITATION_NOTIFICATION_UNSET = object()
+
+
+def build_mobile_sanitation_notifications(
+    expiring_permits=_SANITATION_NOTIFICATION_UNSET,
+    open_complaints=_SANITATION_NOTIFICATION_UNSET,
+):
     today = timezone.localdate()
     now = timezone.now()
-    expiring_permits = SanitaryEstablishment.objects.filter(
-        permit_expiry_date__gte=today,
-        permit_expiry_date__lte=today + timedelta(days=30),
-    ).order_by("permit_expiry_date")[:3]
-    open_complaints = SanitaryComplaint.objects.exclude(
-        status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
-    ).order_by("-reported_date", "-id")[:3]
+
+    if expiring_permits is _SANITATION_NOTIFICATION_UNSET:
+        expiring_permits = SanitaryEstablishment.objects.filter(
+            permit_expiry_date__gte=today,
+            permit_expiry_date__lte=today + timedelta(days=30),
+        ).order_by("permit_expiry_date")[:3]
+
+    if open_complaints is _SANITATION_NOTIFICATION_UNSET:
+        open_complaints = SanitaryComplaint.objects.exclude(
+            status__in=[COMPLAINT_STATUS_RESOLVED, COMPLAINT_STATUS_REJECTED]
+        ).order_by("-reported_date", "-id")[:3]
 
     notifications = []
 
