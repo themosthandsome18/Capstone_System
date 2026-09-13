@@ -89,6 +89,20 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Added `NotificationWebhookCronTests` covering all authorization branches (unauthorized, invalid key, valid header/bearer, unconfigured).
   - All 39 tests passing cleanly (`Ran 39 tests ... OK`).
 
+- **Mobile Bootstrap Query Optimizations & In-Memory Performance Caching** (`0786741`, `479e251`, `49a3e7b`)
+  - **Tourism Bootstrap Optimization** (`0786741`, `479e251`):
+    - Added `CONN_MAX_AGE: 600` to the local discrete database configuration in `settings.py` to enable persistent TCP/SSL connection reuse.
+    - Deduplicated destination queries: evaluated all resorts once in `mobile_tourism_bootstrap`, passing pre-fetched resorts into `build_reference_tables_payload(resorts=all_resorts)`, deriving the top-10 destinations in-memory, and passing `destinations[0]` into `build_mobile_notifications(..., top_destination=...)`.
+    - Added 15-minute `LocMemCache` caching for the 7 static master tables (`Country`, `Region`, `Province`, `Itinerary`, `TravelMode`, `BoatType`, `VisitPurpose`) under `"mobile_reference_tables_v1"` and active barangays under `"mobile_active_barangays_v1"`, keeping dynamic visitor arrivals and advisories uncached.
+    - Dropped tourism bootstrap queries from 13 down to 3 on warm cache, reducing endpoint latency from ~14.7s down to ~3.3s–3.5s.
+  - **Sanitation Bootstrap Optimization** (`49a3e7b`):
+    - Converted 13 sequential `COUNT(*)` database queries (10 establishment compliance/permit counts + 3 complaint status counts) into in-memory Python calculations over pre-loaded querysets, executing in $< 0.05\text{ ms}$.
+    - Deduplicated open complaints (query 18 & 22) and expiring permits (query 3 & 23), passing pre-sliced/filtered lists directly into `build_mobile_sanitation_notifications`.
+    - Added 15-minute `LocMemCache` caching for sanitary business types & requirements (`"mobile_sanitation_business_types_v1"`) and reused active barangays cache (`"mobile_active_barangays_v1"`).
+    - Reduced query count from 23 down to 5 on warm cache (8 on cold cache), database execution time from 9.04s to 2.01s, and total request time from 11.34s to 4.7s–5.5s.
+    - Verified byte-for-byte and field-by-field response body equivalence against baseline with zero payload divergence.
+  - All 39 automated tests continue to pass cleanly (`Ran 39 tests ... OK`).
+
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
   - Backed up all existing rows to `backend/data_backups/demo_data_backup_full.json` (gitignored, not tracked in git).
