@@ -1524,10 +1524,17 @@
   box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
 }
 
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ================= ARRIVAL TABLE STRUCTURE ================= */
 
 .arrival-table-card table {
   width: 100%;
+  min-width: 850px;
   border-collapse: collapse;
   font-size: 13px;
 }

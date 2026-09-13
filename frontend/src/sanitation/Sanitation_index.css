@@ -364,7 +364,8 @@
 }
 
 .sanitation-stat-card {
-  height: 118px;
+  min-height: 118px;
+  height: auto;
   border: 1px solid #aeb7b1;
   border-radius: 10px;
   background: white;
@@ -373,12 +374,14 @@
   align-items: flex-start;
   justify-content: space-between;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.22);
+  box-sizing: border-box;
 }
 
 .sanitation-stat-card > div:first-child {
   height: 100%;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 }
 
 .sanitation-stat-card p {
@@ -1498,8 +1501,8 @@
   background: white;
   border-radius: 12px;
   padding: 22px 24px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #E2E8F0;
 }
 
 /* TOOLS */
@@ -1565,6 +1568,7 @@
 .establishment-table-wrap {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
 }
 
@@ -2579,12 +2583,14 @@
 .inspection-table-wrap {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .inspection-table-card table {
   width: 100%;
+  min-width: 820px;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-size: 13.5px;
 }
 
@@ -2606,37 +2612,37 @@
   vertical-align: middle;
 }
 
-/* column sizing like Figma */
+/* column sizing with responsive minimums */
 
 .inspection-table-card th:nth-child(1),
 .inspection-table-card td:nth-child(1) {
-  width: 20%;
+  min-width: 180px;
 }
 
 .inspection-table-card th:nth-child(2),
 .inspection-table-card td:nth-child(2) {
-  width: 23%;
+  min-width: 160px;
 }
 
 .inspection-table-card th:nth-child(3),
 .inspection-table-card td:nth-child(3) {
-  width: 15%;
+  min-width: 130px;
 }
 
 .inspection-table-card th:nth-child(4),
 .inspection-table-card td:nth-child(4) {
-  width: 15%;
+  min-width: 130px;
 }
 
 .inspection-table-card th:nth-child(5),
 .inspection-table-card td:nth-child(5) {
-  width: 16%;
+  min-width: 120px;
   text-align: center;
 }
 
 .inspection-table-card th:nth-child(6),
 .inspection-table-card td:nth-child(6) {
-  width: 11%;
+  min-width: 100px;
   text-align: center;
 }
 

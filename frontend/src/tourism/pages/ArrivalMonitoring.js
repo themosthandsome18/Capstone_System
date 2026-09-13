@@ -369,59 +369,61 @@ function ArrivalMonitoring() {
 
       {/* Table */}
       <div className="arrival-table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Group/Guest</th>
-              <th>Male</th>
-              <th>Female</th>
-              <th>Travel Itinerary</th>
-              <th>Overnight</th>
-              <th>Sameday</th>
-              <th>Resort</th>
-              <th>Fee Paid</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.length ? (
-              rows.map((row) => (
-                <tr key={row.survey_id}>
-                  <td>{formatDate(row.date)}</td>
-                  <td className="guest-name">{row.group}</td>
-                  <td>{row.male}</td>
-                  <td>{row.female}</td>
-                  <td>{row.itinerary || "--"}</td>
-                  <td>{displayCount(row.overnight)}</td>
-                  <td>{displayCount(row.sameDay)}</td>
-                  <td>{row.resort}</td>
-                  <td className="fee">{formatCurrency(row.feePaid)}</td>
-                </tr>
-              ))
-            ) : (
+        <div className="table-responsive overflow-x-auto">
+          <table>
+            <thead>
               <tr>
-                <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
-                  {dateMode === "day"
-                    ? `No arrivals recorded for ${formatDate(selectedDate)} at ${activeResortName}.`
-                    : `No arrived tourist records found for ${activeResortName}.`}
-                </td>
+                <th>Date</th>
+                <th>Group/Guest</th>
+                <th>Male</th>
+                <th>Female</th>
+                <th>Travel Itinerary</th>
+                <th>Overnight</th>
+                <th>Sameday</th>
+                <th>Resort</th>
+                <th>Fee Paid</th>
               </tr>
-            )}
+            </thead>
 
-            <tr className="daily-total">
-              <td>{dateMode === "all" ? "TOTAL ARRIVALS" : "DAILY TOTAL"}</td>
-              <td />
-              <td>{dailyTotals.male || 0}</td>
-              <td>{dailyTotals.female || 0}</td>
-              <td />
-              <td>{dailyTotals.overnight || 0}</td>
-              <td>{dailyTotals.sameDay || 0}</td>
-              <td />
-              <td className="fee">{formatCurrency(dailyTotals.feesCollected || 0)}</td>
-            </tr>
-          </tbody>
-        </table>
+            <tbody>
+              {rows.length ? (
+                rows.map((row) => (
+                  <tr key={row.survey_id}>
+                    <td>{formatDate(row.date)}</td>
+                    <td className="guest-name">{row.group}</td>
+                    <td>{row.male}</td>
+                    <td>{row.female}</td>
+                    <td>{row.itinerary || "--"}</td>
+                    <td>{displayCount(row.overnight)}</td>
+                    <td>{displayCount(row.sameDay)}</td>
+                    <td>{row.resort}</td>
+                    <td className="fee">{formatCurrency(row.feePaid)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
+                    {dateMode === "day"
+                      ? `No arrivals recorded for ${formatDate(selectedDate)} at ${activeResortName}.`
+                      : `No arrived tourist records found for ${activeResortName}.`}
+                  </td>
+                </tr>
+              )}
+
+              <tr className="daily-total">
+                <td>{dateMode === "all" ? "TOTAL ARRIVALS" : "DAILY TOTAL"}</td>
+                <td />
+                <td>{dailyTotals.male || 0}</td>
+                <td>{dailyTotals.female || 0}</td>
+                <td />
+                <td>{dailyTotals.overnight || 0}</td>
+                <td>{dailyTotals.sameDay || 0}</td>
+                <td />
+                <td className="fee">{formatCurrency(dailyTotals.feesCollected || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
