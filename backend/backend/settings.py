@@ -159,6 +159,7 @@ else:
             "HOST": config("DB_HOST", default="localhost"),
             "PORT": config("DB_PORT", default="5433"),
             "OPTIONS": DATABASE_OPTIONS,
+            "CONN_MAX_AGE": 600,
         }
     }
 

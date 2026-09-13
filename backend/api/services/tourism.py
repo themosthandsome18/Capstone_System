@@ -82,24 +82,27 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
 ]
 
 
-def build_reference_tables_payload():
+def build_reference_tables_payload(resorts=None):
     payload = {}
 
     for payload_key, (model, serializer_class) in REFERENCE_TABLE_SERIALIZERS.items():
         if model is Resort:
-            from django.db.models import Count, Q
-            from django.utils import timezone
-            today = timezone.localdate()
-            queryset = Resort.objects.annotate(
-                visitor_total=Count(
-                    "tourist_records",
-                    filter=Q(
-                        tourist_records__status="arrived",
-                        tourist_records__arrival_date__year=today.year,
-                        tourist_records__arrival_date__month=today.month
+            if resorts is not None:
+                queryset = resorts
+            else:
+                from django.db.models import Count, Q
+                from django.utils import timezone
+                today = timezone.localdate()
+                queryset = Resort.objects.annotate(
+                    visitor_total=Count(
+                        "tourist_records",
+                        filter=Q(
+                            tourist_records__status="arrived",
+                            tourist_records__arrival_date__year=today.year,
+                            tourist_records__arrival_date__month=today.month
+                        )
                     )
                 )
-            )
         else:
             queryset = model.objects.all()
         payload[payload_key] = serializer_class(queryset, many=True).data

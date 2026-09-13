@@ -79,15 +79,43 @@ from api.services.tourism import build_reference_tables_payload
 def mobile_tourism_bootstrap(request):
     ensure_mobile_reference_data(include_barangays=True)
 
-    destinations = get_mobile_top_destinations()
+    today = timezone.localdate()
+    all_resorts = list(
+        Resort.objects.annotate(
+            visitor_total=Count(
+                "tourist_records",
+                filter=Q(
+                    tourist_records__status="arrived",
+                    tourist_records__arrival_date__year=today.year,
+                    tourist_records__arrival_date__month=today.month,
+                ),
+            )
+        )
+    )
+
+    filtered_destinations = [
+        r for r in all_resorts
+        if r.resort_name not in MOBILE_EXCLUDED_DESTINATION_NAMES
+        and "kwebang" not in (r.resort_name or "").lower()
+    ]
+    filtered_destinations.sort(
+        key=lambda r: (
+            -(getattr(r, "visitor_total", 0) or 0),
+            -(r.monthly_arrivals or 0),
+            -(r.tourism_rating or 0.0),
+            r.resort_name or "",
+        )
+    )
+    destinations = filtered_destinations[:10]
+    top_destination = destinations[0] if destinations else None
 
     return Response(
         {
-            "referenceTables": build_reference_tables_payload(),
+            "referenceTables": build_reference_tables_payload(resorts=all_resorts),
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": BarangaySerializer(Barangay.objects.filter(is_active=True), many=True).data,
-            "notifications": build_mobile_notifications(request),
+            "notifications": build_mobile_notifications(request, top_destination=top_destination),
         }
     )
 
@@ -1010,7 +1038,10 @@ def mobile_household_survey_submit(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-def build_mobile_notifications(request=None):
+_TOP_DESTINATION_UNSET = object()
+
+
+def build_mobile_notifications(request=None, top_destination=_TOP_DESTINATION_UNSET):
     notifications = []
 
     # 1. Query approved tourist records (status == arrived)
@@ -1089,7 +1120,9 @@ def build_mobile_notifications(request=None):
             }
         )
 
-    top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
+    if top_destination is _TOP_DESTINATION_UNSET:
+        top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
+
     if top_destination:
         arrivals = getattr(
             top_destination,
