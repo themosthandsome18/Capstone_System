@@ -164,6 +164,14 @@ else:
     }
 
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "capstone-local-cache",
+    }
+}
+
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {

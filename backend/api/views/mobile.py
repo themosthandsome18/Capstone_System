@@ -74,6 +74,27 @@ from api.services.sanitation import (
 from api.services.tourism import build_reference_tables_payload
 
 
+from django.core.cache import cache
+
+MOBILE_ACTIVE_BARANGAYS_CACHE_KEY = "mobile_active_barangays_v1"
+MOBILE_ACTIVE_BARANGAYS_CACHE_TIMEOUT = 900  # 15 minutes
+
+
+def get_cached_active_barangays():
+    data = cache.get(MOBILE_ACTIVE_BARANGAYS_CACHE_KEY)
+    if data is None:
+        data = BarangaySerializer(
+            Barangay.objects.filter(is_active=True),
+            many=True,
+        ).data
+        cache.set(
+            MOBILE_ACTIVE_BARANGAYS_CACHE_KEY,
+            data,
+            timeout=MOBILE_ACTIVE_BARANGAYS_CACHE_TIMEOUT,
+        )
+    return data
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mobile_tourism_bootstrap(request):
@@ -114,7 +135,7 @@ def mobile_tourism_bootstrap(request):
             "referenceTables": build_reference_tables_payload(resorts=all_resorts),
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
-            "barangays": BarangaySerializer(Barangay.objects.filter(is_active=True), many=True).data,
+            "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_notifications(request, top_destination=top_destination),
         }
     )

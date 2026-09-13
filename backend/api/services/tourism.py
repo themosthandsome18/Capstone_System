@@ -35,7 +35,9 @@ TOURISM_REPORTING_YEAR_CHOICES = ("2024", "2025", "2026")
 ALL_TOURISM_REPORTING_YEARS = "all"
 
 
-REFERENCE_TABLE_SERIALIZERS = {
+from django.core.cache import cache
+
+STATIC_REFERENCE_TABLE_SERIALIZERS = {
     "countries": (Country, CountrySerializer),
     "regions": (Region, RegionSerializer),
     "provinces": (Province, ProvinceSerializer),
@@ -43,8 +45,15 @@ REFERENCE_TABLE_SERIALIZERS = {
     "travelModes": (TravelMode, TravelModeSerializer),
     "boatTypes": (BoatType, BoatTypeSerializer),
     "visitPurposes": (VisitPurpose, VisitPurposeSerializer),
+}
+
+REFERENCE_TABLE_SERIALIZERS = {
+    **STATIC_REFERENCE_TABLE_SERIALIZERS,
     "resorts": (Resort, ResortSerializer),
 }
+
+MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v1"
+MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
 
 
 TOURIST_RECORD_PAYLOAD_FIELDS = [
@@ -83,29 +92,37 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
 
 
 def build_reference_tables_payload(resorts=None):
-    payload = {}
+    static_payload = cache.get(MOBILE_REFERENCE_TABLES_CACHE_KEY)
+    if static_payload is None:
+        static_payload = {
+            payload_key: serializer_class(model.objects.all(), many=True).data
+            for payload_key, (model, serializer_class) in STATIC_REFERENCE_TABLE_SERIALIZERS.items()
+        }
+        cache.set(
+            MOBILE_REFERENCE_TABLES_CACHE_KEY,
+            static_payload,
+            timeout=MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT,
+        )
 
-    for payload_key, (model, serializer_class) in REFERENCE_TABLE_SERIALIZERS.items():
-        if model is Resort:
-            if resorts is not None:
-                queryset = resorts
-            else:
-                from django.db.models import Count, Q
-                from django.utils import timezone
-                today = timezone.localdate()
-                queryset = Resort.objects.annotate(
-                    visitor_total=Count(
-                        "tourist_records",
-                        filter=Q(
-                            tourist_records__status="arrived",
-                            tourist_records__arrival_date__year=today.year,
-                            tourist_records__arrival_date__month=today.month
-                        )
-                    )
-                )
-        else:
-            queryset = model.objects.all()
-        payload[payload_key] = serializer_class(queryset, many=True).data
+    payload = dict(static_payload)
+
+    if resorts is not None:
+        payload["resorts"] = ResortSerializer(resorts, many=True).data
+    else:
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        today = timezone.localdate()
+        queryset = Resort.objects.annotate(
+            visitor_total=Count(
+                "tourist_records",
+                filter=Q(
+                    tourist_records__status="arrived",
+                    tourist_records__arrival_date__year=today.year,
+                    tourist_records__arrival_date__month=today.month,
+                ),
+            )
+        )
+        payload["resorts"] = ResortSerializer(queryset, many=True).data
 
     return payload
 
