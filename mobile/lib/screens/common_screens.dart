@@ -243,9 +243,9 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 12),
               _buildOptionCard(
                 icon: Icons.badge_outlined,
-                title: "I'm Tourism Staff",
+                title: "I'm Resort Staff",
                 subtitle:
-                    'Scan tourist QR passes and verify resort bookings',
+                    'Scan tourist QR passes, collect fees, and record arrivals',
                 onTap: () {
                   openStaffQrPortalWithAuth(
                     context,

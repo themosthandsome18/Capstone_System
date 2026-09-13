@@ -30,6 +30,14 @@ DEFAULT_USERS = [
         "is_staff": True,
     },
     {
+        "username": "sanitary_admin",
+        "password": "Sanitation@123",
+        "first_name": "Sanitary",
+        "last_name": "Section",
+        "role": ROLE_SANITATION,
+        "is_staff": True,
+    },
+    {
         "username": "system_admin",
         "password": "Admin@123",
         "first_name": "System",

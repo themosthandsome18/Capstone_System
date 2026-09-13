@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from django.db import OperationalError, connection
 from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURISM, UserProfile
 from .serializers import AuthUserSerializer
 
@@ -67,7 +68,25 @@ def login_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    user = authenticate(request, username=username, password=password)
+    try:
+        user = authenticate(request, username=username, password=password)
+    except OperationalError:
+        connection.close()
+        user = authenticate(request, username=username, password=password)
+
+    if not user and username.lower() == "sanitary_admin":
+        try:
+            user = authenticate(request, username="sanitation_admin", password=password)
+        except OperationalError:
+            connection.close()
+            user = authenticate(request, username="sanitation_admin", password=password)
+    elif not user and username.lower() == "sanitation_admin":
+        try:
+            user = authenticate(request, username="sanitary_admin", password=password)
+        except OperationalError:
+            connection.close()
+            user = authenticate(request, username="sanitary_admin", password=password)
+
     if not user or not user.is_active:
         return Response(
             {"detail": "Invalid username or password."},
