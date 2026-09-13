@@ -18,7 +18,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import 'utils/web_branding.dart';
 
 part 'constants/colors.dart';
 part 'utils/helpers.dart';
@@ -34,12 +37,37 @@ part 'screens/qr_scanner_screen.dart';
 part 'screens/tourist_qr_checkin_screens.dart';
 part 'widgets/striped_polygon_layer.dart';
 
-void main() {
+bool isSanitationModule() {
   if (appModule == 'sanitation') {
+    return true;
+  }
+  if (kIsWeb) {
+    final uri = Uri.base;
+    final moduleParam =
+        (uri.queryParameters['module'] ??
+                uri.queryParameters['mode'] ??
+                uri.queryParameters['app'])
+            ?.toLowerCase();
+    if (moduleParam == 'sanitation') {
+      return true;
+    }
+    final path = uri.path.toLowerCase();
+    final fragment = uri.fragment.toLowerCase();
+    if (path.contains('sanitation') || fragment.contains('sanitation')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void main() {
+  if (isSanitationModule()) {
+    setWebBranding(WebBrandingModule.sanitation);
     runApp(const SanitationStandaloneApp());
     return;
   }
 
+  setWebBranding(WebBrandingModule.tourism);
   runApp(const MaubanMobileApp());
 }
 
@@ -48,9 +76,10 @@ class MaubanMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.tourism);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mauban Tourism',
+      title: 'Mauban Tourism & Travel Pass',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.green,

@@ -18,19 +18,57 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Mauban Tourism Pass & Sanitary Compliance Mobile Application">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mauban_mobile_app">
+  <meta name="apple-mobile-web-app-title" content="Mauban Portal">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Dynamic Favicon -->
+  <link id="dynamic-favicon" rel="icon" type="image/png" href="favicon_tourism.png"/>
 
-  <title>mauban_mobile_app</title>
+  <title>Mauban Tourism & Travel Pass</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    function updateWebBranding(moduleName) {
+      var isSanitation = false;
+      if (moduleName === 'sanitation') {
+        isSanitation = true;
+      } else if (moduleName === 'tourism') {
+        isSanitation = false;
+      } else {
+        var href = (window.location.href || '').toLowerCase();
+        isSanitation = href.indexOf('sanitation') !== -1;
+      }
+
+      var title = isSanitation
+        ? 'Mauban Sanitation & Health Portal'
+        : 'Mauban Tourism & Travel Pass';
+
+      var favicon = isSanitation
+        ? 'favicon_sanitation.png'
+        : 'favicon_tourism.png';
+
+      document.title = title;
+
+      var link = document.getElementById('dynamic-favicon') || document.querySelector("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.id = 'dynamic-favicon';
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.type = 'image/png';
+      link.href = favicon;
+    }
+    window.updateWebBranding = updateWebBranding;
+    try {
+      updateWebBranding();
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <!--

@@ -4124,9 +4124,10 @@ class SanitationStandaloneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    setWebBranding(WebBrandingModule.sanitation);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mauban Sanitation & Community',
+      title: 'Mauban Sanitation & Health Portal',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.deepGreen,
