@@ -135,6 +135,16 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Updated Tourism gateway wording from "I'm Tourism Staff" to "I'm Resort Staff" with descriptive subtitle and card context for front-desk check-in personnel (`mobile/lib/screens/common_screens.dart`).
   - Updated `StaffAuthGateDialog` in `mobile/lib/screens/tourist_qr_checkin_screens.dart` with debug auto-prefill for staff credentials (`tourism_admin / Tourism@123`) and a "Quick Demo Access" card with auto-fill and direct scanner preview bypass.
   - Verified 39/39 backend tests passing and 0 Flutter analyzer issues.
+- **Sanitation Mobile UX Polish & Web Branding Persistence** (`0d4fd99`)
+  - **Quick Actions Realigned**: Updated `SanitationDashboardPage` to prioritize direct operational field workflows instead of duplicating bottom navigation tabs:
+    * Action 1: "Inspection" (`Icons.fact_check_outlined`) -> routes to `NewInspectionPage` (`SanitationInspectionPage`).
+    * Action 2: "Verify QR" (`Icons.qr_code_scanner`) -> routes to `VerifyPermitPage` (`PermitVerificationPage`).
+    * Action 3: "Household" (`Icons.assignment_outlined`) -> routes to `HouseholdSurveyPage`.
+    * Action 4: "Track Report" (`Icons.manage_search_outlined`) -> routes to `TrackReportStatusPage` (`ReportTrackerPage`).
+  - **Notifications Copy Sanitized**: Updated `NotificationPage` header subtitle from "Tourism and community updates" to "Sanitary advisories and compliance updates" to reflect sanitary compliance rather than tourism.
+  - **Web Tooltip Artifacts Suppressed**: Configured `tooltip: ''` across back `IconButton` widgets in `NewInspectionPage`, `HouseholdSurveyPage`, `VerifyPermitPage`, `TrackReportStatusPage`, and `FormPageScaffold` to prevent dangling gray web tooltip popovers from hovering over form headers in browser environments.
+  - **Web Branding Resilience**: Fixed module reversion in web simulator/responsive preview by guarding `MaubanMobileApp` against overwriting active sanitation branding, asserting sanitation branding in active screen trees, and persisting active module in the JS bridge.
+  - Verified with 0 Flutter analysis issues and all unit/widget tests passing cleanly.
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
