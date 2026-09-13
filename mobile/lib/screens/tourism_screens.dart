@@ -1568,31 +1568,33 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                 ),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Enter an item you need to pack for your island trip:',
-                  style: TextStyle(fontSize: 13, color: AppColors.muted),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Extra beach towel, Sunscreen SPF50',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter an item you need to pack for your island trip:',
+                    style: TextStyle(fontSize: 13, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Extra beach towel, Sunscreen SPF50',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -2423,42 +2425,46 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
           // Itinerary Segment Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(itineraries.length, (idx) {
-                final isSelected = _selectedItineraryIndex == idx;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: FilterChip(
-                    label: Text(
-                      idx == 0
-                          ? '🏝️ Cagbalete Loop'
-                          : idx == 1
-                          ? '🌿 Waterfalls & Heritage'
-                          : '🍲 Food & Culture',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            isSelected ? FontWeight.w900 : FontWeight.w600,
-                        color:
-                            isSelected ? Colors.white : const Color(0xFF334155),
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: List.generate(itineraries.length, (idx) {
+                  final isSelected = _selectedItineraryIndex == idx;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: FilterChip(
+                      label: Text(
+                        idx == 0
+                            ? '🏝️ Cagbalete Loop'
+                            : idx == 1
+                            ? '🌿 Waterfalls & Heritage'
+                            : '🍲 Food & Culture',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight:
+                              isSelected ? FontWeight.w900 : FontWeight.w600,
+                          color:
+                              isSelected ? Colors.white : const Color(0xFF334155),
+                        ),
                       ),
+                      selected: isSelected,
+                      selectedColor: AppColors.deepGreen,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      checkmarkColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      onSelected:
+                          (_) => setState(() => _selectedItineraryIndex = idx),
                     ),
-                    selected: isSelected,
-                    selectedColor: AppColors.deepGreen,
-                    backgroundColor: const Color(0xFFF1F5F9),
-                    checkmarkColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    onSelected:
-                        (_) => setState(() => _selectedItineraryIndex = idx),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
           ),
           const SizedBox(height: 18),
@@ -2500,23 +2506,31 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule,
-                          size: 15,
-                          color: Color(0xFF15803D),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          current['duration'] as String,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule,
+                            size: 15,
                             color: Color(0xFF15803D),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              current['duration'] as String,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

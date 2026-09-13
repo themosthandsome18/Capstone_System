@@ -40,7 +40,10 @@ function SanitationDashboard() {
   if (loading) {
     return (
       <div className="sanitation-dashboard">
-        Loading sanitation dashboard...
+        <div className="sanitation-loading">
+          <div className="sanitation-spinner" />
+          <p className="sanitation-loading-text">Loading sanitation dashboard...</p>
+        </div>
       </div>
     );
   }

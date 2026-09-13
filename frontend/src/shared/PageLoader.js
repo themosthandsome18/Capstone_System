@@ -47,19 +47,12 @@ export default function PageLoader({
 }
 
 /**
- * Normal Sanitation Loader: Official Mauban Municipal Seal with Emerald Circular Spinner
+ * Clean & Minimalist Circular Spinner for Sanitation
  */
 function SanitationNormalLoader() {
   return (
     <div className="sanitation-normal-loader">
-      <div className="sanitation-normal-loader__ring-outer">
-        <div className="sanitation-normal-loader__ring-inner" />
-        <img
-          src={maubanLogo}
-          alt="Municipality of Mauban"
-          className="sanitation-normal-loader__logo"
-        />
-      </div>
+      <div className="sanitation-spinner" />
     </div>
   );
 }

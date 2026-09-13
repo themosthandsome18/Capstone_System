@@ -509,7 +509,14 @@ function EstablishmentRecords() {
   }
 
   if (loading) {
-    return <div className="establishment-page">Loading establishments...</div>;
+    return (
+      <div className="establishment-page">
+        <div className="sanitation-loading">
+          <div className="sanitation-spinner" />
+          <p className="sanitation-loading-text">Loading establishments...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
