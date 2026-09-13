@@ -130,6 +130,11 @@ This project is being developed with a Claude-based planner/reviewer working alo
   - Extended dashboard `ListView` padding to 100px bottom clearance (`padding: const EdgeInsets.fromLTRB(16, 12, 16, 100)`) so the "Recent Activity" card and last action buttons remain fully visible and unobscured by the bottom navigation bar.
   - Added clean empty-state card for the Urgent Alerts section when no active violations or permit follow-ups exist.
   - Verified with 0 Flutter analysis issues.
+- **Auth Resilience & Resort Staff Check-in Gateway Updates** (`2e186ab`)
+  - Added `sanitary_admin` user provisioning in `backend/api/management/commands/create_default_users.py` and automatic alias fallback in `login_view` (`backend/api/auth_views.py`) with connection pooler reconnect retry handling for `OperationalError`.
+  - Updated Tourism gateway wording from "I'm Tourism Staff" to "I'm Resort Staff" with descriptive subtitle and card context for front-desk check-in personnel (`mobile/lib/screens/common_screens.dart`).
+  - Updated `StaffAuthGateDialog` in `mobile/lib/screens/tourist_qr_checkin_screens.dart` with debug auto-prefill for staff credentials (`tourism_admin / Tourism@123`) and a "Quick Demo Access" card with auto-fill and direct scanner preview bypass.
+  - Verified 39/39 backend tests passing and 0 Flutter analyzer issues.
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
