@@ -83,6 +83,7 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
+    "storages",
 ]
 
 LOCAL_APPS = [
@@ -223,14 +224,36 @@ REST_FRAMEWORK = {
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+# Cloud Storage (Supabase S3-Compatible Storage)
+USE_S3_STORAGE = config("USE_S3_STORAGE", default=False, cast=bool)
+AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="media")
+AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")
+AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="ap-southeast-1")
+AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="")
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = config("AWS_QUERYSTRING_AUTH", default=False, cast=bool)
+AWS_S3_FILE_OVERWRITE = False
+
+if USE_S3_STORAGE and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 # Media files (Uploads)
 MEDIA_URL = "/media/"

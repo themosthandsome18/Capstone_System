@@ -310,7 +310,7 @@ def resort_image_upload(request):
         safe_name = file.name.replace(" ", "_")
         filename = f"resorts/{int(time.time())}_{safe_name}"
         saved_path = default_storage.save(filename, file)
-        urls.append(f"/media/{saved_path}")
+        urls.append(default_storage.url(saved_path))
 
     return Response(
         {
