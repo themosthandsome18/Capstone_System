@@ -1809,3 +1809,139 @@ class NotificationWebhookCronTests(TestCase):
         resp = self.client.post(self.url, HTTP_X_CRON_KEY="some_key")
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(resp.json()["detail"], "Cron trigger is not configured on this server.")
+
+
+class SanitaryStaffApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        # Admin user
+        self.admin = User.objects.create_user(
+            username="sanitary_superadmin",
+            password="Password@123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        UserProfile.objects.create(user=self.admin, role=ROLE_ADMIN)
+        self.admin_token, _ = Token.objects.get_or_create(user=self.admin)
+
+        # Existing staff inspector
+        self.inspector = User.objects.create_user(
+            username="inspector_santos",
+            password="Password@123",
+            first_name="Maria",
+            last_name="Santos",
+            email="maria.santos@mauban.gov.ph",
+            is_staff=True,
+            is_active=True,
+        )
+        UserProfile.objects.create(user=self.inspector, role=ROLE_SANITATION)
+        self.inspector_token, _ = Token.objects.get_or_create(user=self.inspector)
+
+        # Tourist user
+        self.tourist = User.objects.create_user(
+            username="tourist_guest",
+            password="Password@123",
+        )
+        UserProfile.objects.create(user=self.tourist, role=ROLE_TOURISM)
+        self.tourist_token, _ = Token.objects.get_or_create(user=self.tourist)
+
+    def test_get_staff_list(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        response = self.client.get("/api/v1/sanitation/staff/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [u["username"] for u in response.json()]
+        self.assertIn("inspector_santos", usernames)
+
+    def test_create_staff_success(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        payload = {
+            "first_name": "Juan",
+            "last_name": "Dela Cruz",
+            "username": "inspector_juan",
+            "password": "SecurePassword@123",
+            "email": "juan.cruz@mauban.gov.ph",
+        }
+        response = self.client.post("/api/v1/sanitation/staff/", payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data["username"], "inspector_juan")
+        self.assertEqual(data["first_name"], "Juan")
+        self.assertEqual(data["last_name"], "Dela Cruz")
+        self.assertEqual(data["role"], ROLE_SANITATION)
+        self.assertTrue(data["is_active"])
+
+        # Check in DB
+        created_user = User.objects.get(username="inspector_juan")
+        self.assertTrue(created_user.check_password("SecurePassword@123"))
+        self.assertTrue(created_user.is_staff)
+        self.assertEqual(created_user.profile.role, ROLE_SANITATION)
+
+    def test_create_staff_validation_errors(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        # Missing fields
+        resp = self.client.post("/api/v1/sanitation/staff/", {})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Password too short
+        resp = self.client.post("/api/v1/sanitation/staff/", {
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "test_short",
+            "password": "123",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("at least 6 characters", resp.json()["detail"])
+
+        # Duplicate username
+        resp = self.client.post("/api/v1/sanitation/staff/", {
+            "first_name": "Maria",
+            "last_name": "Santos",
+            "username": "inspector_santos",
+            "password": "Password@123",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already in use", resp.json()["detail"])
+
+    def test_toggle_staff_status(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        # Deactivate
+        resp = self.client.patch(
+            f"/api/v1/sanitation/staff/{self.inspector.pk}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.json()["is_active"])
+        self.inspector.refresh_from_db()
+        self.assertFalse(self.inspector.is_active)
+
+        # Reactivate
+        resp = self.client.patch(
+            f"/api/v1/sanitation/staff/{self.inspector.pk}/",
+            {"is_active": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.json()["is_active"])
+        self.inspector.refresh_from_db()
+        self.assertTrue(self.inspector.is_active)
+
+    def test_prevent_self_deactivation(self):
+        # Admin cannot deactivate self if admin user was targeted
+        admin_profile = self.admin.profile
+        admin_profile.role = ROLE_SANITATION
+        admin_profile.save()
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.admin_token.key}")
+        resp = self.client.patch(
+            f"/api/v1/sanitation/staff/{self.admin.pk}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cannot deactivate your own", resp.json()["detail"])
+
+    def test_unauthorized_access(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourist_token.key}")
+        resp = self.client.get("/api/v1/sanitation/staff/")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

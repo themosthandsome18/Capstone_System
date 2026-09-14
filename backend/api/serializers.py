@@ -71,6 +71,30 @@ class AuthUserSerializer(serializers.ModelSerializer):
         return obj.get_full_name() or obj.username
 
 
+class SanitaryStaffSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source="profile.role", read_only=True)
+    role_label = serializers.CharField(source="profile.get_role_display", read_only=True)
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "is_active",
+            "date_joined",
+            "role",
+            "role_label",
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
 class ActivityLogSerializer(serializers.ModelSerializer):
     action_label = serializers.CharField(source="get_action_display", read_only=True)
     module_label = serializers.CharField(source="get_module_display", read_only=True)

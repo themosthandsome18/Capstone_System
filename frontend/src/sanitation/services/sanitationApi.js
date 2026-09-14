@@ -198,3 +198,22 @@ export function updateHouseholdRecord(id, payload) {
 export function deleteHouseholdRecord(id) {
   return remove(householdPath(`/records/${encodeURIComponent(id)}/`));
 }
+
+
+export function fetchSanitaryStaff() {
+  return request(sanitationPath("/staff/"));
+}
+
+
+export function createSanitaryStaff(payload) {
+  return save(sanitationPath("/staff/"), "POST", payload);
+}
+
+
+export function updateSanitaryStaff(id, payload) {
+  return save(
+    sanitationPath(`/staff/${encodeURIComponent(id)}/`),
+    "PATCH",
+    payload
+  );
+}

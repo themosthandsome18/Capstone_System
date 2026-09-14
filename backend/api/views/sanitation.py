@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -10,6 +11,8 @@ from api.models import (
     ACTION_DELETE,
     ACTION_UPDATE,
     MODULE_SANITATION,
+    ROLE_ADMIN,
+    ROLE_SANITATION,
     Barangay,
     HouseholdSanitationRecord,
     SanitaryBusinessType,
@@ -17,8 +20,9 @@ from api.models import (
     SanitaryEstablishment,
     SanitaryInspection,
     SanitaryPermitRenewal,
+    UserProfile,
 )
-from api.permissions import module_required
+from api.permissions import get_user_role, module_required
 from api.seeders import (
     ensure_initial_barangays,
     ensure_initial_household_data,
@@ -33,6 +37,7 @@ from api.serializers import (
     SanitaryInspectionCreateSerializer,
     SanitaryInspectionSerializer,
     SanitaryPermitRenewalSerializer,
+    SanitaryStaffSerializer,
 )
 from api.services.activity import log_activity
 from api.services.household import build_household_dashboard_payload
@@ -553,3 +558,176 @@ def household_record_detail(request, household_id):
     )
 
     return Response(serializer.data)
+
+
+@api_view(["GET", "POST"])
+@module_required("sanitation")
+def sanitation_staff_list(request):
+    if request.method == "GET":
+        staff_users = (
+            User.objects.filter(profile__role=ROLE_SANITATION)
+            .select_related("profile")
+            .order_by("-date_joined")
+        )
+        serializer = SanitaryStaffSerializer(staff_users, many=True)
+        return Response(serializer.data)
+
+    # POST: Create a new Sanitary Inspector
+    user_role = get_user_role(request.user)
+    if not (request.user.is_staff or request.user.is_superuser or user_role == ROLE_ADMIN):
+        return Response(
+            {"detail": "Administrator privileges are required to create inspector accounts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    first_name = (request.data.get("first_name") or "").strip()
+    last_name = (request.data.get("last_name") or "").strip()
+    username = (request.data.get("username") or "").strip()
+    password = request.data.get("password") or ""
+    email = (request.data.get("email") or "").strip()
+
+    if not first_name:
+        return Response(
+            {"detail": "First name is required.", "field": "first_name"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not last_name:
+        return Response(
+            {"detail": "Last name is required.", "field": "last_name"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not username:
+        return Response(
+            {"detail": "Username is required.", "field": "username"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not password:
+        return Response(
+            {"detail": "Password is required.", "field": "password"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if len(password) < 6:
+        return Response(
+            {"detail": "Password must be at least 6 characters long.", "field": "password"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if User.objects.filter(username__iexact=username).exists():
+        return Response(
+            {"detail": f"Username '{username}' is already in use.", "field": "username"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if email and User.objects.filter(email__iexact=email).exists():
+        return Response(
+            {"detail": f"Email address '{email}' is already in use.", "field": "email"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    new_user = User(
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        is_staff=True,
+        is_active=True,
+    )
+    new_user.set_password(password)
+    new_user.save()
+
+    UserProfile.objects.update_or_create(
+        user=new_user,
+        defaults={"role": ROLE_SANITATION},
+    )
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_CREATE,
+        new_user,
+        label=f"{new_user.get_full_name() or new_user.username} ({new_user.username})",
+        record_id=new_user.pk,
+    )
+
+    return Response(
+        SanitaryStaffSerializer(new_user).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PATCH", "PUT"])
+@module_required("sanitation")
+def sanitation_staff_detail(request, user_id):
+    staff_user = get_object_or_404(
+        User.objects.select_related("profile"),
+        pk=user_id,
+        profile__role=ROLE_SANITATION,
+    )
+
+    if request.method == "GET":
+        return Response(SanitaryStaffSerializer(staff_user).data)
+
+    user_role = get_user_role(request.user)
+    if not (request.user.is_staff or request.user.is_superuser or user_role == ROLE_ADMIN):
+        return Response(
+            {"detail": "Administrator privileges are required to modify inspector accounts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Prevent deactivating own account
+    if "is_active" in request.data:
+        raw_active = request.data["is_active"]
+        if isinstance(raw_active, str):
+            target_active = raw_active.strip().lower() in ("true", "1", "t", "yes")
+        else:
+            target_active = bool(raw_active)
+
+        if not target_active and staff_user.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot deactivate your own active account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        staff_user.is_active = target_active
+
+    if "first_name" in request.data:
+        first_name = str(request.data["first_name"]).strip()
+        if first_name:
+            staff_user.first_name = first_name
+
+    if "last_name" in request.data:
+        last_name = str(request.data["last_name"]).strip()
+        if last_name:
+            staff_user.last_name = last_name
+
+    if "email" in request.data:
+        email = str(request.data["email"]).strip()
+        if email and User.objects.filter(email__iexact=email).exclude(pk=staff_user.pk).exists():
+            return Response(
+                {"detail": f"Email address '{email}' is already in use.", "field": "email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        staff_user.email = email
+
+    if "password" in request.data:
+        new_pwd = request.data["password"]
+        if new_pwd:
+            if len(new_pwd) < 6:
+                return Response(
+                    {"detail": "Password must be at least 6 characters long.", "field": "password"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            staff_user.set_password(new_pwd)
+
+    staff_user.save()
+
+    status_label = "Activated" if staff_user.is_active else "Deactivated"
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_UPDATE,
+        staff_user,
+        label=f"{staff_user.get_full_name() or staff_user.username} ({staff_user.username}) - {status_label}",
+        record_id=staff_user.pk,
+    )
+
+    return Response(SanitaryStaffSerializer(staff_user).data)

@@ -46,6 +46,8 @@ from .views.sanitation import (
     sanitation_renewal_detail,
     sanitation_renewal_list,
     sanitation_report_data,
+    sanitation_staff_detail,
+    sanitation_staff_list,
     sanitation_submission_data,
 )
 from .views.mobile import (
@@ -132,6 +134,10 @@ urlpatterns = [
     path("sanitation/complaints/<int:complaint_id>/", sanitation_complaint_detail),
     path("sanitation/submissions/", sanitation_submission_data),
     path("sanitation/reports/", sanitation_report_data),
+    path("sanitation/staff/", sanitation_staff_list),
+    path("sanitation/staff/<int:user_id>/", sanitation_staff_detail),
+    path("v1/sanitation/staff/", sanitation_staff_list),
+    path("v1/sanitation/staff/<int:user_id>/", sanitation_staff_detail),
 
     #Household Routes
     path("households/bootstrap/", household_bootstrap_data),

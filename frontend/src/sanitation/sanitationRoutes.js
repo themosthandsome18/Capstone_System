@@ -14,6 +14,7 @@ import HouseholdRecords from "./pages/HouseholdRecords";
 import SanitaryGISMap from "./pages/SanitaryGISMap";
 import HouseholdReportAnalytics from "./pages/HouseholdReportAnalytics";
 import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
+import StaffManagement from "./pages/StaffManagement";
 
 /**
  * Modular Sanitation Routes
@@ -105,6 +106,12 @@ export const sanitationRoutes = [
         () => <ActivityLogsPage module="sanitation" />,
         "Activity Logs"
       )
+    ),
+  },
+  {
+    path: "staff",
+    element: React.createElement(
+      withErrorBoundary(StaffManagement, "Inspector / Staff Management")
     ),
   },
 ];

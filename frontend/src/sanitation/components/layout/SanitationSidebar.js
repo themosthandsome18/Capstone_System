@@ -20,6 +20,10 @@ const householdLinks = [
   { to: "/sanitation/activity-logs", label: "Activity Logs" },
 ];
 
+const adminLinks = [
+  { to: "/sanitation/staff", label: "Staff / Inspector Accounts" },
+];
+
 function SanitationSidebar() {
   const renderLinks = (links) =>
     links.map((item) => (
@@ -54,6 +58,11 @@ function SanitationSidebar() {
       <div className="sanitation-nav-group household-group">
         <span className="nav-group-title">HOUSEHOLD</span>
         {renderLinks(householdLinks)}
+      </div>
+
+      <div className="sanitation-nav-group admin-group">
+        <span className="nav-group-title">ADMINISTRATION</span>
+        {renderLinks(adminLinks)}
       </div>
     </aside>
   );
