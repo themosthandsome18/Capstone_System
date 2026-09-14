@@ -166,6 +166,19 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * **Record Timeline**: Vertical timeline tracking recent inspection events, inspector remarks, and timestamps with color-coded status indicator dots (green = compliant/passed, amber = notice issued, red = violation).
   - Maintained strict account-based authentication with no unauthenticated bypasses, credential disclosures, or mock shortcuts.
   - Verified 0 issues via `flutter analyze` and all widget/unit tests passing cleanly.
+- **Sanitary Inspector & Staff Management Module** (`074c4c1`)
+  - Implemented full-stack Inspector / Staff Management module allowing LGU administrators to manage field inspector credentials and operational statuses without accessing Django `/admin`.
+  - **Backend API**:
+    * Implemented `/api/v1/sanitation/staff/` and `/api/sanitation/staff/` (`GET`, `POST`) with role checks, minimum password length enforcement (6 characters), unique username validation, secure password hashing via `set_password()`, `is_staff: True` provisioning, and `ROLE_SANITATION` profile metadata.
+    * Implemented `/api/v1/sanitation/staff/<id>/` and `/api/sanitation/staff/<id>/` (`GET`, `PATCH`, `PUT`) supporting account activation/deactivation toggles, profile updates, and self-deactivation guards protecting administrators.
+    * Integrated audit logging in `ActivityLog` for all account creations and status changes.
+    * Added comprehensive automated test suite `SanitaryStaffApiTests` covering all CRUD and security access constraints (6/6 tests passing).
+  - **Frontend Web Dashboard**:
+    * Added `StaffManagement.js` with KPI metric cards (Total, Active, Inactive), search and status filters, responsive inspector directory table, "+ Add New Inspector" modal with validation, and confirmation dialogs for account status toggles.
+    * Updated `SanitationSidebar.js` with dedicated `ADMINISTRATION` navigation group linking to `/sanitation/staff`.
+    * Integrated modular route in `sanitationRoutes.js` guarded with `withErrorBoundary`.
+    * Cleaned up dummy/sample test accounts from the database (`Deleted 7 sample user records`).
+  - Production build verified with 0 errors and 0 warnings (`npm run build`).
 
 
 ## Database Cleaned for Deployment (Sept 2026)
