@@ -41,6 +41,11 @@ from api.services.tourism import (
     build_reports_payload,
     build_tourist_records_payload,
 )
+from api.services.upload import (
+    StorageServiceError,
+    UploadValidationError,
+    save_image_file,
+)
 
 
 def auto_update_no_show_bookings():
@@ -306,11 +311,19 @@ def resort_image_upload(request):
         )
 
     urls = []
-    for file in files:
-        safe_name = file.name.replace(" ", "_")
-        filename = f"resorts/{int(time.time())}_{safe_name}"
-        saved_path = default_storage.save(filename, file)
-        urls.append(default_storage.url(saved_path))
+    try:
+        for file in files:
+            urls.append(save_image_file(file, "resorts"))
+    except UploadValidationError as val_err:
+        return Response(
+            {"error": val_err.message, "detail": val_err.message},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except StorageServiceError as stor_err:
+        return Response(
+            {"error": stor_err.message, "detail": stor_err.message},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     return Response(
         {

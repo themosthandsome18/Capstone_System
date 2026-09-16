@@ -1945,3 +1945,134 @@ class SanitaryStaffApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourist_token.key}")
         resp = self.client.get("/api/v1/sanitation/staff/")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from api.services.upload import (
+    MAX_FILE_SIZE_BYTES,
+    StorageServiceError,
+    UploadValidationError,
+    save_image_file,
+    validate_image_file,
+)
+
+
+class SecureUploadTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.tourism_user = User.objects.create_user(
+            username="tourism_staff_upload",
+            password="Password@123",
+            is_staff=True,
+        )
+        UserProfile.objects.create(user=self.tourism_user, role=ROLE_TOURISM)
+        self.tourism_token, _ = Token.objects.get_or_create(user=self.tourism_user)
+
+        self.inspector_user = User.objects.create_user(
+            username="inspector_upload",
+            password="Password@123",
+            is_staff=True,
+        )
+        UserProfile.objects.create(user=self.inspector_user, role=ROLE_SANITATION)
+        self.inspector_token, _ = Token.objects.get_or_create(user=self.inspector_user)
+
+    def test_validate_image_file_valid_types(self):
+        jpg_file = SimpleUploadedFile("photo.jpg", b"fake jpg content", content_type="image/jpeg")
+        self.assertEqual(validate_image_file(jpg_file), ".jpg")
+
+        png_file = SimpleUploadedFile("photo.png", b"fake png content", content_type="image/png")
+        self.assertEqual(validate_image_file(png_file), ".png")
+
+        webp_file = SimpleUploadedFile("photo.webp", b"fake webp content", content_type="image/webp")
+        self.assertEqual(validate_image_file(webp_file), ".webp")
+
+    def test_validate_image_file_oversized(self):
+        large_content = b"0" * (MAX_FILE_SIZE_BYTES + 1)
+        oversized = SimpleUploadedFile("big.jpg", large_content, content_type="image/jpeg")
+        with self.assertRaises(UploadValidationError) as ctx:
+            validate_image_file(oversized)
+        self.assertEqual(str(ctx.exception), "File size exceeds 5MB limit.")
+
+    def test_validate_image_file_disallowed_type(self):
+        pdf_file = SimpleUploadedFile("doc.pdf", b"%PDF-1.4...", content_type="application/pdf")
+        with self.assertRaises(UploadValidationError) as ctx:
+            validate_image_file(pdf_file)
+        self.assertEqual(str(ctx.exception), "Only JPG, PNG, and WebP images are allowed.")
+
+        exe_file = SimpleUploadedFile("malware.exe", b"MZ...", content_type="image/jpeg")
+        with self.assertRaises(UploadValidationError) as ctx:
+            validate_image_file(exe_file)
+        self.assertEqual(str(ctx.exception), "Only JPG, PNG, and WebP images are allowed.")
+
+    def test_save_image_file_generates_uuid_name(self):
+        test_file = SimpleUploadedFile("my vacation photo.JPG", b"sample-bytes", content_type="image/jpeg")
+        url = save_image_file(test_file, "resorts")
+        self.assertIn("resorts/", url)
+        self.assertNotIn("my vacation photo", url)
+        self.assertTrue(url.endswith(".jpg"))
+
+    def test_save_image_file_storage_error_raises_503_exception(self):
+        test_file = SimpleUploadedFile("photo.png", b"sample-bytes", content_type="image/png")
+        with patch("api.services.upload.default_storage.save", side_effect=IOError("Storage quota exceeded")):
+            with self.assertRaises(StorageServiceError) as ctx:
+                save_image_file(test_file, "resorts")
+            self.assertEqual(str(ctx.exception), "Image upload failed. Storage service unavailable or full.")
+
+    def test_resort_image_upload_endpoint_success(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        test_file = SimpleUploadedFile("resort_view.png", b"image-content", content_type="image/png")
+        response = self.client.post("/api/resorts/upload-image/", {"image": test_file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("url", response.json())
+        self.assertIn("resorts/", response.json()["url"])
+
+    def test_resort_image_upload_endpoint_oversized_rejected(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        oversized = SimpleUploadedFile("huge.png", b"0" * (MAX_FILE_SIZE_BYTES + 1), content_type="image/png")
+        response = self.client.post("/api/resorts/upload-image/", {"image": oversized}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["error"], "File size exceeds 5MB limit.")
+
+    def test_resort_image_upload_endpoint_invalid_type_rejected(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        bad_file = SimpleUploadedFile("document.pdf", b"pdf-data", content_type="application/pdf")
+        response = self.client.post("/api/resorts/upload-image/", {"image": bad_file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["error"], "Only JPG, PNG, and WebP images are allowed.")
+
+    def test_resort_image_upload_endpoint_storage_failure_503(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.tourism_token.key}")
+        test_file = SimpleUploadedFile("resort.jpg", b"image-data", content_type="image/jpeg")
+        with patch("api.services.upload.default_storage.save", side_effect=Exception("S3 Connection Timeout")):
+            response = self.client.post("/api/resorts/upload-image/", {"image": test_file}, format="multipart")
+            self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+            self.assertEqual(response.json()["error"], "Image upload failed. Storage service unavailable or full.")
+
+    def test_mobile_sanitation_report_upload_validation(self):
+        bad_file = SimpleUploadedFile("evidence.pdf", b"pdf-data", content_type="application/pdf")
+        response = self.client.post(
+            "/api/mobile/sanitation/reports/",
+            {
+                "category": "Solid Waste",
+                "description": "Garbage dump near creek",
+                "photo": bad_file,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["error"], "Only JPG, PNG, and WebP images are allowed.")
+
+    def test_mobile_sanitation_report_storage_failure_503(self):
+        good_file = SimpleUploadedFile("trash.jpg", b"image-data", content_type="image/jpeg")
+        with patch("api.services.upload.default_storage.save", side_effect=Exception("S3 Storage Bucket Full")):
+            response = self.client.post(
+                "/api/mobile/sanitation/reports/",
+                {
+                    "category": "Solid Waste",
+                    "description": "Garbage dump near creek",
+                    "photo": good_file,
+                },
+                format="multipart",
+            )
+            self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+            self.assertEqual(response.json()["error"], "Image upload failed. Storage service unavailable or full.")

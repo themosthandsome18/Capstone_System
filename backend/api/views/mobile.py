@@ -72,6 +72,11 @@ from api.services.sanitation import (
     with_establishment_rollups,
 )
 from api.services.tourism import build_reference_tables_payload
+from api.services.upload import (
+    StorageServiceError,
+    UploadValidationError,
+    save_image_file,
+)
 
 
 from django.core.cache import cache
@@ -510,12 +515,19 @@ def mobile_feedback_submit(request):
         or request.FILES.getlist("images")
     )
     if uploads:
-        from django.core.files.storage import default_storage
-        for upload in uploads:
-            safe_name = upload.name.replace(" ", "_")
-            filename = f"feedback/{int(time.time())}_{safe_name}"
-            saved_path = default_storage.save(filename, upload)
-            photos.append(default_storage.url(saved_path))
+        try:
+            for upload in uploads:
+                photos.append(save_image_file(upload, "feedback"))
+        except UploadValidationError as val_err:
+            return Response(
+                {"error": val_err.message, "detail": val_err.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except StorageServiceError as stor_err:
+            return Response(
+                {"error": stor_err.message, "detail": stor_err.message},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
     elif data.get("photos") and isinstance(data.get("photos"), list):
         photos = data.get("photos")
 
@@ -565,18 +577,20 @@ def mobile_sanitation_report_submit(request):
 
         if uploads and not data.get("photo_documentation"):
             try:
-                from django.core.files.storage import default_storage
-                import time
                 saved_urls = []
                 for upload in uploads:
-                    safe_name = upload.name.replace(" ", "_").replace("/", "_").replace("\\", "_")
-                    filename = f"complaints/{int(time.time())}_{safe_name}"
-                    saved_path = default_storage.save(filename, upload)
-                    saved_urls.append(default_storage.url(saved_path))
+                    saved_urls.append(save_image_file(upload, "complaints"))
                 data["photo_documentation"] = ",".join(saved_urls)
-            except Exception as photo_err:
-                import logging
-                logging.getLogger(__name__).warning("Failed to save report photo: %s", photo_err)
+            except UploadValidationError as val_err:
+                return Response(
+                    {"error": val_err.message, "detail": val_err.message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except StorageServiceError as stor_err:
+                return Response(
+                    {"error": stor_err.message, "detail": stor_err.message},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
         # Clean and validate coordinates
         for field in ["latitude", "longitude"]:
@@ -990,11 +1004,18 @@ def mobile_sanitation_inspection_submit(request):
     upload = request.FILES.get("photo") or request.FILES.get("image")
 
     if upload and not data.get("photo_documentation"):
-        from django.core.files.storage import default_storage
-        import time
-        filename = f"inspections/{int(time.time())}_{upload.name.replace(' ', '_')}"
-        saved_path = default_storage.save(filename, upload)
-        data["photo_documentation"] = default_storage.url(saved_path)
+        try:
+            data["photo_documentation"] = save_image_file(upload, "inspections")
+        except UploadValidationError as val_err:
+            return Response(
+                {"error": val_err.message, "detail": val_err.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except StorageServiceError as stor_err:
+            return Response(
+                {"error": stor_err.message, "detail": stor_err.message},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
     serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
