@@ -6,6 +6,7 @@ import { useTourismData } from "../../context/TourismDataContext";
 import LoadingOverlay from "../../../shared/LoadingOverlay";
 import PageLoader from "../../../shared/PageLoader";
 import ErrorBoundary from "../../../shared/ErrorBoundary";
+import useDocumentBranding from "../../../shared/useDocumentBranding";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -59,6 +60,11 @@ function AppShell() {
   const { loading, actionLoading } = useTourismData();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
+
+  useDocumentBranding({
+    module: "tourism",
+    pageTitle: currentPage.title,
+  });
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
