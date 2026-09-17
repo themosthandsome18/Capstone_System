@@ -246,6 +246,28 @@ class SanitationEstablishment {
       !permitNumber.toLowerCase().contains('unissued') &&
       permitStatus.toLowerCase() != 'unissued';
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'business_name': businessName,
+      'owner_name': ownerName,
+      'business_type': businessTypeId,
+      'business_type_name': businessTypeName,
+      'inspection_frequency': inspectionFrequency,
+      'barangay': barangay,
+      'address': address,
+      'permit_number': permitNumber,
+      'permit_expiry_date': permitExpiryDate,
+      'compliance_status': complianceStatus,
+      'compliance_status_label': statusLabel,
+      'permit_status': permitStatus,
+      'permit_status_label': permitStatusLabel,
+      'latitude': latitude,
+      'longitude': longitude,
+      'contact_number': contactNumber,
+    };
+  }
+
   factory SanitationEstablishment.fromJson(Map<String, dynamic> json) {
     return SanitationEstablishment(
       id: jsonInt(json['id']),

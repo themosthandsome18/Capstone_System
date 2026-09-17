@@ -700,7 +700,7 @@ def mobile_sanitation_permit_verify(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    query = Q(permit_number__iexact=code)
+    query = Q(permit_number__iexact=code) | Q(business_name__iexact=code)
     numeric_id = parse_mobile_int(code, 0)
     if numeric_id:
         query |= Q(id=numeric_id)

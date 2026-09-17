@@ -414,12 +414,33 @@ class TourismApi {
       Uri.parse('$apiBaseUrl$path'),
     );
     request.fields.addAll(fields);
-    for (final photo in photos) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    for (var i = 0; i < photos.length; i++) {
+      final photo = photos[i];
+      final bytes = await photo.readAsBytes();
+      final originalName = photo.name.trim();
+      final ext = originalName.contains('.')
+          ? originalName.split('.').last.toLowerCase()
+          : 'jpg';
+      final validExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].contains(ext)
+          ? ext
+          : 'jpg';
+      final filename = 'report_${timestamp}_$i.$validExt';
+
+      final mediaType = switch (validExt) {
+        'png' => MediaType('image', 'png'),
+        'webp' => MediaType('image', 'webp'),
+        'heic' => MediaType('image', 'heic'),
+        'heif' => MediaType('image', 'heif'),
+        _ => MediaType('image', 'jpeg'),
+      };
+
       request.files.add(
         http.MultipartFile.fromBytes(
           'photo',
-          await photo.readAsBytes(),
-          filename: photo.name,
+          bytes,
+          filename: filename,
+          contentType: mediaType,
         ),
       );
     }

@@ -1980,11 +1980,29 @@ class SecureUploadTests(TestCase):
         jpg_file = SimpleUploadedFile("photo.jpg", b"fake jpg content", content_type="image/jpeg")
         self.assertEqual(validate_image_file(jpg_file), ".jpg")
 
+        upper_jpg = SimpleUploadedFile("PHOTO.JPG", b"fake jpg content", content_type="image/jpeg")
+        self.assertEqual(validate_image_file(upper_jpg), ".jpg")
+
+        jpeg_file = SimpleUploadedFile("photo.JPEG", b"fake jpeg content", content_type="image/jpeg")
+        self.assertEqual(validate_image_file(jpeg_file), ".jpg")
+
         png_file = SimpleUploadedFile("photo.png", b"fake png content", content_type="image/png")
         self.assertEqual(validate_image_file(png_file), ".png")
 
         webp_file = SimpleUploadedFile("photo.webp", b"fake webp content", content_type="image/webp")
         self.assertEqual(validate_image_file(webp_file), ".webp")
+
+        heic_file = SimpleUploadedFile("photo.heic", b"fake heic content", content_type="image/heic")
+        self.assertEqual(validate_image_file(heic_file), ".heic")
+
+        heif_file = SimpleUploadedFile("photo.HEIF", b"fake heif content", content_type="image/heif")
+        self.assertEqual(validate_image_file(heif_file), ".heic")
+
+        octet_jpg = SimpleUploadedFile("photo.jpg", b"fake binary", content_type="application/octet-stream")
+        self.assertEqual(validate_image_file(octet_jpg), ".jpg")
+
+        octet_no_ext = SimpleUploadedFile("camera_raw", b"fake binary", content_type="application/octet-stream")
+        self.assertEqual(validate_image_file(octet_no_ext), ".jpg")
 
     def test_validate_image_file_oversized(self):
         large_content = b"0" * (MAX_FILE_SIZE_BYTES + 1)

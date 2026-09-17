@@ -3816,15 +3816,18 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         SanitationEstablishment.placeholder();
     _inspectionDate = DateTime.now();
     _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
-    _status = _establishment.complianceStatus.isNotEmpty
-        ? _establishment.complianceStatus
-        : 'good_standing';
+    _status = 'for_completion';
     _checks = _defaultChecksFor(_establishment);
-    if (_status == 'violation') {
-      _findings.text = 'Critical requirements uncomplied / violation recorded.';
-    } else if (_status == 'for_completion') {
-      _findings.text = 'Incomplete sanitary requirements pending compliance.';
-    }
+    _findings.clear();
+    _remarks.clear();
+    SharedPreferences.getInstance().then((prefs) {
+      final savedUser = prefs.getString(staffAuthUsernameKey);
+      if (savedUser != null && savedUser.isNotEmpty && _inspector.text.isEmpty && mounted) {
+        setState(() {
+          _inspector.text = formatProperName(savedUser);
+        });
+      }
+    });
   }
 
   @override
@@ -3855,19 +3858,10 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             setState(() {
               _establishment = item;
               _nextDueDate = _suggestedDueDate(_inspectionDate, item);
-              _status = item.complianceStatus.isNotEmpty
-                  ? item.complianceStatus
-                  : 'good_standing';
+              _status = 'for_completion';
               _checks = _defaultChecksFor(item);
-              if (_status == 'violation') {
-                _findings.text =
-                    'Critical requirements uncomplied / violation recorded.';
-              } else if (_status == 'for_completion') {
-                _findings.text =
-                    'Incomplete sanitary requirements pending compliance.';
-              } else {
-                _findings.clear();
-              }
+              _findings.clear();
+              _remarks.clear();
             });
           },
         ),
@@ -3922,10 +3916,20 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     final businessType = widget.bootstrap.businessTypes.firstWhereOrNull(
       (item) => item.id == establishment.businessTypeId,
     );
-    final requirements = businessType?.requirements ?? const [];
+    final rawRequirements = businessType?.requirements ?? const [];
 
-    final list = requirements.isNotEmpty
-        ? requirements.map((item) => item.requirementName).toList()
+    // Deduplicate requirements by requirement name (case-insensitive)
+    final seen = <String>{};
+    final uniqueRequirements = <String>[];
+    for (final item in rawRequirements) {
+      final name = item.requirementName.trim();
+      if (name.isNotEmpty && seen.add(name.toLowerCase())) {
+        uniqueRequirements.add(name);
+      }
+    }
+
+    final list = uniqueRequirements.isNotEmpty
+        ? uniqueRequirements
         : const [
             'Proper waste disposal system',
             'Clean water supply available',
@@ -3934,40 +3938,10 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             'Valid sanitary permit displayed',
           ];
 
-    final isViolation = establishment.complianceStatus == 'violation';
-    final isForCompletion = establishment.complianceStatus == 'for_completion';
-    final isNoPermit = establishment.complianceStatus == 'no_permit' ||
-        establishment.permitStatus == 'no_permit';
-
-    return list.asMap().entries.map((entry) {
-      final idx = entry.key;
-      final name = entry.value;
-      final lower = name.toLowerCase();
-
-      bool isComplied = true;
-      if (isViolation) {
-        // Red: critical deficiencies/violations
-        if (lower.contains('permit') ||
-            lower.contains('waste') ||
-            lower.contains('toilet') ||
-            idx == 0 ||
-            idx == list.length - 1) {
-          isComplied = false;
-        }
-      } else if (isForCompletion) {
-        // Yellow: incomplete pending requirement
-        if (lower.contains('water') ||
-            lower.contains('health') ||
-            idx == list.length - 1) {
-          isComplied = false;
-        }
-      } else if (isNoPermit) {
-        if (lower.contains('permit')) {
-          isComplied = false;
-        }
-      }
-      return InspectionChecklistDraft(name, isComplied);
-    }).toList();
+    // For a new inspection, items default to false (unchecked / 0% complete)
+    return list
+        .map((name) => InspectionChecklistDraft(name, false))
+        .toList();
   }
 
   DateTime _suggestedDueDate(
@@ -4009,16 +3983,15 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         current.requirementName,
         !current.isComplied,
       );
-      if (_checks.any((item) => !item.isComplied)) {
-        _status = 'for_completion';
-        if (_findings.text.trim().isEmpty) {
-          _findings.text = 'Some checklist items need correction.';
-        }
-      } else {
+      final completed = _checks.where((item) => item.isComplied).length;
+      final total = _checks.length;
+      if (total > 0 && completed == total) {
         _status = 'good_standing';
         if (_findings.text.trim() == 'Some checklist items need correction.') {
           _findings.clear();
         }
+      } else {
+        _status = 'for_completion';
       }
     });
   }
@@ -4126,7 +4099,7 @@ class InspectionChecklistPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final completed = checks.where((item) => item.isComplied).length;
     final total = checks.length;
-    final percent = total == 0 ? 100 : ((completed / total) * 100).round();
+    final percent = total == 0 ? 0 : ((completed / total) * 100).round();
 
     Color gradeColor;
     String gradeLabel;
@@ -4139,9 +4112,12 @@ class InspectionChecklistPanel extends StatelessWidget {
     } else if (percent >= 60) {
       gradeColor = const Color(0xFFD97706);
       gradeLabel = 'For Correction ($percent%)';
-    } else {
+    } else if (percent > 0) {
       gradeColor = const Color(0xFFDC2626);
       gradeLabel = 'Notice of Violation ($percent%)';
+    } else {
+      gradeColor = const Color(0xFF64748B);
+      gradeLabel = '0% Complete (Unchecked)';
     }
 
     return Card(
@@ -4156,10 +4132,24 @@ class InspectionChecklistPanel extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Sanitation Checklist & Score',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Sanitation Checklist & Score',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$completed of $total requirements complied',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Container(
@@ -4184,7 +4174,7 @@ class InspectionChecklistPanel extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
-                value: total == 0 ? 1.0 : completed / total,
+                value: total == 0 ? 0.0 : completed / total,
                 minHeight: 6,
                 backgroundColor: const Color(0xFFF1F5F9),
                 valueColor: AlwaysStoppedAnimation<Color>(gradeColor),
@@ -4311,8 +4301,10 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _estUsername = TextEditingController();
   final TextEditingController _estPassword = TextEditingController();
+  final TextEditingController _estPermitLookup = TextEditingController();
 
   SanitationGatewayScreen _currentScreen = SanitationGatewayScreen.chooser;
+  int _estAccessMode = 0; // 0: Option B (Scan QR / Permit Code), 1: Option A (Account Credentials)
   bool _signedIn = false;
   bool _signedInEstablishment = false;
   bool _signingIn = false;
@@ -4331,7 +4323,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(staffAuthTokenKey);
       final role = prefs.getString(staffAuthRoleKey) ?? '';
-      if (token != null && token.isNotEmpty) {
+      if ((token != null && token.isNotEmpty) || role == 'establishment') {
         if (role == 'establishment') {
           final estJson = prefs.getString(establishmentDataKey);
           if (estJson != null && estJson.isNotEmpty) {
@@ -4349,7 +4341,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
               // Failed to parse stored establishment JSON, fall back to login screen
             }
           }
-        } else {
+        } else if (token != null && token.isNotEmpty) {
           if (!mounted) return;
           setState(() {
             _signedIn = true;
@@ -4369,6 +4361,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     _password.dispose();
     _estUsername.dispose();
     _estPassword.dispose();
+    _estPermitLookup.dispose();
     super.dispose();
   }
 
@@ -4747,7 +4740,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(18),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
+                constraints: const BoxConstraints(maxWidth: 440),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -4769,7 +4762,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                             onPressed: () {
                               setState(() => _currentScreen = SanitationGatewayScreen.chooser);
                             },
-                            tooltip: '',
+                            tooltip: 'Back',
                           ),
                           const SizedBox(width: 4),
                           const Expanded(
@@ -4807,57 +4800,221 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              'Establishment Account',
+                              'Establishment Access',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
                             const Text(
-                              'View active sanitary permit, QR code, inspection checklist & violations.',
+                              'Inspect your active sanitary permit, QR code, checklist & violations.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: AppColors.muted,
                                 fontSize: 12,
                               ),
                             ),
-                            const SizedBox(height: 18),
-                            _GatewaySection(
-                              icon: Icons.storefront_outlined,
-                              title: 'Establishment Account',
-                              text: 'View active sanitary permit, QR code, inspection checklist & violations.',
-                              children: [
-                                TextField(
-                                  controller: _estUsername,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Username or Permit No.',
-                                    hintText: 'Enter username or permit number',
+                            const SizedBox(height: 16),
+                            // Prominent Dual-Choice Mode Selector
+                            SegmentedButton<int>(
+                              segments: const [
+                                ButtonSegment<int>(
+                                  value: 0,
+                                  icon: Icon(Icons.qr_code_scanner, size: 18),
+                                  label: Text(
+                                    'Permit QR / Code',
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                                   ),
                                 ),
-                                const SizedBox(height: 10),
-                                TextField(
-                                  controller: _estPassword,
-                                  obscureText: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Password',
+                                ButtonSegment<int>(
+                                  value: 1,
+                                  icon: Icon(Icons.badge_outlined, size: 18),
+                                  label: Text(
+                                    'Account Login',
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                FilledButton(
-                                  onPressed: _signingIn ? null : _signInEstablishment,
-                                  child: Text(
-                                    _signingIn
-                                        ? 'Signing in...'
-                                        : 'Sign in to Establishment Portal',
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                TextButton(
-                                  onPressed: _showEstablishmentRegistrationDialog,
-                                  child: const Text('Register or Claim Business Account'),
                                 ),
                               ],
+                              selected: {_estAccessMode},
+                              onSelectionChanged: (set) {
+                                setState(() => _estAccessMode = set.first);
+                              },
                             ),
+                            const SizedBox(height: 16),
+                            if (_estAccessMode == 0) ...[
+                              // Option B: Direct QR / Permit Code Access (No Password Required)
+                              _GatewaySection(
+                                icon: Icons.qr_code_2_outlined,
+                                title: 'Option B: Direct Permit Access',
+                                text:
+                                    'Scan your physical Sanitary Permit QR code or enter your permit number. No password required.',
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: _signingIn
+                                        ? null
+                                        : () async {
+                                            final scanned = await Navigator.of(context).push<String>(
+                                              MaterialPageRoute(
+                                                builder: (context) => const QrScannerScreen(),
+                                              ),
+                                            );
+                                            if (scanned != null && scanned.isNotEmpty) {
+                                              _accessEstablishmentByCode(scanned);
+                                            }
+                                          },
+                                    icon: const Icon(Icons.qr_code_scanner, size: 20),
+                                    label: const Text(
+                                      'Scan Establishment QR Code',
+                                      style: TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.deepGreen,
+                                      minimumSize: const Size.fromHeight(48),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _estPermitLookup,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Permit No. or Business Name',
+                                            hintText: 'e.g. SP-2026-001 or Moto Shop',
+                                            prefixIcon: Icon(Icons.confirmation_number_outlined, size: 18),
+                                          ),
+                                          onSubmitted: (val) => _accessEstablishmentByCode(val),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      FilledButton.tonalIcon(
+                                        onPressed: _signingIn
+                                            ? null
+                                            : () => _accessEstablishmentByCode(_estPermitLookup.text),
+                                        icon: const Icon(Icons.arrow_forward, size: 16),
+                                        label: const Text('View'),
+                                        style: FilledButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (widget.bootstrap.establishments.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Quick Demo Establishments:',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.muted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: widget.bootstrap.establishments.take(3).map((est) {
+                                        return ActionChip(
+                                          avatar: const Icon(Icons.storefront, size: 14, color: AppColors.deepGreen),
+                                          label: Text(
+                                            est.businessName,
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                          ),
+                                          onPressed: _signingIn
+                                              ? null
+                                              : () => _accessEstablishmentByCode(
+                                                    est.permitNumber.isNotEmpty ? est.permitNumber : est.businessName,
+                                                  ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () => setState(() => _estAccessMode = 1),
+                                      child: const Text('Prefer password login? Switch to Account Login ->'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              // Option A: Standard Login (Username & Password)
+                              _GatewaySection(
+                                icon: Icons.storefront_outlined,
+                                title: 'Option A: Standard Account Login',
+                                text:
+                                    'Sign in using your establishment username and password.',
+                                children: [
+                                  TextField(
+                                    controller: _estUsername,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Username or Permit No.',
+                                      hintText: 'Enter username or permit number',
+                                      prefixIcon: Icon(Icons.person_outline, size: 18),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: _estPassword,
+                                    obscureText: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Password',
+                                      prefixIcon: Icon(Icons.lock_outline, size: 18),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: _signingIn ? null : _signInEstablishment,
+                                    child: Text(
+                                      _signingIn
+                                          ? 'Signing in...'
+                                          : 'Sign in to Establishment Portal',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0FDF4),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.info_outline, size: 16, color: AppColors.deepGreen),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Default Demo Account:\nUsername: establishment_owner\nPassword: Establishment@123',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.green.shade900,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Center(
+                                    child: TextButton.icon(
+                                      onPressed: () => setState(() => _estAccessMode = 0),
+                                      icon: const Icon(Icons.qr_code_scanner, size: 16),
+                                      label: const Text('No password? Scan QR or enter Permit Code directly'),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _showEstablishmentRegistrationDialog,
+                                    child: const Text('Register or Claim Business Account'),
+                                  ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 14),
                             Center(
                               child: TextButton.icon(
@@ -4921,12 +5078,90 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     }
   }
 
+  Future<void> _accessEstablishmentByCode(String rawCode) async {
+    final code = rawCode.trim();
+    if (code.isEmpty) {
+      showAppMessage(context, 'Enter or scan a sanitary permit code.');
+      return;
+    }
+
+    setState(() => _signingIn = true);
+
+    try {
+      SanitationEstablishment? matchedEst;
+      final lower = code.toLowerCase();
+
+      // 1. Check local bootstrap establishments
+      for (final est in widget.bootstrap.establishments) {
+        if (est.permitNumber.trim().toLowerCase() == lower ||
+            est.id.toString() == lower ||
+            est.businessName.trim().toLowerCase() == lower) {
+          matchedEst = est;
+          break;
+        }
+      }
+
+      // 2. Query verify permit API endpoint
+      try {
+        final res = await widget.api.verifySanitaryPermit(code);
+        if (res.verified) {
+          matchedEst = res.establishment;
+        }
+      } catch (_) {
+        // Fall back to local match if offline or verification endpoint failed
+      }
+
+      // 3. Fallback partial search in bootstrap if exact match not found
+      if (matchedEst == null) {
+        for (final est in widget.bootstrap.establishments) {
+          if ((est.permitNumber.isNotEmpty && est.permitNumber.toLowerCase().contains(lower)) ||
+              est.businessName.toLowerCase().contains(lower)) {
+            matchedEst = est;
+            break;
+          }
+        }
+      }
+
+      if (matchedEst == null) {
+        throw Exception(
+          'No establishment found matching "$code". Please check the permit code or scan again.',
+        );
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(staffAuthTokenKey, 'permit_access_${matchedEst.id}');
+      await prefs.setString(staffAuthRoleKey, 'establishment');
+      await prefs.setString(
+        staffAuthUsernameKey,
+        matchedEst.permitNumber.isNotEmpty ? matchedEst.permitNumber : matchedEst.businessName,
+      );
+      await prefs.setString(establishmentDataKey, jsonEncode(matchedEst.toJson()));
+
+      if (!mounted) return;
+      setState(() {
+        _signingIn = false;
+        _activeEstablishment = matchedEst;
+        _signedInEstablishment = true;
+      });
+      showAppMessage(context, 'Welcome, ${matchedEst.businessName}!');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _signingIn = false);
+      showAppMessage(context, conciseError(e));
+    }
+  }
+
   Future<void> _signInEstablishment() async {
     final user = _estUsername.text.trim();
     final pass = _estPassword.text.trim();
 
-    if (user.isEmpty || pass.isEmpty) {
-      showAppMessage(context, 'Enter establishment username and password.');
+    if (user.isEmpty) {
+      showAppMessage(context, 'Enter establishment username or permit number.');
+      return;
+    }
+    if (pass.isEmpty) {
+      showAppMessage(context, 'Password is empty. Accessing directly via Permit QR / Code...');
+      await _accessEstablishmentByCode(user);
       return;
     }
 
