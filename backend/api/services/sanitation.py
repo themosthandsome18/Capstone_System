@@ -486,7 +486,7 @@ def build_sanitation_reports_payload(params=None):
     }
 
 
-def build_sanitation_complaints_payload(params=None):
+def build_sanitation_complaints_payload(params=None, request=None):
     ensure_initial_sanitation_data()
 
     params = params or {}
@@ -519,6 +519,7 @@ def build_sanitation_complaints_payload(params=None):
         complaints = complaints.filter(barangay=barangay_filter)
 
     all_complaints = SanitaryComplaint.objects.all()
+    serializer_context = {"request": request} if request is not None else {}
 
     return {
         "filters": {
@@ -542,7 +543,7 @@ def build_sanitation_complaints_payload(params=None):
         "byCategory": grouped_counts(all_complaints, "category"),
         "byBarangay": grouped_counts(all_complaints, "barangay"),
         "barangays": sorted(set(SanitaryComplaint.objects.values_list("barangay", flat=True))),
-        "rows": SanitaryComplaintSerializer(complaints, many=True).data,
+        "rows": SanitaryComplaintSerializer(complaints, many=True, context=serializer_context).data,
     }
 
 

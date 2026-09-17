@@ -607,7 +607,7 @@ def mobile_sanitation_report_submit(request):
                 except (ValueError, TypeError):
                     data.pop(field, None)
 
-        serializer = SanitaryComplaintSerializer(data=data)
+        serializer = SanitaryComplaintSerializer(data=data, context={"request": request})
         if not serializer.is_valid():
             error_msgs = []
             for field, errs in serializer.errors.items():

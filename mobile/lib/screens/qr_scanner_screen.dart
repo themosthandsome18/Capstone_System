@@ -59,6 +59,36 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         children: [
           MobileScanner(
             controller: _controller,
+            errorBuilder: (context, error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.videocam_off_outlined,
+                        size: 48,
+                        color: Colors.white70,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        kIsWeb
+                            ? 'Camera access unavailable in this browser.\nPlease enter your Permit Number or Business Name directly in the search field.'
+                            : 'Unable to start camera: ${error.errorCode.name}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.tonal(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Go Back to Manual Entry'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
             onDetect: (capture) {
               if (_scanned) return;
               final List<Barcode> barcodes = capture.barcodes;

@@ -4401,20 +4401,21 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   }
 
   Widget _buildChooserScreen() {
+    final isWeb = kIsWeb;
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(18),
+            padding: EdgeInsets.all(isWeb ? 24 : 18),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+              constraints: BoxConstraints(maxWidth: isWeb ? 680 : 430),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isWeb ? 22 : 18,
+                      vertical: isWeb ? 16 : 12,
                     ),
                     decoration: const BoxDecoration(
                       color: AppColors.green,
@@ -4422,12 +4423,59 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                         top: Radius.circular(18),
                       ),
                     ),
-                    child: const Text(
-                      'Mauban Sanitation & Community Portal',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.health_and_safety_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Mauban Sanitation & Public Health Portal',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              if (isWeb) ...[
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Rural Health Unit (RHU) • Municipal Health Office',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (isWeb)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'PWA Web Portal',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   Card(
@@ -4440,65 +4488,181 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(18),
+                      padding: EdgeInsets.all(isWeb ? 24 : 18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Center(
                             child: Image.asset(
                               'assets/sanitary_logo.jpg',
-                              width: 76,
-                              height: 76,
+                              width: isWeb ? 84 : 76,
+                              height: isWeb ? 84 : 76,
                             ),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'What do you need today?',
+                            isWeb
+                                ? 'Public Citizen & Business Services'
+                                : 'What do you need today?',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 17,
+                                  fontSize: isWeb ? 19 : 17,
                                 ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Choose a service or transaction to continue',
+                          Text(
+                            isWeb
+                                ? 'Submit a community sanitation concern or access establishment sanitary permits online.'
+                                : 'Choose a service or transaction to continue',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AppColors.muted,
-                              fontSize: 12,
+                              fontSize: 12.5,
                             ),
                           ),
                           const SizedBox(height: 20),
 
-                          // Option A: Inspector / Staff
+                          // Option 1: Community Reporting (Public, No Login Required)
                           _buildChooserCard(
-                            icon: Icons.shield_outlined,
-                            title: "I'm an Inspector / Staff",
-                            subtitle: 'Sign in for inspections and official records',
-                            onTap: () {
-                              setState(() => _currentScreen = SanitationGatewayScreen.staffLogin);
-                            },
+                            icon: Icons.campaign_rounded,
+                            badge: 'Public Citizen Access',
+                            badgeColor: const Color(0xFF059669),
+                            badgeBg: const Color(0xFFECFDF5),
+                            title: 'Community Sanitation Report',
+                            subtitle:
+                                'Report unsanitary conditions, sewage leaks, stagnant water, or hygiene hazards. Includes photo upload, GPS map pin, and offline draft capability.',
+                            featureList: const [
+                              '📷 Photo Upload',
+                              '📍 Map Pin',
+                              '💾 Draft Sync',
+                              '🔒 Anonymous Option',
+                            ],
+                            onTap: _openCommunityReport,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
-                          // Option B: Establishment Owner
+                          // Option 2: Establishment Portal (Business Owners)
                           _buildChooserCard(
                             icon: Icons.storefront_outlined,
-                            title: 'I Have an Establishment',
-                            subtitle: 'Access your sanitary permit, QR code, and compliance status',
+                            badge: 'Establishment Owners',
+                            badgeColor: const Color(0xFF0284C7),
+                            badgeBg: const Color(0xFFF0F9FF),
+                            title: 'Establishment & Business Portal',
+                            subtitle:
+                                'Access sanitary permit status, QR code, inspection grades, and compliance certificate via direct QR scan, permit code lookup, or owner account.',
+                            featureList: const [
+                              '⚡ Permit Code Lookup',
+                              '🔍 QR Pass Scan',
+                              '📋 Inspection Checklist',
+                              '📄 Certificate',
+                            ],
                             onTap: () {
-                              setState(() => _currentScreen = SanitationGatewayScreen.establishmentLogin);
+                              setState(() => _currentScreen =
+                                  SanitationGatewayScreen.establishmentLogin);
                             },
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 18),
 
-                          // Option C: Guest Community Report
-                          _buildChooserCard(
-                            icon: Icons.flag_outlined,
-                            title: 'I Want to Report a Concern',
-                            subtitle: 'Submit a sanitation concern (no login needed)',
-                            onTap: _openCommunityReport,
+                          // Option 3: Inspector / Staff (Graceful Non-Blocking module)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.canvas,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.deepGreen
+                                        .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.shield_outlined,
+                                    color: AppColors.deepGreen,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Municipal Inspector Portal',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                          color: AppColors.ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isWeb
+                                            ? 'Official field inspections are performed via the mobile app. Web sign-in is available for staff records review.'
+                                            : 'Authorized Sanitary Inspectors and Health Staff sign in here.',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.muted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (!isWeb)
+                                  OutlinedButton(
+                                    onPressed: () {
+                                      setState(() => _currentScreen =
+                                          SanitationGatewayScreen.staffLogin);
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      textStyle: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    child: const Text('Staff Sign In'),
+                                  )
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.canvas,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: AppColors.border),
+                                    ),
+                                    child: const Text(
+                                      '📱 Mobile\nApp Only',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.muted,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -4518,6 +4682,10 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    String? badge,
+    Color? badgeColor,
+    Color? badgeBg,
+    List<String>? featureList,
   }) {
     return Material(
       color: Colors.white,
@@ -4531,50 +4699,109 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         splashColor: AppColors.green.withValues(alpha: 0.12),
         highlightColor: AppColors.green.withValues(alpha: 0.06),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.green.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: AppColors.deepGreen, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.ink,
-                      ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.green.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.muted,
-                        height: 1.25,
-                      ),
+                    child: Icon(icon, color: AppColors.deepGreen, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (badge != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeBg ?? const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              badge.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: badgeColor ?? const Color(0xFF059669),
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: AppColors.muted,
+                  ),
+                ],
+              ),
+              if (featureList != null && featureList.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: featureList.map((f) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.canvas,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: AppColors.border.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      child: Text(
+                        f,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: AppColors.muted,
-              ),
+              ],
             ],
           ),
         ),
@@ -4596,7 +4823,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(18),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
+                constraints: BoxConstraints(maxWidth: kIsWeb ? 540 : 430),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -4670,6 +4897,29 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                                 fontSize: 12,
                               ),
                             ),
+                            if (kIsWeb) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline, size: 18, color: Color(0xFF16A34A)),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Official field inspections are performed on the mobile app. Web sign-in is available for staff records review.',
+                                        style: TextStyle(fontSize: 11.5, color: Color(0xFF166534)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 18),
                             _GatewaySection(
                               icon: Icons.admin_panel_settings_outlined,
@@ -4740,7 +4990,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(18),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: BoxConstraints(maxWidth: kIsWeb ? 640 : 440),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -5827,6 +6077,43 @@ class _SanitationEstablishmentPortalPageState
                   ? 'Permit: ${establishment.permitNumber}'
                   : 'Establishment ID: ${establishment.id}',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                try {
+                  final qrData = establishment.permitNumber.isNotEmpty
+                      ? establishment.permitNumber
+                      : 'EST-${establishment.id}';
+                  final painter = QrPainter(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    color: AppColors.deepGreen,
+                    emptyColor: Colors.white,
+                  );
+                  final picData = await painter.toImageData(600, format: ui.ImageByteFormat.png);
+                  if (picData != null) {
+                    final cleanPermit = (establishment.permitNumber.isNotEmpty
+                            ? establishment.permitNumber
+                            : 'EST_${establishment.id}')
+                        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+                    await exportAndShareBytes(
+                      bytes: picData.buffer.asUint8List(),
+                      fileName: 'Sanitary_Permit_QR_$cleanPermit.png',
+                      subject: 'Sanitary Permit QR - ${establishment.businessName}',
+                    );
+                    if (context.mounted) {
+                      showAppMessage(context, 'Sanitary Permit QR saved.');
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    showAppMessage(context, 'Export failed: $e');
+                  }
+                }
+              },
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text('Download Official QR Pass'),
             ),
           ],
         ),

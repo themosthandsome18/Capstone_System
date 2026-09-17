@@ -349,13 +349,13 @@ def sanitation_complaint_list(request):
     ensure_initial_sanitation_data()
 
     if request.method == "GET":
-        return Response(build_sanitation_complaints_payload(request.query_params))
+        return Response(build_sanitation_complaints_payload(request.query_params, request=request))
 
     data = request.data.copy()
     if not data.get("complaint_id"):
         data["complaint_id"] = generate_complaint_id()
 
-    serializer = SanitaryComplaintSerializer(data=data)
+    serializer = SanitaryComplaintSerializer(data=data, context={"request": request})
     serializer.is_valid(raise_exception=True)
     complaint = serializer.save()
     log_activity(
@@ -368,7 +368,7 @@ def sanitation_complaint_list(request):
     )
 
     return Response(
-        SanitaryComplaintSerializer(complaint).data,
+        SanitaryComplaintSerializer(complaint, context={"request": request}).data,
         status=status.HTTP_201_CREATED,
     )
 
@@ -379,7 +379,7 @@ def sanitation_complaint_detail(request, complaint_id):
     complaint = get_object_or_404(SanitaryComplaint, pk=complaint_id)
 
     if request.method == "GET":
-        return Response(SanitaryComplaintSerializer(complaint).data)
+        return Response(SanitaryComplaintSerializer(complaint, context={"request": request}).data)
 
     if request.method == "DELETE":
         label = complaint.category
@@ -403,6 +403,7 @@ def sanitation_complaint_detail(request, complaint_id):
         complaint,
         data=data,
         partial=True,
+        context={"request": request},
     )
     serializer.is_valid(raise_exception=True)
     complaint = serializer.save()
@@ -414,7 +415,7 @@ def sanitation_complaint_detail(request, complaint_id):
         label=complaint.category,
         record_id=complaint.complaint_id,
     )
-    return Response(SanitaryComplaintSerializer(complaint).data)
+    return Response(SanitaryComplaintSerializer(complaint, context={"request": request}).data)
 
 
 @api_view(["GET"])
