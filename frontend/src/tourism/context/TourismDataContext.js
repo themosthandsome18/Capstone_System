@@ -124,34 +124,23 @@ export function TourismDataProvider({ children }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadData() {
-      try {
-        const response = await tourismApi.getBootstrapData();
-
-        if (mounted) {
-          setBootstrap(response);
-          setError("");
-        }
-      } catch (requestError) {
-        if (mounted) {
-          setError(requestError.message || "Unable to load tourism data.");
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await tourismApi.getBootstrapData();
+      setBootstrap(response);
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message || "Unable to load tourism data.");
+    } finally {
+      setLoading(false);
     }
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const bootstrapRef = useRef(bootstrap);
   useEffect(() => {
@@ -441,6 +430,7 @@ export function TourismDataProvider({ children }) {
         loading,
         actionLoading,
         error,
+        reload: loadData,
         createRecord,
         updateRecord,
         deleteRecord,

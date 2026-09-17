@@ -57,7 +57,13 @@ function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, role, user } = useAuth();
-  const { loading, actionLoading } = useTourismData();
+  const {
+    loading,
+    actionLoading,
+    error,
+    reload,
+    referenceTables,
+  } = useTourismData();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
 
@@ -77,6 +83,20 @@ function AppShell() {
         subtext="Synchronizing arrivals, bookings, and destinations"
         variant="fullscreen"
         theme="tourism"
+      />
+    );
+  }
+
+  // If initial bootstrap failed and there's no cached or loaded data, show clear retry UI
+  if (error && (!referenceTables?.countries || referenceTables.countries.length === 0)) {
+    return (
+      <PageLoader
+        message="Unable to Connect to Tourism System"
+        subtext="The backend server may still be waking up or experiencing high latency."
+        variant="fullscreen"
+        theme="tourism"
+        error={error}
+        onRetry={reload}
       />
     );
   }

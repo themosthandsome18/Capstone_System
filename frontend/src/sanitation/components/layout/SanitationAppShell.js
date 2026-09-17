@@ -27,7 +27,14 @@ const sanitationPageInfo = {
 
 function SanitationAppShell() {
   const location = useLocation();
-  const { loading, actionLoading } = useSanitationData();
+  const {
+    loading,
+    actionLoading,
+    error,
+    reload,
+    dashboardData,
+    establishments,
+  } = useSanitationData();
 
   const currentPath = location.pathname.replace(/\/$/, "");
   const pageTitle =
@@ -46,6 +53,20 @@ function SanitationAppShell() {
         subtext="Synchronizing establishments, permits, and inspections"
         variant="fullscreen"
         theme="sanitation"
+      />
+    );
+  }
+
+  // If initial bootstrap failed and there's no cached or loaded data, show clear retry UI
+  if (error && !dashboardData && (!establishments || establishments.length === 0)) {
+    return (
+      <PageLoader
+        message="Unable to Connect to Sanitation System"
+        subtext="The backend server may still be waking up or experiencing high latency."
+        variant="fullscreen"
+        theme="sanitation"
+        error={error}
+        onRetry={reload}
       />
     );
   }

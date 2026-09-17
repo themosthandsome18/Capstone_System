@@ -40,9 +40,12 @@ export function buildQueryString(params = {}) {
 
 
 export async function apiRequest(endpoint, options = {}) {
-  const { auth = true, errorMessage, ...fetchOptions } = options;
+  const { auth = true, errorMessage, timeout = 30000, ...fetchOptions } = options;
   const token = auth ? getStoredAuthToken() : "";
   const isFormData = fetchOptions.body instanceof FormData;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
 
   let response;
   try {
@@ -53,14 +56,26 @@ export async function apiRequest(endpoint, options = {}) {
         "Accept-Encoding": "gzip, deflate, br",
         ...(fetchOptions.headers || {}),
       },
+      signal: fetchOptions.signal || controller.signal,
       ...fetchOptions,
     });
   } catch (requestError) {
+    if (requestError.name === "AbortError") {
+      const error = new Error(
+        `Connection timed out while reaching the backend at ${API_BASE_URL}. The server may be waking up or offline. Please retry.`
+      );
+      error.status = 408;
+      error.details = { detail: error.message };
+      throw error;
+    }
+
     const error = new Error(
       `Cannot connect to the backend at ${API_BASE_URL}. Check if Django is running.`
     );
     error.details = { detail: error.message };
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {
