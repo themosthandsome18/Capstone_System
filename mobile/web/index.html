@@ -90,6 +90,27 @@
       }
       return mod || null;
     };
+    window.downloadBlob = function(base64Data, fileName, mimeType) {
+      try {
+        var byteCharacters = atob(base64Data);
+        var byteNumbers = new Array(byteCharacters.length);
+        for (var i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        var byteArray = new Uint8Array(byteNumbers);
+        var blob = new Blob([byteArray], { type: mimeType || 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+      } catch (e) {
+        console.error('Browser download error:', e);
+      }
+    };
     try {
       updateWebBranding();
     } catch (e) {}

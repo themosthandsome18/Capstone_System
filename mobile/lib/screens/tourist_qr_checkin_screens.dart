@@ -408,13 +408,10 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
 
       final csvData = buildTouristArrivalsCsv(records);
       final dateStr = DateTime.now().toIso8601String().split('T').first;
-      final file = await saveStringToTempFile(
-        csvData,
-        'mauban_tourist_arrivals_$dateStr.csv',
-      );
-
-      final result = await shareFile(
-        file: file,
+      final result = await exportAndShareText(
+        content: csvData,
+        fileName: 'mauban_tourist_arrivals_$dateStr.csv',
+        mimeType: 'text/csv;charset=utf-8',
         subject: 'Mauban Tourist Arrivals - $dateStr',
         text: 'Exported ${records.length} tourism arrival record(s) from LGU Mauban Tourism.',
       );
@@ -429,7 +426,11 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 10),
-                Expanded(child: Text('Exported and shared ${records.length} arrival record(s)!')),
+                Expanded(
+                  child: Text(kIsWeb
+                      ? 'Exported and downloaded ${records.length} arrival record(s) to CSV!'
+                      : 'Exported and shared ${records.length} arrival record(s)!'),
+                ),
               ],
             ),
             backgroundColor: const Color(0xFF14532D),
@@ -795,13 +796,10 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
     try {
       final csvData = buildTouristArrivalsCsv(recordsToExport);
       final dateStr = DateTime.now().toIso8601String().split('T').first;
-      final file = await saveStringToTempFile(
-        csvData,
-        'mauban_tourist_arrivals_$dateStr.csv',
-      );
-
-      final result = await shareFile(
-        file: file,
+      final result = await exportAndShareText(
+        content: csvData,
+        fileName: 'mauban_tourist_arrivals_$dateStr.csv',
+        mimeType: 'text/csv;charset=utf-8',
         subject: 'Mauban Tourist Arrivals - $dateStr',
         text: 'Exported ${recordsToExport.length} tourism arrival record(s) from LGU Mauban Tourism.',
       );
@@ -816,7 +814,11 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 10),
-                Expanded(child: Text('Exported and shared ${recordsToExport.length} record(s) to CSV!')),
+                Expanded(
+                  child: Text(kIsWeb
+                      ? 'Exported and downloaded ${recordsToExport.length} record(s) to CSV!'
+                      : 'Exported and shared ${recordsToExport.length} record(s) to CSV!'),
+                ),
               ],
             ),
             backgroundColor: const Color(0xFF14532D),

@@ -315,10 +315,10 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
       final cleanRef = widget.receipt.reference.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
       final fileName = 'mauban_qr_$cleanRef.png';
 
-      final file = await saveBytesToTempFile(pngBytes, fileName);
-
-      final result = await shareFile(
-        file: file,
+      final result = await exportAndShareBytes(
+        bytes: pngBytes,
+        fileName: fileName,
+        mimeType: 'image/png',
         subject: 'Mauban Tourist Entry Pass - ${widget.receipt.reference}',
         text: 'Official Tourist Entry Pass for ${widget.receipt.fullName.isNotEmpty ? widget.receipt.fullName : "Tourist"} (${widget.receipt.reference}) at ${widget.receipt.destination.name}.',
       );
@@ -334,7 +334,9 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('QR Pass for ${widget.receipt.reference} shared successfully!'),
+                  child: Text(kIsWeb
+                      ? 'QR Pass for ${widget.receipt.reference} downloaded successfully!'
+                      : 'QR Pass for ${widget.receipt.reference} shared successfully!'),
                 ),
               ],
             ),

@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'utils/web_branding.dart';
+import 'utils/web_download.dart';
 
 part 'constants/colors.dart';
 part 'utils/helpers.dart';
