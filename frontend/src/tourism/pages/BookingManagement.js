@@ -41,7 +41,7 @@ const initialForm = {
   age_0_7: "0",
   age_8_59: "0",
   age_60_above: "0",
-  status: "arrived",
+  status: "",
 };
 
 const WIZARD_STEPS = [
@@ -304,7 +304,7 @@ function BookingManagement() {
     const philippinesId = referenceTables.countries.find(
       (c) => c.name?.toLowerCase().includes("philippine")
     )?.id || "";
-    setForm({ ...initialForm, country_id: String(philippinesId), status: "arrived" });
+    setForm({ ...initialForm, country_id: String(philippinesId), status: "" });
     setFormError("");
     setStepError("");
     setCurrentStep(1);
@@ -447,7 +447,7 @@ function BookingManagement() {
       age_0_7: toInteger(form.age_0_7),
       age_8_59: toInteger(form.age_8_59),
       age_60_above: toInteger(form.age_60_above),
-      status: form.status || editingRecord?.status || "arrived",
+      status: form.status || editingRecord?.status || "",
     };
   }
 
@@ -474,6 +474,7 @@ function BookingManagement() {
         if (form.arrival_date < minArrivalDate) {
           return "Arrival Date cannot be in the past. Please select today or a future date.";
         }
+        if (!form.status) return "Arrival Status is required.";
         return "";
       case 4: {
         const payload = buildPayload();
@@ -571,6 +572,15 @@ function BookingManagement() {
   }
 
   async function handleSubmit() {
+    for (let step = 1; step <= 4; step++) {
+      const stepErr = validateStep(step);
+      if (stepErr) {
+        setCurrentStep(step);
+        setStepError(stepErr);
+        return;
+      }
+    }
+
     const payload = buildPayload();
     const totalsError = validateTotals(payload);
 
@@ -1327,6 +1337,7 @@ function BookingManagement() {
                         value={form.status}
                         onChange={(e) => updateField("status", e.target.value)}
                       >
+                        <option value="">Select status</option>
                         <option value="arrived">Arrived (Confirmed)</option>
                         <option value="pending">Pending</option>
                       </select>
@@ -1420,7 +1431,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Boat Type" value={resolveLabel(referenceTables.boatTypes, form.boat_type_id)} />
                       <WizardReviewItem label="Visit Purpose" value={resolveLabel(referenceTables.visitPurposes, form.visit_purpose_id)} />
                       <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
-                      <WizardReviewItem label="Arrival Status" value={form.status === "pending" ? "Pending" : "Arrived (Confirmed)"} />
+                      <WizardReviewItem label="Arrival Status" value={form.status === "pending" ? "Pending" : form.status === "arrived" ? "Arrived (Confirmed)" : "—"} />
                     </WizardReviewSection>
                     <WizardReviewSection title="Head Count" onEdit={() => jumpToStep(4)}>
                       <WizardReviewItem label="Filipino Count" value={form.filipino_count} />
