@@ -231,7 +231,34 @@ AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="media")
 AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")
 AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="ap-southeast-1")
-AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="")
+
+
+def _get_supabase_s3_custom_domain():
+    explicit_domain = config("AWS_S3_CUSTOM_DOMAIN", default="").strip()
+    if explicit_domain:
+        return explicit_domain
+
+    ref = config("SUPABASE_PROJECT_REF", default="").strip()
+    if not ref and AWS_S3_ENDPOINT_URL:
+        import re
+        match = re.search(r"https?://([^/]+)/storage/v1/s3", AWS_S3_ENDPOINT_URL)
+        if match:
+            ref = match.group(1).split(".")[0]
+    if not ref:
+        db_user = config("DB_USER", default="")
+        if "postgres." in db_user:
+            ref = db_user.split("postgres.")[1].strip()
+
+    if ref:
+        return f"{ref}.supabase.co/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}"
+    return ""
+
+
+AWS_S3_CUSTOM_DOMAIN = (
+    _get_supabase_s3_custom_domain()
+    if (not DEBUG or USE_S3_STORAGE)
+    else config("AWS_S3_CUSTOM_DOMAIN", default="")
+)
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = config("AWS_QUERYSTRING_AUTH", default=False, cast=bool)
 AWS_S3_FILE_OVERWRITE = False

@@ -700,7 +700,11 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
     )
     reported_time = serializers.SerializerMethodField()
     reported_time_12h = serializers.SerializerMethodField()
-    photo_documentation = serializers.SerializerMethodField()
+    photo_documentation = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
 
     def get_reported_time(self, obj):
         if obj.created_at:
@@ -716,19 +720,19 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             return local_dt.strftime("%I:%M %p").lstrip("0")
         return "9:00 AM"
 
-    def get_photo_documentation(self, obj):
-        """Return photo URLs as absolute URLs when request context is available."""
-        raw = obj.photo_documentation or ""
-        if not raw.strip():
-            return ""
-        request = self.context.get("request")
-        urls = [u.strip() for u in raw.split(",") if u.strip()]
-        if request is not None:
-            urls = [
-                u if u.startswith("http") else request.build_absolute_uri(u)
-                for u in urls
-            ]
-        return ",".join(urls)
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        raw = data.get("photo_documentation") or ""
+        if raw.strip():
+            request = self.context.get("request")
+            urls = [u.strip() for u in raw.split(",") if u.strip()]
+            if request is not None:
+                urls = [
+                    u if u.startswith("http") else request.build_absolute_uri(u)
+                    for u in urls
+                ]
+            data["photo_documentation"] = ",".join(urls)
+        return data
 
     class Meta:
         model = SanitaryComplaint
