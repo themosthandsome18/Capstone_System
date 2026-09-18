@@ -243,7 +243,7 @@ This project is being developed with a Claude-based planner/reviewer working alo
     9. Environment Variables, Setup Instructions, and Management CLI Commands
     10. Security, Data Integrity, and Architectural Risk Observations
 
-- **Backend Role-Isolation: Public Tourist Privilege Escalation Fix**
+- **Backend Role-Isolation: Public Tourist Privilege Escalation Fix** (`60fdee3`)
   - Resolved critical privilege escalation where public tourist registration assigned administrative `ROLE_TOURISM` ("tourism"), granting registered tourists unauthorized access to Tourism staff and booking management endpoints.
   - Added discrete `ROLE_TOURIST = "tourist"` and `(ROLE_TOURIST, "Tourist")` to `USER_ROLE_CHOICES` in `backend/api/models.py`.
   - Kept `UserProfile.role` default (`default=ROLE_TOURISM`) and existing production profiles untouched to preserve production compatibility.
@@ -255,6 +255,17 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * `test_tourist_cannot_access_staff_tourism_endpoints`: Asserts HTTP 403 on `/api/booking-management/` and `/api/mobile/tourism/records/lookup/`.
     * `test_tourism_staff_retains_access_to_staff_tourism_endpoints`: Asserts HTTP 200 on `/api/booking-management/` and access allowed to staff lookup for legitimate staff.
   - Verified 5/5 passed in `AuthApiTests` and full suite passed with 59/59 tests (`Ran 59 tests in 519.018s, OK`).
+  - **Production Deployment & Live Verification (`60fdee3206d6218674ff65c9bb517b533095381b`)**:
+    * Pushed commit `60fdee3` to `origin/main`; automatically deployed by Render continuous deployment.
+    * Migration `0032` applied in production PostgreSQL database at 2026-09-18 02:28:01 UTC.
+    * Verified live production backend health at `/api/health/` (HTTP 200 `{"status": "ok"}`).
+    * Executed live security regression tests using an ephemeral test account:
+      - Public tourist registration returned HTTP 201 with `role="tourist"` and `role_label="Tourist"`.
+      - Tourist token received HTTP 403 Forbidden on `GET /api/booking-management/` (`"You do not have access to this module."`).
+      - Tourist token received HTTP 403 Forbidden on `GET /api/mobile/tourism/records/lookup/?query=...` (`"Only tourism staff and administrators can look up visitor records."`).
+      - Authorized Tourism staff (`tourism_admin`) retained access: HTTP 200 on `GET /api/booking-management/` and HTTP 404 on nonexistent lookup query (proving authorization boundary passed).
+    * Ephemeral test user was cleaned up immediately after verification (3 records deleted; zero production business data modified).
+    * Existing production user accounts holding the old `tourism` role were intentionally NOT bulk-converted.
 
 
 ## Database Cleaned for Deployment (Sept 2026)
