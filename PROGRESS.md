@@ -180,6 +180,82 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * Cleaned up dummy/sample test accounts from the database (`Deleted 7 sample user records`).
   - Production build verified with 0 errors and 0 warnings (`npm run build`).
 
+- **Supabase S3 Cloud Storage Backend & Upload Security Hardening** (`f762692`, `a1543e9`)
+  - Configured `django-storages` with `boto3` to use Supabase S3-compatible cloud object storage (`media` bucket) with automatic local `FileSystemStorage` fallback when credentials are not supplied.
+  - Implemented secure upload handler in `backend/api/services/upload.py`:
+    * Enforced random UUIDv4 filenames to prevent file overwrite collisions and directory traversal attacks.
+    * Enforced 5MB file size limit (`MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024`).
+    * Validated and normalized image MIME types and extensions (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.heif`).
+    * Handled custom exceptions `UploadValidationError` (HTTP 400) and `StorageServiceError` (HTTP 503).
+  - Added automated test class `SecureUploadTests` (4 tests) in `backend/api/tests.py` covering valid image uploads, oversized files (>5MB), non-image files, and missing upload payloads.
+
+- **Dynamic Module-Aware Browser Tab Branding & Booking Wizard UX Validation** (`879404c`, `2b0303a`)
+  - Implemented `useDocumentBranding.js` in the React Web Portal for dynamic document title and favicon switching:
+    * Tourism Module: "Mauban LGU | Tourism & Travel Pass" with sailboat favicon.
+    * Sanitation Module: "Mauban LGU | Sanitary & Health Compliance" with official municipal seal favicon.
+  - Fixed Tourism Booking Management new booking wizard (`BookingManagement.js`): removed confusing pre-selected `Arrival Status` default and added explicit step validation preventing submission of incomplete tourist entries.
+
+- **Automated Keep-Alive Ping & Scheduled Notifications Workflow** (`6c82dbf`)
+  - Created automated GitHub Actions cron workflow `.github/workflows/keep-alive-and-notifications.yml`:
+    * Periodically pings `/api/health/` every 14 minutes to prevent Render free-tier web dyno sleep / cold starts.
+    * Triggers scheduled daily due-date scanning by posting to `/api/notifications/evaluate-due/` with the secret `CRON_SECRET_KEY` once daily at 00:00 UTC (08:00 AM PHT).
+
+- **Cold-Start Resilience, API Timeouts, and Mobile Production Routing** (`36ef212`, `465a692`)
+  - Integrated 30-second fetch timeout with `AbortController` in `frontend/src/shared/apiClient.js`.
+  - Added friendly cold-start wake-up notices and retry guidance in `PageLoader.js` and `PageLoader.css` for when free-tier backend instances take >8s to respond.
+  - Pointed default mobile fallback `apiBaseUrl` in `mobile/lib/utils/helpers.dart` to the live production Render backend (`https://capstone-backend-stzr.onrender.com/api`).
+
+- **Web Download Fallback & Dual-Option Establishment Portal Access** (`9007bbf`, `b652f7a`)
+  - Added browser-compatible blob download fallback (`mobile/lib/utils/web_download_web.dart`) for QR pass image exports and CSV arrival exports when running the Flutter app on web browsers.
+  - Supported HEIC/JPEG uploads in mobile API client using `http_parser` MediaType mapping.
+  - Added dual-option access mode in the Establishment Portal (`mobile/lib/screens/sanitation_screens.dart`): Option A allows traditional username/password authentication; Option B allows direct permit code entry or camera QR scanning.
+
+- **Sanitation PWA Web Build Adaptations vs. Inspector Mobile Exclusivity** (`046b665`)
+  - Enforced mobile exclusivity for Sanitary Inspector field workflows: hid the "Staff Sign In" button on web (`kIsWeb == true`) in `SanitationAccessGateway`, replacing it with a "Mobile App Only" badge to restrict field inspection and survey tools to native mobile devices.
+  - Added graceful camera error fallback UI in `QrScannerScreen` for web browsers when camera/webcam hardware is unavailable, displaying a clean notice guiding users to manual permit code verification.
+
+- **Absolute Photo URLs & Web Dashboard Media Routing** (`046b665`, `4d046e2`, `385f37c`)
+  - Resolved relative `/media/` paths breaking photo evidence displays on the Web Complaints Management dashboard:
+    * Added `SerializerMethodField` for `photo_documentation` in `SanitaryComplaintSerializer` that converts relative local paths or stored URLs into fully-qualified absolute URLs via `request.build_absolute_uri()`.
+    * Propagated `context={"request": request}` across all complaint serializer instances in `sanitation.py` (list GET, detail GET, POST, PATCH), `mobile.py` (complaint submit), and `services/sanitation.py` (`build_sanitation_complaints_payload`).
+  - Updated `ComplaintsManagement.js` with a responsive photo thumbnail grid, error fallbacks, and a full-size modal preview for inspecting sanitary violation photographic evidence.
+
+- **Mobile Submission Image Compression & Extended API Timeouts** (`4d046e2`)
+  - Added client-side image compression in Flutter mobile complaint submission (`sanitation_screens.dart`): configured `image_picker` with `maxWidth: 1280`, `maxHeight: 1280`, and `imageQuality: 80` to prevent network payload timeouts over cellular data.
+  - Extended mobile HTTP timeouts in `TourismApi` (`mobile/lib/services/api.dart`): standard requests increased to 90 seconds (`_requestTimeout`), and multipart image uploads increased to 120 seconds (`_uploadTimeout`).
+
+- **Supabase S3 Public Object CDN URL Fix & Writable Serializer Restore** (`385f37c`)
+  - Fixed Supabase S3 custom domain resolution in `backend/backend/settings.py` via helper `_get_supabase_s3_custom_domain()`: correctly constructs the public storage CDN path `<ref>.supabase.co/storage/v1/object/public/<bucket>` when `USE_S3_STORAGE` is enabled.
+  - Restored writable support for `photo_documentation` in `SanitaryComplaintSerializer`: overrode `to_internal_value()` and `validate()` to accept raw incoming string URLs or comma-separated upload lists during `POST` and `PATCH` requests while continuing to output serialized absolute URLs on `GET`.
+  - Cleaned up redundant local media `re_path` from root `backend/urls.py` in favor of standard conditional debug media serving.
+
+- **Comprehensive Project Code Audit (`PROJECT_AUDIT.md`)**
+  - Conducted an exhaustive, read-only architectural and codebase audit across Backend, Frontend, and Mobile.
+  - Produced 722-line standalone technical document `PROJECT_AUDIT.md` at repository root covering:
+    1. Project Overview & Municipal Scope
+    2. Complete Tech Stack & Installed vs. Actually Imported Packages
+    3. 2–3 Level Project Directory Hierarchy
+    4. 18 Data Models, Relationships, Constraints, and Automated Scorer Logic
+    5. User Roles (`admin`, `tourism`, `sanitation`, `establishment`, public) & Token Auth Flows
+    6. Detailed Feature Inventory across Web and Mobile modules
+    7. Comprehensive Routing Table covering all 50+ REST endpoints
+    8. Known Issues, Stubs, Hardcoded Paths, and Demo Credentials
+    9. Environment Variables, Setup Instructions, and Management CLI Commands
+    10. Security, Data Integrity, and Architectural Risk Observations
+
+- **Backend Role-Isolation: Public Tourist Privilege Escalation Fix**
+  - Resolved critical privilege escalation where public tourist registration assigned administrative `ROLE_TOURISM` ("tourism"), granting registered tourists unauthorized access to Tourism staff and booking management endpoints.
+  - Added discrete `ROLE_TOURIST = "tourist"` and `(ROLE_TOURIST, "Tourist")` to `USER_ROLE_CHOICES` in `backend/api/models.py`.
+  - Kept `UserProfile.role` default (`default=ROLE_TOURISM`) and existing production profiles untouched to preserve production compatibility.
+  - Updated `tourist_register_view` in `backend/api/auth_views.py` so newly registered public tourists explicitly receive `ROLE_TOURIST`.
+  - Imported `ROLE_TOURIST` in `backend/api/permissions.py`; kept `MODULE_ROLES["tourism"] = {ROLE_ADMIN, ROLE_TOURISM}` strictly restricted to staff and administrators.
+  - Generated Django migration `0032_alter_notification_target_role_and_more.py` (verified via `sqlmigrate` as pure zero-lock, schema-neutral `(no-op)`).
+  - Added 3 automated regression security tests in `backend/api/tests.py` (`AuthApiTests`):
+    * `test_public_tourist_registration_assigns_tourist_role`: Asserts 201 Created and profile role is `tourist`.
+    * `test_tourist_cannot_access_staff_tourism_endpoints`: Asserts HTTP 403 on `/api/booking-management/` and `/api/mobile/tourism/records/lookup/`.
+    * `test_tourism_staff_retains_access_to_staff_tourism_endpoints`: Asserts HTTP 200 on `/api/booking-management/` and access allowed to staff lookup for legitimate staff.
+  - Verified 5/5 passed in `AuthApiTests` and full suite passed with 59/59 tests (`Ran 59 tests in 519.018s, OK`).
+
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
@@ -214,7 +290,19 @@ This project is being developed with a Claude-based planner/reviewer working alo
 ## Pre-Existing Test Failures (RESOLVED)
 ~~All 5 errors + 5 failures previously documented here are now fully resolved via self-contained test fixtures in `backend/api/tests.py` (`386497b`). All 33 tests pass cleanly.~~
 
-## Pending / Not Started Yet
-- **Database configuration**: Staying on Supabase (confirmed working; Render does not require Aiven, so no database migration planned). Need to verify which Supabase connection string variant (pooler vs. direct) is configured prior to production deployment.
-- **Deployment host selection**: Final hosting platform not yet finalized (Render currently under consideration).
+## Pending Tasks & Next Testing Steps
+- **Production Credentials & Demo Shortcut Cleanup**:
+  - Remove plain-text demo credential disclosures and one-click quick access chips from `mobile/lib/screens/sanitation_screens.dart` (lines 5160-5185 and 5244) and `frontend/src/sanitation/pages/EstablishmentRecords.js` (line 894).
+  - Update default staff passwords via Django `/admin/` or environment overrides prior to real-world LGU usage.
+- **Supabase Production Connection String Verification**:
+  - Verify that the production host uses the transaction pooler or session pooler URL variant with `sslmode=require` and connection pooling (`CONN_MAX_AGE=600`).
+- **Management Command Hardcoded Path Cleanup**:
+  - Update `backend/api/management/commands/import_sanitary_permits.py` to make file arguments mandatory or fall back to repository-relative fixtures instead of user-specific local paths (`C:\Users\This PC\Downloads\...`).
+- **Mobile Production Release Signing**:
+  - Configure release keystore signing in `mobile/android/app/build.gradle.kts` for final Android APK/AAB distribution.
+- **End-to-End Field Device Validation**:
+  - Test the mobile build on physical Android devices to verify hardware camera QR scanning (`mobile_scanner`), GPS geolocation accuracy (`geolocator`), and native OS file sharing (`share_plus`).
+- **Frontend Automated Test Setup**:
+  - Add basic component smoke tests and routing validation in `frontend/src/` to prevent regressions during future web updates.
+
 

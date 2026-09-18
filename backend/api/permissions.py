@@ -3,7 +3,7 @@ from functools import wraps
 from rest_framework import status
 from rest_framework.response import Response
 
-from .models import ROLE_ADMIN, ROLE_SANITATION, ROLE_TOURISM, UserProfile
+from .models import ROLE_ADMIN, ROLE_SANITATION, ROLE_TOURIST, ROLE_TOURISM, UserProfile
 
 
 MODULE_ROLES = {

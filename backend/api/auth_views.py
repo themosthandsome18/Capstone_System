@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from django.db import OperationalError, connection
-from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURISM, UserProfile
+from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURIST, ROLE_TOURISM, UserProfile
 from .serializers import AuthUserSerializer
 
 
@@ -146,7 +146,7 @@ def tourist_register_view(request):
     user.save()
 
     profile = get_or_create_profile(user)
-    profile.role = ROLE_TOURISM
+    profile.role = ROLE_TOURIST
     profile.save()
 
     token, _ = Token.objects.get_or_create(user=user)

@@ -59,12 +59,14 @@ ROLE_ADMIN = "admin"
 ROLE_TOURISM = "tourism"
 ROLE_SANITATION = "sanitation"
 ROLE_ESTABLISHMENT = "establishment"
+ROLE_TOURIST = "tourist"
 
 USER_ROLE_CHOICES = [
     (ROLE_ADMIN, "System Admin"),
     (ROLE_TOURISM, "Tourism Office"),
     (ROLE_SANITATION, "Sanitary Section"),
     (ROLE_ESTABLISHMENT, "Establishment Owner"),
+    (ROLE_TOURIST, "Tourist"),
 ]
 
 MODULE_TOURISM = "tourism"

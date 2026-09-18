@@ -30,6 +30,7 @@ from .models import (
     ROLE_ADMIN,
     ROLE_ESTABLISHMENT,
     ROLE_SANITATION,
+    ROLE_TOURIST,
     ROLE_TOURISM,
     Province,
     Region,
@@ -78,6 +79,57 @@ class AuthApiTests(TestCase):
         response = self.client.get("/api/booking-management/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_public_tourist_registration_assigns_tourist_role(self):
+        payload = {
+            "full_name": "Maria Tourist",
+            "email": "maria.tourist@example.com",
+            "password": "SecurePassword@123",
+            "contact_number": "09171234567",
+        }
+        response = self.client.post("/api/auth/register/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["user"]["profile"]["role"], ROLE_TOURIST)
+        self.assertEqual(response.json()["user"]["profile"]["role_label"], "Tourist")
+
+        created_user = User.objects.get(username="maria.tourist@example.com")
+        self.assertEqual(created_user.profile.role, ROLE_TOURIST)
+
+    def test_tourist_cannot_access_staff_tourism_endpoints(self):
+        tourist_user = User.objects.create_user(
+            username="registered_tourist",
+            password="Password@123",
+        )
+        UserProfile.objects.create(user=tourist_user, role=ROLE_TOURIST)
+        token = Token.objects.create(user=tourist_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        # 1. Staff Booking Management Web API
+        resp_booking = self.client.get("/api/booking-management/")
+        self.assertEqual(resp_booking.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp_booking.json()["detail"], "You do not have access to this module.")
+
+        # 2. Staff-only Mobile Tourism Record Lookup
+        resp_lookup = self.client.get("/api/mobile/tourism/records/lookup/?query=SURV-2026-00001")
+        self.assertEqual(resp_lookup.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp_lookup.json()["detail"], "Only tourism staff and administrators can look up visitor records.")
+
+    def test_tourism_staff_retains_access_to_staff_tourism_endpoints(self):
+        staff_user = User.objects.create_user(
+            username="tourism_staff_member",
+            password="Password@123",
+        )
+        UserProfile.objects.create(user=staff_user, role=ROLE_TOURISM)
+        token = Token.objects.create(user=staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        # 1. Staff Booking Management Web API
+        resp_booking = self.client.get("/api/booking-management/")
+        self.assertEqual(resp_booking.status_code, status.HTTP_200_OK)
+
+        # 2. Staff-only Mobile Tourism Record Lookup (access granted through permission boundary, returns 404 for missing query)
+        resp_lookup = self.client.get("/api/mobile/tourism/records/lookup/?query=NONEXISTENT_ID")
+        self.assertNotEqual(resp_lookup.status_code, status.HTTP_403_FORBIDDEN)
 
 
 def ensure_test_reference_tables():
