@@ -1280,7 +1280,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       if (source == ImageSource.gallery) {
         final picked = await _imagePicker.pickMultiImage(
           imageQuality: 80,
-          maxWidth: 1600,
+          maxWidth: 1920,
+          maxHeight: 1920,
         );
         if (picked.isNotEmpty) {
           setState(() {
@@ -1295,7 +1296,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         final picked = await _imagePicker.pickImage(
           source: source,
           imageQuality: 80,
-          maxWidth: 1600,
+          maxWidth: 1920,
+          maxHeight: 1920,
         );
         if (picked != null) {
           setState(() {

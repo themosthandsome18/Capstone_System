@@ -1060,11 +1060,15 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
         <div className="community-photo-grid">
           {report.photo_documentation ? (
             report.photo_documentation.split(",").map((photoUrl, index) => {
-              const fullUrl = photoUrl.startsWith("http")
-                ? photoUrl
-                : `${API_BASE_URL.replace("/api", "")}${
-                    photoUrl.startsWith("/") ? "" : "/"
-                  }${photoUrl}`;
+              const trimmed = (photoUrl || "").trim();
+              const getPhotoUrl = (url) => {
+                if (!url) return "";
+                if (url.startsWith("http://") || url.startsWith("https://")) return url;
+                const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+                return `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
+              };
+              const fullUrl = getPhotoUrl(trimmed);
+              if (!fullUrl) return null;
 
               return (
                 <div key={index} className="community-photo-image">
@@ -1078,6 +1082,9 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
                       borderRadius: "8px",
                       border: "1px solid #e2e8f0",
                       backgroundColor: "#f8fafc",
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
                     }}
                   />
                 </div>

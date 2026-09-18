@@ -2,7 +2,8 @@ part of '../main.dart';
 
 class TourismApi {
   const TourismApi();
-  static const Duration _requestTimeout = Duration(seconds: 30);
+  static const Duration _requestTimeout = Duration(seconds: 90);
+  static const Duration _uploadTimeout = Duration(seconds: 120);
 
   Future<MobileBootstrap> fetchBootstrap() async {
     try {
@@ -445,8 +446,8 @@ class TourismApi {
       );
     }
 
-    final streamed = await request.send().timeout(_requestTimeout);
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await request.send().timeout(_uploadTimeout);
+    final response = await http.Response.fromStream(streamed).timeout(_uploadTimeout);
     return _decode(response);
   }
 
