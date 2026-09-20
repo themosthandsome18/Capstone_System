@@ -176,6 +176,19 @@ function EstablishmentRecords() {
       [...new Set(establishments.map((item) => item.barangay).filter(Boolean))].sort(),
     [establishments]
   );
+  // Distinct client-facing labels derived from the real business types, so new
+  // types and later mapping changes are picked up without a hardcoded list.
+  const businessTypeFilterOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          businessTypes
+            .map((type) => businessTypeDisplayLabel(type.name))
+            .filter(Boolean)
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [businessTypes]
+  );
   const selectedTimeline = useMemo(() => {
     if (!selectedEstablishment) {
       return [];
@@ -188,6 +201,20 @@ function EstablishmentRecords() {
       renewalRows
     );
   }, [complaintRows, inspections, renewalRows, selectedEstablishment]);
+  // Print output uses the display label; the on-screen modal timeline keeps the real type.
+  const selectedPrintTimeline = useMemo(() => {
+    if (!selectedEstablishment) {
+      return [];
+    }
+
+    return buildEstablishmentTimeline(
+      selectedEstablishment,
+      inspections,
+      complaintRows,
+      renewalRows,
+      { displayLabels: true }
+    );
+  }, [complaintRows, inspections, renewalRows, selectedEstablishment]);
 
   const filteredEstablishments = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -197,6 +224,7 @@ function EstablishmentRecords() {
         item.business_name,
         item.owner_name,
         item.business_type_name,
+        businessTypeDisplayLabel(item.business_type_name),
         item.barangay,
         item.address,
         item.permit_number,
@@ -210,9 +238,11 @@ function EstablishmentRecords() {
         statusFilter === "all" || item.compliance_status === statusFilter;
       const matchesBarangay =
         barangayFilter === "all" || item.barangay === barangayFilter;
+      // The filter value is a client-facing display label, which several real
+      // business types can share, so match on the label the table shows.
       const matchesType =
         businessTypeFilter === "all" ||
-        String(item.business_type) === String(businessTypeFilter);
+        businessTypeDisplayLabel(item.business_type_name) === businessTypeFilter;
       const matchesPermit =
         permitFilter === "all" || item.permit_status === permitFilter;
 
@@ -491,11 +521,12 @@ function EstablishmentRecords() {
       "Permit Status",
       "Compliance Status",
       "Remarks",
+      "Underlying Business Type",
     ];
     const rows = filteredEstablishments.map((item) => [
       item.business_name,
       item.owner_name,
-      item.business_type_name,
+      businessTypeDisplayLabel(item.business_type_name),
       item.permit_size_label || item.permit_size?.toUpperCase(),
       item.permit_number,
       item.barangay,
@@ -504,6 +535,7 @@ function EstablishmentRecords() {
       item.permit_status_label,
       item.compliance_status_label,
       item.remarks,
+      item.business_type_name,
     ]);
 
     exportCsv(datedCsvFilename("sanitary-establishments"), headers, rows);
@@ -565,7 +597,7 @@ function EstablishmentRecords() {
             {statusFilter !== "all" ? <span> • Status: <em>{statusFilter}</em></span> : null}
             {barangayFilter !== "all" ? <span> • Barangay: <em>{barangayFilter}</em></span> : null}
             {businessTypeFilter !== "all" ? (
-              <span> • Type: <em>{businessTypes.find((t) => String(t.id) === String(businessTypeFilter))?.name}</em></span>
+              <span> • Type: <em>{businessTypeFilter}</em></span>
             ) : null}
             {permitFilter !== "all" ? <span> • Permit: <em>{permitFilter}</em></span> : null}
           </div>
@@ -618,9 +650,9 @@ function EstablishmentRecords() {
             onChange={(event) => setBusinessTypeFilter(event.target.value)}
           >
             <option value="all">All Business Types</option>
-            {businessTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
+            {businessTypeFilterOptions.map((label) => (
+              <option key={label} value={label}>
+                {label}
               </option>
             ))}
           </select>
@@ -773,6 +805,7 @@ function EstablishmentRecords() {
         <EstablishmentDetailModal
           establishment={selectedEstablishment}
           timeline={selectedTimeline}
+          printTimeline={selectedPrintTimeline}
           onClose={closeDetailModal}
           onEdit={editSelectedEstablishment}
         />
@@ -784,6 +817,7 @@ function EstablishmentRecords() {
 function EstablishmentDetailModal({
   establishment,
   timeline,
+  printTimeline,
   onClose,
   onEdit,
 }) {
@@ -820,7 +854,7 @@ function EstablishmentDetailModal({
               onClick={() => {
                 const qrSvgEl = document.getElementById("establishment-detail-qr-svg");
                 const qrSvgHtml = qrSvgEl ? qrSvgEl.outerHTML : "";
-                printEstablishmentReport(establishment, timeline, qrSvgHtml);
+                printEstablishmentReport(establishment, printTimeline, qrSvgHtml);
               }}
             >
               <FiPrinter /> Print
@@ -1379,14 +1413,18 @@ function buildEstablishmentTimeline(
   establishment,
   inspections = [],
   complaints = [],
-  renewals = []
+  renewals = [],
+  { displayLabels = false } = {}
 ) {
   const establishmentId = String(establishment.id);
+  const businessTypeText = displayLabels
+    ? businessTypeDisplayLabel(establishment.business_type_name)
+    : establishment.business_type_name;
   const rows = [
     {
       id: `establishment-${establishmentId}`,
       title: "Establishment record encoded",
-      detail: `${establishment.business_type_name || "Business"} in ${
+      detail: `${businessTypeText || "Business"} in ${
         establishment.barangay || "unassigned barangay"
       }`,
       date:
@@ -1667,7 +1705,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             establishment.owner_name
           )}</strong></div>
           <div class="box"><span>Business Type</span><strong>${escapeHtml(
-            establishment.business_type_name
+            businessTypeDisplayLabel(establishment.business_type_name)
           )}</strong></div>
           <div class="box"><span>Barangay</span><strong>${escapeHtml(
             establishment.barangay
