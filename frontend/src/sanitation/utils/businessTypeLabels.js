@@ -12,10 +12,9 @@
  * "Food Establishment"), so this mapping is one-way: a display label cannot be
  * turned back into a single real business type.
  *
- * NOT MAPPED YET: "Karaoke / Video Bar / CSW".
- * The client has not yet decided which category it belongs to, so it is
- * deliberately absent and falls through to its original name. Add it here once
- * the client confirms the category.
+ * All 15 real business types are currently mapped. Any type added to the
+ * database later is not an error: it falls through to its own name unchanged
+ * until it is given a label here.
  */
 
 /** Real business type name -> client-facing display label. */
@@ -35,6 +34,7 @@ export const BUSINESS_TYPE_DISPLAY_LABELS = {
   "Funeral Parlor": "Public Places",
   "Burial Ground": "Public Places",
   "Private Laboratory & Clinic": "Institutional Establishment",
+  "Karaoke / Video Bar / CSW": "Public Places",
 };
 
 /**
@@ -55,9 +55,9 @@ const LABEL_BY_NORMALIZED_NAME = new Map(
 /**
  * Returns the client-facing label for a real business type name.
  *
- * Any type that is not mapped (currently "Karaoke / Video Bar / CSW", plus any
- * type added to the database later) falls back to its original name unchanged,
- * never blank and never a placeholder such as "Other".
+ * Any type that is not mapped (none today, but any type added to the database
+ * later) falls back to its original name unchanged, never blank and never a
+ * placeholder such as "Other".
  */
 export function businessTypeDisplayLabel(realBusinessTypeName) {
   if (typeof realBusinessTypeName !== "string") {
