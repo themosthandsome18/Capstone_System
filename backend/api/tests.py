@@ -132,6 +132,155 @@ class AuthApiTests(TestCase):
         self.assertNotEqual(resp_lookup.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class EstablishmentClaimSecurityTests(TestCase):
+    """Establishment claims are matched by permit number only and never overwrite an owner."""
+
+    REGISTER_URL = "/api/auth/register-establishment/"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Claim Test Bakery",
+            inspection_frequency="monthly",
+        )
+        self.owner = User.objects.create_user(username="original_owner", password="Owner@12345")
+        UserProfile.objects.create(user=self.owner, role=ROLE_ESTABLISHMENT)
+        self.claimed = SanitaryEstablishment.objects.create(
+            business_name="Claimed Bakery",
+            owner_name="Original Owner",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="1 Claimed St",
+            permit_number="SP-2026-CLAIMED",
+            user=self.owner,
+        )
+        self.unclaimed = SanitaryEstablishment.objects.create(
+            business_name="Unclaimed Bakery",
+            owner_name="Nobody Yet",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="2 Open St",
+            permit_number="SP-2026-OPEN",
+        )
+
+    def test_claiming_already_linked_permit_is_rejected_and_writes_nothing(self):
+        users_before = User.objects.count()
+        profiles_before = UserProfile.objects.count()
+        tokens_before = Token.objects.count()
+
+        response = self.client.post(
+            self.REGISTER_URL,
+            {
+                "username": "attacker",
+                "password": "Attacker@123",
+                "permit_number": "sp-2026-claimed",  # case-insensitive match must still be blocked
+                "business_name": "Claimed Bakery",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("already has a linked account", response.json()["detail"])
+        self.assertNotIn("token", response.json())
+        self.assertEqual(User.objects.count(), users_before)
+        self.assertEqual(UserProfile.objects.count(), profiles_before)
+        self.assertEqual(Token.objects.count(), tokens_before)
+        self.assertFalse(User.objects.filter(username="attacker").exists())
+        self.claimed.refresh_from_db()
+        self.assertEqual(self.claimed.user_id, self.owner.id)
+
+    def test_business_name_alone_cannot_claim_an_establishment(self):
+        response = self.client.post(
+            self.REGISTER_URL,
+            {
+                "username": "name_only",
+                "password": "NameOnly@123",
+                "business_name": "Unclaimed Bakery",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("establishment", response.json())
+        self.unclaimed.refresh_from_db()
+        self.assertIsNone(self.unclaimed.user_id)
+        self.claimed.refresh_from_db()
+        self.assertEqual(self.claimed.user_id, self.owner.id)
+
+    def test_business_name_of_claimed_establishment_cannot_take_it_over(self):
+        response = self.client.post(
+            self.REGISTER_URL,
+            {
+                "username": "name_takeover",
+                "password": "Takeover@123",
+                "business_name": "Claimed Bakery",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("establishment", response.json())
+        self.claimed.refresh_from_db()
+        self.assertEqual(self.claimed.user_id, self.owner.id)
+
+    def test_valid_permit_for_unclaimed_establishment_still_links(self):
+        response = self.client.post(
+            self.REGISTER_URL,
+            {
+                "username": "legit_owner",
+                "password": "Legit@12345",
+                "permit_number": "SP-2026-OPEN",
+                "contact_number": "09170000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        new_user = User.objects.get(username="legit_owner")
+        self.assertEqual(new_user.profile.role, ROLE_ESTABLISHMENT)
+        self.unclaimed.refresh_from_db()
+        self.assertEqual(self.unclaimed.user_id, new_user.id)
+        self.assertEqual(self.unclaimed.contact_number, "09170000000")
+        self.assertEqual(response.json()["establishment"]["id"], self.unclaimed.id)
+
+    def test_second_claim_of_same_permit_is_rejected_after_first_succeeds(self):
+        first = self.client.post(
+            self.REGISTER_URL,
+            {"username": "first_claim", "password": "First@12345", "permit_number": "SP-2026-OPEN"},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        users_after_first = User.objects.count()
+
+        second = self.client.post(
+            self.REGISTER_URL,
+            {"username": "second_claim", "password": "Second@12345", "permit_number": "SP-2026-OPEN"},
+            format="json",
+        )
+
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(User.objects.count(), users_after_first)
+        self.unclaimed.refresh_from_db()
+        self.assertEqual(self.unclaimed.user.username, "first_claim")
+
+    def test_missing_or_unknown_permit_creates_unlinked_account(self):
+        for username, extra in (
+            ("no_permit", {}),
+            ("unknown_permit", {"permit_number": "SP-DOES-NOT-EXIST"}),
+        ):
+            with self.subTest(username=username):
+                response = self.client.post(
+                    self.REGISTER_URL,
+                    {"username": username, "password": "Unlinked@123", **extra},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                self.assertNotIn("establishment", response.json())
+                self.assertFalse(
+                    SanitaryEstablishment.objects.filter(user__username=username).exists()
+                )
+
+
 def ensure_test_reference_tables():
     if not Country.objects.exists():
         Country.objects.bulk_create([Country(**c) for c in REFERENCE_TABLES["countries"]], ignore_conflicts=True)

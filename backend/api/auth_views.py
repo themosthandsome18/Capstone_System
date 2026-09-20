@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from django.db import OperationalError, connection
+from django.db import OperationalError, connection, transaction
 from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURIST, ROLE_TOURISM, UserProfile
 from .serializers import AuthUserSerializer
 
@@ -206,32 +206,49 @@ def establishment_register_view(request):
     first_name = parts[0]
     last_name = parts[1] if len(parts) > 1 else ""
 
-    user = User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name,
-    )
-    user.is_active = True
-    user.save()
+    # Claims are matched by permit number ONLY. business_name is display text and
+    # must never be used to find or link an establishment.
+    with transaction.atomic():
+        san_est = None
+        if permit_number:
+            # Lock matching rows so two concurrent claims cannot both win.
+            matches = list(
+                SanitaryEstablishment.objects.select_for_update()
+                .filter(permit_number__iexact=permit_number)
+                .order_by("id")
+            )
+            # Reject before any account is created if the permit is already claimed.
+            if any(item.user_id is not None for item in matches):
+                return Response(
+                    {
+                        "detail": (
+                            "This establishment already has a linked account. "
+                            "If you believe this is an error, please contact the Sanitary Office."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            san_est = matches[0] if matches else None
 
-    profile = get_or_create_profile(user)
-    profile.role = ROLE_ESTABLISHMENT
-    profile.save()
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+        )
+        user.is_active = True
+        user.save()
 
-    # Link to existing establishment if matching permit or business name
-    san_est = None
-    if permit_number:
-        san_est = SanitaryEstablishment.objects.filter(permit_number__iexact=permit_number).first()
-    if not san_est and business_name:
-        san_est = SanitaryEstablishment.objects.filter(business_name__iexact=business_name).first()
+        profile = get_or_create_profile(user)
+        profile.role = ROLE_ESTABLISHMENT
+        profile.save()
 
-    if san_est:
-        san_est.user = user
-        if contact_number and not san_est.contact_number:
-            san_est.contact_number = contact_number
-        san_est.save()
+        if san_est:
+            san_est.user = user
+            if contact_number and not san_est.contact_number:
+                san_est.contact_number = contact_number
+            san_est.save()
 
     token, _ = Token.objects.get_or_create(user=user)
     payload = serialize_auth_payload(user, token)
