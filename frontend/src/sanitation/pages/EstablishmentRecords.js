@@ -201,20 +201,6 @@ function EstablishmentRecords() {
       renewalRows
     );
   }, [complaintRows, inspections, renewalRows, selectedEstablishment]);
-  // Print output uses the display label; the on-screen modal timeline keeps the real type.
-  const selectedPrintTimeline = useMemo(() => {
-    if (!selectedEstablishment) {
-      return [];
-    }
-
-    return buildEstablishmentTimeline(
-      selectedEstablishment,
-      inspections,
-      complaintRows,
-      renewalRows,
-      { displayLabels: true }
-    );
-  }, [complaintRows, inspections, renewalRows, selectedEstablishment]);
 
   const filteredEstablishments = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -805,7 +791,6 @@ function EstablishmentRecords() {
         <EstablishmentDetailModal
           establishment={selectedEstablishment}
           timeline={selectedTimeline}
-          printTimeline={selectedPrintTimeline}
           onClose={closeDetailModal}
           onEdit={editSelectedEstablishment}
         />
@@ -817,7 +802,6 @@ function EstablishmentRecords() {
 function EstablishmentDetailModal({
   establishment,
   timeline,
-  printTimeline,
   onClose,
   onEdit,
 }) {
@@ -843,8 +827,16 @@ function EstablishmentDetailModal({
             <span>Official Establishment Record</span>
             <h2>{establishment.business_name}</h2>
             <p>
-              {establishment.business_type_name} | {establishment.barangay}
+              {businessTypeDisplayLabel(establishment.business_type_name)} |{" "}
+              {establishment.barangay}
             </p>
+            {/* Real underlying type, shown only when it differs from the label. */}
+            {isSameBusinessTypeText(
+              businessTypeDisplayLabel(establishment.business_type_name),
+              establishment.business_type_name
+            ) ? null : (
+              <p>{establishment.business_type_name}</p>
+            )}
           </div>
 
           <div className="establishment-detail-actions">
@@ -854,7 +846,7 @@ function EstablishmentDetailModal({
               onClick={() => {
                 const qrSvgEl = document.getElementById("establishment-detail-qr-svg");
                 const qrSvgHtml = qrSvgEl ? qrSvgEl.outerHTML : "";
-                printEstablishmentReport(establishment, printTimeline, qrSvgHtml);
+                printEstablishmentReport(establishment, timeline, qrSvgHtml);
               }}
             >
               <FiPrinter /> Print
@@ -1409,17 +1401,32 @@ function statusClass(status = "") {
   return status.toLowerCase().replaceAll(" ", "-");
 }
 
+/**
+ * True when a display label and a real business type name are the same text,
+ * ignoring casing and spacing, so unmapped types (and types that map to
+ * themselves) are not shown twice in the detail modal header.
+ */
+function isSameBusinessTypeText(displayLabel, realName) {
+  const normalize = (value) =>
+    String(value ?? "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+
+  return normalize(displayLabel) === normalize(realName);
+}
+
 function buildEstablishmentTimeline(
   establishment,
   inspections = [],
   complaints = [],
-  renewals = [],
-  { displayLabels = false } = {}
+  renewals = []
 ) {
   const establishmentId = String(establishment.id);
-  const businessTypeText = displayLabels
-    ? businessTypeDisplayLabel(establishment.business_type_name)
-    : establishment.business_type_name;
+  // Display label, matching the modal header, the table and the print report.
+  const businessTypeText = businessTypeDisplayLabel(
+    establishment.business_type_name
+  );
   const rows = [
     {
       id: `establishment-${establishmentId}`,
