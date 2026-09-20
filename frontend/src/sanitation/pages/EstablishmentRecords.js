@@ -917,7 +917,7 @@ function EstablishmentDetailModal({
             <span style={{ fontSize: "13px", color: "#15803d" }}>
               {establishment.account_username
                 ? `Owner account active (@${establishment.account_username}). Can log in to view live permit, checklist & request re-inspection.`
-                : "Owner can register an account in the Mobile Sanitation Portal using their Permit / Business Name, or use demo account (establishment_owner / Establishment@123)."}
+                : "Owner can register an account in the Mobile Sanitation Portal using their Permit / Business Name."}
             </span>
           </div>
           <span
