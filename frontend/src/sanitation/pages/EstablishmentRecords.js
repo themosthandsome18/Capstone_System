@@ -641,11 +641,11 @@ function EstablishmentRecords() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: "6%" }}>ID</th>
                 <th style={{ width: "22%" }}>Business Name</th>
                 <th style={{ width: "16%" }}>Owner / Proprietor</th>
                 <th style={{ width: "20%" }}>Business Type</th>
-                <th style={{ width: "10%", textAlign: "center" }}>Permit Size</th>
-                <th style={{ width: "18%" }}>Address</th>
+                <th style={{ width: "22%" }}>Address</th>
                 <th style={{ width: "14%", textAlign: "center" }}>Status</th>
                 <th style={{ width: "10%", textAlign: "center" }}>Actions</th>
               </tr>
@@ -655,6 +655,7 @@ function EstablishmentRecords() {
               {filteredEstablishments.length ? (
                 filteredEstablishments.map((item) => (
                   <tr key={item.id}>
+                    <td>{item.id}</td>
                     <td>
                       <strong>{item.business_name}</strong>
                       {item.account_username ? (
@@ -679,11 +680,6 @@ function EstablishmentRecords() {
                     </td>
                     <td>{item.owner_name}</td>
                     <td>{item.business_type_name}</td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className={`permit-size-badge ${(item.permit_size || "sp").toLowerCase()}`}>
-                        {item.permit_size_label || (item.permit_size === "large" ? "Large" : "SP")}
-                      </span>
-                    </td>
                     <td>{item.address || `Brgy. ${item.barangay}, Mauban`}</td>
                     <td style={{ textAlign: "center" }}>
                       <span
