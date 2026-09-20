@@ -20,6 +20,7 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { businessTypeDisplayLabel } from "../utils/businessTypeLabels";
 import { QRCodeSVG } from "qrcode.react";
 
 export const OFFICIAL_MAUBAN_BARANGAYS = [
@@ -679,7 +680,8 @@ function EstablishmentRecords() {
                       ) : null}
                     </td>
                     <td>{item.owner_name}</td>
-                    <td>{item.business_type_name}</td>
+                    {/* Display label only; filtering, export and detail view use the real type. */}
+                    <td>{businessTypeDisplayLabel(item.business_type_name)}</td>
                     <td>{item.address || `Brgy. ${item.barangay}, Mauban`}</td>
                     <td style={{ textAlign: "center" }}>
                       <span
