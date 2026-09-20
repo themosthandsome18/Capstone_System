@@ -835,7 +835,9 @@ function EstablishmentDetailModal({
               businessTypeDisplayLabel(establishment.business_type_name),
               establishment.business_type_name
             ) ? null : (
-              <p>{establishment.business_type_name}</p>
+              <p className="underlying-type">
+                {establishment.business_type_name}
+              </p>
             )}
           </div>
 
