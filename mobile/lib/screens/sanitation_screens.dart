@@ -4303,10 +4303,8 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _estUsername = TextEditingController();
   final TextEditingController _estPassword = TextEditingController();
-  final TextEditingController _estPermitLookup = TextEditingController();
 
   SanitationGatewayScreen _currentScreen = SanitationGatewayScreen.chooser;
-  int _estAccessMode = 0; // 0: Option B (Scan QR / Permit Code), 1: Option A (Account Credentials)
   bool _signedIn = false;
   bool _signedInEstablishment = false;
   bool _signingIn = false;
@@ -4325,8 +4323,19 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(staffAuthTokenKey);
       final role = prefs.getString(staffAuthRoleKey) ?? '';
-      if ((token != null && token.isNotEmpty) || role == 'establishment') {
+      if (token != null && token.isNotEmpty) {
         if (role == 'establishment') {
+          // Real server tokens are 40-char hex. Anything else is a leftover from
+          // the removed unauthenticated permit-code access and must not restore a session.
+          if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(token)) {
+            await prefs.remove(staffAuthTokenKey);
+            await prefs.remove(staffAuthRoleKey);
+            await prefs.remove(staffAuthUsernameKey);
+            await prefs.remove(establishmentDataKey);
+            if (!mounted) return;
+            setState(() => _checkingSavedAuth = false);
+            return;
+          }
           final estJson = prefs.getString(establishmentDataKey);
           if (estJson != null && estJson.isNotEmpty) {
             try {
@@ -4343,7 +4352,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
               // Failed to parse stored establishment JSON, fall back to login screen
             }
           }
-        } else if (token != null && token.isNotEmpty) {
+        } else {
           if (!mounted) return;
           setState(() {
             _signedIn = true;
@@ -4363,7 +4372,6 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     _password.dispose();
     _estUsername.dispose();
     _estPassword.dispose();
-    _estPermitLookup.dispose();
     super.dispose();
   }
 
@@ -5067,206 +5075,45 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            // Prominent Dual-Choice Mode Selector
-                            SegmentedButton<int>(
-                              segments: const [
-                                ButtonSegment<int>(
-                                  value: 0,
-                                  icon: Icon(Icons.qr_code_scanner, size: 18),
-                                  label: Text(
-                                    'Permit QR / Code',
-                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                            _GatewaySection(
+                              icon: Icons.storefront_outlined,
+                              title: 'Establishment Account',
+                              text:
+                                  'Sign in using your establishment username and password.',
+                              children: [
+                                TextField(
+                                  controller: _estUsername,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Username',
+                                    hintText: 'Enter your username',
+                                    prefixIcon: Icon(Icons.person_outline, size: 18),
                                   ),
                                 ),
-                                ButtonSegment<int>(
-                                  value: 1,
-                                  icon: Icon(Icons.badge_outlined, size: 18),
-                                  label: Text(
-                                    'Account Login',
-                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                                const SizedBox(height: 10),
+                                TextField(
+                                  controller: _estPassword,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Password',
+                                    prefixIcon: Icon(Icons.lock_outline, size: 18),
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _signingIn ? null : _signInEstablishment,
+                                  child: Text(
+                                    _signingIn
+                                        ? 'Signing in...'
+                                        : 'Sign in to Establishment Portal',
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextButton(
+                                  onPressed: _showEstablishmentRegistrationDialog,
+                                  child: const Text('Register or Claim Business Account'),
                                 ),
                               ],
-                              selected: {_estAccessMode},
-                              onSelectionChanged: (set) {
-                                setState(() => _estAccessMode = set.first);
-                              },
                             ),
-                            const SizedBox(height: 16),
-                            if (_estAccessMode == 0) ...[
-                              // Option B: Direct QR / Permit Code Access (No Password Required)
-                              _GatewaySection(
-                                icon: Icons.qr_code_2_outlined,
-                                title: 'Option B: Direct Permit Access',
-                                text:
-                                    'Scan your physical Sanitary Permit QR code or enter your permit number. No password required.',
-                                children: [
-                                  FilledButton.icon(
-                                    onPressed: _signingIn
-                                        ? null
-                                        : () async {
-                                            final scanned = await Navigator.of(context).push<String>(
-                                              MaterialPageRoute(
-                                                builder: (context) => const QrScannerScreen(),
-                                              ),
-                                            );
-                                            if (scanned != null && scanned.isNotEmpty) {
-                                              _accessEstablishmentByCode(scanned);
-                                            }
-                                          },
-                                    icon: const Icon(Icons.qr_code_scanner, size: 20),
-                                    label: const Text(
-                                      'Scan Establishment QR Code',
-                                      style: TextStyle(fontWeight: FontWeight.w800),
-                                    ),
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.deepGreen,
-                                      minimumSize: const Size.fromHeight(48),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _estPermitLookup,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Permit No. or Business Name',
-                                            hintText: 'e.g. SP-2026-001 or Moto Shop',
-                                            prefixIcon: Icon(Icons.confirmation_number_outlined, size: 18),
-                                          ),
-                                          onSubmitted: (val) => _accessEstablishmentByCode(val),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      FilledButton.tonalIcon(
-                                        onPressed: _signingIn
-                                            ? null
-                                            : () => _accessEstablishmentByCode(_estPermitLookup.text),
-                                        icon: const Icon(Icons.arrow_forward, size: 16),
-                                        label: const Text('View'),
-                                        style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (widget.bootstrap.establishments.isNotEmpty) ...[
-                                    const SizedBox(height: 12),
-                                    const Text(
-                                      'Quick Demo Establishments:',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.muted,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: widget.bootstrap.establishments.take(3).map((est) {
-                                        return ActionChip(
-                                          avatar: const Icon(Icons.storefront, size: 14, color: AppColors.deepGreen),
-                                          label: Text(
-                                            est.businessName,
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                          ),
-                                          onPressed: _signingIn
-                                              ? null
-                                              : () => _accessEstablishmentByCode(
-                                                    est.permitNumber.isNotEmpty ? est.permitNumber : est.businessName,
-                                                  ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Center(
-                                    child: TextButton(
-                                      onPressed: () => setState(() => _estAccessMode = 1),
-                                      child: const Text('Prefer password login? Switch to Account Login ->'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ] else ...[
-                              // Option A: Standard Login (Username & Password)
-                              _GatewaySection(
-                                icon: Icons.storefront_outlined,
-                                title: 'Option A: Standard Account Login',
-                                text:
-                                    'Sign in using your establishment username and password.',
-                                children: [
-                                  TextField(
-                                    controller: _estUsername,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Username or Permit No.',
-                                      hintText: 'Enter username or permit number',
-                                      prefixIcon: Icon(Icons.person_outline, size: 18),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  TextField(
-                                    controller: _estPassword,
-                                    obscureText: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Password',
-                                      prefixIcon: Icon(Icons.lock_outline, size: 18),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton(
-                                    onPressed: _signingIn ? null : _signInEstablishment,
-                                    child: Text(
-                                      _signingIn
-                                          ? 'Signing in...'
-                                          : 'Sign in to Establishment Portal',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF0FDF4),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFFBBF7D0)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.info_outline, size: 16, color: AppColors.deepGreen),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'Default Demo Account:\nUsername: establishment_owner\nPassword: Establishment@123',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.green.shade900,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Center(
-                                    child: TextButton.icon(
-                                      onPressed: () => setState(() => _estAccessMode = 0),
-                                      icon: const Icon(Icons.qr_code_scanner, size: 16),
-                                      label: const Text('No password? Scan QR or enter Permit Code directly'),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: _showEstablishmentRegistrationDialog,
-                                    child: const Text('Register or Claim Business Account'),
-                                  ),
-                                ],
-                              ),
-                            ],
                             const SizedBox(height: 14),
                             Center(
                               child: TextButton.icon(
@@ -5330,90 +5177,16 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     }
   }
 
-  Future<void> _accessEstablishmentByCode(String rawCode) async {
-    final code = rawCode.trim();
-    if (code.isEmpty) {
-      showAppMessage(context, 'Enter or scan a sanitary permit code.');
-      return;
-    }
-
-    setState(() => _signingIn = true);
-
-    try {
-      SanitationEstablishment? matchedEst;
-      final lower = code.toLowerCase();
-
-      // 1. Check local bootstrap establishments
-      for (final est in widget.bootstrap.establishments) {
-        if (est.permitNumber.trim().toLowerCase() == lower ||
-            est.id.toString() == lower ||
-            est.businessName.trim().toLowerCase() == lower) {
-          matchedEst = est;
-          break;
-        }
-      }
-
-      // 2. Query verify permit API endpoint
-      try {
-        final res = await widget.api.verifySanitaryPermit(code);
-        if (res.verified) {
-          matchedEst = res.establishment;
-        }
-      } catch (_) {
-        // Fall back to local match if offline or verification endpoint failed
-      }
-
-      // 3. Fallback partial search in bootstrap if exact match not found
-      if (matchedEst == null) {
-        for (final est in widget.bootstrap.establishments) {
-          if ((est.permitNumber.isNotEmpty && est.permitNumber.toLowerCase().contains(lower)) ||
-              est.businessName.toLowerCase().contains(lower)) {
-            matchedEst = est;
-            break;
-          }
-        }
-      }
-
-      if (matchedEst == null) {
-        throw Exception(
-          'No establishment found matching "$code". Please check the permit code or scan again.',
-        );
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(staffAuthTokenKey, 'permit_access_${matchedEst.id}');
-      await prefs.setString(staffAuthRoleKey, 'establishment');
-      await prefs.setString(
-        staffAuthUsernameKey,
-        matchedEst.permitNumber.isNotEmpty ? matchedEst.permitNumber : matchedEst.businessName,
-      );
-      await prefs.setString(establishmentDataKey, jsonEncode(matchedEst.toJson()));
-
-      if (!mounted) return;
-      setState(() {
-        _signingIn = false;
-        _activeEstablishment = matchedEst;
-        _signedInEstablishment = true;
-      });
-      showAppMessage(context, 'Welcome, ${matchedEst.businessName}!');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _signingIn = false);
-      showAppMessage(context, conciseError(e));
-    }
-  }
-
   Future<void> _signInEstablishment() async {
     final user = _estUsername.text.trim();
     final pass = _estPassword.text.trim();
 
     if (user.isEmpty) {
-      showAppMessage(context, 'Enter establishment username or permit number.');
+      showAppMessage(context, 'Enter your establishment username.');
       return;
     }
     if (pass.isEmpty) {
-      showAppMessage(context, 'Password is empty. Accessing directly via Permit QR / Code...');
-      await _accessEstablishmentByCode(user);
+      showAppMessage(context, 'Password is required.');
       return;
     }
 
