@@ -311,7 +311,7 @@ describe("FOCUS 2: submission payload", () => {
     ]);
   });
 
-  test("text fields are title-cased on entry (apostrophes get an upper-cased letter)", async () => {
+  test("text fields are title-cased on entry, and apostrophes are preserved", async () => {
     const form = openCreateForm();
     fillRequired(form, { "Business Name": "perly's sari-sari store" });
     submit(form);
@@ -319,7 +319,7 @@ describe("FOCUS 2: submission payload", () => {
     await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
     const name = mockCtx.createEstablishment.mock.calls[0][0].business_name;
     console.log("TITLE-CASED business_name:", JSON.stringify(name));
-    expect(name).toBe("Perly'S Sari-Sari Store");
+    expect(name).toBe("Perly's Sari-Sari Store");
   });
 
   test("coordinates typed into the number inputs are submitted as numbers", async () => {
@@ -758,6 +758,83 @@ describe("FOCUS 8: edit flow loads existing values", () => {
       // Merely opening and saving the record writes dates that were never entered.
       expect(payload.permit_issued_date).toBe(TODAY);
       expect(payload.permit_expiry_date).toBe(END_OF_YEAR);
+    } finally {
+      mockCtx.establishments = original;
+    }
+  });
+});
+
+/* ================================================================== */
+/* REGRESSION - apostrophes in establishment names                     */
+/* ================================================================== */
+
+describe("REGRESSION: title-casing preserves apostrophes", () => {
+  /** Type `typed` into a text field and read back what the form now holds. */
+  function titleCasedValue(labelText, typed) {
+    const form = openCreateForm();
+    setField(form, labelText, typed);
+    return field(form, labelText).value;
+  }
+
+  test.each([
+    // The reported bug: the letter after an apostrophe was upper-cased.
+    ["perly's sari-sari store", "Perly's Sari-Sari Store"],
+    ["PERLY'S SARI-SARI STORE", "PERLY'S SARI-SARI STORE"],
+    ["aling nena's carinderia", "Aling Nena's Carinderia"],
+    ["d'best pizza", "D'best Pizza"],
+    // Curly apostrophe, as produced by phone keyboards and Word.
+    ["perly\u2019s store", "Perly\u2019s Store"],
+    // Existing behaviour that must not change.
+    ["sari-sari store", "Sari-Sari Store"],
+    ["mauban water refilling station", "Mauban Water Refilling Station"],
+    ["  leading and trailing  ", "  Leading And Trailing  "],
+    ["double  spaced  words", "Double  Spaced  Words"],
+    ["j.r. hardware", "J.R. Hardware"],
+    ["7-eleven mauban", "7-Eleven Mauban"],
+    ["st. peter chapel (main)", "St. Peter Chapel (Main)"],
+    ["Already Title Cased", "Already Title Cased"],
+    ["", ""],
+  ])("Business Name %j -> %j", (typed, expected) => {
+    expect(titleCasedValue("Business Name", typed)).toBe(expected);
+  });
+
+  test("the same rule applies to Owner / Proprietor and Complete Address", () => {
+    const form = openCreateForm();
+    setField(form, "Owner / Proprietor", "maria o'brien");
+    setField(form, "Complete Address", "12 santo niño st.");
+
+    expect(field(form, "Owner / Proprietor").value).toBe("Maria O'brien");
+    expect(field(form, "Complete Address").value).toBe("12 Santo Niño St.");
+  });
+
+  test("the preserved apostrophe survives into the submitted payload", async () => {
+    const form = openCreateForm();
+    fillRequired(form, {
+      "Business Name": "perly's sari-sari store",
+      "Owner / Proprietor": "maria o'brien",
+    });
+    submit(form);
+
+    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
+    const payload = mockCtx.createEstablishment.mock.calls[0][0];
+    expect(payload.business_name).toBe("Perly's Sari-Sari Store");
+    expect(payload.owner_name).toBe("Maria O'brien");
+  });
+
+  test("an existing record's name is not re-mangled when re-saved from the edit form", async () => {
+    const original = mockCtx.establishments;
+    mockCtx.establishments = [
+      { ...original[0], id: 501, business_name: "Perly's Sari-Sari Store" },
+    ];
+    try {
+      const form = openEditForm(0);
+      expect(field(form, "Business Name").value).toBe("Perly's Sari-Sari Store");
+
+      submit(form);
+      await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
+      expect(mockCtx.updateEstablishment.mock.calls[0][1].business_name).toBe(
+        "Perly's Sari-Sari Store"
+      );
     } finally {
       mockCtx.establishments = original;
     }

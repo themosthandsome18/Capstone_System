@@ -66,9 +66,19 @@ export const OFFICIAL_MAUBAN_BARANGAYS = [
   "Tapucan",
 ];
 
+/**
+ * Upper-cases the first letter of each word.
+ *
+ * An apostrophe is part of the word, not a separator, so "perly's" becomes
+ * "Perly's" and not "Perly'S". Hyphens and spaces still separate words, so
+ * "sari-sari store" becomes "Sari-Sari Store".
+ */
 function toTitleCase(str) {
   if (!str) return "";
-  return str.replace(/\b\w/g, (char) => char.toUpperCase());
+  return str.replace(
+    /(^|[^\p{L}\p{N}'’])(\p{L})/gu,
+    (_match, separator, letter) => separator + letter.toUpperCase()
+  );
 }
 
 export function generatePermitNumber(establishments = [], permitSize = "sp") {
