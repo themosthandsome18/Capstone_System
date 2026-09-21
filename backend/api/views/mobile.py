@@ -76,7 +76,11 @@ from api.services.upload import (
     StorageServiceError,
     UploadValidationError,
     save_image_file,
+    validate_image_file,
 )
+
+# The mobile feedback screen allows at most this many photos per review.
+MAX_FEEDBACK_PHOTOS = 5
 
 
 from django.core.cache import cache
@@ -490,7 +494,10 @@ def mobile_tourist_record_history(request):
 def mobile_feedback_submit(request):
     ensure_mobile_reference_data()
 
-    data = request.data.copy()
+    # Multipart input arrives as a QueryDict. DRF treats form input for a JSONField as a JSON
+    # *string*, so a list of photo URLs put in it becomes "['https://...']" (invalid JSON) and is
+    # rejected with "photos: Value must be valid JSON". Use a plain dict so the list stays a list.
+    data = request.data.dict() if hasattr(request.data, "dict") else dict(request.data)
     destination_id = (
         data.get("destinationId")
         or data.get("destination_id")
@@ -514,10 +521,20 @@ def mobile_feedback_submit(request):
         or request.FILES.getlist("image")
         or request.FILES.getlist("images")
     )
+    if len(uploads) > MAX_FEEDBACK_PHOTOS:
+        message = f"A maximum of {MAX_FEEDBACK_PHOTOS} photos is allowed."
+        return Response(
+            {"error": message, "detail": message},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     if uploads:
         try:
+            # Validate every photo first so a bad one never leaves earlier ones in storage.
             for upload in uploads:
-                photos.append(save_image_file(upload, "feedback"))
+                validate_image_file(upload, strict=True)
+            for upload in uploads:
+                photos.append(save_image_file(upload, "feedback", strict=True))
         except UploadValidationError as val_err:
             return Response(
                 {"error": val_err.message, "detail": val_err.message},

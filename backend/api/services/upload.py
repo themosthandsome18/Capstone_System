@@ -20,6 +20,8 @@ ALLOWED_CONTENT_TYPES = {
     "binary/octet-stream",
 }
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+OCTET_STREAM_TYPES = {"image/octet-stream", "application/octet-stream", "binary/octet-stream"}
+HEIC_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs", b"mif1", b"msf1"}
 
 
 class UploadValidationError(Exception):
@@ -34,13 +36,36 @@ class StorageServiceError(Exception):
         self.message = message
 
 
-def validate_image_file(file):
+def looks_like_image(file):
+    """Checks the file's first bytes for a JPEG, PNG, WebP or HEIC/HEIF signature."""
+    try:
+        head = file.read(16)
+        file.seek(0)
+    except Exception:
+        return False
+
+    if head.startswith(b"\xff\xd8\xff"):
+        return True
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return True
+    if head[4:8] == b"ftyp" and head[8:12] in HEIC_BRANDS:
+        return True
+    return False
+
+
+def validate_image_file(file, strict=False):
     """
     Validates uploaded file size and image type.
     Rejects files exceeding 5MB or with non-image types/extensions.
     Supports JPEG, JPG, PNG, WEBP, and HEIC/HEIF with case-insensitive extensions
     and fallback for octet-stream binaries.
     Returns normalized file extension.
+
+    strict=True (used for public feedback uploads) additionally refuses to guess:
+    a generic octet-stream upload is only accepted with a real image extension, and
+    the file content must start with a known image signature.
     """
     if not file:
         raise UploadValidationError("No image file provided.")
@@ -55,6 +80,12 @@ def validate_image_file(file):
 
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:
         raise UploadValidationError("Only JPG, PNG, and WebP images are allowed.")
+
+    if strict:
+        if content_type in OCTET_STREAM_TYPES and file_ext not in ALLOWED_EXTENSIONS:
+            raise UploadValidationError("Only JPG, PNG, and WebP images are allowed.")
+        if not looks_like_image(file):
+            raise UploadValidationError("The uploaded file is not a valid image.")
 
     if not file_ext:
         if content_type in {"image/jpeg", "image/jpg", "image/pjpeg"}:
@@ -80,14 +111,14 @@ def validate_image_file(file):
     return file_ext
 
 
-def save_image_file(file, folder):
+def save_image_file(file, folder, strict=False):
     """
     Validates the uploaded file, generates an unpredictable UUIDv4 filename,
     saves the file to default_storage, and returns its public URL.
     Raises UploadValidationError if validation fails.
     Raises StorageServiceError if storage backend fails.
     """
-    file_ext = validate_image_file(file)
+    file_ext = validate_image_file(file, strict=strict)
     filename = f"{folder}/{uuid.uuid4().hex}{file_ext}"
 
     try:

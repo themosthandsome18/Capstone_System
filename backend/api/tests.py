@@ -2662,3 +2662,166 @@ class PublicBoatRenameMigrationTests(TestCase):
             normalize_boat_type("Boat provided by resort"),
             "Boat Provided by Resort (As confirmed by both guests and resort)",
         )
+
+
+class MobileFeedbackPhotoUploadTests(TestCase):
+    """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
+
+    URL = "/api/mobile/tourism/feedback/"
+    JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"\x00" * 64
+
+    def setUp(self):
+        ensure_test_reference_tables()
+        self.client = APIClient()
+        self.resort = Resort.objects.first()
+
+        from unittest.mock import MagicMock
+
+        self.storage = MagicMock()
+        self.storage.save.side_effect = lambda name, _file: name
+        self.storage.url.side_effect = lambda name: f"https://storage.test/{name}"
+        patcher = patch("api.services.upload.default_storage", self.storage)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _fields(self):
+        # Same string fields as ApiService.submitFeedback
+        return {
+            "destination_id": str(self.resort.resort_id),
+            "reviewer": "Mobile Tester",
+            "rating": "4",
+            "message": "Nice place",
+            "cleanliness_rating": "5",
+            "sanitation_comment": "Clean",
+        }
+
+    def _photo(self, index=0, name=None, content=None, content_type="image/jpeg"):
+        return SimpleUploadedFile(
+            name or f"report_1700000000000_{index}.jpg",
+            content if content is not None else self.JPEG,
+            content_type=content_type,
+        )
+
+    def _post(self, photos):
+        data = self._fields()
+        data["photo"] = photos  # one 'photo' part per image, like the app
+        return self.client.post(self.URL, data, format="multipart")
+
+    def test_one_photo_is_uploaded_and_urls_are_stored(self):
+        response = self._post([self._photo(0)])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        photos = response.json()["photos"]
+        self.assertEqual(len(photos), 1)
+        self.assertRegex(photos[0], r"^https://storage\.test/feedback/[0-9a-f]{32}\.jpg$")
+        entry = FeedbackEntry.objects.get(reviewer="Mobile Tester")
+        self.assertEqual(entry.photos, photos)
+        self.assertNotIn("report_1700000000000", photos[0])  # storage name is a UUID, not the client's
+
+    def test_two_photos_are_uploaded(self):
+        png = self._photo(
+            1,
+            "report_1700000000000_1.png",
+            content=b"\x89PNG\r\n\x1a\n" + b"\x00" * 32,
+            content_type="image/png",
+        )
+        response = self._post([self._photo(0), png])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        photos = response.json()["photos"]
+        self.assertEqual(len(photos), 2)
+        self.assertEqual(len(set(photos)), 2)
+        self.assertTrue(photos[1].endswith(".png"))
+        self.assertEqual(self.storage.save.call_count, 2)
+
+    def test_five_photos_allowed_six_rejected(self):
+        ok = self._post([self._photo(i) for i in range(5)])
+        self.assertEqual(ok.status_code, status.HTTP_201_CREATED, ok.content)
+        self.assertEqual(len(ok.json()["photos"]), 5)
+
+        self.storage.save.reset_mock()
+        too_many = self._post([self._photo(i) for i in range(6)])
+        self.assertEqual(too_many.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("maximum of 5 photos", too_many.json()["detail"])
+        self.storage.save.assert_not_called()
+
+    def test_feedback_without_photos_still_works(self):
+        as_json = self.client.post(self.URL, self._fields(), format="json")
+        self.assertEqual(as_json.status_code, status.HTTP_201_CREATED, as_json.content)
+        self.assertEqual(as_json.json()["photos"], [])
+
+        as_multipart = self.client.post(self.URL, self._fields(), format="multipart")
+        self.assertEqual(as_multipart.status_code, status.HTTP_201_CREATED, as_multipart.content)
+        self.assertEqual(as_multipart.json()["photos"], [])
+        self.storage.save.assert_not_called()
+
+    def test_json_body_with_photo_url_list_still_works(self):
+        payload = self._fields()
+        payload["photos"] = ["https://storage.test/feedback/existing.jpg"]
+        response = self.client.post(self.URL, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(response.json()["photos"], ["https://storage.test/feedback/existing.jpg"])
+
+    def test_non_image_file_is_rejected_with_clear_400(self):
+        response = self._post([self._photo(name="notes.txt", content=b"hello", content_type="text/plain")])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["detail"], "Only JPG, PNG, and WebP images are allowed.")
+        self.assertFalse(FeedbackEntry.objects.filter(reviewer="Mobile Tester").exists())
+        self.storage.save.assert_not_called()
+
+    def test_file_that_is_not_really_an_image_is_rejected(self):
+        response = self._post([self._photo(name="photo.jpg", content=b"%PDF-1.4 not an image at all")])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["detail"], "The uploaded file is not a valid image.")
+        self.storage.save.assert_not_called()
+
+    def test_generic_octet_stream_is_not_accepted_as_an_image(self):
+        octet = "application/octet-stream"
+        # no image extension -> rejected even though the bytes look like a JPEG
+        no_ext = self._post([self._photo(name="camera_raw", content_type=octet)])
+        self.assertEqual(no_ext.status_code, status.HTTP_400_BAD_REQUEST)
+        # image extension but arbitrary bytes -> rejected
+        junk = self._post([self._photo(name="photo.jpg", content=b"MZ\x90\x00 arbitrary binary", content_type=octet)])
+        self.assertEqual(junk.status_code, status.HTTP_400_BAD_REQUEST)
+        self.storage.save.assert_not_called()
+
+        # a real JPEG named .jpg but sent as octet-stream (some Android clients) is still fine
+        real = self._post([self._photo(name="photo.jpg", content_type=octet)])
+        self.assertEqual(real.status_code, status.HTTP_201_CREATED, real.content)
+
+    def test_oversized_photo_is_rejected(self):
+        big = self._photo(content=b"\xff\xd8\xff" + b"0" * (5 * 1024 * 1024))
+        response = self._post([big])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["detail"], "File size exceeds 5MB limit.")
+        self.storage.save.assert_not_called()
+
+    def test_one_bad_photo_stores_nothing(self):
+        bad = self._photo(1, name="notes.txt", content=b"x", content_type="text/plain")
+        response = self._post([self._photo(0), bad])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.storage.save.assert_not_called()
+        self.assertFalse(FeedbackEntry.objects.filter(reviewer="Mobile Tester").exists())
+
+    def test_valid_photo_larger_than_django_memory_threshold_is_accepted(self):
+        # Uploads over 2.5 MB are spooled to a temp file by Django. Real phone photos are often
+        # 2.5-5 MB, so this must work (copying request.data used to crash on such files).
+        photo = self._photo(content=self.JPEG + b"\x00" * (3 * 1024 * 1024))
+        response = self._post([photo])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(len(response.json()["photos"]), 1)
+        self.storage.save.assert_called_once()
+
+    def test_storage_failure_returns_503_and_no_entry(self):
+        self.storage.save.side_effect = IOError("Storage quota exceeded")
+        response = self._post([self._photo(0)])
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("Image upload failed", response.json()["detail"])
+        self.assertFalse(FeedbackEntry.objects.filter(reviewer="Mobile Tester").exists())
