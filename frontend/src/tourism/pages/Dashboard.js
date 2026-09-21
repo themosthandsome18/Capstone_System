@@ -152,7 +152,7 @@ function Dashboard() {
     datasets: [
       {
         data: [
-          (classification.filipino || 0) + (classification.maubanin || 0),
+          classification.filipino || 0,
           classification.foreign || 0,
         ],
         backgroundColor: ["#147c79", "#ffc978"],
@@ -160,7 +160,7 @@ function Dashboard() {
         cutout: "62%",
       },
     ],
-  }), [classification.filipino, classification.maubanin, classification.foreign]);
+  }), [classification.filipino, classification.foreign]);
 
   const genderData = useMemo(() => ({
     labels: ["Male", "Female"],
@@ -225,7 +225,7 @@ function Dashboard() {
       ["No-show Rate", `${metrics.noShowRate || 0}%`],
       ["Top Resort This Month", metrics.topResortThisMonth],
       ["Top Origin This Month", metrics.topOriginThisMonth],
-      ["Domestic (Filipino)", (classification.filipino || 0) + (classification.maubanin || 0)],
+      ["Domestic (Filipino)", classification.filipino || 0],
       ["Foreign (International)", classification.foreign || 0],
       ["Male", gender.male],
       ["Female", gender.female],
@@ -356,7 +356,7 @@ function Dashboard() {
               />
             </div>
 
-            <LegendRow color="#147c79" label="Domestic (Filipino)" value={(classification.filipino || 0) + (classification.maubanin || 0)} />
+            <LegendRow color="#147c79" label="Domestic (Filipino)" value={classification.filipino || 0} />
             <LegendRow color="#ffc978" label="Foreign (International)" value={classification.foreign || 0} />
           </div>
         </section>

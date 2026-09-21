@@ -41,6 +41,7 @@ const initialForm = {
   age_0_7: "0",
   age_8_59: "0",
   age_60_above: "0",
+  maubanin_count: "0",
   status: "",
 };
 
@@ -351,6 +352,7 @@ function BookingManagement() {
       age_0_7: String(record.age_0_7 || 0),
       age_8_59: String(record.age_8_59 || 0),
       age_60_above: String(record.age_60_above || 0),
+      maubanin_count: String(record.maubanin_count || 0),
       status: record.status || "arrived",
     });
 
@@ -398,6 +400,7 @@ function BookingManagement() {
       [field]: value,
       ...(field === "region_id" ? { province_id: "" } : {}),
       ...(field === "boat_type_id" && !isPublicBoat(value) ? { boat_capacity_fare: "" } : {}),
+      ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
     }));
   }
 
@@ -446,7 +449,7 @@ function BookingManagement() {
       arrival_date: form.arrival_date,
       filipino_count: filipinoCount,
       foreigner_count: foreignerCount,
-      maubanin_count: 0,
+      maubanin_count: filipinoCount > 0 ? toInteger(form.maubanin_count) : 0,
       total_visitors: totalVisitors,
       total_male: toInteger(form.total_male),
       total_female: toInteger(form.total_female),
@@ -525,8 +528,14 @@ function BookingManagement() {
       return "Filipino + foreigner count must equal age 0-7 + age 8-59 + age 60+.";
     }
 
+    if (payload.maubanin_count < 0) {
+      return "Maubanin count cannot be negative.";
+    }
+
+    // Informational only: Mauban residents are Filipino, so this can never exceed the
+    // Filipino count (and therefore never the total head count).
     if (payload.maubanin_count > payload.filipino_count) {
-      return "Maubanin count cannot be greater than Filipino count.";
+      return "Maubanin count cannot be greater than the Filipino count.";
     }
 
     if (payload.special_group_count > payload.total_visitors) {
@@ -1371,9 +1380,17 @@ function BookingManagement() {
                 {currentStep === 4 && (
                   <>
                     <div className="wizard-grid">
-                      <WizardField label="Filipino Count" required>
-                        <input type="number" min="0" value={form.filipino_count} onChange={(e) => updateField("filipino_count", e.target.value)} />
-                      </WizardField>
+                      <div className="wizard-field-group">
+                        <WizardField label="Filipino Count" required>
+                          <input type="number" min="0" value={form.filipino_count} onChange={(e) => updateField("filipino_count", e.target.value)} />
+                        </WizardField>
+                        {toInteger(form.filipino_count) > 0 && (
+                          <div className="wizard-field wizard-subfield">
+                            <label>Sub Maubanin</label>
+                            <input type="number" min="0" value={form.maubanin_count} onChange={(e) => updateField("maubanin_count", e.target.value)} />
+                          </div>
+                        )}
+                      </div>
                       <WizardField label="Foreigner Count" required>
                         <input type="number" min="0" value={form.foreigner_count} onChange={(e) => updateField("foreigner_count", e.target.value)} />
                       </WizardField>
@@ -1452,6 +1469,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Age 0-7" value={form.age_0_7} />
                       <WizardReviewItem label="Age 8-59" value={form.age_8_59} />
                       <WizardReviewItem label="Age 60+" value={form.age_60_above} />
+                      <WizardReviewItem label="Maubanin Count" value={form.maubanin_count} />
                     </WizardReviewSection>
                     {formError && <p className="wizard-step-error">{formError}</p>}
                   </>

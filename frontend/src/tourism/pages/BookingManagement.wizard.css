@@ -248,6 +248,21 @@
   cursor: not-allowed;
 }
 
+/* Filipino Count plus its conditional Maubanin sub-field, kept in one grid cell */
+.wizard-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wizard-subfield {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 2px solid #d1fae5;
+  min-width: 0;
+}
+
 .wizard-field input[type="date"] {
   padding-right: 8px;
 }

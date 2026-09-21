@@ -390,6 +390,127 @@ class BookingManagementApiTests(TestCase):
         )
 
 
+    def _record_payload(self, **overrides):
+        region = Region.objects.first()
+        province = Province.objects.first() or Province.objects.create(
+            id=9001, name="Quezon", region=region
+        )
+        payload = {
+            "first_name": "Maria",
+            "last_name": "Reyes",
+            "full_name": "Maria Reyes",
+            "email": "maria@example.com",
+            "consent_confirmed": True,
+            "contact_number": "+639171234567",
+            "country_id": Country.objects.first().id,
+            "region_id": region.id,
+            "province_id": province.id,
+            "country_of_origin": "",
+            "resort_id": Resort.objects.first().resort_id,
+            "itinerary_id": Itinerary.objects.first().id,
+            "travel_mode_id": TravelMode.objects.first().id,
+            "boat_type_id": BoatType.objects.first().id,
+            "boat_capacity_fare": "",
+            "parking_space": "",
+            "visit_purpose_id": VisitPurpose.objects.first().id,
+            "arrival_date": "2026-04-01",
+            "filipino_count": 3,
+            "foreigner_count": 1,
+            "total_visitors": 4,
+            "total_male": 2,
+            "total_female": 2,
+            "special_group_count": 0,
+            "age_0_7": 0,
+            "age_8_59": 4,
+            "age_60_above": 0,
+            "status": "pending",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_maubanin_count_above_filipino_or_total_is_rejected(self):
+        for value in (4, 5, 99):  # 4 = total head count, still > filipino_count (3)
+            response = self.client.post(
+                "/api/tourist-records/",
+                self._record_payload(maubanin_count=value),
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, value)
+            self.assertIn("maubanin_count", response.json())
+            self.assertIn(
+                "cannot be greater than the Filipino count",
+                str(response.json()["maubanin_count"]),
+            )
+        self.assertFalse(TouristRecord.objects.filter(email="maria@example.com").exists())
+
+    def test_valid_maubanin_count_is_saved_without_changing_totals(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._record_payload(maubanin_count=2),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = TouristRecord.objects.get(email="maria@example.com")
+        self.assertEqual(record.maubanin_count, 2)
+        self.assertEqual(record.filipino_count, 3)
+        self.assertEqual(record.foreigner_count, 1)
+        self.assertEqual(record.total_visitors, 4)
+
+    def test_maubanin_count_equal_to_filipino_count_is_allowed(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._record_payload(maubanin_count=3),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+
+    def test_omitted_maubanin_count_saves_zero(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._record_payload(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(
+            TouristRecord.objects.get(email="maria@example.com").maubanin_count, 0
+        )
+
+    def test_updating_maubanin_count_above_filipino_count_is_rejected(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._record_payload(maubanin_count=1),
+            format="json",
+        )
+        survey_id = response.json()["survey_id"]
+
+        bad = self.client.patch(
+            f"/api/tourist-records/{survey_id}/", {"maubanin_count": 4}, format="json"
+        )
+        self.assertEqual(bad.status_code, status.HTTP_400_BAD_REQUEST)
+
+        good = self.client.patch(
+            f"/api/tourist-records/{survey_id}/", {"maubanin_count": 3}, format="json"
+        )
+        self.assertEqual(good.status_code, status.HTTP_200_OK, good.content)
+        self.assertEqual(good.json()["maubanin_count"], 3)
+
+    def test_maubanin_count_is_not_added_on_top_of_filipino_in_dashboard(self):
+        TouristRecord.objects.all().delete()
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._record_payload(maubanin_count=3, status="arrived"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+
+        dashboard = self.client.get("/api/dashboard/", {"year": "all"})
+        self.assertEqual(dashboard.status_code, status.HTTP_200_OK)
+        classification = dashboard.json()["classification"]
+        # Maubanin is a subset of Filipino: Domestic must equal filipino_count (3), not 3 + 3.
+        self.assertEqual(classification["filipino"], 3)
+        self.assertEqual(classification["foreign"], 1)
+
+
 class MobilePublicApiTests(TestCase):
     @classmethod
     def setUpTestData(cls):

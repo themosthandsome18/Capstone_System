@@ -231,7 +231,7 @@ def validate_tourist_record_values(values):
     if counts["maubanin_count"] > counts["filipino_count"]:
         add_error(
             "maubanin_count",
-            "Cannot be greater than filipino_count.",
+            "Maubanin count cannot be greater than the Filipino count.",
         )
 
     if total_visitors != gender_total:
