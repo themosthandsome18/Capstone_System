@@ -2289,6 +2289,7 @@ class DropdownTile<T> extends StatelessWidget {
     required this.items,
     required this.itemLabel,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String label;
@@ -2296,6 +2297,9 @@ class DropdownTile<T> extends StatelessWidget {
   final List<T> items;
   final String Function(T item) itemLabel;
   final ValueChanged<T> onChanged;
+
+  /// When false the field stays visible but is disabled (Flutter's normal disabled styling).
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -2318,10 +2322,13 @@ class DropdownTile<T> extends StatelessWidget {
               ),
             )
             .toList(),
-        onChanged: (item) {
-          if (item != null) onChanged(item);
-        },
+        onChanged: enabled
+            ? (item) {
+                if (item != null) onChanged(item);
+              }
+            : null,
         decoration: InputDecoration(
+          enabled: enabled,
           labelText: label,
           filled: true,
           fillColor: Colors.white,
@@ -2428,47 +2435,70 @@ class CounterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
+    final row = Row(
+      children: [
+        Expanded(
+          child: Text(
+            item.label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        IconButton.filledTonal(
+          onPressed: item.value > 0
+              ? () => item.onChanged(item.value - 1)
+              : null,
+          icon: const Icon(Icons.remove),
+        ),
+        SizedBox(
+          width: 38,
+          child: Center(
             child: Text(
-              item.label,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              '${item.value}',
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
-          IconButton.filledTonal(
-            onPressed: item.value > 0
-                ? () => item.onChanged(item.value - 1)
-                : null,
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 38,
-            child: Center(
-              child: Text(
-                '${item.value}',
-                style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        IconButton.filledTonal(
+          onPressed: () => item.onChanged(item.value + 1),
+          icon: const Icon(Icons.add),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(top: 6, bottom: 6, left: item.subItem ? 20 : 0),
+      child: item.subItem
+          ? Container(
+              padding: const EdgeInsets.only(left: 10),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: AppColors.green.withValues(alpha: 0.4),
+                    width: 2,
+                  ),
+                ),
               ),
-            ),
-          ),
-          IconButton.filledTonal(
-            onPressed: () => item.onChanged(item.value + 1),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
+              child: row,
+            )
+          : row,
     );
   }
 }
 
 class CounterItem {
-  const CounterItem(this.label, this.value, this.onChanged);
+  const CounterItem(
+    this.label,
+    this.value,
+    this.onChanged, {
+    this.subItem = false,
+  });
 
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+
+  /// Shown indented under the row above it, as a sub-item of that row.
+  final bool subItem;
 }
 
 class RatingSelector extends StatelessWidget {

@@ -187,6 +187,13 @@ String boatCapacityFareLabel(String value) {
   return value.isEmpty ? 'Select capacity and fare' : value;
 }
 
+/// Boat Capacity & Fare only applies to the public boat. It is identified by name
+/// (starts with "public boat", case-insensitive), not by id, same as the web wizard.
+/// No boat / a blank name is not the public boat.
+bool isPublicBoat(RefItem? boat) {
+  return (boat?.name ?? '').trim().toLowerCase().startsWith('public boat');
+}
+
 String statusLabel(String value) {
   switch (value) {
     case 'pending':

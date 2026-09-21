@@ -3973,13 +3973,18 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           value: _boatType,
           items: widget.bootstrap.boatTypes,
           itemLabel: (item) => item.name,
-          onChanged: (item) => setState(() => _boatType = item),
+          onChanged: (item) => setState(() {
+            _boatType = item;
+            // A fare only applies to the public boat.
+            if (!isPublicBoat(item)) _boatCapacityFare = '';
+          }),
         ),
         DropdownTile<String>(
           label: 'Boat Capacity & Fare',
           value: _boatCapacityFare,
           items: boatCapacityFareOptions,
           itemLabel: boatCapacityFareLabel,
+          enabled: isPublicBoat(_boatType),
           onChanged: (item) => setState(() => _boatCapacityFare = item),
         ),
         AppTextField(controller: _parkingSpace, label: 'Parking space (Optional)'),
@@ -4017,16 +4022,17 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
                 _maubanin = clampInt(_maubanin, 0, _filipino);
               });
             }),
+            if (_filipino > 0)
+              CounterItem('Sub Maubanin', _maubanin, (value) {
+                setState(() {
+                  _maubanin = clampInt(value, 0, _filipino);
+                });
+              }, subItem: true),
             CounterItem('Foreigner', _foreign, (value) {
               setState(() {
                 _foreign = clampInt(value, 0, _visitors);
                 _filipino = _visitors - _foreign;
                 _maubanin = clampInt(_maubanin, 0, _filipino);
-              });
-            }),
-            CounterItem('Maubanin (Local Resident, subset of Filipino)', _maubanin, (value) {
-              setState(() {
-                _maubanin = clampInt(value, 0, _filipino);
               });
             }),
           ],
@@ -4166,14 +4172,14 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         itineraryId: _itinerary.id,
         travelModeId: _travelMode.id,
         boatTypeId: _boatType.id,
-        boatCapacityFare: _boatCapacityFare.trim(),
+        boatCapacityFare: isPublicBoat(_boatType) ? _boatCapacityFare.trim() : '',
         parkingSpace: _parkingSpace.text.trim(),
         visitPurposeId: _purpose.id,
         totalVisitors: _visitors,
         totalMale: _male,
         totalFemale: _female,
         filipinoCount: _filipino,
-        maubaninCount: _maubanin,
+        maubaninCount: _filipino > 0 ? _maubanin : 0,
         foreignerCount: _foreign,
         specialGroupCount: _specialGroup,
         age0To7: _age0To7,
