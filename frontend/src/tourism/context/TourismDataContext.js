@@ -118,6 +118,89 @@ const emptyBootstrap = {
   apiBaseUrl: "",
 };
 
+// Background refresh tuning. Only the booking list changes while staff are watching
+// (mobile QR check-ins), so it is the only data polled frequently. Reference tables are
+// loaded once at start; feedback is refreshed on a much longer interval.
+const BOOKING_POLL_INTERVAL_MS = 30 * 1000;
+const FEEDBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
+// Ignore a visibility refresh if a run finished this recently (rapid tab switching).
+const VISIBLE_REFRESH_MIN_GAP_MS = 5 * 1000;
+
+// Runs `task` every `intervalMs`, but:
+//  - never overlaps itself: the next run is scheduled only after the previous one finishes
+//  - pauses completely while the browser tab is hidden
+//  - refreshes once right away when the tab becomes visible again
+function useVisibleInterval(task, intervalMs) {
+  const taskRef = useRef(task);
+
+  useEffect(() => {
+    taskRef.current = task;
+  }, [task]);
+
+  useEffect(() => {
+    let timer = null;
+    let running = false;
+    let stopped = false;
+    let lastFinishedAt = 0;
+
+    const isHidden = () => document.visibilityState === "hidden";
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const schedule = () => {
+      clearTimer();
+      if (stopped || isHidden()) {
+        return;
+      }
+      timer = setTimeout(run, intervalMs);
+    };
+
+    async function run() {
+      timer = null;
+      // If a run is in flight, its `finally` will schedule the next one.
+      if (stopped || isHidden() || running) {
+        return;
+      }
+      running = true;
+      try {
+        await taskRef.current();
+      } catch (err) {
+        // Background refresh: stay quiet on connection drops.
+      } finally {
+        running = false;
+        lastFinishedAt = Date.now();
+        schedule();
+      }
+    }
+
+    function handleVisibilityChange() {
+      clearTimer();
+      if (isHidden()) {
+        return;
+      }
+      if (Date.now() - lastFinishedAt < VISIBLE_REFRESH_MIN_GAP_MS) {
+        schedule();
+        return;
+      }
+      run();
+    }
+
+    schedule();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopped = true;
+      clearTimer();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [intervalMs]);
+}
+
 export function TourismDataProvider({ children }) {
   const [bootstrap, setBootstrap] = useState(emptyBootstrap);
   const [loading, setLoading] = useState(true);
@@ -147,53 +230,63 @@ export function TourismDataProvider({ children }) {
     bootstrapRef.current = bootstrap;
   }, [bootstrap]);
 
-  const pollLatestData = useCallback(async () => {
-    try {
-      const currentBootstrap = bootstrapRef.current;
-      const currentFilters = currentBootstrap.bookingManagement?.filters || {};
-      const currentPage = currentBootstrap.bookingManagement?.pagination?.page || 1;
-      const currentPageSize = currentBootstrap.bookingManagement?.pagination?.pageSize || 10;
-      const bookingParams = {
-        ...currentFilters,
-        page: currentPage,
-        pageSize: currentPageSize,
-      };
+  const loadingRef = useRef(true);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
 
-      const [bootstrapData, bookingData] = await Promise.all([
-        tourismApi.getBootstrapData(),
-        tourismApi.getBookingManagementData(bookingParams)
-      ]);
-
-      setBootstrap((current) => {
-        const activeFilters = current.bookingManagement?.filters || {};
-        const activePage = current.bookingManagement?.pagination?.page || 1;
-
-        return {
-          ...current,
-          referenceTables: bootstrapData.referenceTables,
-          feedbackEntries: bootstrapData.feedbackEntries,
-          bookingManagement: {
-            ...bookingData,
-            filters: activeFilters,
-            pagination: {
-              ...bookingData.pagination,
-              page: activePage
-            }
-          }
-        };
-      });
-    } catch (err) {
-      // Quietly handle connection drops in background
+  // Live data: only the booking list (the mobile app can change it while staff watch).
+  const pollBookingList = useCallback(async () => {
+    // Don't stack a background refresh on top of the initial full load.
+    if (loadingRef.current) {
+      return;
     }
+
+    const currentBootstrap = bootstrapRef.current;
+    const currentFilters = currentBootstrap.bookingManagement?.filters || {};
+    const currentPage = currentBootstrap.bookingManagement?.pagination?.page || 1;
+    const currentPageSize = currentBootstrap.bookingManagement?.pagination?.pageSize || 10;
+
+    const bookingData = await tourismApi.getBookingManagementData({
+      ...currentFilters,
+      page: currentPage,
+      pageSize: currentPageSize,
+    });
+
+    setBootstrap((current) => {
+      const activeFilters = current.bookingManagement?.filters || {};
+      const activePage = current.bookingManagement?.pagination?.page || 1;
+
+      return {
+        ...current,
+        bookingManagement: {
+          ...bookingData,
+          filters: activeFilters,
+          pagination: {
+            ...bookingData.pagination,
+            page: activePage,
+          },
+        },
+      };
+    });
   }, []);
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      pollLatestData();
-    }, 15000); // Poll every 15 seconds
+  // Slow data: feedback comes from occasional visitor submissions.
+  const pollFeedback = useCallback(async () => {
+    if (loadingRef.current) {
+      return;
+    }
 
-    return () => clearInterval(intervalId);
-  }, [pollLatestData]);
+    const feedbackEntries = await tourismApi.getFeedbackEntries();
+    if (!Array.isArray(feedbackEntries)) {
+      return;
+    }
+
+    setBootstrap((current) => ({ ...current, feedbackEntries }));
+  }, []);
+
+  useVisibleInterval(pollBookingList, BOOKING_POLL_INTERVAL_MS);
+  useVisibleInterval(pollFeedback, FEEDBACK_POLL_INTERVAL_MS);
 
   const refreshArrivalMonitoring = useCallback(async function refreshArrivalMonitoring(
     params = {}
