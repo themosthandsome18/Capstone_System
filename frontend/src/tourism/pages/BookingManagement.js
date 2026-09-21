@@ -454,7 +454,8 @@ function BookingManagement() {
       age_0_7: toInteger(form.age_0_7),
       age_8_59: toInteger(form.age_8_59),
       age_60_above: toInteger(form.age_60_above),
-      status: form.status || editingRecord?.status || "",
+      // New records are always saved as pending; staff update status later via Edit or QR check-in.
+      status: editingRecord ? form.status || editingRecord.status || "" : "pending",
     };
   }
 
@@ -481,7 +482,7 @@ function BookingManagement() {
         if (form.arrival_date < minArrivalDate) {
           return "Arrival Date cannot be in the past. Please select today or a future date.";
         }
-        if (!form.status) return "Arrival Status is required.";
+        if (editingRecord && !form.status) return "Arrival Status is required.";
         return "";
       case 4: {
         const payload = buildPayload();
@@ -1339,16 +1340,18 @@ function BookingManagement() {
                         onChange={(e) => updateField("arrival_date", e.target.value)}
                       />
                     </WizardField>
-                    <WizardField label="Arrival Status" required>
-                      <select
-                        value={form.status}
-                        onChange={(e) => updateField("status", e.target.value)}
-                      >
-                        <option value="">Select status</option>
-                        <option value="arrived">Arrived (Confirmed)</option>
-                        <option value="pending">Pending</option>
-                      </select>
-                    </WizardField>
+                    {editingRecord && (
+                      <WizardField label="Arrival Status" required>
+                        <select
+                          value={form.status}
+                          onChange={(e) => updateField("status", e.target.value)}
+                        >
+                          <option value="">Select status</option>
+                          <option value="arrived">Arrived (Confirmed)</option>
+                          <option value="pending">Pending</option>
+                        </select>
+                      </WizardField>
+                    )}
                     <WizardField label="Boat Capacity and Fare">
                       <select
                         value={form.boat_capacity_fare}
@@ -1439,7 +1442,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Boat Type" value={resolveLabel(referenceTables.boatTypes, form.boat_type_id)} />
                       <WizardReviewItem label="Visit Purpose" value={resolveLabel(referenceTables.visitPurposes, form.visit_purpose_id)} />
                       <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
-                      <WizardReviewItem label="Arrival Status" value={form.status === "pending" ? "Pending" : form.status === "arrived" ? "Arrived (Confirmed)" : "—"} />
+                      <WizardReviewItem label="Arrival Status" value={!editingRecord || form.status === "pending" ? "Pending" : form.status === "arrived" ? "Arrived (Confirmed)" : "—"} />
                     </WizardReviewSection>
                     <WizardReviewSection title="Head Count" onEdit={() => jumpToStep(4)}>
                       <WizardReviewItem label="Filipino Count" value={form.filipino_count} />
