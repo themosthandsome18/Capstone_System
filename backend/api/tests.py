@@ -306,6 +306,148 @@ def ensure_test_reference_tables():
         Resort.objects.bulk_create([Resort(**res) for res in REFERENCE_TABLES["resorts"]], ignore_conflicts=True)
 
 
+class SanitaryEstablishmentRecordsApiTests(TestCase):
+    """The server contract the Establishment Records Register/Edit form relies on."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="records_sanitation", password="Password@123"
+        )
+        UserProfile.objects.create(user=self.user, role=ROLE_SANITATION)
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        self.market_stall = SanitaryBusinessType.objects.create(
+            name="Public Market Stall", inspection_frequency="monthly"
+        )
+        self.karaoke = SanitaryBusinessType.objects.create(
+            name="Karaoke / Video Bar / CSW", inspection_frequency="monthly"
+        )
+
+    def create_permitted_establishment(self):
+        return SanitaryEstablishment.objects.create(
+            business_name="Existing Bakery",
+            owner_name="Juan Dela Cruz",
+            business_type=self.market_stall,
+            permit_size="large",
+            barangay="Daungan",
+            address="12 Rizal St",
+            contact_number="09171234567",
+            has_permit=True,
+            permit_number="LG-2026-007",
+            permit_issued_date="2026-02-01",
+            permit_expiry_date="2026-12-31",
+            compliance_status="for_completion",
+            permit_status="conditional",
+            latitude=14.191234,
+            longitude=121.735678,
+            remarks="Existing remarks",
+        )
+
+    def test_registration_payload_creates_establishment_with_no_permit_on_record(self):
+        # Exactly what the Register New Establishment form sends.
+        response = self.client.post(
+            "/api/sanitation/establishments/",
+            {
+                "business_name": "New Sari-Sari Store",
+                "owner_name": "Ana Reyes",
+                "business_type": self.market_stall.id,
+                "barangay": "Daungan",
+                "address": "1 Test St",
+                "contact_number": "09170000000",
+                "latitude": 14.188,
+                "longitude": 121.732,
+                "has_permit": False,
+                "permit_number": "",
+                "permit_issued_date": None,
+                "permit_expiry_date": None,
+                "compliance_status": "no_permit",
+                "permit_status": "no_permit",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        created = SanitaryEstablishment.objects.get(pk=response.data["id"])
+        self.assertFalse(created.has_permit)
+        self.assertEqual(created.permit_number, "")
+        self.assertIsNone(created.permit_issued_date)
+        self.assertIsNone(created.permit_expiry_date)
+        self.assertEqual(created.compliance_status, "no_permit")
+        self.assertEqual(created.permit_status, "no_permit")
+        self.assertEqual(created.business_type_id, self.market_stall.id)
+        # Not asked for at registration: the model defaults apply.
+        self.assertEqual(created.permit_size, "sp")
+        self.assertEqual(created.remarks, "")
+        self.assertEqual(created.latitude, 14.188)
+        self.assertEqual(created.longitude, 121.732)
+        # The internal record id is not a permit number.
+        self.assertNotEqual(str(created.pk), created.permit_number)
+
+    def test_patch_of_profile_fields_preserves_permit_location_and_coverage(self):
+        establishment = self.create_permitted_establishment()
+
+        response = self.client.patch(
+            f"/api/sanitation/establishments/{establishment.id}/",
+            {"contact_number": "09990000000", "address": "99 New Address"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        establishment.refresh_from_db()
+        self.assertEqual(establishment.contact_number, "09990000000")
+        self.assertEqual(establishment.address, "99 New Address")
+        self.assertTrue(establishment.has_permit)
+        self.assertEqual(establishment.permit_number, "LG-2026-007")
+        self.assertEqual(str(establishment.permit_issued_date), "2026-02-01")
+        self.assertEqual(str(establishment.permit_expiry_date), "2026-12-31")
+        self.assertEqual(establishment.compliance_status, "for_completion")
+        self.assertEqual(establishment.permit_status, "conditional")
+        self.assertEqual(establishment.permit_size, "large")
+        self.assertEqual(establishment.latitude, 14.191234)
+        self.assertEqual(establishment.longitude, 121.735678)
+        self.assertEqual(establishment.remarks, "Existing remarks")
+        self.assertEqual(establishment.business_type_id, self.market_stall.id)
+
+    def test_patch_of_business_type_keeps_the_real_type_id_and_permit_data(self):
+        establishment = self.create_permitted_establishment()
+
+        response = self.client.patch(
+            f"/api/sanitation/establishments/{establishment.id}/",
+            {"business_type": self.karaoke.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["business_type"], self.karaoke.id)
+        self.assertEqual(response.data["business_type_name"], "Karaoke / Video Bar / CSW")
+        establishment.refresh_from_db()
+        self.assertEqual(establishment.business_type_id, self.karaoke.id)
+        self.assertEqual(establishment.permit_number, "LG-2026-007")
+        self.assertEqual(establishment.permit_size, "large")
+        self.assertEqual(establishment.compliance_status, "for_completion")
+
+    def test_patch_with_null_permit_dates_left_untouched_keeps_them_null(self):
+        # Mirrors a production record holding a permit but no recorded dates.
+        establishment = self.create_permitted_establishment()
+        SanitaryEstablishment.objects.filter(pk=establishment.pk).update(
+            permit_issued_date=None, permit_expiry_date=None
+        )
+
+        response = self.client.patch(
+            f"/api/sanitation/establishments/{establishment.id}/",
+            {"owner_name": "Maria Dela Cruz"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        establishment.refresh_from_db()
+        self.assertEqual(establishment.owner_name, "Maria Dela Cruz")
+        self.assertIsNone(establishment.permit_issued_date)
+        self.assertIsNone(establishment.permit_expiry_date)
+
+
 class BookingManagementApiTests(TestCase):
     @classmethod
     def setUpTestData(cls):

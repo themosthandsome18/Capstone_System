@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   FiAlertTriangle,
   FiArrowLeft,
-  FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
   FiDownload,
@@ -20,7 +19,10 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
 import { useSanitationData } from "../context/SanitationDataContext";
-import { businessTypeDisplayLabel } from "../utils/businessTypeLabels";
+import {
+  CLIENT_BUSINESS_TYPE_CATEGORIES,
+  businessTypeDisplayLabel,
+} from "../utils/businessTypeLabels";
 import { QRCodeSVG } from "qrcode.react";
 
 export const OFFICIAL_MAUBAN_BARANGAYS = [
@@ -134,6 +136,138 @@ const permitStatusOptions = [
   { value: "no_permit", label: "No Permit" },
 ];
 
+/**
+ * Registering an establishment does not issue a sanitary permit, so a new
+ * record starts with no permit on record rather than an invented permit
+ * number, invented dates or an unearned "Good Standing".
+ */
+const NEW_ESTABLISHMENT_PERMIT_STATE = {
+  has_permit: false,
+  permit_number: "",
+  permit_issued_date: null,
+  permit_expiry_date: null,
+  compliance_status: "no_permit",
+  permit_status: "no_permit",
+};
+
+function trimmedText(value) {
+  return String(value ?? "").trim();
+}
+
+function optionalNumber(value) {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isNaN(number) ? null : number;
+}
+
+function hasValidMaubanCoordinates(latitude, longitude) {
+  const lat = optionalNumber(latitude);
+  const lng = optionalNumber(longitude);
+
+  return (
+    lat !== null &&
+    lng !== null &&
+    lat >= 13.9 &&
+    lat <= 14.4 &&
+    lng >= 121.55 &&
+    lng <= 122
+  );
+}
+
+/**
+ * Normalises form state or a stored record into the values the API stores,
+ * so the two can be compared field by field.
+ */
+function toApiValues(values) {
+  return {
+    business_name: trimmedText(values.business_name),
+    owner_name: trimmedText(values.owner_name),
+    business_type: optionalNumber(values.business_type),
+    permit_size: values.permit_size ?? "",
+    barangay: trimmedText(values.barangay),
+    address: trimmedText(values.address),
+    contact_number: trimmedText(values.contact_number),
+    has_permit: Boolean(values.has_permit),
+    permit_number: trimmedText(values.permit_number),
+    permit_issued_date: values.permit_issued_date || null,
+    permit_expiry_date: values.permit_expiry_date || null,
+    compliance_status: values.compliance_status ?? "",
+    permit_status: values.permit_status ?? "",
+    latitude: optionalNumber(values.latitude),
+    longitude: optionalNumber(values.longitude),
+    remarks: trimmedText(values.remarks),
+  };
+}
+
+function buildCreatePayload(values) {
+  // Permit coverage (SP / Large) and remarks are not asked for at registration;
+  // the backend model defaults apply ("sp" and "").
+  return {
+    business_name: values.business_name,
+    owner_name: values.owner_name,
+    business_type: values.business_type,
+    barangay: values.barangay,
+    address: values.address,
+    contact_number: values.contact_number,
+    latitude: values.latitude,
+    longitude: values.longitude,
+    ...NEW_ESTABLISHMENT_PERMIT_STATE,
+  };
+}
+
+/**
+ * Only the fields staff actually changed. Anything left untouched is not sent,
+ * so an unrelated edit cannot overwrite permit or inspection-driven data.
+ */
+function buildEditPayload(formValues, establishment) {
+  const next = toApiValues(formValues);
+  const stored = toApiValues(establishment);
+
+  return Object.fromEntries(
+    Object.entries(next).filter(([field, value]) => value !== stored[field])
+  );
+}
+
+function formFromEstablishment(establishment) {
+  return {
+    business_name: establishment.business_name ?? "",
+    owner_name: establishment.owner_name ?? "",
+    business_type: establishment.business_type ?? "",
+    permit_size: establishment.permit_size ?? "",
+    barangay: establishment.barangay ?? "",
+    address: establishment.address ?? "",
+    contact_number: establishment.contact_number ?? "",
+    has_permit: Boolean(establishment.has_permit),
+    permit_number: establishment.permit_number ?? "",
+    permit_issued_date: establishment.permit_issued_date ?? "",
+    permit_expiry_date: establishment.permit_expiry_date ?? "",
+    compliance_status: establishment.compliance_status ?? "",
+    permit_status: establishment.permit_status ?? "",
+    latitude: establishment.latitude ?? "",
+    longitude: establishment.longitude ?? "",
+    remarks: establishment.remarks ?? "",
+  };
+}
+
+/** Real business types grouped under the client's categories, for the form. */
+function groupBusinessTypesByCategory(businessTypes = []) {
+  const groups = CLIENT_BUSINESS_TYPE_CATEGORIES.map((category) => ({
+    category,
+    types: businessTypes.filter(
+      (type) => businessTypeDisplayLabel(type.name) === category
+    ),
+  }));
+  const unmapped = businessTypes.filter(
+    (type) =>
+      !CLIENT_BUSINESS_TYPE_CATEGORIES.includes(businessTypeDisplayLabel(type.name))
+  );
+
+  return { groups, unmapped };
+}
+
 function EstablishmentRecords() {
   const {
     establishments,
@@ -186,19 +320,10 @@ function EstablishmentRecords() {
       [...new Set(establishments.map((item) => item.barangay).filter(Boolean))].sort(),
     [establishments]
   );
-  // Distinct client-facing labels derived from the real business types, so new
-  // types and later mapping changes are picked up without a hardcoded list.
-  const businessTypeFilterOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          businessTypes
-            .map((type) => businessTypeDisplayLabel(type.name))
-            .filter(Boolean)
-        ),
-      ].sort((a, b) => a.localeCompare(b)),
-    [businessTypes]
-  );
+  // Filters are intentionally limited to the client's approved categories.
+  // Unknown underlying types remain stored and searchable by their real name,
+  // but never create an unapproved client-facing filter category.
+  const businessTypeFilterOptions = CLIENT_BUSINESS_TYPE_CATEGORIES;
   const selectedTimeline = useMemo(() => {
     if (!selectedEstablishment) {
       return [];
@@ -277,53 +402,38 @@ function EstablishmentRecords() {
     const { forceEnablePermit = false } = options;
     setEditingEstablishment(establishment);
 
-    const hasPermit = forceEnablePermit || Boolean(establishment.has_permit);
-    let permitNum = establishment.permit_number || "";
-    let compliance = establishment.compliance_status || "good_standing";
-    let permitStat = establishment.permit_status || "active";
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const endOfYearStr = `${new Date().getFullYear()}-12-31`;
+    // Stored values load exactly as recorded; nothing is back-filled or coerced.
+    const loaded = formFromEstablishment(establishment);
 
-    if (hasPermit) {
+    // Only the explicit "Issue & Generate Permit Now" action pre-fills a new
+    // permit. Staff still review these values before saving.
+    if (forceEnablePermit) {
+      loaded.has_permit = true;
+
       if (
-        !permitNum ||
-        permitNum.trim() === "" ||
-        permitNum.toLowerCase().includes("no permit")
+        !loaded.permit_number.trim() ||
+        loaded.permit_number.toLowerCase().includes("no permit")
       ) {
-        permitNum = generatePermitNumber(
+        loaded.permit_number = generatePermitNumber(
           establishments,
-          establishment.permit_size || "sp"
+          loaded.permit_size || "sp"
         );
       }
-      if (compliance === "no_permit") {
-        compliance = "good_standing";
+      if (!loaded.permit_issued_date) {
+        loaded.permit_issued_date = new Date().toISOString().slice(0, 10);
       }
-      if (permitStat === "no_permit") {
-        permitStat = "active";
+      if (!loaded.permit_expiry_date) {
+        loaded.permit_expiry_date = `${new Date().getFullYear()}-12-31`;
+      }
+      if (loaded.compliance_status === "no_permit") {
+        loaded.compliance_status = "good_standing";
+      }
+      if (loaded.permit_status === "no_permit") {
+        loaded.permit_status = "active";
       }
     }
 
-    setForm({
-      business_name: establishment.business_name || "",
-      owner_name: establishment.owner_name || "",
-      business_type: establishment.business_type || "",
-      permit_size: establishment.permit_size || "sp",
-      barangay: establishment.barangay || "",
-      address: establishment.address || "",
-      contact_number: establishment.contact_number || "",
-      has_permit: hasPermit,
-      permit_number: permitNum,
-      permit_issued_date:
-        establishment.permit_issued_date || (hasPermit ? todayStr : ""),
-      permit_expiry_date:
-        establishment.permit_expiry_date || (hasPermit ? endOfYearStr : ""),
-      compliance_status: compliance,
-      permit_status: permitStat,
-      latitude: establishment.latitude ?? "",
-      longitude: establishment.longitude ?? "",
-      remarks: establishment.remarks || "",
-    });
-
+    setForm(loaded);
     setFormError("");
     setShowModal(true);
   }
@@ -353,24 +463,6 @@ function EstablishmentRecords() {
     setFormError("");
   }
 
-  function getSelectedBusinessType() {
-    return businessTypes.find(
-      (type) => String(type.id) === String(form.business_type)
-    );
-  }
-
-  function getAutoRequirements() {
-    const selectedType = getSelectedBusinessType();
-
-    if (!selectedType) {
-      return [];
-    }
-
-    return (selectedType.requirements || []).filter(
-      (requirement) => requirement.permit_size === form.permit_size
-    );
-  }
-
   function getErrorMessage(requestError) {
     if (requestError?.details?.detail) {
       return requestError.details.detail;
@@ -386,50 +478,6 @@ function EstablishmentRecords() {
     }
 
     return requestError?.message || "Unable to save establishment.";
-  }
-
-  function buildPayload() {
-    const hasPermit = Boolean(form.has_permit);
-    let complianceStatus = form.compliance_status;
-    let permitStatus = form.permit_status;
-    let permitNumber = form.permit_number.trim();
-
-    if (!hasPermit) {
-      complianceStatus = "no_permit";
-      permitStatus = "no_permit";
-      permitNumber = "";
-    } else {
-      if (complianceStatus === "no_permit") {
-        complianceStatus = "good_standing";
-      }
-      if (permitStatus === "no_permit") {
-        permitStatus = "active";
-      }
-      if (!permitNumber || permitNumber.toLowerCase().includes("no permit")) {
-        permitNumber = generatePermitNumber(establishments, form.permit_size);
-      }
-    }
-
-    return {
-      business_name: form.business_name.trim(),
-      owner_name: form.owner_name.trim(),
-      business_type: Number(form.business_type),
-      permit_size: form.permit_size,
-      barangay: form.barangay.trim(),
-      address: form.address.trim(),
-      contact_number: form.contact_number.trim(),
-      has_permit: hasPermit,
-      permit_number: hasPermit ? permitNumber : "",
-      permit_issued_date:
-        hasPermit && form.permit_issued_date ? form.permit_issued_date : null,
-      permit_expiry_date:
-        hasPermit && form.permit_expiry_date ? form.permit_expiry_date : null,
-      compliance_status: complianceStatus,
-      permit_status: permitStatus,
-      latitude: form.latitude ? Number(form.latitude) : null,
-      longitude: form.longitude ? Number(form.longitude) : null,
-      remarks: form.remarks.trim(),
-    };
   }
 
   function validatePayload(payload) {
@@ -459,11 +507,21 @@ function EstablishmentRecords() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const payload = buildPayload();
-    const validationError = validatePayload(payload);
+    const values = toApiValues(form);
+    const validationError = validatePayload(values);
 
     if (validationError) {
       setFormError(validationError);
+      return;
+    }
+
+    const changes = editingEstablishment
+      ? buildEditPayload(form, editingEstablishment)
+      : null;
+
+    if (changes && Object.keys(changes).length === 0) {
+      // Nothing was changed, so there is nothing to save.
+      closeModal();
       return;
     }
 
@@ -472,9 +530,9 @@ function EstablishmentRecords() {
 
     try {
       if (editingEstablishment) {
-        await updateEstablishment(editingEstablishment.id, payload);
+        await updateEstablishment(editingEstablishment.id, changes);
       } else {
-        await createEstablishment(payload);
+        await createEstablishment(buildCreatePayload(values));
       }
 
       closeModal();
@@ -506,10 +564,11 @@ function EstablishmentRecords() {
 
   function handleExport() {
     const headers = [
+      "Establishment ID",
       "Business Name",
       "Owner",
       "Business Type",
-      "Permit Size",
+      "Permit Coverage (SP/Large)",
       "Permit Number",
       "Barangay",
       "Address",
@@ -520,6 +579,7 @@ function EstablishmentRecords() {
       "Underlying Business Type",
     ];
     const rows = filteredEstablishments.map((item) => [
+      item.id,
       item.business_name,
       item.owner_name,
       businessTypeDisplayLabel(item.business_type_name),
@@ -676,7 +736,7 @@ function EstablishmentRecords() {
                 <th style={{ width: "20%" }}>Business Type</th>
                 <th style={{ width: "22%" }}>Address</th>
                 <th style={{ width: "14%", textAlign: "center" }}>Status</th>
-                <th style={{ width: "10%", textAlign: "center" }}>Actions</th>
+                <th style={{ width: "10%", textAlign: "center" }}>Action</th>
               </tr>
             </thead>
 
@@ -708,7 +768,7 @@ function EstablishmentRecords() {
                       ) : null}
                     </td>
                     <td>{item.owner_name}</td>
-                    {/* Display label only; filtering, export and detail view use the real type. */}
+                    {/* Client-facing category; the record keeps its real business type id. */}
                     <td>{businessTypeDisplayLabel(item.business_type_name)}</td>
                     <td>{item.address || `Brgy. ${item.barangay}, Mauban`}</td>
                     <td style={{ textAlign: "center" }}>
@@ -725,7 +785,7 @@ function EstablishmentRecords() {
                         <button
                           type="button"
                           className="establishment-icon-btn view"
-                          title="View establishment timeline"
+                          title="View establishment"
                           onClick={() => openDetailModal(item)}
                         >
                           <FiEye />
@@ -788,8 +848,6 @@ function EstablishmentRecords() {
           barangayOptions={barangayOptions}
           saving={saving}
           formError={formError}
-          autoRequirements={getAutoRequirements()}
-          selectedBusinessType={getSelectedBusinessType()}
           editingEstablishment={editingEstablishment}
           onChange={updateField}
           onClose={closeModal}
@@ -815,10 +873,25 @@ function EstablishmentDetailModal({
   onClose,
   onEdit,
 }) {
-  const coordinateText =
-    establishment.latitude && establishment.longitude
-      ? `${establishment.latitude}, ${establishment.longitude}`
-      : "Not encoded";
+  const displayLabel = businessTypeDisplayLabel(establishment.business_type_name);
+  const hasCoordinates =
+    optionalNumber(establishment.latitude) !== null &&
+    optionalNumber(establishment.longitude) !== null;
+  // The current schema does not retain whether coordinates were selected by
+  // staff or generated by the backend from the barangay. Treat every valid
+  // point as a non-verified map reference, and never link invalid legacy data.
+  const hasValidMapReference = hasValidMaubanCoordinates(
+    establishment.latitude,
+    establishment.longitude
+  );
+  const mapsUrl = hasValidMapReference
+    ? `https://www.google.com/maps/search/?api=1&query=${establishment.latitude},${establishment.longitude}`
+    : "";
+  const openComplaints =
+    establishment.open_complaints === null ||
+    establishment.open_complaints === undefined
+      ? null
+      : String(establishment.open_complaints);
 
   return (
     <div className="establishment-modal-backdrop">
@@ -834,21 +907,24 @@ function EstablishmentDetailModal({
 
         <div className="establishment-detail-header">
           <div>
-            <span>Official Establishment Record</span>
+            <span>Establishment Profile</span>
             <h2>{establishment.business_name}</h2>
             <p>
-              {businessTypeDisplayLabel(establishment.business_type_name)} |{" "}
-              {establishment.barangay}
+              {displayLabel} | {establishment.barangay}
             </p>
             {/* Real underlying type, shown only when it differs from the label. */}
             {isSameBusinessTypeText(
-              businessTypeDisplayLabel(establishment.business_type_name),
+              displayLabel,
               establishment.business_type_name
             ) ? null : (
               <p className="underlying-type">
                 {establishment.business_type_name}
               </p>
             )}
+            <p className="establishment-record-id">
+              Establishment ID: {establishment.id} (internal record number, not
+              a permit number)
+            </p>
           </div>
 
           <div className="establishment-detail-actions">
@@ -869,26 +945,12 @@ function EstablishmentDetailModal({
           </div>
         </div>
 
+        <h3 className="establishment-detail-section-title">Establishment Details</h3>
         <div className="establishment-detail-grid">
+          <InfoTile label="Establishment ID" value={String(establishment.id)} />
           <InfoTile label="Owner / Proprietor" value={establishment.owner_name} />
+          <InfoTile label="Business Type" value={displayLabel} />
           <InfoTile label="Contact Number" value={establishment.contact_number} />
-          <InfoTile label="Complete Address" value={establishment.address} />
-          <InfoTile
-            label="Permit Size"
-            value={establishment.permit_size_label || establishment.permit_size}
-          />
-          <InfoTile
-            label="Permit Number"
-            value={establishment.permit_number || "No permit number"}
-          />
-          <InfoTile
-            label="Permit Status"
-            value={establishment.permit_status_label || establishment.permit_status}
-          />
-          <InfoTile
-            label="Compliance Status"
-            value={establishment.compliance_status_label}
-          />
           <InfoTile
             label="Mobile Portal Account"
             value={
@@ -903,7 +965,6 @@ function EstablishmentDetailModal({
               )
             }
           />
-          <InfoTile label="Map Coordinates" value={coordinateText} />
         </div>
 
         <div
@@ -955,33 +1016,95 @@ function EstablishmentDetailModal({
           </div>
         </div>
 
+        <h3 className="establishment-detail-section-title">Location / Reference</h3>
+        <div className="establishment-detail-grid">
+          <InfoTile label="Barangay" value={establishment.barangay} />
+          <InfoTile label="Complete Address" value={establishment.address} />
+          <InfoTile
+            label="Location Coordinates"
+            value={
+              hasCoordinates
+                ? `${establishment.latitude}, ${establishment.longitude}`
+                : "No location coordinates recorded"
+            }
+          />
+          <InfoTile
+            label="Map Reference"
+            value={
+              mapsUrl ? (
+                <a href={mapsUrl} target="_blank" rel="noreferrer">
+                  Open in Google Maps
+                </a>
+              ) : (
+                hasCoordinates
+                  ? "No valid map reference available"
+                  : "No map reference recorded"
+              )
+            }
+          />
+        </div>
+
+        <h3 className="establishment-detail-section-title">Sanitary Permit</h3>
+        {establishment.has_permit ? null : (
+          <p className="establishment-detail-empty">
+            No sanitary permit is on record for this establishment.
+          </p>
+        )}
+        <div className="establishment-detail-grid">
+          <InfoTile
+            label="Permit Number"
+            value={establishment.permit_number || "No permit number recorded"}
+          />
+          <InfoTile
+            label="Permit Status"
+            value={establishment.permit_status_label || establishment.permit_status}
+          />
+          <InfoTile
+            label="Permit Issued Date"
+            value={formatDisplayDate(establishment.permit_issued_date)}
+          />
+          <InfoTile
+            label="Permit Expiry Date"
+            value={formatDisplayDate(establishment.permit_expiry_date)}
+          />
+          <InfoTile
+            label="Permit Coverage (internal SP / Large)"
+            value={establishment.permit_size_label || establishment.permit_size}
+          />
+        </div>
+
         <div className="establishment-detail-qr-card">
           <div className="qr-box">
-            <QRCodeSVG 
+            <QRCodeSVG
               id="establishment-detail-qr-svg"
-              value={`${window.location.origin}/verify-permit/${establishment.id}`} 
-              size={130} 
+              value={`${window.location.origin}/verify-permit/${establishment.id}`}
+              size={130}
               level="H"
               includeMargin={true}
             />
           </div>
           <div className="qr-info">
             <div className="qr-badge-row">
-              <span className="qr-badge official">Official Sanitary Permit QR Code</span>
+              <span className="qr-badge official">Establishment Verification QR</span>
               {establishment.has_permit ? (
-                <span className="qr-badge valid">Permit: {establishment.permit_number || "Active"}</span>
+                <span className="qr-badge valid">
+                  Permit: {establishment.permit_number || "number not recorded"}
+                </span>
               ) : (
-                <span className="qr-badge unissued">Unissued / No Permit</span>
+                <span className="qr-badge unissued">No permit on record</span>
               )}
             </div>
-            <h4>Official Permit Verification QR Code</h4>
+            <h4>Verification QR Code</h4>
             <p>
-              Tourists, inspectors, and LGU officials can scan this QR code using the Mauban Mobile App or any smartphone camera to instantly verify the legitimate compliance status of this establishment.
+              This code links to Establishment ID {establishment.id}. Scanning it
+              with the Mauban Mobile App or any smartphone camera opens the public
+              verification page, which shows the establishment's current permit
+              and compliance status.
             </p>
             <div className="qr-actions">
-              <a 
-                href={`/verify-permit/${establishment.id}`} 
-                target="_blank" 
+              <a
+                href={`/verify-permit/${establishment.id}`}
+                target="_blank"
                 rel="noreferrer"
                 className="qr-test-link"
               >
@@ -998,6 +1121,15 @@ function EstablishmentDetailModal({
               )}
             </div>
           </div>
+        </div>
+
+        <h3 className="establishment-detail-section-title">Compliance Overview</h3>
+        <div className="establishment-detail-grid">
+          <InfoTile
+            label="Compliance Status"
+            value={establishment.compliance_status_label || establishment.compliance_status}
+          />
+          <InfoTile label="Open Complaints" value={openComplaints} />
         </div>
 
         <div className="establishment-timeline-panel">
@@ -1046,16 +1178,27 @@ function RegisterEstablishmentModal({
   form,
   establishments = [],
   businessTypes,
-  barangayOptions,
   saving,
   formError,
-  autoRequirements,
-  selectedBusinessType,
   editingEstablishment,
   onChange,
   onClose,
   onSubmit,
 }) {
+  const isEditing = Boolean(editingEstablishment);
+  const { groups, unmapped } = groupBusinessTypesByCategory(businessTypes);
+
+  // "No Permit" is hidden while a permit is held, unless the record already
+  // stores it, so a stored value is never displayed as a different one.
+  function selectableStatuses(options, currentValue) {
+    return options.filter(
+      (status) =>
+        !form.has_permit ||
+        status.value !== "no_permit" ||
+        status.value === currentValue
+    );
+  }
+
   return (
     <div className="establishment-modal-backdrop">
       <form className="establishment-modal" onSubmit={onSubmit}>
@@ -1063,326 +1206,321 @@ function RegisterEstablishmentModal({
           <FiX />
         </button>
 
-        <h2>
-          {editingEstablishment
-            ? "Edit Establishment"
-            : "Register New Establishment"}
-        </h2>
+        <h2>{isEditing ? "Edit Establishment" : "Register New Establishment"}</h2>
 
-        <label className="modal-field full">
-          <span>Business Name</span>
-          <input
-            type="text"
-            placeholder="e.g. Cagbalete Bay Resort & Restaurant"
-            value={form.business_name}
-            onChange={(event) =>
-              onChange("business_name", toTitleCase(event.target.value))
-            }
-          />
-        </label>
+        <section className="establishment-form-section">
+          <h3>Establishment Profile</h3>
 
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Owner / Proprietor</span>
+          <label className="modal-field full">
+            <span>Business Name</span>
             <input
               type="text"
-              placeholder="e.g. Juan C. Dela Cruz"
-              value={form.owner_name}
+              placeholder="e.g. Cagbalete Bay Resort & Restaurant"
+              value={form.business_name}
               onChange={(event) =>
-                onChange("owner_name", toTitleCase(event.target.value))
+                onChange("business_name", toTitleCase(event.target.value))
               }
             />
           </label>
 
-          <label className="modal-field">
-            <span>Barangay</span>
-            <select
-              value={form.barangay}
-              onChange={(event) => onChange("barangay", event.target.value)}
-            >
-              <option value="">Select Barangay</option>
-              {OFFICIAL_MAUBAN_BARANGAYS.map((bgy) => (
-                <option key={bgy} value={bgy}>
-                  {bgy}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+          <div className="modal-two-grid">
+            <label className="modal-field">
+              <span>Owner / Proprietor</span>
+              <input
+                type="text"
+                placeholder="e.g. Juan C. Dela Cruz"
+                value={form.owner_name}
+                onChange={(event) =>
+                  onChange("owner_name", toTitleCase(event.target.value))
+                }
+              />
+            </label>
 
-        <label className="modal-field full">
-          <span>Complete Address</span>
-          <input
-            type="text"
-            placeholder="e.g. Gomez St., Brgy. Daungan, Mauban, Quezon"
-            value={form.address}
-            onChange={(event) =>
-              onChange("address", toTitleCase(event.target.value))
-            }
-          />
-        </label>
+            <label className="modal-field">
+              <span>Business Type</span>
+              <select
+                value={form.business_type}
+                onChange={(event) => onChange("business_type", event.target.value)}
+              >
+                <option value="">Select business type</option>
+                {groups.map(({ category, types }) => (
+                  <optgroup key={category} label={category}>
+                    {types.length ? (
+                      types.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={`unavailable:${category}`} disabled>
+                        No business type configured yet
+                      </option>
+                    )}
+                  </optgroup>
+                ))}
+                {unmapped.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Contact Number</span>
+          <div className="modal-two-grid">
+            <label className="modal-field">
+              <span>Barangay</span>
+              <select
+                value={form.barangay}
+                onChange={(event) => onChange("barangay", event.target.value)}
+              >
+                <option value="">Select Barangay</option>
+                {OFFICIAL_MAUBAN_BARANGAYS.map((bgy) => (
+                  <option key={bgy} value={bgy}>
+                    {bgy}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="modal-field">
+              <span>Contact Number</span>
+              <input
+                type="text"
+                placeholder="0917 123 4567"
+                value={form.contact_number}
+                onChange={(event) => onChange("contact_number", event.target.value)}
+              />
+            </label>
+          </div>
+
+          <label className="modal-field full">
+            <span>Complete Address</span>
             <input
               type="text"
-              placeholder="0917 123 4567"
-              value={form.contact_number}
-              onChange={(event) => onChange("contact_number", event.target.value)}
+              placeholder="e.g. Gomez St., Brgy. Daungan, Mauban, Quezon"
+              value={form.address}
+              onChange={(event) =>
+                onChange("address", toTitleCase(event.target.value))
+              }
             />
           </label>
 
-          <label className="modal-field">
-            <span>Business Type</span>
-            <select
-              value={form.business_type}
-              onChange={(event) => onChange("business_type", event.target.value)}
-            >
-              <option value="">Select business type</option>
-              {businessTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+          {isEditing ? (
+            <label className="modal-field full">
+              <span>Remarks</span>
+              <input
+                type="text"
+                placeholder="Optional remarks"
+                value={form.remarks}
+                onChange={(event) => onChange("remarks", event.target.value)}
+              />
+            </label>
+          ) : null}
+        </section>
 
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Permit Size</span>
-            <select
-              value={form.permit_size}
-              onChange={(event) => onChange("permit_size", event.target.value)}
-            >
-              <option value="sp">Small / Micro (SP)</option>
-              <option value="large">Large / Commercial</option>
-            </select>
-          </label>
+        <section className="establishment-form-section">
+          <h3>Location / Reference</h3>
+          <LocationPicker
+            label="Establishment Map Pin"
+            latitude={form.latitude}
+            longitude={form.longitude}
+            onChange={onChange}
+          />
+        </section>
 
-          <label className="modal-field">
-            <span>Has Permit?</span>
-            <select
-              value={form.has_permit ? "yes" : "no"}
-              onChange={(event) => {
-                const hasPermit = event.target.value === "yes";
-                onChange("has_permit", hasPermit);
+        {isEditing ? (
+          <section className="establishment-form-section permit-record">
+            <h3>Sanitary Permit &amp; Compliance Record</h3>
+            <p className="establishment-form-hint">
+              Managed separately from the establishment profile. Only the values
+              you change here are saved.
+            </p>
 
-                if (!hasPermit) {
-                  onChange("compliance_status", "no_permit");
-                  onChange("permit_status", "no_permit");
-                  onChange("permit_number", "");
-                  onChange("permit_issued_date", "");
-                  onChange("permit_expiry_date", "");
-                } else {
-                  const todayStr = new Date().toISOString().slice(0, 10);
-                  const endOfYearStr = `${new Date().getFullYear()}-12-31`;
-                  onChange("compliance_status", "good_standing");
-                  onChange("permit_status", "active");
-                  if (
-                    !form.permit_number ||
-                    form.permit_number.trim() === "" ||
-                    form.permit_number.toLowerCase().includes("no permit")
-                  ) {
-                    onChange(
-                      "permit_number",
-                      generatePermitNumber(establishments, form.permit_size)
-                    );
-                  }
-                  if (!form.permit_issued_date) {
-                    onChange("permit_issued_date", todayStr);
-                  }
-                  if (!form.permit_expiry_date) {
-                    onChange("permit_expiry_date", endOfYearStr);
-                  }
-                }
-              }}
-            >
-              <option value="yes">With Permit</option>
-              <option value="no">No Permit</option>
-            </select>
-          </label>
-        </div>
-
-        {!form.has_permit ? (
-          <div
-            style={{
-              background: "#fffbeb",
-              border: "1px solid #fde68a",
-              borderRadius: "8px",
-              padding: "10px 14px",
-              marginBottom: "14px",
-              fontSize: "12.5px",
-              color: "#92400e",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <FiAlertTriangle
-              style={{ flexShrink: 0, fontSize: "16px", color: "#d97706" }}
-            />
-            <span>
-              This establishment will be flagged as{" "}
-              <strong>"No Permit / For Immediate Inspection"</strong> in
-              Sanitary GIS Map and Dashboard.
-            </span>
-          </div>
-        ) : null}
-
-        <label className="modal-field full">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>Permit Number</span>
-            {form.has_permit && (
-              <button
-                type="button"
-                className="permit-gen-btn"
-                title="Generate new sequential permit number"
-                onClick={() => {
-                  const newNum = generatePermitNumber(establishments, form.permit_size);
-                  onChange("permit_number", newNum);
+            {!form.has_permit ? (
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  marginBottom: "14px",
+                  fontSize: "12.5px",
+                  color: "#92400e",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
-                ⚡ Auto-Generate
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            placeholder="SP-2026-000"
-            value={form.permit_number}
-            disabled={!form.has_permit}
-            onChange={(event) => onChange("permit_number", event.target.value)}
-          />
-        </label>
-
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Compliance Status</span>
-            <select
-              value={form.compliance_status}
-              disabled={!form.has_permit}
-              onChange={(event) =>
-                onChange("compliance_status", event.target.value)
-              }
-            >
-              {statusOptions
-                .filter((s) => !form.has_permit || s.value !== "no_permit")
-                .map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-            </select>
-          </label>
-
-          <label className="modal-field">
-            <span>Permit Status</span>
-            <select
-              value={form.permit_status}
-              disabled={!form.has_permit}
-              onChange={(event) => onChange("permit_status", event.target.value)}
-            >
-              {permitStatusOptions
-                .filter((s) => !form.has_permit || s.value !== "no_permit")
-                .map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Permit Issued Date</span>
-            <input
-              type="date"
-              value={form.permit_issued_date}
-              disabled={!form.has_permit}
-              onChange={(event) =>
-                onChange("permit_issued_date", event.target.value)
-              }
-            />
-          </label>
-
-          <label className="modal-field">
-            <span>Permit Expiry Date</span>
-            <input
-              type="date"
-              value={form.permit_expiry_date}
-              disabled={!form.has_permit}
-              onChange={(event) =>
-                onChange("permit_expiry_date", event.target.value)
-              }
-            />
-          </label>
-        </div>
-
-        <div className="modal-two-grid">
-          <label className="modal-field">
-            <span>Latitude</span>
-            <input
-              type="number"
-              step="any"
-              placeholder="14.18"
-              value={form.latitude}
-              onChange={(event) => onChange("latitude", event.target.value)}
-            />
-          </label>
-
-          <label className="modal-field">
-            <span>Longitude</span>
-            <input
-              type="number"
-              step="any"
-              placeholder="121.73"
-              value={form.longitude}
-              onChange={(event) => onChange("longitude", event.target.value)}
-            />
-          </label>
-        </div>
-
-        <LocationPicker
-          label="Establishment Map Pin"
-          latitude={form.latitude}
-          longitude={form.longitude}
-          onChange={onChange}
-        />
-
-        <label className="modal-field full">
-          <span>Remarks</span>
-          <input
-            type="text"
-            placeholder="Optional remarks"
-            value={form.remarks}
-            onChange={(event) => onChange("remarks", event.target.value)}
-          />
-        </label>
-
-        <div className="auto-requirements-box">
-          <h3>
-            AUTO-LOADED REQUIREMENTS{" "}
-            {selectedBusinessType
-              ? `(${form.permit_size.toUpperCase()}) - ${selectedBusinessType.inspection_frequency?.toUpperCase()} INSPECTION`
-              : ""}
-          </h3>
-
-          <div className="auto-req-grid">
-            {autoRequirements.length ? (
-              autoRequirements.map((requirement) => (
-                <span key={requirement.id}>
-                  <FiCheckCircle />
-                  {requirement.requirement_name}
+                <FiAlertTriangle
+                  style={{ flexShrink: 0, fontSize: "16px", color: "#d97706" }}
+                />
+                <span>
+                  This establishment will be flagged as{" "}
+                  <strong>"No Permit / For Immediate Inspection"</strong> in
+                  Sanitary GIS Map and Dashboard.
                 </span>
-              ))
-            ) : (
-              <span>Select a business type to load requirements.</span>
-            )}
-          </div>
-        </div>
+              </div>
+            ) : null}
+
+            <div className="modal-two-grid">
+              <label className="modal-field">
+                <span>Has Permit?</span>
+                <select
+                  value={form.has_permit ? "yes" : "no"}
+                  onChange={(event) => {
+                    const hasPermit = event.target.value === "yes";
+                    onChange("has_permit", hasPermit);
+
+                    if (!hasPermit) {
+                      onChange("compliance_status", "no_permit");
+                      onChange("permit_status", "no_permit");
+                      onChange("permit_number", "");
+                      onChange("permit_issued_date", "");
+                      onChange("permit_expiry_date", "");
+                    } else {
+                      const todayStr = new Date().toISOString().slice(0, 10);
+                      const endOfYearStr = `${new Date().getFullYear()}-12-31`;
+                      onChange("compliance_status", "good_standing");
+                      onChange("permit_status", "active");
+                      if (
+                        !form.permit_number ||
+                        form.permit_number.trim() === "" ||
+                        form.permit_number.toLowerCase().includes("no permit")
+                      ) {
+                        onChange(
+                          "permit_number",
+                          generatePermitNumber(establishments, form.permit_size)
+                        );
+                      }
+                      if (!form.permit_issued_date) {
+                        onChange("permit_issued_date", todayStr);
+                      }
+                      if (!form.permit_expiry_date) {
+                        onChange("permit_expiry_date", endOfYearStr);
+                      }
+                    }
+                  }}
+                >
+                  <option value="yes">With Permit</option>
+                  <option value="no">No Permit</option>
+                </select>
+              </label>
+
+              <label className="modal-field">
+                <span>Permit Status</span>
+                <select
+                  value={form.permit_status}
+                  disabled={!form.has_permit}
+                  onChange={(event) => onChange("permit_status", event.target.value)}
+                >
+                  {selectableStatuses(permitStatusOptions, form.permit_status).map(
+                    (status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+            </div>
+
+            <label className="modal-field full">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Permit Number</span>
+                {form.has_permit && (
+                  <button
+                    type="button"
+                    className="permit-gen-btn"
+                    title="Generate new sequential permit number"
+                    onClick={() => {
+                      const newNum = generatePermitNumber(establishments, form.permit_size);
+                      onChange("permit_number", newNum);
+                    }}
+                  >
+                    ⚡ Auto-Generate
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                placeholder="SP-2026-000"
+                value={form.permit_number}
+                disabled={!form.has_permit}
+                onChange={(event) => onChange("permit_number", event.target.value)}
+              />
+            </label>
+
+            <div className="modal-two-grid">
+              <label className="modal-field">
+                <span>Permit Issued Date</span>
+                <input
+                  type="date"
+                  value={form.permit_issued_date}
+                  disabled={!form.has_permit}
+                  onChange={(event) =>
+                    onChange("permit_issued_date", event.target.value)
+                  }
+                />
+              </label>
+
+              <label className="modal-field">
+                <span>Permit Expiry Date</span>
+                <input
+                  type="date"
+                  value={form.permit_expiry_date}
+                  disabled={!form.has_permit}
+                  onChange={(event) =>
+                    onChange("permit_expiry_date", event.target.value)
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="modal-two-grid">
+              <label className="modal-field">
+                <span>Compliance Status</span>
+                <select
+                  value={form.compliance_status}
+                  disabled={!form.has_permit}
+                  onChange={(event) =>
+                    onChange("compliance_status", event.target.value)
+                  }
+                >
+                  {selectableStatuses(statusOptions, form.compliance_status).map(
+                    (status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+
+              <label className="modal-field">
+                <span>Permit Coverage (SP / Large)</span>
+                <select
+                  value={form.permit_size}
+                  onChange={(event) => onChange("permit_size", event.target.value)}
+                >
+                  {form.permit_size ? null : <option value="">Not set</option>}
+                  <option value="sp">SP</option>
+                  <option value="large">Large</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="establishment-form-hint">
+              Permit Coverage is an internal person-in-charge grouping for permit
+              processing. It is not the physical size of the establishment.
+            </p>
+          </section>
+        ) : (
+          <p className="establishment-form-hint">
+            A new establishment is registered with no sanitary permit on record.
+            Record or issue its permit afterwards from View or Edit.
+          </p>
+        )}
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
 
@@ -1399,7 +1537,7 @@ function RegisterEstablishmentModal({
           <button type="submit" className="save-btn" disabled={saving}>
             {saving
               ? "Saving..."
-              : editingEstablishment
+              : isEditing
               ? "Save Changes"
               : "Save & Register"}
           </button>
