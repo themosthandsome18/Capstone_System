@@ -620,3 +620,44 @@
   background: #f0faf4;
   border-color: #bbf7d0;
 }
+
+/* Small non-blocking notice after a save/delete (background list refresh) */
+.booking-save-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.booking-save-notice.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.booking-save-notice span {
+  flex: 1;
+}
+
+.booking-save-notice button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.booking-save-notice button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}

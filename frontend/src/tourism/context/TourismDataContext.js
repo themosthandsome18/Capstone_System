@@ -207,19 +207,42 @@ export function TourismDataProvider({ children }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Arrival monitoring, dashboard and reports are the heavy computed views. A record change
+  // only marks them stale (bumps dataVersionRef); each is refetched when its page is opened.
+  const dataVersionRef = useRef(0);
+  const freshVersionRef = useRef({ arrivalMonitoring: 0, dashboardData: 0, reportData: 0 });
+  const staleRefreshRef = useRef({});
+
+  const markComputedStale = useCallback(() => {
+    dataVersionRef.current += 1;
+  }, []);
+
+  const markFresh = useCallback((keys, version) => {
+    keys.forEach((key) => {
+      freshVersionRef.current[key] = Math.max(freshVersionRef.current[key], version);
+    });
+  }, []);
+
+  const isComputedDataStale = useCallback(
+    (key) => freshVersionRef.current[key] < dataVersionRef.current,
+    []
+  );
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
+    const version = dataVersionRef.current;
     try {
       const response = await tourismApi.getBootstrapData();
       setBootstrap(response);
+      markFresh(["arrivalMonitoring", "dashboardData", "reportData"], version);
       setError("");
     } catch (requestError) {
       setError(requestError.message || "Unable to load tourism data.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [markFresh]);
 
   useEffect(() => {
     loadData();
@@ -285,35 +308,74 @@ export function TourismDataProvider({ children }) {
     setBootstrap((current) => ({ ...current, feedbackEntries }));
   }, []);
 
-  useVisibleInterval(pollBookingList, BOOKING_POLL_INTERVAL_MS);
   useVisibleInterval(pollFeedback, FEEDBACK_POLL_INTERVAL_MS);
 
   const refreshArrivalMonitoring = useCallback(async function refreshArrivalMonitoring(
     params = {}
   ) {
+    const version = dataVersionRef.current;
     const arrivalMonitoring = await tourismApi.getArrivalMonitoringData(params);
     setBootstrap((current) => ({
       ...current,
       arrivalMonitoring,
     }));
+    markFresh(["arrivalMonitoring"], version);
     return arrivalMonitoring;
-  }, []);
+  }, [markFresh]);
 
-  async function refreshDashboardData(params = {}) {
+  const refreshDashboardData = useCallback(async function refreshDashboardData(params = {}) {
+    const version = dataVersionRef.current;
     const dashboardData = await tourismApi.getDashboardData(params);
     setBootstrap((current) => ({
       ...current,
       dashboardData,
     }));
-  }
+    markFresh(["dashboardData"], version);
+  }, [markFresh]);
 
-  async function refreshReportData(filters = {}) {
+  const refreshReportData = useCallback(async function refreshReportData(filters = {}) {
+    const version = dataVersionRef.current;
     const reportData = await tourismApi.getReportsData(filters);
     setBootstrap((current) => ({
       ...current,
       reportData,
     }));
-  }
+    markFresh(["reportData"], version);
+  }, [markFresh]);
+
+  // Called when a page is opened: refetch only if a record changed since it was last loaded.
+  const refreshWhenStale = useCallback(
+    (key, run) => {
+      if (!isComputedDataStale(key)) {
+        return Promise.resolve(false);
+      }
+      if (!staleRefreshRef.current[key]) {
+        staleRefreshRef.current[key] = run()
+          .then(() => true)
+          .finally(() => {
+            delete staleRefreshRef.current[key];
+          });
+      }
+      return staleRefreshRef.current[key];
+    },
+    [isComputedDataStale]
+  );
+
+  const refreshArrivalMonitoringIfStale = useCallback(
+    () =>
+      refreshWhenStale("arrivalMonitoring", () =>
+        refreshArrivalMonitoring(bootstrapRef.current.arrivalMonitoring?.filters || {})
+      ),
+    [refreshWhenStale, refreshArrivalMonitoring]
+  );
+
+  const refreshDashboardIfStale = useCallback(
+    () =>
+      refreshWhenStale("dashboardData", () =>
+        refreshDashboardData(bootstrapRef.current.dashboardData?.filters || {})
+      ),
+    [refreshWhenStale, refreshDashboardData]
+  );
 
   const refreshBookingManagement = useCallback(async function refreshBookingManagement(
     params = {}
@@ -326,30 +388,12 @@ export function TourismDataProvider({ children }) {
     return bookingManagement;
   }, []);
 
-  async function refreshComputedData() {
-    const [arrivalMonitoring, dashboardData, reportData] = await Promise.all([
-      tourismApi.getArrivalMonitoringData(bootstrap.arrivalMonitoring?.filters || {}),
-      tourismApi.getDashboardData(bootstrap.dashboardData?.filters || {}),
-      tourismApi.getReportsData({
-        ...(bootstrap.reportData?.filters || {}),
-        include_questions: true,
-      }),
-    ]);
-
-    setBootstrap((current) => ({
-      ...current,
-      arrivalMonitoring,
-      dashboardData,
-      reportData,
-    }));
-  }
-
   async function refreshReferenceTables() {
     try {
-      const response = await tourismApi.getBootstrapData();
+      const referenceTables = await tourismApi.getReferenceTables();
       setBootstrap((current) => ({
         ...current,
-        referenceTables: response.referenceTables,
+        referenceTables,
       }));
     } catch (err) {
       console.error("Failed to refresh reference tables", err);
@@ -364,9 +408,9 @@ export function TourismDataProvider({ children }) {
         ...current,
         touristRecords: [createdRecord, ...current.touristRecords],
       }));
-      // Run computed data refresh in background — no need to await here
-      // so the overlay closes immediately after save
-      refreshComputedData().catch(() => {});
+      // The record is saved. Heavy pages refetch when next opened, not now.
+      markComputedStale();
+      return createdRecord;
     } finally {
       setActionLoading(false);
     }
@@ -390,8 +434,7 @@ export function TourismDataProvider({ children }) {
       }));
 
       if (refreshComputed) {
-        // Fire-and-forget: update charts/dashboard in background
-        refreshComputedData().catch(() => {});
+        markComputedStale();
       }
 
       return updatedRecord;
@@ -410,8 +453,9 @@ export function TourismDataProvider({ children }) {
           (record) => record.survey_id !== surveyId
         ),
       }));
-      await refreshComputedData();
-      await refreshReferenceTables();
+      markComputedStale();
+      // Resort figures depend on the records; refresh them in the background.
+      refreshReferenceTables();
     } finally {
       setActionLoading(false);
     }
@@ -431,8 +475,10 @@ export function TourismDataProvider({ children }) {
         ...options,
         action: "import",
       });
+      const version = dataVersionRef.current;
       const response = await tourismApi.getBootstrapData();
       setBootstrap(response);
+      markFresh(["arrivalMonitoring", "dashboardData", "reportData"], version);
       return result;
     } finally {
       setActionLoading(false);
@@ -530,9 +576,13 @@ export function TourismDataProvider({ children }) {
         previewOnlineBookingImport,
         importOnlineBookingFile,
         refreshArrivalMonitoring,
+        refreshArrivalMonitoringIfStale,
         refreshBookingManagement,
         refreshDashboardData,
+        refreshDashboardIfStale,
         refreshReportData,
+        isComputedDataStale,
+        pollBookingList,
         createResort,
         updateResort,
         deleteResort,
@@ -543,6 +593,13 @@ export function TourismDataProvider({ children }) {
       {children}
     </TourismDataContext.Provider>
   );
+}
+
+// Live booking-list refresh. Only the Booking Management page calls this, so the list is
+// polled only while that page is open (and the tab is visible).
+export function useBookingListPolling() {
+  const { pollBookingList } = useTourismData();
+  useVisibleInterval(pollBookingList, BOOKING_POLL_INTERVAL_MS);
 }
 
 export function useTourismData() {

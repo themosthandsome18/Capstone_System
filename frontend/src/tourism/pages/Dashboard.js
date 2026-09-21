@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
@@ -120,13 +120,49 @@ const doughnutOptions = {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { dashboardData, loading, error, refreshDashboardData } =
-    useTourismData();
+  const {
+    dashboardData,
+    loading,
+    error,
+    refreshDashboardData,
+    refreshDashboardIfStale,
+    isComputedDataStale,
+  } = useTourismData();
   const [selectedYear, setSelectedYear] = useState(
     dashboardData.filters?.year || currentReportingYear
   );
   const [dashboardError, setDashboardError] = useState("");
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  // A record changed since the dashboard was last loaded: refetch on open, never show stale.
+  const [staleLoading, setStaleLoading] = useState(() =>
+    isComputedDataStale("dashboardData")
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isComputedDataStale("dashboardData")) {
+      setStaleLoading(false);
+      return undefined;
+    }
+
+    setStaleLoading(true);
+    refreshDashboardIfStale()
+      .catch((requestError) => {
+        if (active) {
+          setDashboardError(requestError.message || "Unable to load dashboard data.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setStaleLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isComputedDataStale, refreshDashboardIfStale]);
   const metrics = dashboardData.metrics;
   const classification = dashboardData.classification;
   const gender = dashboardData.gender;
@@ -188,7 +224,7 @@ function Dashboard() {
 
 
 
-  if (loading) {
+  if (loading || staleLoading) {
     return <div className="dashboard-loading">Loading dashboard data...</div>;
   }
 

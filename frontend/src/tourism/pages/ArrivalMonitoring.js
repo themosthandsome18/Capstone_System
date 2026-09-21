@@ -9,7 +9,7 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { formatNumber } from "../utils/format";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const currentReportingYear = String(new Date().getFullYear());
 
@@ -59,6 +59,8 @@ function ArrivalMonitoring() {
     loading,
     error,
     refreshArrivalMonitoring,
+    refreshArrivalMonitoringIfStale,
+    isComputedDataStale,
   } = useTourismData();
 
   const todayStr = useMemo(() => getTodayDateString(), []);
@@ -77,6 +79,36 @@ function ArrivalMonitoring() {
   );
   const [arrivalError, setArrivalError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  // A record changed since arrival data was last loaded: refetch on open, never show stale.
+  const [staleLoading, setStaleLoading] = useState(() =>
+    isComputedDataStale("arrivalMonitoring")
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isComputedDataStale("arrivalMonitoring")) {
+      setStaleLoading(false);
+      return undefined;
+    }
+
+    setStaleLoading(true);
+    refreshArrivalMonitoringIfStale()
+      .catch((requestError) => {
+        if (active) {
+          setArrivalError(requestError.message || "Unable to load arrival data.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setStaleLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isComputedDataStale, refreshArrivalMonitoringIfStale]);
 
   const summary = arrivalMonitoring.summary || {};
   const rows = arrivalMonitoring.rows || [];
@@ -184,7 +216,7 @@ function ArrivalMonitoring() {
     exportCsv(datedCsvFilename(`arrival-monitoring-${dateSlug}-${resortSlug}`), headers, csvRows);
   }
 
-  if (loading) {
+  if (loading || staleLoading) {
     return <div className="panel p-10 text-center">Loading arrival data...</div>;
   }
 

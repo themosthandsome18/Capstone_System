@@ -14,7 +14,7 @@ import {
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
-import { useTourismData } from "../context/TourismDataContext";
+import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 
 const pageSize = 10;
 
@@ -167,6 +167,22 @@ function BookingManagement() {
   const location = useLocation();
   const navigate = useNavigate();
   const lastHandledTsRef = useRef(0);
+  // Non-blocking notice about the background list refresh after a save/delete.
+  const [listNotice, setListNotice] = useState(null);
+  // Set when a save resets to page 1 and refreshes the list itself, so the page-change
+  // effect below does not fetch the same list a second time.
+  const skipNextFetchRef = useRef(false);
+
+  // Live-refresh the list only while this page is open.
+  useBookingListPolling();
+
+  useEffect(() => {
+    if (listNotice?.tone !== "success") {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setListNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [listNotice]);
 
   useEffect(() => {
     if (
@@ -192,6 +208,11 @@ function BookingManagement() {
 
 
   useEffect(() => {
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      return undefined;
+    }
+
     let active = true;
     const timeout = window.setTimeout(async () => {
       setLoadingRows(true);
@@ -609,20 +630,49 @@ function BookingManagement() {
     setSaving(true);
     setFormError("");
 
+    const wasEditing = Boolean(editingRecord);
+    let saved = false;
+
     try {
       if (editingRecord) {
         await updateRecord(editingRecord.survey_id, payload);
       } else {
         await createRecord(payload);
       }
-
-      closeForm();
-      setPage(1);
-      await loadBookingRows({ page: 1 });
+      saved = true;
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {
       setSaving(false);
+    }
+
+    if (saved) {
+      // The record is saved: close right away and refresh the list in the background.
+      closeForm();
+      showFirstPageAfterChange();
+      refreshListInBackground(wasEditing ? "Record updated." : "Record saved.");
+    }
+  }
+
+  function showFirstPageAfterChange() {
+    if (page !== 1) {
+      skipNextFetchRef.current = true;
+      setPage(1);
+    }
+  }
+
+  async function refreshListInBackground(savedMessage) {
+    setListNotice({ tone: "success", text: savedMessage, savedMessage });
+
+    try {
+      await refreshBookingManagement({ ...filters, search, page: 1, pageSize });
+    } catch (error) {
+      // The change itself succeeded; only the list refresh failed.
+      setListNotice({
+        tone: "warning",
+        text: `${savedMessage} The list could not be refreshed just now, so it may be out of date.`,
+        savedMessage,
+      });
     }
   }
 
@@ -652,15 +702,21 @@ function BookingManagement() {
     setSaving(true);
     setDeleteError("");
 
+    let deleted = false;
+
     try {
       await deleteRecord(deleteTarget.survey_id);
-      setDeleteTarget(null);
-      setPage(1);
-      await loadBookingRows({ page: 1 });
+      deleted = true;
     } catch (error) {
       setDeleteError(getErrorMessage(error));
     } finally {
       setSaving(false);
+    }
+
+    if (deleted) {
+      setDeleteTarget(null);
+      showFirstPageAfterChange();
+      refreshListInBackground("Record deleted.");
     }
   }
 
@@ -868,6 +924,20 @@ function BookingManagement() {
           <h2>{summary.noShow}</h2>
         </div>
       </div>
+
+      {listNotice ? (
+        <div className={`booking-save-notice ${listNotice.tone}`} role="status">
+          <span>{listNotice.text}</span>
+          {listNotice.tone === "warning" ? (
+            <button type="button" onClick={() => refreshListInBackground(listNotice.savedMessage)}>
+              Retry
+            </button>
+          ) : null}
+          <button type="button" aria-label="Dismiss" onClick={() => setListNotice(null)}>
+            <FiX size={14} />
+          </button>
+        </div>
+      ) : null}
 
       {tableError ? <p className="tourist-record-error">{tableError}</p> : null}
 

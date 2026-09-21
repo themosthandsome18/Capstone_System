@@ -263,6 +263,12 @@ export const tourismApi = {
     return mergeBootstrapData(remote);
   },
 
+  // Lightweight alternative to getBootstrapData() when only the reference tables changed.
+  async getReferenceTables() {
+    const remote = await apiRequest("/reference-tables/");
+    return mergeBootstrapData({ referenceTables: remote }).referenceTables;
+  },
+
   async getBookingManagementData(params = {}) {
     const query = buildQueryString({
       search: params.search,
