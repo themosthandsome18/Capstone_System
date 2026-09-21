@@ -2416,3 +2416,107 @@ class SecureUploadTests(TestCase):
             )
             self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
             self.assertEqual(response.json()["error"], "Image upload failed. Storage service unavailable or full.")
+
+
+class PublicBoatRenameMigrationTests(TestCase):
+    OLD = "Public Boat (P100/ride/head) Sabang Port Only"
+    NEW = "Public Boat"
+
+    def setUp(self):
+        import importlib
+
+        self.migration = importlib.import_module(
+            "api.migrations.0033_rename_public_boat_type"
+        )
+
+    def _forward(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from django.apps import apps
+
+        out = StringIO()
+        with redirect_stdout(out):
+            self.migration.rename_public_boat_forward(apps, None)
+        return out.getvalue()
+
+    def _reverse(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from django.apps import apps
+
+        out = StringIO()
+        with redirect_stdout(out):
+            self.migration.rename_public_boat_reverse(apps, None)
+        return out.getvalue()
+
+    def test_renames_only_the_old_public_boat_row_and_keeps_its_id(self):
+        BoatType.objects.create(id=901, name=self.OLD)
+        BoatType.objects.create(id=902, name="Private Boat (Rates depend on the capacity)")
+        BoatType.objects.create(id=903, name="2.0")
+
+        self._forward()
+
+        self.assertEqual(BoatType.objects.get(id=901).name, self.NEW)
+        self.assertEqual(
+            BoatType.objects.get(id=902).name,
+            "Private Boat (Rates depend on the capacity)",
+        )
+        self.assertEqual(BoatType.objects.get(id=903).name, "2.0")
+        self.assertEqual(BoatType.objects.count(), 3)
+
+    def test_skips_with_warning_when_public_boat_already_exists(self):
+        BoatType.objects.create(id=901, name=self.OLD)
+        BoatType.objects.create(id=902, name=self.NEW)
+
+        output = self._forward()
+
+        self.assertIn("WARNING", output)
+        self.assertEqual(BoatType.objects.get(id=901).name, self.OLD)
+        self.assertEqual(BoatType.objects.get(id=902).name, self.NEW)
+        self.assertEqual(BoatType.objects.filter(name=self.NEW).count(), 1)
+        self.assertEqual(BoatType.objects.count(), 2)
+
+    def test_does_nothing_when_old_row_is_absent(self):
+        BoatType.objects.create(id=901, name="Speedboat")
+
+        self._forward()
+
+        self.assertEqual(list(BoatType.objects.values_list("name", flat=True)), ["Speedboat"])
+
+    def test_reverse_restores_the_old_name(self):
+        BoatType.objects.create(id=901, name=self.OLD)
+        self._forward()
+        self.assertEqual(BoatType.objects.get(id=901).name, self.NEW)
+
+        self._reverse()
+
+        self.assertEqual(BoatType.objects.get(id=901).name, self.OLD)
+        self.assertEqual(BoatType.objects.count(), 1)
+
+    def test_reverse_skips_when_old_name_already_exists(self):
+        BoatType.objects.create(id=901, name=self.OLD)
+        BoatType.objects.create(id=902, name=self.NEW)
+
+        output = self._reverse()
+
+        self.assertIn("WARNING", output)
+        self.assertEqual(BoatType.objects.get(id=901).name, self.OLD)
+        self.assertEqual(BoatType.objects.get(id=902).name, self.NEW)
+
+    def test_seed_and_importer_use_the_new_name(self):
+        from .services.online_booking import normalize_boat_type
+
+        self.assertEqual(REFERENCE_TABLES["boat_types"][0], {"id": 1, "name": self.NEW})
+        self.assertEqual(normalize_boat_type(self.OLD), self.NEW)
+        self.assertEqual(normalize_boat_type("Public Boat"), self.NEW)
+        self.assertEqual(normalize_boat_type("  public boat (sabang)  "), self.NEW)
+        self.assertEqual(normalize_boat_type(""), self.NEW)
+        # Other boat types are untouched
+        self.assertEqual(
+            normalize_boat_type("Private Boat"),
+            "Private Boat (Rates depend on the capacity)",
+        )
+        self.assertEqual(
+            normalize_boat_type("Boat provided by resort"),
+            "Boat Provided by Resort (As confirmed by both guests and resort)",
+        )

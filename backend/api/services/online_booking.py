@@ -709,10 +709,10 @@ def normalize_boat_type(value):
     if key.startswith("private boat"):
         return "Private Boat (Rates depend on the capacity)"
     if key.startswith("public boat"):
-        return "Public Boat (P100/ride/head) Sabang Port Only"
+        return "Public Boat"
     if key.startswith("boat provided"):
         return "Boat Provided by Resort (As confirmed by both guests and resort)"
-    return text or "Public Boat (P100/ride/head) Sabang Port Only"
+    return text or "Public Boat"
 
 
 def normalize_purpose(value):

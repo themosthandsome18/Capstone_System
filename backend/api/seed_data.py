@@ -407,7 +407,7 @@ REFERENCE_TABLES = {
         {"id": 4, "name": "Ferry / Port Transfer"},
     ],
     "boat_types": [
-        {"id": 1, "name": "Public Boat (P100/ride/head) Sabang Port Only"},
+        {"id": 1, "name": "Public Boat"},
         {"id": 2, "name": "Private Boat (Rates depend on the capacity)"},
         {"id": 3, "name": "Boat Provided by Resort (As confirmed by both guests and resort)"},
     ],
