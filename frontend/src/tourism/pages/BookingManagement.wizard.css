@@ -240,6 +240,14 @@
   box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
 }
 
+/* Same look as the existing .modal-field disabled inputs (Sanitation_index.css) */
+.wizard-field input:disabled,
+.wizard-field select:disabled {
+  background: #f3f4f6;
+  color: #777;
+  cursor: not-allowed;
+}
+
 .wizard-field input[type="date"] {
   padding-right: 8px;
 }
