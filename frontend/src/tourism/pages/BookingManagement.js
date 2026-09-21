@@ -166,7 +166,10 @@ function BookingManagement() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const lastHandledTsRef = useRef(0);
+  // AppShell keeps addEntryRequestId for the whole session, but this page remounts every time
+  // the user navigates back to it. Start from the current id so an "Add Entry" request that was
+  // already handled (or made before this mount) never reopens the wizard by itself.
+  const lastHandledTsRef = useRef(addEntryRequestId || 0);
   // Non-blocking notice about the background list refresh after a save/delete.
   const [listNotice, setListNotice] = useState(null);
   // Set when a save resets to page 1 and refreshes the list itself, so the page-change
