@@ -3798,4 +3798,50 @@
 }
 
 
+/* ================= PAGE HEADER ACTION BUTTONS =================
+   Shared by every tourism page header (title block on the left, buttons on the right).
+   Buttons keep their full label on one line; when the row is too narrow the whole
+   button group wraps under the title instead of being squeezed off the screen. */
 
+.dashboard-header,
+.booking-header,
+.arrival-header,
+.destination-header,
+.feedback-header,
+.reports-header,
+.gis-header {
+  flex-wrap: wrap;
+  column-gap: 24px;
+  row-gap: 16px;
+}
+
+/* Title block takes the free space but yields (wrapping the buttons below) below ~320px */
+.dashboard-header > :first-child,
+.booking-header > :first-child,
+.arrival-header > :first-child,
+.destination-header > :first-child,
+.feedback-header > :first-child,
+.reports-header > :first-child,
+.gis-header > :first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.dashboard-actions,
+.booking-actions,
+.arrival-actions,
+.reports-actions,
+.gis-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.dashboard-actions > *,
+.booking-actions > *,
+.arrival-actions > *,
+.reports-actions > *,
+.gis-actions > *,
+.destination-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
