@@ -1961,6 +1961,40 @@
   font-weight: 600;
 }
 
+/* Section headings for the establishment form and View modal. */
+.establishment-form-section {
+  margin-bottom: 18px;
+}
+
+.establishment-form-section h3,
+.establishment-detail-section-title {
+  margin: 0 0 16px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #7a7a7a;
+  text-transform: uppercase;
+}
+
+.establishment-detail-section-title {
+  margin-top: 18px;
+}
+
+/* Permit and compliance values are kept apart from the establishment profile. */
+.establishment-form-section.permit-record {
+  border: 1px solid #d7e0dc;
+  border-radius: 7px;
+  background: #f7faf8;
+  padding: 16px;
+}
+
+.establishment-form-hint,
+.establishment-detail-empty {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .establishment-detail-actions {
   display: flex;
   align-items: center;

@@ -8,19 +8,44 @@
  * one of these, update the test in the SAME commit as the fix so the change
  * is visible in review.
  *
+ * Phase 1 of the Establishment Records redesign intentionally changed the
+ * Register and Edit behaviour (FOCUS 1, 2, 3, 7, 8): registration now captures
+ * the establishment profile only and records no permit, permit controls live in
+ * Edit, and Edit sends only the fields staff changed. Those expectations were
+ * updated in the same change; see EstablishmentRecords.test.js for the rest.
+ *
  * Known harness limitation: react-router-dom v7 ships ESM that CRA 5's Jest
  * resolver cannot load, so the router is stubbed here rather than changing
  * shared Jest config. The component only consumes useLocation/useNavigate.
  */
 import React from "react";
-import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  within,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 
 jest.mock(
   "react-router-dom",
   () => ({ useLocation: () => ({ search: "" }), useNavigate: () => jest.fn() }),
   { virtual: true }
 );
-jest.mock("../../shared/LocationPicker", () => () => null);
+// Stands in for the map pin: applying it hands coordinates to the form exactly
+// the way the real LocationPicker does (strings normalised to 6 decimals).
+jest.mock("../../shared/LocationPicker", () => ({ onChange }) => (
+  <button
+    type="button"
+    onClick={() => {
+      onChange("latitude", "14.188000");
+      onChange("longitude", "121.732000");
+    }}
+  >
+    Mock Apply Pin
+  </button>
+));
 jest.mock("qrcode.react", () => ({ QRCodeSVG: () => null }));
 
 import EstablishmentRecords, { generatePermitNumber } from "./EstablishmentRecords";
@@ -176,7 +201,7 @@ beforeEach(() => jest.clearAllMocks());
 /* ================================================================== */
 
 describe("FOCUS 1: new Register form defaults", () => {
-  test("every field has its current default before staff enters anything", () => {
+  test("only establishment profile fields are shown, all empty by default", () => {
     const form = openCreateForm();
 
     expect(within(form).getByText("Register New Establishment")).toBeTruthy();
@@ -188,60 +213,35 @@ describe("FOCUS 1: new Register form defaults", () => {
       "Complete Address": field(form, "Complete Address").value,
       "Contact Number": field(form, "Contact Number").value,
       "Business Type": field(form, "Business Type").value,
-      "Permit Size": field(form, "Permit Size").value,
-      "Has Permit?": field(form, "Has Permit?").value,
-      "Permit Number": field(form, "Permit Number").value,
-      "Compliance Status": field(form, "Compliance Status").value,
-      "Permit Status": field(form, "Permit Status").value,
-      "Permit Issued Date": field(form, "Permit Issued Date").value,
-      "Permit Expiry Date": field(form, "Permit Expiry Date").value,
-      Latitude: field(form, "Latitude").value,
-      Longitude: field(form, "Longitude").value,
-      Remarks: field(form, "Remarks").value,
     };
-    console.log("NEW FORM DEFAULTS:", JSON.stringify(defaults, null, 2));
-
-    // Empty by default
-    expect(defaults["Business Name"]).toBe("");
-    expect(defaults["Owner / Proprietor"]).toBe("");
-    expect(defaults.Barangay).toBe("");
-    expect(defaults["Complete Address"]).toBe("");
-    expect(defaults["Contact Number"]).toBe("");
-    expect(defaults["Business Type"]).toBe("");
-    expect(defaults["Permit Number"]).toBe("");
-    expect(defaults["Permit Issued Date"]).toBe("");
-    expect(defaults["Permit Expiry Date"]).toBe("");
-    expect(defaults.Latitude).toBe("");
-    expect(defaults.Longitude).toBe("");
-    expect(defaults.Remarks).toBe("");
-
-    // Non-empty defaults - the permissive starting state
-    expect(defaults["Permit Size"]).toBe("sp");
-    expect(defaults["Has Permit?"]).toBe("yes");
-    expect(defaults["Compliance Status"]).toBe("good_standing");
-    expect(defaults["Permit Status"]).toBe("active");
+    Object.values(defaults).forEach((value) => expect(value).toBe(""));
   });
 
-  test("status selects hide the no_permit option while Has Permit = yes", () => {
+  test("permit, compliance, coverage, coordinate and remarks controls are not on the Register form", () => {
     const form = openCreateForm();
-    const compliance = [...field(form, "Compliance Status").options].map((o) => o.value);
-    const permit = [...field(form, "Permit Status").options].map((o) => o.value);
-    console.log("COMPLIANCE OPTS (has_permit=yes):", JSON.stringify(compliance));
-    console.log("PERMIT OPTS (has_permit=yes):", JSON.stringify(permit));
-    expect(compliance).toEqual(["good_standing", "upcoming", "for_completion", "violation"]);
-    expect(permit).toEqual(["active", "renewal_due", "conditional", "suspended"]);
+    [
+      "Permit Size",
+      "Permit Coverage (SP / Large)",
+      "Has Permit?",
+      "Permit Number",
+      "Compliance Status",
+      "Permit Status",
+      "Permit Issued Date",
+      "Permit Expiry Date",
+      "Latitude",
+      "Longitude",
+      "Remarks",
+    ].forEach((label) => expect(within(form).queryByText(label)).toBeNull());
+    expect(within(form).queryByText(/Auto-Generate/)).toBeNull();
   });
 
-  test("requirements panel is empty until a business type is chosen, then filters by permit size", () => {
+  test("the Register form no longer shows an SP/Large-filtered requirement preview", () => {
     const form = openCreateForm();
-    expect(within(form).getByText("Select a business type to load requirements.")).toBeTruthy();
-
     setField(form, "Business Type", "13");
-    expect(within(form).getByText("Public Market Stall SP req")).toBeTruthy();
 
-    setField(form, "Permit Size", "large");
-    expect(within(form).getByText("Public Market Stall LG req")).toBeTruthy();
+    expect(within(form).queryByText(/AUTO-LOADED REQUIREMENTS/)).toBeNull();
     expect(within(form).queryByText("Public Market Stall SP req")).toBeNull();
+    expect(within(form).queryByText("Public Market Stall LG req")).toBeNull();
   });
 });
 
@@ -250,47 +250,39 @@ describe("FOCUS 1: new Register form defaults", () => {
 /* ================================================================== */
 
 describe("FOCUS 2: submission payload", () => {
-  test("required-fields-only submit sends the permissive defaults and an auto permit number", async () => {
+  test("required-fields-only submit registers the establishment with no permit on record", async () => {
     const form = openCreateForm();
     fillRequired(form);
     submit(form);
 
     await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
     const payload = mockCtx.createEstablishment.mock.calls[0][0];
-    console.log("PAYLOAD (defaults untouched):", JSON.stringify(payload, null, 2));
 
     expect(payload.business_type).toBe(13);
     expect(typeof payload.business_type).toBe("number");
-    expect(payload.permit_size).toBe("sp");
-    expect(payload.has_permit).toBe(true);
-    expect(payload.compliance_status).toBe("good_standing");
-    expect(payload.permit_status).toBe("active");
-
-    // Permit number is auto-generated at submit even though the field was left blank.
-    // Fixture permit numbers are LG-2026-007 and "", so the SP sequence starts at 001.
-    expect(payload.permit_number).toBe(SEQ_AFTER_FIXTURES);
-
-    // Dates are NOT auto-filled on this path; they submit as null.
+    // No permit number, dates or "Good Standing" are invented at registration.
+    expect(payload.has_permit).toBe(false);
+    expect(payload.permit_number).toBe("");
     expect(payload.permit_issued_date).toBeNull();
     expect(payload.permit_expiry_date).toBeNull();
+    expect(payload.compliance_status).toBe("no_permit");
+    expect(payload.permit_status).toBe("no_permit");
 
-    // Coordinates omitted by staff submit as null (backend then fills them in).
+    // Coordinates left unset submit as null (backend then fills them in).
     expect(payload.latitude).toBeNull();
     expect(payload.longitude).toBeNull();
 
-    expect(payload.remarks).toBe("");
     expect(payload.contact_number).toBe("");
     expect("id" in payload).toBe(false);
   });
 
-  test("payload carries exactly the current field set (no extra keys)", async () => {
+  test("payload carries exactly the registration field set; SP/Large and remarks are left to backend defaults", async () => {
     const form = openCreateForm();
     fillRequired(form);
     submit(form);
 
     await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
     const keys = Object.keys(mockCtx.createEstablishment.mock.calls[0][0]).sort();
-    console.log("PAYLOAD KEYS:", JSON.stringify(keys));
     expect(keys).toEqual([
       "address",
       "barangay",
@@ -305,9 +297,7 @@ describe("FOCUS 2: submission payload", () => {
       "permit_expiry_date",
       "permit_issued_date",
       "permit_number",
-      "permit_size",
       "permit_status",
-      "remarks",
     ]);
   });
 
@@ -318,15 +308,13 @@ describe("FOCUS 2: submission payload", () => {
 
     await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
     const name = mockCtx.createEstablishment.mock.calls[0][0].business_name;
-    console.log("TITLE-CASED business_name:", JSON.stringify(name));
     expect(name).toBe("Perly's Sari-Sari Store");
   });
 
-  test("coordinates typed into the number inputs are submitted as numbers", async () => {
+  test("coordinates applied from the map pin are submitted as numbers", async () => {
     const form = openCreateForm();
     fillRequired(form);
-    setField(form, "Latitude", "14.188");
-    setField(form, "Longitude", "121.732");
+    fireEvent.click(within(form).getByText("Mock Apply Pin"));
     submit(form);
 
     await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
@@ -338,12 +326,12 @@ describe("FOCUS 2: submission payload", () => {
 });
 
 /* ================================================================== */
-/* FOCUS AREA 3 - Has Permit behaviour                                 */
+/* FOCUS AREA 3 - Has Permit behaviour (now in Edit only)              */
 /* ================================================================== */
 
 describe("FOCUS 3: Has Permit behaviour", () => {
   test("With Permit: permit fields are visible and enabled", () => {
-    const form = openCreateForm();
+    const form = openEditForm(0); // EXISTING_ESTABLISHMENT holds a permit
     [
       "Permit Number",
       "Permit Issued Date",
@@ -352,58 +340,36 @@ describe("FOCUS 3: Has Permit behaviour", () => {
       "Permit Status",
     ].forEach((label) => {
       const el = field(form, label);
-      expect(el).not.toBeNull(); // visible
-      expect(el.disabled).toBe(false); // enabled
+      expect(el).not.toBeNull();
+      expect(el.disabled).toBe(false);
     });
     expect(within(form).getByText(/Auto-Generate/)).toBeTruthy();
   });
 
   test("No Permit: fields stay VISIBLE but become DISABLED, values cleared, statuses forced", () => {
-    const form = openCreateForm();
-
-    // Seed values first so we can observe clearing.
-    setField(form, "Permit Number", "SP-2026-999");
-    setField(form, "Permit Issued Date", "2026-03-03");
-    setField(form, "Permit Expiry Date", "2026-09-09");
-    expect(field(form, "Permit Number").value).toBe("SP-2026-999");
+    const form = openEditForm(0);
+    expect(field(form, "Permit Number").value).toBe("LG-2026-007");
 
     setField(form, "Has Permit?", "no");
 
-    const state = [
-      "Permit Number",
-      "Permit Issued Date",
-      "Permit Expiry Date",
-      "Compliance Status",
-      "Permit Status",
-    ].reduce((acc, label) => {
+    ["Permit Number", "Permit Issued Date", "Permit Expiry Date"].forEach((label) => {
       const el = field(form, label);
-      acc[label] = { visible: el !== null, disabled: el.disabled, value: el.value };
-      return acc;
-    }, {});
-    console.log("NO-PERMIT FIELD STATE:", JSON.stringify(state, null, 2));
-
-    expect(state["Permit Number"]).toEqual({ visible: true, disabled: true, value: "" });
-    expect(state["Permit Issued Date"]).toEqual({ visible: true, disabled: true, value: "" });
-    expect(state["Permit Expiry Date"]).toEqual({ visible: true, disabled: true, value: "" });
-    expect(state["Compliance Status"].value).toBe("no_permit");
-    expect(state["Permit Status"].value).toBe("no_permit");
-
-    // Auto-Generate button is hidden (the only element actually removed)
+      expect(el.disabled).toBe(true);
+      expect(el.value).toBe("");
+    });
+    expect(field(form, "Compliance Status").value).toBe("no_permit");
+    expect(field(form, "Permit Status").value).toBe("no_permit");
     expect(within(form).queryByText(/Auto-Generate/)).toBeNull();
-    // Warning banner appears
     expect(within(form).getByText(/No Permit \/ For Immediate Inspection/)).toBeTruthy();
   });
 
-  test("No Permit: cleared permit values are still PRESENT in the payload as empty/null", async () => {
-    const form = openCreateForm();
-    fillRequired(form);
-    setField(form, "Permit Number", "SP-2026-999");
+  test("No Permit: the explicitly cleared permit values are sent", async () => {
+    const form = openEditForm(0);
     setField(form, "Has Permit?", "no");
     submit(form);
 
-    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
-    const payload = mockCtx.createEstablishment.mock.calls[0][0];
-    console.log("NO-PERMIT PAYLOAD:", JSON.stringify(payload, null, 2));
+    await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
+    const payload = mockCtx.updateEstablishment.mock.calls[0][1];
     expect(payload.has_permit).toBe(false);
     expect(payload.permit_number).toBe("");
     expect(payload.permit_issued_date).toBeNull();
@@ -413,23 +379,14 @@ describe("FOCUS 3: Has Permit behaviour", () => {
   });
 
   test("toggling No Permit -> With Permit back-fills permit number and BOTH dates", () => {
-    const form = openCreateForm();
-    setField(form, "Has Permit?", "no");
+    const form = openEditForm(1); // NO_PERMIT_ESTABLISHMENT (coverage sp)
     setField(form, "Has Permit?", "yes");
 
-    const backfilled = {
-      permit_number: field(form, "Permit Number").value,
-      issued: field(form, "Permit Issued Date").value,
-      expiry: field(form, "Permit Expiry Date").value,
-      compliance: field(form, "Compliance Status").value,
-      permit_status: field(form, "Permit Status").value,
-    };
-    console.log("BACK-FILLED ON RE-ENABLE:", JSON.stringify(backfilled));
-    expect(backfilled.permit_number).toBe(SEQ_AFTER_FIXTURES);
-    expect(backfilled.issued).toBe(TODAY);
-    expect(backfilled.expiry).toBe(END_OF_YEAR);
-    expect(backfilled.compliance).toBe("good_standing");
-    expect(backfilled.permit_status).toBe("active");
+    expect(field(form, "Permit Number").value).toBe(SEQ_AFTER_FIXTURES);
+    expect(field(form, "Permit Issued Date").value).toBe(TODAY);
+    expect(field(form, "Permit Expiry Date").value).toBe(END_OF_YEAR);
+    expect(field(form, "Compliance Status").value).toBe("good_standing");
+    expect(field(form, "Permit Status").value).toBe("active");
   });
 });
 
@@ -498,24 +455,23 @@ describe("FOCUS 4: generatePermitNumber", () => {
     expect(a).toBe(b);
   });
 
-  test("Auto-Generate OVERWRITES a value already typed into Permit Number", () => {
-    const form = openCreateForm();
+  test("Auto-Generate (in Edit) OVERWRITES a value already typed into Permit Number", () => {
+    const form = openEditForm(0); // coverage "large", so the LG sequence is used
     setField(form, "Permit Number", "MANUALLY-TYPED-123");
     expect(field(form, "Permit Number").value).toBe("MANUALLY-TYPED-123");
 
     fireEvent.click(within(form).getByText(/Auto-Generate/));
-    const after = field(form, "Permit Number").value;
-    console.log("AFTER AUTO-GENERATE OVER EXISTING VALUE:", after);
-    expect(after).toBe(SEQ_AFTER_FIXTURES);
+    expect(field(form, "Permit Number").value).toBe(
+      generatePermitNumber(mockCtx.establishments, "large")
+    );
   });
 
-  test("a manually typed permit number is preserved through submit when non-blank", async () => {
-    const form = openCreateForm();
-    fillRequired(form);
+  test("a manually typed permit number (in Edit) is sent as typed", async () => {
+    const form = openEditForm(0);
     setField(form, "Permit Number", "CUSTOM-ABC-001");
     submit(form);
-    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
-    expect(mockCtx.createEstablishment.mock.calls[0][0].permit_number).toBe("CUSTOM-ABC-001");
+    await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
+    expect(mockCtx.updateEstablishment.mock.calls[0][1].permit_number).toBe("CUSTOM-ABC-001");
   });
 });
 
@@ -550,50 +506,27 @@ describe("FOCUS 5: validation (blocks vs proceeds)", () => {
     expect(formErrorText()).toBeNull();
   });
 
-  test("out-of-range latitude/longitude PROCEED (number inputs bypass the Mauban bounds check)", async () => {
-    const form = openCreateForm();
-    fillRequired(form);
-    setField(form, "Latitude", "99");
-    setField(form, "Longitude", "-400");
-    submit(form);
+  test("raw latitude/longitude inputs are gone; coordinates only come from the bounds-checked map pin", () => {
+    const createForm = openCreateForm();
+    expect(within(createForm).queryByText("Latitude")).toBeNull();
+    expect(within(createForm).queryByText("Longitude")).toBeNull();
+    cleanup();
 
-    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
-    const payload = mockCtx.createEstablishment.mock.calls[0][0];
-    console.log("OUT-OF-RANGE COORDS SUBMITTED:", payload.latitude, payload.longitude);
-    expect(payload.latitude).toBe(99);
-    expect(payload.longitude).toBe(-400);
+    const editForm = openEditForm(0);
+    expect(within(editForm).queryByText("Latitude")).toBeNull();
+    expect(within(editForm).getByText("Mock Apply Pin")).toBeTruthy();
   });
 
-  test("expiry earlier than issued date PROCEEDS (no ordering rule)", async () => {
-    const form = openCreateForm();
-    fillRequired(form);
+  test("expiry earlier than issued date PROCEEDS in Edit (no ordering rule)", async () => {
+    const form = openEditForm(0);
     setField(form, "Permit Issued Date", "2026-12-01");
     setField(form, "Permit Expiry Date", "2026-01-01");
     submit(form);
 
-    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
-    const payload = mockCtx.createEstablishment.mock.calls[0][0];
-    console.log(
-      "REVERSED DATES SUBMITTED:",
-      payload.permit_issued_date,
-      "->",
-      payload.permit_expiry_date
-    );
+    await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
+    const payload = mockCtx.updateEstablishment.mock.calls[0][1];
     expect(payload.permit_issued_date).toBe("2026-12-01");
     expect(payload.permit_expiry_date).toBe("2026-01-01");
-  });
-
-  test("missing permit dates while Has Permit = yes PROCEED as null", async () => {
-    const form = openCreateForm();
-    fillRequired(form);
-    expect(field(form, "Permit Issued Date").value).toBe("");
-    submit(form);
-
-    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
-    const payload = mockCtx.createEstablishment.mock.calls[0][0];
-    expect(payload.has_permit).toBe(true);
-    expect(payload.permit_issued_date).toBeNull();
-    expect(payload.permit_expiry_date).toBeNull();
   });
 
   test("whitespace-only required values are trimmed and BLOCK submission", async () => {
@@ -610,16 +543,19 @@ describe("FOCUS 5: validation (blocks vs proceeds)", () => {
 /* ================================================================== */
 
 describe("FOCUS 7: form uses REAL business types, not display labels", () => {
-  test("all 15 real options are present with their numeric IDs", () => {
+  test("all 15 real options are present with their numeric IDs, grouped by category", () => {
     const form = openCreateForm();
-    const opts = [...field(form, "Business Type").options].map(
-      (o) => o.value + ":" + o.textContent
-    );
-    console.log("FORM BUSINESS TYPE OPTIONS:", JSON.stringify(opts, null, 2));
+    const select = field(form, "Business Type");
+    const selectable = [...select.options].filter((o) => o.value && !o.disabled);
 
-    expect(opts[0]).toBe(":Select business type");
-    expect(opts.slice(1)).toEqual(REAL_BUSINESS_TYPES.map((t) => t.id + ":" + t.name));
-    expect(opts).toHaveLength(16);
+    expect(select.options[0].value + ":" + select.options[0].textContent).toBe(
+      ":Select business type"
+    );
+    expect(selectable.map((o) => o.value + ":" + o.textContent).sort()).toEqual(
+      REAL_BUSINESS_TYPES.map((t) => t.id + ":" + t.name).sort()
+    );
+    // Every real option sits under one of the client's categories.
+    selectable.forEach((o) => expect(o.parentElement.tagName).toBe("OPTGROUP"));
   });
 
   test("Karaoke / Video Bar / CSW remains a real, selectable option", () => {
@@ -664,81 +600,39 @@ describe("FOCUS 8: edit flow loads existing values", () => {
     const form = openEditForm(0); // EXISTING_ESTABLISHMENT
     expect(within(form).getByText("Edit Establishment")).toBeTruthy();
 
-    const loaded = {
-      business_name: field(form, "Business Name").value,
-      owner_name: field(form, "Owner / Proprietor").value,
-      business_type: field(form, "Business Type").value,
-      permit_size: field(form, "Permit Size").value,
-      barangay: field(form, "Barangay").value,
-      contact_number: field(form, "Contact Number").value,
-      has_permit: field(form, "Has Permit?").value,
-      permit_number: field(form, "Permit Number").value,
-      issued: field(form, "Permit Issued Date").value,
-      expiry: field(form, "Permit Expiry Date").value,
-      compliance: field(form, "Compliance Status").value,
-      permit_status: field(form, "Permit Status").value,
-      latitude: field(form, "Latitude").value,
-      longitude: field(form, "Longitude").value,
-      remarks: field(form, "Remarks").value,
-    };
-    console.log("EDIT FORM LOADED VALUES:", JSON.stringify(loaded, null, 2));
-
-    expect(loaded.business_type).toBe("13"); // real ID, not a label
-    expect(loaded.permit_size).toBe("large"); // real operational value
-    expect(loaded.has_permit).toBe("yes");
-    expect(loaded.permit_number).toBe("LG-2026-007");
-    expect(loaded.issued).toBe("2026-02-01");
-    expect(loaded.expiry).toBe("2026-12-31");
-    expect(loaded.compliance).toBe("for_completion");
-    expect(loaded.permit_status).toBe("conditional");
-    expect(loaded.latitude).toBe("14.191234");
-    expect(loaded.longitude).toBe("121.735678");
-    expect(loaded.remarks).toBe("Existing remarks");
+    expect(field(form, "Business Type").value).toBe("13"); // real ID, not a label
+    expect(field(form, "Permit Coverage (SP / Large)").value).toBe("large");
+    expect(field(form, "Has Permit?").value).toBe("yes");
+    expect(field(form, "Permit Number").value).toBe("LG-2026-007");
+    expect(field(form, "Permit Issued Date").value).toBe("2026-02-01");
+    expect(field(form, "Permit Expiry Date").value).toBe("2026-12-31");
+    expect(field(form, "Compliance Status").value).toBe("for_completion");
+    expect(field(form, "Permit Status").value).toBe("conditional");
+    expect(field(form, "Remarks").value).toBe("Existing remarks");
   });
 
-  test("saving an unchanged edit submits the same underlying values", async () => {
+  test("saving an unchanged edit sends nothing and closes the form", async () => {
     const form = openEditForm(0);
     submit(form);
 
-    await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
-    const [id, payload] = mockCtx.updateEstablishment.mock.calls[0];
-    console.log("EDIT SUBMITTED:", id, JSON.stringify(payload, null, 2));
-    expect(id).toBe(501);
-    expect(payload.business_type).toBe(13);
-    expect(payload.permit_size).toBe("large");
-    expect(payload.has_permit).toBe(true);
-    expect(payload.permit_number).toBe("LG-2026-007");
-    expect(payload.compliance_status).toBe("for_completion");
-    expect(payload.permit_status).toBe("conditional");
-    expect(payload.latitude).toBe(14.191234);
-    expect(payload.longitude).toBe(121.735678);
+    await waitFor(() =>
+      expect(document.querySelector("form.establishment-modal")).toBeNull()
+    );
+    expect(mockCtx.updateEstablishment).not.toHaveBeenCalled();
     expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
   });
 
-  test("editing a NO-PERMIT record keeps it no-permit and leaves coordinates blank", () => {
+  test("editing a NO-PERMIT record keeps it no-permit", () => {
     const form = openEditForm(1); // NO_PERMIT_ESTABLISHMENT
-    const loaded = {
-      business_type: field(form, "Business Type").value,
-      has_permit: field(form, "Has Permit?").value,
-      permit_number: field(form, "Permit Number").value,
-      issued: field(form, "Permit Issued Date").value,
-      expiry: field(form, "Permit Expiry Date").value,
-      compliance: field(form, "Compliance Status").value,
-      latitude: field(form, "Latitude").value,
-      longitude: field(form, "Longitude").value,
-    };
-    console.log("EDIT NO-PERMIT LOADED:", JSON.stringify(loaded));
-    expect(loaded.business_type).toBe("23");
-    expect(loaded.has_permit).toBe("no");
-    expect(loaded.permit_number).toBe("");
-    expect(loaded.issued).toBe("");
-    expect(loaded.expiry).toBe("");
-    expect(loaded.compliance).toBe("no_permit");
-    expect(loaded.latitude).toBe("");
-    expect(loaded.longitude).toBe("");
+    expect(field(form, "Business Type").value).toBe("23");
+    expect(field(form, "Has Permit?").value).toBe("no");
+    expect(field(form, "Permit Number").value).toBe("");
+    expect(field(form, "Permit Issued Date").value).toBe("");
+    expect(field(form, "Permit Expiry Date").value).toBe("");
+    expect(field(form, "Compliance Status").value).toBe("no_permit");
   });
 
-  test("CHARACTERIZATION: editing a with-permit record that has NULL dates silently back-fills them", async () => {
+  test("editing a with-permit record that has NULL dates no longer back-fills them", async () => {
     // Mirrors production record id=448: has_permit=true but both dates null.
     const original = mockCtx.establishments;
     mockCtx.establishments = [
@@ -746,18 +640,15 @@ describe("FOCUS 8: edit flow loads existing values", () => {
     ];
     try {
       const form = openEditForm(0);
-      const issued = field(form, "Permit Issued Date").value;
-      const expiry = field(form, "Permit Expiry Date").value;
-      console.log("NULL-DATE EDIT BACK-FILL -> issued:", issued, "expiry:", expiry);
-      expect(issued).toBe(TODAY);
-      expect(expiry).toBe(END_OF_YEAR);
+      expect(field(form, "Permit Issued Date").value).toBe("");
+      expect(field(form, "Permit Expiry Date").value).toBe("");
 
+      setField(form, "Contact Number", "09998887777");
       submit(form);
       await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
-      const payload = mockCtx.updateEstablishment.mock.calls[0][1];
-      // Merely opening and saving the record writes dates that were never entered.
-      expect(payload.permit_issued_date).toBe(TODAY);
-      expect(payload.permit_expiry_date).toBe(END_OF_YEAR);
+      expect(mockCtx.updateEstablishment.mock.calls[0][1]).toEqual({
+        contact_number: "09998887777",
+      });
     } finally {
       mockCtx.establishments = original;
     }
@@ -830,10 +721,23 @@ describe("REGRESSION: title-casing preserves apostrophes", () => {
       const form = openEditForm(0);
       expect(field(form, "Business Name").value).toBe("Perly's Sari-Sari Store");
 
+      // Saving an unrelated change must not re-send (and so cannot re-mangle) the name.
+      setField(form, "Contact Number", "09175550000");
       submit(form);
       await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
+      expect(mockCtx.updateEstablishment.mock.calls[0][1]).toEqual({
+        contact_number: "09175550000",
+      });
+
+      // An edit that touches the name keeps the apostrophe intact.
+      cleanup();
+      jest.clearAllMocks();
+      const nameForm = openEditForm(0);
+      setField(nameForm, "Business Name", "perly's sari-sari store & grill");
+      submit(nameForm);
+      await waitFor(() => expect(mockCtx.updateEstablishment).toHaveBeenCalledTimes(1));
       expect(mockCtx.updateEstablishment.mock.calls[0][1].business_name).toBe(
-        "Perly's Sari-Sari Store"
+        "Perly's Sari-Sari Store & Grill"
       );
     } finally {
       mockCtx.establishments = original;

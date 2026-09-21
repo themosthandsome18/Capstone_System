@@ -12,10 +12,27 @@
  * "Food Establishment"), so this mapping is one-way: a display label cannot be
  * turned back into a single real business type.
  *
- * All 15 real business types are currently mapped. Any type added to the
- * database later is not an error: it falls through to its own name unchanged
- * until it is given a label here.
+ * The 15 seeded types, the permit-importer types, and legacy names retained in
+ * production are mapped here. Any newly introduced type must be assigned to
+ * one of the confirmed categories before it is presented to staff.
  */
+
+/**
+ * The client's confirmed business type categories, in the client's order.
+ * Institutional Establishment includes schools and other institutions.
+ * Ambulant Food Vendor is currently represented by imported production data.
+ */
+export const CLIENT_BUSINESS_TYPE_CATEGORIES = [
+  "Commercial / NF",
+  "Food Establishment",
+  "Industrial Establishment",
+  "Agro-Industrial Establishment",
+  "Institutional Establishment",
+  "Water Refilling Station",
+  "Public Transport",
+  "Ambulant Food Vendor",
+  "Public Places",
+];
 
 /** Real business type name -> client-facing display label. */
 export const BUSINESS_TYPE_DISPLAY_LABELS = {
@@ -35,6 +52,25 @@ export const BUSINESS_TYPE_DISPLAY_LABELS = {
   "Burial Ground": "Public Places",
   "Private Laboratory & Clinic": "Institutional Establishment",
   "Karaoke / Video Bar / CSW": "Public Places",
+
+  // Existing permit-importer type names. These remain stored exactly as
+  // imported; the mapping only prevents them becoming extra client categories.
+  "Pool / Resort": "Public Places",
+  "Industrial Establishment": "Industrial Establishment",
+  "Agricultural / Industrial Establishment": "Agro-Industrial Establishment",
+  "Ambulant Food Vendor": "Ambulant Food Vendor",
+  "Public Transport": "Public Transport",
+  "Food / Commercial": "Food Establishment",
+  "Fishing Vessel / Boat": "Public Transport",
+  "Commercial Service Worker": "Commercial / NF",
+  "Tiange": "Commercial / NF",
+
+  // Legacy names handled by the sanitation seeder's compatibility aliases.
+  "Poultry Farm": "Agro-Industrial Establishment",
+  "Restaurant / Food Service": "Food Establishment",
+  "Barbershop / Salon": "Commercial / NF",
+  "Gasoline Station": "Industrial Establishment",
+  "Motorshop": "Industrial Establishment",
 };
 
 /**
