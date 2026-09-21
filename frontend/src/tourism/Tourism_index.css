@@ -1857,13 +1857,15 @@
   cursor: pointer;
 }
 
+/* The tile is a fixed-width thumbnail, so the two buttons are stacked full-width
+   under the picture instead of squeezed side by side. */
 .feedback-photo-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px;
   background: #f8fafc;
-  gap: 4px;
+  gap: 6px;
 }
 
 .photo-action-btn {
@@ -1878,7 +1880,8 @@
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
-  flex: 1;
+  width: 100%;
+  white-space: nowrap;
 }
 
 .photo-action-btn.download {
