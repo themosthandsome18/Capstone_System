@@ -307,6 +307,38 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * The verifications above cover the deployed build only. Authenticated production Establishment Records UI behavior was **not** manually verified.
     * No staff credentials were used. No production establishment was created, edited, issued a permit, or otherwise modified during verification.
     * The authenticated production workflow must therefore not be treated as fully verified.
+    * *Later update*: a limited read-only authenticated inspection of the Business Type categories and Register dropdown was performed (see **Ambulant Food Vendor Business Type** below). The full authenticated workflow remains unverified.
+
+
+## Completed Locally — Pending Commit, Push & Deployment
+- **Ambulant Food Vendor Business Type** (migration `0034_add_ambulant_food_vendor_business_type`)
+  - **Authenticated Production UI Observation (read-only)**:
+    * Sanitation → Establishment Records was inspected read-only with an authorized account.
+    * The 9 approved client-facing Business Type categories were visible, including Ambulant Food Vendor.
+    * The Register New Establishment Business Type dropdown showed "Ambulant Food Vendor — No business type configured yet": the category existed in the UI but had no underlying selectable `SanitaryBusinessType`.
+    * No production record was created or modified. No Save, Submit, Update, Issue, or Renew action was performed.
+  - **Client Confirmation**:
+    * Official business type name: Ambulant Food Vendor.
+    * Inspection frequency: Monthly.
+    * Standard requirements: not yet provided. Additional requirements: none yet provided. Legal basis: not yet provided.
+  - **Implementation**:
+    * Added data migration `backend/api/migrations/0034_add_ambulant_food_vendor_business_type.py`, which creates the underlying `SanitaryBusinessType` with `name = "Ambulant Food Vendor"`, `inspection_frequency = monthly`, and no requirements. It does nothing if a type with that name (any casing) already exists; its reverse is a no-op.
+    * A data migration was used because seed data is disabled in production (`USE_SEED_DATA=False`), and adding the type to `SANITARY_BUSINESS_TYPES` would have auto-generated the standard requirements for both SP and Large.
+    * The existing Phase 1 mapping in `businessTypeLabels.js` already maps this name to the client-facing Ambulant Food Vendor category, so the type becomes selectable in Register/Edit. No UI workaround was added.
+    * Corrected the stale comment in `businessTypeLabels.js` that claimed the category was already represented by imported production data.
+    * No sanitary requirements, legal basis, or SP/Large-specific requirements were invented or added.
+  - **Verification (local)**:
+    * New backend Ambulant tests: 7/7 passed. Full backend suite: 100/100 passed, run on isolated in-memory SQLite (not production Postgres).
+    * Focused frontend tests (Establishment Records): 106/106 passed. Full frontend suite: 131/131 passed.
+    * `makemigrations --check` passed (no model changes pending); `0034` is the only new migration.
+    * `git diff --check` passed.
+    * Frontend production build succeeded twice without errors: a default build and a build with the production API URL. The production-URL build's JS, CSS, `index.html`, and `asset-manifest.json` were byte-identical to the currently deployed production frontend, confirming the comment-only change does not alter shipped code.
+    * No unrelated source, configuration, infrastructure, or mobile changes were found. Test-generated media files under `backend/media/` (gitignored) were local only.
+  - **Production Deployment State**:
+    * Migration `0034` has **not** been applied to production. No production database modification was performed during this implementation or its verification.
+    * The next deployment containing migration `0034` will intentionally create the Ambulant Food Vendor `SanitaryBusinessType` row in production (via `migrate` in `backend/build.sh`). This is an intentional production data change.
+  - **Requirements Status**:
+    * Ambulant Food Vendor has zero sanitary requirements by design, because the Sanitation Section has not yet provided the official requirements or legal basis. The requirement list is **not** complete.
 
 
 ## Database Cleaned for Deployment (Sept 2026)
@@ -345,6 +377,10 @@ This project is being developed with a Claude-based planner/reviewer working alo
 ## Pending Tasks & Next Testing Steps
 - **Authenticated Production Verification of Establishment Records Phase 1 (`703533a`)**:
   - Deployed-build verification is complete, but authenticated production UI behavior (registration as No Permit, non-destructive edit, explicit permit issuance, Business Type filters, location wording) has not yet been manually verified with a staff account. Any such check that creates or edits records must be planned so it does not leave test data in production.
+- **Deploy and Verify Ambulant Food Vendor (migration `0034`)**:
+  - After `0034` is pushed and deployed, confirm read-only that production has exactly one Ambulant Food Vendor `SanitaryBusinessType` (monthly, zero requirements) and that it is selectable in the Register New Establishment dropdown.
+- **Ambulant Food Vendor Requirements & Legal Basis**:
+  - Obtain the official standard requirements, any additional requirements, and the legal basis from the Sanitation Section before adding requirements to this type. Do not infer them from other types or from SP/Large coverage.
 - **Production Credentials & Demo Shortcut Cleanup**:
   - Remove plain-text demo credential disclosures and one-click quick access chips from `mobile/lib/screens/sanitation_screens.dart` (lines 5160-5185 and 5244) and `frontend/src/sanitation/pages/EstablishmentRecords.js` (line 894).
   - Update default staff passwords via Django `/admin/` or environment overrides prior to real-world LGU usage.
