@@ -797,8 +797,8 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - The authenticated production workflow is therefore **not** considered fully verified.
   - *Later update*: a limited read-only authenticated inspection of the Business Type categories and Register dropdown was performed (see the Ambulant Food Vendor subsection below). The full authenticated workflow remains unverified.
 
-### Ambulant Food Vendor Business Type (migration `0034`, not yet deployed)
-- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c` (committed locally; not yet pushed or deployed).
+### Ambulant Food Vendor Business Type (migration `0034`, deployed)
+- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c`, documentation commit `e7015992a2f5a50d32c1ea6efb70c133441d6896`. Both pushed; `origin/main` is at `e701599` and the Render deployment is live.
 - **Authenticated Production UI Observation (read-only)**:
   - Sanitation → Establishment Records was inspected read-only with an authorized account.
   - The 9 approved client-facing Business Type categories were visible, including Ambulant Food Vendor.
@@ -821,13 +821,25 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - Frontend production build succeeded twice without errors (default build and production-API-URL build). The production-URL build's JS, CSS, `index.html`, and `asset-manifest.json` were byte-identical to the currently deployed production frontend.
   - No unrelated source, configuration, infrastructure, or mobile changes were found. Test-generated media files under `backend/media/` (gitignored) were local only.
 - **Production Deployment State**:
-  - Migration `0034` has **not** been applied to production, and no production database modification was performed during this implementation or its verification.
-  - The next deployment containing `0034` will intentionally create the Ambulant Food Vendor `SanitaryBusinessType` row in production (via `migrate` in `backend/build.sh`). This is an intentional production data change.
+  - Migration `0034` **is applied in production**, based on the production `Ambulant Food Vendor` row created by the Render deployment (via `migrate` in `backend/build.sh`). This was the intended, intentional production data change.
+  - No production database modification was performed during the implementation itself or during verification; the row was created by the deployment's `migrate` step.
+- **Production Verification (read-only, after deployment)**:
+  - Verified through the public unauthenticated sanitation bootstrap endpoint and the deployed frontend bundle. No write requests were made, and no production records were created or edited.
+  - Production has exactly one case-insensitive `Ambulant Food Vendor` type: production ID `24`, frequency `monthly`, requirement count `0`.
+  - Production now has 16 business types, up from the previously recorded 15. All 15 previously known business type names remain present and unchanged.
+  - Total configured requirements remain `243`; no requirements were deleted during this work.
+  - No production establishment currently uses the Ambulant type.
+  - The deployed frontend's 51 application source files are byte-identical to commit `e701599`.
+- **Verification Limitations**:
+  - Production verification could not directly confirm the authenticated production UI: no staff session was used, so the logged-in Register/Inspection/Renewal screens were not visually verified.
+  - Production verification could not directly read `django_migrations`; applied status is based on the production `Ambulant Food Vendor` row, which only migration `0034` creates.
+  - Production verification could not perform a complete before/after comparison of establishment records, so this section does not claim that establishment records definitely did not change.
+  - Production verification could not directly confirm the backend commit SHA; the backend exposes no version or commit information.
 - **Requirements Status**:
   - Ambulant Food Vendor has zero sanitary requirements by design, because the Sanitation Section has not yet provided the official requirements or legal basis. The requirement list is **not** complete.
 
 ### Web Zero-Requirement Safety Fix (Inspection Management & Permit Renewal, web only)
-- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c` (committed locally; not yet pushed or deployed).
+- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c`, documentation commit `e7015992a2f5a50d32c1ea6efb70c133441d6896`. Both pushed; `origin/main` is at `e701599` and the Render deployment is live.
 - **Root Cause**:
   - The existing web Inspection Management and Permit Renewal workflows substituted hard-coded generic requirements when a business type had no configured requirements.
   - Inspection Management's fallback contained 10 generic items and could save them as inspection checklist items.
@@ -847,7 +859,11 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
 - **Mobile Limitation (not fixed)**:
   - The mobile Flutter app still contains a generic fallback checklist for zero-requirement business types, and those items can be submitted and saved as inspection checklist items.
   - Mobile is **not** yet safe for zero-requirement types. Fixing it is a separate pending Flutter change that will require a source change and a new APK/build verification if approved.
-- **Existing Production Impact (inference, not verified)**:
-  - Which existing production business types currently have zero configured requirements has **not** been verified.
-  - *Inference only*: the 13 seeded types produce exactly 243 requirement rows, matching the `SanitaryRequirement: 243` recorded at the clean-slate cleanup, which suggests the two non-seeded production types (likely "Food Establishment" and "Commercial Non Food") have zero requirements and were already receiving the generic fallback. This has not been checked against production.
-- **Ambulant Status**: Migration `0034` remains **not** deployed. Ambulant Food Vendor still intentionally has zero configured requirements; no requirements or legal basis were invented.
+- **Existing Production Impact (inference at the time; since confirmed in production)**:
+  - *Stated before production verification*: which existing production business types had zero configured requirements was not verified at that point. The inference was that the 13 seeded types produce exactly 243 requirement rows, matching the `SanitaryRequirement: 243` recorded at the clean-slate cleanup, which suggested the two non-seeded production types (likely "Food Establishment" and "Commercial Non Food") had zero requirements and were already receiving the generic fallback.
+  - *Confirmed afterwards by the read-only production verification*: the three zero-requirement production types are `Ambulant Food Vendor`, `Commercial Non Food`, and `Food Establishment`, and the deployed web code no longer contains the old generic fallbacks. This confirmation rests on the public bootstrap data and the deployed frontend bundle; the authenticated UI was not visually checked.
+- **Production Verification (read-only, after deployment)**:
+  - The deployed frontend's 51 application source files are byte-identical to commit `e701599`. The old 10-item Inspection fallback and 7-item Renewal fallback are absent from the deployed frontend, and the new honest zero-requirement state is present.
+  - Production currently has three zero-requirement business types (`Ambulant Food Vendor`, `Commercial Non Food`, `Food Establishment`), which confirms the earlier inference about the two non-seeded types.
+  - Production verification could not directly confirm the authenticated production UI: the logged-in Inspection and Renewal screens were not visually verified.
+- **Ambulant Status**: Migration `0034` is applied in production. Ambulant Food Vendor still intentionally has zero configured requirements; no requirements or legal basis were invented.
