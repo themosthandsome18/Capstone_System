@@ -286,16 +286,25 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * Frontend production build passed.
     * `git diff --check` passed.
   - **Git/Deployment**:
-    * Pushed `703533a` to `origin/main` as a fast-forward from `2e14a30`; `origin/main` now points to `703533a`.
-    * No manual deployment was performed. No production database modification was performed.
-  - **Production Deployed-Build Verification**:
+    * Pushed `703533a` to `origin/main` as a fast-forward from `2e14a30`.
+    * `origin/main` pointed to `703533a` when the Phase 1 verification was performed. It has since advanced to `49bf302` through separate Tourism commits. Those commits do not modify the Phase 1 Sanitation source files.
+    * No manual deployment was performed. No production database modification was performed as part of the Phase 1 release or its verification.
+    * The later Tourism release includes migration `0033`; whether that migration has been applied in production was not verified from public read-only checks. This entry makes no claim that production data is unchanged overall.
+  - **Initial Production Deployed-Build Verification (build from `703533a`)**:
     * Production frontend `https://capstone-frontend-ohuj.onrender.com/` returned HTTP 200 and loads the production backend API `https://capstone-backend-stzr.onrender.com/api`.
     * Backend `/api/health/` returned HTTP 200 with status ok.
-    * Inspected the deployed frontend bundle: deployed `EstablishmentRecords.js` and `businessTypeLabels.js` matched the Phase 1 versions from `703533a` and differed from `2e14a30`; deployed CSS matched the Phase 1 local build byte-for-byte.
+    * Inspected the deployed frontend bundle: deployed `EstablishmentRecords.js` and `businessTypeLabels.js` matched the Phase 1 versions from `703533a` and differed from `2e14a30`; the CSS deployed at that time matched the Phase 1 local build byte-for-byte.
     * Phase 1 markers and all 9 approved Business Type categories were found in the deployed bundle; no `GPS` wording was present in the deployed Establishment Records build.
-    * This is strong evidence that the Phase 1 frontend implementation from `703533a` is live.
+  - **Current Production Deployed-Build Re-Verification (after `origin/main` advanced to `49bf302`)**:
+    * Verified through the production frontend's publicly accessible source maps (`main.*.js.map`, `main.*.css.map`), comparing their embedded sources against the repository source using only read-only requests.
+    * The current production frontend is built from `49bf302`: every application JS and CSS source file in the source maps is byte-identical to `49bf302`. No commit SHA is exposed publicly; this conclusion comes from the source comparison.
+    * Production frontend returns HTTP 200 and points to the production backend API `https://capstone-backend-stzr.onrender.com/api`. Backend `/api/health/` returns HTTP 200 with `status: ok`.
+    * The deployed `EstablishmentRecords.js` and `businessTypeLabels.js` remain byte-identical to the Phase 1 versions from `703533a`.
+    * The Phase 1 Sanitation strings (`Permit Coverage (internal SP / Large)`, `Location Coordinates`, `Map Reference`, `Issue & Generate Permit Now`, `No Permit`) and all 9 client-facing Business Type categories remain present. `GPS` wording remains absent from the deployed Establishment Records implementation.
+    * The current production CSS is **not** byte-identical to the earlier Phase 1 build. The difference is attributable to the later Tourism changes in `Tourism_index.css` and `BookingManagement.wizard.css`; `Sanitation_index.css` and all other CSS sources remain unchanged.
+    * Phase 1 remains strongly evidenced in the current deployed frontend.
   - **Limitation — Authenticated Production UI NOT Verified**:
-    * The verification above covers the deployed build only. Authenticated production Establishment Records UI behavior was **not** manually verified.
+    * The verifications above cover the deployed build only. Authenticated production Establishment Records UI behavior was **not** manually verified.
     * No staff credentials were used. No production establishment was created, edited, issued a permit, or otherwise modified during verification.
     * The authenticated production workflow must therefore not be treated as fully verified.
 
