@@ -370,6 +370,7 @@ Roles are defined in `UserProfile.role`:
 ### 2. Sanitation & Environmental Health (Web Portal)
 - **Sanitary Dashboard (`SanitationDashboard.js`)**: Health compliance KPIs (total establishments, good standing %, pending inspections, active violations, expiring permits), urgent alerts banner, and recent inspection timeline.
 - **Establishment Directory (`EstablishmentRecords.js`)**: Searchable masterlist across 40 barangays. Displays permit numbers, compliance statuses, inspection frequencies, and contact numbers. Supports adding/editing establishments and viewing complete compliance history.
+  - *Post-audit update*: The registration/edit workflow was redesigned in Phase 1 (`703533a`). See [Section 11](#11-post-audit-updates).
 - **Inspection Management (`InspectionManagement.js`)**: Digital inspection record logger. Evaluates requirement checklists (water potability, health cards, waste management, grease traps), computes next inspection due dates, records findings, and updates establishment status.
 - **Complaints Management (`ComplaintsManagement.js`)**: Triages citizen community reports. Tracks statuses (`pending` $\rightarrow$ `investigating` $\rightarrow$ `resolved` / `rejected`), assigns inspectors, schedules field investigation dates/times, and stores investigation notes.
 - **Permit Monitoring & Renewal Pipeline (`PermitRenewal.js`, `PermitMonitoring.js`)**: 8-stage progress pipeline (`notice_sent` $\rightarrow$ `application_filed` $\rightarrow$ `requirements_review` $\rightarrow$ `inspection_scheduled` $\rightarrow$ `payment_pending` $\rightarrow$ `approved` $\rightarrow$ `released` $\rightarrow$ `lapsed`). Tracks fees, Official Receipt (OR) numbers, payment methods, and automated permit validity extension upon release.
@@ -736,3 +737,52 @@ flutter run -d emulator --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
     - The React frontend has no unit or integration tests (`0` test files in `frontend/src/`). Any regression in API response parsing or routing can only be detected via manual browser testing.
 11. **Hardcoded Absolute File Paths in Management Commands**:
     - `import_sanitary_permits.py` contains hardcoded user directory paths (`C:\Users\This PC\Downloads\...`), rendering it unusable in automated CI/CD or production containers without providing explicit CLI arguments.
+
+---
+
+## 11. Post-Audit Updates
+
+Sections 1–10 above describe the codebase as audited on September 18, 2026 and are preserved as a historical record. This section records later changes (documented September 22, 2026).
+
+### Sanitary Establishment Records Phase 1 (`703533a`)
+- **Commit**: `703533a` — `feat(sanitation): redesign establishment records workflow`.
+- **Implemented Behavior**:
+  - Redesigned the Sanitary Establishment Records registration/edit workflow.
+  - New registrations start as **No Permit** rather than inventing permit data. Registration focuses on establishment profile, business type, address/barangay, contact, and location.
+  - Existing establishment values are loaded non-destructively during edit.
+  - Permit issuance/generation remains an explicit action.
+  - SP/Large is presented as internal **Permit Coverage**, not physical establishment size.
+  - Client-facing Business Type categories are exactly the 9 confirmed categories:
+    1. Commercial / NF
+    2. Food Establishment
+    3. Industrial Establishment
+    4. Agro-Industrial Establishment
+    5. Institutional Establishment
+    6. Water Refilling Station
+    7. Public Transport
+    8. Ambulant Food Vendor
+    9. Public Places
+  - Existing underlying business type IDs/names remain preserved. Known legacy/importer business types are mapped to the approved client-facing categories. Unknown underlying types do not create additional Business Type filter categories.
+  - Location wording no longer implies GPS verification; valid map references are distinguished from invalid/out-of-bounds coordinates.
+  - Timeline precedence remains `updated_at || created_at || permit_issued_date`.
+  - Phase 1 included regression/characterization tests and frontend/backend test coverage.
+- **Test/Build Verification (post-commit, all passed)**:
+  - Establishment Records focused frontend tests: 101/101 passed.
+  - Full frontend tests: 126/126 passed. (The "zero frontend test files" findings in Section 8 *Testing Gaps* and Section 10 item 10 reflect the original audit date and are left unchanged as historical record.)
+  - Backend tests: 69/69 passed using isolated in-memory SQLite. SQLite was used intentionally so the run did not create or alter a test database on the production Postgres/Supabase environment; backend tests were not run against production Postgres.
+  - Frontend production build passed.
+  - `git diff --check` passed.
+- **Git/Deployment**:
+  - `703533a` was pushed to `origin/main` as a fast-forward from `2e14a30`; `origin/main` points to `703533a`.
+  - No manual deployment was performed. No production database modification was performed.
+- **Production Deployed-Build Verification**:
+  - Production frontend `https://capstone-frontend-ohuj.onrender.com/` returned HTTP 200 and loads the production backend API `https://capstone-backend-stzr.onrender.com/api`.
+  - Backend `/api/health/` returned HTTP 200 with status ok.
+  - The deployed frontend bundle was inspected: deployed `EstablishmentRecords.js` and `businessTypeLabels.js` matched the Phase 1 versions from `703533a` and differed from `2e14a30`; deployed CSS matched the Phase 1 local build byte-for-byte.
+  - Phase 1 markers and all 9 approved Business Type categories were found in the deployed bundle. No `GPS` wording was present in the deployed Establishment Records build.
+  - This provides strong evidence that the Phase 1 frontend implementation from `703533a` is live.
+- **Limitation — Authenticated UI Behavior Not Verified**:
+  - The verification above establishes what build is deployed; it does not establish authenticated UI behavior in production.
+  - Authenticated production Establishment Records UI behavior was **not** manually verified. No staff credentials were used.
+  - No production establishment was created, edited, issued a permit, or otherwise modified during verification.
+  - The authenticated production workflow is therefore **not** considered fully verified.

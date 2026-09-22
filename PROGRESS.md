@@ -267,6 +267,38 @@ This project is being developed with a Claude-based planner/reviewer working alo
     * Ephemeral test user was cleaned up immediately after verification (3 records deleted; zero production business data modified).
     * Existing production user accounts holding the old `tourism` role were intentionally NOT bulk-converted.
 
+- **Sanitary Establishment Records Phase 1: Registration/Edit Workflow Redesign** (`703533a` — `feat(sanitation): redesign establishment records workflow`)
+  - **Scope of Phase 1**:
+    * Redesigned the Sanitary Establishment Records registration/edit workflow.
+    * New registrations start as **No Permit** instead of inventing permit data; registration focuses on establishment profile, business type, address/barangay, contact, and location.
+    * Edit mode loads existing establishment values non-destructively.
+    * Permit issuance/generation remains an explicit, separate action.
+    * SP/Large is presented as internal **Permit Coverage**, not as physical establishment size.
+    * Client-facing Business Type categories are exactly the 9 confirmed categories: (1) Commercial / NF, (2) Food Establishment, (3) Industrial Establishment, (4) Agro-Industrial Establishment, (5) Institutional Establishment, (6) Water Refilling Station, (7) Public Transport, (8) Ambulant Food Vendor, (9) Public Places.
+    * Existing underlying business type IDs/names are preserved; known legacy/importer business types are mapped to the approved client-facing categories; unknown underlying types do not create additional Business Type filter categories.
+    * Location wording no longer implies GPS verification; valid map references are distinguished from invalid/out-of-bounds coordinates.
+    * Timeline precedence remains `updated_at || created_at || permit_issued_date`.
+    * Included regression/characterization tests and frontend/backend test coverage.
+  - **Post-Commit Test/Build Verification (all passed)**:
+    * Establishment Records focused frontend tests: 101/101 passed.
+    * Full frontend tests: 126/126 passed.
+    * Backend tests: 69/69 passed using an isolated in-memory SQLite database. SQLite was used intentionally so the test run did not create or alter a test database on the production Postgres/Supabase environment. Backend tests were **not** run against production Postgres.
+    * Frontend production build passed.
+    * `git diff --check` passed.
+  - **Git/Deployment**:
+    * Pushed `703533a` to `origin/main` as a fast-forward from `2e14a30`; `origin/main` now points to `703533a`.
+    * No manual deployment was performed. No production database modification was performed.
+  - **Production Deployed-Build Verification**:
+    * Production frontend `https://capstone-frontend-ohuj.onrender.com/` returned HTTP 200 and loads the production backend API `https://capstone-backend-stzr.onrender.com/api`.
+    * Backend `/api/health/` returned HTTP 200 with status ok.
+    * Inspected the deployed frontend bundle: deployed `EstablishmentRecords.js` and `businessTypeLabels.js` matched the Phase 1 versions from `703533a` and differed from `2e14a30`; deployed CSS matched the Phase 1 local build byte-for-byte.
+    * Phase 1 markers and all 9 approved Business Type categories were found in the deployed bundle; no `GPS` wording was present in the deployed Establishment Records build.
+    * This is strong evidence that the Phase 1 frontend implementation from `703533a` is live.
+  - **Limitation — Authenticated Production UI NOT Verified**:
+    * The verification above covers the deployed build only. Authenticated production Establishment Records UI behavior was **not** manually verified.
+    * No staff credentials were used. No production establishment was created, edited, issued a permit, or otherwise modified during verification.
+    * The authenticated production workflow must therefore not be treated as fully verified.
+
 
 ## Database Cleaned for Deployment (Sept 2026)
 - **All sample/demo transactional data deleted (Clean Slate)**:
@@ -302,6 +334,8 @@ This project is being developed with a Claude-based planner/reviewer working alo
 ~~All 5 errors + 5 failures previously documented here are now fully resolved via self-contained test fixtures in `backend/api/tests.py` (`386497b`). All 33 tests pass cleanly.~~
 
 ## Pending Tasks & Next Testing Steps
+- **Authenticated Production Verification of Establishment Records Phase 1 (`703533a`)**:
+  - Deployed-build verification is complete, but authenticated production UI behavior (registration as No Permit, non-destructive edit, explicit permit issuance, Business Type filters, location wording) has not yet been manually verified with a staff account. Any such check that creates or edits records must be planned so it does not leave test data in production.
 - **Production Credentials & Demo Shortcut Cleanup**:
   - Remove plain-text demo credential disclosures and one-click quick access chips from `mobile/lib/screens/sanitation_screens.dart` (lines 5160-5185 and 5244) and `frontend/src/sanitation/pages/EstablishmentRecords.js` (line 894).
   - Update default staff passwords via Django `/admin/` or environment overrides prior to real-world LGU usage.
