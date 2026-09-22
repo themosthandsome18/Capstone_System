@@ -20,7 +20,8 @@
 /**
  * The client's confirmed business type categories, in the client's order.
  * Institutional Establishment includes schools and other institutions.
- * Ambulant Food Vendor is currently represented by imported production data.
+ * Ambulant Food Vendor is backed by the real "Ambulant Food Vendor" type added
+ * by migration 0034 (monthly inspections, requirements not yet provided).
  */
 export const CLIENT_BUSINESS_TYPE_CATEGORIES = [
   "Commercial / NF",

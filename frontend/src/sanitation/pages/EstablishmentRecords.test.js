@@ -476,7 +476,8 @@ describe("Register New Establishment", () => {
       "Karaoke / Video Bar / CSW",
     ]);
 
-    // No real type exists for Ambulant Food Vendor yet, so nothing can be chosen.
+    // This fixture has no real Ambulant Food Vendor type, so the empty category
+    // shows a disabled placeholder. See "Ambulant Food Vendor business type" below.
     const ambulant = groups.find((g) => g.label === "Ambulant Food Vendor");
     const ambulantOptions = [...ambulant.querySelectorAll("option")];
     expect(ambulantOptions).toHaveLength(1);
@@ -512,6 +513,88 @@ describe("Register New Establishment", () => {
       permit_status: "no_permit",
     });
     expect(mockCtx.updateEstablishment).not.toHaveBeenCalled();
+  });
+});
+
+/* ================================================================== */
+/* Ambulant Food Vendor business type (migration 0034)                  */
+/* ================================================================== */
+
+describe("Ambulant Food Vendor business type", () => {
+  const AMBULANT = {
+    id: 24,
+    name: "Ambulant Food Vendor",
+    inspection_frequency: "monthly",
+    requirements: [],
+  };
+
+  beforeEach(() => {
+    mockCtx.businessTypes = [...REAL_BUSINESS_TYPES, AMBULANT];
+  });
+
+  function ambulantGroup(form) {
+    return [...field(form, "Business Type").querySelectorAll("optgroup")].find(
+      (group) => group.label === "Ambulant Food Vendor"
+    );
+  }
+
+  test("the real type maps to the Ambulant Food Vendor category", () => {
+    expect(businessTypeDisplayLabel("Ambulant Food Vendor")).toBe("Ambulant Food Vendor");
+  });
+
+  test("is selectable in Register instead of the empty placeholder", () => {
+    const form = openCreateForm();
+    const options = [...ambulantGroup(form).querySelectorAll("option")];
+
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toBe("Ambulant Food Vendor");
+    expect(options[0].value).toBe("24");
+    expect(options[0].disabled).toBe(false);
+    expect(within(form).queryByText("No business type configured yet")).toBeNull();
+  });
+
+  test("the 9 categories are unchanged and no extra option is added", () => {
+    const form = openCreateForm();
+    const select = field(form, "Business Type");
+    expect([...select.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(
+      CLIENT_BUSINESS_TYPE_CATEGORIES
+    );
+    // Every real type sits inside a category group; none is listed loose.
+    expect(
+      [...select.children].filter((child) => child.tagName === "OPTION").map((o) => o.value)
+    ).toEqual([""]);
+  });
+
+  test("registering with it submits the real type id and no permit data", async () => {
+    const form = openCreateForm();
+    setField(form, "Business Name", "Mang Tomas Fishball Cart");
+    setField(form, "Owner / Proprietor", "Tomas Reyes");
+    setField(form, "Business Type", "24");
+    setField(form, "Barangay", "Daungan");
+    setField(form, "Complete Address", "Pier Rd");
+    setField(form, "Contact Number", "09170002222");
+    fireEvent.click(within(form).getByText("Mock Apply Pin"));
+    submit(form);
+
+    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
+    expect(mockCtx.createEstablishment.mock.calls[0][0]).toMatchObject({
+      business_type: 24,
+      has_permit: false,
+      permit_number: "",
+      permit_issued_date: null,
+      permit_expiry_date: null,
+      compliance_status: "no_permit",
+      permit_status: "no_permit",
+    });
+  });
+
+  test("is selectable in Edit and changing to it sends only the type id", async () => {
+    const form = openEditForm(501);
+    expect(ambulantGroup(form).querySelector("option").disabled).toBe(false);
+
+    setField(form, "Business Type", "24");
+    const [, payload] = await submittedEdit(form);
+    expect(payload).toEqual({ business_type: 24 });
   });
 });
 

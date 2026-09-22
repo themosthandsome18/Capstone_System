@@ -2825,3 +2825,118 @@ class MobileFeedbackPhotoUploadTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertIn("Image upload failed", response.json()["detail"])
         self.assertFalse(FeedbackEntry.objects.filter(reviewer="Mobile Tester").exists())
+
+
+class AmbulantFoodVendorBusinessTypeTests(TestCase):
+    """Migration 0034: the client-confirmed Ambulant Food Vendor type, with no requirements yet."""
+
+    NAME = "Ambulant Food Vendor"
+
+    def setUp(self):
+        import importlib
+
+        self.migration = importlib.import_module(
+            "api.migrations.0034_add_ambulant_food_vendor_business_type"
+        )
+
+    def _run_migration(self):
+        from django.apps import apps
+
+        self.migration.add_ambulant_food_vendor(apps, None)
+
+    def _ambulant(self):
+        return SanitaryBusinessType.objects.get(name=self.NAME)
+
+    def test_type_exists_with_monthly_inspections(self):
+        ambulant = self._ambulant()
+        self.assertEqual(ambulant.inspection_frequency, "monthly")
+        self.assertEqual(ambulant.description, "")
+
+    def test_type_has_no_requirements_for_sp_or_large(self):
+        ambulant = self._ambulant()
+        self.assertEqual(ambulant.requirements.count(), 0)
+        for permit_size in ("sp", "large"):
+            self.assertFalse(ambulant.requirements.filter(permit_size=permit_size).exists())
+
+    def test_running_again_does_not_duplicate_or_change_the_row(self):
+        before = self._ambulant()
+        self._run_migration()
+        self.assertEqual(SanitaryBusinessType.objects.filter(name__iexact=self.NAME).count(), 1)
+        self.assertEqual(self._ambulant().pk, before.pk)
+
+    def test_existing_row_in_other_casing_is_left_untouched(self):
+        SanitaryBusinessType.objects.filter(name=self.NAME).delete()
+        existing = SanitaryBusinessType.objects.create(
+            name="ambulant food vendor", inspection_frequency="quarterly"
+        )
+
+        self._run_migration()
+
+        self.assertEqual(SanitaryBusinessType.objects.filter(name__iexact=self.NAME).count(), 1)
+        existing.refresh_from_db()
+        self.assertEqual(existing.name, "ambulant food vendor")
+        self.assertEqual(existing.inspection_frequency, "quarterly")
+
+    def test_seed_requirement_sync_adds_no_requirements_for_sp_or_large(self):
+        from .seed_data import SANITARY_REQUIREMENTS
+        from .seeders import sync_sanitary_business_types_and_requirements
+
+        self.assertFalse(
+            any(group["business_type"] == self.NAME for group in SANITARY_REQUIREMENTS)
+        )
+
+        sync_sanitary_business_types_and_requirements()
+
+        ambulant = self._ambulant()
+        self.assertEqual(ambulant.inspection_frequency, "monthly")
+        self.assertEqual(ambulant.requirements.count(), 0)
+
+    def test_bootstrap_offers_the_type_with_no_requirements(self):
+        client = APIClient()
+        user = User.objects.create_user(username="ambulant_staff", password="Password@123")
+        UserProfile.objects.create(user=user, role=ROLE_SANITATION)
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+        response = client.get("/api/sanitation/bootstrap/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ambulant = [t for t in response.json()["businessTypes"] if t["name"] == self.NAME]
+        self.assertEqual(len(ambulant), 1)
+        self.assertEqual(ambulant[0]["inspection_frequency"], "monthly")
+        self.assertEqual(ambulant[0]["requirements"], [])
+
+    def test_establishment_registered_as_sp_or_large_gets_no_requirements(self):
+        client = APIClient()
+        user = User.objects.create_user(username="ambulant_register", password="Password@123")
+        UserProfile.objects.create(user=user, role=ROLE_SANITATION)
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        ambulant = self._ambulant()
+
+        for permit_size in ("sp", "large"):
+            response = client.post(
+                "/api/sanitation/establishments/",
+                {
+                    "business_name": f"Ambulant Vendor {permit_size}",
+                    "owner_name": "Ana Reyes",
+                    "business_type": ambulant.id,
+                    "permit_size": permit_size,
+                    "barangay": "Daungan",
+                    "address": "1 Test St",
+                    "contact_number": "09170000000",
+                    "latitude": 14.188,
+                    "longitude": 121.732,
+                    "has_permit": False,
+                    "permit_number": "",
+                    "permit_issued_date": None,
+                    "permit_expiry_date": None,
+                    "compliance_status": "no_permit",
+                    "permit_status": "no_permit",
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+            created = SanitaryEstablishment.objects.get(pk=response.data["id"])
+            self.assertEqual(created.business_type_id, ambulant.id)
+            self.assertEqual(created.permit_size, permit_size)
+
+        self.assertEqual(ambulant.requirements.count(), 0)

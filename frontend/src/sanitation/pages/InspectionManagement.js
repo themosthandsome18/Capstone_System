@@ -586,31 +586,13 @@ function InspectionFormModal({
     (type) => String(type.id) === String(establishment.business_type)
   );
 
+  // Only the requirements configured for this business type and permit
+  // coverage. A type with none configured (e.g. Ambulant Food Vendor, whose
+  // official requirements are not yet provided) gets an empty checklist, never
+  // a substituted generic list.
   const defaultRequirements = (selectedType?.requirements || []).filter(
     (requirement) => requirement.permit_size === establishment.permit_size
   );
-
-  if (defaultRequirements.length === 0) {
-    const STANDARD_REQUIREMENT_NAMES = [
-      "1x1 picture of owner and employees",
-      "Barangay Clearance of owner",
-      "CTC/Cedula of owner and employees",
-      "Certificate of 40-hour Training Course (Owner)",
-      "Certificate of Potability of Product Water",
-      "Chest X-ray Results (Owner & employees)",
-      "DOH Operational Permit Certificate",
-      "Potability of Water Supply - Microbiological Examination",
-      "Potability of Water Supply - Physical/Chemical Examination",
-      "Xerox copy of DTI/SEC/CDA",
-    ];
-    defaultRequirements.push(
-      ...STANDARD_REQUIREMENT_NAMES.map((name) => ({
-        requirement_name: name,
-        permit_size: establishment.permit_size || "sp",
-        is_required: true,
-      }))
-    );
-  }
 
   const isDraftOrRecent = establishment.latestInspection?.is_draft || 
     establishment.latestInspection?.inspection_date === getTodayDate();
@@ -864,7 +846,7 @@ function InspectionFormModal({
             ))
           ) : (
             <p className="inspection-empty">
-              No requirements found for this establishment type.
+              No requirements configured yet.
             </p>
           )}
         </div>
