@@ -798,6 +798,7 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - *Later update*: a limited read-only authenticated inspection of the Business Type categories and Register dropdown was performed (see the Ambulant Food Vendor subsection below). The full authenticated workflow remains unverified.
 
 ### Ambulant Food Vendor Business Type (migration `0034`, not yet deployed)
+- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c` (committed locally; not yet pushed or deployed).
 - **Authenticated Production UI Observation (read-only)**:
   - Sanitation → Establishment Records was inspected read-only with an authorized account.
   - The 9 approved client-facing Business Type categories were visible, including Ambulant Food Vendor.
@@ -824,3 +825,29 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - The next deployment containing `0034` will intentionally create the Ambulant Food Vendor `SanitaryBusinessType` row in production (via `migrate` in `backend/build.sh`). This is an intentional production data change.
 - **Requirements Status**:
   - Ambulant Food Vendor has zero sanitary requirements by design, because the Sanitation Section has not yet provided the official requirements or legal basis. The requirement list is **not** complete.
+
+### Web Zero-Requirement Safety Fix (Inspection Management & Permit Renewal, web only)
+- Implementation commit: `57f1f086547b4bac84aca5e51e5964ae4437322c` (committed locally; not yet pushed or deployed).
+- **Root Cause**:
+  - The existing web Inspection Management and Permit Renewal workflows substituted hard-coded generic requirements when a business type had no configured requirements.
+  - Inspection Management's fallback contained 10 generic items and could save them as inspection checklist items.
+  - Permit Renewal's fallback (`getEstablishmentRequirements`) contained 7 generic items and could save selected items as `submitted_requirements`.
+  - This affected any zero-requirement business type, not Ambulant specifically. Ambulant would have exposed it, because migration `0034` intentionally creates that type with zero requirements.
+- **Web Fix** (`frontend/src/sanitation/pages/InspectionManagement.js`, `frontend/src/sanitation/pages/PermitRenewal.js`):
+  - Inspection Management no longer substitutes the 10 generic requirements; Permit Renewal no longer substitutes the 7 generic requirements.
+  - Zero-requirement types now show an honest "No requirements configured yet." state.
+  - Inspections submit an empty checklist and renewals submit an empty `submitted_requirements` list instead of fabricated requirements.
+  - Existing configured requirements continue to behave as before. Permit Renewal's cross-size behavior (using a type's own configured requirements from the other SP/Large coverage when none match) was intentionally preserved.
+- **Verification (local)**:
+  - New tests: `InspectionManagement.test.js` (5) and `PermitRenewal.test.js` (9); 14/14 passed. Against the pre-fix implementation, 8/14 intentionally failed, demonstrating that the tests catch the old fallback behavior.
+  - Full frontend suite: 145/145 passed across 5 suites. Production-URL frontend build compiled successfully. `git diff --check` passed.
+  - Backend tests were not rerun because no backend code changed; the previous 100/100 result remains valid for the unchanged backend.
+  - No production database or API was modified.
+- **Scope**: Web-only safety fix. Backend, migration `0034`, seed data, mobile code, requirements architecture, and production data were not changed.
+- **Mobile Limitation (not fixed)**:
+  - The mobile Flutter app still contains a generic fallback checklist for zero-requirement business types, and those items can be submitted and saved as inspection checklist items.
+  - Mobile is **not** yet safe for zero-requirement types. Fixing it is a separate pending Flutter change that will require a source change and a new APK/build verification if approved.
+- **Existing Production Impact (inference, not verified)**:
+  - Which existing production business types currently have zero configured requirements has **not** been verified.
+  - *Inference only*: the 13 seeded types produce exactly 243 requirement rows, matching the `SanitaryRequirement: 243` recorded at the clean-slate cleanup, which suggests the two non-seeded production types (likely "Food Establishment" and "Commercial Non Food") have zero requirements and were already receiving the generic fallback. This has not been checked against production.
+- **Ambulant Status**: Migration `0034` remains **not** deployed. Ambulant Food Vendor still intentionally has zero configured requirements; no requirements or legal basis were invented.
