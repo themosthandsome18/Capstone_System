@@ -404,3 +404,83 @@ describe("inspector attribution", () => {
     expect(within(modal).queryByText(/Verified Inspector/)).toBeNull();
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Checklist starting state                                             */
+/* ------------------------------------------------------------------ */
+
+function checkboxes(modal) {
+  return [...modal.querySelectorAll(".inspection-checklist-box input[type=checkbox]")];
+}
+
+describe("checklist starting state", () => {
+  function withEstablishment(overrides) {
+    const previous = mockCtx.establishments;
+    mockCtx.establishments = [
+      establishment(702, "Aqua Station", WATER_STATION, overrides),
+    ];
+    return () => {
+      mockCtx.establishments = previous;
+    };
+  }
+
+  test("a for_completion establishment starts with nothing ticked", () => {
+    const restore = withEstablishment({ compliance_status: "for_completion" });
+
+    try {
+      const modal = openInspection("Aqua Station");
+      const boxes = checkboxes(modal);
+
+      expect(boxes).toHaveLength(2);
+      expect(boxes.every((box) => box.checked)).toBe(false);
+      expect(boxes.some((box) => box.checked)).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test("a good_standing establishment also starts with nothing ticked", () => {
+    const restore = withEstablishment({ compliance_status: "good_standing" });
+
+    try {
+      const modal = openInspection("Aqua Station");
+      expect(checkboxes(modal).some((box) => box.checked)).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test("a saved draft still restores its own ticks", () => {
+    const restoreEstablishment = withEstablishment({
+      compliance_status: "for_completion",
+    });
+    const previousInspections = mockCtx.inspections;
+    mockCtx.inspections = [
+      {
+        establishment: 702,
+        id: 558,
+        is_draft: true,
+        inspection_date: "2026-01-05",
+        status_after_inspection: "for_completion",
+        checklist_items: [
+          { requirement_name: "Water Potability Certificate", is_complied: true, notes: "" },
+          { requirement_name: "Health Certificate of Staff", is_complied: false, notes: "" },
+        ],
+      },
+    ];
+
+    try {
+      const modal = openInspection("Aqua Station");
+      expect(checkboxes(modal).map((box) => box.checked)).toEqual([true, false]);
+    } finally {
+      mockCtx.inspections = previousInspections;
+      restoreEstablishment();
+    }
+  });
+
+  test("the form's warning matches the rule it actually applies", () => {
+    const modal = openInspection("Aqua Station");
+
+    expect(within(modal).queryByText(/auto-set to/i)).toBeNull();
+  });
+});

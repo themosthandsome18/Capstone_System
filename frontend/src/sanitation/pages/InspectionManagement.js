@@ -627,29 +627,19 @@ function InspectionFormModal({
   const [remarks, setRemarks] = useState(draft?.remarks || "");
   const initialChecks = (() => {
     const existingChecks = draft?.checklist_items || [];
-    // Default to true only if in good standing or upcoming
-    const defaultComplied = establishment.compliance_status === "good_standing" || establishment.compliance_status === "upcoming";
-    
-    return defaultRequirements.map((requirement, index) => {
-      const existing = existingChecks.find(c => c.requirement_name === requirement.requirement_name);
-      if (existing) {
-        return {
-          requirement_name: existing.requirement_name,
-          is_complied: existing.is_complied,
-          notes: existing.notes || "",
-        };
-      }
-      
-      let isComplied = defaultComplied;
-      if (establishment.compliance_status === "for_completion") {
-        // To accurately reflect 'for_completion', we check all items EXCEPT the last one (if there are multiple)
-        isComplied = index < defaultRequirements.length - 1 || defaultRequirements.length === 1;
-      }
+
+    // A new inspection starts with nothing ticked: the inspector records what
+    // they observe on this visit, not what the previous status implies. Only a
+    // saved draft restores the ticks the inspector had already made.
+    return defaultRequirements.map((requirement) => {
+      const existing = existingChecks.find(
+        (item) => item.requirement_name === requirement.requirement_name
+      );
 
       return {
         requirement_name: requirement.requirement_name,
-        is_complied: isComplied,
-        notes: "",
+        is_complied: existing ? existing.is_complied : false,
+        notes: existing?.notes || "",
       };
     });
   })();
@@ -897,9 +887,10 @@ function InspectionFormModal({
         </div>
 
         <div className="inspection-warning">
-          Warning: Status will be auto-set to <strong>For Completion</strong> if any
-          requirement is unchecked. You may manually change the final status
-          before submitting.
+          The status follows the checklist as you tick it: <strong>Good Standing</strong>{" "}
+          when every requirement is met, <strong>Violation</strong> when none are, and{" "}
+          <strong>For Completion</strong> in between. You may change it before
+          submitting.
         </div>
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
