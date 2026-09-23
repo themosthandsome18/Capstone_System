@@ -912,3 +912,30 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
 - **Not Verified**:
   - Not merged to `main` and not deployed. A new APK build is still required.
   - **No real-device or emulator end-to-end test was performed.** The portal was exercised only in widget tests, never against a running backend with a real owner login.
+
+### Explicit Inspection Status for Empty Checklists (branch `sanitation/inspection-status-explicit`, NOT merged, NOT deployed)
+- Commits on branch: `56276bc` (web) and `887e574` (mobile). Branched from `65a687f`. `origin/main` is unchanged by this work.
+- **Rule**: when an inspection's checklist is empty — a business type with zero configured requirements, such as Ambulant Food Vendor — neither client auto-defaults `status_after_inspection`. The inspector must choose one before submitting. Non-empty checklists behave exactly as before, including the pre-existing divergence where web sets `violation` when nothing is ticked while mobile sets `for_completion`; that divergence was deliberately left untouched.
+- **Rationale**: with nothing to check there is no evidence to infer a status from. The previous default of `good_standing` recorded a compliance judgement that no inspector had actually made.
+- **Backend Finding (read-only; the backend was NOT changed in this work)**:
+  - `SanitaryInspection.status_after_inspection` is declared as `models.CharField(max_length=30, choices=SANITARY_STATUS_CHOICES, default=SANITARY_STATUS_GOOD)` in `backend/api/models.py`, without `blank=True`. `SANITARY_STATUS_GOOD` is `"good_standing"`.
+  - `SanitaryInspectionCreateSerializer` lists the field in `Meta.fields` with no explicit override, so DRF builds a `ChoiceField` with `required=False` and `allow_blank=False`.
+  - Verified directly against the serializer field: a **missing** value raises `SkipField`, so it never reaches `validated_data` and the model default `good_standing` is applied silently; a **blank** `""` is rejected with `'"" is not a valid choice.'`
+  - Consequence: the backend cannot distinguish "the inspector chose Good Standing" from "the client omitted the field", and it will not accept an empty string. Both clients therefore block locally rather than sending a blank or omitted status. Tightening the backend (for example making the field explicitly required for non-draft submissions) would be a separate, independently reviewable change.
+- **Web Fix** (`frontend/src/sanitation/pages/InspectionManagement.js`):
+  - The initial status is `""` when the checklist is empty and no draft status exists. Previously the rule was `if (total === 0 || completed === total) return "good_standing";`; it is now split so that `total === 0` returns `""` while `completed === total` still returns `good_standing`.
+  - The Status After Inspection select gains a disabled `"Select status"` placeholder option, rendered only while no status is chosen. It had no placeholder before.
+  - `handleSubmit` blocks with "Select the status after inspection." and sends nothing when the status is empty. A saved draft's status is still restored ahead of this rule, unchanged.
+- **Mobile Fix** (`mobile/lib/screens/sanitation_screens.dart`, `mobile/lib/widgets/widgets.dart`):
+  - `_status` is now `String?` and `_statusForChecks` returns null for an empty checklist instead of `good_standing`.
+  - The Inspection status dropdown becomes `DropdownTile<String?>` and shows a "Select status" hint, via a new optional `hint` parameter added to the shared `DropdownTile` widget. The parameter is optional and defaults to null, so every other `DropdownTile` in the app is unaffected.
+  - `_submit` blocks with "Select the status after inspection." when no status is chosen. The existing "Update the status for unchecked items." guard is unchanged.
+  - The four selectable statuses were extracted from an inline literal into a named `sanitationInspectionStatuses` constant so the tests and the dropdown share one list.
+- **Verification (local only)**:
+  - Web: 4 new tests in `InspectionManagement.test.js`, 2 of which failed against the pre-fix code. Full frontend suite 149/149 passed across 5 suites (145 before plus the 4 new). `npm run build` compiled successfully.
+  - Mobile: 3 new or rewritten tests in `sanitation_inspection_checklist_test.dart`, all 3 of which failed against the pre-fix code. `flutter test` 13/13 passed; `flutter analyze` reported the same 4 pre-existing info-level issues — no new issues.
+  - Two existing web tests and one existing mobile test submitted a zero-requirement inspection without choosing a status. They were updated to pick one, because blocking that submission is the intended behaviour change.
+  - No production database, API, or production data was touched. The backend was not modified.
+- **Not Verified**:
+  - Not merged to `main` and not deployed. **A new APK build is still required** for the mobile half to reach users.
+  - No real-device or emulator end-to-end test was performed; the mobile form was exercised only through a fake `TourismApi` in widget tests.
