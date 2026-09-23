@@ -4440,6 +4440,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     if (_signedInEstablishment && _activeEstablishment != null) {
       return SanitationEstablishmentPortalPage(
         establishment: _activeEstablishment!,
+        businessTypes: widget.bootstrap.businessTypes,
         onLogout: _signOutEstablishment,
         onRefresh: widget.onRefresh,
       );
@@ -5489,22 +5490,6 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   }
 }
 
-enum _ChecklistFilter { all, needAction, completed }
-
-class _RequirementItem {
-  const _RequirementItem({
-    required this.title,
-    required this.description,
-    required this.submitted,
-    required this.timestamp,
-  });
-
-  final String title;
-  final String description;
-  final bool submitted;
-  final String timestamp;
-}
-
 class _TimelineEvent {
   const _TimelineEvent({
     required this.title,
@@ -5525,11 +5510,13 @@ class SanitationEstablishmentPortalPage extends StatefulWidget {
   const SanitationEstablishmentPortalPage({
     super.key,
     required this.establishment,
+    required this.businessTypes,
     required this.onLogout,
     required this.onRefresh,
   });
 
   final SanitationEstablishment establishment;
+  final List<SanitationBusinessType> businessTypes;
   final VoidCallback onLogout;
   final Future<void> Function() onRefresh;
 
@@ -5540,8 +5527,6 @@ class SanitationEstablishmentPortalPage extends StatefulWidget {
 
 class _SanitationEstablishmentPortalPageState
     extends State<SanitationEstablishmentPortalPage> {
-  _ChecklistFilter _selectedFilter = _ChecklistFilter.all;
-
   @override
   Widget build(BuildContext context) {
     setWebBranding(WebBrandingModule.sanitation);
@@ -5565,19 +5550,8 @@ class _SanitationEstablishmentPortalPageState
 
     final isExpiringSoon = daysRemaining != null && daysRemaining <= 60;
 
-    // 4. Requirements Checklist items & counts
-    final List<_RequirementItem> allRequirements = _buildRequirements(establishment);
-    final completedCount = allRequirements.where((i) => i.submitted).length;
-    final needActionCount = allRequirements.where((i) => !i.submitted).length;
-    final allCount = allRequirements.length;
-
-    final List<_RequirementItem> filteredRequirements = switch (_selectedFilter) {
-      _ChecklistFilter.all => allRequirements,
-      _ChecklistFilter.needAction => allRequirements.where((i) => !i.submitted).toList(),
-      _ChecklistFilter.completed => allRequirements.where((i) => i.submitted).toList(),
-    };
-
-    final completionRate = allCount > 0 ? (completedCount / allCount) : 1.0;
+    // 4. Requirements configured for this establishment's business type
+    final List<String>? configuredRequirements = _buildRequirements(establishment);
 
     // 5. Timeline Events
     final List<_TimelineEvent> timelineEvents = _buildTimeline(establishment);
@@ -5627,14 +5601,8 @@ class _SanitationEstablishmentPortalPageState
             _buildPermitsAndDeadlinesCard(establishment, daysRemaining),
             const SizedBox(height: 14),
 
-            // 4. Requirements Checklist with Filter Tabs
-            _buildRequirementsCard(
-              allCount: allCount,
-              needActionCount: needActionCount,
-              completedCount: completedCount,
-              completionRate: completionRate,
-              filteredItems: filteredRequirements,
-            ),
+            // 4. Requirements configured for the business type
+            _buildRequirementsCard(configuredRequirements),
             const SizedBox(height: 14),
 
             // 5. Record Timeline
@@ -6104,13 +6072,13 @@ class _SanitationEstablishmentPortalPageState
     );
   }
 
-  Widget _buildRequirementsCard({
-    required int allCount,
-    required int needActionCount,
-    required int completedCount,
-    required double completionRate,
-    required List<_RequirementItem> filteredItems,
-  }) {
+  /// Lists the requirements configured for the establishment's business type.
+  ///
+  /// [requirements] is null when the business type could not be resolved.
+  /// Nothing here is derived from the compliance status: the portal has no
+  /// record of which documents an owner has actually submitted, so it states
+  /// only what is configured.
+  Widget _buildRequirementsCard(List<String>? requirements) {
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -6135,161 +6103,46 @@ class _SanitationEstablishmentPortalPageState
             ),
             const SizedBox(height: 12),
 
-            // Filter Tabs
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _filterTab('All ($allCount)', _ChecklistFilter.all),
-                  const SizedBox(width: 8),
-                  _filterTab('Need Action ($needActionCount)', _ChecklistFilter.needAction),
-                  const SizedBox(width: 8),
-                  _filterTab('Completed ($completedCount)', _ChecklistFilter.completed),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Checklist Items
-            if (filteredItems.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: Text(
-                    _selectedFilter == _ChecklistFilter.needAction
-                        ? 'All requirements are submitted and in order!'
-                        : 'No records found.',
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                  ),
-                ),
+            if (requirements == null)
+              const Text(
+                'Requirements unavailable.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+              )
+            else if (requirements.isEmpty)
+              const Text(
+                'No requirements configured yet.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.muted),
               )
             else
-              ...filteredItems.map((item) => _requirementRow(item)),
-
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-
-            // Completion Progress Bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Completion: ${(completionRate * 100).round()}%',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                ),
-                Text(
-                  '$completedCount of $allCount requirements met',
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: completionRate,
-                minHeight: 8,
-                backgroundColor: const Color(0xFFE2E8F0),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  completionRate == 1.0 ? AppColors.green : AppColors.deepGreen,
-                ),
-              ),
-            ),
+              ...requirements.map(_requirementRow),
           ],
         ),
       ),
     );
   }
 
-  Widget _filterTab(String label, _ChecklistFilter filter) {
-    final isSelected = _selectedFilter == filter;
-    return InkWell(
-      onTap: () {
-        setState(() => _selectedFilter = filter);
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.deepGreen : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.deepGreen : const Color(0xFFCBD5E1),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : const Color(0xFF475569),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _requirementRow(_RequirementItem item) {
+  Widget _requirementRow(String requirementName) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            item.submitted ? Icons.check_circle : Icons.pending_actions_outlined,
-            color: item.submitted ? AppColors.green : const Color(0xFFD97706),
-            size: 19,
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Icon(
+              Icons.circle,
+              size: 6,
+              color: AppColors.muted,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: item.submitted
-                            ? const Color(0xFFDCFCE7)
-                            : const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        item.submitted ? 'SUBMITTED' : 'PENDING',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          color: item.submitted
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFFD97706),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.description,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  item.timestamp,
-                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                ),
-              ],
+            child: Text(
+              requirementName,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -6464,50 +6317,22 @@ class _SanitationEstablishmentPortalPageState
     );
   }
 
-  List<_RequirementItem> _buildRequirements(SanitationEstablishment establishment) {
-    final isGood = establishment.complianceStatus == 'good_standing';
-    final isViolation = establishment.complianceStatus == 'violation';
+  /// The requirement names configured for the establishment's business type.
+  ///
+  /// Returns null when the business type cannot be resolved from the loaded
+  /// types, so the card can say the requirements are unavailable rather than
+  /// imply that none are configured. Reuses [buildInspectionChecks] so the
+  /// portal and the inspection form de-duplicate names the same way.
+  List<String>? _buildRequirements(SanitationEstablishment establishment) {
+    final hasBusinessType = widget.businessTypes.any(
+      (item) => item.id == establishment.businessTypeId,
+    );
+    if (!hasBusinessType) return null;
 
-    return [
-      _RequirementItem(
-        title: 'Barangay Business Clearance',
-        description: 'Barangay certification endorsing ${establishment.barangay} business operations',
-        submitted: true,
-        timestamp: 'Verified on Jan 15, 2026',
-      ),
-      _RequirementItem(
-        title: 'Employee Health Certificates',
-        description: isViolation
-            ? 'Food handler health cards pending Chest X-Ray and medical exam'
-            : 'All food handlers and personnel certified medically fit',
-        submitted: !isViolation,
-        timestamp: isViolation ? 'Action required: 15-day compliance notice' : 'Updated 12/12 staff records',
-      ),
-      _RequirementItem(
-        title: 'Water Potability Test Result',
-        description: isGood
-            ? 'Bacteriological laboratory analysis negative for coliforms'
-            : 'Quarterly bacteriological water analysis report due',
-        submitted: isGood,
-        timestamp: isGood ? 'Tested on Jan 22, 2026 • Daungan Lab' : 'Submission overdue',
-      ),
-      _RequirementItem(
-        title: 'Solid Waste & Grease Trap Maintenance',
-        description: isViolation
-            ? 'Grease trap cleaning maintenance logbook overdue for update'
-            : 'Proper waste segregation and operational grease trap verified',
-        submitted: !isViolation,
-        timestamp: isViolation ? 'Remediation requested' : 'Inspected on Feb 05, 2026',
-      ),
-      _RequirementItem(
-        title: 'Pest & Vermin Abatement Plan',
-        description: isGood
-            ? 'Certified commercial pest control contract on file with RHU'
-            : 'Semi-annual pest abatement certification verification pending',
-        submitted: isGood,
-        timestamp: isGood ? 'Certified valid until Dec 2026' : 'Schedule renewal visit',
-      ),
-    ];
+    return buildInspectionChecks(
+      widget.businessTypes,
+      establishment.businessTypeId,
+    ).map((item) => item.requirementName).toList();
   }
 
   List<_TimelineEvent> _buildTimeline(SanitationEstablishment establishment) {
