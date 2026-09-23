@@ -3777,6 +3777,14 @@ class SanitationPermitsPage extends StatelessWidget {
   }
 }
 
+/// The statuses an inspector can record for an inspection.
+const sanitationInspectionStatuses = [
+  'good_standing',
+  'upcoming',
+  'for_completion',
+  'violation',
+];
+
 /// Builds the checklist a new inspection starts from.
 ///
 /// The requirements configured for [businessTypeId] are kept in their
@@ -3835,7 +3843,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   late SanitationEstablishment _establishment;
   late DateTime _inspectionDate;
   late DateTime _nextDueDate;
-  String _status = 'good_standing';
+  String? _status;
   List<InspectionChecklistDraft> _checks = [];
   bool _submitting = false;
 
@@ -3914,16 +3922,12 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
           value: shortDate(_nextDueDate),
           onTap: _pickNextDueDate,
         ),
-        DropdownTile<String>(
+        DropdownTile<String?>(
           label: 'Inspection status',
           value: _status,
-          items: const [
-            'good_standing',
-            'upcoming',
-            'for_completion',
-            'violation',
-          ],
-          itemLabel: sanitationStatusLabel,
+          items: sanitationInspectionStatuses,
+          itemLabel: (item) => sanitationStatusLabel(item ?? ''),
+          hint: 'Select status',
           onChanged: (item) => setState(() => _status = item),
         ),
         InspectionChecklistPanel(checks: _checks, onToggle: _toggleCheck),
@@ -3953,11 +3957,11 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
 
   /// Starting status for a freshly loaded checklist.
   ///
-  /// As on the web form, a business type with no configured requirements has
-  /// nothing outstanding to record. The inspector can still pick another
-  /// status from the dropdown.
-  String _statusForChecks(List<InspectionChecklistDraft> checks) {
-    return checks.isEmpty ? 'good_standing' : 'for_completion';
+  /// As on the web form, an empty checklist gives the app nothing to infer a
+  /// status from, so it returns null and the inspector must pick one before
+  /// submitting.
+  String? _statusForChecks(List<InspectionChecklistDraft> checks) {
+    return checks.isEmpty ? null : 'for_completion';
   }
 
   DateTime _suggestedDueDate(
@@ -4022,8 +4026,14 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
       return;
     }
     // A business type with no configured requirements submits an empty
-    // checklist rather than a fabricated one.
-    if (_checks.any((item) => !item.isComplied) && _status == 'good_standing') {
+    // checklist rather than a fabricated one, but the inspector still has to
+    // say what the inspection found.
+    final status = _status;
+    if (status == null) {
+      showAppMessage(context, 'Select the status after inspection.');
+      return;
+    }
+    if (_checks.any((item) => !item.isComplied) && status == 'good_standing') {
       showAppMessage(context, 'Update the status for unchecked items.');
       return;
     }
@@ -4039,7 +4049,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         nextDueDate: isoDate(_nextDueDate),
         findings: _findings.text.trim(),
         remarks: _remarks.text.trim(),
-        statusAfterInspection: _status,
+        statusAfterInspection: status,
         checklistItems: _checks,
       );
 
@@ -4048,7 +4058,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
           response,
           establishment: _establishment,
           inspectorName: inspectorName,
-          status: _status,
+          status: status,
           inspectionDate: isoDate(_inspectionDate),
         );
         await showSubmissionDialog(

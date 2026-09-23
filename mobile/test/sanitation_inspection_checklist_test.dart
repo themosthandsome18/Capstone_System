@@ -115,6 +115,13 @@ Future<FakeSanitationApi> pumpInspectionForm(
   return api;
 }
 
+Future<void> chooseStatus(WidgetTester tester, String status) async {
+  await tester.tap(find.byType(DropdownButtonFormField<String?>).last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(sanitationStatusLabel(status)).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> submitForm(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField).first, 'Juan Dela Cruz');
   await tester.pump();
@@ -168,17 +175,38 @@ void main() {
       }
     });
 
-    testWidgets('submits an empty checklist instead of a fabricated one', (
+    testWidgets('has no status chosen when there is nothing to check', (
       tester,
     ) async {
+      await pumpInspectionForm(tester, fishballCart);
+
+      // The hint stands in for a status; no real status is preselected.
+      expect(find.text('Select status'), findsOneWidget);
+      for (final status in sanitationInspectionStatuses) {
+        expect(find.text(sanitationStatusLabel(status)), findsNothing);
+      }
+    });
+
+    testWidgets('blocks submission until a status is chosen', (tester) async {
       final api = await pumpInspectionForm(tester, fishballCart);
 
       await submitForm(tester);
 
+      expect(api.sentChecklist, isNull);
+      expect(find.text('Select the status after inspection.'), findsOneWidget);
+    });
+
+    testWidgets('submits an empty checklist with the chosen status', (
+      tester,
+    ) async {
+      final api = await pumpInspectionForm(tester, fishballCart);
+
+      await chooseStatus(tester, 'upcoming');
+      await submitForm(tester);
+
       expect(api.sentChecklist, isNotNull);
       expect(api.sentChecklist, isEmpty);
-      // Mirrors the web form: nothing configured means nothing outstanding.
-      expect(api.sentStatus, 'good_standing');
+      expect(api.sentStatus, 'upcoming');
       expect(find.text('Inspection checklist is required.'), findsNothing);
     });
 
@@ -190,6 +218,9 @@ void main() {
       expect(find.text('No requirements configured yet.'), findsNothing);
       expect(find.text('Water Potability Certificate'), findsOneWidget);
       expect(find.text('Health Certificate of Staff'), findsOneWidget);
+      // A configured type still starts with a status and needs no prompt.
+      expect(find.text('Select status'), findsNothing);
+      expect(find.text(sanitationStatusLabel('for_completion')), findsOneWidget);
 
       await submitForm(tester);
 
