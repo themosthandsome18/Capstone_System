@@ -18,6 +18,8 @@ import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
 
+const ROWS_PER_PAGE = 10;
+
 const statusOptions = [
   { value: "good_standing", label: "Good Standing" },
   { value: "upcoming", label: "Upcoming" },
@@ -46,6 +48,7 @@ function InspectionManagement() {
   const [calendarMonth, setCalendarMonth] = useState(() =>
     getMonthStart(new Date())
   );
+  const [page, setPage] = useState(1);
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -87,6 +90,22 @@ function InspectionManagement() {
       return matchesSearch && matchesStatus && matchesDue;
     });
   }, [dueFilter, rows, searchTerm, statusFilter]);
+
+  // Paging is presentation only: exports and the alert counts stay over the
+  // full filtered set, never just the visible page.
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = filteredRows.slice(
+    (currentPage - 1) * ROWS_PER_PAGE,
+    currentPage * ROWS_PER_PAGE
+  );
+
+  function changeFilter(setter) {
+    return (value) => {
+      setter(value);
+      setPage(1);
+    };
+  }
 
   const dueWithinSevenDays = rows.filter((row) => {
     if (!row.nextDueDate) return false;
@@ -345,13 +364,13 @@ function InspectionManagement() {
                 type="text"
                 placeholder="Search records..."
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) => changeFilter(setSearchTerm)(event.target.value)}
               />
             </div>
 
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => changeFilter(setStatusFilter)(event.target.value)}
             >
               <option value="all">All Statuses</option>
               {statusOptions.map((status) => (
@@ -363,7 +382,7 @@ function InspectionManagement() {
 
             <select
               value={dueFilter}
-              onChange={(event) => setDueFilter(event.target.value)}
+              onChange={(event) => changeFilter(setDueFilter)(event.target.value)}
             >
               <option value="all">All Due Dates</option>
               <option value="overdue">Overdue</option>
@@ -387,8 +406,8 @@ function InspectionManagement() {
               </thead>
 
               <tbody>
-                {filteredRows.length ? (
-                  filteredRows.map((row) => (
+                {visibleRows.length ? (
+                  visibleRows.map((row) => (
                     <tr key={row.id}>
                       <td>
                         <strong>{row.business_name}</strong>
@@ -477,15 +496,26 @@ function InspectionManagement() {
 
           <div className="inspection-pagination">
             <p>
-              Showing {filteredRows.length} of {rows.length}
+              Showing {visibleRows.length} of {filteredRows.length} | Page{" "}
+              {currentPage} of {pageCount}
             </p>
 
             <div>
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                aria-label="Previous page"
+              >
                 <FiChevronLeft />
               </button>
 
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage >= pageCount}
+                aria-label="Next page"
+              >
                 <FiChevronRight />
               </button>
             </div>

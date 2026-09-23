@@ -518,3 +518,111 @@ describe("getSuggestedNextDueDate", () => {
     expect(getSuggestedNextDueDate("", "monthly")).toBe("");
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Pagination                                                           */
+/* ------------------------------------------------------------------ */
+
+const { exportCsv } = require("../../shared/csvExport");
+
+function manyEstablishments(count) {
+  return Array.from({ length: count }, (_, index) =>
+    establishment(1000 + index, `Stall ${String(index + 1).padStart(2, "0")}`, AMBULANT)
+  );
+}
+
+function withManyRows(count) {
+  const previous = mockCtx.establishments;
+  mockCtx.establishments = manyEstablishments(count);
+  return () => {
+    mockCtx.establishments = previous;
+  };
+}
+
+function rowNames() {
+  return [...document.querySelectorAll(".inspection-table-card tbody tr td:first-child strong")].map(
+    (cell) => cell.textContent
+  );
+}
+
+function pageLabel() {
+  return document.querySelector(".inspection-pagination p").textContent;
+}
+
+function pageButtons() {
+  return [...document.querySelectorAll(".inspection-pagination button")];
+}
+
+describe("pagination", () => {
+  test("shows 10 rows per page and counts the pages", () => {
+    const restore = withManyRows(25);
+
+    try {
+      render(<InspectionManagement />);
+
+      expect(rowNames()).toHaveLength(10);
+      expect(rowNames()[0]).toBe("Stall 01");
+      expect(pageLabel()).toContain("Page 1 of 3");
+    } finally {
+      restore();
+    }
+  });
+
+  test("next and previous move between pages", () => {
+    const restore = withManyRows(25);
+
+    try {
+      render(<InspectionManagement />);
+      const [previous, next] = pageButtons();
+
+      expect(previous.disabled).toBe(true);
+
+      fireEvent.click(next);
+      expect(rowNames()[0]).toBe("Stall 11");
+      expect(pageLabel()).toContain("Page 2 of 3");
+
+      fireEvent.click(next);
+      expect(rowNames()).toHaveLength(5);
+      expect(pageLabel()).toContain("Page 3 of 3");
+      expect(pageButtons()[1].disabled).toBe(true);
+
+      fireEvent.click(pageButtons()[0]);
+      expect(pageLabel()).toContain("Page 2 of 3");
+    } finally {
+      restore();
+    }
+  });
+
+  test("changing the search resets to the first page", () => {
+    const restore = withManyRows(25);
+
+    try {
+      render(<InspectionManagement />);
+      fireEvent.click(pageButtons()[1]);
+      expect(pageLabel()).toContain("Page 2 of 3");
+
+      fireEvent.change(screen.getByPlaceholderText("Search records..."), {
+        target: { value: "Stall" },
+      });
+
+      expect(pageLabel()).toContain("Page 1 of 3");
+      expect(rowNames()[0]).toBe("Stall 01");
+    } finally {
+      restore();
+    }
+  });
+
+  test("the CSV export covers every filtered row, not just the page", () => {
+    const restore = withManyRows(25);
+
+    try {
+      render(<InspectionManagement />);
+      fireEvent.click(screen.getByText("Export CSV"));
+
+      expect(exportCsv).toHaveBeenCalledTimes(1);
+      expect(exportCsv.mock.calls[0][2]).toHaveLength(25);
+    } finally {
+      restore();
+    }
+  });
+});
