@@ -887,5 +887,28 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
 - **Not Verified**:
   - Not merged to `main` and not deployed. A new APK build is still required.
   - **No real-device or emulator end-to-end test was performed.** The submission path was exercised only through a fake `TourismApi` in widget tests, never against a running backend.
-- **Still Open (separate task)**:
-  - `_buildRequirements()` in `mobile/lib/screens/sanitation_screens.dart` still returns a hard-coded list of five compliance documents with invented dates and details (for example "Barangay Business Clearance — Verified on Jan 15, 2026" and "Water Potability Test Result — Tested on Jan 22, 2026 • Daungan Lab"), shown to business owners in the Establishment Portal. It ignores the establishment's configured requirements. It is display-only and submits nothing, but it presents fabricated compliance records as real. It was deliberately left out of this fix.
+- **Related (fixed separately)**:
+  - `_buildRequirements()` in `mobile/lib/screens/sanitation_screens.dart` was deliberately left out of this fix and addressed on its own branch. See **Establishment Portal Real Requirements** below.
+
+### Establishment Portal Real Requirements (branch `sanitation/portal-real-requirements`, NOT merged, NOT deployed)
+- Commit on branch: `5f916e7`. Branched from `87f8cd6`. `origin/main` is unchanged by this work.
+- **Root Cause**:
+  - `_buildRequirements()` in `mobile/lib/screens/sanitation_screens.dart` returned a hard-coded list of five compliance documents — "Barangay Business Clearance", "Employee Health Certificates", "Water Potability Test Result", "Solid Waste & Grease Trap Maintenance" and "Pest & Vermin Abatement Plan" — regardless of the establishment's business type.
+  - Each carried an invented description, an invented SUBMITTED/PENDING badge and an invented timestamp, for example "Verified on Jan 15, 2026", "Updated 12/12 staff records", "Tested on Jan 22, 2026 • Daungan Lab" and "Certified valid until Dec 2026". The badges and timestamps were switched on `complianceStatus`, which records nothing about whether an owner submitted a document.
+  - The card also derived filter tabs, "N of 5 requirements met" counters and a completion progress bar from those invented values, and presented the whole thing to business owners in the Establishment Portal.
+- **Data Availability (investigated before changing anything)**:
+  - `SanitationEstablishmentPortalPage` previously received only the establishment, so it had `businessTypeId` but no access to that type's requirements.
+  - Its caller, `_SanitationAccessGatewayState`, already holds a `SanitationBootstrap` whose `businessTypes` include each type's `requirements`. The bootstrap endpoint `/mobile/sanitation/bootstrap/` is `AllowAny` and is fetched before the gateway renders, so it is populated for establishment-owner sessions as well as staff sessions.
+  - The fix was therefore possible entirely client-side. **No backend, serializer, endpoint or payload change was made.**
+- **Mobile Fix** (`mobile/lib/screens/sanitation_screens.dart`):
+  - `SanitationEstablishmentPortalPage` takes a new required `businessTypes` argument, supplied by the gateway from `widget.bootstrap.businessTypes`.
+  - `_buildRequirements()` now returns the requirement names configured for the establishment's business type, or `null` when that type cannot be resolved. Name de-duplication reuses `buildInspectionChecks`, so the portal and the inspection form treat duplicate and blank names identically rather than carrying a second copy of the logic.
+  - The card renders a plain list of names: no icons implying status, no SUBMITTED/PENDING badges, no descriptions, no timestamps, no counts, no completion percentage, and nothing derived from `complianceStatus`. The filter tabs, the `_ChecklistFilter` enum, the `_RequirementItem` class and the progress bar were removed as dead code.
+  - Zero configured requirements shows "No requirements configured yet."; an unresolvable business type shows "Requirements unavailable."
+- **Verification (local only)**:
+  - New tests: `mobile/test/sanitation_portal_requirements_test.dart` (4 tests). All four failed against the pre-fix code. They assert the configured names render, both honest empty states render, none of the five fabricated documents appear, and none of the invented evidence fragments ("Verified on", "Tested on", "Daungan Lab", "12/12", "Certified valid until") appear anywhere in the rendered page, including for an establishment with a recorded violation.
+  - `flutter test`: 11/11 passed across the suite. `flutter analyze`: 4 issues found, the same 4 pre-existing info-level issues — no new issues.
+  - No production database, API, or production data was touched.
+- **Not Verified**:
+  - Not merged to `main` and not deployed. A new APK build is still required.
+  - **No real-device or emulator end-to-end test was performed.** The portal was exercised only in widget tests, never against a running backend with a real owner login.
