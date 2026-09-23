@@ -1303,6 +1303,12 @@ def add_one_year(value):
 
 
 def sync_establishment_after_inspection(inspection):
+    # A draft is work in progress, not a result. It must not change the
+    # establishment's compliance or permit status, and must not raise a
+    # violation notification. Finalizing the draft runs this for real.
+    if inspection.is_draft:
+        return
+
     establishment = inspection.establishment
     previous_status = establishment.compliance_status
     new_status = inspection.status_after_inspection

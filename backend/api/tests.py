@@ -2940,3 +2940,151 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
             self.assertEqual(created.permit_size, permit_size)
 
         self.assertEqual(ambulant.requirements.count(), 0)
+
+
+class InspectionDraftIsolationTests(TestCase):
+    """A draft is work in progress, so it must not touch live records.
+
+    Saving a draft must leave the establishment's compliance and permit status
+    alone and raise no violation notification. Finalizing that same draft
+    applies the result exactly once.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.admin_user = User.objects.create_user(
+            username="draft_test_admin",
+            password="Password@123",
+            email="draft-admin@test.local",
+        )
+        UserProfile.objects.create(user=self.admin_user, role=ROLE_ADMIN)
+
+        self.sanitation_user = User.objects.create_user(
+            username="draft_test_sanitation",
+            password="Password@123",
+            email="draft-sanitation@test.local",
+        )
+        UserProfile.objects.create(user=self.sanitation_user, role=ROLE_SANITATION)
+
+        self.token = Token.objects.create(user=self.sanitation_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Draft Test Cafe",
+            inspection_frequency="monthly",
+        )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Draft Street Cafe",
+            owner_name="Owner Ana",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="12 Quezon St",
+            compliance_status="good_standing",
+            permit_status="active",
+        )
+
+    def violation_payload(self, is_draft):
+        return {
+            "establishment": self.establishment.id,
+            "inspector_name": "Inspector Test",
+            "inspection_date": "2026-09-11",
+            "status_after_inspection": "violation",
+            "findings": "Draft in progress",
+            "is_draft": is_draft,
+            "checklist_items": [
+                {"requirement_name": "Pest Control", "is_complied": False},
+            ],
+        }
+
+    def notification_count(self):
+        return Notification.objects.filter(
+            recipient_user__in=[self.admin_user, self.sanitation_user]
+        ).count()
+
+    def assertEstablishmentUntouched(self):
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "good_standing")
+        self.assertEqual(self.establishment.permit_status, "active")
+        self.assertEqual(self.notification_count(), 0)
+
+    def test_saving_a_draft_leaves_the_establishment_alone(self):
+        response = self.client.post(
+            "/api/sanitation/inspections/",
+            self.violation_payload(is_draft=True),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.json()["is_draft"])
+        self.assertEstablishmentUntouched()
+
+    def test_updating_a_draft_leaves_the_establishment_alone(self):
+        created = self.client.post(
+            "/api/sanitation/inspections/",
+            self.violation_payload(is_draft=True),
+            format="json",
+        )
+        inspection_id = created.json()["id"]
+
+        payload = self.violation_payload(is_draft=True)
+        payload["findings"] = "Still drafting"
+        response = self.client.put(
+            f"/api/sanitation/inspections/{inspection_id}/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEstablishmentUntouched()
+
+    def test_mobile_draft_leaves_the_establishment_alone(self):
+        response = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            self.violation_payload(is_draft=True),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEstablishmentUntouched()
+
+    def test_finalizing_a_draft_applies_it_once(self):
+        created = self.client.post(
+            "/api/sanitation/inspections/",
+            self.violation_payload(is_draft=True),
+            format="json",
+        )
+        inspection_id = created.json()["id"]
+        self.assertEstablishmentUntouched()
+
+        response = self.client.put(
+            f"/api/sanitation/inspections/{inspection_id}/",
+            self.violation_payload(is_draft=False),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "violation")
+        self.assertEqual(self.establishment.permit_status, "suspended")
+        self.assertEqual(
+            Notification.objects.filter(recipient_user=self.admin_user).count(), 1
+        )
+        self.assertEqual(
+            Notification.objects.filter(recipient_user=self.sanitation_user).count(), 1
+        )
+
+    def test_a_final_inspection_still_applies_immediately(self):
+        response = self.client.post(
+            "/api/sanitation/inspections/",
+            self.violation_payload(is_draft=False),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "violation")
+        self.assertEqual(self.establishment.permit_status, "suspended")
+        self.assertEqual(
+            Notification.objects.filter(recipient_user=self.admin_user).count(), 1
+        )
