@@ -626,3 +626,191 @@ describe("pagination", () => {
     }
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Inspection history and read-only detail                              */
+/* ------------------------------------------------------------------ */
+
+const HISTORY = [
+  {
+    id: 801,
+    establishment: 701,
+    inspection_date: "2026-01-10",
+    next_due_date: "2026-02-10",
+    inspector_name: "Ana Reyes",
+    status_after_inspection: "good_standing",
+    status_after_inspection_label: "Good Standing",
+    is_draft: false,
+    findings: "All clear in January",
+    remarks: "",
+    checklist_items: [],
+  },
+  {
+    id: 802,
+    establishment: 701,
+    inspection_date: "2026-03-04",
+    next_due_date: "2026-04-04",
+    inspector_name: "Ben Cruz",
+    status_after_inspection: "violation",
+    status_after_inspection_label: "Violation",
+    is_draft: false,
+    findings: "Pests observed",
+    remarks: "Notice issued",
+    checklist_items: [
+      { requirement_name: "Pest Control", is_complied: false, notes: "Rodents" },
+      { requirement_name: "Waste Disposal", is_complied: true, notes: "" },
+    ],
+  },
+  {
+    id: 803,
+    establishment: 701,
+    inspection_date: "2026-02-02",
+    next_due_date: null,
+    inspector_name: "Ana Reyes",
+    status_after_inspection: "for_completion",
+    status_after_inspection_label: "For Completion",
+    is_draft: true,
+    findings: "Half done",
+    remarks: "",
+    checklist_items: [],
+  },
+  {
+    id: 804,
+    establishment: 702,
+    inspection_date: "2026-03-09",
+    next_due_date: "2026-04-09",
+    inspector_name: "Someone Else",
+    status_after_inspection: "good_standing",
+    status_after_inspection_label: "Good Standing",
+    is_draft: false,
+    findings: "Different establishment",
+    remarks: "",
+    checklist_items: [],
+  },
+];
+
+function withHistory() {
+  const previous = mockCtx.inspections;
+  mockCtx.inspections = HISTORY;
+  return () => {
+    mockCtx.inspections = previous;
+  };
+}
+
+function openHistory(businessName) {
+  render(<InspectionManagement />);
+  fireEvent.click(
+    screen.getByLabelText(`View inspection history for ${businessName}`)
+  );
+  return document.querySelector(".inspection-history-modal");
+}
+
+function historyRows(modal) {
+  return [...modal.querySelectorAll(".inspection-history-row")];
+}
+
+describe("inspection history", () => {
+  test("lists only that establishment's inspections, newest first", () => {
+    const restore = withHistory();
+
+    try {
+      const modal = openHistory("Fishball Cart");
+      const dates = historyRows(modal).map(
+        (row) => row.querySelector(".inspection-history-date").textContent
+      );
+
+      expect(historyRows(modal)).toHaveLength(3);
+      expect(dates).toEqual(["2026-03-04", "2026-02-02", "2026-01-10"]);
+      expect(within(modal).queryByText("Someone Else")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("labels drafts", () => {
+    const restore = withHistory();
+
+    try {
+      const modal = openHistory("Fishball Cart");
+
+      expect(within(modal).getAllByText("Draft")).toHaveLength(1);
+    } finally {
+      restore();
+    }
+  });
+
+  test("shows the inspector, status and next due of each", () => {
+    const restore = withHistory();
+
+    try {
+      const modal = openHistory("Fishball Cart");
+      const latest = historyRows(modal)[0];
+
+      expect(within(latest).getByText("Ben Cruz")).toBeTruthy();
+      expect(within(latest).getByText("Violation")).toBeTruthy();
+      expect(within(latest).getByText("2026-04-04")).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("says so when there are no inspections yet", () => {
+    const modal = openHistory("Fishball Cart");
+
+    expect(within(modal).getByText("No inspections recorded yet.")).toBeTruthy();
+  });
+});
+
+describe("read-only inspection detail", () => {
+  function openDetail() {
+    const modal = openHistory("Fishball Cart");
+    fireEvent.click(historyRows(modal)[0]);
+    return document.querySelector(".inspection-detail-modal");
+  }
+
+  test("shows the inspection's fields and checklist", () => {
+    const restore = withHistory();
+
+    try {
+      const detail = openDetail();
+
+      expect(within(detail).getByText("Pests observed")).toBeTruthy();
+      expect(within(detail).getByText("Notice issued")).toBeTruthy();
+      expect(within(detail).getByText("Pest Control")).toBeTruthy();
+      expect(within(detail).getByText("Waste Disposal")).toBeTruthy();
+      expect(within(detail).getByText("Rodents")).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("marks each checklist item complied or not", () => {
+    const restore = withHistory();
+
+    try {
+      const detail = openDetail();
+      const states = [...detail.querySelectorAll(".inspection-detail-check")].map(
+        (item) => item.textContent
+      );
+
+      expect(states.join(" ")).toContain("Not complied");
+      expect(states.join(" ")).toContain("Complied");
+    } finally {
+      restore();
+    }
+  });
+
+  test("offers no way to edit or save from the detail view", () => {
+    const restore = withHistory();
+
+    try {
+      const detail = openDetail();
+
+      expect(within(detail).queryByText("Submit Inspection")).toBeNull();
+      expect(within(detail).queryByText("Save Draft")).toBeNull();
+      expect(detail.querySelectorAll("input, textarea, select")).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+});

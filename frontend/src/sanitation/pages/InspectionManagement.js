@@ -7,6 +7,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiClipboard,
+  FiClock,
   FiDownload,
   FiLock,
   FiMapPin,
@@ -49,6 +50,8 @@ function InspectionManagement() {
     getMonthStart(new Date())
   );
   const [page, setPage] = useState(1);
+  const [historyEstablishment, setHistoryEstablishment] = useState(null);
+  const [detailInspection, setDetailInspection] = useState(null);
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -471,6 +474,16 @@ function InspectionManagement() {
                           </button>
                           <button
                             type="button"
+                            className="inspection-icon-action history"
+                            onClick={() => setHistoryEstablishment(row)}
+                            aria-label={`View inspection history for ${row.business_name}`}
+                            title="Inspection history"
+                            data-tooltip="Inspection history"
+                          >
+                            <FiClock />
+                          </button>
+                          <button
+                            type="button"
                             className="inspection-icon-action conduct"
                             onClick={() => openForm(row)}
                             aria-label={`Conduct inspection for ${row.business_name}`}
@@ -592,6 +605,22 @@ function InspectionManagement() {
         </section>
       )}
 
+      {historyEstablishment ? (
+        <InspectionHistoryModal
+          establishment={historyEstablishment}
+          inspections={inspections}
+          onSelect={setDetailInspection}
+          onClose={() => setHistoryEstablishment(null)}
+        />
+      ) : null}
+
+      {detailInspection ? (
+        <InspectionDetailModal
+          inspection={detailInspection}
+          onClose={() => setDetailInspection(null)}
+        />
+      ) : null}
+
       {showForm && selectedEstablishment ? (
         <InspectionFormModal
           establishment={selectedEstablishment}
@@ -601,6 +630,137 @@ function InspectionManagement() {
           onClose={() => setShowForm(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function InspectionHistoryModal({
+  establishment,
+  inspections,
+  onSelect,
+  onClose,
+}) {
+  // Every inspection recorded for this establishment, newest first. Drafts are
+  // included but labelled, since they are part of the record of work done.
+  const history = inspections
+    .filter((item) => item.establishment === establishment.id)
+    .sort(
+      (a, b) =>
+        new Date(b.inspection_date || 0) - new Date(a.inspection_date || 0)
+    );
+
+  return (
+    <div className="inspection-modal-backdrop">
+      <div className="inspection-history-modal">
+        <button type="button" className="inspection-close-btn" onClick={onClose}>
+          <FiX />
+        </button>
+
+        <div className="inspection-form-title">
+          <h2>
+            Inspection History : <strong>{establishment.business_name}</strong>
+          </h2>
+          <p>{history.length} recorded</p>
+        </div>
+
+        {history.length ? (
+          <div className="inspection-history-list">
+            {history.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className="inspection-history-row"
+                onClick={() => onSelect(item)}
+              >
+                <span className="inspection-history-date">
+                  {item.inspection_date}
+                </span>
+                <span>{item.inspector_name || "Not recorded"}</span>
+                <span>
+                  {item.status_after_inspection_label ||
+                    item.status_after_inspection}
+                </span>
+                <span>{item.next_due_date || "Not set"}</span>
+                {item.is_draft ? (
+                  <span className="inspection-history-draft">Draft</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="inspection-empty">No inspections recorded yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InspectionDetailModal({ inspection, onClose }) {
+  // Read only on purpose: a past inspection is a record of a visit, so this
+  // view renders it without any control that could change it.
+  const checklist = inspection.checklist_items || [];
+
+  return (
+    <div className="inspection-modal-backdrop">
+      <div className="inspection-detail-modal">
+        <button type="button" className="inspection-close-btn" onClick={onClose}>
+          <FiX />
+        </button>
+
+        <div className="inspection-form-title">
+          <h2>
+            Inspection : <strong>{inspection.inspection_date}</strong>
+            {inspection.is_draft ? (
+              <span className="inspection-history-draft">Draft</span>
+            ) : null}
+          </h2>
+          <p>{inspection.establishment_name}</p>
+        </div>
+
+        <dl className="inspection-detail-fields">
+          <div>
+            <dt>Inspector</dt>
+            <dd>{inspection.inspector_name || "Not recorded"}</dd>
+          </div>
+          <div>
+            <dt>Status After Inspection</dt>
+            <dd>
+              {inspection.status_after_inspection_label ||
+                inspection.status_after_inspection}
+            </dd>
+          </div>
+          <div>
+            <dt>Next Due</dt>
+            <dd>{inspection.next_due_date || "Not set"}</dd>
+          </div>
+          <div>
+            <dt>Findings</dt>
+            <dd>{inspection.findings || "No findings recorded."}</dd>
+          </div>
+          <div>
+            <dt>Remarks</dt>
+            <dd>{inspection.remarks || "No remarks recorded."}</dd>
+          </div>
+        </dl>
+
+        <h3>Requirements Checklist</h3>
+        {checklist.length ? (
+          <ul className="inspection-detail-checklist">
+            {checklist.map((item, index) => (
+              <li
+                key={`${item.requirement_name}-${index}`}
+                className="inspection-detail-check"
+              >
+                <strong>{item.requirement_name}</strong>
+                <span>{item.is_complied ? "Complied" : "Not complied"}</span>
+                {item.notes ? <small>{item.notes}</small> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="inspection-empty">No checklist items recorded.</p>
+        )}
+      </div>
     </div>
   );
 }
