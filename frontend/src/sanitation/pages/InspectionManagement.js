@@ -594,10 +594,12 @@ function InspectionFormModal({
     (requirement) => requirement.permit_size === establishment.permit_size
   );
 
-  const isDraftOrRecent = establishment.latestInspection?.is_draft || 
-    establishment.latestInspection?.inspection_date === getTodayDate();
-    
-  const draft = isDraftOrRecent ? establishment.latestInspection : null;
+  // Only an unfinished draft is reopened for editing. A finalized inspection
+  // is a record of a visit that happened, so a second visit the same day
+  // creates a new inspection instead of overwriting the first.
+  const draft = establishment.latestInspection?.is_draft
+    ? establishment.latestInspection
+    : null;
 
   const { user } = useAuth();
   const defaultInspector = useMemo(() => {

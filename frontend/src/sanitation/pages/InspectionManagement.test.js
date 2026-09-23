@@ -229,3 +229,93 @@ describe("status after inspection with an empty checklist", () => {
     expect(payload.status_after_inspection).toBe("violation");
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Reopening drafts vs creating new inspections                         */
+/* ------------------------------------------------------------------ */
+
+// The page builds "today" from the local date, not UTC, so match that here or
+// the same-day case silently stops being a same-day case.
+const TODAY = (() => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+})();
+
+// The page derives each row's latest inspection from the inspections list,
+// so that is where a pre-existing inspection has to be injected.
+function withLatestInspection(latestInspection) {
+  const previous = mockCtx.inspections;
+  mockCtx.inspections = [{ establishment: 701, ...latestInspection }];
+  return () => {
+    mockCtx.inspections = previous;
+  };
+}
+
+describe("same-day inspections", () => {
+  test("a finalized inspection dated today is never overwritten", async () => {
+    const restore = withLatestInspection({
+      id: 555,
+      is_draft: false,
+      inspection_date: TODAY,
+      status_after_inspection: "violation",
+      findings: "Earlier visit",
+      checklist_items: [],
+    });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
+      fireEvent.click(within(modal).getByText("Submit Inspection"));
+
+      await waitFor(() => expect(mockCtx.createInspection).toHaveBeenCalledTimes(1));
+      expect(mockCtx.updateInspection).not.toHaveBeenCalled();
+      expect(mockCtx.createInspection.mock.calls[0][0].findings).toBe("");
+    } finally {
+      restore();
+    }
+  });
+
+  test("an existing draft is reopened and updated in place", async () => {
+    const restore = withLatestInspection({
+      id: 556,
+      is_draft: true,
+      inspection_date: TODAY,
+      status_after_inspection: "upcoming",
+      findings: "Half-finished",
+      checklist_items: [],
+    });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      fireEvent.click(within(modal).getByText("Submit Inspection"));
+
+      await waitFor(() => expect(mockCtx.updateInspection).toHaveBeenCalledTimes(1));
+      expect(mockCtx.updateInspection.mock.calls[0][0]).toBe(556);
+      expect(mockCtx.createInspection).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  });
+
+  test("a draft from an earlier day is still reopened", async () => {
+    const restore = withLatestInspection({
+      id: 557,
+      is_draft: true,
+      inspection_date: "2026-01-05",
+      status_after_inspection: "for_completion",
+      checklist_items: [],
+    });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      fireEvent.click(within(modal).getByText("Submit Inspection"));
+
+      await waitFor(() => expect(mockCtx.updateInspection).toHaveBeenCalledTimes(1));
+      expect(mockCtx.updateInspection.mock.calls[0][0]).toBe(557);
+    } finally {
+      restore();
+    }
+  });
+});
