@@ -1,3 +1,4 @@
+import calendar
 from datetime import timedelta
 
 from django.db.models import Count, Q
@@ -34,6 +35,9 @@ from ..models import (
     RENEWAL_STAGE_PAYMENT_PENDING,
     RENEWAL_STAGE_RELEASED,
     RENEWAL_STAGE_REQUIREMENTS_REVIEW,
+    SANITARY_FREQUENCY_ANNUAL,
+    SANITARY_FREQUENCY_MONTHLY,
+    SANITARY_FREQUENCY_QUARTERLY,
     SANITARY_STATUS_FOR_COMPLETION,
     SANITARY_STATUS_GOOD,
     SANITARY_STATUS_NO_PERMIT,
@@ -1300,6 +1304,55 @@ def add_one_year(value):
         return value.replace(year=value.year + 1)
     except ValueError:
         return value + timedelta(days=365)
+
+
+def add_months(date, months):
+    """Shift a date by whole months, clamping to the end of a shorter month."""
+    total = date.month - 1 + months
+    year = date.year + total // 12
+    month = total % 12 + 1
+    day = min(date.day, calendar.monthrange(year, month)[1])
+    return date.replace(year=year, month=month, day=day)
+
+
+# One shared rule for every client and for the server.
+INSPECTION_FREQUENCY_MONTHS = {
+    SANITARY_FREQUENCY_MONTHLY: 1,
+    SANITARY_FREQUENCY_QUARTERLY: 3,
+    SANITARY_FREQUENCY_ANNUAL: 12,
+}
+
+
+def suggested_next_due_date(inspection_date, frequency):
+    """The next due date for an inspection, or None for an unknown frequency.
+
+    An unrecognised frequency yields no suggestion rather than a silent
+    monthly one, so a misconfigured business type is visible instead of
+    quietly producing a wrong schedule.
+    """
+    months = INSPECTION_FREQUENCY_MONTHS.get(frequency)
+    if not inspection_date or months is None:
+        return None
+    return add_months(inspection_date, months)
+
+
+def apply_default_next_due_date(inspection):
+    """Fill in a final inspection's next due date when the client omitted it.
+
+    A date sent by the client always wins, and drafts are left alone because
+    they are not a scheduled result yet.
+    """
+    if inspection.is_draft or inspection.next_due_date:
+        return
+
+    business_type = getattr(inspection.establishment, "business_type", None)
+    suggested = suggested_next_due_date(
+        inspection.inspection_date,
+        getattr(business_type, "inspection_frequency", None),
+    )
+    if suggested:
+        inspection.next_due_date = suggested
+        inspection.save(update_fields=["next_due_date"])
 
 
 def sync_establishment_after_inspection(inspection):

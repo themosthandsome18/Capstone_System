@@ -3777,6 +3777,29 @@ class SanitationPermitsPage extends StatelessWidget {
   }
 }
 
+/// One shared rule, matching the backend and the web app.
+const inspectionFrequencyMonths = {
+  'monthly': 1,
+  'quarterly': 3,
+  'annual': 12,
+};
+
+/// The next inspection due date for [frequency], or null if it is unknown.
+///
+/// An unrecognised frequency suggests nothing rather than a silent monthly
+/// date, so a misconfigured business type is visible instead of quietly wrong.
+DateTime? suggestedInspectionDueDate(DateTime inspected, String frequency) {
+  final months = inspectionFrequencyMonths[frequency];
+  if (months == null) return null;
+
+  // Keep the day of the month, clamping when the target month is shorter.
+  final total = inspected.month - 1 + months;
+  final year = inspected.year + total ~/ 12;
+  final month = total % 12 + 1;
+  final lastDay = DateTime(year, month + 1, 0).day;
+  return DateTime(year, month, math.min(inspected.day, lastDay));
+}
+
 /// The statuses an inspector can record for an inspection.
 const sanitationInspectionStatuses = [
   'good_standing',
@@ -3964,12 +3987,18 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     return checks.isEmpty ? null : 'for_completion';
   }
 
+  /// The suggested due date, or the inspection date itself when the business
+  /// type's frequency is unrecognised and no schedule can be inferred. The
+  /// inspector can always pick another date.
   DateTime _suggestedDueDate(
     DateTime date,
     SanitationEstablishment establishment,
   ) {
-    final months = establishment.inspectionFrequency == 'quarterly' ? 3 : 1;
-    return DateTime(date.year, date.month + months, date.day);
+    return suggestedInspectionDueDate(
+          date,
+          establishment.inspectionFrequency,
+        ) ??
+        date;
   }
 
   Future<void> _pickInspectionDate() async {

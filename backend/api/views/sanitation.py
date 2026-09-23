@@ -54,6 +54,7 @@ from api.services.sanitation import (
     mark_renewal_paid,
     mark_renewal_unpaid,
     resolve_overdue_renewal,
+    apply_default_next_due_date,
     sync_establishment_after_inspection,
     sync_renewal_progress,
     with_establishment_rollups,
@@ -189,6 +190,7 @@ def sanitation_inspection_list(request):
     serializer = SanitaryInspectionCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
     log_activity(
         request,
@@ -234,6 +236,7 @@ def sanitation_inspection_detail(request, inspection_id):
     )
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
     log_activity(
         request,

@@ -484,3 +484,37 @@ describe("checklist starting state", () => {
     expect(within(modal).queryByText(/auto-set to/i)).toBeNull();
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Next due date rule                                                   */
+/* ------------------------------------------------------------------ */
+
+import { getSuggestedNextDueDate } from "./InspectionManagement";
+
+describe("getSuggestedNextDueDate", () => {
+  test("annual adds one year", () => {
+    expect(getSuggestedNextDueDate("2026-03-15", "annual")).toBe("2027-03-15");
+  });
+
+  test("quarterly adds three months", () => {
+    expect(getSuggestedNextDueDate("2026-03-15", "quarterly")).toBe("2026-06-15");
+  });
+
+  test("monthly adds one month", () => {
+    expect(getSuggestedNextDueDate("2026-03-15", "monthly")).toBe("2026-04-15");
+  });
+
+  test("an unknown frequency suggests nothing", () => {
+    expect(getSuggestedNextDueDate("2026-03-15", "fortnightly")).toBe("");
+    expect(getSuggestedNextDueDate("2026-03-15", "")).toBe("");
+    expect(getSuggestedNextDueDate("2026-03-15", undefined)).toBe("");
+  });
+
+  test("a month end rolls back to a real date", () => {
+    expect(getSuggestedNextDueDate("2026-01-31", "monthly")).toBe("2026-02-28");
+  });
+
+  test("no inspection date suggests nothing", () => {
+    expect(getSuggestedNextDueDate("", "monthly")).toBe("");
+  });
+});

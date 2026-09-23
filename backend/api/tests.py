@@ -3088,3 +3088,105 @@ class InspectionDraftIsolationTests(TestCase):
         self.assertEqual(
             Notification.objects.filter(recipient_user=self.admin_user).count(), 1
         )
+
+
+class InspectionNextDueDateTests(TestCase):
+    """The next due date follows the business type's inspection frequency.
+
+    annual -> +1 year, quarterly -> +3 months, monthly -> +1 month. An
+    unrecognised frequency yields no suggestion rather than a silent monthly
+    one, and a date sent by the client always wins.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="due_date_sanitation",
+            password="Password@123",
+            email="due@test.local",
+        )
+        UserProfile.objects.create(user=self.user, role=ROLE_SANITATION)
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+    def establishment_with(self, frequency, name):
+        btype = SanitaryBusinessType.objects.create(
+            name=f"Due Date {name}",
+            inspection_frequency=frequency,
+        )
+        return SanitaryEstablishment.objects.create(
+            business_name=f"Due Date {name} Shop",
+            owner_name="Owner",
+            business_type=btype,
+            barangay="Poblacion",
+            address="1 Main St",
+            compliance_status="good_standing",
+            permit_status="active",
+        )
+
+    def post_inspection(self, establishment, **extra):
+        payload = {
+            "establishment": establishment.id,
+            "inspector_name": "Inspector Test",
+            "inspection_date": "2026-03-15",
+            "status_after_inspection": "good_standing",
+        }
+        payload.update(extra)
+        return self.client.post(
+            "/api/sanitation/inspections/", payload, format="json"
+        )
+
+    def test_annual_adds_one_year(self):
+        establishment = self.establishment_with("annual", "Annual")
+        response = self.post_inspection(establishment)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["next_due_date"], "2027-03-15")
+
+    def test_quarterly_adds_three_months(self):
+        establishment = self.establishment_with("quarterly", "Quarterly")
+        response = self.post_inspection(establishment)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["next_due_date"], "2026-06-15")
+
+    def test_monthly_adds_one_month(self):
+        establishment = self.establishment_with("monthly", "Monthly")
+        response = self.post_inspection(establishment)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["next_due_date"], "2026-04-15")
+
+    def test_unknown_frequency_suggests_nothing(self):
+        establishment = self.establishment_with("monthly", "Unknown")
+        SanitaryBusinessType.objects.filter(
+            pk=establishment.business_type_id
+        ).update(inspection_frequency="fortnightly")
+
+        response = self.post_inspection(establishment)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.json()["next_due_date"])
+
+    def test_explicit_next_due_date_wins(self):
+        establishment = self.establishment_with("annual", "Explicit")
+        response = self.post_inspection(establishment, next_due_date="2026-05-01")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["next_due_date"], "2026-05-01")
+
+    def test_a_draft_is_not_given_a_due_date(self):
+        establishment = self.establishment_with("annual", "Draft")
+        response = self.post_inspection(establishment, is_draft=True)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.json()["next_due_date"])
+
+    def test_month_end_rolls_back_to_a_real_date(self):
+        establishment = self.establishment_with("monthly", "MonthEnd")
+        response = self.post_inspection(
+            establishment, inspection_date="2026-01-31"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["next_due_date"], "2026-02-28")

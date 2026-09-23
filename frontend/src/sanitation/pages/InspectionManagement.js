@@ -923,20 +923,30 @@ function getTodayDate() {
   return toIsoDate(new Date());
 }
 
-function getSuggestedNextDueDate(dateValue, frequency) {
-  if (!dateValue) return "";
+// One shared rule, matching the backend and the mobile app. An unrecognised
+// frequency suggests nothing rather than a silent monthly date, so a
+// misconfigured business type is visible instead of quietly wrong.
+const INSPECTION_FREQUENCY_MONTHS = {
+  monthly: 1,
+  quarterly: 3,
+  annual: 12,
+};
+
+export function getSuggestedNextDueDate(dateValue, frequency) {
+  const months = INSPECTION_FREQUENCY_MONTHS[frequency];
+
+  if (!dateValue || months === undefined) return "";
 
   const date = parseLocalDate(dateValue);
 
   if (!date) return "";
 
-  if (frequency === "annual") {
-    date.setFullYear(date.getFullYear() + 1);
-  } else if (frequency === "quarterly") {
-    date.setMonth(date.getMonth() + 3);
-  } else {
-    date.setMonth(date.getMonth() + 1);
-  }
+  // Keep the day of the month, clamping when the target month is shorter.
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
 
   return toIsoDate(date);
 }

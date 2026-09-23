@@ -68,6 +68,7 @@ from api.serializers import (
 from api.services.activity import log_activity
 from api.services.sanitation import (
     generate_complaint_id,
+    apply_default_next_due_date,
     sync_establishment_after_inspection,
     with_establishment_rollups,
 )
@@ -1037,6 +1038,7 @@ def mobile_sanitation_inspection_submit(request):
     serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
 
     log_activity(
