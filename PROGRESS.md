@@ -1,7 +1,7 @@
 # Project Progress & Status Tracker
 
 ## Working Conventions
-This project is being developed with a Claude-based planner/reviewer working alongside you (Antigravity) as implementer, following strict discipline: small scoped steps, real test output required (not just "tests should pass" claims), full file contents requested when reviewing critical logic (not truncated diffs), git discipline (explicit staging, review diffs before commit, no push without explicit review/approval), and an audit-before-fix approach for any broad review. If a different session or tool picks this up, maintain the same discipline: show real command output, don't claim something works without demonstrating it.
+This project is being developed with Claude-based and ChatGPT-based planners/reviewers working alongside you (Claude Code) as implementer, following strict discipline: small scoped steps, real test output required (not just "tests should pass" claims), full file contents requested when reviewing critical logic (not truncated diffs), git discipline (explicit staging, review diffs before commit, no push without explicit review/approval), and an audit-before-fix approach for any broad review. If a different session or tool picks this up, maintain the same discipline: show real command output, don't claim something works without demonstrating it.
 
 ## Completed & Verified (pushed to origin/main)
 - **Notification model + violation write-time trigger** (`8ffb4f7`)
