@@ -14,8 +14,9 @@ jest.mock(
   () => ({ useNavigate: () => jest.fn() }),
   { virtual: true }
 );
+let mockAuthUser = { username: "tester", display_name: "Maria Santos" };
 jest.mock("../../auth/AuthContext", () => ({
-  useAuth: () => ({ user: { username: "tester", display_name: "Maria Santos" } }),
+  useAuth: () => ({ user: mockAuthUser }),
 }));
 jest.mock("../../shared/csvExport", () => ({
   datedCsvFilename: (name) => `${name}.csv`,
@@ -317,5 +318,89 @@ describe("same-day inspections", () => {
     } finally {
       restore();
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Inspector attribution                                                */
+/* ------------------------------------------------------------------ */
+
+function withUser(user) {
+  const previous = mockAuthUser;
+  mockAuthUser = user;
+  return () => {
+    mockAuthUser = previous;
+  };
+}
+
+function inspectorField(modal) {
+  return within(modal)
+    .getByText("Sanitary Inspector (Auto-Assigned)")
+    .closest("label");
+}
+
+describe("inspector attribution", () => {
+  test("uses the logged-in user's real name", async () => {
+    const restore = withUser({ username: "msantos", display_name: "Maria Santos" });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      expect(within(inspectorField(modal)).getByText("Maria Santos")).toBeTruthy();
+
+      fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
+      const payload = await submittedPayload(modal);
+      expect(payload.inspector_name).toBe("Maria Santos");
+    } finally {
+      restore();
+    }
+  });
+
+  test("falls back to the username when there is no display name", async () => {
+    const restore = withUser({ username: "msantos" });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      expect(within(inspectorField(modal)).getByText("msantos")).toBeTruthy();
+
+      fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
+      const payload = await submittedPayload(modal);
+      expect(payload.inspector_name).toBe("msantos");
+    } finally {
+      restore();
+    }
+  });
+
+  test("builds a name from first and last name when that is all there is", () => {
+    const restore = withUser({
+      username: "jsmith",
+      first_name: "Jose",
+      last_name: "Rizal",
+    });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      expect(within(inspectorField(modal)).getByText("Jose Rizal")).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("never invents a person when the account has no name at all", () => {
+    const restore = withUser({ username: "inspector_juan" });
+
+    try {
+      const modal = openInspection("Fishball Cart");
+      expect(within(modal).queryByText(/Juan Dela Cruz/)).toBeNull();
+      expect(within(modal).queryByText(/Maria Santos/)).toBeNull();
+      expect(within(inspectorField(modal)).getByText("inspector_juan")).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("makes no unverifiable claim about the inspector", () => {
+    const modal = openInspection("Fishball Cart");
+
+    expect(within(modal).queryByText(/Verified Inspector/)).toBeNull();
   });
 });

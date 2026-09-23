@@ -602,14 +602,17 @@ function InspectionFormModal({
     : null;
 
   const { user } = useAuth();
+  // An inspection is a record of who carried it out, so it is attributed to
+  // the signed-in account and never to a stand-in name.
   const defaultInspector = useMemo(() => {
     if (draft?.inspector_name) return draft.inspector_name;
-    if (user?.display_name && user.display_name !== "admin" && user.display_name !== "System Admin") {
-      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
-    }
-    if (user?.username === "inspector_maria") return "Insp. Maria Santos";
-    if (user?.username === "inspector_juan") return "Insp. Juan Dela Cruz";
-    return "Insp. Juan Dela Cruz";
+
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return user?.display_name?.trim() || fullName || user?.username || "";
   }, [draft, user]);
 
   const inspectorName = defaultInspector;
@@ -782,7 +785,7 @@ function InspectionFormModal({
               <FiLock className="inspector-lock-icon" />
               <div className="inspector-name-badge">
                 <strong>{inspectorName}</strong>
-                <small>Logged-in Active Account • Verified Inspector</small>
+                <small>Signed-in account</small>
               </div>
             </div>
           </label>

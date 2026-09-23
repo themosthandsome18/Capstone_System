@@ -176,7 +176,7 @@ export function getScheduleDateLimits(priority) {
 }
 
 const emptySchedule = {
-  inspector: "Insp. J. Cruz",
+  inspector: "",
   date: new Date().toISOString().slice(0, 10),
   time: "09:00",
   priority: "high",
@@ -196,13 +196,14 @@ function ComplaintsManagement() {
   } = useSanitationData();
 
   const { user } = useAuth();
+  // Attributed to the signed-in account, never to a stand-in name.
   const defaultInspectorName = useMemo(() => {
-    if (!user) return "Insp. Juan Dela Cruz";
-    if (user.display_name && user.display_name !== "admin") {
-      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
-    }
-    if (user.username === "inspector_maria") return "Insp. Maria Santos";
-    return "Insp. Juan Dela Cruz";
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return user?.display_name?.trim() || fullName || user?.username || "";
   }, [user]);
 
   const [filters, setFilters] = useState({
@@ -957,7 +958,7 @@ export function printFieldworkActionSlip(report) {
           </div>
           <div class="box">
             <span>Assigned Sanitary Inspector</span>
-            <strong>${report.assigned_inspector || "Insp. Juan Dela Cruz"}</strong>
+            <strong>${report.assigned_inspector || "Not assigned"}</strong>
           </div>
           <div class="box">
             <span>Scheduled Date & Time</span>
