@@ -3848,8 +3848,8 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         SanitationEstablishment.placeholder();
     _inspectionDate = DateTime.now();
     _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
-    _status = 'for_completion';
     _checks = _defaultChecksFor(_establishment);
+    _status = _statusForChecks(_checks);
     _findings.clear();
     _remarks.clear();
     SharedPreferences.getInstance().then((prefs) {
@@ -3890,8 +3890,8 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             setState(() {
               _establishment = item;
               _nextDueDate = _suggestedDueDate(_inspectionDate, item);
-              _status = 'for_completion';
               _checks = _defaultChecksFor(item);
+              _status = _statusForChecks(_checks);
               _findings.clear();
               _remarks.clear();
             });
@@ -3949,6 +3949,15 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
       widget.bootstrap.businessTypes,
       establishment.businessTypeId,
     );
+  }
+
+  /// Starting status for a freshly loaded checklist.
+  ///
+  /// As on the web form, a business type with no configured requirements has
+  /// nothing outstanding to record. The inspector can still pick another
+  /// status from the dropdown.
+  String _statusForChecks(List<InspectionChecklistDraft> checks) {
+    return checks.isEmpty ? 'good_standing' : 'for_completion';
   }
 
   DateTime _suggestedDueDate(
@@ -4012,10 +4021,8 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
       showAppMessage(context, 'Inspector name is required.');
       return;
     }
-    if (_checks.isEmpty) {
-      showAppMessage(context, 'Inspection checklist is required.');
-      return;
-    }
+    // A business type with no configured requirements submits an empty
+    // checklist rather than a fabricated one.
     if (_checks.any((item) => !item.isComplied) && _status == 'good_standing') {
       showAppMessage(context, 'Update the status for unchecked items.');
       return;
@@ -4106,7 +4113,40 @@ class InspectionChecklistPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final completed = checks.where((item) => item.isComplied).length;
     final total = checks.length;
-    final percent = total == 0 ? 0 : ((completed / total) * 100).round();
+
+    if (total == 0) {
+      // Nothing is configured for this business type, so there is nothing to
+      // score. Say so instead of showing an empty 0% checklist.
+      return Card(
+        elevation: 0,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.only(bottom: 12),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sanitation Checklist & Score',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'No requirements configured yet.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final percent = ((completed / total) * 100).round();
 
     Color gradeColor;
     String gradeLabel;

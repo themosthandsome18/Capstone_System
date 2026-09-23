@@ -4,8 +4,10 @@
 // A type such as Ambulant Food Vendor has none configured yet, so the app
 // must show nothing rather than invent a generic list. Types that do have
 // requirements keep their existing behaviour.
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// The generic list the app used to substitute when a type had no requirements.
 const oldFabricatedChecklist = [
@@ -42,7 +44,90 @@ final waterStation = businessType(8, 'Water Refilling Station', const [
 
 final allTypes = [ambulant, waterStation];
 
+SanitationEstablishment establishment(int id, String name, int typeId) {
+  return SanitationEstablishment.fromJson({
+    'id': id,
+    'business_name': name,
+    'business_type': typeId,
+  });
+}
+
+final fishballCart = establishment(701, 'Fishball Cart', ambulant.id);
+final aquaStation = establishment(702, 'Aqua Station', waterStation.id);
+
+SanitationBootstrap bootstrapWith(SanitationEstablishment record) {
+  return SanitationBootstrap(
+    businessTypes: allTypes,
+    establishments: [record],
+    inspections: const [],
+    complaints: const [],
+    householdRecords: const [],
+    barangays: const [],
+    notifications: const [],
+  );
+}
+
+/// Records what the inspection form would send, without touching the network.
+class FakeSanitationApi extends TourismApi {
+  FakeSanitationApi();
+
+  List<InspectionChecklistDraft>? sentChecklist;
+  String? sentStatus;
+
+  @override
+  Future<Map<String, dynamic>> submitSanitationInspection({
+    required int establishmentId,
+    required String inspectorName,
+    required String inspectionDate,
+    required String nextDueDate,
+    required String findings,
+    required String remarks,
+    required String statusAfterInspection,
+    required List<InspectionChecklistDraft> checklistItems,
+  }) async {
+    sentChecklist = checklistItems;
+    sentStatus = statusAfterInspection;
+    return {'id': 4242};
+  }
+}
+
+Future<FakeSanitationApi> pumpInspectionForm(
+  WidgetTester tester,
+  SanitationEstablishment record,
+) async {
+  // Tall surface so the whole scrolling form, submit button included, builds.
+  tester.view.physicalSize = const Size(1200, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final api = FakeSanitationApi();
+  await tester.pumpWidget(
+    MaterialApp(
+      home: SanitationInspectionPage(
+        api: api,
+        bootstrap: bootstrapWith(record),
+        initialEstablishment: record,
+      ),
+    ),
+  );
+  await tester.pump();
+  return api;
+}
+
+Future<void> submitForm(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextField).first, 'Juan Dela Cruz');
+  await tester.pump();
+  final button = find.text('Submit Inspection');
+  await tester.tap(button);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   group('buildInspectionChecks', () {
     test('a type with no configured requirements yields no checklist', () {
       final checks = buildInspectionChecks(allTypes, ambulant.id);
@@ -61,13 +146,58 @@ void main() {
         checks.map((item) => item.requirementName).toList(),
         const ['Water Potability Certificate', 'Health Certificate of Staff'],
       );
-      expect(checks.every((item) => item.isComplied), isFalse);
       expect(checks.any((item) => item.isComplied), isFalse);
     });
 
     test('an unknown business type yields no checklist', () {
       expect(buildInspectionChecks(allTypes, 999), isEmpty);
       expect(buildInspectionChecks(const [], waterStation.id), isEmpty);
+    });
+  });
+
+  group('Inspection form', () {
+    testWidgets('shows an empty state for a type with no requirements', (
+      tester,
+    ) async {
+      await pumpInspectionForm(tester, fishballCart);
+
+      expect(find.text('No requirements configured yet.'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      for (final fabricated in oldFabricatedChecklist) {
+        expect(find.text(fabricated), findsNothing);
+      }
+    });
+
+    testWidgets('submits an empty checklist instead of a fabricated one', (
+      tester,
+    ) async {
+      final api = await pumpInspectionForm(tester, fishballCart);
+
+      await submitForm(tester);
+
+      expect(api.sentChecklist, isNotNull);
+      expect(api.sentChecklist, isEmpty);
+      // Mirrors the web form: nothing configured means nothing outstanding.
+      expect(api.sentStatus, 'good_standing');
+      expect(find.text('Inspection checklist is required.'), findsNothing);
+    });
+
+    testWidgets('a configured type still lists and sends its requirements', (
+      tester,
+    ) async {
+      final api = await pumpInspectionForm(tester, aquaStation);
+
+      expect(find.text('No requirements configured yet.'), findsNothing);
+      expect(find.text('Water Potability Certificate'), findsOneWidget);
+      expect(find.text('Health Certificate of Staff'), findsOneWidget);
+
+      await submitForm(tester);
+
+      expect(
+        api.sentChecklist?.map((item) => item.requirementName).toList(),
+        const ['Water Potability Certificate', 'Health Certificate of Staff'],
+      );
+      expect(api.sentStatus, 'for_completion');
     });
   });
 }
