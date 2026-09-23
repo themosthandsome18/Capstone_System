@@ -124,7 +124,10 @@ describe("business type with no configured requirements", () => {
   });
 
   test("submits no fabricated checklist items", async () => {
-    const payload = await submittedPayload(openInspection("Fishball Cart"));
+    const modal = openInspection("Fishball Cart");
+    // With no requirements there is no status to infer, so one must be picked.
+    fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
+    const payload = await submittedPayload(modal);
 
     expect(payload.establishment).toBe(701);
     expect(payload.checklist_items).toEqual([]);
@@ -137,6 +140,7 @@ describe("business type with no configured requirements", () => {
     try {
       const modal = openInspection("Fishball Cart");
       expect(checklistNames(modal)).toEqual([]);
+      fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
       const payload = await submittedPayload(modal);
       expect(payload.checklist_items).toEqual([]);
     } finally {
@@ -169,5 +173,59 @@ describe("business type with configured requirements (unchanged)", () => {
       "Water Potability Certificate",
       "Health Certificate of Staff",
     ]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Explicit status when there is nothing to check                       */
+/* ------------------------------------------------------------------ */
+
+function statusSelect(modal) {
+  return within(modal)
+    .getByText("Status After Inspection")
+    .closest("label")
+    .querySelector("select");
+}
+
+describe("status after inspection with an empty checklist", () => {
+  test("starts with no status chosen, offering a placeholder", () => {
+    const modal = openInspection("Fishball Cart");
+    const select = statusSelect(modal);
+
+    expect(select.value).toBe("");
+    const placeholder = select.querySelector('option[value=""]');
+    expect(placeholder).toBeTruthy();
+    expect(placeholder.textContent).toBe("Select status");
+    expect(placeholder.disabled).toBe(true);
+  });
+
+  test("blocks submission until the inspector picks one", () => {
+    const modal = openInspection("Fishball Cart");
+
+    fireEvent.click(within(modal).getByText("Submit Inspection"));
+
+    expect(mockCtx.createInspection).not.toHaveBeenCalled();
+    expect(within(modal).getByText("Select the status after inspection.")).toBeTruthy();
+  });
+
+  test("submits the chosen status with an empty checklist", async () => {
+    const modal = openInspection("Fishball Cart");
+    fireEvent.change(statusSelect(modal), { target: { value: "upcoming" } });
+
+    const payload = await submittedPayload(modal);
+
+    expect(payload.status_after_inspection).toBe("upcoming");
+    expect(payload.checklist_items).toEqual([]);
+  });
+
+  test("a configured type still defaults its status and submits (unchanged)", async () => {
+    const modal = openInspection("Aqua Station");
+    const select = statusSelect(modal);
+
+    expect(select.value).toBe("violation");
+    expect(select.querySelector('option[value=""]')).toBeNull();
+
+    const payload = await submittedPayload(modal);
+    expect(payload.status_after_inspection).toBe("violation");
   });
 });

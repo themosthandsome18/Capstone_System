@@ -653,11 +653,14 @@ function InspectionFormModal({
 
   const [statusAfterInspection, setStatusAfterInspection] = useState(() => {
     if (draft?.status_after_inspection) return draft.status_after_inspection;
-    
+
     const completed = initialChecks.filter((item) => item.is_complied).length;
     const total = initialChecks.length;
-    
-    if (total === 0 || completed === total) return "good_standing";
+
+    // With nothing to check there is nothing to infer a status from, so the
+    // inspector picks one instead of the form guessing on their behalf.
+    if (total === 0) return "";
+    if (completed === total) return "good_standing";
     if (completed === 0) return "violation";
     return "for_completion";
   });
@@ -713,6 +716,11 @@ function InspectionFormModal({
 
     if (!inspectionDate) {
       setFormError("Inspection date is required.");
+      return;
+    }
+
+    if (!statusAfterInspection) {
+      setFormError("Select the status after inspection.");
       return;
     }
 
@@ -815,6 +823,11 @@ function InspectionFormModal({
               value={statusAfterInspection}
               onChange={(event) => setStatusAfterInspection(event.target.value)}
             >
+              {statusAfterInspection ? null : (
+                <option value="" disabled>
+                  Select status
+                </option>
+              )}
               {statusOptions.map((status) => (
                 <option key={status.value} value={status.value}>
                   {status.label}
