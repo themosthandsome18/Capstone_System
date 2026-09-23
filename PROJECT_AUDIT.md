@@ -939,3 +939,35 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
 - **Not Verified**:
   - Not merged to `main` and not deployed. **A new APK build is still required** for the mobile half to reach users.
   - No real-device or emulator end-to-end test was performed; the mobile form was exercised only through a fake `TourismApi` in widget tests.
+
+### Inspection Management — Phase 1 Data-Integrity Fixes (branch `sanitation/inspection-integrity`, NOT merged, NOT deployed)
+- Commits: `353e922`, `db24dd4`, `8e3830c`, `24d8b99`, `dde5ef6`. Branched from `0ff406b`. `origin/main` is unchanged by this work. Each fix has its own commit and its own tests that failed against the pre-fix code.
+- **1. Drafts no longer change live records** (`353e922`, `backend/api/services/sanitation.py`):
+  - `sync_establishment_after_inspection` ran on every save and never checked `is_draft`. Saving a draft therefore rewrote the establishment's `compliance_status`, mapped a new `permit_status` (a draft marked Violation **suspended the permit**), and raised a violation notification — all before the inspection was finalized.
+  - The function now returns early for a draft. The guard sits at the single shared choke point, so it covers the web endpoint, the mobile endpoint, and both create and update. Finalizing a draft (`is_draft` True → False) applies the result exactly once.
+  - Tests: `InspectionDraftIsolationTests` (5 tests; 4 failed before the fix), covering web create, web update, mobile create, finalizing, and the unchanged non-draft path.
+- **2. No same-day overwrite** (`db24dd4`, `frontend/src/sanitation/pages/InspectionManagement.js`):
+  - `isDraftOrRecent` treated **any** inspection dated today as editable, so a second visit on the same day issued a `PUT` over the first inspection and the serializer deleted and recreated its checklist. The first visit's record was lost.
+  - Only an unfinished draft is reopened now; a finalized inspection is never overwritten, and a second visit creates a new record. Tests: 3 (1 failed before the fix).
+- **3. Real inspector attribution** (`8e3830c`, `InspectionManagement.js`, `ComplaintsManagement.js`):
+  - Removed the hard-coded `"Insp. Juan Dela Cruz"` universal fallback and the `inspector_maria`/`inspector_juan` special cases from both pages, the fabricated `"Insp. J. Cruz"` default in the complaint scheduling form, and the `"Insp. Juan Dela Cruz"` fallback printed on complaint reports.
+  - Inspections are attributed to the signed-in account: `display_name` (which the API computes as `get_full_name() or username`), else first+last name, else username. Never an invented person.
+  - The caption "Logged-in Active Account • Verified Inspector" was replaced with "Signed-in account": nothing in the system verifies inspector status, so the original claim was not backed by data.
+  - Remaining occurrences are test fixtures only (`EstablishmentRecords` owner names, the `InspectionManagement.test.js` auth mock) and a `StaffManagement` input placeholder.
+  - Tests: 5, all of which failed before the fix.
+- **4. Checklists start unchecked** (`24d8b99`, `InspectionManagement.js`):
+  - New inspections pre-ticked items from the establishment's previous `compliance_status`: everything for `good_standing`/`upcoming`, and everything except the last item for `for_completion`. An inspector could submit a checklist they never looked at.
+  - Every item now starts unchecked. A saved draft still restores the ticks and notes the inspector had already made. The stale warning text ("Status will be auto-set to For Completion…") now describes the rule the form actually applies.
+  - Tests: 4 (3 failed before the fix).
+- **5. One next-due-date rule everywhere** (`dde5ef6`, backend + web + mobile):
+  - **Rule**: annual → +1 year, quarterly → +3 months, monthly → +1 month; an unrecognised frequency yields **no** suggestion rather than a silent +1 month, so a misconfigured business type is visible instead of quietly producing a wrong schedule.
+  - **Frequency values that exist**: `monthly`, `quarterly`, `annual` — the three `SANITARY_FREQUENCY_CHOICES` in `backend/api/models.py`, and the only three values in production (7 monthly, 3 quarterly, 6 annual across 16 types, via a read-only bootstrap GET). There is no `annually` spelling anywhere in code or data.
+  - **Mobile** had no annual branch at all (`frequency == 'quarterly' ? 3 : 1`), so all 6 annual types got a one-month due date from the phone. It also overflowed at month ends, turning 31 January into **3 March**; the web overflowed the same way. All three layers now clamp to the last real day of the target month.
+  - **Backend**: `suggested_next_due_date` and `apply_default_next_due_date` were added to `services/sanitation.py` and wired into both endpoints. When a **final** inspection omits `next_due_date`, it is computed from `establishment.business_type.inspection_frequency`. An explicit value from the client always wins, and drafts are left without a due date. Previously the backend never computed one, so the schedule depended entirely on whichever client happened to submit.
+  - Tests: 7 backend (4 red), 6 web (6 red), 5 mobile (3 red).
+- **Verification (local only)**:
+  - Backend: `Ran 112 tests in 103.650s` / `OK`.
+  - Frontend: `Tests: 167 passed, 167 total`, `Test Suites: 5 passed, 5 total`; `npm run build` → `Compiled successfully.`
+  - Mobile: `flutter test` 18/18 passed; `flutter analyze` → `4 issues found`, the same 4 pre-existing info-level issues, none new.
+  - No production database, API, or production data was changed.
+- **Not Verified**: not merged to `main`, not deployed, **a new APK build is still required**, and no real-device or emulator end-to-end test was performed.
