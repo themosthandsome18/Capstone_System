@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { API_BASE_URL } from "../../shared/apiClient";
+import { fetchSanitationInspectors } from "../services/sanitationApi";
 
 export const REPORT_LIMIT_MAX = 5;
 
@@ -229,6 +230,22 @@ function ComplaintsManagement() {
   const [dayModalData, setDayModalData] = useState(null);
   const [inspectionModalData, setInspectionModalData] = useState(null);
   const [summaryModalReport, setSummaryModalReport] = useState(null);
+  const [inspectors, setInspectors] = useState([]);
+
+  // Names for the assignment dropdown come from real staff accounts.
+  useEffect(() => {
+    let active = true;
+    fetchSanitationInspectors()
+      .then((rows) => {
+        if (active) setInspectors(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (active) setInspectors([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
@@ -561,6 +578,7 @@ function ComplaintsManagement() {
         <ScheduleInspectionModal
           report={selectedReport}
           schedule={schedule}
+          inspectors={inspectors}
           saving={saving}
           onClose={() => setScheduleOpen(false)}
           onSubmit={handleScheduleInspection}
@@ -1219,15 +1237,24 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
   );
 }
 
-function ScheduleInspectionModal({
+export function ScheduleInspectionModal({
   report,
   schedule,
+  inspectors = [],
   saving,
   onClose,
   onSubmit,
   onPriorityChange,
   onChange,
 }) {
+  // Real staff accounts, plus whatever name an older record already carries so
+  // that history stays readable even if that person no longer has an account.
+  const inspectorNames = inspectors.map((item) => item.name);
+  const inspectorOptions =
+    schedule.inspector && !inspectorNames.includes(schedule.inspector)
+      ? [schedule.inspector, ...inspectorNames]
+      : inspectorNames;
+
   const isUrgentLocked =
     report.priority === "high" ||
     String(report.priority).toLowerCase() === "urgent";
@@ -1288,11 +1315,22 @@ function ScheduleInspectionModal({
               value={schedule.inspector}
               onChange={(event) => onChange("inspector", event.target.value)}
             >
-              <option>Insp. J. Cruz</option>
-              <option>Insp. M. Santos</option>
-              <option>Insp. R. Dela Pena</option>
-              <option>Insp. E. Alcantara</option>
+              {schedule.inspector ? null : (
+                <option value="" disabled>
+                  Select inspector
+                </option>
+              )}
+              {inspectorOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
             </select>
+            {inspectorOptions.length ? null : (
+              <small className="community-field-hint">
+                No inspector accounts available.
+              </small>
+            )}
           </label>
           <label>
             Inspection Date (Strict Constraint)

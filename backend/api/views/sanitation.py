@@ -564,6 +564,33 @@ def household_record_detail(request, household_id):
     return Response(serializer.data)
 
 
+@api_view(["GET"])
+@module_required("sanitation")
+def sanitation_inspector_list(request):
+    """Names for the inspector pickers, and nothing else.
+
+    Deliberately narrower than `sanitation_staff_list`: it returns only an id
+    and a display name, so a dropdown never carries staff email addresses or
+    account metadata. Inactive accounts are left out because they cannot carry
+    out an inspection.
+    """
+    inspectors = (
+        User.objects.filter(
+            is_active=True,
+            profile__role__in=[ROLE_SANITATION, ROLE_ADMIN],
+        )
+        .select_related("profile")
+        .order_by("first_name", "last_name", "username")
+    )
+
+    return Response(
+        [
+            {"id": user.id, "name": user.get_full_name() or user.username}
+            for user in inspectors
+        ]
+    )
+
+
 @api_view(["GET", "POST"])
 @module_required("sanitation")
 def sanitation_staff_list(request):

@@ -74,6 +74,10 @@ export function deleteSanitationEstablishment(id) {
 }
 
 
+export function fetchSanitationInspectors() {
+  return request(sanitationPath("/inspectors/"));
+}
+
 export function fetchSanitationInspections() {
   return request(sanitationPath("/inspections/"));
 }

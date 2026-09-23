@@ -3190,3 +3190,107 @@ class InspectionNextDueDateTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json()["next_due_date"], "2026-02-28")
+
+
+class SanitationInspectorListTests(TestCase):
+    """The inspector picker needs names only, and only to sanitation staff.
+
+    It must expose no contact details, must list active sanitation and admin
+    accounts, and must be closed to every other role.
+    """
+
+    ENDPOINT = "/api/sanitation/inspectors/"
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.sanitation_user = self.make_user(
+            "insp_list_sanitation", ROLE_SANITATION, first="Ana", last="Reyes"
+        )
+        self.admin_user = self.make_user(
+            "insp_list_admin", ROLE_ADMIN, first="Ben", last="Cruz"
+        )
+        self.nameless_user = self.make_user("insp_list_nameless", ROLE_SANITATION)
+        self.inactive_user = self.make_user(
+            "insp_list_inactive", ROLE_SANITATION, first="Old", last="Staff"
+        )
+        self.inactive_user.is_active = False
+        self.inactive_user.save(update_fields=["is_active"])
+
+        self.tourism_user = self.make_user("insp_list_tourism", ROLE_TOURISM)
+        self.tourist_user = self.make_user("insp_list_tourist", ROLE_TOURIST)
+        self.establishment_user = self.make_user(
+            "insp_list_establishment", ROLE_ESTABLISHMENT
+        )
+
+    def make_user(self, username, role, first="", last=""):
+        user = User.objects.create_user(
+            username=username,
+            password="Password@123",
+            email=f"{username}@test.local",
+            first_name=first,
+            last_name=last,
+        )
+        UserProfile.objects.create(user=user, role=role)
+        return user
+
+    def authenticate(self, user):
+        token, _ = Token.objects.get_or_create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+    def test_sanitation_staff_can_list_inspectors(self):
+        self.authenticate(self.sanitation_user)
+        response = self.client.get(self.ENDPOINT)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row["name"] for row in response.json()]
+        self.assertIn("Ana Reyes", names)
+        self.assertIn("Ben Cruz", names)
+
+    def test_only_id_and_name_are_exposed(self):
+        self.authenticate(self.sanitation_user)
+        response = self.client.get(self.ENDPOINT)
+
+        for row in response.json():
+            self.assertEqual(set(row.keys()), {"id", "name"})
+
+        body = response.content.decode()
+        self.assertNotIn("@test.local", body)
+        self.assertNotIn("date_joined", body)
+
+    def test_an_account_without_a_name_falls_back_to_its_username(self):
+        self.authenticate(self.sanitation_user)
+        response = self.client.get(self.ENDPOINT)
+
+        names = [row["name"] for row in response.json()]
+        self.assertIn("insp_list_nameless", names)
+
+    def test_inactive_accounts_are_excluded(self):
+        self.authenticate(self.sanitation_user)
+        response = self.client.get(self.ENDPOINT)
+
+        names = [row["name"] for row in response.json()]
+        self.assertNotIn("Old Staff", names)
+
+    def test_other_roles_are_refused(self):
+        for user in [
+            self.tourism_user,
+            self.tourist_user,
+            self.establishment_user,
+        ]:
+            with self.subTest(user=user.username):
+                self.authenticate(user)
+                response = self.client.get(self.ENDPOINT)
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_is_refused(self):
+        self.client.credentials()
+        response = self.client.get(self.ENDPOINT)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_the_endpoint_is_read_only(self):
+        self.authenticate(self.sanitation_user)
+        response = self.client.post(self.ENDPOINT, {"name": "New"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
