@@ -3777,6 +3777,36 @@ class SanitationPermitsPage extends StatelessWidget {
   }
 }
 
+/// Builds the checklist a new inspection starts from.
+///
+/// The requirements configured for [businessTypeId] are kept in their
+/// configured order, de-duplicated by name (case-insensitive), and start
+/// unchecked.
+List<InspectionChecklistDraft> buildInspectionChecks(
+  List<SanitationBusinessType> businessTypes,
+  int businessTypeId,
+) {
+  final businessType = businessTypes.firstWhereOrNull(
+    (item) => item.id == businessTypeId,
+  );
+  final rawRequirements = businessType?.requirements ?? const [];
+
+  // Deduplicate requirements by requirement name (case-insensitive)
+  final seen = <String>{};
+  final uniqueRequirements = <String>[];
+  for (final item in rawRequirements) {
+    final name = item.requirementName.trim();
+    if (name.isNotEmpty && seen.add(name.toLowerCase())) {
+      uniqueRequirements.add(name);
+    }
+  }
+
+  // For a new inspection, items default to false (unchecked / 0% complete)
+  return uniqueRequirements
+      .map((name) => InspectionChecklistDraft(name, false))
+      .toList();
+}
+
 class SanitationInspectionPage extends StatefulWidget {
   const SanitationInspectionPage({
     super.key,
@@ -3915,35 +3945,10 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   List<InspectionChecklistDraft> _defaultChecksFor(
     SanitationEstablishment establishment,
   ) {
-    final businessType = widget.bootstrap.businessTypes.firstWhereOrNull(
-      (item) => item.id == establishment.businessTypeId,
+    return buildInspectionChecks(
+      widget.bootstrap.businessTypes,
+      establishment.businessTypeId,
     );
-    final rawRequirements = businessType?.requirements ?? const [];
-
-    // Deduplicate requirements by requirement name (case-insensitive)
-    final seen = <String>{};
-    final uniqueRequirements = <String>[];
-    for (final item in rawRequirements) {
-      final name = item.requirementName.trim();
-      if (name.isNotEmpty && seen.add(name.toLowerCase())) {
-        uniqueRequirements.add(name);
-      }
-    }
-
-    final list = uniqueRequirements.isNotEmpty
-        ? uniqueRequirements
-        : const [
-            'Proper waste disposal system',
-            'Clean water supply available',
-            'Functional toilet facilities',
-            'Food handling area is clean',
-            'Valid sanitary permit displayed',
-          ];
-
-    // For a new inspection, items default to false (unchecked / 0% complete)
-    return list
-        .map((name) => InspectionChecklistDraft(name, false))
-        .toList();
   }
 
   DateTime _suggestedDueDate(
