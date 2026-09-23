@@ -856,9 +856,9 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - Backend tests were not rerun because no backend code changed; the previous 100/100 result remains valid for the unchanged backend.
   - No production database or API was modified.
 - **Scope**: Web-only safety fix. Backend, migration `0034`, seed data, mobile code, requirements architecture, and production data were not changed.
-- **Mobile Limitation (not fixed)**:
-  - The mobile Flutter app still contains a generic fallback checklist for zero-requirement business types, and those items can be submitted and saved as inspection checklist items.
-  - Mobile is **not** yet safe for zero-requirement types. Fixing it is a separate pending Flutter change that will require a source change and a new APK/build verification if approved.
+- **Mobile Limitation (addressed later, on a branch)**:
+  - At the time of this web fix, the mobile Flutter app still contained a generic fallback checklist for zero-requirement business types, and those items could be submitted and saved as inspection checklist items.
+  - This was subsequently fixed on branch `sanitation/mobile-zero-requirements`; see **Mobile Zero-Requirement Inspection Checklist Fix** below. It is not merged and not deployed.
 - **Existing Production Impact (inference at the time; since confirmed in production)**:
   - *Stated before production verification*: which existing production business types had zero configured requirements was not verified at that point. The inference was that the 13 seeded types produce exactly 243 requirement rows, matching the `SanitaryRequirement: 243` recorded at the clean-slate cleanup, which suggested the two non-seeded production types (likely "Food Establishment" and "Commercial Non Food") had zero requirements and were already receiving the generic fallback.
   - *Confirmed afterwards by the read-only production verification*: the three zero-requirement production types are `Ambulant Food Vendor`, `Commercial Non Food`, and `Food Establishment`, and the deployed web code no longer contains the old generic fallbacks. This confirmation rests on the public bootstrap data and the deployed frontend bundle; the authenticated UI was not visually checked.
@@ -867,3 +867,25 @@ Sections 1–10 above describe the codebase as audited on September 18, 2026 and
   - Production currently has three zero-requirement business types (`Ambulant Food Vendor`, `Commercial Non Food`, `Food Establishment`), which confirms the earlier inference about the two non-seeded types.
   - Production verification could not directly confirm the authenticated production UI: the logged-in Inspection and Renewal screens were not visually verified.
 - **Ambulant Status**: Migration `0034` is applied in production. Ambulant Food Vendor still intentionally has zero configured requirements; no requirements or legal basis were invented.
+
+### Mobile Zero-Requirement Inspection Checklist Fix (branch `sanitation/mobile-zero-requirements`, NOT merged, NOT deployed)
+- Commits on branch: `598e850` (remove the fabrication) and `97a6d4d` (honest empty state and empty-checklist submit). Branched from `f3bd653`. `origin/main` is unchanged by this work.
+- **Root Cause**:
+  - `_defaultChecksFor()` in `mobile/lib/screens/sanitation_screens.dart` substituted a hard-coded five-item checklist ("Proper waste disposal system", "Clean water supply available", "Functional toilet facilities", "Food handling area is clean", "Valid sanitary permit displayed") whenever the establishment's business type had no configured requirements, or when its business type id matched none of the loaded types.
+  - Those fabricated items were ticked by the inspector and submitted to `/mobile/sanitation/inspections/` as real checklist items.
+  - Mobile parses only `requirement_name` from the bootstrap and carries no permit-size field, so unlike the web it performs no SP/Large filtering and needs no cross-size fallback. The fabricated list therefore appeared only for types with zero requirements in total.
+- **Mobile Fix** (`mobile/lib/screens/sanitation_screens.dart`):
+  - The list-building logic was extracted unchanged into a pure top-level `buildInspectionChecks(businessTypes, businessTypeId)`, and the hard-coded fallback branch was then deleted. Configured types keep their exact previous behaviour: same names, same configured order, same case-insensitive de-duplication, all starting unchecked.
+  - `InspectionChecklistPanel` shows "No requirements configured yet." for an empty checklist — the same wording as the web — instead of a "0% Complete (Unchecked)" score badge and empty progress bar.
+  - The `_checks.isEmpty` submit guard ("Inspection checklist is required.") was removed, so a zero-requirement establishment can be inspected and submits `checklist_items: []`.
+  - The starting status for an empty checklist is `good_standing`, mirroring the web form's rule in `frontend/src/sanitation/pages/InspectionManagement.js` (`if (total === 0 || completed === total) return "good_standing";`). The inspector can still change it from the Inspection status dropdown. Non-empty checklists keep their existing status behaviour.
+- **Backend**: unchanged, and no change was required. `SanitaryInspectionCreateSerializer` declares `checklist_items` as `required=False` and `create()` defaults it to `[]`; `sync_establishment_after_inspection` copies the submitted `status_after_inspection` and derives nothing from the checklist, so an empty list cannot mis-score an establishment or divide by zero.
+- **Verification (local only)**:
+  - New tests: `mobile/test/sanitation_inspection_checklist_test.dart` (6 tests). Three failed against the pre-fix code, demonstrating the fabrication; all pass after the fix.
+  - `flutter test`: 7/7 passed across the suite. `flutter analyze`: 4 issues found, the same 4 pre-existing info-level issues as before the change — no new issues.
+  - No production database, API, or production data was touched.
+- **Not Verified**:
+  - Not merged to `main` and not deployed. A new APK build is still required.
+  - **No real-device or emulator end-to-end test was performed.** The submission path was exercised only through a fake `TourismApi` in widget tests, never against a running backend.
+- **Still Open (separate task)**:
+  - `_buildRequirements()` in `mobile/lib/screens/sanitation_screens.dart` still returns a hard-coded list of five compliance documents with invented dates and details (for example "Barangay Business Clearance — Verified on Jan 15, 2026" and "Water Potability Test Result — Tested on Jan 22, 2026 • Daungan Lab"), shown to business owners in the Establishment Portal. It ignores the establishment's configured requirements. It is display-only and submits nothing, but it presents fabricated compliance records as real. It was deliberately left out of this fix.
