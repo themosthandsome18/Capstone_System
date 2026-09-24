@@ -1015,9 +1015,8 @@ def mobile_sanitation_inspection_submit(request):
     data["inspection_date"] = (
         data.get("inspection_date") or timezone.localdate().isoformat()
     )
-    data["status_after_inspection"] = (
-        data.get("status_after_inspection") or "good_standing"
-    )
+    # No default status: a final inspection must state its own result, and the
+    # serializer rejects it otherwise. The distributed app always sends one.
     data["is_draft"] = data.get("is_draft", False)
     upload = request.FILES.get("photo") or request.FILES.get("image")
 

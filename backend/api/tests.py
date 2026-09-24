@@ -3294,3 +3294,119 @@ class SanitationInspectorListTests(TestCase):
         response = self.client.post(self.ENDPOINT, {"name": "New"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class InspectionStatusRequiredTests(TestCase):
+    """A finished inspection must say what it found.
+
+    Silently defaulting a missing status to good_standing recorded a
+    compliance judgement nobody made, so a final inspection without one is now
+    rejected. Drafts are still work in progress and may omit it.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="status_required_sanitation",
+            password="Password@123",
+            email="status@test.local",
+        )
+        UserProfile.objects.create(user=self.user, role=ROLE_SANITATION)
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Status Required Cafe",
+            inspection_frequency="monthly",
+        )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Status Required Shop",
+            owner_name="Owner",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="1 Main St",
+            compliance_status="upcoming",
+            permit_status="renewal_due",
+        )
+
+    def payload(self, **extra):
+        data = {
+            "establishment": self.establishment.id,
+            "inspector_name": "Inspector Test",
+            "inspection_date": "2026-03-15",
+        }
+        data.update(extra)
+        return data
+
+    def post(self, endpoint, **extra):
+        return self.client.post(endpoint, self.payload(**extra), format="json")
+
+    def test_web_final_without_status_is_rejected(self):
+        response = self.post("/api/sanitation/inspections/", is_draft=False)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("status_after_inspection", response.json())
+
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "upcoming")
+        self.assertEqual(SanitaryInspection.objects.count(), 0)
+
+    def test_mobile_final_without_status_is_rejected(self):
+        response = self.post("/api/mobile/sanitation/inspections/", is_draft=False)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(SanitaryInspection.objects.count(), 0)
+
+    def test_a_final_inspection_defaults_to_nothing_when_the_key_is_absent(self):
+        # No is_draft key at all: the serializer still treats it as final.
+        response = self.client.post(
+            "/api/sanitation/inspections/", self.payload(), format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_draft_may_omit_the_status(self):
+        response = self.post("/api/sanitation/inspections/", is_draft=True)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.json()["is_draft"])
+
+    def test_a_final_with_a_status_is_accepted(self):
+        response = self.post(
+            "/api/sanitation/inspections/",
+            is_draft=False,
+            status_after_inspection="violation",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.compliance_status, "violation")
+
+    def test_the_mobile_client_still_works_because_it_always_sends_one(self):
+        # Mirrors the payload the distributed APK sends.
+        response = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            self.payload(
+                next_due_date="2026-04-15",
+                findings="",
+                remarks="",
+                status_after_inspection="good_standing",
+                is_draft=False,
+                checklist_items=[],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_finalizing_a_draft_without_a_status_is_rejected(self):
+        created = self.post("/api/sanitation/inspections/", is_draft=True)
+        inspection_id = created.json()["id"]
+
+        response = self.client.put(
+            f"/api/sanitation/inspections/{inspection_id}/",
+            self.payload(is_draft=False),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

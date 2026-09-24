@@ -3880,7 +3880,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     _inspectionDate = DateTime.now();
     _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
     _checks = _defaultChecksFor(_establishment);
-    _status = _statusForChecks(_checks);
+    _status = null;
     _findings.clear();
     _remarks.clear();
     SharedPreferences.getInstance().then((prefs) {
@@ -3922,7 +3922,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
               _establishment = item;
               _nextDueDate = _suggestedDueDate(_inspectionDate, item);
               _checks = _defaultChecksFor(item);
-              _status = _statusForChecks(_checks);
+              _status = null;
               _findings.clear();
               _remarks.clear();
             });
@@ -3978,15 +3978,6 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     );
   }
 
-  /// Starting status for a freshly loaded checklist.
-  ///
-  /// As on the web form, an empty checklist gives the app nothing to infer a
-  /// status from, so it returns null and the inspector must pick one before
-  /// submitting.
-  String? _statusForChecks(List<InspectionChecklistDraft> checks) {
-    return checks.isEmpty ? null : 'for_completion';
-  }
-
   /// The suggested due date, or the inspection date itself when the business
   /// type's frequency is unrecognised and no schedule can be inferred. The
   /// inspector can always pick another date.
@@ -4032,16 +4023,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         current.requirementName,
         !current.isComplied,
       );
-      final completed = _checks.where((item) => item.isComplied).length;
-      final total = _checks.length;
-      if (total > 0 && completed == total) {
-        _status = 'good_standing';
-        if (_findings.text.trim() == 'Some checklist items need correction.') {
-          _findings.clear();
-        }
-      } else {
-        _status = 'for_completion';
-      }
+      // Ticking records an observation; it never decides the status.
     });
   }
 

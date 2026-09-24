@@ -791,6 +791,26 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
             "checklist_items",
         ]
 
+    def validate(self, attrs):
+        # A finished inspection has to say what it found. Letting the model
+        # default fill in "good_standing" would record a compliance judgement
+        # that no inspector actually made. Drafts are still in progress.
+        is_draft = attrs.get(
+            "is_draft",
+            getattr(self.instance, "is_draft", False),
+        )
+
+        if not is_draft and not attrs.get("status_after_inspection"):
+            raise serializers.ValidationError(
+                {
+                    "status_after_inspection": (
+                        "Select the status after inspection before submitting."
+                    )
+                }
+            )
+
+        return attrs
+
     def create(self, validated_data):
         checklist_items = validated_data.pop("checklist_items", [])
         inspection = SanitaryInspection.objects.create(**validated_data)

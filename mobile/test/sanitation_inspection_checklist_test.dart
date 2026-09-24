@@ -218,16 +218,67 @@ void main() {
       expect(find.text('No requirements configured yet.'), findsNothing);
       expect(find.text('Water Potability Certificate'), findsOneWidget);
       expect(find.text('Health Certificate of Staff'), findsOneWidget);
-      // A configured type still starts with a status and needs no prompt.
-      expect(find.text('Select status'), findsNothing);
-      expect(find.text(sanitationStatusLabel('for_completion')), findsOneWidget);
 
+      // A configured type is asked for a status just like any other.
+      await chooseStatus(tester, 'for_completion');
       await submitForm(tester);
 
       expect(
         api.sentChecklist?.map((item) => item.requirementName).toList(),
         const ['Water Potability Certificate', 'Health Certificate of Staff'],
       );
+      expect(api.sentStatus, 'for_completion');
+    });
+  });
+
+  _statusIsAlwaysChosen();
+}
+
+// The status is the inspector's judgement, never the form's: a new inspection
+// starts with none chosen and ticking items must not set one.
+void _statusIsAlwaysChosen() {
+  group('Inspection status is always chosen', () {
+    testWidgets('a configured type also starts with no status', (tester) async {
+      await pumpInspectionForm(tester, aquaStation);
+
+      expect(find.text('Select status'), findsOneWidget);
+      for (final status in sanitationInspectionStatuses) {
+        expect(find.text(sanitationStatusLabel(status)), findsNothing);
+      }
+    });
+
+    testWidgets('ticking a requirement does not set a status', (tester) async {
+      await pumpInspectionForm(tester, aquaStation);
+
+      await tester.tap(find.byType(CheckboxListTile).first);
+      await tester.pump();
+      expect(find.text('Select status'), findsOneWidget);
+
+      await tester.tap(find.byType(CheckboxListTile).last);
+      await tester.pump();
+      expect(find.text('Select status'), findsOneWidget);
+    });
+
+    testWidgets('ticking does not override a chosen status', (tester) async {
+      await pumpInspectionForm(tester, aquaStation);
+
+      await chooseStatus(tester, 'upcoming');
+      await tester.tap(find.byType(CheckboxListTile).first);
+      await tester.pump();
+
+      expect(find.text(sanitationStatusLabel('upcoming')), findsOneWidget);
+      expect(find.text('Select status'), findsNothing);
+    });
+
+    testWidgets('blocks submission until a status is chosen', (tester) async {
+      final api = await pumpInspectionForm(tester, aquaStation);
+
+      await submitForm(tester);
+      expect(api.sentChecklist, isNull);
+      expect(find.text('Select the status after inspection.'), findsOneWidget);
+
+      await chooseStatus(tester, 'for_completion');
+      await submitForm(tester);
       expect(api.sentStatus, 'for_completion');
     });
   });

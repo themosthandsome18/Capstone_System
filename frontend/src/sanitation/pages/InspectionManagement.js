@@ -837,19 +837,11 @@ function InspectionFormModal({
 
   const [checks, setChecks] = useState(initialChecks);
 
-  const [statusAfterInspection, setStatusAfterInspection] = useState(() => {
-    if (draft?.status_after_inspection) return draft.status_after_inspection;
-
-    const completed = initialChecks.filter((item) => item.is_complied).length;
-    const total = initialChecks.length;
-
-    // With nothing to check there is nothing to infer a status from, so the
-    // inspector picks one instead of the form guessing on their behalf.
-    if (total === 0) return "";
-    if (completed === total) return "good_standing";
-    if (completed === 0) return "violation";
-    return "for_completion";
-  });
+  // The status is the inspector's judgement, never the form's. A new
+  // inspection starts with none chosen; only a saved draft restores one.
+  const [statusAfterInspection, setStatusAfterInspection] = useState(
+    () => draft?.status_after_inspection || ""
+  );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -858,23 +850,14 @@ function InspectionFormModal({
   const percentage = Math.round((completedCount / totalCount) * 100);
 
   function handleCheck(index) {
-    const updated = checks.map((item, itemIndex) =>
-      itemIndex === index
-        ? { ...item, is_complied: !item.is_complied }
-        : item
+    // Ticking records an observation; it never decides the status.
+    setChecks(
+      checks.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, is_complied: !item.is_complied }
+          : item
+      )
     );
-    setChecks(updated);
-
-    const completed = updated.filter((item) => item.is_complied).length;
-    const total = updated.length;
-
-    if (total === 0 || completed === total) {
-      setStatusAfterInspection("good_standing");
-    } else if (completed === 0) {
-      setStatusAfterInspection("violation");
-    } else {
-      setStatusAfterInspection("for_completion");
-    }
   }
 
   function getErrorMessage(requestError) {
@@ -1077,12 +1060,9 @@ function InspectionFormModal({
           Drag & drop photos here, or click to upload
         </div>
 
-        <div className="inspection-warning">
-          The status follows the checklist as you tick it: <strong>Good Standing</strong>{" "}
-          when every requirement is met, <strong>Violation</strong> when none are, and{" "}
-          <strong>For Completion</strong> in between. You may change it before
-          submitting.
-        </div>
+        <p className="inspection-warning">
+          Choose the inspection status based on your findings.
+        </p>
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
 

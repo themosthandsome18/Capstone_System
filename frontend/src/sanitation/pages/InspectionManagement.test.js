@@ -168,7 +168,10 @@ describe("business type with configured requirements (unchanged)", () => {
   });
 
   test("submits the configured checklist items", async () => {
-    const payload = await submittedPayload(openInspection("Aqua Station"));
+    const modal = openInspection("Aqua Station");
+    // The inspector always picks the status; the form never infers one.
+    fireEvent.change(statusSelect(modal), { target: { value: "good_standing" } });
+    const payload = await submittedPayload(modal);
 
     expect(payload.checklist_items.map((item) => item.requirement_name)).toEqual([
       "Water Potability Certificate",
@@ -219,13 +222,16 @@ describe("status after inspection with an empty checklist", () => {
     expect(payload.checklist_items).toEqual([]);
   });
 
-  test("a configured type still defaults its status and submits (unchanged)", async () => {
+  test("a configured type asks for a status the same way", async () => {
     const modal = openInspection("Aqua Station");
     const select = statusSelect(modal);
 
-    expect(select.value).toBe("violation");
-    expect(select.querySelector('option[value=""]')).toBeNull();
+    expect(select.value).toBe("");
+    expect(select.querySelector('option[value=""]').textContent).toBe(
+      "Select status"
+    );
 
+    fireEvent.change(select, { target: { value: "violation" } });
     const payload = await submittedPayload(modal);
     expect(payload.status_after_inspection).toBe("violation");
   });
@@ -885,5 +891,89 @@ describe("calendar events", () => {
     } finally {
       restore();
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* The inspector always chooses the status                              */
+/* ------------------------------------------------------------------ */
+
+function checkboxesIn(modal) {
+  return [...modal.querySelectorAll(".inspection-checklist-box input[type=checkbox]")];
+}
+
+describe("status is always chosen by the inspector", () => {
+  test("a non-empty checklist also starts with no status", () => {
+    const modal = openInspection("Aqua Station");
+
+    expect(checkboxesIn(modal)).toHaveLength(2);
+    expect(statusSelect(modal).value).toBe("");
+  });
+
+  test("ticking a checklist item does not change the status", () => {
+    const modal = openInspection("Aqua Station");
+    const boxes = checkboxesIn(modal);
+
+    fireEvent.click(boxes[0]);
+    expect(statusSelect(modal).value).toBe("");
+
+    fireEvent.click(boxes[1]);
+    expect(statusSelect(modal).value).toBe("");
+
+    fireEvent.click(boxes[0]);
+    expect(statusSelect(modal).value).toBe("");
+  });
+
+  test("ticking does not override a status the inspector already picked", () => {
+    const modal = openInspection("Aqua Station");
+    fireEvent.change(statusSelect(modal), { target: { value: "upcoming" } });
+
+    fireEvent.click(checkboxesIn(modal)[0]);
+    fireEvent.click(checkboxesIn(modal)[1]);
+
+    expect(statusSelect(modal).value).toBe("upcoming");
+  });
+
+  test("submission is blocked until a status is picked", async () => {
+    const modal = openInspection("Aqua Station");
+
+    fireEvent.click(within(modal).getByText("Submit Inspection"));
+    expect(mockCtx.createInspection).not.toHaveBeenCalled();
+    expect(within(modal).getByText("Select the status after inspection.")).toBeTruthy();
+
+    fireEvent.change(statusSelect(modal), { target: { value: "for_completion" } });
+    const payload = await submittedPayload(modal);
+    expect(payload.status_after_inspection).toBe("for_completion");
+  });
+
+  test("a saved draft still restores its own status", () => {
+    const previous = mockCtx.inspections;
+    mockCtx.inspections = [
+      {
+        establishment: 702,
+        id: 559,
+        is_draft: true,
+        inspection_date: "2026-01-05",
+        status_after_inspection: "violation",
+        checklist_items: [],
+      },
+    ];
+
+    try {
+      const modal = openInspection("Aqua Station");
+      expect(statusSelect(modal).value).toBe("violation");
+    } finally {
+      mockCtx.inspections = previous;
+    }
+  });
+
+  test("the helper line replaces the old auto-status warning", () => {
+    const modal = openInspection("Aqua Station");
+
+    expect(within(modal).queryByText(/auto-set/i)).toBeNull();
+    expect(within(modal).queryByText(/The status follows the checklist/i)).toBeNull();
+    expect(
+      within(modal).getByText("Choose the inspection status based on your findings.")
+    ).toBeTruthy();
   });
 });
