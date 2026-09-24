@@ -814,3 +814,76 @@ describe("read-only inspection detail", () => {
     }
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Calendar                                                             */
+/* ------------------------------------------------------------------ */
+
+function openCalendar() {
+  render(<InspectionManagement />);
+  fireEvent.click(screen.getByText("Calendar View"));
+  return document.querySelector(".inspection-calendar-card");
+}
+
+function goToMonth(calendar, isoMonth) {
+  // Step back from the current month until the target month is showing.
+  for (let step = 0; step < 48; step += 1) {
+    const title = calendar.querySelector(
+      ".inspection-calendar-header strong"
+    ).textContent;
+    if (title === isoMonth) return;
+    fireEvent.click(within(calendar).getByLabelText("Previous month"));
+  }
+  throw new Error(`Could not reach ${isoMonth}`);
+}
+
+function calendarEventLabels(calendar) {
+  return [...calendar.querySelectorAll(".calendar-event")].map(
+    (event) => event.textContent
+  );
+}
+
+describe("calendar events", () => {
+  test("plots a finalized inspection on the date it happened", () => {
+    const restore = withHistory();
+
+    try {
+      const calendar = openCalendar();
+      goToMonth(calendar, "March 2026");
+
+      expect(calendarEventLabels(calendar).join(" ")).toContain("Inspected");
+    } finally {
+      restore();
+    }
+  });
+
+  test("does not plot a draft as a completed inspection", () => {
+    const restore = withHistory();
+
+    try {
+      const calendar = openCalendar();
+      goToMonth(calendar, "February 2026");
+      const inspected = [...calendar.querySelectorAll(".calendar-event")].filter(
+        (event) => event.textContent.includes("Inspected")
+      );
+
+      expect(inspected).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+
+  test("still plots due and overdue events", () => {
+    const restore = withHistory();
+
+    try {
+      const calendar = openCalendar();
+      goToMonth(calendar, "April 2026");
+      const labels = calendarEventLabels(calendar).join(" ");
+
+      expect(labels).toMatch(/Overdue|Upcoming Due/);
+    } finally {
+      restore();
+    }
+  });
+});

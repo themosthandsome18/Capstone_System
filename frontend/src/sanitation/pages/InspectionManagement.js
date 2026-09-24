@@ -123,8 +123,8 @@ function InspectionManagement() {
   }).length;
 
   const calendarCells = useMemo(() => {
-    return buildCalendarCells(rows, calendarMonth);
-  }, [calendarMonth, rows]);
+    return buildCalendarCells(rows, calendarMonth, inspections);
+  }, [calendarMonth, rows, inspections]);
 
   function openForm(row) {
     setSelectedEstablishment(row);
@@ -567,6 +567,7 @@ function InspectionManagement() {
           <div className="inspection-calendar-key">
             <span className="good">Upcoming Due</span>
             <span className="violation">Overdue</span>
+            <span className="completed">Inspected</span>
           </div>
 
           <div className="calendar-weekdays">
@@ -1197,7 +1198,7 @@ function matchesDueFilter(dateValue, filter) {
   return true;
 }
 
-function buildCalendarCells(rows, monthStart) {
+function buildCalendarCells(rows, monthStart, inspections = []) {
   const todayIso = toIsoDate(new Date());
   const anchor = getMonthStart(monthStart || new Date());
   const firstVisibleDate = new Date(anchor);
@@ -1208,7 +1209,7 @@ function buildCalendarCells(rows, monthStart) {
     0
   ).getDate();
   const visibleCellCount = Math.ceil((anchor.getDay() + daysInMonth) / 7) * 7;
-  const eventsByDate = buildCalendarEventMap(rows);
+  const eventsByDate = buildCalendarEventMap(rows, inspections);
   const cells = [];
 
   for (let index = 0; index < visibleCellCount; index += 1) {
@@ -1229,7 +1230,7 @@ function buildCalendarCells(rows, monthStart) {
   return cells;
 }
 
-function buildCalendarEventMap(rows) {
+function buildCalendarEventMap(rows, inspections = []) {
   const eventsByDate = new Map();
 
   function addEvent(dateValue, event) {
@@ -1263,19 +1264,27 @@ function buildCalendarEventMap(rows) {
     }
   });
 
+  // Inspections that actually happened, on the day they happened. Drafts are
+  // left out: an unfinished draft is not a completed inspection.
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+  inspections.forEach((inspection) => {
+    if (inspection.is_draft || !inspection.inspection_date) return;
+
+    const row = rowsById.get(inspection.establishment);
+
+    if (!row) return;
+
+    addEvent(inspection.inspection_date, {
+      key: `${inspection.id}-inspected`,
+      row,
+      title: row.business_name,
+      typeLabel: "Inspected",
+      status: "completed",
+    });
+  });
+
   return eventsByDate;
-}
-
-// eslint-disable-next-line no-unused-vars
-function calendarStatusClass(status = "") {
-  const normalized = status.toLowerCase();
-
-  if (normalized.includes("good")) return "good";
-  if (normalized.includes("upcoming")) return "upcoming";
-  if (normalized.includes("completion")) return "completion";
-  if (normalized.includes("violation")) return "violation";
-
-  return "upcoming";
 }
 
 function statusClass(status = "") {
