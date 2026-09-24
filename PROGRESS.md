@@ -450,7 +450,23 @@ This project is being developed with Claude-based and ChatGPT-based planners/rev
   - **Verification**: `flutter test` reports 11 passing tests across the suite; `flutter analyze` reports the same 4 pre-existing info-level issues — no new issues.
   - **Not verified**: not merged to `main` and not deployed. A new APK build is still required, and **no real-device or emulator end-to-end test was performed** — the portal was exercised only in widget tests.
 
-## Inspection Management — Phase 2a (branch `sanitation/inspection-phase2a`, NOT merged, NOT deployed)
+## Inspection Management — Phase 2a Follow-ups (branch `sanitation/inspection-followups`, NOT merged, NOT deployed)
+Branched from `4e30bf6`.
+
+- **The inspector always chooses the status** (`ab57d7d`, backend + web + mobile). Client decision: no auto-status, ever.
+  - A new inspection now starts with **no** status selected, whether the checklist is empty or not, on both clients. Ticking or unticking a requirement records an observation and no longer sets the status — the auto-status blocks in the web `handleCheck` and the mobile `_toggleCheck` are gone, along with the mobile `_statusForChecks` helper. This also ends the old web/mobile divergence, where web set `violation` when nothing was ticked and mobile set `for_completion`.
+  - Submit is blocked on both clients with "Select the status after inspection." until one is picked. A saved draft still restores its own saved status.
+  - The yellow box now reads simply "Choose the inspection status based on your findings."
+  - **Backend**: `SanitaryInspectionCreateSerializer.validate` now **requires** `status_after_inspection` on a final (`is_draft=False`) inspection and returns 400 with a clear message instead of letting the model default silently record `good_standing`. Drafts may still omit it. The rule lives in the serializer, so it covers the web and mobile endpoints and both create and finalize-a-draft. The mobile view's `data["status_after_inspection"] = ... or "good_standing"` line was removed.
+  - **Old APKs keep working**: `submitSanitationInspection` declares `required String statusAfterInspection` and always sends `'status_after_inspection': statusAfterInspection` (`mobile/lib/services/api.dart:344`) together with `'is_draft': false`. Dart cannot omit a required named argument, so every already-distributed build sends the field. A test mirrors that exact payload.
+  - Tests: 7 backend (4 red), 6 web (5 red), 4 mobile (4 red). Three older tests that asserted the removed auto-status behaviour were updated, since that behaviour was deliberately changed.
+- **Helper text layout** (`fe16670`, CSS). `.inspection-warning` was `display: flex; align-items: center`, which made every text node and inline element its own flex item and split the sentence into columns. It is now a normal text block with vertical padding and a line height. It has exactly one usage, the inspection form.
+  - **Table horizontal scrollbar: left as is, intentionally.** `.inspection-table-wrap` is `overflow-x: auto` and `.inspection-table-card table` is `min-width: 820px` — the standard responsive-table pattern that lets columns scroll on a narrow screen instead of squashing. The 820px is the exact sum of the six per-column minimums (180+160+130+130+120+100). At 1440px the content area is about 1440 − 280 sidebar − 44 padding ≈ 1116px, comfortably more than 820px, so this rule cannot produce a scrollbar at that width.
+  - Worth noting: Phase 2a added a fourth action button, so the Actions cell's natural width is now roughly 4×31px + 3×8px + padding ≈ 176px against its declared 100px minimum, which raises the table's real minimum to about 896px — still under 1116px. **This was not reproduced in a browser** (no browser tooling in this environment), so if a scrollbar really does appear at 1440px the cause is elsewhere and needs a look with devtools.
+- **Verification**: backend `Ran 126 tests` / `OK`; frontend `193 passed, 193 total` across 6 suites; `npm run build` `Compiled successfully.`; `flutter test` 22/22; `flutter analyze` the same 4 pre-existing info issues.
+- **Not verified**: not merged, not deployed, **a new APK build is still required**, and no manual or authenticated UI check was performed.
+
+## Inspection Management — Phase 2a (merged to `main` as `4e30bf6`)
 Branched from `cfb8524`. Four items, each with its own commit and its own red-then-green tests. Mobile was not touched.
 
 - **Real inspector list in Complaints** (`dacbdb2`, backend + web).
