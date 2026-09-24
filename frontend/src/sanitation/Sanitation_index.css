@@ -3296,17 +3296,17 @@
   color: #888;
 }
 
+/* A sentence, not a row of items: `display: flex` made each text node and
+   inline element its own flex item, which split the wording into columns. */
 .inspection-warning {
   margin-top: 22px;
-  min-height: 52px;
   border: 1px solid #ffc933;
   border-radius: 8px;
   background: linear-gradient(90deg, #fff8da, #ffe9db);
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
+  padding: 15px 16px;
   color: #e5a700;
   font-size: 14.5px;
+  line-height: 1.5;
 }
 
 .inspection-warning strong {
