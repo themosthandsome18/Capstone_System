@@ -450,7 +450,22 @@ This project is being developed with Claude-based and ChatGPT-based planners/rev
   - **Verification**: `flutter test` reports 11 passing tests across the suite; `flutter analyze` reports the same 4 pre-existing info-level issues — no new issues.
   - **Not verified**: not merged to `main` and not deployed. A new APK build is still required, and **no real-device or emulator end-to-end test was performed** — the portal was exercised only in widget tests.
 
-## Inspection Management — Phase 1 Data-Integrity Fixes (branch `sanitation/inspection-integrity`, NOT merged, NOT deployed)
+## Inspection Management — Phase 2a (branch `sanitation/inspection-phase2a`, NOT merged, NOT deployed)
+Branched from `cfb8524`. Four items, each with its own commit and its own red-then-green tests. Mobile was not touched.
+
+- **Real inspector list in Complaints** (`dacbdb2`, backend + web).
+  - *Investigation*: `GET /api/sanitation/staff/` already exists and a sanitation-role user may call it (`@module_required("sanitation")`), but it was **not** safe to reuse here. It returns `SanitaryStaffSerializer` — id, username, first_name, last_name, full_name, **email**, is_active, date_joined, role, role_label — so a dropdown would carry staff email addresses it has no need for. It also filters on `profile__role=ROLE_SANITATION` only, excluding admin accounts, and does not exclude inactive users.
+  - *New endpoint*: `GET /api/sanitation/inspectors/`, `@module_required("sanitation")`, returning only `{id, name}` for **active** users whose role is sanitation or admin, with `name` = full name else username. Backend tests: 7, covering the 200 case, the exact field set (asserting no email and no `date_joined` anywhere in the body), the username fallback, exclusion of inactive accounts, 403 for tourism/tourist/establishment, 401 for anonymous, and 405 for POST.
+  - *Web*: the four invented names are gone. Options come from the endpoint; a name already stored on an older record stays selectable so history is not rewritten; an unset value shows a "Select inspector" placeholder; an empty list says "No inspector accounts available." The stored value is still a plain string — **no schema change**. Web tests: 6, all red before the change.
+- **Working pagination** (`485f1b0`, web). 10 rows per page, prev/next disabled at the edges, "Showing N of M | Page X of Y", and any search or filter change resets to page 1. Paging is presentation only: the CSV export and the due/overdue alert counts still cover every filtered row. Tests: 4; 3 red before the change (the export test passed both before and after, pinning that behaviour).
+- **Inspection history and read-only detail** (`013c954`, web).
+  - *Investigation*: no backend change was needed. `GET /api/sanitation/inspections/` already returns **all** inspections with `checklist_items` prefetched, and the data context already holds them, so no filter parameter was required.
+  - A History action per establishment lists every inspection for that establishment, newest first, with date, inspector, status, next due and a "Draft" label. Selecting one opens a read-only detail with all fields plus each checklist item marked Complied or Not complied. The detail renders no input, textarea, select, or save control at all. Tests: 7, all red before the change.
+- **Completed inspections on the calendar** (`1891c4b`, web). Finalized inspections are now plotted on their `inspection_date` as a distinct "Inspected" event alongside the existing Upcoming Due and Overdue events; drafts are deliberately not plotted, since an unfinished draft is not a completed inspection. The dead `calendarStatusClass` helper and its eslint suppression were removed. Tests: 3; 1 red before the change.
+- **Verification**: backend `Ran 119 tests` / `OK`; frontend `187 passed, 187 total` across 6 suites; `npm run build` `Compiled successfully.`; `flutter test` 18/18 and `flutter analyze` the same 4 pre-existing info issues — mobile is byte-identical to `main`.
+- **Not verified**: not merged, not deployed, and the new screens were exercised only in tests — no manual or authenticated UI check was performed.
+
+## Inspection Management — Phase 1 Data-Integrity Fixes (merged to `main` as `cfb8524`)
 Branched from `0ff406b`. Five fixes, each with its own commit and its own red-then-green tests.
 
 - **Drafts no longer change live records** (`353e922`, backend). `sync_establishment_after_inspection` returned early on `inspection.is_draft`, so saving a draft no longer rewrites the establishment's `compliance_status`, no longer maps a new `permit_status` (a draft marked Violation was suspending the permit), and no longer fires a violation notification. Finalizing the draft applies it exactly once. Gated at the single shared choke point, so it covers the web and mobile endpoints and both create and update. Tests: `InspectionDraftIsolationTests` (5); 4 failed before the fix.
@@ -462,17 +477,16 @@ Branched from `0ff406b`. Five fixes, each with its own commit and its own red-th
 - **Not verified**: not merged, not deployed, **a new APK build is still required**, and no real-device or emulator end-to-end test was performed.
 
 ## Pending Tasks & Next Testing Steps
-- **Inspection Management Phase 2 (broken or fake features)**:
-  - Photo documentation: the web upload box (`InspectionManagement.js`) is a plain `div` with no file input, and the form always sends `photo_documentation: ""`. The server-side path works but only on the mobile endpoint, and the Flutter client never sends a photo, so nothing can attach one today.
-  - Pagination: the prev/next buttons in the inspection list have no handler and no page state; every row always renders.
-  - No inspection history or detail view: the page shows only the latest inspection per establishment, and the only way into an inspection is the edit form. There is no delete action in the UI despite a working endpoint.
-  - Calendar: it plots only due dates. Its own subtitle promises completed inspections, which are never shown.
+- **Inspection Management Phase 2b — photo documentation (OPEN, blocked)**:
+  - The web upload box in `InspectionManagement.js` is still a plain `div` with no file input, and the form still sends `photo_documentation: ""`. The server-side path exists but only on the mobile endpoint (`save_image_file(upload, "inspections")`), and the Flutter client never sends a photo, so nothing can attach one today.
+  - **Blocked on upload validation**: before the web can accept uploads, `validate_image_file` needs magic-byte (content-sniffing) validation rather than trusting the declared extension or content type. Wiring an upload path to the web endpoint without that would widen the attack surface, so this was deliberately deferred out of Phase 2a.
+  - Still missing regardless: photo captions (no field exists), and a delete action in the inspection UI despite a working `DELETE` endpoint.
 - **Inspection Management Phase 3 (manuscript gaps)**:
   - No inspection result field (Passed / Failed / For Re-inspection), no recommendation field, and no distinct reinspection date.
   - `inspector_name` is free text with no foreign key to a user account.
   - No photo captions; no link between a violation/complaint and the inspection that raised it.
   - `SanitaryInspection.establishment` and `SanitaryInspectionChecklistItem.inspection` are `on_delete=CASCADE`, so deleting an establishment erases its entire inspection history. Consider `PROTECT`.
-  - The Complaints scheduling form still offers a hard-coded roster of four invented inspectors (`Insp. J. Cruz`, `Insp. M. Santos`, `Insp. R. Dela Pena`, `Insp. E. Alcantara`) as the only selectable values for `assigned_inspector`. Replacing it needs a real staff list from the API; it was deliberately left out of Phase 1.
+  - `assigned_inspector` on a complaint and `inspector_name` on an inspection are both still plain strings. Phase 2a made the Complaints picker offer real staff accounts, but the stored value is a name, not a foreign key, so it does not survive a rename and cannot be joined on.
 - **Production Inspection Frequencies (awaiting client clarification)**:
   - 7 of the 12 determinate production business types do not match the client's confirmed rule: Restaurant / Food Establishment, Public Market Stall and Food Establishment are `monthly` where the Food Establishment category says quarterly; Sub-contractor is `annual` where Industrial says quarterly; Boatman is `annual` where Public Transport says quarterly; Resort / Picnic Ground is `quarterly` and Karaoke / Video Bar / CSW is `monthly` where Public Places says annually.
   - Before changing any of these, confirm with the client whether Food Establishments, Water Refilling Stations and Resorts are intended exceptions to the category rule. Commercial / NF and Institutional are "depends", so no fixed value can be checked. **No production data was changed.**
