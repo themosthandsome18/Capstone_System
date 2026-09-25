@@ -3739,3 +3739,154 @@ class ClientInspectionFrequencyMigrationTests(TestCase):
             expected = self.migration.CLIENT_INSPECTION_FREQUENCIES.get(row["name"])
             if expected is not None:
                 self.assertEqual(row["inspection_frequency"], expected, row["name"])
+
+
+class EstablishmentPermitNumberTests(TestCase):
+    """Recording an existing sanitary permit number when registering an establishment."""
+
+    LIST_URL = "/api/sanitation/establishments/"
+    CLAIM_URL = "/api/auth/register-establishment/"
+
+    def setUp(self):
+        self.client = APIClient()
+        staff = User.objects.create_user(username="permit_staff", password="Password@123")
+        UserProfile.objects.create(user=staff, role=ROLE_SANITATION)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=staff).key}")
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Permit Test Store", inspection_frequency="annual"
+        )
+
+    def _payload(self, **overrides):
+        payload = {
+            "business_name": "Permit Test Store",
+            "owner_name": "Ana Reyes",
+            "business_type": self.btype.id,
+            "barangay": "Daungan",
+            "address": "5 Pier Rd",
+            "compliance_status": "not_yet_inspected",
+            "has_permit": False,
+            "permit_number": "",
+            "permit_issued_date": None,
+            "permit_expiry_date": None,
+            "permit_status": "no_permit",
+        }
+        payload.update(overrides)
+        return payload
+
+    def _with_permit(self, number="SP-2026-777", **overrides):
+        return self._payload(
+            has_permit=True,
+            permit_number=number,
+            permit_issued_date="2026-03-01",
+            permit_expiry_date="2027-03-01",
+            permit_status="active",
+            **overrides,
+        )
+
+    def test_registering_with_a_permit_stores_it_trimmed_and_not_yet_inspected(self):
+        response = self.client.post(self.LIST_URL, self._with_permit("  SP-2026-777  "), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = SanitaryEstablishment.objects.get(pk=response.json()["id"])
+        self.assertEqual(record.permit_number, "SP-2026-777")
+        self.assertTrue(record.has_permit)
+        self.assertEqual(record.permit_status, "active")
+        self.assertEqual(str(record.permit_expiry_date), "2027-03-01")
+        self.assertEqual(record.compliance_status, "not_yet_inspected")
+
+    def test_registering_without_a_permit_is_unchanged(self):
+        response = self.client.post(self.LIST_URL, self._payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = SanitaryEstablishment.objects.get(pk=response.json()["id"])
+        self.assertFalse(record.has_permit)
+        self.assertEqual(record.permit_number, "")
+        self.assertIsNone(record.permit_issued_date)
+        self.assertEqual(record.permit_status, "no_permit")
+
+    def test_many_records_may_have_no_permit_number(self):
+        for name in ("First Store", "Second Store"):
+            response = self.client.post(self.LIST_URL, self._payload(business_name=name), format="json")
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+
+    def test_duplicate_permit_number_is_rejected_ignoring_case_and_spaces(self):
+        self.client.post(self.LIST_URL, self._with_permit("SP-2026-777"), format="json")
+        count_before = SanitaryEstablishment.objects.count()
+
+        response = self.client.post(
+            self.LIST_URL,
+            self._with_permit("  sp-2026-777 ", business_name="Copy Store"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already recorded", " ".join(response.json()["permit_number"]))
+        self.assertEqual(SanitaryEstablishment.objects.count(), count_before)
+
+    def test_editing_a_record_to_another_records_permit_number_is_rejected(self):
+        self.client.post(self.LIST_URL, self._with_permit("SP-2026-777"), format="json")
+        other = self.client.post(
+            self.LIST_URL, self._payload(business_name="Other Store"), format="json"
+        ).json()
+
+        response = self.client.patch(
+            f"{self.LIST_URL}{other['id']}/", {"permit_number": "SP-2026-777"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_record_keeps_its_own_permit_number_when_edited(self):
+        created = self.client.post(self.LIST_URL, self._with_permit(), format="json").json()
+
+        response = self.client.patch(
+            f"{self.LIST_URL}{created['id']}/",
+            {"permit_number": "SP-2026-777", "remarks": "Checked"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+    def test_owner_claim_of_a_recorded_permit_is_still_protected(self):
+        created = self.client.post(self.LIST_URL, self._with_permit(), format="json").json()
+        claimant = APIClient()
+
+        first = claimant.post(
+            self.CLAIM_URL,
+            {"username": "real_owner", "password": "Owner@12345", "permit_number": " sp-2026-777 "},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.content)
+        record = SanitaryEstablishment.objects.get(pk=created["id"])
+        self.assertEqual(record.user.username, "real_owner")
+
+        users_before = User.objects.count()
+        second = claimant.post(
+            self.CLAIM_URL,
+            {"username": "second_claimant", "password": "Other@12345", "permit_number": "SP-2026-777"},
+            format="json",
+        )
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(User.objects.count(), users_before)
+        record.refresh_from_db()
+        self.assertEqual(record.user.username, "real_owner")
+
+    def test_claim_locks_the_matching_rows(self):
+        from api import auth_views
+
+        self.client.post(self.LIST_URL, self._with_permit(), format="json")
+        with patch.object(
+            auth_views.transaction, "atomic", wraps=auth_views.transaction.atomic
+        ) as atomic, patch(
+            "django.db.models.query.QuerySet.select_for_update",
+            autospec=True,
+            side_effect=lambda qs, *a, **k: qs,
+        ) as select_for_update:
+            response = APIClient().post(
+                self.CLAIM_URL,
+                {"username": "lock_owner", "password": "Owner@12345", "permit_number": "SP-2026-777"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertTrue(atomic.called)
+        self.assertTrue(select_for_update.called)

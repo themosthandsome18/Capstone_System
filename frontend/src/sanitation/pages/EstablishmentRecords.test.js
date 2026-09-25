@@ -45,7 +45,10 @@ jest.mock("../../shared/csvExport", () => ({
   exportCsv: jest.fn(),
 }));
 
-import EstablishmentRecords, { generatePermitNumber } from "./EstablishmentRecords";
+import EstablishmentRecords, {
+  addOneYear,
+  generatePermitNumber,
+} from "./EstablishmentRecords";
 import { exportCsv } from "../../shared/csvExport";
 import {
   BUSINESS_TYPE_DISPLAY_LABELS,
@@ -469,15 +472,17 @@ describe("Establishment Records table", () => {
 /* ================================================================== */
 
 describe("Register New Establishment", () => {
-  test("is organised as Establishment Profile then Location / Reference", () => {
+  test("is organised as Establishment Profile, Location / Reference, then an optional permit", () => {
     const form = openCreateForm();
     const headings = [...form.querySelectorAll(".establishment-form-section h3")].map(
       (h) => h.textContent
     );
-    expect(headings).toEqual(["Establishment Profile", "Location / Reference"]);
-    expect(
-      within(form).getByText(/registered with no sanitary permit on record/)
-    ).toBeTruthy();
+    expect(headings).toEqual([
+      "Establishment Profile",
+      "Location / Reference",
+      "Sanitary Permit (optional)",
+    ]);
+    expect(within(form).getByText(/Leave it blank if it has none yet/)).toBeTruthy();
   });
 
   test("Business Type groups the real types under the 9 client categories", () => {
@@ -972,5 +977,155 @@ describe("never-inspected establishments", () => {
     } finally {
       restore();
     }
+  });
+});
+
+/* ================================================================== */
+/* Existing sanitary permit number at registration                     */
+/* ================================================================== */
+
+describe("Register records an existing sanitary permit", () => {
+  function fillProfile(form) {
+    setField(form, "Business Name", "Mauban Water Station");
+    setField(form, "Owner / Proprietor", "Lito Reyes");
+    setField(form, "Business Type", "8");
+    setField(form, "Barangay", "Daungan");
+    setField(form, "Complete Address", "5 Pier Rd");
+  }
+
+  async function submittedCreate(form) {
+    submit(form);
+    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
+    return mockCtx.createEstablishment.mock.calls[0][0];
+  }
+
+  test("addOneYear adds one calendar year, clamping 29 February", () => {
+    expect(addOneYear("2026-03-01")).toBe("2027-03-01");
+    expect(addOneYear("2028-02-29")).toBe("2029-02-28");
+    expect(addOneYear("")).toBe("");
+  });
+
+  test("the register form offers optional permit number, date issued and expiry", () => {
+    const form = openCreateForm();
+    expect(field(form, "Sanitary Permit Number").value).toBe("");
+    expect(field(form, "Date Issued").value).toBe("");
+    expect(field(form, "Expiry Date").value).toBe("");
+  });
+
+  test("expiry defaults to one year after the date issued and stays editable", () => {
+    const form = openCreateForm();
+    setField(form, "Date Issued", "2026-03-01");
+    expect(field(form, "Expiry Date").value).toBe("2027-03-01");
+
+    // Changing the issue date moves an untouched default along with it.
+    setField(form, "Date Issued", "2026-04-15");
+    expect(field(form, "Expiry Date").value).toBe("2027-04-15");
+
+    // A date staff typed themselves is never overwritten.
+    setField(form, "Expiry Date", "2026-12-31");
+    setField(form, "Date Issued", "2026-05-01");
+    expect(field(form, "Expiry Date").value).toBe("2026-12-31");
+  });
+
+  test("with a permit number and a future expiry the permit is active, not inspected", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "  SP-2026-777 ");
+    setField(form, "Date Issued", "2098-03-01");
+
+    const payload = await submittedCreate(form);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        has_permit: true,
+        permit_number: "SP-2026-777",
+        permit_issued_date: "2098-03-01",
+        permit_expiry_date: "2099-03-01",
+        permit_status: "active",
+        compliance_status: "not_yet_inspected",
+      })
+    );
+  });
+
+  test("an already-expired permit is recorded as renewal due, never active", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2020-001");
+    setField(form, "Date Issued", "2020-01-10");
+
+    const payload = await submittedCreate(form);
+
+    expect(payload.permit_status).toBe("renewal_due");
+    expect(payload.permit_expiry_date).toBe("2021-01-10");
+    expect(payload.compliance_status).toBe("not_yet_inspected");
+  });
+
+  test("without a permit number nothing is fabricated", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+
+    const payload = await submittedCreate(form);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        has_permit: false,
+        permit_number: "",
+        permit_issued_date: null,
+        permit_expiry_date: null,
+        permit_status: "no_permit",
+        compliance_status: "not_yet_inspected",
+      })
+    );
+  });
+
+  test("a permit number needs its date issued", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2026-777");
+    submit(form);
+
+    expect(screen.getByText("Enter the date the sanitary permit was issued.")).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("permit dates without a permit number are not saved silently", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Date Issued", "2026-03-01");
+    submit(form);
+
+    expect(
+      screen.getByText("Enter the sanitary permit number, or clear the permit dates.")
+    ).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("an expiry on or before the date issued is rejected", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2026-777");
+    setField(form, "Date Issued", "2026-03-01");
+    setField(form, "Expiry Date", "2026-03-01");
+    submit(form);
+
+    expect(screen.getByText("The expiry date must be after the date issued.")).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("a duplicate permit number from the server is shown to staff", async () => {
+    mockCtx.createEstablishment.mockRejectedValueOnce({
+      details: {
+        permit_number: [
+          'Sanitary permit number "LG-2026-007" is already recorded for another establishment.',
+        ],
+      },
+    });
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "LG-2026-007");
+    setField(form, "Date Issued", "2098-03-01");
+    submit(form);
+
+    expect(await screen.findByText(/is already recorded for another establishment/)).toBeTruthy();
   });
 });

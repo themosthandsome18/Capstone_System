@@ -488,6 +488,22 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate_permit_number(self, value):
+        # Owners claim an establishment by permit number, so two records must
+        # never share one. Blank means "no permit" and may repeat.
+        value = (value or "").strip()
+        if not value:
+            return value
+
+        duplicates = SanitaryEstablishment.objects.filter(permit_number__iexact=value)
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError(
+                f'Sanitary permit number "{value}" is already recorded for another establishment.'
+            )
+        return value
+
     def get_is_account_linked(self, obj):
         return bool(getattr(obj, "user_id", None))
 

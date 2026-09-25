@@ -203,6 +203,48 @@ function toApiValues(values) {
   };
 }
 
+/** A sanitary permit is valid for one year (29 February becomes 28 February). */
+export function addOneYear(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  if (!match) {
+    return "";
+  }
+
+  const [, year, month, day] = match;
+  const nextDay = month === "02" && day === "29" ? "28" : day;
+  return `${Number(year) + 1}-${month}-${nextDay}`;
+}
+
+function localToday() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The permit fields of a new record. Without a permit number nothing is
+ * recorded. With one, the permit is active until it expires; an already
+ * expired permit is recorded as renewal due, the same way the permit importer
+ * records expired permits. Compliance stays "not yet inspected" either way,
+ * because holding a permit is not an inspection result.
+ */
+function buildNewPermitState(values) {
+  if (!values.permit_number) {
+    return NEW_ESTABLISHMENT_PERMIT_STATE;
+  }
+
+  return {
+    has_permit: true,
+    permit_number: values.permit_number,
+    permit_issued_date: values.permit_issued_date,
+    permit_expiry_date: values.permit_expiry_date,
+    compliance_status: "not_yet_inspected",
+    permit_status:
+      values.permit_expiry_date >= localToday() ? "active" : "renewal_due",
+  };
+}
+
 function buildCreatePayload(values) {
   // Permit coverage (SP / Large) and remarks are not asked for at registration;
   // the backend model defaults apply ("sp" and "").
@@ -215,7 +257,7 @@ function buildCreatePayload(values) {
     contact_number: values.contact_number,
     latitude: values.latitude,
     longitude: values.longitude,
-    ...NEW_ESTABLISHMENT_PERMIT_STATE,
+    ...buildNewPermitState(values),
   };
 }
 
@@ -499,6 +541,34 @@ function EstablishmentRecords() {
 
     if (!payload.address) {
       return "Address is required.";
+    }
+
+    if (!editingEstablishment) {
+      return validateNewPermit(payload);
+    }
+
+    return "";
+  }
+
+  function validateNewPermit(payload) {
+    const hasDates = payload.permit_issued_date || payload.permit_expiry_date;
+
+    if (!payload.permit_number) {
+      return hasDates
+        ? "Enter the sanitary permit number, or clear the permit dates."
+        : "";
+    }
+
+    if (!payload.permit_issued_date) {
+      return "Enter the date the sanitary permit was issued.";
+    }
+
+    if (!payload.permit_expiry_date) {
+      return "Enter the sanitary permit expiry date.";
+    }
+
+    if (payload.permit_expiry_date <= payload.permit_issued_date) {
+      return "The expiry date must be after the date issued.";
     }
 
     return "";
@@ -1517,10 +1587,57 @@ function RegisterEstablishmentModal({
             </p>
           </section>
         ) : (
-          <p className="establishment-form-hint">
-            A new establishment is registered with no sanitary permit on record.
-            Record or issue its permit afterwards from View or Edit.
-          </p>
+          <section className="establishment-form-section permit-record">
+            <h3>Sanitary Permit (optional)</h3>
+            <p className="establishment-form-hint">
+              If the establishment already holds a sanitary permit, record its
+              number here. Leave it blank if it has none yet. A permit is valid
+              for one year, so the expiry date defaults to one year after the
+              date issued; you can change it.
+            </p>
+
+            <label className="modal-field full">
+              <span>Sanitary Permit Number</span>
+              <input
+                type="text"
+                placeholder="e.g. SP-2026-001"
+                value={form.permit_number}
+                onChange={(event) => onChange("permit_number", event.target.value)}
+              />
+            </label>
+
+            <div className="modal-two-grid">
+              <label className="modal-field">
+                <span>Date Issued</span>
+                <input
+                  type="date"
+                  value={form.permit_issued_date}
+                  onChange={(event) => {
+                    const issued = event.target.value;
+                    const untouchedDefault =
+                      !form.permit_expiry_date ||
+                      form.permit_expiry_date === addOneYear(form.permit_issued_date);
+
+                    onChange("permit_issued_date", issued);
+                    if (untouchedDefault) {
+                      onChange("permit_expiry_date", addOneYear(issued));
+                    }
+                  }}
+                />
+              </label>
+
+              <label className="modal-field">
+                <span>Expiry Date</span>
+                <input
+                  type="date"
+                  value={form.permit_expiry_date}
+                  onChange={(event) =>
+                    onChange("permit_expiry_date", event.target.value)
+                  }
+                />
+              </label>
+            </div>
+          </section>
         )}
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
