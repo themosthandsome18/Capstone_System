@@ -860,12 +860,12 @@ SANITARY_BUSINESS_TYPES = [
     },
     {
         "name": "Restaurant / Food Establishment",
-        "inspection_frequency": "monthly",
+        "inspection_frequency": "quarterly",
         "description": "Food establishment requiring sanitary, potability, and employee health requirement monitoring.",
     },
     {
         "name": "Public Market Stall",
-        "inspection_frequency": "monthly",
+        "inspection_frequency": "quarterly",
         "description": "Market stall monitored for food-handling, employee health, potability, and sanitary permit requirements.",
     },
     {
@@ -875,22 +875,22 @@ SANITARY_BUSINESS_TYPES = [
     },
     {
         "name": "Sub-contractor",
-        "inspection_frequency": "annual",
+        "inspection_frequency": "quarterly",
         "description": "Contracted service establishment monitored for employee health and occupational health staffing requirements.",
     },
     {
         "name": "Resort / Picnic Ground",
-        "inspection_frequency": "quarterly",
+        "inspection_frequency": "annual",
         "description": "Recreational establishment monitored for lifeguard, first aid, safety equipment, and wastewater requirements.",
     },
     {
         "name": "Boatman",
-        "inspection_frequency": "annual",
+        "inspection_frequency": "quarterly",
         "description": "Boat operation service monitored for life vest, MARINA license, and first aid readiness.",
     },
     {
         "name": "Massage / Physical Therapy",
-        "inspection_frequency": "quarterly",
+        "inspection_frequency": "annual",
         "description": "Therapy service establishment monitored for professional license, NC2 certification, and Hepa B screening.",
     },
     {
@@ -910,7 +910,7 @@ SANITARY_BUSINESS_TYPES = [
     },
     {
         "name": "Karaoke / Video Bar / CSW",
-        "inspection_frequency": "monthly",
+        "inspection_frequency": "annual",
         "description": "Entertainment or CSW-related establishment monitored for Hepa B screening, regular smear, and birth certificate requirements.",
     },
 ]

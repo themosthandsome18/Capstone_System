@@ -3614,3 +3614,128 @@ class NotYetInspectedMigrationTests(TransactionTestCase):
             address="1 Main St",
         )
         self.assertEqual(fresh.compliance_status, "not_yet_inspected")
+
+
+class ClientInspectionFrequencyMigrationTests(TestCase):
+    """Migration 0036: inspection frequencies per the client's form, keyed by name."""
+
+    # Production values before this migration (public bootstrap, read-only).
+    PRODUCTION_BEFORE = {
+        "Water Refilling Station": "monthly",
+        "Agro-industrial Establishment (Poultry / Piggery Farm)": "quarterly",
+        "Sub-contractor": "annual",
+        "Restaurant / Food Establishment": "monthly",
+        "Massage / Physical Therapy": "quarterly",
+        "Public Market Stall": "monthly",
+        "Food Establishment": "monthly",
+        "Commercial Non Food": "monthly",
+        "Drug Store": "annual",
+        "Resort / Picnic Ground": "quarterly",
+        "Boatman": "annual",
+        "Funeral Parlor": "annual",
+        "Burial Ground": "annual",
+        "Private Laboratory & Clinic": "annual",
+        "Karaoke / Video Bar / CSW": "monthly",
+        "Ambulant Food Vendor": "monthly",
+    }
+
+    EXPECTED = {
+        "Restaurant / Food Establishment": "quarterly",
+        "Public Market Stall": "quarterly",
+        "Food Establishment": "quarterly",
+        "Sub-contractor": "quarterly",
+        "Boatman": "quarterly",
+        "Agro-industrial Establishment (Poultry / Piggery Farm)": "quarterly",
+        "Resort / Picnic Ground": "annual",
+        "Karaoke / Video Bar / CSW": "annual",
+        "Funeral Parlor": "annual",
+        "Burial Ground": "annual",
+        "Private Laboratory & Clinic": "annual",
+        "Massage / Physical Therapy": "annual",
+        "Water Refilling Station": "monthly",
+        "Ambulant Food Vendor": "monthly",
+        # "Depends" on the client's form: unchanged.
+        "Commercial Non Food": "monthly",
+        "Drug Store": "annual",
+    }
+
+    def setUp(self):
+        import importlib
+
+        self.migration = importlib.import_module(
+            "api.migrations.0036_set_client_inspection_frequencies"
+        )
+        for name, frequency in self.PRODUCTION_BEFORE.items():
+            SanitaryBusinessType.objects.update_or_create(
+                name=name,
+                defaults={"inspection_frequency": frequency, "description": f"{name} notes"},
+            )
+
+    def _run_migration(self):
+        from django.apps import apps
+
+        self.migration.set_client_inspection_frequencies(apps, None)
+
+    def _frequencies(self):
+        return dict(SanitaryBusinessType.objects.values_list("name", "inspection_frequency"))
+
+    def test_sets_the_client_frequencies(self):
+        self._run_migration()
+        frequencies = self._frequencies()
+        for name, frequency in self.EXPECTED.items():
+            self.assertEqual(frequencies[name], frequency, name)
+
+    def test_running_again_changes_nothing(self):
+        self._run_migration()
+        first = self._frequencies()
+        self._run_migration()
+        self.assertEqual(self._frequencies(), first)
+
+    def test_depends_types_and_unlisted_types_are_untouched(self):
+        SanitaryBusinessType.objects.create(name="Future Type", inspection_frequency="quarterly")
+        SanitaryBusinessType.objects.filter(name="Drug Store").update(inspection_frequency="quarterly")
+
+        self._run_migration()
+
+        frequencies = self._frequencies()
+        self.assertEqual(frequencies["Future Type"], "quarterly")
+        self.assertEqual(frequencies["Drug Store"], "quarterly")
+        self.assertEqual(frequencies["Commercial Non Food"], "monthly")
+
+    def test_only_inspection_frequency_changes(self):
+        before = {
+            row["name"]: row
+            for row in SanitaryBusinessType.objects.values("id", "name", "description")
+        }
+        self._run_migration()
+        after = {
+            row["name"]: row
+            for row in SanitaryBusinessType.objects.values("id", "name", "description")
+        }
+        self.assertEqual(before, after)
+
+    def test_missing_names_are_skipped_without_failing(self):
+        SanitaryBusinessType.objects.filter(name__in=["Boatman", "Funeral Parlor"]).delete()
+
+        self._run_migration()
+
+        frequencies = self._frequencies()
+        self.assertNotIn("Boatman", frequencies)
+        self.assertNotIn("Funeral Parlor", frequencies)
+        self.assertEqual(frequencies["Sub-contractor"], "quarterly")
+
+    def test_reverse_is_a_noop(self):
+        from django.db.migrations import RunPython
+
+        operation = self.migration.Migration.operations[0]
+        self.assertIs(operation.reverse_code, RunPython.noop)
+
+    def test_seed_data_agrees_with_the_client_frequencies(self):
+        # The optional seeder (USE_SEED_DATA) update_or_creates frequencies from
+        # seed_data; if it disagreed it would silently undo this migration.
+        from .seed_data import SANITARY_BUSINESS_TYPES
+
+        for row in SANITARY_BUSINESS_TYPES:
+            expected = self.migration.CLIENT_INSPECTION_FREQUENCIES.get(row["name"])
+            if expected is not None:
+                self.assertEqual(row["inspection_frequency"], expected, row["name"])
