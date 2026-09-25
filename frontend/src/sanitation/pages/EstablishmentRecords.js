@@ -735,7 +735,7 @@ function EstablishmentRecords() {
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
 
-      <section className="establishment-table-card">
+      <section className="establishment-table-card establishment-records-table">
         <div className="establishment-tools">
           <div className="establishment-search">
             <FiSearch />

@@ -1616,6 +1616,22 @@
   background: #f8fafc;
 }
 
+/* Establishment Records only: larger table text (client request). Other
+   pages that reuse .establishment-table-card keep their sizes. */
+.establishment-records-table th {
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.establishment-records-table td {
+  padding: 16px 16px;
+  font-size: 15px;
+}
+
+.establishment-records-table td .status-pill {
+  font-size: 13px;
+}
+
 .establishment-empty {
   height: 80px;
   text-align: center;
