@@ -450,6 +450,21 @@ This project is being developed with Claude-based and ChatGPT-based planners/rev
   - **Verification**: `flutter test` reports 11 passing tests across the suite; `flutter analyze` reports the same 4 pre-existing info-level issues — no new issues.
   - **Not verified**: not merged to `main` and not deployed. A new APK build is still required, and **no real-device or emulator end-to-end test was performed** — the portal was exercised only in widget tests.
 
+## Production Test-Data Cleanup (2026-09-26)
+- Performed on **2026-09-26** by the planner in a direct Supabase SQL session, with explicit user approval, in **one transaction**, after a full JSON backup of every affected row (the backup is kept by the user, not in this repository). Not performed from this codebase or by an automated agent.
+- **Deleted**:
+  - Inspections 338, 339, 340, 341 and their 35 checklist items.
+  - Complaints 96, 97, 104, 105.
+  - Notifications 2, 3.
+  - Permit renewal 423.
+  - Household records 599, 600, 601, 602.
+  - Establishment 447 "Moto Shop Ni Manong" (test data recorded under the wrong business type).
+- **Updated**: establishments 448 "711" and 449 "Perly'S Sari-Sari Store" → `compliance_status = not_yet_inspected`.
+- **Verified afterwards**: 2 establishments; 0 inspections, checklist items, complaints, permit renewals, notifications and household records; tourist records (11) and activity logs (110) untouched. Migration `0035` confirmed applied in production (`django_migrations`).
+- **Still open**:
+  - 6 complaint photo files remain in Supabase Storage under `media/complaints`; the user is deleting them via the Supabase dashboard.
+  - Establishment 449 has `has_permit = false` but `permit_status = active`, and its stored name is "Perly'S" (title-casing artefact). To be fixed through the web UI.
+
 ## Establishment Records — Client Meeting Fixes (branch `sanitation/establishment-client-fixes`, NOT merged, NOT deployed)
 - Branched from `2426b65`. Commits: `79098e8` (categories), `b966a9d` (frequencies), `7865f89` (permit number), `1aab64f` (table text).
 - **Client meeting decisions (recorded as stated by the client, in person)**:
