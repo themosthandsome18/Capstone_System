@@ -265,7 +265,7 @@ describe("FOCUS 2: submission payload", () => {
     expect(payload.permit_number).toBe("");
     expect(payload.permit_issued_date).toBeNull();
     expect(payload.permit_expiry_date).toBeNull();
-    expect(payload.compliance_status).toBe("no_permit");
+    expect(payload.compliance_status).toBe("not_yet_inspected");
     expect(payload.permit_status).toBe("no_permit");
 
     // Coordinates left unset submit as null (backend then fills them in).
@@ -357,7 +357,8 @@ describe("FOCUS 3: Has Permit behaviour", () => {
       expect(el.disabled).toBe(true);
       expect(el.value).toBe("");
     });
-    expect(field(form, "Compliance Status").value).toBe("no_permit");
+    // The permit toggle no longer decides compliance: the stored finding stands.
+    expect(field(form, "Compliance Status").value).toBe("for_completion");
     expect(field(form, "Permit Status").value).toBe("no_permit");
     expect(within(form).queryByText(/Auto-Generate/)).toBeNull();
     expect(within(form).getByText(/No Permit \/ For Immediate Inspection/)).toBeTruthy();
@@ -374,7 +375,8 @@ describe("FOCUS 3: Has Permit behaviour", () => {
     expect(payload.permit_number).toBe("");
     expect(payload.permit_issued_date).toBeNull();
     expect(payload.permit_expiry_date).toBeNull();
-    expect(payload.compliance_status).toBe("no_permit");
+    // Only permit fields are sent; the compliance finding is left alone.
+    expect(payload).not.toHaveProperty("compliance_status");
     expect(payload.permit_status).toBe("no_permit");
   });
 
@@ -385,7 +387,8 @@ describe("FOCUS 3: Has Permit behaviour", () => {
     expect(field(form, "Permit Number").value).toBe(SEQ_AFTER_FIXTURES);
     expect(field(form, "Permit Issued Date").value).toBe(TODAY);
     expect(field(form, "Permit Expiry Date").value).toBe(END_OF_YEAR);
-    expect(field(form, "Compliance Status").value).toBe("good_standing");
+    // Issuing a permit does not grant Good Standing.
+    expect(field(form, "Compliance Status").value).toBe("no_permit");
     expect(field(form, "Permit Status").value).toBe("active");
   });
 });

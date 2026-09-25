@@ -509,7 +509,7 @@ describe("Register New Establishment", () => {
       permit_number: "",
       permit_issued_date: null,
       permit_expiry_date: null,
-      compliance_status: "no_permit",
+      compliance_status: "not_yet_inspected",
       permit_status: "no_permit",
     });
     expect(mockCtx.updateEstablishment).not.toHaveBeenCalled();
@@ -583,7 +583,7 @@ describe("Ambulant Food Vendor business type", () => {
       permit_number: "",
       permit_issued_date: null,
       permit_expiry_date: null,
-      compliance_status: "no_permit",
+      compliance_status: "not_yet_inspected",
       permit_status: "no_permit",
     });
   });
@@ -848,9 +848,11 @@ describe("View Establishment", () => {
       permit_number: expectedNumber,
       permit_issued_date: TODAY,
       permit_expiry_date: END_OF_YEAR,
-      compliance_status: "good_standing",
       permit_status: "active",
     });
+    // Issuing a permit is not an inspection finding, so it must not decide the
+    // compliance status.
+    expect(payload).not.toHaveProperty("compliance_status");
   });
 
   test("plain Edit of a no-permit record pre-fills nothing", () => {
@@ -860,5 +862,78 @@ describe("View Establishment", () => {
     expect(field(form, "Has Permit?").value).toBe("no");
     expect(field(form, "Permit Number").value).toBe("");
     cleanup();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Not Yet Inspected                                                    */
+/* ------------------------------------------------------------------ */
+
+const NOT_YET_INSPECTED = {
+  ...NO_PERMIT,
+  id: 505,
+  business_name: "Brand New Carinderia",
+  compliance_status: "not_yet_inspected",
+  compliance_status_label: "Not Yet Inspected",
+};
+
+describe("never-inspected establishments", () => {
+  function withNotYetInspected() {
+    const previous = mockCtx.establishments;
+    mockCtx.establishments = [...previous, NOT_YET_INSPECTED];
+    return () => {
+      mockCtx.establishments = previous;
+    };
+  }
+
+  test("the table shows the Not Yet Inspected label, not Good Standing", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      const row = rowFor(505);
+
+      expect(within(row).getByText("Not Yet Inspected")).toBeTruthy();
+      expect(within(row).queryByText("Good Standing")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("its status cell carries the neutral style, not the good one", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      const pill = rowFor(505).querySelector(".status-pill, .establishment-status");
+
+      expect(pill.className).toContain("not-yet-inspected");
+      expect(pill.className).not.toContain("good-standing");
+    } finally {
+      restore();
+    }
+  });
+
+  test("Not Yet Inspected is offered as a filter", () => {
+    renderPage();
+    const options = [...document.querySelectorAll("select option")].map(
+      (option) => option.value
+    );
+
+    expect(options).toContain("not_yet_inspected");
+  });
+
+  test("editing it offers Not Yet Inspected as the stored status", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      fireEvent.click(within(rowFor(505)).getByTitle("Edit establishment"));
+      const form = document.querySelector("form.establishment-modal");
+
+      expect(field(form, "Compliance Status").value).toBe("not_yet_inspected");
+    } finally {
+      restore();
+    }
   });
 });

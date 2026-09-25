@@ -11867,3 +11867,21 @@
 .inspection-calendar-key .completed::before {
   background: #1d4ed8;
 }
+
+/* Never inspected: no finding yet, so a neutral slate rather than a
+   compliance colour. Covers every place the status is rendered. */
+.status-pill.not-yet-inspected,
+.establishment-status.not-yet-inspected,
+.inspection-status.not-yet-inspected,
+.permit-status.not-yet-inspected,
+.permit-compliance.not-yet-inspected,
+.activity-status.not-yet-inspected,
+.establishment-standing-banner.not_yet_inspected {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.status-pill.not-yet-inspected::before {
+  background: #64748b;
+}

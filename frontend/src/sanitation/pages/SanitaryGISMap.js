@@ -82,6 +82,7 @@ export const MAUBAN_BARANGAY_CENTERS = {
 
 const establishmentStatusFilters = [
   { value: "all", label: "All Establishments" },
+  { value: "not_yet_inspected", label: "Not Yet Inspected" },
   { value: "good_standing", label: "Good Standing" },
   { value: "upcoming", label: "Upcoming" },
   { value: "for_completion", label: "For Completion" },
@@ -91,6 +92,7 @@ const establishmentStatusFilters = [
 
 const householdStatusFilters = [
   { value: "all", label: "All Households" },
+  { value: "not_yet_inspected", label: "Not Yet Inspected" },
   { value: "good_standing", label: "Good Standing" },
   { value: "for_completion", label: "For Compliance" },
   { value: "violation", label: "Needs Assistance" },
@@ -190,6 +192,8 @@ function getPinColor(item, mapMode) {
 
   // Establishments
   const status = item.compliance_status || "";
+  // Never inspected has no finding, so it gets a neutral slate marker.
+  if (status === "not_yet_inspected") return "#64748b"; // Slate
   if (status === "good_standing") return "#16a34a"; // Green
   if (status === "upcoming") return "#f59e0b"; // Amber / Yellow
   if (status === "for_completion") return "#ea580c"; // Orange

@@ -113,7 +113,7 @@ const initialForm = {
   permit_number: "",
   permit_issued_date: "",
   permit_expiry_date: "",
-  compliance_status: "good_standing",
+  compliance_status: "not_yet_inspected",
   permit_status: "active",
   latitude: "",
   longitude: "",
@@ -121,6 +121,7 @@ const initialForm = {
 };
 
 const statusOptions = [
+  { value: "not_yet_inspected", label: "Not Yet Inspected" },
   { value: "good_standing", label: "Good Standing" },
   { value: "upcoming", label: "Upcoming" },
   { value: "for_completion", label: "For Completion" },
@@ -146,7 +147,7 @@ const NEW_ESTABLISHMENT_PERMIT_STATE = {
   permit_number: "",
   permit_issued_date: null,
   permit_expiry_date: null,
-  compliance_status: "no_permit",
+  compliance_status: "not_yet_inspected",
   permit_status: "no_permit",
 };
 
@@ -425,9 +426,8 @@ function EstablishmentRecords() {
       if (!loaded.permit_expiry_date) {
         loaded.permit_expiry_date = `${new Date().getFullYear()}-12-31`;
       }
-      if (loaded.compliance_status === "no_permit") {
-        loaded.compliance_status = "good_standing";
-      }
+      // Issuing a permit is an administrative act, not an inspection finding,
+      // so it never sets a compliance status. Only an inspection does that.
       if (loaded.permit_status === "no_permit") {
         loaded.permit_status = "active";
       }
@@ -1372,8 +1372,10 @@ function RegisterEstablishmentModal({
                     const hasPermit = event.target.value === "yes";
                     onChange("has_permit", hasPermit);
 
+                    // Permit state only. Whether an establishment holds a
+                    // permit is an administrative fact; its compliance status
+                    // is an inspection finding and is left untouched here.
                     if (!hasPermit) {
-                      onChange("compliance_status", "no_permit");
                       onChange("permit_status", "no_permit");
                       onChange("permit_number", "");
                       onChange("permit_issued_date", "");
@@ -1381,7 +1383,6 @@ function RegisterEstablishmentModal({
                     } else {
                       const todayStr = new Date().toISOString().slice(0, 10);
                       const endOfYearStr = `${new Date().getFullYear()}-12-31`;
-                      onChange("compliance_status", "good_standing");
                       onChange("permit_status", "active");
                       if (
                         !form.permit_number ||
