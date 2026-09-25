@@ -1011,7 +1011,7 @@ Investigated on branch `sanitation/inspection-followups`. No code, migration or 
   5. **Existing production rows**: a data migration would be needed to reclassify establishments that have `compliance_status = good_standing` **and** zero related `SanitaryInspection` rows. This is a production data change and should be a separate, separately approved step — it cannot distinguish "never inspected" from "inspected on paper before the system existed", so the client should confirm the intent first.
 - **Not investigated**: whether "711" specifically was created by the register form, the permit importer, or a seeder. That would need a production read, which was out of scope here.
 
-### "Not Yet Inspected" Compliance Status (branch `sanitation/not-yet-inspected`, NOT merged, NOT deployed)
+### "Not Yet Inspected" Compliance Status (merged to `main` and pushed as `2426b65`; deploy not verified)
 - Commits: `a314f7e` (backend), `7132faa` (web), `eb57a77` (mobile). Branched from `9a49d85`. `origin/main` is unchanged.
 - Implements the proposal from the earlier read-only investigation. An establishment nobody has inspected previously defaulted to `good_standing`, so it displayed "Good Standing" it had not earned.
 - **Model and migration**:
@@ -1034,3 +1034,39 @@ Investigated on branch `sanitation/inspection-followups`. No code, migration or 
   - Better still, `SanitationEstablishment.fromJson` reads `statusLabel: '${json['compliance_status_label'] ?? 'Upcoming'}'`, and the API serializes that field from `get_compliance_status_display()`, so wherever the app shows `statusLabel` an old APK already displays "Not Yet Inspected" correctly. Only direct `sanitationStatusLabel(complianceStatus)` call sites would show `not_yet_inspected` in snake_case until a rebuild.
 - **Verification (local only)**: backend `Ran 135 tests in 157.369s` / `OK`; frontend `Tests: 197 passed, 197 total`, `6 suites`; `npm run build` → `Compiled successfully.`; `flutter test` 30/30; `flutter analyze` → `4 issues found`, the same pre-existing info issues. No production database, API, or production data was touched.
 - **Not Verified / open**: not merged, not deployed, **a new APK build is required**, and no manual or authenticated UI check was performed. **Existing production rows keep their stored status** — establishments already carrying `good_standing` with no inspections still read Good Standing. Reclassifying them requires a separate data migration and separate client approval, because it cannot distinguish "never inspected" from "inspected before this system existed".
+
+### Establishment Records — Client Meeting Fixes (branch `sanitation/establishment-client-fixes`, NOT merged, NOT deployed)
+- Commits: `79098e8`, `b966a9d`, `7865f89`, `1aab64f`. Branched from `2426b65`.
+- **Client meeting decisions (recorded as stated by the client, in person)**:
+  - **Violation levels**: violations use three colour-coded levels. Not implemented yet.
+  - **Barangay sanidad accounts**: barangay sanidad staff get individual per-person accounts, not a shared barangay account. Not implemented yet.
+  - **Business type**: the business-type field itself stays as it is; only the category mapping and inspection frequencies below were corrected.
+  - **Inspection frequencies**: set per the client's form (below).
+  - **Sanitary permit number** is the most important field to capture when adding a record ("pinakamahalaga"); permits are valid for one year.
+- **Categories**: `businessTypeLabels.js` previously mapped Drug Store and Private Laboratory & Clinic to Institutional Establishment and Massage / Physical Therapy to Commercial / NF. Corrected to Commercial / NF, Public Places and Public Places. Institutional Establishment is intentionally empty until a real schools type exists. Tests assert each client-stated mapping.
+- **Frequencies (migration `0036`)**: production before → after (from the public bootstrap GET, read-only):
+
+  | id | Business type | Before | After |
+  |---|---|---|---|
+  | 8 | Water Refilling Station | monthly | monthly |
+  | 9 | Agro-industrial Establishment (Poultry / Piggery Farm) | quarterly | quarterly |
+  | 10 | Sub-contractor | annual | **quarterly** |
+  | 11 | Restaurant / Food Establishment | monthly | **quarterly** |
+  | 12 | Massage / Physical Therapy | quarterly | **annual** |
+  | 13 | Public Market Stall | monthly | **quarterly** |
+  | 15 | Food Establishment | monthly | **quarterly** |
+  | 16 | Commercial Non Food | monthly | monthly (Depends — unchanged) |
+  | 17 | Drug Store | annual | annual (Depends — unchanged) |
+  | 18 | Resort / Picnic Ground | quarterly | **annual** |
+  | 19 | Boatman | annual | **quarterly** |
+  | 20 | Funeral Parlor | annual | annual |
+  | 21 | Burial Ground | annual | annual |
+  | 22 | Private Laboratory & Clinic | annual | annual |
+  | 23 | Karaoke / Video Bar / CSW | monthly | **annual** |
+  | 24 | Ambulant Food Vendor | monthly | monthly |
+
+  Ids are shown for reference only; the migration matches by name.
+- **Permit number at registration**: optional; unique across establishments (case-insensitive, trimmed) at the serializer. The owner claim flow (`establishment_register_view`) is unchanged and still matches by `permit_number__iexact` under `select_for_update()` inside `transaction.atomic()`, returning 409 and writing nothing when any match is already linked; new tests cover a claim of a staff-recorded permit, a rejected second claim, and the row lock. Uniqueness makes the claim unambiguous (previously two records could share a number and the claim took the lowest id).
+- **Security note (pre-existing, not changed)**: a claim needs only the permit number, which is printed on the permit displayed at the establishment. Recording real permit numbers therefore makes each unlinked establishment claimable by anyone who reads its permit. Consider a second factor (e.g. a staff-issued claim code) before real permit numbers are entered at scale.
+- **Table text**: Establishment Records only (`.establishment-records-table`).
+- **Verification**: backend 150 OK; frontend 217/217; build compiled; flutter 30/30; analyze 4 pre-existing infos. Not merged, not deployed, no browser check.
