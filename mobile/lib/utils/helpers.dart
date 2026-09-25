@@ -215,6 +215,8 @@ String sanitationPriorityLabel(String value) {
 
 String sanitationStatusLabel(String value) {
   switch (value) {
+    case 'not_yet_inspected':
+      return 'Not Yet Inspected';
     case 'good_standing':
       return 'Good Standing';
     case 'upcoming':
@@ -269,6 +271,10 @@ String householdStatusLabel(String value) {
 
 Color sanitationStatusColor(String value) {
   switch (value) {
+    // No inspection finding yet, so no compliance colour. Stated explicitly
+    // rather than relying on the fallback below.
+    case 'not_yet_inspected':
+      return AppColors.muted;
     case 'good_standing':
     case 'active':
     case 'low':
