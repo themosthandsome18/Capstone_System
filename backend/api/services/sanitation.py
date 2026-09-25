@@ -35,6 +35,7 @@ from ..models import (
     RENEWAL_STAGE_PAYMENT_PENDING,
     RENEWAL_STAGE_RELEASED,
     RENEWAL_STAGE_REQUIREMENTS_REVIEW,
+    SANITARY_STATUS_NOT_YET_INSPECTED,
     SANITARY_FREQUENCY_ANNUAL,
     SANITARY_FREQUENCY_MONTHLY,
     SANITARY_FREQUENCY_QUARTERLY,
@@ -150,6 +151,10 @@ def attach_establishment_rollups(establishments):
 def get_establishment_status_counts(establishments):
     return establishments.aggregate(
         total=Count("id"),
+        not_yet_inspected=Count(
+            "id",
+            filter=Q(compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED),
+        ),
         good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
         upcoming=Count("id", filter=Q(compliance_status=SANITARY_STATUS_UPCOMING)),
         for_completion=Count(
@@ -180,6 +185,10 @@ def get_business_type_counts(establishments):
             without_permit=Count("id", filter=Q(has_permit=False)),
             sp=Count("id", filter=Q(permit_size="sp")),
             large=Count("id", filter=Q(permit_size="large")),
+            not_yet_inspected=Count(
+                "id",
+                filter=Q(compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED),
+            ),
             good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
             for_completion=Count(
                 "id",
@@ -212,6 +221,7 @@ def build_dashboard_business_type_rows(establishments):
                 "total": counts.get("total", 0),
                 "sp": counts.get("sp", 0),
                 "large": counts.get("large", 0),
+                "not_yet_inspected": counts.get("not_yet_inspected", 0),
                 "good_standing": counts.get("good", 0),
                 "for_completion": counts.get("for_completion", 0),
                 "upcoming": counts.get("upcoming", 0),
@@ -1381,6 +1391,13 @@ def sync_establishment_after_inspection(inspection):
 
 def build_sanitation_question_answers(establishments):
     total = establishments.count()
+    # Never-inspected establishments have no finding, so they belong in neither
+    # side of the compliance rate. Counting them as non-compliant would be as
+    # wrong as counting them as compliant.
+    not_yet_inspected = establishments.filter(
+        compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED
+    ).count()
+    inspected_total = total - not_yet_inspected
     good = establishments.filter(compliance_status=SANITARY_STATUS_GOOD).count()
     for_completion = establishments.filter(
         compliance_status=SANITARY_STATUS_FOR_COMPLETION
@@ -1389,7 +1406,9 @@ def build_sanitation_question_answers(establishments):
     violation = establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION).count()
     no_permit = establishments.filter(compliance_status=SANITARY_STATUS_NO_PERMIT).count()
     without_permit = establishments.filter(has_permit=False).count()
-    compliance_rate = round((good / total) * 100, 1) if total else 0
+    compliance_rate = (
+        round((good / inspected_total) * 100, 1) if inspected_total else 0
+    )
     top_type = top_sanitation_group(establishments, "business_type__name")
     top_7_type = top_n_sanitation_group(establishments, "business_type__name", limit=7)
     top_violation_type = top_sanitation_group(

@@ -572,12 +572,27 @@ SANITARY_STATUS_FOR_COMPLETION = "for_completion"
 SANITARY_STATUS_VIOLATION = "violation"
 SANITARY_STATUS_NO_PERMIT = "no_permit"
 
+# An establishment nobody has inspected yet has no compliance finding at all.
+# This is the default so a new record cannot claim Good Standing it has not
+# earned. It is deliberately excluded from compliance-rate arithmetic.
+SANITARY_STATUS_NOT_YET_INSPECTED = "not_yet_inspected"
+
 SANITARY_STATUS_CHOICES = [
+    (SANITARY_STATUS_NOT_YET_INSPECTED, "Not Yet Inspected"),
     (SANITARY_STATUS_GOOD, "Good Standing"),
     (SANITARY_STATUS_UPCOMING, "Upcoming"),
     (SANITARY_STATUS_FOR_COMPLETION, "For Completion"),
     (SANITARY_STATUS_VIOLATION, "Violation"),
     (SANITARY_STATUS_NO_PERMIT, "No Permit"),
+]
+
+# An inspection's own result can never be "not yet inspected": by the time one
+# is recorded, the visit has happened. Kept separate so the establishment's
+# status can carry that state without offering it as an inspection outcome.
+SANITARY_INSPECTION_RESULT_CHOICES = [
+    (value, label)
+    for value, label in SANITARY_STATUS_CHOICES
+    if value != SANITARY_STATUS_NOT_YET_INSPECTED
 ]
 
 PERMIT_STATUS_ACTIVE = "active"
@@ -720,7 +735,7 @@ class SanitaryEstablishment(models.Model):
     compliance_status = models.CharField(
         max_length=30,
         choices=SANITARY_STATUS_CHOICES,
-        default=SANITARY_STATUS_GOOD,
+        default=SANITARY_STATUS_NOT_YET_INSPECTED,
     )
     permit_status = models.CharField(
         max_length=30,
@@ -873,7 +888,7 @@ class SanitaryInspection(models.Model):
 
     status_after_inspection = models.CharField(
         max_length=30,
-        choices=SANITARY_STATUS_CHOICES,
+        choices=SANITARY_INSPECTION_RESULT_CHOICES,
         default=SANITARY_STATUS_GOOD,
     )
 

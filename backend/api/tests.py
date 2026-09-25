@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import TestCase
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -3410,3 +3412,205 @@ class InspectionStatusRequiredTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class NotYetInspectedStatusTests(TestCase):
+    """An establishment nobody has inspected must not claim Good Standing.
+
+    The new `not_yet_inspected` status is its own bucket: it is never counted
+    as compliant, and the first finalized inspection replaces it with whatever
+    the inspector actually found.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="nyi_sanitation",
+            password="Password@123",
+            email="nyi@test.local",
+        )
+        UserProfile.objects.create(user=self.user, role=ROLE_SANITATION)
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Not Yet Inspected Cafe",
+            inspection_frequency="monthly",
+        )
+
+    def make_establishment(self, name, **extra):
+        return SanitaryEstablishment.objects.create(
+            business_name=name,
+            owner_name="Owner",
+            business_type=self.btype,
+            barangay="Poblacion",
+            address="1 Main St",
+            **extra,
+        )
+
+    def test_a_new_establishment_starts_not_yet_inspected(self):
+        establishment = self.make_establishment("Brand New Shop")
+
+        self.assertEqual(establishment.compliance_status, "not_yet_inspected")
+        self.assertEqual(
+            establishment.get_compliance_status_display(), "Not Yet Inspected"
+        )
+
+    def test_the_status_is_a_valid_choice(self):
+        field = SanitaryEstablishment._meta.get_field("compliance_status")
+        values = [value for value, _ in field.choices]
+
+        self.assertIn("not_yet_inspected", values)
+        self.assertEqual(field.default, "not_yet_inspected")
+
+    def test_an_explicit_status_still_wins(self):
+        establishment = self.make_establishment(
+            "Explicit Shop", compliance_status="violation"
+        )
+
+        self.assertEqual(establishment.compliance_status, "violation")
+
+    def test_it_is_not_mapped_to_a_permit_status(self):
+        from api.services.sanitation import PERMIT_STATUS_BY_COMPLIANCE
+
+        self.assertNotIn("not_yet_inspected", PERMIT_STATUS_BY_COMPLIANCE)
+
+    def test_the_status_counts_give_it_its_own_bucket(self):
+        from api.services.sanitation import get_establishment_status_counts
+
+        self.make_establishment("Never Seen One")
+        self.make_establishment("Never Seen Two")
+        self.make_establishment("Compliant One", compliance_status="good_standing")
+
+        counts = get_establishment_status_counts(
+            SanitaryEstablishment.objects.all()
+        )
+
+        self.assertEqual(counts["not_yet_inspected"], 2)
+        self.assertEqual(counts["good"], 1)
+        self.assertEqual(counts["total"], 3)
+
+    def test_the_compliance_rate_ignores_never_inspected_records(self):
+        from api.services.sanitation import build_sanitation_question_answers
+
+        self.make_establishment("Compliant", compliance_status="good_standing")
+        self.make_establishment("Violator", compliance_status="violation")
+        self.make_establishment("Never Inspected")
+
+        answers = build_sanitation_question_answers(
+            SanitaryEstablishment.objects.all()
+        )
+        rate = next(
+            item for item in answers if item["id"] == "compliance_rate"
+        )
+
+        # 1 of the 2 inspected establishments, not 1 of 3.
+        self.assertIn("50.0", rate["answer"])
+
+    def test_the_first_final_inspection_replaces_the_status(self):
+        establishment = self.make_establishment("Freshly Inspected")
+        self.assertEqual(establishment.compliance_status, "not_yet_inspected")
+
+        response = self.client.post(
+            "/api/sanitation/inspections/",
+            {
+                "establishment": establishment.id,
+                "inspector_name": "Inspector Test",
+                "inspection_date": "2026-03-15",
+                "status_after_inspection": "for_completion",
+                "is_draft": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        establishment.refresh_from_db()
+        self.assertEqual(establishment.compliance_status, "for_completion")
+
+    def test_a_draft_leaves_it_not_yet_inspected(self):
+        establishment = self.make_establishment("Draft Only")
+
+        response = self.client.post(
+            "/api/sanitation/inspections/",
+            {
+                "establishment": establishment.id,
+                "inspector_name": "Inspector Test",
+                "inspection_date": "2026-03-15",
+                "is_draft": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        establishment.refresh_from_db()
+        self.assertEqual(establishment.compliance_status, "not_yet_inspected")
+
+
+class NotYetInspectedMigrationTests(TransactionTestCase):
+    """Migration 0035 changes the column definition, not the data.
+
+    A default only applies to rows created afterwards, so every establishment
+    that already carries a status must come through the migration unchanged.
+    """
+
+    migrate_from = [("api", "0034_add_ambulant_food_vendor_business_type")]
+    migrate_to = [("api", "0035_add_not_yet_inspected_compliance_status")]
+
+    def test_existing_rows_keep_their_status_across_the_migration(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_from)
+        executor.loader.build_graph()
+
+        old_apps = executor.loader.project_state(self.migrate_from).apps
+        BusinessType = old_apps.get_model("api", "SanitaryBusinessType")
+        Establishment = old_apps.get_model("api", "SanitaryEstablishment")
+
+        btype = BusinessType.objects.create(
+            name="Migration Proof Type", inspection_frequency="monthly"
+        )
+        existing = {
+            "good_standing": None,
+            "upcoming": None,
+            "for_completion": None,
+            "violation": None,
+            "no_permit": None,
+        }
+        for value in existing:
+            record = Establishment.objects.create(
+                business_name=f"Migration Proof {value}",
+                owner_name="Owner",
+                business_type=btype,
+                barangay="Poblacion",
+                address="1 Main St",
+                compliance_status=value,
+            )
+            existing[value] = record.pk
+
+        before = dict(
+            Establishment.objects.values_list("pk", "compliance_status")
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_to)
+        executor.loader.build_graph()
+
+        new_apps = executor.loader.project_state(self.migrate_to).apps
+        MigratedEstablishment = new_apps.get_model("api", "SanitaryEstablishment")
+        after = dict(
+            MigratedEstablishment.objects.values_list("pk", "compliance_status")
+        )
+
+        # Not one row changed.
+        self.assertEqual(before, after)
+        for value, pk in existing.items():
+            self.assertEqual(after[pk], value)
+
+        # Only rows created after the migration pick up the new default.
+        fresh = MigratedEstablishment.objects.create(
+            business_name="Created After Migration",
+            owner_name="Owner",
+            business_type_id=btype.pk,
+            barangay="Poblacion",
+            address="1 Main St",
+        )
+        self.assertEqual(fresh.compliance_status, "not_yet_inspected")
