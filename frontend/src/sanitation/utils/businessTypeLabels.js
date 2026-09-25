@@ -19,7 +19,8 @@
 
 /**
  * The client's confirmed business type categories, in the client's order.
- * Institutional Establishment includes schools and other institutions.
+ * Institutional Establishment is for schools; no real type is mapped to it
+ * yet, so it stays an empty category until one exists.
  * Ambulant Food Vendor is backed by the real "Ambulant Food Vendor" type added
  * by migration 0034 (monthly inspections, requirements not yet provided).
  */
@@ -42,16 +43,16 @@ export const BUSINESS_TYPE_DISPLAY_LABELS = {
     "Agro-Industrial Establishment",
   "Sub-contractor": "Industrial Establishment",
   "Restaurant / Food Establishment": "Food Establishment",
-  "Massage / Physical Therapy": "Commercial / NF",
+  "Massage / Physical Therapy": "Public Places",
   "Public Market Stall": "Food Establishment",
   "Food Establishment": "Food Establishment",
   "Commercial Non Food": "Commercial / NF",
-  "Drug Store": "Institutional Establishment",
+  "Drug Store": "Commercial / NF",
   "Resort / Picnic Ground": "Public Places",
   "Boatman": "Public Transport",
   "Funeral Parlor": "Public Places",
   "Burial Ground": "Public Places",
-  "Private Laboratory & Clinic": "Institutional Establishment",
+  "Private Laboratory & Clinic": "Public Places",
   "Karaoke / Video Bar / CSW": "Public Places",
 
   // Existing permit-importer type names. These remain stored exactly as

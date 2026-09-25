@@ -299,6 +299,28 @@ describe("client business type categories", () => {
     );
   });
 
+  // Stated by the client in person; see PROGRESS.md "client meeting".
+  test.each([
+    ["Drug Store", "Commercial / NF"],
+    ["Private Laboratory & Clinic", "Public Places"],
+    ["Massage / Physical Therapy", "Public Places"],
+    ["Funeral Parlor", "Public Places"],
+    ["Burial Ground", "Public Places"],
+    ["Resort / Picnic Ground", "Public Places"],
+    ["Karaoke / Video Bar / CSW", "Public Places"],
+    ["Sub-contractor", "Industrial Establishment"],
+    ["Boatman", "Public Transport"],
+  ])("client classification: %s is %s", (realName, category) => {
+    expect(businessTypeDisplayLabel(realName)).toBe(category);
+  });
+
+  test("Institutional Establishment (schools) has no real type mapped to it yet", () => {
+    expect(Object.values(BUSINESS_TYPE_DISPLAY_LABELS)).not.toContain(
+      "Institutional Establishment"
+    );
+    expect(CLIENT_BUSINESS_TYPE_CATEGORIES).toContain("Institutional Establishment");
+  });
+
   test.each(IMPORTER_AND_LEGACY_TYPE_MAPPINGS)(
     "%s maps legacy/importer data to %s without changing the stored type name",
     (storedName, category) => {
@@ -390,8 +412,13 @@ describe("Establishment Records table", () => {
     // Karaoke (502) and Resort (448) are both Public Places.
     expect(visibleIds().sort()).toEqual([448, 502]);
 
-    fireEvent.change(businessTypeFilter(), { target: { value: "Institutional Establishment" } });
+    // Drug Store (449) is Commercial / NF per the client's classification.
+    fireEvent.change(businessTypeFilter(), { target: { value: "Commercial / NF" } });
     expect(visibleIds()).toEqual([449]);
+
+    // Institutional Establishment (schools) has no real type yet.
+    fireEvent.change(businessTypeFilter(), { target: { value: "Institutional Establishment" } });
+    expect(visibleIds()).toEqual([]);
   });
 
   test("Ambulant Food Vendor can be filtered but has no records yet", () => {
@@ -405,7 +432,7 @@ describe("Establishment Records table", () => {
     renderPage();
     const search = screen.getByPlaceholderText(/Search by name/);
 
-    fireEvent.change(search, { target: { value: "institutional" } });
+    fireEvent.change(search, { target: { value: "commercial / nf" } });
     expect(visibleIds()).toEqual([449]);
 
     fireEvent.change(search, { target: { value: "drug store" } });
@@ -470,11 +497,19 @@ describe("Register New Establishment", () => {
       "Food Establishment",
     ]);
     expect(namesIn("Public Places")).toEqual([
+      "Massage / Physical Therapy",
       "Resort / Picnic Ground",
       "Funeral Parlor",
       "Burial Ground",
+      "Private Laboratory & Clinic",
       "Karaoke / Video Bar / CSW",
     ]);
+    expect(namesIn("Commercial / NF")).toEqual(["Commercial Non Food", "Drug Store"]);
+
+    // Institutional Establishment (schools) has no real type yet, so it shows
+    // the same disabled placeholder as any empty category.
+    const institutional = namesIn("Institutional Establishment");
+    expect(institutional).toEqual(["No business type configured yet"]);
 
     // This fixture has no real Ambulant Food Vendor type, so the empty category
     // shows a disabled placeholder. See "Ambulant Food Vendor business type" below.
@@ -550,7 +585,9 @@ describe("Ambulant Food Vendor business type", () => {
     expect(options[0].textContent).toBe("Ambulant Food Vendor");
     expect(options[0].value).toBe("24");
     expect(options[0].disabled).toBe(false);
-    expect(within(form).queryByText("No business type configured yet")).toBeNull();
+    expect(
+      within(ambulantGroup(form)).queryByText("No business type configured yet")
+    ).toBeNull();
   });
 
   test("the 9 categories are unchanged and no extra option is added", () => {
