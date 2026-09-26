@@ -527,6 +527,47 @@ const sanitationReportCategories = [
 
 const sanitationReportPriorities = ['low', 'medium', 'high'];
 
+/// Digits only, with a Philippine +63 prefix folded to a leading 0.
+String normalizePhMobileNumber(String value) {
+  var digits = value.replaceAll(RegExp(r'\D'), '');
+  if (digits.startsWith('63') && digits.length == 12) {
+    digits = '0${digits.substring(2)}';
+  }
+  return digits;
+}
+
+/// A Philippine mobile number, 09XXXXXXXXX, the same rule the server applies.
+bool isValidPhMobileNumber(String value) {
+  return RegExp(r'^09\d{9}$').hasMatch(normalizePhMobileNumber(value));
+}
+
+SanitationCategoryMeta? sanitationCategoryMetaFor(String category) {
+  for (final meta in sanitationReportCategoryDefinitions) {
+    if (meta.name == category) return meta;
+  }
+  return null;
+}
+
+/// Read-only urgency shown to reporters. It is derived from the category and
+/// cannot be chosen.
+String communityReportUrgencyBadge(String category) {
+  final priority = sanitationCategoryMetaFor(category)?.priority ?? 'medium';
+  final (level, window) = switch (priority) {
+    'high' => ('Urgent', '24–48 oras'),
+    'low' => ('Low', '5–7 araw'),
+    _ => ('Standard', '3–5 araw'),
+  };
+  return '$level · awtomatiko batay sa category ($window)';
+}
+
+/// The report model has no address field yet, so the typed location is kept
+/// at the top of the description where staff read it.
+String buildCommunityReportDescription(String address, String description) {
+  final location = address.trim();
+  final text = description.trim();
+  return location.isEmpty ? text : 'Lokasyon: $location\n\n$text';
+}
+
 void showSanitationScopeGuideDialog(BuildContext context) {
   showDialog<void>(
     context: context,
@@ -738,78 +779,6 @@ void showSanitationScopeGuideDialog(BuildContext context) {
   );
 }
 
-class _SanitationScopeGuideTrigger extends StatelessWidget {
-  const _SanitationScopeGuideTrigger();
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => showSanitationScopeGuideDialog(context),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FDF4),
-          border: Border.all(color: const Color(0xFF86EFAC)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Color(0xFF15803D), size: 20),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Gabay sa Pag-uulat (Ano ang Sakop?)',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF15803D),
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'I-tap para makita ang gabay sa pop-up',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF166534),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFDCFCE7),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Buksan',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF15803D),
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(Icons.open_in_new, size: 12, color: Color(0xFF15803D)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _GuideItem extends StatelessWidget {
   const _GuideItem({
     required this.icon,
@@ -851,55 +820,47 @@ class _GuideItem extends StatelessWidget {
 }
 
 class _SanitationReportPageState extends State<SanitationReportPage> {
+  static const _maxPhotos = 5;
+  static const _dailyLimit = 5;
+
   final TextEditingController _name = TextEditingController();
   final TextEditingController _contact = TextEditingController();
+  final TextEditingController _address = TextEditingController();
   final TextEditingController _description = TextEditingController();
+  // Kept internally for the map pin; never shown as raw text fields.
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   List<XFile> _photos = [];
-  String _category = sanitationReportCategories.first;
-  String _priority = 'high';
-  bool _isUrgentLocked = false;
-  late String _barangay;
+  String? _category;
+  String? _barangay;
   bool _submitting = false;
   bool _locating = false;
-  bool _locationConfirmed = false;
+  bool _showMap = false;
   bool _consentConfirmed = false;
-  bool _anonymous = false;
   int _dailyCount = 0;
+
+  /// Reporters cannot choose urgency; it always follows the category.
+  String get _priority =>
+      sanitationCategoryMetaFor(_category ?? '')?.priority ?? 'medium';
 
   @override
   void initState() {
     super.initState();
     _loadDailyCount();
     final draft = widget.initialDraft;
-    _barangay =
-        draft?.barangay ?? widget.barangays.firstOrNull?.name ?? 'Poblacion';
     if (draft != null) {
       _name.text = draft.name;
       _contact.text = draft.contactNumber;
-      _category = draft.category;
-      _priority = draft.priority;
+      _address.text = draft.address;
+      _category = draft.category.trim().isEmpty ? null : draft.category;
       _description.text = draft.description;
       _latitude.text = draft.latitude;
       _longitude.text = draft.longitude;
-      _anonymous = draft.isAnonymous;
-      _locationConfirmed =
-          latLngFromText(draft.latitude, draft.longitude) != null;
-    }
-    final initialMeta = sanitationReportCategoryDefinitions.firstWhere(
-      (m) => m.name == _category,
-      orElse: () => SanitationCategoryMeta(
-        name: _category,
-        group: '',
-        priority: _priority,
-        hint: '',
-      ),
-    );
-    if (_priority == 'high' || initialMeta.priority == 'high') {
-      _priority = 'high';
-      _isUrgentLocked = true;
+      _showMap = latLngFromText(draft.latitude, draft.longitude) != null;
+      if (widget.barangays.any((item) => item.name == draft.barangay)) {
+        _barangay = draft.barangay;
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -938,298 +899,454 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   void dispose() {
     _name.dispose();
     _contact.dispose();
+    _address.dispose();
     _description.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
   }
 
+  Widget _sectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final categoryItems = [
-      if (!sanitationReportCategories.contains(_category)) _category,
+    final categories = [
+      if (_category != null && !sanitationReportCategories.contains(_category))
+        _category!,
       ...sanitationReportCategories,
     ];
-    final priorityItems = [
-      if (!sanitationReportPriorities.contains(_priority)) _priority,
-      ...sanitationReportPriorities,
-    ];
+    final remaining = (_dailyLimit - _dailyCount).clamp(0, _dailyLimit);
+    final pin = latLngFromText(_latitude.text, _longitude.text);
 
     return FormPageScaffold(
-      title: 'Report Unsanitary Conditions',
-      subtitle: 'Saw something concerning? Tell the Sanitary Section so they can inspect.',
+      title: 'Community Report',
+      subtitle: '',
       children: [
-        // Daily limit badge
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: _dailyCount >= 5 ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
-            border: Border.all(
-              color: _dailyCount >= 5 ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
+        // a) Header with the scope guide link.
+        Text(
+          'I-report ang maruming kondisyon',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: AppColors.ink,
+              ),
+        ),
+        Row(
+          children: [
+            const Flexible(
+              child: Text(
+                'Siguraduhing sakop ito ng Sanitary Section.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+              ),
             ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.shield_outlined,
-                size: 18,
-                color: _dailyCount >= 5 ? const Color(0xFFDC2626) : const Color(0xFF059669),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${(5 - _dailyCount).clamp(0, 5)} of 5 submissions left today',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: _dailyCount >= 5 ? const Color(0xFFDC2626) : const Color(0xFF059669),
+            TextButton(
+              onPressed: () => showSanitationScopeGuideDialog(context),
+              style: TextButton.styleFrom(foregroundColor: AppColors.deepGreen),
+              child: const Text('Ano ang sakop?'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // b) Category chips (single select).
+        _sectionLabel('Ano ang ire-report mo? *'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: categories
+              .map(
+                (category) => ChoiceChip(
+                  label: Text(category),
+                  selected: _category == category,
+                  selectedColor: AppColors.green.withValues(alpha: 0.18),
+                  onSelected: (_) => setState(() => _category = category),
                 ),
-              ),
-            ],
-          ),
+              )
+              .toList(),
         ),
+        const SizedBox(height: 10),
 
-        // Citizen Scope Guide Trigger (Opens Pop-up)
-        const _SanitationScopeGuideTrigger(),
-
-        const SizedBox(height: 6),
-        CheckboxListTile(
-          value: _anonymous,
-          onChanged: (value) {
-            setState(() => _anonymous = value ?? false);
-          },
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Submit without name'),
-          subtitle: const Text(
-            'Contact number is optional, but needed if you want follow-up updates.',
-          ),
-        ),
-        if (!_anonymous)
-          AppTextField(
-            controller: _name,
-            label: 'Your name',
-            textCapitalization: TextCapitalization.words,
-          ),
-        AppTextField(
-          controller: _contact,
-          label: _anonymous
-              ? 'Contact number (optional)'
-              : 'Contact number for status tracking',
-        ),
-        DropdownTile<String>(
-          label: 'Category (Classified by Urgency)',
-          value: _category,
-          items: categoryItems,
-          itemLabel: (item) {
-            final meta = sanitationReportCategoryDefinitions.firstWhere(
-              (m) => m.name == item,
-              orElse: () => SanitationCategoryMeta(
-                name: item,
-                group: '',
-                priority: 'medium',
-                hint: '',
-              ),
-            );
-            final tag = meta.priority == 'high' ? ' 🔴 [Urgent]' : '';
-            return '$item$tag';
-          },
-          onChanged: (item) {
-            final meta = sanitationReportCategoryDefinitions.firstWhere(
-              (m) => m.name == item,
-              orElse: () => SanitationCategoryMeta(
-                name: item,
-                group: '',
-                priority: 'medium',
-                hint: '',
-              ),
-            );
-            setState(() {
-              _category = item;
-              if (meta.priority == 'high') {
-                _priority = 'high';
-                _isUrgentLocked = true;
-              } else if (!_isUrgentLocked && meta.priority.isNotEmpty) {
-                _priority = meta.priority;
-              }
-            });
-          },
-        ),
-        if (_isUrgentLocked || _priority == 'high')
+        // c) Read-only urgency, derived from the category.
+        if (_category != null)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFCA5A5)),
+              color: _priority == 'high'
+                  ? const Color(0xFFFEF2F2)
+                  : AppColors.canvas,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _priority == 'high'
+                    ? const Color(0xFFFCA5A5)
+                    : AppColors.border,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.lock, color: Color(0xFFDC2626), size: 22),
-                const SizedBox(width: 10),
+                Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                  color: _priority == 'high' ? AppColors.red : AppColors.muted,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Urgency: Urgent (High Priority) 🔒',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          color: Color(0xFFDC2626),
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Naka-lock bilang Urgent dahil sa critical public health hazard (24–48h SLA response). Hindi na maaaring baguhin.',
-                        style: TextStyle(fontSize: 11, color: AppColors.muted),
-                      ),
-                    ],
+                  child: Text(
+                    communityReportUrgencyBadge(_category!),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: _priority == 'high' ? AppColors.red : AppColors.ink,
+                    ),
                   ),
                 ),
               ],
             ),
           )
         else
-          DropdownTile<String>(
-            label: 'Urgency',
-            value: _priority,
-            items: priorityItems,
-            itemLabel: sanitationPriorityLabel,
-            onChanged: (item) {
-              setState(() {
-                _priority = item;
-                if (item == 'high') {
-                  _isUrgentLocked = true;
-                }
-              });
-            },
-          ),
-        DropdownTile<String>(
-          label: 'Barangay',
+          const SizedBox(height: 12),
+
+        // d) Barangay.
+        DropdownTile<String?>(
+          label: 'Barangay *',
           value: _barangay,
-          items: widget.barangays.map((item) => item.name).toList(),
-          itemLabel: (item) => item,
+          hint: 'Piliin ang barangay',
+          items: widget.barangays.map<String?>((item) => item.name).toList(),
+          itemLabel: (item) => item ?? '',
           onChanged: (item) => setState(() => _barangay = item),
         ),
-        AppTextField(
-          controller: _description,
-          label: 'Description',
-          maxLines: 4,
-        ),
-        PhotoPickerPanel(
-          photoName: _photos.isEmpty
-              ? null
-              : _photos.length == 1
-                  ? _photos.first.name
-                  : '${_photos.length} photos selected',
-          onCamera: () => _pickPhoto(ImageSource.camera),
-          onGallery: () => _pickPhoto(ImageSource.gallery),
-          onClear: _photos.isEmpty ? null : () => setState(() => _photos.clear()),
-        ),
-        LocationCapturePanel(
-          latitude: _latitude.text,
-          longitude: _longitude.text,
-          locating: _locating,
-          onCapture: _captureLocation,
-        ),
+
+        // e) Location: typed address, optional GPS pin on a small map.
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: AppTextField(
-                controller: _latitude,
-                label: 'Latitude',
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+              child: TextField(
+                controller: _address,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: _fieldDecoration(
+                  'Lokasyon / Address *',
+                  hint: 'Kalye, landmark, o purok',
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: AppTextField(
-                controller: _longitude,
-                label: 'Longitude',
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                onPressed: _locating ? null : _captureLocation,
+                icon: _locating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                label: const Text('GPS'),
               ),
             ),
           ],
         ),
-        LocationConfirmationPanel(
-          latitude: _latitude.text,
-          longitude: _longitude.text,
-          confirmed: _locationConfirmed,
-          onChanged: _setLocation,
-          onConfirm: () => setState(() => _locationConfirmed = true),
+        if (!_showMap)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showMap = true),
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text('I-adjust sa mapa'),
+            ),
+          )
+        else ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 200,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: FlutterMap(
+                key: ValueKey('${pin?.latitude},${pin?.longitude}'),
+                options: MapOptions(
+                  initialCenter: pin ?? const LatLng(14.185, 121.731),
+                  initialZoom: pin == null ? 13 : 16,
+                  minZoom: 8,
+                  maxZoom: 18,
+                  onTap: (_, tapped) => _setLocation(tapped),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'mauban_sanitation_mobile',
+                  ),
+                  if (pin != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(point: pin, width: 42, height: 42, child: const MapPin()),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'I-tap ang mapa para ilipat ang pin.',
+              style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+
+        // f) Description.
+        TextField(
+          controller: _description,
+          maxLines: 5,
+          maxLength: 1000,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _fieldDecoration('Ilarawan ang nakita mo *'),
         ),
-        ConsentCheckPanel(
-          checked: _consentConfirmed,
-          onChanged: (value) => setState(() => _consentConfirmed = value),
+        const SizedBox(height: 8),
+
+        // g) Photos.
+        _sectionLabel('Litrato (hanggang $_maxPhotos)'),
+        Row(
+          children: [
+            Expanded(
+              child: _photoTile(
+                icon: Icons.photo_camera_outlined,
+                label: 'Kumuha ng litrato',
+                onTap: () => _pickPhoto(ImageSource.camera),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _photoTile(
+                icon: Icons.photo_library_outlined,
+                label: 'Mag-upload',
+                onTap: () => _pickPhoto(ImageSource.gallery),
+              ),
+            ),
+          ],
         ),
-        OutlinedButton.icon(
-          onPressed: _submitting ? null : _saveDraft,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Save Draft'),
+        if (_photos.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var index = 0; index < _photos.length; index++)
+                  _photoThumbnail(index),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        // h) Identity (required; the client does not act on anonymous reports).
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                decoration: _fieldDecoration('Pangalan *'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _contact,
+                keyboardType: TextInputType.phone,
+                decoration: _fieldDecoration('Contact no. *', hint: '09XXXXXXXXX'),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        SubmitButton(
-          label: 'Submit Community Report',
-          loading: _submitting,
-          onPressed: _submit,
+        const SizedBox(height: 8),
+
+        // i) Privacy consent.
+        CheckboxListTile(
+          key: const ValueKey('community-report-consent'),
+          value: _consentConfirmed,
+          onChanged: (value) => setState(() => _consentConfirmed = value ?? false),
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text(
+            'Pahintulot sa privacy *',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: const Text(
+            'Pinapayagan ko ang Sanitary Section na gamitin ang aking pangalan, '
+            'contact number, litrato, at lokasyon para sa beripikasyon at '
+            'follow-up ng report na ito.',
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // j) Submit, remaining submissions, draft.
+        SizedBox(
+          height: 52,
+          child: SubmitButton(
+            label: 'Isumite ang Report',
+            loadingLabel: 'Isinusumite...',
+            loading: _submitting,
+            onPressed: _submit,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          remaining > 0
+              ? '$remaining na lang ang natitirang report ngayong araw'
+              : 'Naabot na ang $_dailyLimit report ngayong araw.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: remaining > 0 ? AppColors.muted : AppColors.red,
+          ),
+        ),
+        Center(
+          child: TextButton.icon(
+            onPressed: _submitting ? null : _saveDraft,
+            icon: const Icon(Icons.save_outlined, size: 18),
+            label: const Text('I-save bilang draft'),
+          ),
         ),
       ],
     );
   }
 
-  Future<void> _submit() async {
-    final contact = _contact.text.trim();
+  Widget _photoTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final full = _photos.length >= _maxPhotos;
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: InkWell(
+        onTap: full ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Icon(icon, color: full ? AppColors.muted : AppColors.deepGreen),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-    if (_dailyCount >= 5) {
-      showAppMessage(
-        context,
-        'Daily submission limit reached (5 of 5 used today). Ang patakarang ito ay upang maiwasan ang spam.',
-      );
-      return;
-    }
+  Widget _photoThumbnail(int index) {
+    final photo = _photos[index];
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: 72,
+            height: 72,
+            child: FutureBuilder<Uint8List>(
+              future: photo.readAsBytes(),
+              builder: (context, snapshot) => snapshot.hasData
+                  ? Image.memory(snapshot.data!, fit: BoxFit.cover)
+                  : Container(color: AppColors.canvas),
+            ),
+          ),
+        ),
+        Positioned(
+          top: -8,
+          right: -8,
+          child: IconButton(
+            tooltip: 'Alisin',
+            visualDensity: VisualDensity.compact,
+            style: IconButton.styleFrom(backgroundColor: Colors.white),
+            icon: const Icon(Icons.close, size: 16),
+            onPressed: () => setState(() => _photos.removeAt(index)),
+          ),
+        ),
+      ],
+    );
+  }
 
-    if (!_anonymous && contact.isEmpty) {
-      showAppMessage(
-        context,
-        'Contact number is required for status tracking.',
-      );
-      return;
-    }
-    if (_description.text.trim().isEmpty) {
-      showAppMessage(context, 'Description is required.');
-      return;
-    }
-    if (latLngFromText(_latitude.text, _longitude.text) == null) {
-      showAppMessage(context, 'Capture or tap the report map location.');
-      return;
-    }
-    if (!_locationConfirmed) {
-      showAppMessage(
-        context,
-        'Confirm the community report GIS pin before submitting.',
-      );
-      return;
+  /// First problem that blocks submission, mirroring the server's rules.
+  String? _validationMessage() {
+    if (_category == null) return 'Pumili kung ano ang ire-report mo.';
+    if (_barangay == null) return 'Pumili ng barangay.';
+    if (_address.text.trim().isEmpty) return 'Ilagay ang lokasyon o address.';
+    if (_description.text.trim().isEmpty) return 'Ilarawan ang nakita mo.';
+    if (_name.text.trim().isEmpty) return 'Ilagay ang iyong pangalan.';
+    if (!isValidPhMobileNumber(_contact.text)) {
+      return 'Ilagay ang wastong contact number (hal. 09171234567).';
     }
     if (!_consentConfirmed) {
-      showAppMessage(context, 'Privacy consent is required before submitting.');
+      return 'Kailangan ang pahintulot sa privacy bago magsumite.';
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    if (_dailyCount >= _dailyLimit) {
+      showAppMessage(
+        context,
+        'Naabot na ang $_dailyLimit report ngayong araw. Ang patakarang ito ay upang maiwasan ang spam.',
+      );
       return;
     }
 
+    final problem = _validationMessage();
+    if (problem != null) {
+      showAppMessage(context, problem);
+      return;
+    }
+
+    final category = _category!;
+    final barangay = _barangay!;
     setState(() => _submitting = true);
 
     try {
       final response = await widget.api.submitSanitationReport(
-        name: _anonymous ? '' : formatProperName(_name.text),
-        contactNumber: contact,
-        category: _category,
+        name: formatProperName(_name.text),
+        contactNumber: normalizePhMobileNumber(_contact.text),
+        category: category,
         priority: _priority,
-        barangay: _barangay,
-        description: _description.text.trim(),
+        barangay: barangay,
+        description: buildCommunityReportDescription(
+          _address.text,
+          _description.text,
+        ),
         photos: _photos,
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
@@ -1240,21 +1357,19 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         if (!mounted) return;
         final receipt = MobileSanitationReceipt.fromResponse(
           response,
-          category: _category,
-          barangay: _barangay,
+          category: category,
+          barangay: barangay,
         );
         await showSubmissionDialog(
           context,
-          title: 'Report submitted',
+          title: 'Naisumite ang report',
           referenceLabel: 'Complaint ID',
           referenceValue: receipt.reference,
-          message: 'Saved to Sanitation Web System.',
+          message: 'Natanggap na ng Sanitary Section.',
           details: [
             'Category: ${receipt.category}',
             'Urgency: ${receipt.priorityLabel}',
             'Barangay: ${receipt.barangay}',
-            if (contact.isEmpty)
-              'Keep the complaint ID to track this anonymous report.',
           ],
         );
         if (widget.initialDraft != null) {
@@ -1267,7 +1382,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       if (mounted) {
         showAppMessage(
           context,
-          'Submission failed: ${conciseError(error)}. Draft saved for pending sync.',
+          'Hindi naisumite: ${conciseError(error)}. Na-save bilang draft.',
         );
       }
     } finally {
@@ -1286,9 +1401,9 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         if (picked.isNotEmpty) {
           setState(() {
             _photos.addAll(picked);
-            if (_photos.length > 5) {
-              _photos = _photos.sublist(0, 5);
-              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            if (_photos.length > _maxPhotos) {
+              _photos = _photos.sublist(0, _maxPhotos);
+              showAppMessage(context, 'Hanggang $_maxPhotos litrato lamang.');
             }
           });
         }
@@ -1302,9 +1417,9 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         if (picked != null) {
           setState(() {
             _photos.add(picked);
-            if (_photos.length > 5) {
-              _photos = _photos.sublist(0, 5);
-              showAppMessage(context, 'Maximum of 5 photos allowed.');
+            if (_photos.length > _maxPhotos) {
+              _photos = _photos.sublist(0, _maxPhotos);
+              showAppMessage(context, 'Hanggang $_maxPhotos litrato lamang.');
             }
           });
         }
@@ -1342,7 +1457,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       setState(() {
         _latitude.text = position.latitude.toStringAsFixed(6);
         _longitude.text = position.longitude.toStringAsFixed(6);
-        _locationConfirmed = false;
+        _showMap = true;
       });
     } catch (error) {
       if (mounted) showAppMessage(context, error.toString());
@@ -1355,7 +1470,6 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
     setState(() {
       _latitude.text = point.latitude.toStringAsFixed(6);
       _longitude.text = point.longitude.toStringAsFixed(6);
-      _locationConfirmed = false;
     });
   }
 
@@ -1374,13 +1488,14 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           DateTime.now().millisecondsSinceEpoch.toString(),
       name: _name.text.trim(),
       contactNumber: _contact.text.trim(),
-      category: _category,
+      category: _category ?? '',
       priority: _priority,
-      barangay: _barangay,
+      barangay: _barangay ?? '',
       description: _description.text.trim(),
+      address: _address.text.trim(),
       latitude: _latitude.text.trim(),
       longitude: _longitude.text.trim(),
-      isAnonymous: _anonymous,
+      isAnonymous: false,
       createdAt:
           widget.initialDraft?.createdAt ?? DateTime.now().toIso8601String(),
     );
@@ -1725,14 +1840,16 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   }
 
   Future<void> _retryReportDraft(SanitationReportDraft draft) async {
-    if ((!draft.isAnonymous && draft.contactNumber.trim().isEmpty) ||
+    if (draft.name.trim().isEmpty ||
+        !isValidPhMobileNumber(draft.contactNumber) ||
         draft.description.trim().isEmpty) {
       showAppMessage(context, 'Edit the draft before retrying.');
       return;
     }
 
-    if (latLngFromText(draft.latitude, draft.longitude) == null) {
-      showAppMessage(context, 'Edit the draft and confirm a GIS pin first.');
+    if (draft.address.trim().isEmpty &&
+        latLngFromText(draft.latitude, draft.longitude) == null) {
+      showAppMessage(context, 'Edit the draft and add its location first.');
       return;
     }
 

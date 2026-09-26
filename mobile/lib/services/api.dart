@@ -287,11 +287,14 @@ class TourismApi {
   ) {
     return submitSanitationReport(
       name: draft.name,
-      contactNumber: draft.contactNumber,
+      contactNumber: normalizePhMobileNumber(draft.contactNumber),
       category: draft.category,
       priority: draft.priority,
       barangay: draft.barangay,
-      description: draft.description,
+      description: buildCommunityReportDescription(
+        draft.address,
+        draft.description,
+      ),
       latitude: draft.latitude,
       longitude: draft.longitude,
     );

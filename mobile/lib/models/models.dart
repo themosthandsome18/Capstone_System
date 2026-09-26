@@ -840,6 +840,7 @@ class SanitationReportDraft {
     required this.longitude,
     required this.isAnonymous,
     required this.createdAt,
+    this.address = '',
   });
 
   final String id;
@@ -849,8 +850,10 @@ class SanitationReportDraft {
   final String priority;
   final String barangay;
   final String description;
+  final String address;
   final String latitude;
   final String longitude;
+  // Kept so drafts saved by older builds still load; new drafts are never anonymous.
   final bool isAnonymous;
   final String createdAt;
 
@@ -863,6 +866,7 @@ class SanitationReportDraft {
       'priority': priority,
       'barangay': barangay,
       'description': description,
+      'address': address,
       'latitude': latitude,
       'longitude': longitude,
       'is_anonymous': isAnonymous,
@@ -879,6 +883,7 @@ class SanitationReportDraft {
       priority: '${json['priority'] ?? 'medium'}',
       barangay: '${json['barangay'] ?? 'Poblacion'}',
       description: '${json['description'] ?? ''}',
+      address: '${json['address'] ?? ''}',
       latitude: '${json['latitude'] ?? ''}',
       longitude: '${json['longitude'] ?? ''}',
       isAnonymous: json['is_anonymous'] == true,
@@ -894,6 +899,7 @@ class SanitationReportDraft {
     String? priority,
     String? barangay,
     String? description,
+    String? address,
     String? latitude,
     String? longitude,
     bool? isAnonymous,
@@ -907,6 +913,7 @@ class SanitationReportDraft {
       priority: priority ?? this.priority,
       barangay: barangay ?? this.barangay,
       description: description ?? this.description,
+      address: address ?? this.address,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       isAnonymous: isAnonymous ?? this.isAnonymous,
