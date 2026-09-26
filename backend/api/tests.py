@@ -866,8 +866,8 @@ class MobilePublicApiTests(TestCase):
         self.assertEqual(complaint.photo_documentation, "sample-photo.jpg")
         self.assertEqual(complaint.status, "pending")
 
-    def test_mobile_sanitation_report_history_filters_by_contact(self):
-        self.client.post(
+    def test_mobile_sanitation_report_history_needs_contact_and_complaint_id(self):
+        submitted = self.client.post(
             "/api/mobile/sanitation/reports/",
             {
                 "complainant_name": "Resident Reporter",
@@ -881,7 +881,7 @@ class MobilePublicApiTests(TestCase):
 
         response = self.client.get(
             "/api/mobile/sanitation/reports/history/",
-            {"contact": "09170000000"},
+            {"contact": "09170000000", "reference": submitted.json()["complaint_id"]},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -3957,3 +3957,58 @@ class PublicPermitVerifyExposureTests(TestCase):
         response = self._verify("SP-0000-000")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(set(response.json()), {"verified", "detail"})
+
+
+class PublicReportHistoryExposureTests(TestCase):
+    """Exploit: report history must return only the caller's own report."""
+
+    URL = "/api/mobile/sanitation/reports/history/"
+
+    def setUp(self):
+        self.mine = SanitaryComplaint.objects.create(
+            complaint_id="SAN-HIST-0001",
+            complainant_name="Reporter One",
+            contact_number="0917 123 4567",
+            category="Improper waste disposal",
+            barangay="Poblacion",
+            reported_date="2026-09-01",
+            description="Mine",
+        )
+        self.other = SanitaryComplaint.objects.create(
+            complaint_id="SAN-HIST-0002",
+            complainant_name="Reporter Two",
+            contact_number="09179990000",
+            category="Unsafe water source",
+            barangay="Daungan",
+            reported_date="2026-09-02",
+            description="Someone else's report",
+        )
+
+    def _history(self, **params):
+        return APIClient().get(self.URL, params)
+
+    def test_partial_contact_returns_nothing(self):
+        response = self._history(contact="0917")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("rows", response.json())
+
+    def test_partial_contact_with_a_reference_returns_nothing(self):
+        response = self._history(contact="0917", reference="SAN-HIST-0001")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["rows"], [])
+
+    def test_wrong_reference_returns_nothing(self):
+        response = self._history(contact="09171234567", reference="SAN-HIST-0002")
+        self.assertEqual(response.json()["rows"], [])
+
+    def test_reference_alone_returns_nothing(self):
+        response = self._history(reference="SAN-HIST-0001")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("contact number and the complaint ID", response.json()["detail"])
+
+    def test_the_correct_pair_returns_only_that_report(self):
+        for contact in ("09171234567", "+63 917 123 4567", "0917-123-4567"):
+            response = self._history(contact=contact, reference="san-hist-0001")
+            rows = response.json()["rows"]
+            self.assertEqual([row["complaint_id"] for row in rows], ["SAN-HIST-0001"], contact)
+            self.assertEqual(response.json()["summary"]["total"], 1)

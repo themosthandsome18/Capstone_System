@@ -667,36 +667,41 @@ def mobile_sanitation_report_history(request):
     contact = (request.query_params.get("contact") or "").strip()
     reference = (request.query_params.get("reference") or "").strip()
 
-    if not contact and not reference:
+    # Public lookup of one's own report: both the complaint ID from the receipt
+    # and the exact contact number used are required. Either alone (or a
+    # partial number) would let anyone list other people's reports.
+    if not contact or not reference:
         return Response(
-            {"detail": "Enter a contact number or complaint ID."},
+            {"detail": "Enter both the contact number and the complaint ID from your receipt."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    complaints = SanitaryComplaint.objects.all()
-
-    if reference:
-        complaints = complaints.filter(
-            Q(complaint_id__iexact=reference)
-            | Q(id=parse_mobile_int(reference, 0))
-        )
-
-    if contact:
-        complaints = complaints.filter(contact_number__icontains=contact)
-
-    complaints = complaints.order_by("-reported_date", "-id")[:30]
+    wanted_contact = normalize_contact_digits(contact)
+    complaint = SanitaryComplaint.objects.filter(complaint_id__iexact=reference).first()
+    matches = (
+        [complaint]
+        if complaint is not None
+        and wanted_contact
+        and normalize_contact_digits(complaint.contact_number) == wanted_contact
+        else []
+    )
 
     return Response(
         {
-            "rows": [
-                serialize_mobile_sanitation_complaint(item)
-                for item in complaints
-            ],
+            "rows": [serialize_mobile_sanitation_complaint(item) for item in matches],
             "summary": {
-                "total": complaints.count(),
+                "total": len(matches),
             },
         }
     )
+
+
+def normalize_contact_digits(value):
+    """Digits only, with a Philippine +63 prefix folded to a leading 0."""
+    digits = "".join(character for character in str(value or "") if character.isdigit())
+    if digits.startswith("63") and len(digits) == 12:
+        digits = "0" + digits[2:]
+    return digits
 
 
 @api_view(["GET"])

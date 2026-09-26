@@ -2920,7 +2920,7 @@ class _ReportTrackerPageState extends State<ReportTrackerPage> {
           icon: Icons.manage_search_outlined,
           title: 'Report Status Tracking',
           text:
-              'Use the contact number used during submission or the complaint ID from the receipt.',
+              'Enter the contact number used during submission and the complaint ID from the receipt.',
         ),
         const SizedBox(height: 12),
         AppTextField(
@@ -2939,7 +2939,7 @@ class _ReportTrackerPageState extends State<ReportTrackerPage> {
         if (!_searched)
           const EmptyState(
             icon: Icons.manage_search_outlined,
-            title: 'Enter contact or complaint ID',
+            title: 'Enter contact number and complaint ID',
           )
         else if (_reports.isEmpty)
           const EmptyState(
@@ -2953,8 +2953,11 @@ class _ReportTrackerPageState extends State<ReportTrackerPage> {
   }
 
   Future<void> _loadReports() async {
-    if (_contact.text.trim().isEmpty && _reference.text.trim().isEmpty) {
-      showAppMessage(context, 'Enter a contact number or complaint ID.');
+    if (_contact.text.trim().isEmpty || _reference.text.trim().isEmpty) {
+      showAppMessage(
+        context,
+        'Enter both the contact number and the complaint ID from your receipt.',
+      );
       return;
     }
 
