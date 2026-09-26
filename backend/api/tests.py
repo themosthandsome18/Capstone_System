@@ -2533,6 +2533,8 @@ class SecureUploadTests(TestCase):
         response = self.client.post(
             "/api/mobile/sanitation/reports/",
             {
+                "complainant_name": "Upload Tester",
+                "contact_number": "09171234567",
                 "category": "Solid Waste",
                 "description": "Garbage dump near creek",
                 "photo": bad_file,
@@ -2548,6 +2550,8 @@ class SecureUploadTests(TestCase):
             response = self.client.post(
                 "/api/mobile/sanitation/reports/",
                 {
+                    "complainant_name": "Upload Tester",
+                    "contact_number": "09171234567",
                     "category": "Solid Waste",
                     "description": "Garbage dump near creek",
                     "photo": good_file,
