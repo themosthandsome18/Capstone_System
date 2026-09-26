@@ -4012,3 +4012,79 @@ class PublicReportHistoryExposureTests(TestCase):
             rows = response.json()["rows"]
             self.assertEqual([row["complaint_id"] for row in rows], ["SAN-HIST-0001"], contact)
             self.assertEqual(response.json()["summary"]["total"], 1)
+
+
+class SanitationStaffBootstrapTests(TestCase):
+    """The staff-only home for the records the public bootstrap used to expose."""
+
+    URL = "/api/mobile/sanitation/staff-bootstrap/"
+
+    def setUp(self):
+        btype = SanitaryBusinessType.objects.create(name="Staff Type", inspection_frequency="annual")
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Staff Only Store",
+            owner_name="Owner Staffview",
+            business_type=btype,
+            barangay="Daungan",
+            address="1 Staff St",
+            contact_number="09170001234",
+            permit_number="SP-2026-321",
+        )
+        SanitaryComplaint.objects.create(
+            complaint_id="SAN-STAFF-0001",
+            complainant_name="Complainant",
+            contact_number="09170005555",
+            category="Improper waste disposal",
+            barangay="Daungan",
+            reported_date="2026-09-01",
+            description="Staff-only complaint",
+        )
+        HouseholdSanitationRecord.objects.create(
+            household_code="HH-STAFF-0001",
+            household_head="Household Staffview",
+            barangay="Daungan",
+        )
+
+    def _client_for(self, role):
+        user = User.objects.create_user(username=f"staffboot_{role}", password="Password@123")
+        UserProfile.objects.create(user=user, role=role)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        return client
+
+    def test_anonymous_is_rejected(self):
+        self.assertEqual(APIClient().get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_non_sanitation_roles_are_forbidden(self):
+        for role in (ROLE_TOURISM, ROLE_TOURIST, ROLE_ESTABLISHMENT):
+            response = self._client_for(role).get(self.URL)
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, role)
+
+    def test_sanitation_and_admin_get_the_staff_records(self):
+        for role in (ROLE_SANITATION, ROLE_ADMIN):
+            response = self._client_for(role).get(self.URL)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, role)
+            data = response.json()
+            self.assertEqual(
+                set(data),
+                {"establishments", "inspections", "complaintData", "householdRecords", "notifications"},
+            )
+            self.assertEqual(data["establishments"][0]["owner_name"], "Owner Staffview")
+            self.assertEqual(data["establishments"][0]["permit_number"], "SP-2026-321")
+            self.assertEqual(set(data["complaintData"]), {"summary", "rows"})
+            self.assertEqual(data["complaintData"]["rows"][0]["complaint_id"], "SAN-STAFF-0001")
+            self.assertEqual(data["householdRecords"][0]["household_head"], "Household Staffview")
+
+    def test_shapes_match_the_existing_mobile_serializers(self):
+        data = self._client_for(ROLE_SANITATION).get(self.URL).json()
+        self.assertEqual(
+            set(data["establishments"][0]),
+            {
+                "id", "business_name", "owner_name", "business_type", "business_type_name",
+                "inspection_frequency", "permit_size", "barangay", "address", "contact_number",
+                "has_permit", "permit_number", "permit_issued_date", "permit_expiry_date",
+                "compliance_status", "compliance_status_label", "permit_status",
+                "permit_status_label", "latitude", "longitude", "open_complaints",
+            },
+        )
+        self.assertEqual(set(data["complaintData"]["summary"]), {"total", "pending", "open"})

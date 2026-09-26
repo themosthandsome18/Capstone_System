@@ -65,6 +65,7 @@ from api.serializers import (
     SanitaryInspectionSerializer,
     TouristRecordSerializer,
 )
+from api.permissions import module_required
 from api.services.activity import log_activity
 from api.services.sanitation import (
     generate_complaint_id,
@@ -785,12 +786,31 @@ def get_cached_sanitary_business_types():
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
-def mobile_sanitation_bootstrap(request):
+@permission_classes([IsAuthenticated])
+@module_required("sanitation")
+def mobile_sanitation_staff_bootstrap(request):
+    """Sanitation staff records for the mobile staff app (admin/sanitation only).
+
+    Owners, contact numbers, permit numbers, complaints, households and
+    inspectors are staff data, so they are served here behind login instead of
+    in the public bootstrap. Shapes match what the mobile app already parses.
+    """
     ensure_initial_sanitation_data()
     ensure_initial_household_data()
-    ensure_mobile_barangays()
 
+    payload = build_sanitation_staff_payload()
+    return Response(
+        {
+            "establishments": payload["establishments"],
+            "inspections": payload["inspections"],
+            "complaintData": payload["complaintData"],
+            "householdRecords": payload["householdRecords"],
+            "notifications": payload["notifications"],
+        }
+    )
+
+
+def build_sanitation_staff_payload():
     today = timezone.localdate()
 
     establishments = list(
@@ -837,54 +857,73 @@ def mobile_sanitation_bootstrap(request):
     pending_complaints = sum(1 for c in all_complaints if c.status == COMPLAINT_STATUS_PENDING)
     open_complaints_count = len(open_complaints)
 
+    return {
+        "establishments": [
+            serialize_mobile_sanitation_establishment(item)
+            for item in establishments
+        ],
+        "inspections": [
+            serialize_mobile_sanitation_inspection(item) for item in inspections
+        ],
+        "dashboardData": {
+            "summary": {
+                "totalEstablishments": total_establishments,
+                "goodStanding": good_standing_count,
+                "forCompletion": for_completion_count,
+                "violators": violators_count,
+                "noPermit": no_permit_count,
+            }
+        },
+        "permitData": {
+            "summary": {
+                "active": active_permits_count,
+                "renewalDue": renewal_due_count,
+                "conditional": conditional_permits_count,
+                "suspended": suspended_permits_count,
+                "noPermit": no_permit_count,
+            },
+            "rows": [],
+        },
+        "complaintData": {
+            "summary": {
+                "total": total_complaints,
+                "pending": pending_complaints,
+                "open": open_complaints_count,
+            },
+            "rows": [
+                serialize_mobile_sanitation_complaint(item)
+                for item in complaints
+            ],
+        },
+        "householdRecords": [
+            serialize_mobile_household_record(item) for item in household_records
+        ],
+        "notifications": build_mobile_sanitation_notifications(
+            expiring_permits=notification_expiring_permits,
+            open_complaints=notification_open_complaints,
+        ),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_sanitation_bootstrap(request):
+    ensure_initial_sanitation_data()
+    ensure_initial_household_data()
+    ensure_mobile_barangays()
+
+    payload = build_sanitation_staff_payload()
     return Response(
         {
             "businessTypes": get_cached_sanitary_business_types(),
-            "establishments": [
-                serialize_mobile_sanitation_establishment(item)
-                for item in establishments
-            ],
-            "inspections": [
-                serialize_mobile_sanitation_inspection(item) for item in inspections
-            ],
-            "dashboardData": {
-                "summary": {
-                    "totalEstablishments": total_establishments,
-                    "goodStanding": good_standing_count,
-                    "forCompletion": for_completion_count,
-                    "violators": violators_count,
-                    "noPermit": no_permit_count,
-                }
-            },
-            "permitData": {
-                "summary": {
-                    "active": active_permits_count,
-                    "renewalDue": renewal_due_count,
-                    "conditional": conditional_permits_count,
-                    "suspended": suspended_permits_count,
-                    "noPermit": no_permit_count,
-                },
-                "rows": [],
-            },
-            "complaintData": {
-                "summary": {
-                    "total": total_complaints,
-                    "pending": pending_complaints,
-                    "open": open_complaints_count,
-                },
-                "rows": [
-                    serialize_mobile_sanitation_complaint(item)
-                    for item in complaints
-                ],
-            },
-            "householdRecords": [
-                serialize_mobile_household_record(item) for item in household_records
-            ],
+            "establishments": payload["establishments"],
+            "inspections": payload["inspections"],
+            "dashboardData": payload["dashboardData"],
+            "permitData": payload["permitData"],
+            "complaintData": payload["complaintData"],
+            "householdRecords": payload["householdRecords"],
             "barangays": get_cached_active_barangays(),
-            "notifications": build_mobile_sanitation_notifications(
-                expiring_permits=notification_expiring_permits,
-                open_complaints=notification_open_complaints,
-            ),
+            "notifications": payload["notifications"],
         }
     )
 
