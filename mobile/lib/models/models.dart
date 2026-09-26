@@ -936,7 +936,7 @@ class PermitVerificationResult {
     required this.code,
     required this.establishment,
     required this.permitStatusLabel,
-    required this.complianceStatusLabel,
+    required this.issuedDate,
     required this.expiryDate,
   });
 
@@ -944,13 +944,12 @@ class PermitVerificationResult {
   final String code;
   final SanitationEstablishment establishment;
   final String permitStatusLabel;
-  final String complianceStatusLabel;
+  final String issuedDate;
   final String expiryDate;
 
   factory PermitVerificationResult.fromJson(Map<String, dynamic> json) {
     final permit = Map<String, dynamic>.from(json['permit'] as Map? ?? {});
     final permitStatus = '${permit['permit_status'] ?? ''}';
-    final complianceStatus = '${permit['compliance_status'] ?? ''}';
     return PermitVerificationResult(
       verified: jsonBool(json['verified']),
       code: '${json['code'] ?? ''}',
@@ -959,8 +958,7 @@ class PermitVerificationResult {
       ),
       permitStatusLabel:
           '${permit['permit_status_label'] ?? sanitationStatusLabel(permitStatus)}',
-      complianceStatusLabel:
-          '${permit['compliance_status_label'] ?? sanitationStatusLabel(complianceStatus)}',
+      issuedDate: '${permit['permit_issued_date'] ?? ''}',
       expiryDate: '${permit['permit_expiry_date'] ?? ''}',
     );
   }

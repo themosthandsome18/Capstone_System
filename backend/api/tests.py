@@ -3890,3 +3890,70 @@ class EstablishmentPermitNumberTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertTrue(atomic.called)
         self.assertTrue(select_for_update.called)
+
+
+class PublicPermitVerifyExposureTests(TestCase):
+    """Exploit: permits/verify/ must only confirm a permit, by permit number."""
+
+    URL = "/api/mobile/sanitation/permits/verify/"
+    ALLOWED = {
+        "verified": None,
+        "establishment": {"business_name", "business_type_name", "barangay", "permit_number"},
+        "permit": {
+            "permit_number",
+            "permit_status",
+            "permit_status_label",
+            "permit_issued_date",
+            "permit_expiry_date",
+        },
+    }
+
+    def setUp(self):
+        btype = SanitaryBusinessType.objects.create(name="Verify Type", inspection_frequency="annual")
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Verify Bakery",
+            owner_name="Hidden Owner Person",
+            business_type=btype,
+            barangay="Daungan",
+            address="77 Private Lane",
+            contact_number="09179998877",
+            has_permit=True,
+            permit_number="SP-2026-900",
+            permit_issued_date="2026-01-05",
+            permit_expiry_date="2027-01-05",
+            permit_status="active",
+            latitude=14.1911,
+            longitude=121.7311,
+        )
+
+    def _verify(self, code):
+        return APIClient().get(self.URL, {"code": code})
+
+    def test_lookup_by_business_name_fails(self):
+        self.assertEqual(self._verify("Verify Bakery").status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_lookup_by_establishment_id_fails(self):
+        response = self._verify(str(self.establishment.id))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_permit_number_matches_trimmed_and_case_insensitive(self):
+        response = self._verify("  sp-2026-900 ")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.json()["verified"])
+        self.assertEqual(response.json()["permit"]["permit_number"], "SP-2026-900")
+
+    def test_response_keys_are_exactly_the_allowed_set(self):
+        data = self._verify("SP-2026-900").json()
+        self.assertEqual(set(data), set(self.ALLOWED))
+        self.assertEqual(set(data["establishment"]), self.ALLOWED["establishment"])
+        self.assertEqual(set(data["permit"]), self.ALLOWED["permit"])
+
+    def test_no_owner_contact_address_or_coordinates(self):
+        body = self._verify("SP-2026-900").content.decode("utf-8")
+        for secret in ("Hidden Owner Person", "09179998877", "77 Private Lane", "14.1911", "121.7311"):
+            self.assertFalse(secret in body, f"{secret!r} leaked")
+
+    def test_not_found_response_reveals_nothing(self):
+        response = self._verify("SP-0000-000")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(set(response.json()), {"verified", "detail"})

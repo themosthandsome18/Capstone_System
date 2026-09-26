@@ -718,14 +718,13 @@ def mobile_sanitation_permit_verify(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    query = Q(permit_number__iexact=code) | Q(business_name__iexact=code)
-    numeric_id = parse_mobile_int(code, 0)
-    if numeric_id:
-        query |= Q(id=numeric_id)
-
+    # Public lookup: the permit number only, never a business name or record
+    # id, so records cannot be enumerated. The answer confirms the permit and
+    # nothing about the owner, contact details, address or location.
     establishment = (
         SanitaryEstablishment.objects.select_related("business_type")
-        .filter(query)
+        .filter(permit_number__iexact=code)
+        .exclude(permit_number="")
         .first()
     )
 
@@ -733,7 +732,6 @@ def mobile_sanitation_permit_verify(request):
         return Response(
             {
                 "verified": False,
-                "code": code,
                 "detail": "No sanitary permit record matched this code.",
             },
             status=status.HTTP_404_NOT_FOUND,
@@ -742,10 +740,12 @@ def mobile_sanitation_permit_verify(request):
     return Response(
         {
             "verified": True,
-            "code": code,
-            "establishment": serialize_mobile_sanitation_establishment(
-                establishment
-            ),
+            "establishment": {
+                "business_name": establishment.business_name,
+                "business_type_name": establishment.business_type.name,
+                "barangay": establishment.barangay,
+                "permit_number": establishment.permit_number,
+            },
             "permit": {
                 "permit_number": establishment.permit_number,
                 "permit_status": establishment.permit_status,
@@ -756,14 +756,9 @@ def mobile_sanitation_permit_verify(request):
                 "permit_expiry_date": date_to_iso(
                     establishment.permit_expiry_date
                 ),
-                "compliance_status": establishment.compliance_status,
-                "compliance_status_label": (
-                    establishment.get_compliance_status_display()
-                ),
             },
         }
     )
-
 
 MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY = "mobile_sanitation_business_types_v1"
 MOBILE_SANITATION_BUSINESS_TYPES_CACHE_TIMEOUT = 900  # 15 minutes

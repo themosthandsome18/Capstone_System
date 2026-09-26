@@ -203,6 +203,16 @@ function toApiValues(values) {
   };
 }
 
+/**
+ * Public verification link for a permit. It is keyed by the permit number:
+ * the public endpoint no longer accepts record ids, which could be counted
+ * through. No permit number means there is nothing to verify.
+ */
+export function permitVerifyPath(establishment) {
+  const permitNumber = String(establishment?.permit_number ?? "").trim();
+  return permitNumber ? `/verify-permit/${encodeURIComponent(permitNumber)}` : "";
+}
+
 /** A sanitary permit is valid for one year (29 February becomes 28 February). */
 export function addOneYear(isoDate) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
@@ -957,6 +967,7 @@ function EstablishmentDetailModal({
   const mapsUrl = hasValidMapReference
     ? `https://www.google.com/maps/search/?api=1&query=${establishment.latitude},${establishment.longitude}`
     : "";
+  const verifyPath = permitVerifyPath(establishment);
   const openComplaints =
     establishment.open_complaints === null ||
     establishment.open_complaints === undefined
@@ -1144,15 +1155,17 @@ function EstablishmentDetailModal({
         </div>
 
         <div className="establishment-detail-qr-card">
-          <div className="qr-box">
-            <QRCodeSVG
-              id="establishment-detail-qr-svg"
-              value={`${window.location.origin}/verify-permit/${establishment.id}`}
-              size={130}
-              level="H"
-              includeMargin={true}
-            />
-          </div>
+          {verifyPath ? (
+            <div className="qr-box">
+              <QRCodeSVG
+                id="establishment-detail-qr-svg"
+                value={`${window.location.origin}${verifyPath}`}
+                size={130}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+          ) : null}
           <div className="qr-info">
             <div className="qr-badge-row">
               <span className="qr-badge official">Establishment Verification QR</span>
@@ -1165,21 +1178,29 @@ function EstablishmentDetailModal({
               )}
             </div>
             <h4>Verification QR Code</h4>
-            <p>
-              This code links to Establishment ID {establishment.id}. Scanning it
-              with the Mauban Mobile App or any smartphone camera opens the public
-              verification page, which shows the establishment's current permit
-              and compliance status.
-            </p>
+            {verifyPath ? (
+              <p>
+                This code links to permit {establishment.permit_number}. Scanning
+                it with the Mauban Mobile App or any smartphone camera opens the
+                public verification page, which confirms the permit and its
+                validity dates.
+              </p>
+            ) : (
+              <p>
+                No permit number is recorded, so there is no verification QR yet.
+              </p>
+            )}
             <div className="qr-actions">
-              <a
-                href={`/verify-permit/${establishment.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="qr-test-link"
-              >
-                Open Verification Page &rarr;
-              </a>
+              {verifyPath ? (
+                <a
+                  href={verifyPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="qr-test-link"
+                >
+                  Open Verification Page &rarr;
+                </a>
+              ) : null}
               {!establishment.has_permit && (
                 <button
                   type="button"
@@ -1835,7 +1856,8 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
     day: "2-digit",
   }).format(new Date());
 
-  const verifyUrl = `${window.location.origin}/verify-permit/${establishment.id}`;
+  const verifyPath = permitVerifyPath(establishment);
+  const verifyUrl = verifyPath ? `${window.location.origin}${verifyPath}` : "";
 
   const timelineRows = timeline.length
     ? timeline
@@ -1952,10 +1974,9 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
         <div class="print-qr-banner">
           <div class="print-qr-code">
             ${
-              qrSvgHtml ||
-              `<img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(
-                verifyUrl
-              )}" width="115" height="115" alt="Permit QR Code" />`
+              // Rendered locally only: the verification URL carries the permit
+              // number, so it is never sent to a third-party QR service.
+              verifyUrl ? qrSvgHtml : ""
             }
           </div>
           <div class="print-qr-details">
@@ -1968,7 +1989,9 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
               )}</strong>
             </div>
             <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
-            <div class="print-qr-url">${escapeHtml(verifyUrl)}</div>
+            <div class="print-qr-url">${escapeHtml(
+              verifyUrl || "No permit number recorded; no verification QR."
+            )}</div>
           </div>
         </div>
 

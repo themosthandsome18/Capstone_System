@@ -39,7 +39,12 @@ jest.mock("../../shared/LocationPicker", () => ({ onChange }) => (
     Mock Apply Pin
   </button>
 ));
-jest.mock("qrcode.react", () => ({ QRCodeSVG: () => null }));
+jest.mock("qrcode.react", () => ({
+  QRCodeSVG: ({ value }) => {
+    const mockReact = require("react");
+    return mockReact.createElement("svg", { "data-testid": "verify-qr", "data-value": value });
+  },
+}));
 jest.mock("../../shared/csvExport", () => ({
   datedCsvFilename: (name) => `${name}.csv`,
   exportCsv: jest.fn(),
@@ -48,6 +53,7 @@ jest.mock("../../shared/csvExport", () => ({
 import EstablishmentRecords, {
   addOneYear,
   generatePermitNumber,
+  permitVerifyPath,
 } from "./EstablishmentRecords";
 import { exportCsv } from "../../shared/csvExport";
 import {
@@ -791,7 +797,8 @@ describe("View Establishment", () => {
     ).toBeTruthy();
     expect(tileValue(modal, "Establishment ID")).toBe("501");
     expect(tileValue(modal, "Permit Number")).toBe("LG-2026-007");
-    expect(within(modal).getByText(/links to Establishment ID 501/)).toBeTruthy();
+    // The QR is keyed by the permit number, never the internal record id.
+    expect(within(modal).queryByText(/links to Establishment ID/)).toBeNull();
   });
 
   test("details, location and compliance come from the stored record", () => {
@@ -1127,5 +1134,41 @@ describe("Register records an existing sanitary permit", () => {
     submit(form);
 
     expect(await screen.findByText(/is already recorded for another establishment/)).toBeTruthy();
+  });
+});
+
+/* ================================================================== */
+/* Verification QR is keyed by permit number                           */
+/* ================================================================== */
+
+describe("verification QR", () => {
+  test("permitVerifyPath uses the URL-encoded permit number", () => {
+    expect(permitVerifyPath({ id: 7, permit_number: "SP 2026/9" })).toBe(
+      "/verify-permit/SP%202026%2F9"
+    );
+    expect(permitVerifyPath({ id: 7, permit_number: "  " })).toBe("");
+  });
+
+  test("a permitted record's QR and link point at its permit number, not its id", () => {
+    const modal = openView(501);
+    const qr = within(modal).getByTestId("verify-qr");
+
+    expect(qr.getAttribute("data-value")).toBe(
+      `${window.location.origin}/verify-permit/LG-2026-007`
+    );
+    expect(within(modal).getByText(/Open Verification Page/).getAttribute("href")).toBe(
+      "/verify-permit/LG-2026-007"
+    );
+    expect(qr.getAttribute("data-value")).not.toMatch(/verify-permit\/501$/);
+  });
+
+  test("a record without a permit number has no verification QR", () => {
+    const modal = openView(502);
+
+    expect(within(modal).queryByTestId("verify-qr")).toBeNull();
+    expect(within(modal).queryByText(/Open Verification Page/)).toBeNull();
+    expect(
+      within(modal).getByText(/No permit number is recorded, so there is no verification QR yet/)
+    ).toBeTruthy();
   });
 });

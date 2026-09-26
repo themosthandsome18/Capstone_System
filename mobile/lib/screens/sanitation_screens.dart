@@ -3141,9 +3141,18 @@ class PermitVerificationCard extends StatelessWidget {
               value: result.permitStatusLabel,
             ),
             PermitDetailRow(
-              icon: Icons.health_and_safety_outlined,
-              label: 'Compliance Status',
-              value: result.complianceStatusLabel,
+              icon: Icons.place_outlined,
+              label: 'Barangay',
+              value: establishment.barangay.isEmpty
+                  ? 'Not recorded'
+                  : establishment.barangay,
+            ),
+            PermitDetailRow(
+              icon: Icons.event_available_outlined,
+              label: 'Date Issued',
+              value: result.issuedDate.isEmpty
+                  ? 'Not recorded'
+                  : result.issuedDate,
             ),
             PermitDetailRow(
               icon: Icons.event_outlined,
