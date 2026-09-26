@@ -4244,3 +4244,43 @@ class EstablishmentClaimRateLimitTests(TestCase):
             settings.CACHES["throttle"]["BACKEND"],
             "django.core.cache.backends.db.DatabaseCache",
         )
+
+
+class ThrottleCacheTableMigrationTests(TransactionTestCase):
+    """Render runs `migrate` but not build.sh, so a migration must create the
+    throttle cache table; without it every claim request would fail with 500."""
+
+    TABLE = "api_throttle_cache"
+    BEFORE = [("api", "0036_set_client_inspection_frequencies")]
+
+    def tearDown(self):
+        # Leave the table in place for other tests whatever happened here.
+        call_command("createcachetable", self.TABLE, verbosity=0)
+
+    def _tables(self):
+        return connection.introspection.table_names()
+
+    def test_migrate_creates_the_table_and_claims_never_return_500(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.BEFORE)
+        with connection.cursor() as cursor:
+            cursor.execute(f"DROP TABLE IF EXISTS {self.TABLE}")
+        self.assertNotIn(self.TABLE, self._tables())
+
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+        self.assertIn(self.TABLE, self._tables())
+
+        client = APIClient(raise_request_exception=False)
+        statuses = [
+            client.post(
+                "/api/auth/register-establishment/",
+                {"username": f"cache_probe_{index}", "password": "short"},
+                format="json",
+            ).status_code
+            for index in range(6)
+        ]
+        self.assertTrue(all(code < 500 for code in statuses), statuses)
+        self.assertEqual(statuses[-1], status.HTTP_429_TOO_MANY_REQUESTS)

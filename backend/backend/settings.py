@@ -171,7 +171,8 @@ CACHES = {
         "LOCATION": "capstone-local-cache",
     },
     # Rate-limit counters must be shared by every server process, so they are
-    # kept in the database (table created by `createcachetable` in build.sh).
+    # kept in the database. The table is created by migration
+    # 0037_create_throttle_cache_table (Render runs `migrate`, not build.sh).
     "throttle": {
         "BACKEND": "django.core.cache.backends.db.DatabaseCache",
         "LOCATION": "api_throttle_cache",
