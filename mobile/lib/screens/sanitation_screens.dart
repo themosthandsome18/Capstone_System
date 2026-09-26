@@ -4533,261 +4533,108 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isWeb ? 22 : 18,
-                      vertical: isWeb ? 16 : 12,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: AppColors.green,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(18),
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/sanitary_logo.jpg',
+                        width: 44,
+                        height: 44,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.health_and_safety_outlined,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Mauban Sanitation & Public Health Portal',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              if (isWeb) ...[
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Rural Health Unit (RHU) • Municipal Health Office',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (isWeb)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'PWA Web Portal',
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mauban Sanitary',
                               style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                                color: AppColors.ink,
                               ),
                             ),
+                            Text(
+                              'Municipal Health Office',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Field inspections run on the mobile app only.
+                      if (!isWeb)
+                        OutlinedButton(
+                          onPressed: () {
+                            setState(() => _currentScreen =
+                                SanitationGatewayScreen.staffLogin);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            shape: const StadiumBorder(),
+                            side: const BorderSide(color: AppColors.deepGreen),
+                            foregroundColor: AppColors.deepGreen,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
                           ),
-                      ],
+                          child: const Text('Staff Sign In'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Ano ang kailangan mo ngayon?',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Pumili ng serbisyo para magpatuloy.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildChooserCard(
+                    icon: Icons.campaign_rounded,
+                    label: 'PARA SA RESIDENTE',
+                    title: 'Community Report',
+                    description:
+                        'I-report ang maruming lugar, tagas ng poso negro, o basura.',
+                    onTap: _openCommunityReport,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildChooserCard(
+                    icon: Icons.storefront_outlined,
+                    label: 'PARA SA MAY-ARI NG NEGOSYO',
+                    title: 'Establishment Portal',
+                    description: 'Tingnan ang status ng sanitary permit.',
+                    onTap: () {
+                      setState(() => _currentScreen =
+                          SanitationGatewayScreen.establishmentLogin);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _openPublicPermitVerification,
+                      icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
+                      label: const Text('I-verify ang nakapaskil na permit'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.deepGreen,
+                        minimumSize: const Size(0, 44),
+                      ),
                     ),
                   ),
-                  Card(
-                    margin: EdgeInsets.zero,
-                    elevation: 0,
-                    color: Colors.white,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(18),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(isWeb ? 24 : 18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(
-                            child: Image.asset(
-                              'assets/sanitary_logo.jpg',
-                              width: isWeb ? 84 : 76,
-                              height: isWeb ? 84 : 76,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            isWeb
-                                ? 'Public Citizen & Business Services'
-                                : 'What do you need today?',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: isWeb ? 19 : 17,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isWeb
-                                ? 'Submit a community sanitation concern or access establishment sanitary permits online.'
-                                : 'Choose a service or transaction to continue',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Option 1: Community Reporting (Public, No Login Required)
-                          _buildChooserCard(
-                            icon: Icons.campaign_rounded,
-                            badge: 'Public Citizen Access',
-                            badgeColor: const Color(0xFF059669),
-                            badgeBg: const Color(0xFFECFDF5),
-                            title: 'Community Sanitation Report',
-                            subtitle:
-                                'Report unsanitary conditions, sewage leaks, stagnant water, or hygiene hazards. Includes photo upload, GPS map pin, and offline draft capability.',
-                            featureList: const [
-                              '📷 Photo Upload',
-                              '📍 Map Pin',
-                              '💾 Draft Sync',
-                              '🔒 Anonymous Option',
-                            ],
-                            onTap: _openCommunityReport,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Option 2: Establishment Portal (Business Owners)
-                          _buildChooserCard(
-                            icon: Icons.storefront_outlined,
-                            badge: 'Establishment Owners',
-                            badgeColor: const Color(0xFF0284C7),
-                            badgeBg: const Color(0xFFF0F9FF),
-                            title: 'Establishment & Business Portal',
-                            subtitle:
-                                'Access sanitary permit status, QR code, inspection grades, and compliance certificate via direct QR scan, permit code lookup, or owner account.',
-                            featureList: const [
-                              '⚡ Permit Code Lookup',
-                              '🔍 QR Pass Scan',
-                              '📋 Inspection Checklist',
-                              '📄 Certificate',
-                            ],
-                            onTap: () {
-                              setState(() => _currentScreen =
-                                  SanitationGatewayScreen.establishmentLogin);
-                            },
-                          ),
-                          const SizedBox(height: 18),
-
-                          // Option 3: Inspector / Staff (Graceful Non-Blocking module)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.canvas,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.deepGreen
-                                        .withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(
-                                    Icons.shield_outlined,
-                                    color: AppColors.deepGreen,
-                                    size: 22,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Municipal Inspector Portal',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13,
-                                          color: AppColors.ink,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isWeb
-                                            ? 'Official field inspections are performed via the mobile app. Web sign-in is available for staff records review.'
-                                            : 'Authorized Sanitary Inspectors and Health Staff sign in here.',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.muted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                if (!isWeb)
-                                  OutlinedButton(
-                                    onPressed: () {
-                                      setState(() => _currentScreen =
-                                          SanitationGatewayScreen.staffLogin);
-                                    },
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      textStyle: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    child: const Text('Staff Sign In'),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.canvas,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: AppColors.border),
-                                    ),
-                                    child: const Text(
-                                      '📱 Mobile\nApp Only',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.muted,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Official Mauban LGU e-Service · Sanitary Section',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.muted, fontSize: 11.5),
                   ),
                 ],
               ),
@@ -4798,15 +4645,20 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     );
   }
 
+  Future<void> _openPublicPermitVerification() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PermitVerificationPage(api: widget.api),
+      ),
+    );
+  }
+
   Widget _buildChooserCard({
     required IconData icon,
+    required String label,
     required String title,
-    required String subtitle,
+    required String description,
     required VoidCallback onTap,
-    String? badge,
-    Color? badgeColor,
-    Color? badgeBg,
-    List<String>? featureList,
   }) {
     return Material(
       color: Colors.white,
@@ -4821,108 +4673,57 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         highlightColor: AppColors.green.withValues(alpha: 0.06),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.green.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon, color: AppColors.deepGreen, size: 26),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (badge != null) ...[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeBg ?? const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              badge.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: badgeColor ?? const Color(0xFF059669),
-                                letterSpacing: 0.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.muted,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: AppColors.muted,
-                  ),
-                ],
-              ),
-              if (featureList != null && featureList.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Divider(height: 1, color: AppColors.border),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: featureList.map((f) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.canvas,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: AppColors.border.withValues(alpha: 0.6),
-                        ),
-                      ),
-                      child: Text(
-                        f,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
+                child: Icon(icon, color: AppColors.deepGreen, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.green,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.muted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.muted,
+              ),
             ],
           ),
         ),
