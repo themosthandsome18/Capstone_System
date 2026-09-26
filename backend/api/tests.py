@@ -891,12 +891,8 @@ class MobilePublicApiTests(TestCase):
         self.assertIn("status_label", rows[0])
 
     def test_mobile_sanitation_permit_verify_by_permit_number(self):
-        bootstrap = self.client.get("/api/mobile/sanitation/bootstrap/").json()
-        permit_number = next(
-            item["permit_number"]
-            for item in bootstrap["establishments"]
-            if item["permit_number"]
-        )
+        # Permit numbers are no longer listed publicly; use the known record.
+        permit_number = self.establishment.permit_number
 
         response = self.client.get(
             "/api/mobile/sanitation/permits/verify/",
@@ -4088,3 +4084,106 @@ class SanitationStaffBootstrapTests(TestCase):
             },
         )
         self.assertEqual(set(data["complaintData"]["summary"]), {"total", "pending", "open"})
+
+
+class PublicSanitationBootstrapExposureTests(TestCase):
+    """Exploit: the anonymous sanitation bootstrap must expose no staff records."""
+
+    URL = "/api/mobile/sanitation/bootstrap/"
+    SECRETS = (
+        "Owner Publicleak",
+        "09170007777",
+        "SP-2026-LEAK",
+        "9 Leak Street",
+        "Complaint Publicleak",
+        "09170008888",
+        "Household Publicleak",
+        "Inspector Publicleak",
+        "14.1987",
+        "121.7412",
+        "14.1765",
+        "121.7234",
+    )
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()  # business types and barangays are cached for 15 minutes
+        self.btype = SanitaryBusinessType.objects.create(name="Leak Type", inspection_frequency="annual")
+        establishment = SanitaryEstablishment.objects.create(
+            business_name="Leak Store",
+            owner_name="Owner Publicleak",
+            business_type=self.btype,
+            barangay="Daungan",
+            address="9 Leak Street",
+            contact_number="09170007777",
+            has_permit=True,
+            permit_number="SP-2026-LEAK",
+            permit_expiry_date=timezone.localdate() + timedelta(days=10),
+            latitude=14.1987,
+            longitude=121.7412,
+        )
+        SanitaryInspection.objects.create(
+            establishment=establishment,
+            inspector_name="Inspector Publicleak",
+            inspection_date=timezone.localdate(),
+        )
+        SanitaryComplaint.objects.create(
+            complaint_id="SAN-LEAK-0001",
+            complainant_name="Complaint Publicleak",
+            contact_number="09170008888",
+            category="Improper waste disposal",
+            barangay="Daungan",
+            reported_date=timezone.localdate(),
+            description="Leak test",
+        )
+        HouseholdSanitationRecord.objects.create(
+            household_code="HH-LEAK-0001",
+            household_head="Household Publicleak",
+            barangay="Daungan",
+            latitude=14.1765,
+            longitude=121.7234,
+        )
+        self.advisory = Notification.objects.create(
+            title="Boil water advisory",
+            message="Public advisory",
+            notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
+            audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
+            module=NOTIFICATION_MODULE_SANITATION,
+            is_active=True,
+        )
+
+    def test_no_staff_record_values_are_exposed(self):
+        body = APIClient().get(self.URL).content.decode("utf-8")
+        for secret in self.SECRETS + ("Leak Store", "SAN-LEAK-0001", "HH-LEAK-0001"):
+            self.assertFalse(secret in body, f"{secret!r} leaked")
+        # No permit-expiry notice (it named the establishment and its expiry).
+        self.assertFalse("permit-" in body, "permit-expiry notice leaked")
+        self.assertFalse("expires on" in body, "permit-expiry notice leaked")
+
+    def test_record_keys_are_present_but_empty_for_old_apks(self):
+        data = APIClient().get(self.URL).json()
+        self.assertEqual(
+            set(data),
+            {
+                "businessTypes",
+                "establishments",
+                "inspections",
+                "complaintData",
+                "householdRecords",
+                "barangays",
+                "notifications",
+            },
+        )
+        self.assertEqual(data["establishments"], [])
+        self.assertEqual(data["inspections"], [])
+        self.assertEqual(data["complaintData"], {"summary": {}, "rows": []})
+        self.assertEqual(data["householdRecords"], [])
+
+    def test_public_data_is_kept(self):
+        data = APIClient().get(self.URL).json()
+        self.assertIn("Leak Type", [item["name"] for item in data["businessTypes"]])
+        self.assertIsInstance(data["barangays"], list)
+        self.assertEqual(
+            [item["id"] for item in data["notifications"]], [f"advisory-{self.advisory.id}"]
+        )

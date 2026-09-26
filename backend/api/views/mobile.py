@@ -842,17 +842,6 @@ def build_sanitation_staff_payload():
     expiring_establishments.sort(key=lambda e: (e.permit_expiry_date, e.id))
     notification_expiring_permits = expiring_establishments[:3]
 
-    total_establishments = len(establishments)
-    good_standing_count = sum(1 for e in establishments if e.compliance_status == "good_standing")
-    for_completion_count = sum(1 for e in establishments if e.compliance_status == "for_completion")
-    violators_count = sum(1 for e in establishments if e.compliance_status == "violation")
-    no_permit_count = sum(1 for e in establishments if e.permit_status == "no_permit")
-
-    active_permits_count = sum(1 for e in establishments if e.permit_status == "active")
-    renewal_due_count = sum(1 for e in establishments if e.permit_status == "renewal_due")
-    conditional_permits_count = sum(1 for e in establishments if e.permit_status == "conditional")
-    suspended_permits_count = sum(1 for e in establishments if e.permit_status == "suspended")
-
     total_complaints = len(all_complaints)
     pending_complaints = sum(1 for c in all_complaints if c.status == COMPLAINT_STATUS_PENDING)
     open_complaints_count = len(open_complaints)
@@ -865,25 +854,6 @@ def build_sanitation_staff_payload():
         "inspections": [
             serialize_mobile_sanitation_inspection(item) for item in inspections
         ],
-        "dashboardData": {
-            "summary": {
-                "totalEstablishments": total_establishments,
-                "goodStanding": good_standing_count,
-                "forCompletion": for_completion_count,
-                "violators": violators_count,
-                "noPermit": no_permit_count,
-            }
-        },
-        "permitData": {
-            "summary": {
-                "active": active_permits_count,
-                "renewalDue": renewal_due_count,
-                "conditional": conditional_permits_count,
-                "suspended": suspended_permits_count,
-                "noPermit": no_permit_count,
-            },
-            "rows": [],
-        },
         "complaintData": {
             "summary": {
                 "total": total_complaints,
@@ -908,22 +878,28 @@ def build_sanitation_staff_payload():
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mobile_sanitation_bootstrap(request):
+    """Public sanitation data only: business types, barangays and advisories.
+
+    Establishments, owners, permit numbers, inspections, complaints and
+    households are staff records served by the authenticated staff bootstrap.
+    Their keys stay here as empty lists so already-installed apps still parse
+    the response; dashboardData and permitData were unused by the app.
+    """
     ensure_initial_sanitation_data()
-    ensure_initial_household_data()
     ensure_mobile_barangays()
 
-    payload = build_sanitation_staff_payload()
     return Response(
         {
             "businessTypes": get_cached_sanitary_business_types(),
-            "establishments": payload["establishments"],
-            "inspections": payload["inspections"],
-            "dashboardData": payload["dashboardData"],
-            "permitData": payload["permitData"],
-            "complaintData": payload["complaintData"],
-            "householdRecords": payload["householdRecords"],
+            "establishments": [],
+            "inspections": [],
+            "complaintData": {"summary": {}, "rows": []},
+            "householdRecords": [],
             "barangays": get_cached_active_barangays(),
-            "notifications": payload["notifications"],
+            "notifications": build_mobile_sanitation_notifications(
+                expiring_permits=[],
+                open_complaints=[],
+            ),
         }
     )
 
