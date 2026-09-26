@@ -85,6 +85,37 @@ class MobileBootstrap {
   }
 }
 
+/// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the
+/// public bootstrap, which keeps supplying business types and barangays.
+SanitationBootstrap mergeSanitationStaffRecords(
+  SanitationBootstrap base,
+  Map<String, dynamic> staff,
+) {
+  return SanitationBootstrap(
+    businessTypes: base.businessTypes,
+    establishments: parseList(
+      staff['establishments'],
+      SanitationEstablishment.fromJson,
+    ),
+    inspections: parseList(
+      staff['inspections'],
+      SanitationInspectionItem.fromJson,
+    ),
+    complaints: parseList(
+      (staff['complaintData'] as Map<String, dynamic>?)?['rows'],
+      SanitationComplaintItem.fromJson,
+    ),
+    householdRecords: parseList(
+      staff['householdRecords'],
+      HouseholdSanitationItem.fromJson,
+    ),
+    barangays: base.barangays,
+    notifications: parseList(staff['notifications'], AppNotification.fromJson),
+    offlineMessage: base.offlineMessage,
+    isOffline: base.isOffline,
+  );
+}
+
 class SanitationBootstrap {
   const SanitationBootstrap({
     required this.businessTypes,

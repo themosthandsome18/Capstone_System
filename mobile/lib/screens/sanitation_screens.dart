@@ -1425,6 +1425,38 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     setWebBranding(WebBrandingModule.sanitation);
     _bootstrap = widget.bootstrap;
     _loadDrafts();
+    _loadStaffRecords();
+  }
+
+  /// Staff records are served behind login, so they are loaded with the staff
+  /// token and layered over the public bootstrap (business types, barangays).
+  /// Returns false when they could not be loaded.
+  Future<bool> _loadStaffRecords() async {
+    try {
+      final staff = await widget.api.fetchSanitationStaffRecords();
+      if (!mounted) return false;
+      setState(() => _bootstrap = mergeSanitationStaffRecords(_bootstrap, staff));
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      if (error is ApiException && error.isUnauthorized) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(staffAuthTokenKey);
+        await prefs.remove(staffAuthRoleKey);
+        await prefs.remove(staffAuthUsernameKey);
+        if (!mounted) return false;
+        if (widget.onSessionExpired != null) {
+          widget.onSessionExpired!();
+        } else {
+          showAppMessage(context, 'Your session expired, please sign in again.');
+        }
+      } else if (error is ApiException && error.isForbidden) {
+        showAppMessage(context, 'This account cannot load sanitation records.');
+      } else {
+        showAppMessage(context, 'Could not load sanitation records: ${conciseError(error)}');
+      }
+      return false;
+    }
   }
 
   void _filterEstablishments({String? status, String? permit}) {
@@ -1806,12 +1838,12 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     final updated = await widget.onRefresh();
     if (!mounted) return;
 
-    setState(() {
-      _bootstrap = updated;
-      _refreshing = false;
-    });
+    setState(() => _bootstrap = updated);
+    final staffLoaded = updated.isOffline ? false : await _loadStaffRecords();
+    if (!mounted) return;
+    setState(() => _refreshing = false);
 
-    if (!silent) {
+    if (!silent && (updated.isOffline || staffLoaded)) {
       showAppMessage(
         context,
         updated.isOffline

@@ -86,6 +86,24 @@ class TourismApi {
     }
   }
 
+  /// Staff-only sanitation records (establishments, inspections, complaints,
+  /// households, staff notifications). Requires a signed-in admin or
+  /// sanitation account; throws [ApiException] (401/403) otherwise.
+  Future<Map<String, dynamic>> fetchSanitationStaffRecords() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Your session expired, please sign in again.',
+      );
+    }
+    return _getWithQuery(
+      '/mobile/sanitation/staff-bootstrap/',
+      const {},
+      headers: {'Authorization': 'Token $token'},
+    );
+  }
+
   Future<List<MobileSanitationReceipt>> fetchSanitationReportHistory({
     required String contact,
     required String reference,
