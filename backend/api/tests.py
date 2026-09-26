@@ -4284,3 +4284,68 @@ class ThrottleCacheTableMigrationTests(TransactionTestCase):
         ]
         self.assertTrue(all(code < 500 for code in statuses), statuses)
         self.assertEqual(statuses[-1], status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class CommunityReportIdentityTests(TestCase):
+    """Client decision: anonymous community reports are not accepted."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def _payload(self, **overrides):
+        payload = {
+            "complainant_name": "Juana Reporter",
+            "contact_number": "0917 123 4567",
+            "category": "Severe Sewage Overflow",
+            "priority": "high",
+            "barangay": "Daungan",
+            "description": "Tumatagas ang poso negro sa kanto.",
+            "latitude": 14.19,
+            "longitude": 121.73,
+        }
+        payload.update(overrides)
+        return payload
+
+    def _post(self, **overrides):
+        return APIClient().post(self.URL, self._payload(**overrides), format="json")
+
+    def test_missing_name_is_rejected(self):
+        response = self._post(complainant_name="  ")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("pangalan", response.json()["detail"].lower())
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_missing_contact_is_rejected(self):
+        response = self._post(contact_number="")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("contact", response.json()["detail"].lower())
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_invalid_contact_is_rejected(self):
+        for contact in ("12345", "0817 123 4567", "0917123456", "091712345678", "abc"):
+            response = self._post(contact_number=contact)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, contact)
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_anonymous_flag_with_blank_name_is_rejected(self):
+        response = self._post(complainant_name="", is_anonymous=True, anonymous=True)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_anonymous_flag_is_ignored_when_identity_is_given(self):
+        response = self._post(is_anonymous=True)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            SanitaryComplaint.objects.get().complainant_name, "Juana Reporter"
+        )
+
+    def test_valid_report_is_saved_with_its_category_urgency(self):
+        for contact in ("09171234567", "+63 917 123 4567"):
+            SanitaryComplaint.objects.all().delete()
+            response = self._post(contact_number=contact)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+            complaint = SanitaryComplaint.objects.get()
+            self.assertEqual(complaint.complainant_name, "Juana Reporter")
+            self.assertEqual(complaint.contact_number, "09171234567")
+            # Urgency is derived from the category by the app and stored as sent.
+            self.assertEqual(complaint.priority, "high")
+            self.assertEqual(response.json()["priority"], "high")

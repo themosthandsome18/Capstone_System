@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -594,6 +595,21 @@ def mobile_sanitation_report_submit(request):
             data.get("description") or data.get("message") or ""
         ).strip()
 
+        # Client decision: anonymous reports are not acted on, so a name and a
+        # reachable Philippine mobile number are required. Any anonymous flag
+        # is ignored; a blank name is rejected whatever the flag says.
+        identity_error = community_report_identity_error(
+            data["complainant_name"], data["contact_number"]
+        )
+        if identity_error:
+            return Response(
+                {"error": identity_error, "detail": identity_error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["contact_number"] = normalize_contact_digits(data["contact_number"])
+        for flag in ("is_anonymous", "anonymous"):
+            data.pop(flag, None)
+
         if uploads and not data.get("photo_documentation"):
             try:
                 saved_urls = []
@@ -695,6 +711,21 @@ def mobile_sanitation_report_history(request):
             },
         }
     )
+
+
+PH_MOBILE_NUMBER = re.compile(r"^09\d{9}$")
+
+
+def community_report_identity_error(name, contact):
+    """Message for a missing name or an invalid contact number, else ""."""
+    if not str(name or "").strip():
+        return "Ilagay ang iyong pangalan. / Please enter your name."
+    if not PH_MOBILE_NUMBER.match(normalize_contact_digits(contact)):
+        return (
+            "Ilagay ang wastong contact number (hal. 09171234567). / "
+            "Please enter a valid mobile number (e.g. 09171234567)."
+        )
+    return ""
 
 
 def normalize_contact_digits(value):
