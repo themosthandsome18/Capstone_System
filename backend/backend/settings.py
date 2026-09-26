@@ -169,7 +169,13 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "capstone-local-cache",
-    }
+    },
+    # Rate-limit counters must be shared by every server process, so they are
+    # kept in the database (table created by `createcachetable` in build.sh).
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "api_throttle_cache",
+    },
 }
 
 
@@ -217,6 +223,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Render terminates TLS at one proxy that appends the client address to
+    # X-Forwarded-For; trust exactly that one hop when identifying clients.
+    # Only used by throttles, and only the establishment claim is throttled.
+    "NUM_PROXIES": 1,
+    "DEFAULT_THROTTLE_RATES": {
+        "establishment_claim": "5/hour",
+    },
 }
 
 

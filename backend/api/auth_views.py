@@ -2,13 +2,14 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from django.db import OperationalError, connection, transaction
 from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURIST, ROLE_TOURISM, UserProfile
 from .serializers import AuthUserSerializer
+from .throttles import EstablishmentClaimRateThrottle
 
 
 def get_or_create_profile(user):
@@ -169,6 +170,7 @@ def logout_view(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([EstablishmentClaimRateThrottle])
 def establishment_register_view(request):
     """
     Register or claim an establishment account.

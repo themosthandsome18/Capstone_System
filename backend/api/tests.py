@@ -4187,3 +4187,60 @@ class PublicSanitationBootstrapExposureTests(TestCase):
         self.assertEqual(
             [item["id"] for item in data["notifications"]], [f"advisory-{self.advisory.id}"]
         )
+
+
+class EstablishmentClaimRateLimitTests(TestCase):
+    """Exploit: unlimited claim attempts let anyone guess permit numbers."""
+
+    def setUp(self):
+        from django.conf import settings
+        from django.core.cache import caches
+
+        if "throttle" in settings.CACHES:
+            caches["throttle"].clear()
+
+    def test_establishment_claim_is_limited_to_five_per_hour(self):
+        client = APIClient()
+        statuses = [
+            client.post(
+                "/api/auth/register-establishment/",
+                {"username": f"guess_{index}", "password": "short"},
+                format="json",
+            ).status_code
+            for index in range(6)
+        ]
+        self.assertNotIn(status.HTTP_429_TOO_MANY_REQUESTS, statuses[:5])
+        self.assertEqual(statuses[5], status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_the_mobile_claim_route_shares_the_limit(self):
+        client = APIClient()
+        for index in range(5):
+            client.post(
+                "/api/auth/register-establishment/",
+                {"username": f"web_{index}", "password": "short"},
+                format="json",
+            )
+        response = client.post(
+            "/api/mobile/sanitation/register-establishment/",
+            {"username": "mobile_guess", "password": "short"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_login_is_not_throttled(self):
+        client = APIClient()
+        statuses = {
+            client.post(
+                "/api/auth/login/", {"username": "nobody", "password": "wrong"}, format="json"
+            ).status_code
+            for _ in range(12)
+        }
+        self.assertNotIn(status.HTTP_429_TOO_MANY_REQUESTS, statuses)
+
+    def test_throttle_uses_a_cache_shared_across_processes(self):
+        from django.conf import settings
+
+        self.assertEqual(
+            settings.CACHES["throttle"]["BACKEND"],
+            "django.core.cache.backends.db.DatabaseCache",
+        )
