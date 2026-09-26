@@ -450,7 +450,23 @@ This project is being developed with Claude-based and ChatGPT-based planners/rev
   - **Verification**: `flutter test` reports 11 passing tests across the suite; `flutter analyze` reports the same 4 pre-existing info-level issues — no new issues.
   - **Not verified**: not merged to `main` and not deployed. A new APK build is still required, and **no real-device or emulator end-to-end test was performed** — the portal was exercised only in widget tests.
 
-## Security: Sanitation Public Data Exposure (branch `security/sanitation-public-data`, NOT merged, NOT deployed)
+## Security: Sanitation Public Data Exposure — Deployed (merged to `main` as `29621bc`, 2026-09-26)
+- Fast-forwarded `75c2309..29621bc`; no tourism files in `git diff 75c2309..HEAD --stat`. Local suites on `main`: backend `Ran 173 tests` / `OK`; frontend `224 passed` (7 suites); build `Compiled successfully.`; `flutter test` 38/38; `flutter analyze` 4 pre-existing infos.
+- **Post-deploy checks against production** (read-only except where noted; only key names, counts and status codes were printed):
+  - Public `/api/mobile/sanitation/bootstrap/` → 200: `businessTypes` 16, `barangays` 40, `establishments` 0, `inspections` 0, `complaintData` `{summary: {}, rows: 0}`, `householdRecords` 0, `notifications` 0 (no active advisories; no complaint or permit-expiry notices). `dashboardData`/`permitData` absent.
+  - `/api/mobile/sanitation/staff-bootstrap/` anonymous → 401.
+  - `permits/verify/` with a business name → 404 (`detail`, `verified`); with a real permit number → 200 with exactly `verified`, `establishment` {barangay, business_name, business_type_name, permit_number}, `permit` {permit_expiry_date, permit_issued_date, permit_number, permit_status, permit_status_label}.
+  - One invalid claim POST (password too short, so no account is created) → 400, not 500. The throttle runs before the view, so this shows migration `0037` created `api_throttle_cache` in production. The request wrote one throttle-counter row to that cache table.
+  - `NUM_PROXIES = 1` is **not yet confirmed**; see the procedure under Pending Tasks.
+- **New sanitation APK (security release)**: built from `main` with `flutter build apk --release --flavor sanitation -t lib/main_sanitation.dart`.
+  - Path: `mobile/build/app/outputs/flutter-apk/app-sanitation-release.apk` (76.0 MB; SHA-1 `6eb3dc9abd6a2cdde3eba93c53cb0349374915bf`). Build output, not committed.
+  - Package `com.mauban.sanitation`, versionName `1.0.1`, versionCode `2` (set by `version:` in `mobile/pubspec.yaml`; bumped from `1.0.0+1` in `fe0f9ce`).
+  - API base URL: `mobile/lib/utils/helpers.dart` `String.fromEnvironment('API_BASE_URL', defaultValue: 'https://capstone-backend-stzr.onrender.com/api')`; no `--dart-define` was passed, and the production URL and the `staff-bootstrap` path are present in the compiled `libapp.so`.
+  - Signed with the **debug key** (release signing is still a pending task); certificate SHA-256 `98214ff2…c01c86b`, the same key as the previous 1.0.0 sanitation build on this machine, so it installs over that build. An APK built on another machine would not.
+  - Tourism is a separate flavor/APK (`com.mauban.tourism`) and was not rebuilt.
+  - **The old sanitation APK must be replaced on every staff device**: it can no longer load establishment records, so it cannot submit establishment inspections (see the old-APK list below). Not yet tested on a real device.
+
+## Security: Sanitation Public Data Exposure — Branch Details (`security/sanitation-public-data`)
 - Branch from `75c2309`. Sanitation only: no tourism file, tourism endpoint, tourism screen or shared login behaviour was changed. `backend/api/views/mobile.py` holds both modules; every hunk in it is inside a sanitation function (plus one import).
 - Commits: `2a9e5d0` (permit verify), `1e3d4f0` (report history), `35b6749` (staff bootstrap endpoint), `b8f3446` (mobile staff merge), `79fb668` (public bootstrap reduced), `c502222` (claim rate limit). Each has an exploit test that failed against the previous code and passes after.
 - **Permit verification** (`/api/mobile/sanitation/permits/verify/`): previously matched a business name or a numeric record id (so records could be enumerated) and returned owner name, contact number, address, coordinates and the permit number. Now matches the permit number only (trimmed, case-insensitive) and returns exactly: `verified`; `establishment` {business_name, business_type_name, barangay, permit_number}; `permit` {permit_number, permit_status, permit_status_label, permit_issued_date, permit_expiry_date}. Web `VerifyPermit.js` and the mobile verification card show only these (the web headline now follows the permit status). The web Establishment Records QR, "Open Verification Page" link and print view used `/verify-permit/<id>`; they now use the URL-encoded permit number, show no QR without a permit number, and printing no longer falls back to the third-party `api.qrserver.com` image service. **Any QR already printed from Establishment Records (id-based) no longer verifies.**
@@ -471,7 +487,7 @@ This project is being developed with Claude-based and ChatGPT-based planners/rev
   - `referenceTables.resorts` includes entries named "Private Property", "Residence" and "Others / Private Residence" with coordinates.
   - Login is not rate-limited.
 - **Verification (local only)**: backend `Ran 172 tests` / `OK`; frontend `224 passed, 224 total` (7 suites); `npm run build` → `Compiled successfully.`; `flutter test` 38/38; `flutter analyze` the same 4 pre-existing info issues.
-- **Not verified / open**: not merged, not deployed, **a new APK is required** for staff. `NUM_PROXIES = 1` assumes one proxy hop on Render; if Render adds another hop every client would share one bucket — check after deploy. No authenticated browser or device check was performed.
+- **Not verified / open (at branch time)**: since merged and deployed — see the section above. **The new APK must be installed on staff devices.** `NUM_PROXIES = 1` assumes one proxy hop on Render; if Render adds another hop every client would share one bucket — check after deploy. No authenticated browser or device check was performed.
 
 ## Production Test-Data Cleanup (2026-09-26)
 - Performed on **2026-09-26** by the planner in a direct Supabase SQL session, with explicit user approval, in **one transaction**, after a full JSON backup of every affected row (the backup is kept by the user, not in this repository). Not performed from this codebase or by an automated agent.
@@ -562,6 +578,8 @@ Branched from `0ff406b`. Five fixes, each with its own commit and its own red-th
 - **Not verified**: not merged, not deployed, **a new APK build is still required**, and no real-device or emulator end-to-end test was performed.
 
 ## Pending Tasks & Next Testing Steps
+- **Replace the sanitation APK on staff devices** with `1.0.1` (versionCode 2) and check on a real device: staff sign-in loads establishments, an establishment inspection submits, permit verification and report tracking work.
+- **Confirm `NUM_PROXIES = 1` on Render**: from one network, send 5 invalid claim POSTs (too-short password, so no account is created), then a 6th with a made-up `X-Forwarded-For: 203.0.113.7` header; it must still be 429 (a spoofed header must not reset the limit). Then send one invalid claim from a different network (e.g. a phone hotspot); it must be 400, not 429 (clients must not share one bucket). If the 6th is 400, the client address is spoofable; if the other network gets 429, Render adds more than one hop. Each request writes only a throttle-counter row, and claims from that address are locked for up to an hour.
 - **Inspection Management Phase 2b — photo documentation (OPEN, blocked)**:
   - The web upload box in `InspectionManagement.js` is still a plain `div` with no file input, and the form still sends `photo_documentation: ""`. The server-side path exists but only on the mobile endpoint (`save_image_file(upload, "inspections")`), and the Flutter client never sends a photo, so nothing can attach one today.
   - **Blocked on upload validation**: before the web can accept uploads, `validate_image_file` needs magic-byte (content-sniffing) validation rather than trusting the declared extension or content type. Wiring an upload path to the web endpoint without that would widen the attack surface, so this was deliberately deferred out of Phase 2a.
