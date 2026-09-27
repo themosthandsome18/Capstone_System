@@ -15,6 +15,7 @@
     --th-primary: #2fa34a;
     --th-primary-hover: #278d3f;
     --th-primary-active: #1f7f36;
+    --th-primary-deep: #146c43;
     --th-primary-contrast: #ffffff;
     --th-primary-tint: #f0fdf4;
     --th-primary-tint-strong: #dff1e2;
@@ -1116,8 +1117,8 @@
 }
 
 .tourist-record-save {
-  border: 1px solid #146c43;
-  background: #146c43;
+  border: 1px solid var(--th-primary-deep);
+  background: var(--th-primary-deep);
   color: #ffffff;
 }
 
@@ -1201,7 +1202,7 @@
 
 .import-status {
   font-weight: 700;
-  color: #146c43 !important;
+  color: var(--th-primary-deep) !important;
 }
 
 .import-summary-grid {
@@ -3651,7 +3652,7 @@
 }
 
 .booking-icon-btn.arrived {
-  color: #16a34a;
+  color: var(--th-success);
   border-color: #86efac;
   background: #f0fdf4;
 }

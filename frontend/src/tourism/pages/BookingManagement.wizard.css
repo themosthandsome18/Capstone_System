@@ -488,7 +488,7 @@
 }
 
 .wizard-total-item strong.ok {
-  color: #16a34a;
+  color: var(--th-success);
 }
 
 .wizard-total-item strong.error {
