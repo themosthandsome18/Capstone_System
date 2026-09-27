@@ -4715,3 +4715,63 @@ class CommunityReportConcurrentSubmitTests(TransactionTestCase):
         self.assertEqual(len({complaint_id for _, complaint_id in results}), 1, results)
         self.assertEqual(SanitaryComplaint.objects.filter(client_submission_id=self.SID).count(), 1)
         self.assertEqual(SanitaryComplaint.objects.count(), 1)
+
+
+class CommunityReportDuplicateInsideTransactionTests(TestCase):
+    """The duplicate path must work when the request runs inside an outer
+    transaction (ATOMIC_REQUESTS, or a caller's atomic block).
+
+    On PostgreSQL a failed INSERT aborts the whole transaction unless it ran
+    in its own savepoint; the lookup that follows would then fail with
+    "current transaction is aborted" and the request would return 500.
+    """
+
+    URL = "/api/mobile/sanitation/reports/"
+    SID = "outer-atomic-0001"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def test_forced_duplicate_inside_an_outer_atomic_block_returns_200(self):
+        import itertools
+
+        from django.db import transaction
+
+        from api.views import mobile as mobile_views
+
+        existing = SanitaryComplaint.objects.create(
+            complaint_id="SAN-OUTER-0001",
+            complainant_name="Juana Reporter",
+            contact_number="09171234567",
+            category="Improper Garbage Disposal",
+            barangay="Daungan",
+            location_address="Purok 3",
+            reported_date="2026-09-27",
+            description="Saved by the first request.",
+            client_submission_id=self.SID,
+        )
+
+        # The IP throttle, the contact throttle and the view's own check all
+        # "miss" the saved report (as when two requests race), so the insert
+        # runs and fails on the unique id. The lookup after that is real.
+        real_lookup = mobile_views.find_existing_community_report
+        calls = itertools.count()
+
+        def racing_lookup(submission_id):
+            return None if next(calls) < 3 else real_lookup(submission_id)
+
+        with patch.object(mobile_views, "find_existing_community_report", side_effect=racing_lookup):
+            with transaction.atomic():
+                response = APIClient(raise_request_exception=False).post(
+                    self.URL,
+                    _community_report_payload(client_submission_id=self.SID),
+                    format="json",
+                )
+                # The outer transaction is still usable afterwards.
+                rows = SanitaryComplaint.objects.filter(client_submission_id=self.SID).count()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content[:300])
+        self.assertEqual(response.json()["complaint_id"], existing.complaint_id)
+        self.assertEqual(rows, 1)
