@@ -19,6 +19,7 @@ class FakeReportApi extends TourismApi {
     required String category,
     required String priority,
     required String barangay,
+    required String locationAddress,
     required String description,
     List<XFile> photos = const [],
     required String latitude,
@@ -30,6 +31,7 @@ class FakeReportApi extends TourismApi {
       'category': category,
       'priority': priority,
       'barangay': barangay,
+      'location_address': locationAddress,
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
@@ -123,12 +125,17 @@ void main() {
       );
     });
 
-    test('the typed location is kept with the description', () {
+    test('staff see the typed location next to the barangay', () {
+      final item = SanitationComplaintItem.fromJson({
+        'complaint_id': 'SAN-1',
+        'barangay': 'Daungan',
+        'location_address': 'Kanto ng Rizal St.',
+      });
+      expect(complaintLocationLine(item), 'Daungan · Kanto ng Rizal St.');
       expect(
-        buildCommunityReportDescription('Kanto ng Rizal St.', 'Umaapaw.'),
-        'Lokasyon: Kanto ng Rizal St.\n\nUmaapaw.',
+        complaintLocationLine(SanitationComplaintItem.fromJson({'barangay': 'Daungan'})),
+        'Daungan',
       );
-      expect(buildCommunityReportDescription('', 'Umaapaw.'), 'Umaapaw.');
     });
   });
 
@@ -197,6 +204,7 @@ void main() {
     expect(payload['category'], 'Severe Sewage Overflow');
     expect(payload['priority'], 'high');
     expect(payload['barangay'], 'Daungan');
-    expect(payload['description'], 'Lokasyon: Kanto ng Rizal St.\n\nUmaapaw ang poso negro.');
+    expect(payload['location_address'], 'Kanto ng Rizal St.');
+    expect(payload['description'], 'Umaapaw ang poso negro.');
   });
 }

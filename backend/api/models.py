@@ -828,6 +828,8 @@ class SanitaryComplaint(models.Model):
     contact_number = models.CharField(max_length=60, blank=True)
     category = models.CharField(max_length=120)
     barangay = models.CharField(max_length=120)
+    # Where the reporter says the problem is (street, landmark, purok).
+    location_address = models.CharField(max_length=255, blank=True, default="")
     reported_date = models.DateField()
     status = models.CharField(
         max_length=30,

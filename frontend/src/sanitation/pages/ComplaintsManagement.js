@@ -269,6 +269,7 @@ function ComplaintsManagement() {
           item.complaint_id,
           item.category,
           item.barangay,
+          item.location_address,
           item.description,
           item.complainant_name,
         ]
@@ -897,6 +898,16 @@ function ReportListCard({ item, active, onSelect, onOpenSummary }) {
   );
 }
 
+/** Reporter-typed text goes into the print window's HTML, so escape it. */
+function escapeSlipText(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function printFieldworkActionSlip(report) {
   if (!report) return;
 
@@ -964,7 +975,12 @@ export function printFieldworkActionSlip(report) {
         <div class="grid">
           <div class="box">
             <span>Location / Barangay</span>
-            <strong>Brgy. ${report.barangay || "Unspecified"}</strong>
+            <strong>Brgy. ${escapeSlipText(report.barangay || "Unspecified")}</strong>
+            ${
+              report.location_address
+                ? `<small>${escapeSlipText(report.location_address)}</small>`
+                : ""
+            }
           </div>
           <div class="box">
             <span>Inspection Urgency SLA</span>
@@ -1146,6 +1162,7 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
             </small>
           </span>
           <strong>{report.barangay || "Unspecified"}</strong>
+          {report.location_address ? <small>{report.location_address}</small> : null}
           <small>{reportTitle(report)}</small>
         </div>
       </div>
@@ -1717,6 +1734,7 @@ function ReportSummaryModal({
                 Brgy. {report.barangay || "Mauban"}
                 {report.establishment_name ? ` (${report.establishment_name})` : ""}
               </strong>
+              {report.location_address ? <small>{report.location_address}</small> : null}
               <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>
                 View on GIS Map &rarr;
               </small>

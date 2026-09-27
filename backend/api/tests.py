@@ -851,6 +851,7 @@ class MobilePublicApiTests(TestCase):
                 "contact_number": "09170000000",
                 "category": "Improper Garbage Disposal",
                 "barangay": "Poblacion",
+                "location_address": "Walkway beside the plaza",
                 "description": "Garbage pile near the walkway.",
                 "latitude": 14.186,
                 "longitude": 121.73,
@@ -874,6 +875,7 @@ class MobilePublicApiTests(TestCase):
                 "contact_number": "09170000000",
                 "category": "Contaminated Water Source",
                 "barangay": "Poblacion",
+                "location_address": "Deep well, Purok 2",
                 "description": "Water source needs inspection.",
             },
             format="json",
@@ -2536,6 +2538,7 @@ class SecureUploadTests(TestCase):
                 "complainant_name": "Upload Tester",
                 "contact_number": "09171234567",
                 "category": "Improper Garbage Disposal",
+                "location_address": "Creek bank, Purok 1",
                 "description": "Garbage dump near creek",
                 "photo": bad_file,
             },
@@ -2553,6 +2556,7 @@ class SecureUploadTests(TestCase):
                     "complainant_name": "Upload Tester",
                     "contact_number": "09171234567",
                     "category": "Improper Garbage Disposal",
+                    "location_address": "Creek bank, Purok 1",
                     "description": "Garbage dump near creek",
                     "photo": good_file,
                 },
@@ -4302,6 +4306,7 @@ class CommunityReportIdentityTests(TestCase):
             "category": "Severe Sewage Overflow",
             "priority": "low",
             "barangay": "Daungan",
+            "location_address": "Kanto ng Rizal St.",
             "description": "Tumatagas ang poso negro sa kanto.",
             "latitude": 14.19,
             "longitude": 121.73,
@@ -4366,6 +4371,7 @@ class CommunityReportUrgencyTests(TestCase):
             "contact_number": "09171234567",
             "category": "Improper Garbage Disposal",
             "barangay": "Daungan",
+            "location_address": "Purok 3",
             "description": "Nakatambak ang basura.",
         }
         payload.update(overrides)
@@ -4420,6 +4426,7 @@ class CommunityReportRateLimitTests(TestCase):
             "contact_number": "09171234567",
             "category": "Improper Garbage Disposal",
             "barangay": "Daungan",
+            "location_address": "Purok 3",
             "description": "Nakatambak ang basura.",
         }
         payload.update(overrides)
@@ -4465,3 +4472,51 @@ class CommunityReportRateLimitTests(TestCase):
 
         other_address = self._post(contact_number="09179990001", remote_addr="10.0.0.2")
         self.assertEqual(other_address.status_code, status.HTTP_201_CREATED)
+
+
+class CommunityReportAddressTests(TestCase):
+    """The reporter's typed location is its own required field."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def _post(self, **overrides):
+        payload = {
+            "complainant_name": "Juana Reporter",
+            "contact_number": "09171234567",
+            "category": "Improper Garbage Disposal",
+            "barangay": "Daungan",
+            "location_address": "  Kanto ng Rizal St.  ",
+            "description": "Nakatambak ang basura.",
+        }
+        payload.update(overrides)
+        return APIClient().post(self.URL, payload, format="json")
+
+    def test_missing_address_is_rejected(self):
+        for value in ("", "   "):
+            response = self._post(location_address=value)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, repr(value))
+            detail = response.json()["detail"].lower()
+            self.assertIn("lokasyon", detail)
+            self.assertIn("address", detail)
+        # The field left out entirely.
+        response = APIClient().post(
+            self.URL,
+            {
+                "complainant_name": "Juana Reporter",
+                "contact_number": "09171234567",
+                "category": "Improper Garbage Disposal",
+                "barangay": "Daungan",
+                "description": "Nakatambak ang basura.",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_address_is_saved_to_its_field_and_description_is_unchanged(self):
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        complaint = SanitaryComplaint.objects.get()
+        self.assertEqual(complaint.location_address, "Kanto ng Rizal St.")
+        self.assertEqual(complaint.description, "Nakatambak ang basura.")
+        self.assertEqual(response.json()["location_address"], "Kanto ng Rizal St.")

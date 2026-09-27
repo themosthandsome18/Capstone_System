@@ -370,6 +370,13 @@ class SanitationInspectionItem {
   }
 }
 
+/// "Barangay · typed location" for staff lists; just the barangay when the
+/// report has no typed location (older reports).
+String complaintLocationLine(SanitationComplaintItem item) {
+  final address = item.locationAddress.trim();
+  return address.isEmpty ? item.barangay : '${item.barangay} · $address';
+}
+
 class SanitationComplaintItem {
   const SanitationComplaintItem({
     required this.reference,
@@ -380,11 +387,13 @@ class SanitationComplaintItem {
     required this.statusLabel,
     required this.priority,
     required this.actionTaken,
+    this.locationAddress = '',
   });
 
   final String reference;
   final String category;
   final String barangay;
+  final String locationAddress;
   final String description;
   final String status;
   final String statusLabel;
@@ -396,6 +405,7 @@ class SanitationComplaintItem {
       reference: '${json['complaint_id'] ?? json['id'] ?? ''}',
       category: '${json['category'] ?? 'Sanitation concern'}',
       barangay: '${json['barangay'] ?? 'Unspecified'}',
+      locationAddress: '${json['location_address'] ?? ''}',
       description: '${json['description'] ?? ''}',
       status: '${json['status'] ?? 'pending'}',
       statusLabel:

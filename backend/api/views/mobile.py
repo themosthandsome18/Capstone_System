@@ -602,6 +602,9 @@ def mobile_sanitation_report_submit(request):
         data["description"] = (
             data.get("description") or data.get("message") or ""
         ).strip()
+        data["location_address"] = " ".join(
+            str(data.get("location_address") or "").split()
+        )
 
         # Client decision: anonymous reports are not acted on, so a name and a
         # reachable Philippine mobile number are required. Any anonymous flag
@@ -612,6 +615,15 @@ def mobile_sanitation_report_submit(request):
         if identity_error:
             return Response(
                 {"error": identity_error, "detail": identity_error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not data["location_address"]:
+            message = (
+                "Ilagay ang lokasyon o address ng nakitang problema. / "
+                "Please enter the location or address of the problem."
+            )
+            return Response(
+                {"error": message, "detail": message},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         data["contact_number"] = normalize_contact_digits(data["contact_number"])
@@ -1011,6 +1023,7 @@ def serialize_mobile_sanitation_complaint(complaint):
         "complaint_id": complaint.complaint_id,
         "category": complaint.category,
         "barangay": complaint.barangay,
+        "location_address": complaint.location_address,
         "reported_date": date_to_iso(complaint.reported_date),
         "status": complaint.status,
         "status_label": complaint.get_status_display(),

@@ -560,14 +560,6 @@ String communityReportUrgencyBadge(String category) {
   return '$level · awtomatiko batay sa category ($window)';
 }
 
-/// The report model has no address field yet, so the typed location is kept
-/// at the top of the description where staff read it.
-String buildCommunityReportDescription(String address, String description) {
-  final location = address.trim();
-  final text = description.trim();
-  return location.isEmpty ? text : 'Lokasyon: $location\n\n$text';
-}
-
 void showSanitationScopeGuideDialog(BuildContext context) {
   showDialog<void>(
     context: context,
@@ -1343,10 +1335,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         category: category,
         priority: _priority,
         barangay: barangay,
-        description: buildCommunityReportDescription(
-          _address.text,
-          _description.text,
-        ),
+        locationAddress: _address.text.trim(),
+        description: _description.text.trim(),
         photos: _photos,
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
@@ -1847,8 +1837,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       return;
     }
 
-    if (draft.address.trim().isEmpty &&
-        latLngFromText(draft.latitude, draft.longitude) == null) {
+    if (draft.address.trim().isEmpty) {
       showAppMessage(context, 'Edit the draft and add its location first.');
       return;
     }
@@ -2929,7 +2918,7 @@ class SanitationReportsPage extends StatelessWidget {
               .map(
                 (item) => SanitationAlertCard(
                   title: item.category,
-                  subtitle: '${item.barangay} - ${item.description}',
+                  subtitle: '${complaintLocationLine(item)} - ${item.description}',
                   status: item.priority,
                 ),
               ),

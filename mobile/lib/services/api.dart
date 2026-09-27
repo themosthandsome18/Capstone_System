@@ -259,6 +259,7 @@ class TourismApi {
     required String category,
     required String priority,
     required String barangay,
+    required String locationAddress,
     required String description,
     List<XFile> photos = const [],
     required String latitude,
@@ -270,6 +271,7 @@ class TourismApi {
       'category': category,
       'priority': priority,
       'barangay': barangay,
+      'location_address': locationAddress,
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
@@ -291,10 +293,8 @@ class TourismApi {
       category: draft.category,
       priority: draft.priority,
       barangay: draft.barangay,
-      description: buildCommunityReportDescription(
-        draft.address,
-        draft.description,
-      ),
+      locationAddress: draft.address,
+      description: draft.description,
       latitude: draft.latitude,
       longitude: draft.longitude,
     );

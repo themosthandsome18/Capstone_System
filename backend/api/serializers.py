@@ -762,6 +762,7 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             "contact_number",
             "category",
             "barangay",
+            "location_address",
             "reported_date",
             "status",
             "status_label",
