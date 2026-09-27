@@ -9,6 +9,7 @@ import {
   FiEdit2,
   FiEye,
   FiFileText,
+  FiKey,
   FiPlus,
   FiPrinter,
   FiRotateCcw,
@@ -18,7 +19,15 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
+import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { issueOwnerTrackingCode } from "../services/sanitationApi";
+import {
+  buildOwnerSlipHtml,
+  ownerSlipGeneratingHtml,
+  ownerSlipReplaceMessage,
+  ownerSlipStatusText,
+} from "../utils/ownerSlip";
 import {
   CLIENT_BUSINESS_TYPE_CATEGORIES,
   businessTypeDisplayLabel,
@@ -333,7 +342,14 @@ function EstablishmentRecords() {
     createEstablishment,
     updateEstablishment,
     deleteEstablishment,
+    refreshEstablishments,
   } = useSanitationData();
+  const { role } = useAuth();
+  // Owner's Slips (private tracking codes) are for sanitation staff only.
+  const canIssueOwnerSlips = role === "admin" || role === "sanitation";
+  const [slipConfirmFor, setSlipConfirmFor] = useState(null);
+  const [slipError, setSlipError] = useState("");
+  const [issuingSlipId, setIssuingSlipId] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingEstablishment, setEditingEstablishment] = useState(null);
@@ -513,6 +529,68 @@ function EstablishmentRecords() {
     setEditingEstablishment(null);
     setForm(initialForm);
     setFormError("");
+  }
+
+  function startOwnerSlip(establishment) {
+    setSlipError("");
+    if (establishment.tracking_code_issued_at) {
+      setSlipConfirmFor(establishment);
+      return;
+    }
+    issueOwnerSlip(establishment);
+  }
+
+  function confirmOwnerSlip() {
+    const establishment = slipConfirmFor;
+    setSlipConfirmFor(null);
+    if (establishment) {
+      issueOwnerSlip(establishment);
+    }
+  }
+
+  // Runs inside the click handler: the print window must be opened before
+  // any await, or pop-up blockers stop it. The code goes from the answer
+  // straight into that window and is not kept anywhere on the page.
+  async function issueOwnerSlip(establishment) {
+    const slipWindow = window.open("", "_blank", "width=520,height=760");
+    if (!slipWindow) {
+      setSlipError(
+        "Hinarang ng browser ang print window. Payagan ang pop-ups at subukan ulit. / " +
+          "The browser blocked the print window. Allow pop-ups and try again."
+      );
+      return;
+    }
+    slipWindow.document.open();
+    slipWindow.document.write(ownerSlipGeneratingHtml());
+    slipWindow.document.close();
+    setIssuingSlipId(establishment.id);
+
+    try {
+      const slip = await issueOwnerTrackingCode(establishment.id);
+      slipWindow.document.open();
+      slipWindow.document.write(buildOwnerSlipHtml(slip));
+      slipWindow.document.close();
+      slipWindow.focus?.();
+      slipWindow.print?.();
+    } catch (requestError) {
+      slipWindow.close();
+      setSlipError(
+        `Hindi nagawa ang Owner's Slip. / The Owner's Slip was not issued. ${getErrorMessage(
+          requestError
+        )}`
+      );
+      return;
+    } finally {
+      setIssuingSlipId(null);
+    }
+
+    const refreshed = refreshEstablishments ? await refreshEstablishments() : null;
+    const updated = (refreshed || []).find((item) => item.id === establishment.id);
+    if (updated) {
+      setSelectedEstablishment((current) =>
+        current && current.id === updated.id ? updated : current
+      );
+    }
   }
 
   function getErrorMessage(requestError) {
@@ -744,6 +822,11 @@ function EstablishmentRecords() {
       ) : null}
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {slipError && !selectedEstablishment ? (
+        <p className="sanitation-error-text" role="alert">
+          {slipError}
+        </p>
+      ) : null}
 
       <section className="establishment-table-card establishment-records-table">
         <div className="establishment-tools">
@@ -880,6 +963,18 @@ function EstablishmentRecords() {
                           <FiEdit2 />
                         </button>
 
+                        {canIssueOwnerSlips ? (
+                          <button
+                            type="button"
+                            className="establishment-icon-btn view"
+                            title="Print Owner's Slip"
+                            disabled={issuingSlipId === item.id}
+                            onClick={() => startOwnerSlip(item)}
+                          >
+                            <FiKey />
+                          </button>
+                        ) : null}
+
                         <button
                           type="button"
                           className="establishment-icon-btn delete"
@@ -941,7 +1036,41 @@ function EstablishmentRecords() {
           timeline={selectedTimeline}
           onClose={closeDetailModal}
           onEdit={editSelectedEstablishment}
+          canIssueOwnerSlips={canIssueOwnerSlips}
+          issuingOwnerSlip={issuingSlipId === selectedEstablishment.id}
+          onPrintOwnerSlip={() => startOwnerSlip(selectedEstablishment)}
+          slipError={slipError}
         />
+      ) : null}
+
+      {slipConfirmFor ? (
+        <div className="establishment-modal-backdrop">
+          <section
+            className="establishment-detail-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Issue a new Owner's Slip"
+          >
+            <h3>Bagong Owner's Slip / New Owner's Slip</h3>
+            <p>{ownerSlipReplaceMessage(slipConfirmFor)}</p>
+            <div className="establishment-detail-actions">
+              <button
+                type="button"
+                className="sanitation-export-btn"
+                onClick={() => setSlipConfirmFor(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="add-establishment-btn"
+                onClick={confirmOwnerSlip}
+              >
+                Mag-isyu ng bagong code / Issue new code
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );
@@ -952,6 +1081,10 @@ function EstablishmentDetailModal({
   timeline,
   onClose,
   onEdit,
+  canIssueOwnerSlips = false,
+  issuingOwnerSlip = false,
+  onPrintOwnerSlip,
+  slipError = "",
 }) {
   const displayLabel = businessTypeDisplayLabel(establishment.business_type_name);
   const hasCoordinates =
@@ -1020,6 +1153,16 @@ function EstablishmentDetailModal({
             >
               <FiPrinter /> Print
             </button>
+            {canIssueOwnerSlips ? (
+              <button
+                type="button"
+                className="sanitation-export-btn"
+                disabled={issuingOwnerSlip}
+                onClick={onPrintOwnerSlip}
+              >
+                <FiKey /> {issuingOwnerSlip ? "Generating…" : "Print Owner's Slip"}
+              </button>
+            ) : null}
             <button type="button" className="add-establishment-btn" onClick={() => onEdit(false)}>
               <FiEdit2 /> Edit
             </button>
@@ -1032,21 +1175,14 @@ function EstablishmentDetailModal({
           <InfoTile label="Owner / Proprietor" value={establishment.owner_name} />
           <InfoTile label="Business Type" value={displayLabel} />
           <InfoTile label="Contact Number" value={establishment.contact_number} />
-          <InfoTile
-            label="Mobile Portal Account"
-            value={
-              establishment.account_username ? (
-                <span style={{ color: "#16a34a", fontWeight: "600" }}>
-                  🟢 Linked (@{establishment.account_username})
-                </span>
-              ) : (
-                <span style={{ color: "#64748b" }}>
-                  ⚪ Not Linked (Register via Mobile)
-                </span>
-              )
-            }
-          />
+          <InfoTile label="Owner's Slip" value={ownerSlipStatusText(establishment)} />
         </div>
+
+        {slipError ? (
+          <p className="sanitation-error-text" role="alert">
+            {slipError}
+          </p>
+        ) : null}
 
         <div
           style={{

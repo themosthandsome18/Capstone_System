@@ -45,6 +45,8 @@ jest.mock("qrcode.react", () => ({
     return mockReact.createElement("svg", { "data-testid": "verify-qr", "data-value": value });
   },
 }));
+// The page reads the signed-in role (Owner's Slip is staff-only).
+jest.mock("../../auth/AuthContext", () => ({ useAuth: () => ({ role: "sanitation" }) }));
 jest.mock("../../shared/csvExport", () => ({
   datedCsvFilename: (name) => `${name}.csv`,
   exportCsv: jest.fn(),

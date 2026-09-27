@@ -47,6 +47,8 @@ jest.mock("../../shared/LocationPicker", () => ({ onChange }) => (
   </button>
 ));
 jest.mock("qrcode.react", () => ({ QRCodeSVG: () => null }));
+// The page reads the signed-in role (Owner's Slip is staff-only).
+jest.mock("../../auth/AuthContext", () => ({ useAuth: () => ({ role: "sanitation" }) }));
 
 import EstablishmentRecords, { generatePermitNumber } from "./EstablishmentRecords";
 

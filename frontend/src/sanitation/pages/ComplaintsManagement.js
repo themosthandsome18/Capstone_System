@@ -17,6 +17,8 @@ import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { API_BASE_URL } from "../../shared/apiClient";
 import { fetchSanitationInspectors } from "../services/sanitationApi";
+// Reporter-typed text goes into the print window's HTML, so it is escaped.
+import { escapeSlipText } from "../utils/escapeSlipText";
 
 export const REPORT_LIMIT_MAX = 5;
 
@@ -896,16 +898,6 @@ function ReportListCard({ item, active, onSelect, onOpenSummary }) {
       </div>
     </div>
   );
-}
-
-/** Reporter-typed text goes into the print window's HTML, so escape it. */
-function escapeSlipText(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 export function printFieldworkActionSlip(report) {
