@@ -36,10 +36,18 @@
     /* Surfaces and text */
     --th-surface: #ffffff;
     --th-surface-alt: #f7fbf8;
+    --th-surface-tinted: #eefaf1;
+    --th-surface-tinted-strong: #c6ded4;
     --th-border: #e5e7eb;
     --th-border-strong: #d1d5db;
+    --th-border-tinted: #d7ebe0;
+    --th-border-tinted-strong: #bfcfc5;
+    --th-border-tinted-control: #b7d7c7;
     --th-text-main: #111827;
     --th-text-muted: #64748b;
+    --th-text-tinted-strong: #101815;
+    --th-text-tinted: #37443e;
+    --th-text-tinted-muted: #66746d;
     --th-text-inverse: #ffffff;
 
     /* Overlay */
@@ -58,7 +66,6 @@
     --th-info: #2563eb;
     --th-info-bg: #dbeafe;
     --th-info-border: #93c5fd;
-    --th-info-text: #2563eb;
 
     /* Charts */
     --th-chart-1: #147c79;
@@ -165,8 +172,8 @@
   position: sticky;
   top: 0;
   flex-shrink: 0;
-  background: #eefaf1;
-  border-right: 1px solid #d7ebe0;
+  background: var(--th-surface-tinted);
+  border-right: 1px solid var(--th-border-tinted);
   padding: 58px 22px 0;
   overflow: hidden;
 }
@@ -190,7 +197,7 @@
 .sidebar-brand span {
   font-size: 15px;
   font-weight: 800;
-  color: #101815;
+  color: var(--th-text-tinted-strong);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -211,7 +218,7 @@
   padding: 0 24px;
   font-size: 14px;
   font-weight: 500;
-  color: #101815;
+  color: var(--th-text-tinted-strong);
   text-decoration: none;
   line-height: 1.2;
   transition: 0.2s ease;
@@ -235,7 +242,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #eefaf1;
+  background: var(--th-surface-tinted);
   border-bottom: 1px solid #d6e6dc;
   padding: 0 30px;
 }
@@ -253,7 +260,7 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: #37443e;
+  color: var(--th-text-tinted);
   font-size: 24px;
   display: flex;
   align-items: center;
@@ -263,7 +270,7 @@
 .topbar-divider {
   width: 1px;
   height: 40px;
-  background: #bfcfc5;
+  background: var(--th-border-tinted-strong);
 }
 
 .topbar-left h2 {
@@ -348,7 +355,7 @@
 }
 
 .topbar-user small {
-  color: #66746d;
+  color: var(--th-text-tinted-muted);
   font-size: 11px;
   font-weight: 600;
 }
@@ -808,7 +815,7 @@
 .booking-filter-grid input {
   min-width: 0;
   height: 38px;
-  border: 1px solid #b7d7c7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 8px;
   background: #ffffff;
   padding: 0 10px;
@@ -848,7 +855,7 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
 }
 
 /* ================= TABLE BODY ================= */
@@ -1038,7 +1045,7 @@
 
 .tourist-record-form {
   border-radius: 10px;
-  background: #c6ded4;
+  background: var(--th-surface-tinted-strong);
   padding: 22px 28px 24px;
 }
 
@@ -1460,7 +1467,7 @@
 
 .arrival-date-input:focus {
   border-color: #1f7a33;
-  box-shadow: 0 0 0 2px rgba(47, 163, 74, 0.2);
+  box-shadow: 0 0 0 2px var(--th-primary-alpha-20);
 }
 
 .arrival-pill-btn {
@@ -1609,7 +1616,7 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1743,7 +1750,7 @@
 .destination-tab-btn.active {
   background: var(--th-primary);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(47, 163, 74, 0.3);
+  box-shadow: 0 4px 12px var(--th-primary-alpha-30);
 }
 
 /* ================= DESTINATION CARD GRID ================= */
@@ -2658,7 +2665,7 @@
 /* FOCUS */
 .feedback-filters select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #2fa34a33, 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 0 0 2px var(--th-primary-alpha-20), 0 12px 20px rgba(34, 72, 55, 0.25);
 }
 
 .feedback-search {
@@ -2923,7 +2930,7 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
 }
 
 .report-table-card td {
