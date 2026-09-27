@@ -8,6 +8,60 @@
   :root {
     --page-bg: #e6f4ef;
     --text-main: #163046;
+
+    /* Tourism theme tokens. Defaults match the current literals exactly. */
+
+    /* Brand */
+    --th-primary: #2fa34a;
+    --th-primary-hover: #278d3f;
+    --th-primary-active: #1f7f36;
+    --th-primary-contrast: #ffffff;
+    --th-primary-tint: #f0fdf4;
+    --th-primary-tint-strong: #dff1e2;
+    --th-primary-border: #bbf7d0;
+    --th-primary-alpha-20: rgba(47, 163, 74, 0.2);
+    --th-primary-alpha-30: rgba(47, 163, 74, 0.3);
+
+    /* Page background */
+    --th-page-grad-1: #eaf7f1;
+    --th-page-grad-2: #d8eee5;
+    --th-page-grad-3: #c2ddd4;
+    --th-page-bg: #e6f4ef;
+
+    /* Surfaces and text */
+    --th-surface: #ffffff;
+    --th-surface-alt: #f7fbf8;
+    --th-border: #e5e7eb;
+    --th-border-strong: #d1d5db;
+    --th-text-main: #111827;
+    --th-text-muted: #64748b;
+    --th-text-inverse: #ffffff;
+
+    /* Overlay */
+    --th-scrim: rgba(2, 6, 23, 0.55);
+
+    /* Status (fixed, never derived from the theme) */
+    --th-success: #16a34a;
+    --th-success-bg: #dcfce7;
+    --th-success-text: #15803d;
+    --th-warning: #eab308;
+    --th-warning-bg: #fef9c3;
+    --th-warning-text: #a16207;
+    --th-danger: #ef4444;
+    --th-danger-bg: #fee2e2;
+    --th-danger-text: #dc2626;
+    --th-info: #2563eb;
+    --th-info-bg: #dbeafe;
+    --th-info-border: #93c5fd;
+    --th-info-text: #2563eb;
+
+    /* Charts */
+    --th-chart-1: #147c79;
+    --th-chart-2: #359e9b;
+    --th-chart-3: #6abdc0;
+    --th-chart-4: #2f9c9c;
+    --th-chart-5: #32a19b;
+    --th-chart-wash: rgba(106, 189, 192, 0.15);
   }
 
   * {
