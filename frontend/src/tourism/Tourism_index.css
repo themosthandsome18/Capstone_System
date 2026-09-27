@@ -243,7 +243,7 @@
   align-items: center;
   justify-content: space-between;
   background: var(--th-surface-tinted);
-  border-bottom: 1px solid #d6e6dc;
+  border-bottom: 1px solid var(--th-border-tinted);
   padding: 0 30px;
 }
 
@@ -283,7 +283,7 @@
 .topbar-left p {
   margin: 2px 0 0;
   font-size: 14px;
-  color: #3f4f48;
+  color: var(--th-text-tinted);
 }
 
 /* RIGHT SIDE */
@@ -1466,7 +1466,7 @@
 }
 
 .arrival-date-input:focus {
-  border-color: #1f7a33;
+  border-color: var(--th-primary-active);
   box-shadow: 0 0 0 2px var(--th-primary-alpha-20);
 }
 
@@ -1666,7 +1666,7 @@
 /* ================= DAILY TOTAL ROW ================= */
 
 .daily-total {
-  background: #e2f5e7;
+  background: var(--th-primary-tint-strong);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -2258,7 +2258,7 @@
 }
 
 .gmaps-action-btn.primary:hover {
-  background: #26893e;
+  background: var(--th-primary-hover);
 }
 
 /* Info list */
@@ -2346,7 +2346,7 @@
 }
 
 .gmaps-view-all-reviews-btn:hover {
-  color: #1f7a33;
+  color: var(--th-primary-hover);
   text-decoration: underline;
 }
 
@@ -2701,7 +2701,7 @@
 
 .feedback-empty {
   background: #ffffff;
-  border: 1px solid #d7e5e1;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 18px;
   padding: 32px;
   text-align: center;
@@ -2959,7 +2959,7 @@
 }
 
 .report-table-card .total-row {
-  background: #dff6e4;
+  background: var(--th-primary-tint-strong);
 }
 
 .report-table-card .total-row td {
@@ -2987,7 +2987,7 @@
 .analytics-question-item {
   min-width: 0;
   min-height: 290px;
-  border: 1px solid #cfe4d8;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f4faf7 100%);
   padding: 22px 24px;
@@ -3207,7 +3207,7 @@
 .insight-metric {
   border-radius: 10px;
   background: #ffffff;
-  border: 1px solid #e0eee7;
+  border: 1px solid var(--th-border-tinted);
   padding: 16px;
   text-align: center;
 }
@@ -3216,7 +3216,7 @@
   display: block;
   font-size: 46px;
   line-height: 1;
-  color: #0f7a45;
+  color: var(--th-primary-ink);
 }
 
 .insight-metric span {
@@ -3789,7 +3789,7 @@
 
 .sortable-th:hover {
   background: rgba(34, 72, 55, 0.08) !important;
-  color: #1f7655 !important;
+  color: var(--th-primary-ink) !important;
 }
 
 .sort-indicator {
@@ -3802,14 +3802,14 @@
 }
 
 .sortable-th.active-sort {
-  color: #1f7655 !important;
+  color: var(--th-primary-ink) !important;
   background: rgba(34, 72, 55, 0.07) !important;
   font-weight: 800;
 }
 
 .sortable-th.active-sort .sort-indicator {
   opacity: 1;
-  color: #1f7655;
+  color: var(--th-primary-ink);
 }
 
 .report-sort-controls {
