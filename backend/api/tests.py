@@ -5441,6 +5441,23 @@ class EstablishmentStatusTests(TestCase):
         # Another address is not affected.
         self.assertEqual(self._post(self.CODE, ip="10.0.0.2").status_code, status.HTTP_200_OK)
 
+    def test_successful_lookups_do_not_count(self):
+        # Owners behind one mobile-carrier address must not lock each other out.
+        statuses = [self._post(self.CODE).status_code for _ in range(25)]
+        self.assertEqual(statuses, [status.HTTP_200_OK] * 25)
+
+        for _ in range(19):
+            self.assertEqual(self._post("MBN-2222-2222").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._post(self.CODE).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._post("MBN-2222-2222").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._post(self.CODE).status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_once_refused_every_request_from_that_address_is_refused(self):
+        for _ in range(20):
+            self._post("MBN-2222-2222")
+        for typed in (self.CODE, "MBN-2222-2222", ""):
+            self.assertEqual(self._post(typed).status_code, status.HTTP_429_TOO_MANY_REQUESTS, typed)
+
     @override_settings(TRACKING_CODE_KEY="", DEBUG=False)
     def test_without_a_key_in_production_it_is_503(self):
         response = self._post(self.CODE)

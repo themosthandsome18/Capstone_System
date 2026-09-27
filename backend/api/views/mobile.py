@@ -960,7 +960,7 @@ def mobile_sanitation_establishment_status(request):
     """Establishment Portal: the owner's permit status by private tracking code.
 
     No login. Every wrong code (wrong, empty, malformed, replaced) gets the
-    same 404, and each attempt counts toward the per-address limit.
+    same 404, and only those count toward the per-address limit.
     """
     data = request.data if hasattr(request.data, "get") else {}
     try:
@@ -971,6 +971,7 @@ def mobile_sanitation_establishment_status(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     if establishment is None:
+        OwnerStatusRateThrottle.record_failure(request)
         return Response(
             {"detail": OWNER_STATUS_NOT_FOUND},
             status=status.HTTP_404_NOT_FOUND,

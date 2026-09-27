@@ -53,8 +53,14 @@ class EstablishmentClaimRateThrottle(_FixedScopeRateThrottle):
 
 
 class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
-    """Establishment Portal lookups per client address; every attempt counts,
-    so tracking codes cannot be guessed at speed."""
+    """Failed Establishment Portal lookups per client address.
+
+    Only a code that is not found counts (the view calls `record_failure`),
+    so owners who share a mobile-carrier address are not locked out by each
+    other's valid checks, while codes still cannot be guessed at speed. Once
+    the limit is reached, every request from the address is refused until
+    the window passes, even one with a correct code.
+    """
 
     fixed_scope = "owner_status_ip"
     message = (
@@ -62,6 +68,33 @@ class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
         "pagkalipas ng isang oras. / Too many attempts from this device. "
         "Please try again in an hour."
     )
+
+    def allow_request(self, request, view):
+        self._use_scope()
+        self.key = self.get_cache_key(request, view)
+        if self.key is None:
+            return True
+        self.now = self.timer()
+        self.history = [
+            stamp for stamp in self.cache.get(self.key, []) if stamp > self.now - self.duration
+        ]
+        if len(self.history) >= self.num_requests:
+            raise _MessageOnlyThrottled(wait=self.wait(), detail=self.message)
+        return True
+
+    @classmethod
+    def record_failure(cls, request):
+        throttle = cls()
+        throttle._use_scope()
+        key = throttle.get_cache_key(request, None)
+        if key is None:
+            return
+        now = throttle.timer()
+        history = [
+            stamp for stamp in throttle.cache.get(key, []) if stamp > now - throttle.duration
+        ]
+        history.insert(0, now)
+        throttle.cache.set(key, history, throttle.duration)
 
 
 def _is_resend_of_saved_report(request):
