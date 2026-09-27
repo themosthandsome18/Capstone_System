@@ -646,7 +646,7 @@ function AnalyticsAndReport() {
               style={{
                 boxShadow: "0 10px 25px rgba(var(--th-shadow-rgb), 0.12)",
                 background: "#ffffff",
-                border: "1px solid #d7e5e1",
+                border: "1px solid var(--th-border-tinted)",
               }}
             >
               <div className="analytics-question-top" style={{ justifyContent: "flex-end" }}>
@@ -778,7 +778,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "var(--th-chart-1)", lineHeight: 1.1 }}>{percentage}%</strong>
           <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
@@ -803,14 +803,14 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#147c79",
+          color: "var(--th-chart-1)",
           fontSize: "26px",
           flexShrink: 0,
         }}>
           <FiClock />
         </div>
         <div>
-          <strong style={{ fontSize: "32px", fontWeight: "900", color: "#147c79", lineHeight: 1 }}>
+          <strong style={{ fontSize: "32px", fontWeight: "900", color: "var(--th-chart-1)", lineHeight: 1 }}>
             {value}
           </strong>
           <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--th-text-muted)", display: "block", marginTop: "2px" }}>
@@ -857,7 +857,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <strong style={{ fontSize: "24px", fontWeight: "900", color: "#147c79", lineHeight: 1.1 }}>{percentage}%</strong>
+          <strong style={{ fontSize: "24px", fontWeight: "900", color: "var(--th-chart-1)", lineHeight: 1.1 }}>{percentage}%</strong>
           <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
