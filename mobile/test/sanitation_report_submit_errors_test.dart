@@ -128,7 +128,7 @@ Future<void> enter(WidgetTester tester, String label, String text) async {
 Future<void> fillForm(WidgetTester tester) async {
   await tester.tap(find.text('Improper Garbage Disposal'));
   await tester.pump();
-  await tester.tap(find.text('Piliin ang barangay'));
+  await tester.tap(find.byKey(const ValueKey('barangay-field')));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();

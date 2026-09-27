@@ -1169,13 +1169,10 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
               decoration: _fieldDecoration('Barangay *').copyWith(
                 suffixIcon: const Icon(Icons.arrow_drop_down),
               ),
+              // Empty: only the label, inside the field. A hint here would be
+              // drawn on top of it; once chosen, the label floats above.
               isEmpty: _barangay == null,
-              child: Text(
-                _barangay ?? 'Piliin ang barangay',
-                style: _barangay == null
-                    ? const TextStyle(color: AppColors.muted)
-                    : null,
-              ),
+              child: Text(_barangay ?? ''),
             ),
           ),
         ),

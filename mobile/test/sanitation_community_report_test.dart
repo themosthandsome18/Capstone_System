@@ -79,7 +79,7 @@ Future<void> enter(WidgetTester tester, String label, String text) async {
 Future<void> fillEverything(WidgetTester tester) async {
   await tester.tap(find.text('Severe Sewage Overflow'));
   await tester.pump();
-  await tester.tap(find.text('Piliin ang barangay'));
+  await tester.tap(find.byKey(const ValueKey('barangay-field')));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();

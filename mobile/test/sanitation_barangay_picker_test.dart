@@ -87,7 +87,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Piliin ang barangay'));
+    await tester.tap(find.byKey(const ValueKey('barangay-field')));
     await tester.pumpAndSettle();
     expect(visibleChoices(tester), hasLength(40));
 
@@ -101,6 +101,42 @@ void main() {
     expect(find.text('Piliin ang barangay'), findsNothing);
   });
 
+  // The empty field drew the label "Barangay *" and the hint "Piliin ang
+  // barangay" on top of each other (seen on a phone with APK 1.0.3).
+  List<Text> fieldTexts(WidgetTester tester) => tester
+      .widgetList<Text>(find.descendant(
+        of: find.byKey(const ValueKey('barangay-field')),
+        matching: find.byType(Text),
+      ))
+      .where((text) => (text.data ?? '').isNotEmpty)
+      .toList();
+
+  testWidgets('the empty barangay field shows only its label', (tester) async {
+    await pumpForm(tester);
+
+    expect(fieldTexts(tester).map((text) => text.data), ['Barangay *']);
+    expect(find.text('Piliin ang barangay'), findsNothing);
+  });
+
+  testWidgets('a chosen barangay and the label do not overlap', (tester) async {
+    await pumpForm(tester);
+    await tester.tap(find.byKey(const ValueKey('barangay-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('San Isidro'));
+    await tester.pumpAndSettle();
+
+    expect(fieldTexts(tester).map((text) => text.data), unorderedEquals(['Barangay *', 'San Isidro']));
+    final label = tester.getRect(find.descendant(
+      of: find.byKey(const ValueKey('barangay-field')),
+      matching: find.text('Barangay *'),
+    ));
+    final value = tester.getRect(find.descendant(
+      of: find.byKey(const ValueKey('barangay-field')),
+      matching: find.text('San Isidro'),
+    ));
+    expect(label.overlaps(value), isFalse);
+  });
+
   testWidgets('a form opened before the server answered gets the real list', (tester) async {
     await pumpForm(
       tester,
@@ -110,7 +146,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Piliin ang barangay'));
+    await tester.tap(find.byKey(const ValueKey('barangay-field')));
     await tester.pumpAndSettle();
 
     final choices = visibleChoices(tester);
