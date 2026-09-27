@@ -448,6 +448,8 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
         default=None,
     )
     is_account_linked = serializers.SerializerMethodField()
+    # When the current Owner's Slip was printed, and by whom; never the hash.
+    tracking_code_issued_by_name = serializers.SerializerMethodField()
     coordinates = serializers.SerializerMethodField()
     risk_score = serializers.SerializerMethodField()
     risk_level = serializers.SerializerMethodField()
@@ -484,9 +486,18 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "remarks",
             "account_username",
             "is_account_linked",
+            "tracking_code_issued_at",
+            "tracking_code_issued_by_name",
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["tracking_code_issued_at"]
+
+    def get_tracking_code_issued_by_name(self, obj):
+        user = obj.tracking_code_issued_by
+        if user is None:
+            return ""
+        return user.get_full_name().strip() or user.username
 
     def validate_permit_number(self, value):
         # Owners claim an establishment by permit number, so two records must

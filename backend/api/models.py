@@ -746,6 +746,19 @@ class SanitaryEstablishment(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
 
+    # The owner's private tracking code (MBN-XXXX-XXXX) is shown once, on the
+    # printed Owner's Slip; only its HMAC-SHA256 is kept. Printing a new slip
+    # replaces it, so the old code stops working. NULL: no slip issued yet.
+    tracking_code_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    tracking_code_issued_at = models.DateTimeField(null=True, blank=True)
+    tracking_code_issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
     remarks = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

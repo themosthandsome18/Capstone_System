@@ -59,6 +59,11 @@ def bool_config(name, default=False):
 # Core
 SECRET_KEY = config("SECRET_KEY")
 
+# HMAC key for establishment owners' tracking codes (set in the Render
+# dashboard; never commit it). Without it the tracking-code endpoints answer
+# 503, except under DEBUG, where SECRET_KEY stands in.
+TRACKING_CODE_KEY = config("TRACKING_CODE_KEY", default="").strip()
+
 DEBUG = bool_config("DEBUG", default=False)
 
 USE_SEED_DATA = bool_config("USE_SEED_DATA", default=False)

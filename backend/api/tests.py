@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -4969,3 +4969,280 @@ class CommunityReportBarangayTests(TestCase):
 
         self.assertEqual(len(MAUBAN_BARANGAYS), 40)
         self.assertNotIn("Poblacion", MAUBAN_BARANGAYS)
+
+
+# --- Owner's tracking code (Establishment Portal, step 1) -------------------
+
+TRACKING_TEST_KEY = "test-tracking-code-key"
+TRACKING_CODE_PATTERN = r"^MBN-[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$"
+
+
+def _tracking_hash(code, key=TRACKING_TEST_KEY):
+    """The expected stored digest, computed independently of the service."""
+    import hashlib
+    import hmac
+
+    body = code.replace("MBN-", "").replace("-", "")
+    return hmac.new(key.encode(), body.encode(), hashlib.sha256).hexdigest()
+
+
+class TrackingCodeFormatTests(TestCase):
+    def test_generated_codes_use_the_unambiguous_alphabet(self):
+        from .services.tracking_codes import ALPHABET, new_tracking_code
+
+        self.assertEqual(len(ALPHABET), 31)
+        for character in "0O1IL":
+            self.assertNotIn(character, ALPHABET)
+        codes = {new_tracking_code() for _ in range(300)}
+        self.assertGreater(len(codes), 295)
+        for code in codes:
+            self.assertRegex(code, TRACKING_CODE_PATTERN)
+
+    def test_codes_are_accepted_in_any_case_with_or_without_dashes_or_spaces(self):
+        from .services.tracking_codes import normalize_tracking_code
+
+        for typed in (
+            "MBN-2ABC-3DEF",
+            "mbn-2abc-3def",
+            "MBN2ABC3DEF",
+            " mbn 2abc 3def ",
+            "Mbn - 2aBc - 3dEf",
+            "2ABC3DEF",
+            "2abc-3def",
+        ):
+            self.assertEqual(normalize_tracking_code(typed), "2ABC3DEF", typed)
+
+    def test_malformed_codes_normalize_to_nothing(self):
+        from .services.tracking_codes import normalize_tracking_code
+
+        for typed in (None, "", "   ", "MBN-2ABC-3DE", "MBN-2ABC-3DEFG", "MBN-2ABC-3DE0",
+                      "MBN-2ABC-3DEO", "MBN-2ABC-3DE1", "MBN-2ABC-3DEI", "MBN-2ABC-3DEL",
+                      "XYZ-2ABC-3DEF", "MBN-2ABC-3DE!"):
+            self.assertEqual(normalize_tracking_code(typed), "", typed)
+
+
+@override_settings(TRACKING_CODE_KEY=TRACKING_TEST_KEY)
+class TrackingCodeGenerateTests(TestCase):
+    """POST /api/sanitation/establishments/<id>/tracking-code/ (staff only)."""
+
+    def setUp(self):
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Tracking Code Carinderia", inspection_frequency="monthly"
+        )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Aling Nena Carinderia",
+            owner_name="Nena Santos",
+            business_type=self.btype,
+            barangay="Daungan",
+            address="Purok 1",
+            contact_number="09171234567",
+            permit_number="SP-2026-0101",
+        )
+        self.staff = self._user("tracking_staff", ROLE_SANITATION, first_name="Maria", last_name="Santos")
+        self.admin = self._user("tracking_admin", ROLE_ADMIN)
+
+    def _user(self, username, role, **names):
+        user = User.objects.create_user(username=username, password="Password@123", **names)
+        UserProfile.objects.create(user=user, role=role)
+        return user
+
+    def _client(self, user=None):
+        client = APIClient()
+        if user is not None:
+            token, _ = Token.objects.get_or_create(user=user)
+            client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        return client
+
+    def _url(self, establishment_id=None):
+        return f"/api/sanitation/establishments/{establishment_id or self.establishment.id}/tracking-code/"
+
+    def _generate(self, user=None):
+        return self._client(user or self.staff).post(self._url())
+
+    def test_staff_get_a_code_and_the_slip_details_once(self):
+        response = self._generate()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        body = response.json()
+        self.assertRegex(body["tracking_code"], TRACKING_CODE_PATTERN)
+        self.assertEqual(
+            body["establishment"],
+            {
+                "id": self.establishment.id,
+                "business_name": "Aling Nena Carinderia",
+                "permit_number": "SP-2026-0101",
+                "business_type_name": "Tracking Code Carinderia",
+                "barangay": "Daungan",
+            },
+        )
+        self.assertTrue(body["issued_at"])
+        self.assertEqual(body["issued_by"], "Maria Santos")
+
+    def test_only_the_hash_is_stored(self):
+        code = self._generate().json()["tracking_code"]
+
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.tracking_code_hash, _tracking_hash(code))
+        self.assertEqual(len(self.establishment.tracking_code_hash), 64)
+        body = code.replace("MBN-", "").replace("-", "")
+        row = SanitaryEstablishment.objects.filter(pk=self.establishment.pk).values().get()
+        for value in row.values():
+            self.assertNotIn(body, str(value))
+            self.assertNotIn(code, str(value))
+
+    def test_who_and_when_are_recorded(self):
+        before = timezone.now()
+        self._generate()
+
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.tracking_code_issued_by, self.staff)
+        self.assertGreaterEqual(self.establishment.tracking_code_issued_at, before)
+
+    def test_a_new_code_replaces_the_old_one(self):
+        first = self._generate().json()["tracking_code"]
+        second = self._generate(self.admin).json()["tracking_code"]
+
+        self.assertNotEqual(first, second)
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.tracking_code_hash, _tracking_hash(second))
+        self.assertNotEqual(self.establishment.tracking_code_hash, _tracking_hash(first))
+        self.assertEqual(self.establishment.tracking_code_issued_by, self.admin)
+
+    def test_the_activity_log_records_the_issue_but_not_the_code(self):
+        code = self._generate().json()["tracking_code"]
+
+        log = ActivityLog.objects.get(record_type="SanitaryEstablishment", action=ACTION_UPDATE)
+        self.assertEqual(log.user, self.staff)
+        self.assertEqual(log.record_id, str(self.establishment.id))
+        self.assertIn("tracking code", log.record_label.lower())
+        body = code.replace("MBN-", "").replace("-", "")
+        self.assertNotIn(body, log.record_label)
+
+    def test_printing_a_slip_does_not_reorder_the_records(self):
+        updated_at = SanitaryEstablishment.objects.get(pk=self.establishment.pk).updated_at
+        self._generate()
+        self.assertEqual(SanitaryEstablishment.objects.get(pk=self.establishment.pk).updated_at, updated_at)
+
+    def test_non_staff_cannot_generate(self):
+        tourism = self._user("tracking_tourism", ROLE_TOURISM)
+        owner = self._user("tracking_owner", ROLE_ESTABLISHMENT)
+        tourist = self._user("tracking_tourist", ROLE_TOURIST)
+
+        self.assertIn(self._client().post(self._url()).status_code, (401, 403))
+        for user in (tourism, owner, tourist):
+            self.assertEqual(self._generate(user).status_code, status.HTTP_403_FORBIDDEN, user.username)
+        self.establishment.refresh_from_db()
+        self.assertIsNone(self.establishment.tracking_code_hash)
+        self.assertIsNone(self.establishment.tracking_code_issued_at)
+
+    def test_only_post_is_allowed(self):
+        response = self._client(self.staff).get(self._url())
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_an_unknown_establishment_is_404(self):
+        response = self._client(self.staff).post(self._url(establishment_id=999999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_records_show_when_a_slip_was_issued_but_never_the_hash(self):
+        self._generate()
+        self.establishment.refresh_from_db()
+        digest = self.establishment.tracking_code_hash
+        client = self._client(self.staff)
+
+        detail = client.get(f"/api/sanitation/establishments/{self.establishment.id}/").json()
+        self.assertTrue(detail["tracking_code_issued_at"])
+        self.assertEqual(detail["tracking_code_issued_by_name"], "Maria Santos")
+        for url in (
+            f"/api/sanitation/establishments/{self.establishment.id}/",
+            "/api/sanitation/establishments/",
+            "/api/sanitation/bootstrap/",
+            "/api/mobile/sanitation/staff-bootstrap/",
+            "/api/mobile/sanitation/bootstrap/",
+        ):
+            text = client.get(url).content.decode()
+            self.assertNotIn(digest, text, url)
+            self.assertNotIn("tracking_code_hash", text, url)
+
+    def test_a_record_without_a_slip_says_so(self):
+        detail = self._client(self.staff).get(f"/api/sanitation/establishments/{self.establishment.id}/").json()
+        self.assertIsNone(detail["tracking_code_issued_at"])
+        self.assertEqual(detail["tracking_code_issued_by_name"], "")
+
+    def test_the_code_fields_cannot_be_written_through_the_record(self):
+        self._generate()
+        self.establishment.refresh_from_db()
+        digest = self.establishment.tracking_code_hash
+        issued_at = self.establishment.tracking_code_issued_at
+
+        response = self._client(self.admin).patch(
+            f"/api/sanitation/establishments/{self.establishment.id}/",
+            {
+                "tracking_code_hash": "0" * 64,
+                "tracking_code_issued_at": "2020-01-01T00:00:00Z",
+                "tracking_code_issued_by": self.admin.id,
+                "remarks": "edited",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.remarks, "edited")
+        self.assertEqual(self.establishment.tracking_code_hash, digest)
+        self.assertEqual(self.establishment.tracking_code_issued_at, issued_at)
+        self.assertEqual(self.establishment.tracking_code_issued_by, self.staff)
+
+    def test_a_hash_collision_draws_a_new_code(self):
+        other = SanitaryEstablishment.objects.create(
+            business_name="Other", owner_name="O", business_type=self.btype,
+            barangay="Daungan", address="Purok 2",
+        )
+        other.tracking_code_hash = _tracking_hash("MBN-2222-2222")
+        other.save()
+
+        with patch(
+            "api.services.tracking_codes.new_tracking_code",
+            side_effect=["MBN-2222-2222", "MBN-3333-3333"],
+        ):
+            response = self._generate()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.json()["tracking_code"], "MBN-3333-3333")
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.tracking_code_hash, _tracking_hash("MBN-3333-3333"))
+
+    @override_settings(TRACKING_CODE_KEY="", DEBUG=False)
+    def test_without_a_key_in_production_it_is_503_and_nothing_is_stored(self):
+        response = self._generate()
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("not configured", response.json()["detail"])
+        self.establishment.refresh_from_db()
+        self.assertIsNone(self.establishment.tracking_code_hash)
+        # The rest of the records still work.
+        detail = self._client(self.staff).get(f"/api/sanitation/establishments/{self.establishment.id}/")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+
+    @override_settings(TRACKING_CODE_KEY="", DEBUG=True)
+    def test_in_debug_the_secret_key_stands_in(self):
+        from django.conf import settings
+
+        code = self._generate().json()["tracking_code"]
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.tracking_code_hash, _tracking_hash(code, settings.SECRET_KEY))
+
+    @override_settings(TRACKING_CODE_KEY="", DEBUG=False)
+    def test_a_missing_key_is_warned_about_at_startup(self):
+        from .services.tracking_codes import warn_if_tracking_code_key_missing
+
+        with self.assertLogs("api.services.tracking_codes", level="WARNING") as logs:
+            warn_if_tracking_code_key_missing()
+        self.assertIn("TRACKING_CODE_KEY", logs.output[0])
+
+    @override_settings(DEBUG=False)
+    def test_no_warning_when_the_key_is_set(self):
+        from .services.tracking_codes import warn_if_tracking_code_key_missing
+
+        with self.assertNoLogs("api.services.tracking_codes", level="WARNING"):
+            warn_if_tracking_code_key_missing()
