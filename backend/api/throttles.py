@@ -1,6 +1,21 @@
+import math
+
 from django.core.cache import caches
 from rest_framework.exceptions import Throttled
 from rest_framework.throttling import ScopedRateThrottle
+
+
+class _MessageOnlyThrottled(Throttled):
+    """A 429 whose detail is exactly `detail`.
+
+    DRF's Throttled appends an English "Expected available in N seconds." to
+    the detail when given a wait; here the wait goes only to the Retry-After
+    header, so the reporter sees just the bilingual message.
+    """
+
+    def __init__(self, wait, detail):
+        super().__init__(wait=None, detail=detail)
+        self.wait = None if wait is None else math.ceil(wait)
 
 
 class _FixedScopeRateThrottle(ScopedRateThrottle):
@@ -29,7 +44,7 @@ class _FixedScopeRateThrottle(ScopedRateThrottle):
         self._use_scope()
         allowed = super(ScopedRateThrottle, self).allow_request(request, view)
         if not allowed and self.message:
-            raise Throttled(wait=self.wait(), detail=self.message)
+            raise _MessageOnlyThrottled(wait=self.wait(), detail=self.message)
         return allowed
 
 
@@ -85,7 +100,7 @@ class CommunityReportContactRateThrottle(_FixedScopeRateThrottle):
         while self.history and self.history[-1] <= self.now - self.duration:
             self.history.pop()
         if len(self.history) >= self.num_requests:
-            raise Throttled(wait=self.wait(), detail=self.message)
+            raise _MessageOnlyThrottled(wait=self.wait(), detail=self.message)
         return True
 
     @classmethod

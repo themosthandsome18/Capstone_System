@@ -4520,3 +4520,51 @@ class CommunityReportAddressTests(TestCase):
         self.assertEqual(complaint.location_address, "Kanto ng Rizal St.")
         self.assertEqual(complaint.description, "Nakatambak ang basura.")
         self.assertEqual(response.json()["location_address"], "Kanto ng Rizal St.")
+
+
+class CommunityReportRateLimitMessageTests(TestCase):
+    """429s carry only the bilingual text; the wait is in Retry-After."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def _post(self, contact, remote_addr="127.0.0.1"):
+        return APIClient().post(
+            self.URL,
+            {
+                "complainant_name": "Juana Reporter",
+                "contact_number": contact,
+                "category": "Improper Garbage Disposal",
+                "barangay": "Daungan",
+                "location_address": "Purok 3",
+                "description": "Nakatambak ang basura.",
+            },
+            format="json",
+            REMOTE_ADDR=remote_addr,
+        )
+
+    def test_contact_limit_detail_is_exactly_the_bilingual_message(self):
+        from .throttles import CommunityReportContactRateThrottle
+
+        for _ in range(5):
+            self._post("09171234567")
+        response = self._post("09171234567")
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(response.json()["detail"], CommunityReportContactRateThrottle.message)
+        self.assertGreater(int(response["Retry-After"]), 0)
+
+    def test_ip_limit_detail_is_exactly_the_bilingual_message(self):
+        from .throttles import CommunityReportIpRateThrottle
+
+        for index in range(20):
+            self._post(f"091700{index:05d}", remote_addr="10.9.9.9")
+        response = self._post("09179990000", remote_addr="10.9.9.9")
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(response.json()["detail"], CommunityReportIpRateThrottle.message)
+        self.assertGreater(int(response["Retry-After"]), 0)
