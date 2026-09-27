@@ -110,7 +110,7 @@
   /* GLOBAL COMPONENTS */
 
   .panel {
-    @apply rounded-[22px] border border-[#cfe5e1] bg-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.15)];
+    @apply rounded-[22px] border border-[var(--th-border-tinted)] bg-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.15)];
   }
 
   .page-title {
@@ -2511,7 +2511,7 @@
 }
 
 .destination-card-stats div {
-  @apply rounded-xl border border-[#cfe5d8] bg-[#f4fbf7] px-4 py-3;
+  @apply rounded-xl border border-[var(--th-border-tinted)] bg-[var(--th-surface-alt)] px-4 py-3;
 }
 
 .destination-card-stats p {
@@ -3475,7 +3475,7 @@
 }
 
 .gis-location-item {
-  @apply w-full items-center border border-[#cbd5d1] bg-white/30 px-3 py-2 text-left transition;
+  @apply w-full items-center border border-[var(--th-border-tinted-strong)] bg-white/30 px-3 py-2 text-left transition;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
