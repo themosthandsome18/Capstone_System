@@ -237,6 +237,7 @@ REST_FRAMEWORK = {
         "establishment_claim": "5/hour",
         "community_report_contact": "5/day",
         "community_report_ip": "20/hour",
+        "owner_status_ip": "20/hour",
     },
 }
 

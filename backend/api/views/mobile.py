@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import timedelta
+from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings
@@ -14,6 +15,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
+    authentication_classes,
     parser_classes,
     permission_classes,
     throttle_classes,
@@ -74,7 +76,14 @@ from api.serializers import (
     TouristRecordSerializer,
 )
 from api.permissions import module_required
+from api.services.tracking_codes import (
+    NOT_CONFIGURED_MESSAGE,
+    TrackingCodeNotConfigured,
+    find_establishment_by_code,
+    owner_status_payload,
+)
 from api.throttles import (
+    OwnerStatusRateThrottle,
     CommunityReportContactRateThrottle,
     CommunityReportIpRateThrottle,
 )
@@ -921,6 +930,53 @@ def mobile_sanitation_permit_verify(request):
             },
         }
     )
+
+OWNER_STATUS_NOT_FOUND = (
+    "Hindi nahanap ang tracking code. Tingnan ang code sa iyong Owner's Slip. / "
+    "Tracking code not found. Check the code on your Owner's Slip."
+)
+
+
+def no_store(view):
+    """Cache-Control: no-store on every answer of the view, including the
+    ones DRF makes itself (429, 405)."""
+
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        response = view(request, *args, **kwargs)
+        response["Cache-Control"] = "no-store"
+        return response
+
+    return wrapped
+
+
+@no_store
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([OwnerStatusRateThrottle])
+def mobile_sanitation_establishment_status(request):
+    """Establishment Portal: the owner's permit status by private tracking code.
+
+    No login. Every wrong code (wrong, empty, malformed, replaced) gets the
+    same 404, and each attempt counts toward the per-address limit.
+    """
+    data = request.data if hasattr(request.data, "get") else {}
+    try:
+        establishment = find_establishment_by_code(data.get("code"))
+    except TrackingCodeNotConfigured:
+        return Response(
+            {"detail": NOT_CONFIGURED_MESSAGE},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if establishment is None:
+        return Response(
+            {"detail": OWNER_STATUS_NOT_FOUND},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(owner_status_payload(establishment, timezone.localdate()))
+
 
 MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY = "mobile_sanitation_business_types_v1"
 MOBILE_SANITATION_BUSINESS_TYPES_CACHE_TIMEOUT = 900  # 15 minutes

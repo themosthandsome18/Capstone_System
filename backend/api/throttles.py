@@ -52,6 +52,18 @@ class EstablishmentClaimRateThrottle(_FixedScopeRateThrottle):
     fixed_scope = "establishment_claim"
 
 
+class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
+    """Establishment Portal lookups per client address; every attempt counts,
+    so tracking codes cannot be guessed at speed."""
+
+    fixed_scope = "owner_status_ip"
+    message = (
+        "Masyadong maraming pagsubok mula sa device na ito. Subukan muli "
+        "pagkalipas ng isang oras. / Too many attempts from this device. "
+        "Please try again in an hour."
+    )
+
+
 def _is_resend_of_saved_report(request):
     """True when this request resends a form whose report was already saved.
 

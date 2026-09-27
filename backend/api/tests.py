@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -5246,3 +5247,367 @@ class TrackingCodeGenerateTests(TestCase):
 
         with self.assertNoLogs("api.services.tracking_codes", level="WARNING"):
             warn_if_tracking_code_key_missing()
+
+
+@override_settings(TRACKING_CODE_KEY=TRACKING_TEST_KEY)
+class EstablishmentStatusTests(TestCase):
+    """POST /api/mobile/sanitation/establishment-status/ (public, by tracking code)."""
+
+    URL = "/api/mobile/sanitation/establishment-status/"
+    CODE = "MBN-7KQ4-XP2M"
+    KEYS = {
+        "business_name",
+        "business_type",
+        "barangay",
+        "permit_number",
+        "permit_status",
+        "permit_status_label",
+        "permit_expiry_date",
+        "days_left",
+        "is_expired",
+        "renewal_notice",
+        "expired_notice",
+        "suspended_notice",
+        "requirements",
+        "requirements_note",
+    }
+    NOT_FOUND = (
+        "Hindi nahanap ang tracking code. Tingnan ang code sa iyong Owner's Slip. / "
+        "Tracking code not found. Check the code on your Owner's Slip."
+    )
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        from .models import SanitaryRequirement
+
+        caches["throttle"].clear()
+        self.today = timezone.localdate()
+        self.btype = SanitaryBusinessType.objects.create(
+            name="Status Carinderia", inspection_frequency="monthly"
+        )
+        for size, name in (
+            ("sp", "Health Certificate"),
+            ("sp", "Water Potability Test"),
+            ("large", "Pest Control Contract"),
+        ):
+            SanitaryRequirement.objects.create(
+                business_type=self.btype, permit_size=size, requirement_name=name
+            )
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Aling Nena Carinderia",
+            owner_name="Nena Santos",
+            business_type=self.btype,
+            barangay="Daungan",
+            address="Purok 1, Rizal St.",
+            contact_number="09171234567",
+            permit_number="SP-2026-0101",
+            permit_issued_date=self.today - timedelta(days=200),
+            permit_expiry_date=self.today + timedelta(days=165),
+            permit_status="active",
+            compliance_status="good_standing",
+            remarks="Inspector notes: grease trap",
+            latitude=14.19,
+            longitude=121.73,
+        )
+        self._set_code(self.establishment, self.CODE)
+
+    def _set_code(self, establishment, code):
+        establishment.tracking_code_hash = _tracking_hash(code)
+        establishment.save()
+
+    def _post(self, code, ip="10.0.0.1"):
+        return APIClient().post(self.URL, {"code": code}, format="json", REMOTE_ADDR=ip)
+
+    def _status(self, **changes):
+        SanitaryEstablishment.objects.filter(pk=self.establishment.pk).update(**changes)
+        response = self._post(self.CODE)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        return response.json()
+
+    # -- what is returned ------------------------------------------------------
+
+    def test_the_answer_has_exactly_the_public_keys(self):
+        from .models import SanitaryComplaint
+
+        SanitaryInspection.objects.create(
+            establishment=self.establishment,
+            inspector_name="Inspector Juan",
+            inspection_date=self.today,
+            status_after_inspection="good_standing",
+            remarks="Secret inspection note",
+        )
+        SanitaryComplaint.objects.create(
+            complaint_id="CMP-2026-9001", establishment=self.establishment,
+            complainant_name="Complainer Pedro", contact_number="09998887777",
+            category="Improper Garbage Disposal", barangay="Daungan",
+            description="Complaint text", reported_date=self.today,
+        )
+        other = SanitaryEstablishment.objects.create(
+            business_name="Other Shop", owner_name="Other Owner", business_type=self.btype,
+            barangay="Daungan", address="Purok 9",
+        )
+        self._set_code(other, "MBN-2222-3333")
+
+        response = self._post(self.CODE)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        body = response.json()
+        self.assertEqual(set(body), self.KEYS)
+        self.assertEqual(body["business_name"], "Aling Nena Carinderia")
+        self.assertEqual(body["business_type"], "Status Carinderia")
+        self.assertEqual(body["barangay"], "Daungan")
+        self.assertEqual(body["permit_number"], "SP-2026-0101")
+        self.assertEqual(body["permit_status"], "active")
+        self.assertEqual(body["permit_status_label"], "Active")
+        text = response.content.decode()
+        for private in (
+            "Nena Santos", "09171234567", "Purok 1", "14.19", "121.73", "grease trap",
+            "Inspector Juan", "Secret inspection note", "Complainer Pedro", "09998887777",
+            "Complaint text", "CMP-2026-9001", "Other Shop", "Other Owner",
+            self.establishment.tracking_code_hash,
+        ):
+            self.assertNotIn(private, text, private)
+        for key in ("owner", "contact", "address", "latitude", "longitude", "remarks",
+                    "inspection", "inspector", "complaint", "id", "user"):
+            self.assertNotIn(key, body)
+
+    def test_the_code_may_be_typed_in_any_case_with_or_without_dashes_or_spaces(self):
+        for typed in ("MBN-7KQ4-XP2M", "mbn-7kq4-xp2m", "MBN7KQ4XP2M", " mbn 7kq4 xp2m ",
+                      "7kq4-xp2m", "7KQ4XP2M", "Mbn - 7Kq4 - xP2m"):
+            response = self._post(typed)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, typed)
+            self.assertEqual(response.json()["business_name"], "Aling Nena Carinderia")
+
+    def test_form_encoded_bodies_work_too(self):
+        response = APIClient().post(self.URL, {"code": "mbn-7kq4-xp2m"}, REMOTE_ADDR="10.0.0.1")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+    # -- not found ---------------------------------------------------------------
+
+    def test_wrong_empty_malformed_and_replaced_codes_get_the_same_404(self):
+        self._set_code(self.establishment, "MBN-9WWW-8XXX")  # the old code is replaced
+
+        bodies = set()
+        for typed in (self.CODE, "MBN-2222-2222", "", "   ", "MBN-0000-OOOO", "hello",
+                      "MBN-7KQ4-XP2", "SP-2026-0101", None):
+            response = self._post(typed)
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, typed)
+            self.assertEqual(response["Cache-Control"], "no-store")
+            bodies.add(response.content)
+        missing = APIClient().post(self.URL, {}, format="json", REMOTE_ADDR="10.0.0.1")
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+        bodies.add(missing.content)
+
+        self.assertEqual(len(bodies), 1)
+        self.assertEqual(json.loads(bodies.pop()), {"detail": self.NOT_FOUND})
+
+    def test_a_bad_format_still_computes_the_hmac_and_queries(self):
+        with patch("api.services.tracking_codes.hash_tracking_code",
+                   wraps=__import__("api.services.tracking_codes", fromlist=["x"]).hash_tracking_code) as spy:
+            self._post("not a code at all")
+            self._post("")
+        self.assertEqual(spy.call_count, 2)
+
+    def test_the_lookup_is_one_query(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            self._post("MBN-2222-2222")
+        lookups = [q["sql"] for q in queries.captured_queries if "api_sanitaryestablishment" in q["sql"]]
+        self.assertEqual(len(lookups), 1, lookups)
+        self.assertIn("tracking_code_hash", lookups[0])
+
+    def test_only_post_is_allowed(self):
+        response = APIClient().get(self.URL, {"code": self.CODE})
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    # -- limits and configuration --------------------------------------------------
+
+    def test_the_21st_request_in_an_hour_from_one_address_is_refused(self):
+        statuses = [self._post("MBN-2222-2222").status_code for _ in range(20)]
+        self.assertEqual(set(statuses), {status.HTTP_404_NOT_FOUND})
+
+        refused = self._post(self.CODE)
+        self.assertEqual(refused.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(refused["Cache-Control"], "no-store")
+        self.assertTrue(int(refused["Retry-After"]) > 0)
+        detail = refused.json()["detail"]
+        self.assertTrue(detail.startswith("Masyadong maraming"), detail)
+        self.assertNotIn("Expected available", detail)
+
+        # Another address is not affected.
+        self.assertEqual(self._post(self.CODE, ip="10.0.0.2").status_code, status.HTTP_200_OK)
+
+    @override_settings(TRACKING_CODE_KEY="", DEBUG=False)
+    def test_without_a_key_in_production_it_is_503(self):
+        response = self._post(self.CODE)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("not configured", response.json()["detail"])
+        self.assertEqual(response["Cache-Control"], "no-store")
+
+    # -- expiry ----------------------------------------------------------------------
+
+    def test_a_permit_well_before_expiry(self):
+        body = self._status()
+        self.assertEqual(body["permit_expiry_date"], (self.today + timedelta(days=165)).isoformat())
+        self.assertEqual(body["days_left"], 165)
+        self.assertFalse(body["is_expired"])
+        self.assertIsNone(body["renewal_notice"])
+        self.assertIsNone(body["expired_notice"])
+
+    def test_sixty_days_left_shows_the_renewal_notice(self):
+        body = self._status(permit_expiry_date=self.today + timedelta(days=60))
+        self.assertEqual(body["days_left"], 60)
+        self.assertIn("60 araw", body["renewal_notice"])
+        self.assertIsNone(body["expired_notice"])
+
+    def test_sixty_one_days_left_shows_no_notice(self):
+        body = self._status(permit_expiry_date=self.today + timedelta(days=61))
+        self.assertIsNone(body["renewal_notice"])
+
+    def test_expiring_today_is_not_expired_yet(self):
+        body = self._status(permit_expiry_date=self.today)
+        self.assertEqual(body["days_left"], 0)
+        self.assertFalse(body["is_expired"])
+        self.assertEqual(body["permit_status"], "active")
+        self.assertIn("ngayong araw", body["renewal_notice"])
+        self.assertIsNone(body["expired_notice"])
+
+    def test_a_past_date_is_expired_whatever_the_stored_status(self):
+        body = self._status(permit_expiry_date=self.today - timedelta(days=1), permit_status="active")
+
+        self.assertEqual(body["days_left"], -1)
+        self.assertTrue(body["is_expired"])
+        self.assertEqual(body["permit_status"], "expired")
+        self.assertEqual(body["permit_status_label"], "Expired")
+        self.assertIsNone(body["renewal_notice"])
+        self.assertIn("Expired", body["expired_notice"])
+        self.establishment.refresh_from_db()
+        self.assertEqual(self.establishment.permit_status, "active")  # stored field unchanged
+
+    def test_no_expiry_date(self):
+        body = self._status(permit_expiry_date=None)
+        self.assertIsNone(body["permit_expiry_date"])
+        self.assertIsNone(body["days_left"])
+        self.assertFalse(body["is_expired"])
+        self.assertIsNone(body["renewal_notice"])
+        self.assertIsNone(body["expired_notice"])
+
+    def test_days_left_use_the_manila_date(self):
+        from datetime import datetime, timezone as dt_timezone
+
+        # 2026-03-01 17:00 UTC is already 2026-03-02 in Manila.
+        SanitaryEstablishment.objects.filter(pk=self.establishment.pk).update(
+            permit_expiry_date="2026-03-12"
+        )
+        with patch("django.utils.timezone.now",
+                   return_value=datetime(2026, 3, 1, 17, 0, tzinfo=dt_timezone.utc)):
+            body = self._post(self.CODE).json()
+        self.assertEqual(body["days_left"], 10)
+
+    # -- suspended / no permit ---------------------------------------------------------
+
+    def test_suspended_adds_only_the_contact_notice(self):
+        body = self._status(permit_status="suspended", compliance_status="violation")
+
+        self.assertEqual(body["permit_status"], "suspended")
+        self.assertEqual(body["permit_status_label"], "Suspended")
+        self.assertTrue(body["suspended_notice"].startswith("Makipag-ugnayan sa Sanitary Office"))
+        self.assertNotIn("violation", response_text := json.dumps(body))
+        self.assertNotIn("grease", response_text)
+
+    def test_not_suspended_has_no_suspended_notice(self):
+        self.assertIsNone(self._status()["suspended_notice"])
+
+    def test_no_permit_number_is_null(self):
+        body = self._status(permit_number="", has_permit=False, permit_status="no_permit",
+                            permit_expiry_date=None, permit_issued_date=None)
+        self.assertIsNone(body["permit_number"])
+        self.assertEqual(body["permit_status"], "no_permit")
+        self.assertEqual(body["permit_status_label"], "No Permit")
+        self.assertIsNone(body["days_left"])
+
+    # -- requirements checklist ------------------------------------------------------------
+
+    def _renewal(self, stage="requirements_review", submitted=(), renewal_id="REN-1", days=0):
+        from .models import SanitaryPermitRenewal
+
+        renewal = SanitaryPermitRenewal.objects.create(
+            renewal_id=renewal_id,
+            establishment=self.establishment,
+            permit_number="SP-2026-0101",
+            expiration_date=self.today + timedelta(days=30),
+            stage=stage,
+            submitted_requirements=list(submitted),
+        )
+        if days:
+            SanitaryPermitRenewal.objects.filter(pk=renewal.pk).update(
+                created_at=timezone.now() - timedelta(days=days)
+            )
+        return renewal
+
+    def test_the_newest_unreleased_renewal_marks_submitted_and_missing(self):
+        self._renewal(renewal_id="REN-OLD", submitted=["Health Certificate", "Water Potability Test"], days=40)
+        self._renewal(renewal_id="REN-NEW", submitted=["health certificate "])
+        self._renewal(renewal_id="REN-DONE", stage="released", submitted=[])
+
+        body = self._status()
+
+        self.assertEqual(
+            body["requirements"],
+            [
+                {"name": "Health Certificate", "submitted": True},
+                {"name": "Water Potability Test", "submitted": False},
+            ],
+        )
+        self.assertIsNone(body["requirements_note"])
+
+    def test_a_large_permit_uses_the_large_requirements(self):
+        self._renewal(submitted=["Pest Control Contract"])
+        body = self._status(permit_size="large")
+        self.assertEqual(body["requirements"], [{"name": "Pest Control Contract", "submitted": True}])
+
+    def test_a_submitted_item_that_is_no_longer_configured_is_still_listed(self):
+        self._renewal(submitted=["Old Barangay Clearance"])
+        names = [item["name"] for item in self._status()["requirements"]]
+        self.assertEqual(names, ["Health Certificate", "Water Potability Test", "Old Barangay Clearance"])
+
+    def test_without_an_open_renewal_the_list_is_neutral(self):
+        self._renewal(stage="released", submitted=["Health Certificate"])
+
+        body = self._status()
+
+        self.assertEqual(
+            body["requirements"],
+            [
+                {"name": "Health Certificate", "submitted": None},
+                {"name": "Water Potability Test", "submitted": None},
+            ],
+        )
+        self.assertEqual(body["requirements_note"], "Dalhin sa renewal")
+
+    def test_a_type_without_requirements_says_so(self):
+        from .models import SanitaryRequirement
+
+        SanitaryRequirement.objects.all().delete()
+        body = self._status()
+        self.assertEqual(body["requirements"], [])
+        self.assertEqual(body["requirements_note"], "Wala pang naka-set na requirements")
+
+        self._renewal()
+        body = self._status()
+        self.assertEqual(body["requirements"], [])
+        self.assertEqual(body["requirements_note"], "Wala pang naka-set na requirements")
+
+    def test_a_size_without_its_own_list_falls_back_to_the_type_list(self):
+        from .models import SanitaryRequirement
+
+        SanitaryRequirement.objects.filter(permit_size="large").delete()
+        body = self._status(permit_size="large")
+        self.assertEqual(
+            [item["name"] for item in body["requirements"]],
+            ["Health Certificate", "Water Potability Test"],
+        )

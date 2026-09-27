@@ -41,7 +41,11 @@ from api.serializers import (
 )
 from api.services.activity import log_activity
 from api.services.household import build_household_dashboard_payload
-from api.services.tracking_codes import TrackingCodeNotConfigured, issue_tracking_code
+from api.services.tracking_codes import (
+    NOT_CONFIGURED_MESSAGE,
+    TrackingCodeNotConfigured,
+    issue_tracking_code,
+)
 from api.services.sanitation import (
     advance_renewal_stage,
     build_sanitation_complaints_payload,
@@ -190,12 +194,7 @@ def sanitation_establishment_tracking_code(request, establishment_id):
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
     except TrackingCodeNotConfigured:
         return Response(
-            {
-                "detail": (
-                    "Tracking codes are not configured on the server (TRACKING_CODE_KEY "
-                    "is not set). / Hindi pa naka-set ang tracking code sa server."
-                )
-            },
+            {"detail": NOT_CONFIGURED_MESSAGE},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
