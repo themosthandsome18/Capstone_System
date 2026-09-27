@@ -4668,6 +4668,130 @@ class CommunityReportIdempotencyTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 
+class _LargePhotoMixin:
+    """Photos bigger than Django's in-memory upload limit (2.5 MB).
+
+    Such a photo is spooled to a temporary file, and a request with one used to
+    fail with 500 "cannot pickle 'BufferedRandom' instances" (APK 1.0.3 on a
+    real phone, 2026-09-27) because the view deep-copied request.data.
+    """
+
+    LARGE = 3 * 1024 * 1024
+    JPEG_HEAD = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    PNG_HEAD = b"\x89PNG\r\n\x1a\n"
+
+    def setUp(self):
+        from unittest.mock import MagicMock
+
+        self.storage = MagicMock()
+        self.storage.save.side_effect = lambda name, _file: name
+        self.storage.url.side_effect = lambda name: f"https://storage.test/{name}"
+        patcher = patch("api.services.upload.default_storage", self.storage)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _photo(self, head, size, name, content_type):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, head + b"\x00" * (size - len(head)), content_type=content_type)
+
+
+class CommunityReportLargePhotoTests(_LargePhotoMixin, TestCase):
+    URL = "/api/mobile/sanitation/reports/"
+    SID = "0d6f3b0e-2f4a-4c1d-8e5b-9a7c6b5d4e3f"
+
+    def setUp(self):
+        super().setUp()
+        ensure_test_barangays()
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def _post(self, photo, **overrides):
+        # Same shape as ApiService._multipartPost: string fields plus one
+        # 'photo' part per image.
+        data = _community_report_payload(client_submission_id=self.SID, **overrides)
+        data["photo"] = [photo]
+        return APIClient().post(self.URL, data, format="multipart")
+
+    def _assert_saved_with_photo(self, response, filename_suffix):
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        complaint = SanitaryComplaint.objects.get()
+        self.assertEqual(complaint.client_submission_id, self.SID)
+        self.assertTrue(complaint.photo_documentation.endswith(filename_suffix))
+        self.assertEqual(self.storage.save.call_count, 1)
+
+    def test_a_large_jpeg_is_saved(self):
+        photo = self._photo(self.JPEG_HEAD, self.LARGE, "report_1700000000000_0.jpg", "image/jpeg")
+        self._assert_saved_with_photo(self._post(photo), ".jpg")
+
+    def test_a_large_png_is_saved(self):
+        photo = self._photo(self.PNG_HEAD, self.LARGE, "report_1700000000000_0.png", "image/png")
+        self._assert_saved_with_photo(self._post(photo), ".png")
+
+    def test_a_small_photo_is_still_saved(self):
+        photo = self._photo(self.JPEG_HEAD, 200 * 1024, "report_1700000000000_0.jpg", "image/jpeg")
+        self._assert_saved_with_photo(self._post(photo), ".jpg")
+
+    def test_resending_a_large_photo_returns_the_saved_report(self):
+        make = lambda: self._photo(self.JPEG_HEAD, self.LARGE, "report_1700000000000_0.jpg", "image/jpeg")
+        first = self._post(make())
+        second = self._post(make())
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.content)
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.content)
+        self.assertEqual(second.json()["complaint_id"], first.json()["complaint_id"])
+        self.assertEqual(SanitaryComplaint.objects.count(), 1)
+        self.assertEqual(self.storage.save.call_count, 1)
+
+    def test_an_unexpected_error_does_not_leak_exception_text(self):
+        photo = self._photo(self.JPEG_HEAD, 200 * 1024, "report_1700000000000_0.jpg", "image/jpeg")
+        with patch("api.views.mobile.generate_complaint_id", side_effect=RuntimeError("secret internals")):
+            response = self._post(photo)
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotIn("secret internals", response.content.decode())
+        self.assertEqual(SanitaryComplaint.objects.count(), 0)
+
+
+class InspectionLargePhotoTests(_LargePhotoMixin, TestCase):
+    """The staff inspection endpoint copied request.data the same way."""
+
+    def setUp(self):
+        super().setUp()
+        user = User.objects.create_user(username="large_photo_inspector", password="Password@123")
+        UserProfile.objects.create(user=user, role=ROLE_SANITATION)
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        btype = SanitaryBusinessType.objects.create(name="Large Photo Cafe", inspection_frequency="monthly")
+        self.establishment = SanitaryEstablishment.objects.create(
+            business_name="Large Photo Shop",
+            owner_name="Owner",
+            business_type=btype,
+            barangay="Daungan",
+            address="1 Main St",
+        )
+
+    def test_a_large_inspection_photo_is_saved(self):
+        photo = self._photo(self.JPEG_HEAD, self.LARGE, "inspection.jpg", "image/jpeg")
+        response = self.client.post(
+            "/api/mobile/sanitation/inspections/",
+            {
+                "establishment": str(self.establishment.id),
+                "inspector_name": "Inspector Test",
+                "inspection_date": "2026-09-27",
+                "status_after_inspection": "good_standing",
+                "is_draft": "false",
+                "photo": photo,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        inspection = SanitaryInspection.objects.get()
+        self.assertTrue(inspection.photo_documentation.endswith(".jpg"))
+
+
 class CommunityReportConcurrentSubmitTests(TransactionTestCase):
     """Two requests with the same id arriving together still make one report."""
 

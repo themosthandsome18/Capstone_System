@@ -4,6 +4,8 @@ from datetime import timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings
+from django.http import QueryDict
+from django.core.files.uploadedfile import UploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
@@ -598,7 +600,7 @@ def mobile_sanitation_report_submit(request):
                     status=status.HTTP_200_OK,
                 )
 
-        data = request.data.copy()
+        data = copy_request_fields(request)
         data.pop("client_submission_id", None)
         uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
 
@@ -745,8 +747,13 @@ def mobile_sanitation_report_submit(request):
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception("Error in mobile_sanitation_report_submit: %s", exc)
+        # The details are in the log; the reporter gets a fixed message.
+        message = (
+            "May problema sa server. Subukan ulit mamaya. / "
+            "Server problem. Please try again later."
+        )
         return Response(
-            {"detail": f"Failed to submit report: {str(exc)}"},
+            {"error": message, "detail": message},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -786,6 +793,26 @@ def mobile_sanitation_report_history(request):
             },
         }
     )
+
+
+def copy_request_fields(request):
+    """A mutable copy of the request's fields, without its uploaded files.
+
+    request.data also holds the uploads, and QueryDict.copy() deep-copies
+    every value. A photo over FILE_UPLOAD_MAX_MEMORY_SIZE (2.5 MB) is spooled
+    to a temporary file, which cannot be deep-copied ("cannot pickle
+    'BufferedRandom' instances"), so the uploads are left out here and read
+    from request.FILES instead.
+    """
+    data = request.data
+    if not isinstance(data, QueryDict):
+        return data.copy()
+    fields = QueryDict(mutable=True)
+    for key, values in data.lists():
+        kept = [value for value in values if not isinstance(value, UploadedFile)]
+        if kept:
+            fields.setlist(key, kept)
+    return fields
 
 
 def community_report_submission_id(request):
@@ -1155,7 +1182,7 @@ def mobile_sanitation_inspection_submit(request):
 
     ensure_initial_sanitation_data()
 
-    data = request.data.copy()
+    data = copy_request_fields(request)
     data["inspector_name"] = data.get("inspector_name") or data.get("inspector") or ""
     data["inspection_date"] = (
         data.get("inspection_date") or timezone.localdate().isoformat()
