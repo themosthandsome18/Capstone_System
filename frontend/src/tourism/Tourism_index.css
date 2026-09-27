@@ -1878,7 +1878,7 @@
 .resort-carousel-dot.active {
   width: 18px;
   border-radius: 9999px;
-  background: #22c55e;
+  background: var(--th-primary);
 }
 
 /* ================= FEEDBACK PHOTO GRID & ACTIONS ================= */
@@ -2439,7 +2439,7 @@
   height: 100%;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--th-primary-tint-strong), #d8eef4);
+  background: linear-gradient(135deg, var(--th-primary-tint-strong), var(--th-primary-tint));
   padding: 18px;
   text-align: center;
   font-size: 16px;
@@ -3841,7 +3841,7 @@
 }
 
 .report-sort-select:focus {
-  border-color: #1f7655;
+  border-color: var(--th-primary);
 }
 
 .report-sort-dir-btn {
