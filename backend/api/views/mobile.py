@@ -639,6 +639,17 @@ def mobile_sanitation_report_submit(request):
                 {"error": message, "detail": message},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        official_barangay = official_barangay_name(data.get("barangay"))
+        if official_barangay is None:
+            message = (
+                "Pumili ng barangay mula sa listahan ng Mauban. / "
+                "Please choose a Mauban barangay from the list."
+            )
+            return Response(
+                {"error": message, "detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["barangay"] = official_barangay
         data["contact_number"] = normalize_contact_digits(data["contact_number"])
         for flag in ("is_anonymous", "anonymous"):
             data.pop(flag, None)
@@ -782,6 +793,18 @@ def community_report_submission_id(request):
     data = getattr(request, "data", {}) or {}
     value = str(data.get("client_submission_id") or "").strip()
     return value[:64] or None
+
+
+def official_barangay_name(name):
+    """The api_barangay spelling of an active barangay, ignoring case and
+    extra spaces; None when the name is not an active Mauban barangay."""
+    wanted = " ".join(str(name or "").split()).lower()
+    if not wanted:
+        return None
+    for official in Barangay.objects.filter(is_active=True).values_list("name", flat=True):
+        if " ".join(official.split()).lower() == wanted:
+            return official
+    return None
 
 
 def find_existing_community_report(submission_id):

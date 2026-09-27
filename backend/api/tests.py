@@ -18,6 +18,7 @@ from .models import (
     BOOKING_STATUS_ARRIVED,
     MODULE_TOURISM,
     ActivityLog,
+    Barangay,
     BoatType,
     Country,
     FeedbackEntry,
@@ -281,6 +282,16 @@ class EstablishmentClaimSecurityTests(TestCase):
                 self.assertFalse(
                     SanitaryEstablishment.objects.filter(user__username=username).exists()
                 )
+
+
+def ensure_test_barangays():
+    """The 40 official Mauban barangays, as seeded into api_barangay."""
+    from .seed_data import MAUBAN_BARANGAYS
+
+    for index, name in enumerate(MAUBAN_BARANGAYS, start=1):
+        Barangay.objects.get_or_create(
+            name=name, defaults={"display_order": index, "is_active": True}
+        )
 
 
 def ensure_test_reference_tables():
@@ -659,6 +670,7 @@ class MobilePublicApiTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        ensure_test_barangays()
         ensure_test_reference_tables()
         cls.btype, _ = SanitaryBusinessType.objects.get_or_create(
             name="Food Establishment",
@@ -850,7 +862,7 @@ class MobilePublicApiTests(TestCase):
                 "complainant_name": "Resident Reporter",
                 "contact_number": "09170000000",
                 "category": "Improper Garbage Disposal",
-                "barangay": "Poblacion",
+                "barangay": "Daungan",
                 "location_address": "Walkway beside the plaza",
                 "description": "Garbage pile near the walkway.",
                 "latitude": 14.186,
@@ -874,7 +886,7 @@ class MobilePublicApiTests(TestCase):
                 "complainant_name": "Resident Reporter",
                 "contact_number": "09170000000",
                 "category": "Contaminated Water Source",
-                "barangay": "Poblacion",
+                "barangay": "Daungan",
                 "location_address": "Deep well, Purok 2",
                 "description": "Water source needs inspection.",
             },
@@ -2423,6 +2435,7 @@ from api.services.upload import (
 
 class SecureUploadTests(TestCase):
     def setUp(self):
+        ensure_test_barangays()
         self.client = APIClient()
         self.tourism_user = User.objects.create_user(
             username="tourism_staff_upload",
@@ -2538,6 +2551,7 @@ class SecureUploadTests(TestCase):
                 "complainant_name": "Upload Tester",
                 "contact_number": "09171234567",
                 "category": "Improper Garbage Disposal",
+                "barangay": "Daungan",
                 "location_address": "Creek bank, Purok 1",
                 "description": "Garbage dump near creek",
                 "photo": bad_file,
@@ -2556,7 +2570,8 @@ class SecureUploadTests(TestCase):
                     "complainant_name": "Upload Tester",
                     "contact_number": "09171234567",
                     "category": "Improper Garbage Disposal",
-                    "location_address": "Creek bank, Purok 1",
+                    "barangay": "Daungan",
+                "location_address": "Creek bank, Purok 1",
                     "description": "Garbage dump near creek",
                     "photo": good_file,
                 },
@@ -4299,6 +4314,9 @@ class CommunityReportIdentityTests(TestCase):
 
     URL = "/api/mobile/sanitation/reports/"
 
+    def setUp(self):
+        ensure_test_barangays()
+
     def _payload(self, **overrides):
         payload = {
             "complainant_name": "Juana Reporter",
@@ -4365,6 +4383,9 @@ class CommunityReportUrgencyTests(TestCase):
 
     URL = "/api/mobile/sanitation/reports/"
 
+    def setUp(self):
+        ensure_test_barangays()
+
     def _post(self, **overrides):
         payload = {
             "complainant_name": "Juana Reporter",
@@ -4416,6 +4437,7 @@ class CommunityReportRateLimitTests(TestCase):
     URL = "/api/mobile/sanitation/reports/"
 
     def setUp(self):
+        ensure_test_barangays()
         from django.core.cache import caches
 
         caches["throttle"].clear()
@@ -4479,6 +4501,9 @@ class CommunityReportAddressTests(TestCase):
 
     URL = "/api/mobile/sanitation/reports/"
 
+    def setUp(self):
+        ensure_test_barangays()
+
     def _post(self, **overrides):
         payload = {
             "complainant_name": "Juana Reporter",
@@ -4528,6 +4553,7 @@ class CommunityReportRateLimitMessageTests(TestCase):
     URL = "/api/mobile/sanitation/reports/"
 
     def setUp(self):
+        ensure_test_barangays()
         from django.core.cache import caches
 
         caches["throttle"].clear()
@@ -4590,6 +4616,7 @@ class CommunityReportIdempotencyTests(TestCase):
     SID = "7f1c2a9e-4b3d-4e8f-9a1b-2c3d4e5f6a7b"
 
     def setUp(self):
+        ensure_test_barangays()
         from django.core.cache import caches
 
         caches["throttle"].clear()
@@ -4648,6 +4675,7 @@ class CommunityReportConcurrentSubmitTests(TransactionTestCase):
     SID = "concurrent-fill-0001"
 
     def setUp(self):
+        ensure_test_barangays()
         from django.core.cache import caches
 
         caches["throttle"].clear()
@@ -4730,6 +4758,7 @@ class CommunityReportDuplicateInsideTransactionTests(TestCase):
     SID = "outer-atomic-0001"
 
     def setUp(self):
+        ensure_test_barangays()
         from django.core.cache import caches
 
         caches["throttle"].clear()
@@ -4775,3 +4804,44 @@ class CommunityReportDuplicateInsideTransactionTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content[:300])
         self.assertEqual(response.json()["complaint_id"], existing.complaint_id)
         self.assertEqual(rows, 1)
+
+
+class CommunityReportBarangayTests(TestCase):
+    """Reports must name an active official Mauban barangay."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+        ensure_test_barangays()
+
+    def _post(self, barangay):
+        return APIClient().post(
+            self.URL, _community_report_payload(barangay=barangay), format="json"
+        )
+
+    def test_a_name_that_is_not_a_mauban_barangay_is_rejected(self):
+        for name in ("Poblacion", "Cagsiay", "", "Unspecified"):
+            response = self._post(name)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, name)
+            detail = response.json()["detail"].lower()
+            self.assertIn("barangay", detail)
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_an_inactive_barangay_is_rejected(self):
+        Barangay.objects.filter(name="Daungan").update(is_active=False)
+        self.assertEqual(self._post("Daungan").status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_case_and_spacing_are_ignored_and_the_official_spelling_is_saved(self):
+        response = self._post("  cagsiay   ii ")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(SanitaryComplaint.objects.get().barangay, "Cagsiay II")
+        self.assertEqual(response.json()["barangay"], "Cagsiay II")
+
+    def test_the_official_list_is_the_forty_mauban_barangays(self):
+        from .seed_data import MAUBAN_BARANGAYS
+
+        self.assertEqual(len(MAUBAN_BARANGAYS), 40)
+        self.assertNotIn("Poblacion", MAUBAN_BARANGAYS)

@@ -55,7 +55,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   @override
   void initState() {
     super.initState();
-    _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? 'Poblacion';
+    _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
       _head.text = widget.household!.householdHead;
       if (widget.household!.hasCoordinates) {
@@ -405,6 +405,70 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 }
 
+/// Bottom sheet with a search box over the barangay names.
+class _BarangaySearchSheet extends StatefulWidget {
+  const _BarangaySearchSheet({required this.names});
+
+  final List<String> names;
+
+  @override
+  State<_BarangaySearchSheet> createState() => _BarangaySearchSheetState();
+}
+
+class _BarangaySearchSheetState extends State<_BarangaySearchSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final needle = _query.trim().toLowerCase();
+    final matches = widget.names
+        .where((name) => needle.isEmpty || name.toLowerCase().contains(needle))
+        .toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.75,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  key: const ValueKey('barangay-search'),
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Hanapin ang barangay',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+              ),
+              Expanded(
+                child: matches.isEmpty
+                    ? const Center(child: Text('Walang tugmang barangay.'))
+                    : ListView.builder(
+                        itemCount: matches.length,
+                        itemBuilder: (context, index) => ListTile(
+                          key: const ValueKey('barangay-choice'),
+                          title: Text(matches[index]),
+                          onTap: () => Navigator.of(context).pop(matches[index]),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SanitationReportPage extends StatefulWidget {
   const SanitationReportPage({
     super.key,
@@ -413,6 +477,7 @@ class SanitationReportPage extends StatefulWidget {
     this.initialDraft,
     this.saveDraftOnFailure = false,
     this.imagePicker,
+    this.refreshBarangays,
   });
 
   final TourismApi api;
@@ -425,6 +490,10 @@ class SanitationReportPage extends StatefulWidget {
 
   /// Injectable for tests; defaults to the device picker.
   final ImagePicker? imagePicker;
+
+  /// Loads the live barangay list when [barangays] may be the offline
+  /// fallback (the form was opened before the server answered).
+  final Future<List<BarangayItem>> Function()? refreshBarangays;
 
   @override
   State<SanitationReportPage> createState() => _SanitationReportPageState();
@@ -868,6 +937,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   bool _consentConfirmed = false;
   int _dailyCount = 0;
 
+  late List<BarangayItem> _barangays = widget.barangays;
+
   /// One id for this fill of the form, reused on every retry, so a resend
   /// after a lost reply returns the saved report instead of a duplicate.
   /// A new form (a new page) gets a new id.
@@ -895,11 +966,38 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         _barangay = draft.barangay;
       }
     }
+    _loadLiveBarangays();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         showSanitationScopeGuideDialog(context);
       }
     });
+  }
+
+  Future<void> _loadLiveBarangays() async {
+    final refresh = widget.refreshBarangays;
+    if (refresh == null) return;
+    try {
+      final live = await refresh();
+      if (!mounted || live.isEmpty) return;
+      setState(() {
+        _barangays = live;
+        if (!live.any((item) => item.name == _barangay)) _barangay = null;
+      });
+    } catch (_) {
+      // Keep the list the form opened with.
+    }
+  }
+
+  Future<void> _pickBarangay() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _BarangaySearchSheet(
+        names: _barangays.map((item) => item.name).toList(),
+      ),
+    );
+    if (picked != null && mounted) setState(() => _barangay = picked);
   }
 
   Future<void> _loadDailyCount() async {
@@ -1060,14 +1158,26 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         else
           const SizedBox(height: 12),
 
-        // d) Barangay.
-        DropdownTile<String?>(
-          label: 'Barangay *',
-          value: _barangay,
-          hint: 'Piliin ang barangay',
-          items: widget.barangays.map<String?>((item) => item.name).toList(),
-          itemLabel: (item) => item ?? '',
-          onChanged: (item) => setState(() => _barangay = item),
+        // d) Barangay: 40 names, so a searchable sheet instead of a dropdown.
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            key: const ValueKey('barangay-field'),
+            onTap: _pickBarangay,
+            borderRadius: BorderRadius.circular(12),
+            child: InputDecorator(
+              decoration: _fieldDecoration('Barangay *').copyWith(
+                suffixIcon: const Icon(Icons.arrow_drop_down),
+              ),
+              isEmpty: _barangay == null,
+              child: Text(
+                _barangay ?? 'Piliin ang barangay',
+                style: _barangay == null
+                    ? const TextStyle(color: AppColors.muted)
+                    : null,
+              ),
+            ),
+          ),
         ),
 
         // e) Location: typed address, optional GPS pin on a small map.
@@ -1857,6 +1967,9 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           api: widget.api,
           barangays: widget.bootstrap.barangays,
           saveDraftOnFailure: true,
+          refreshBarangays: widget.bootstrap.isOffline
+              ? () async => (await widget.onRefresh()).barangays
+              : null,
         ),
       ),
     );
@@ -1877,6 +1990,9 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           barangays: widget.bootstrap.barangays,
           initialDraft: draft,
           saveDraftOnFailure: true,
+          refreshBarangays: widget.bootstrap.isOffline
+              ? () async => (await widget.onRefresh()).barangays
+              : null,
         ),
       ),
     );
@@ -5512,6 +5628,11 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
         builder: (context) => SanitationReportPage(
           api: widget.api,
           barangays: widget.bootstrap.barangays,
+          // Opened before the (possibly cold) server answered: the list is
+          // the offline fallback, so fetch the live one.
+          refreshBarangays: widget.bootstrap.isOffline
+              ? () async => (await widget.onRefresh()).barangays
+              : null,
         ),
       ),
     );

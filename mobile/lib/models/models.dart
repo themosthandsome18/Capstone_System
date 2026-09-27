@@ -116,6 +116,52 @@ SanitationBootstrap mergeSanitationStaffRecords(
   );
 }
 
+/// The 40 official Mauban barangays, spelled as in api_barangay and in its
+/// display_order (backend/api/seed_data.py MAUBAN_BARANGAYS). Used only when
+/// the server has not answered yet; ids are positions, not database ids.
+const sanitationBarangayFallback = [
+  BarangayItem(id: 1, name: 'Abo-abo'),
+  BarangayItem(id: 2, name: 'Alitap'),
+  BarangayItem(id: 3, name: 'Baao'),
+  BarangayItem(id: 4, name: 'Bagong Bayan'),
+  BarangayItem(id: 5, name: 'Balaybalay'),
+  BarangayItem(id: 6, name: 'Bato'),
+  BarangayItem(id: 7, name: 'Cagbalete I'),
+  BarangayItem(id: 8, name: 'Cagbalete II'),
+  BarangayItem(id: 9, name: 'Cagsiay I'),
+  BarangayItem(id: 10, name: 'Cagsiay II'),
+  BarangayItem(id: 11, name: 'Cagsiay III'),
+  BarangayItem(id: 12, name: 'Concepcion'),
+  BarangayItem(id: 13, name: 'Daungan'),
+  BarangayItem(id: 14, name: 'Liwayway'),
+  BarangayItem(id: 15, name: 'Lual'),
+  BarangayItem(id: 16, name: 'Lual Rural'),
+  BarangayItem(id: 17, name: 'Lucutan'),
+  BarangayItem(id: 18, name: 'Luya-luya'),
+  BarangayItem(id: 19, name: 'Mabato'),
+  BarangayItem(id: 20, name: 'Macasin'),
+  BarangayItem(id: 21, name: 'Polo'),
+  BarangayItem(id: 22, name: 'Remedios I'),
+  BarangayItem(id: 23, name: 'Remedios II'),
+  BarangayItem(id: 24, name: 'Rizaliana'),
+  BarangayItem(id: 25, name: 'Rosario'),
+  BarangayItem(id: 26, name: 'Sadsaran'),
+  BarangayItem(id: 27, name: 'San Gabriel'),
+  BarangayItem(id: 28, name: 'San Isidro'),
+  BarangayItem(id: 29, name: 'San Jose'),
+  BarangayItem(id: 30, name: 'San Lorenzo'),
+  BarangayItem(id: 31, name: 'San Miguel'),
+  BarangayItem(id: 32, name: 'San Rafael'),
+  BarangayItem(id: 33, name: 'San Roque'),
+  BarangayItem(id: 34, name: 'San Vicente'),
+  BarangayItem(id: 35, name: 'Santa Lucia'),
+  BarangayItem(id: 36, name: 'Santo Angel'),
+  BarangayItem(id: 37, name: 'Santo Niño'),
+  BarangayItem(id: 38, name: 'Santol'),
+  BarangayItem(id: 39, name: 'Soledad'),
+  BarangayItem(id: 40, name: 'Tapucan'),
+];
+
 class SanitationBootstrap {
   const SanitationBootstrap({
     required this.businessTypes,
@@ -174,11 +220,7 @@ class SanitationBootstrap {
       inspections: const [],
       complaints: const [],
       householdRecords: const [],
-      barangays: const [
-        BarangayItem(id: 1, name: 'Poblacion'),
-        BarangayItem(id: 2, name: 'San Isidro'),
-        BarangayItem(id: 3, name: 'Cagsiay'),
-      ],
+      barangays: sanitationBarangayFallback,
       notifications: const [
         AppNotification(
           id: 'offline-sanitation',
@@ -891,7 +933,7 @@ class SanitationReportDraft {
       contactNumber: '${json['contact_number'] ?? ''}',
       category: '${json['category'] ?? sanitationReportCategories.first}',
       priority: '${json['priority'] ?? 'medium'}',
-      barangay: '${json['barangay'] ?? 'Poblacion'}',
+      barangay: '${json['barangay'] ?? ''}',
       description: '${json['description'] ?? ''}',
       address: '${json['address'] ?? ''}',
       latitude: '${json['latitude'] ?? ''}',
