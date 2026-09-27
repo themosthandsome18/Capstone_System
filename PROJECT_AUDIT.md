@@ -40,6 +40,7 @@ Comprehensive standalone codebase audit generated on September 18, 2026.
 - **Framework & Runtime**: **React 19.2.4**, `react-dom 19.2.4`, Create React App (`react-scripts 5.0.1`)
 - **Routing**: `react-router-dom 7.14.0`
 - **Styling**: Tailwind CSS 3.x (`tailwindcss`, `postcss 8.4.49`, `autoprefixer 10.4.20`), custom scoped CSS files
+- **Tourism theming**: tourism colours are `--th-*` CSS tokens. The contract, exceptions and verification method are in `frontend/src/tourism/THEME_TOKENS.md`; read it before editing `Tourism_index.css`.
 - **Charts & Data Visualization**: `chart.js 4.5.1`, `react-chartjs-2 5.3.1`
 - **GIS Mapping**: `leaflet 1.9.4`, `react-leaflet 5.0.0`, `leaflet.heat 0.2.0`
 - **QR Code Generation**: `qrcode.react 4.2.0`
@@ -736,3 +737,5 @@ flutter run -d emulator --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
     - The React frontend has no unit or integration tests (`0` test files in `frontend/src/`). Any regression in API response parsing or routing can only be detected via manual browser testing.
 11. **Hardcoded Absolute File Paths in Management Commands**:
     - `import_sanitary_permits.py` contains hardcoded user directory paths (`C:\Users\This PC\Downloads\...`), rendering it unusable in automated CI/CD or production containers without providing explicit CLI arguments.
+12. **Tourism CSS Reaches Sanitation Pages**:
+    - `frontend/src/index.js` imports `Tourism_index.css` globally, so tourism rules (for example `.btn-primary`, `.insight-bars`, and the `.ws-*` block in `BookingManagement.wizard.css`) also style Sanitation pages. The list, and the rule that theme colours must never be set on `:root`, is in `frontend/src/tourism/THEME_TOKENS.md` section 5.
