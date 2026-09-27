@@ -1527,7 +1527,7 @@
 
 .arrival-filter-summary-chip .chip-sub {
   font-size: 12px;
-  color: #15803d;
+  color: var(--th-primary-ink);
 }
 
 /* ================= ARRIVAL MINI CARDS ================= */
@@ -1956,13 +1956,13 @@
 
 .photo-action-btn.promote {
   background: var(--th-primary-tint);
-  color: #15803d;
-  border-color: #a7f3d0;
+  color: var(--th-primary-ink);
+  border-color: var(--th-primary-border);
 }
 
 .photo-action-btn.promote:hover {
   background: var(--th-primary-selected);
-  color: #14532d;
+  color: var(--th-primary-ink-strong);
 }
 
 /* ================= RESORT IMAGE UPLOAD SECTION ================= */
@@ -2404,7 +2404,7 @@
 
 .gmaps-review-reply small {
   font-weight: 700;
-  color: #15803d;
+  color: var(--th-primary-ink);
   font-size: 11px;
 }
 
@@ -2437,7 +2437,7 @@
   text-align: center;
   font-size: 16px;
   font-weight: 800;
-  color: #14532d;
+  color: var(--th-primary-ink);
 }
 
 .destination-rating {
@@ -3015,7 +3015,7 @@
   padding: 6px 12px;
   font-size: 11px;
   font-weight: 800;
-  color: #0f7a45;
+  color: var(--th-primary-ink);
 }
 
 .analytics-question-item h4 {
@@ -3381,7 +3381,7 @@
   padding: 4px 9px;
   font-size: 10px;
   font-weight: 800;
-  color: #17643a;
+  color: var(--th-primary-ink);
 }
 
 .gis-selected-destination p {

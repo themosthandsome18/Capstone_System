@@ -131,7 +131,7 @@
 }
 
 .wizard-step-item.active .wizard-step-label strong {
-  color: var(--th-primary-active);
+  color: var(--th-primary-ink);
 }
 
 .wizard-step-label small {
