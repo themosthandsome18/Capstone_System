@@ -68,7 +68,7 @@
 }
 
 .wizard-step-item.active {
-  background: #d1fae5;
+  background: var(--th-primary-selected);
 }
 
 .wizard-close-btn {
@@ -340,7 +340,7 @@
 }
 
 .wizard-review-edit-btn:hover {
-  background: #d1fae5;
+  background: var(--th-primary-selected);
 }
 
 .wizard-review-grid {
