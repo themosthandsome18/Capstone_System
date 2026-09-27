@@ -4,6 +4,7 @@ from datetime import timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -586,7 +587,19 @@ def mobile_sanitation_report_submit(request):
     try:
         ensure_mobile_barangays()
 
+        # A resend of a form that was already saved (the first reply was lost,
+        # e.g. to a timeout) gets that report back, and creates nothing.
+        submission_id = community_report_submission_id(request)
+        if submission_id:
+            existing = find_existing_community_report(submission_id)
+            if existing is not None:
+                return Response(
+                    SanitaryComplaintSerializer(existing, context={"request": request}).data,
+                    status=status.HTTP_200_OK,
+                )
+
         data = request.data.copy()
+        data.pop("client_submission_id", None)
         uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
 
         data["complaint_id"] = generate_complaint_id()
@@ -690,7 +703,21 @@ def mobile_sanitation_report_submit(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        complaint = serializer.save()
+        try:
+            with transaction.atomic():
+                complaint = serializer.save(client_submission_id=submission_id)
+        except IntegrityError:
+            # Two requests with the same id raced past the check above; the
+            # other one saved first, so answer with its report.
+            existing = (
+                find_existing_community_report(submission_id) if submission_id else None
+            )
+            if existing is None:
+                raise
+            return Response(
+                SanitaryComplaintSerializer(existing, context={"request": request}).data,
+                status=status.HTTP_200_OK,
+            )
         # Only a saved report counts toward the contact's daily limit.
         CommunityReportContactRateThrottle.record_success(request)
 
@@ -748,6 +775,17 @@ def mobile_sanitation_report_history(request):
             },
         }
     )
+
+
+def community_report_submission_id(request):
+    """The form's client_submission_id (at most 64 characters), or None."""
+    data = getattr(request, "data", {}) or {}
+    value = str(data.get("client_submission_id") or "").strip()
+    return value[:64] or None
+
+
+def find_existing_community_report(submission_id):
+    return SanitaryComplaint.objects.filter(client_submission_id=submission_id).first()
 
 
 PH_MOBILE_NUMBER = re.compile(r"^09\d{9}$")

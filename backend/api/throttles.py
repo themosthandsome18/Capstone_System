@@ -52,8 +52,24 @@ class EstablishmentClaimRateThrottle(_FixedScopeRateThrottle):
     fixed_scope = "establishment_claim"
 
 
+def _is_resend_of_saved_report(request):
+    """True when this request resends a form whose report was already saved.
+
+    Such a request creates nothing (the view returns the saved report), so it
+    must not count toward, or be blocked by, the report limits.
+    """
+    from .views.mobile import (
+        community_report_submission_id,
+        find_existing_community_report,
+    )
+
+    submission_id = community_report_submission_id(request)
+    return bool(submission_id) and find_existing_community_report(submission_id) is not None
+
+
 class CommunityReportIpRateThrottle(_FixedScopeRateThrottle):
-    """Public community reports per client address (every attempt counts)."""
+    """Public community reports per client address (every attempt counts,
+    except resends of an already-saved report)."""
 
     fixed_scope = "community_report_ip"
     message = (
@@ -61,6 +77,11 @@ class CommunityReportIpRateThrottle(_FixedScopeRateThrottle):
         "Subukan muli mamaya. / Too many reports from this device this hour. "
         "Please try again later."
     )
+
+    def allow_request(self, request, view):
+        if _is_resend_of_saved_report(request):
+            return True
+        return super().allow_request(request, view)
 
 
 class CommunityReportContactRateThrottle(_FixedScopeRateThrottle):
@@ -91,6 +112,8 @@ class CommunityReportContactRateThrottle(_FixedScopeRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": contact}
 
     def allow_request(self, request, view):
+        if _is_resend_of_saved_report(request):
+            return True
         self._use_scope()
         self.key = self.get_cache_key(request, view)
         if self.key is None:

@@ -4568,3 +4568,150 @@ class CommunityReportRateLimitMessageTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(response.json()["detail"], CommunityReportIpRateThrottle.message)
         self.assertGreater(int(response["Retry-After"]), 0)
+
+
+def _community_report_payload(**overrides):
+    payload = {
+        "complainant_name": "Juana Reporter",
+        "contact_number": "09171234567",
+        "category": "Improper Garbage Disposal",
+        "barangay": "Daungan",
+        "location_address": "Purok 3",
+        "description": "Nakatambak ang basura.",
+    }
+    payload.update(overrides)
+    return payload
+
+
+class CommunityReportIdempotencyTests(TestCase):
+    """Resending the same form (e.g. after a timeout) never creates a second report."""
+
+    URL = "/api/mobile/sanitation/reports/"
+    SID = "7f1c2a9e-4b3d-4e8f-9a1b-2c3d4e5f6a7b"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def _post(self, **overrides):
+        return APIClient().post(self.URL, _community_report_payload(**overrides), format="json")
+
+    def test_same_id_twice_creates_one_report_and_returns_it(self):
+        first = self._post(client_submission_id=self.SID)
+        second = self._post(client_submission_id=self.SID)
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.content)
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.content)
+        self.assertEqual(second.json(), first.json())
+        self.assertEqual(SanitaryComplaint.objects.count(), 1)
+        self.assertEqual(SanitaryComplaint.objects.get().client_submission_id, self.SID)
+
+    def test_a_new_id_creates_a_new_report(self):
+        self._post(client_submission_id=self.SID)
+        response = self._post(client_submission_id="another-form-fill-0001")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(SanitaryComplaint.objects.count(), 2)
+
+    def test_missing_id_is_still_accepted(self):
+        for _ in range(2):
+            self.assertEqual(self._post().status_code, status.HTTP_201_CREATED)
+        self.assertEqual(SanitaryComplaint.objects.count(), 2)
+        self.assertTrue(
+            all(value is None for value in SanitaryComplaint.objects.values_list("client_submission_id", flat=True))
+        )
+
+    def test_resending_is_not_blocked_when_the_contact_is_at_its_limit(self):
+        for index in range(5):
+            response = self._post(client_submission_id=f"fill-{index}")
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, index)
+        self.assertEqual(self._post(client_submission_id="fill-5").status_code, 429)
+
+        resend = self._post(client_submission_id="fill-4")
+        self.assertEqual(resend.status_code, status.HTTP_200_OK, resend.content)
+        self.assertEqual(SanitaryComplaint.objects.count(), 5)
+
+    def test_resending_does_not_use_up_the_ip_limit(self):
+        self._post(client_submission_id=self.SID)
+        for _ in range(25):
+            self.assertEqual(
+                self._post(client_submission_id=self.SID).status_code, status.HTTP_200_OK
+            )
+        response = self._post(client_submission_id="fresh", contact_number="09179998888")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+class CommunityReportConcurrentSubmitTests(TransactionTestCase):
+    """Two requests with the same id arriving together still make one report."""
+
+    URL = "/api/mobile/sanitation/reports/"
+    SID = "concurrent-fill-0001"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def test_concurrent_duplicates_create_exactly_one_row(self):
+        import threading
+
+        from django.db import connections
+
+        barrier = threading.Barrier(2)
+        results = []
+        errors = []
+
+        # Both requests pass the "already submitted?" check before either
+        # saves, then both insert: the losing insert must turn into a 200 for
+        # the winner's report, not a second row or a 500.
+        #
+        # The second insert is started 0.5 s after the first. SQLite's
+        # in-memory test database answers truly simultaneous writes with
+        # "database table is locked" instead of waiting; PostgreSQL makes the
+        # second insert wait for the first and then raises IntegrityError,
+        # which is exactly the path this staggering exercises.
+        import time
+
+        from api.views import mobile as mobile_views
+
+        real_lookup = mobile_views.find_existing_community_report
+
+        def lookup_after_both_arrive(submission_id):
+            found = real_lookup(submission_id)
+            if found is None:
+                try:
+                    order = barrier.wait(timeout=10)
+                except threading.BrokenBarrierError:
+                    order = 0
+                if order == 1:
+                    time.sleep(0.5)
+            return found
+
+        def send():
+            try:
+                client = APIClient(raise_request_exception=False)
+                response = client.post(
+                    self.URL,
+                    _community_report_payload(client_submission_id=self.SID),
+                    format="json",
+                )
+                results.append((response.status_code, response.json().get("complaint_id")))
+            except Exception as exc:  # pragma: no cover - reported below
+                errors.append(repr(exc))
+            finally:
+                connections.close_all()
+
+        with patch.object(
+            mobile_views, "find_existing_community_report", side_effect=lookup_after_both_arrive
+        ):
+            threads = [threading.Thread(target=send) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=30)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(code for code, _ in results), [200, 201], results)
+        self.assertEqual(len({complaint_id for _, complaint_id in results}), 1, results)
+        self.assertEqual(SanitaryComplaint.objects.filter(client_submission_id=self.SID).count(), 1)
+        self.assertEqual(SanitaryComplaint.objects.count(), 1)

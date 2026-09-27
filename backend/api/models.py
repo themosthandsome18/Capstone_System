@@ -830,6 +830,11 @@ class SanitaryComplaint(models.Model):
     barangay = models.CharField(max_length=120)
     # Where the reporter says the problem is (street, landmark, purok).
     location_address = models.CharField(max_length=255, blank=True, default="")
+    # One id per filled-in public report form, so a resend (e.g. after a
+    # timeout) returns the existing report instead of creating another.
+    client_submission_id = models.CharField(
+        max_length=64, null=True, blank=True, unique=True
+    )
     reported_date = models.DateField()
     status = models.CharField(
         max_length=30,
