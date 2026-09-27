@@ -285,7 +285,7 @@
 .search-box {
   width: 260px;
   height: 40px;
-  border: 1.5px solid var(--th-primary);
+  border: 1.5px solid #2fa34a;
   border-radius: 999px;
   background: white;
   display: flex;
