@@ -4,8 +4,8 @@ This file governs `Tourism_index.css` and `pages/BookingManagement.wizard.css`.
 **Read section 5 before you edit either file.** It describes rules that also
 style Sanitation pages.
 
-Every fact below was checked against the code at commit `0840be5`. Line
-numbers are given as "at `0840be5`" and will drift, so find rules by selector.
+Every fact below was checked against the code at commit `3d1e2fd`. Line
+numbers are given as "at `3d1e2fd`" and will drift, so find rules by selector.
 
 ---
 
@@ -36,11 +36,12 @@ hook Phase 3 will use to recolour it.
   - the full-screen `PageLoader` shown while tourism boots
   - canvas charts
 
-## 2. The tokens (53 at `0840be5`)
+## 2. The tokens (53 at `3d1e2fd`)
 
 All tokens are declared in the `:root` block at the top of `Tourism_index.css`.
 
-"Uses" counts `var(--th-…)` reads anywhere in `frontend/src` at `0840be5`.
+"Uses" counts `var(--th-…)` reads in the `.js` and `.css` files under
+`frontend/src`, measured at `3d1e2fd`.
 Some of those reads sit in dead rules (section 7).
 
 "Follows theme" records intent for Phase 3, as follows:
@@ -52,17 +53,17 @@ Some of those reads sit in dead rules (section 7).
 ### Brand (14)
 | Token | Default | Role | Uses |
 |---|---|---|---|
-| `--th-primary` | `#2fa34a` | Primary fills, active nav/tabs, outline-control borders, focus borders, brand icons | 52 |
-| `--th-primary-hover` | `#15803d` | Hover fill of primary buttons, link hover. Chosen so white text is 5.02:1 | 4 |
+| `--th-primary` | `#2fa34a` | Primary fills, active nav/tabs, outline-control borders, focus borders, brand icons | 53 |
+| `--th-primary-hover` | `#15803d` | Hover fill of primary buttons, hover text of links and the secondary button. Chosen so white text is 5.02:1 | 5 |
 | `--th-primary-active` | `#1f7f36` | Pressed state, date-field focus outline | 3 |
 | `--th-primary-deep` | `#146c43` | Dark primary fills carrying white text (Save/Import buttons). White text 6.45:1 | 3 |
-| `--th-primary-ink` | `#166534` | Text sitting on a primary tint | 14 |
+| `--th-primary-ink` | `#166534` | Text sitting on a primary tint, and brand accent text on white | 18 |
 | `--th-primary-ink-strong` | `#0f3b1e` | Emphasis or hover text on a tint | 2 |
-| `--th-primary-selected` | `#d1fae5` | Selection / strong-hover fills (wizard active step) | 3 |
+| `--th-primary-selected` | `#d1fae5` | Selection / strong-hover fills (wizard active step, View button hover) | 4 |
 | `--th-primary-contrast` | `#ffffff` | Text on a primary fill. **Unused. Must be derived in Phase 3** (section 7) | 0 |
-| `--th-primary-tint` | `#f0fdf4` | Pale brand surfaces and hovers | 18 |
-| `--th-primary-tint-strong` | `#dff1e2` | Table headers, totals rows, selected items | 9 |
-| `--th-primary-border` | `#bbf7d0` | Pale brand borders | 3 |
+| `--th-primary-tint` | `#f0fdf4` | Pale brand surfaces and hovers | 19 |
+| `--th-primary-tint-strong` | `#dff1e2` | Table headers, totals rows, selected items, View button fill | 10 |
+| `--th-primary-border` | `#bbf7d0` | Pale brand borders | 4 |
 | `--th-primary-alpha-10` | `rgba(47, 163, 74, 0.1)` | Focus glow | 2 |
 | `--th-primary-alpha-20` | `rgba(47, 163, 74, 0.2)` | Focus ring | 2 |
 | `--th-primary-alpha-30` | `rgba(47, 163, 74, 0.3)` | Active-tab glow | 1 |
@@ -146,16 +147,17 @@ Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
    raised text that already failed AA above it.
 7. **Inline JSX styles beat the stylesheet.** Tokenising a stylesheet rule does
    nothing if an inline `style={{…}}` on the same element sets that property.
-   At `0840be5` no such override of a tokenised property remains.
+   At `3d1e2fd` no such override of a tokenised property remains.
 
 ## 4. Deliberate exceptions: leave these literal
 
 | What | Where | Why |
 |---|---|---|
 | Top-bar **"Sanitation" module-switch button** | `.module-switch-btn` (`#0f6b42`, hover `#0b5836`) | It keeps Sanitation's own green on purpose, to signal that it leaves the tourism module. |
-| **`.btn-primary`**, including `hover:bg-[#278d3f]` | `Tourism_index.css` (TI:128–129 at `0840be5`) | Dead in tourism, but **live on Sanitation's Submission Tracking page** (`SubmissionTracking.js`). Its hover colour paints that page. Tokenising it would let a tourism theme repaint Sanitation. |
+| **`.btn-primary`**, including `hover:bg-[#278d3f]` | `Tourism_index.css` (TI:128–129 at `3d1e2fd`) | Dead in tourism, but **live on Sanitation's Submission Tracking page** (`SubmissionTracking.js`). Its hover colour paints that page. Tokenising it would let a tourism theme repaint Sanitation. |
 | **"View & Review record" 👁 button** on booking rows | `.booking-icon-btn.view` (`#0f766e` / `#99f6e4` / `#f0fdfa`) | A fixed functional action colour (Tailwind teal-700/200/50), part of the row's colour-coded actions: view teal, delete red, arrived green, no-show red. It stays fixed like status colours. |
 | **Wizard auto-fill buttons** ("Balance female count", "Balance age 8-59") | `.tourist-auto-fill-row button` (`#0f766e` text, `#94d3bd` border) | The same fixed functional teal. Not part of any system that should follow the brand. |
+| **Gallery toast** (appears after promoting a feedback photo) | JSX `bg-green-700` in `DestinationManagement.js` (line 604 at `3d1e2fd`, the "Toast message for gallery promotion" block) | **Status.** It announces "✓ Photo successfully added to … slideshow!", so it stays fixed like other status colours. Its other message, "Photo is already included in … images.", shares the same success styling. Changing that is a design change, not a theming one. |
 | Plain white (`#ffffff`, `bg-white`) | many | White is not a theme colour. Tokenising it would be churn. |
 
 ## 5. ⚠ The Sanitation coupling (the most important warning in this file)
@@ -187,7 +189,7 @@ Sanitation:**
 - `.sortable-th:hover`, `.sortable-th.active-sort`,
   `.sortable-th.active-sort .sort-indicator`, `.report-sort-select:focus`.
   They're used by `AnalyticsAndReport.js` and `SanitaryReportAnalytics.js`.
-  `Sanitation_index.css` (around lines 5886–5940 at `0840be5`) redefines each
+  `Sanitation_index.css` (around lines 5886–5940 at `3d1e2fd`) redefines each
   colour property, with `!important` where tourism uses it, so the tourism
   tokens never paint Sanitation.
 - `.report-sort-label`, `.report-sort-select`, `.report-sort-dir-btn` (and its
@@ -197,34 +199,75 @@ Sanitation:**
 lines in the `.ws-*` block and the `.search-box` border were tokenised by
 mistake and then returned to literals in `facaac5`.
 
-## 6. Tailwind opacity limitation: 17 sites
+## 6. Tailwind opacity limitation: 27 sites
 
-These `@apply` rules use arbitrary `var()` colours, for example
+These rules use arbitrary `var()` colours, for example
 `border-[var(--th-primary)]`. Tailwind compiles those **without** its
-`--tw-border-opacity` / `--tw-bg-opacity` variables. Instead of
-`rgb(… / var(--tw-border-opacity, 1))` the output is a plain `var(…)`.
+`--tw-border-opacity` / `--tw-bg-opacity` / `--tw-text-opacity` variables.
+Instead of `rgb(… / var(--tw-*-opacity, 1))` the output is a plain `var(…)`.
 
-**Consequence:** `border-opacity-*` and `bg-opacity-*` utilities have **no
-effect** on these elements. A slash opacity modifier on the tokenised class
-(for example `border-[var(--th-border-tinted)]/50`) is untested, so verify it
-before relying on it.
+**Consequence:** the matching `*-opacity-*` utility has **no effect** on these
+elements. A slash opacity modifier on the tokenised class (for example
+`border-[var(--th-border-tinted)]/50`) is untested, so verify it before relying
+on it.
 
-| Utility that no longer works | Selectors |
-|---|---|
-| `border-opacity-*` | `.panel`, `.btn-secondary`, `.dashboard-year-select`, `.outline-action`, `.booking-search input`, `.arrival-date-btn` / `.arrival-export-btn`, `.destination-search input`, `.reports-actions button`, `.gis-actions button`, `.destination-card-stats div`, `.gis-location-item` |
-| `bg-opacity-*` | `.primary-action`, `.destination-add-btn`, `.reports-actions .green`, `.report-filter-card button`, `.gis-actions .active`, `.destination-card-stats div` |
+Measured at `3d1e2fd`. Line numbers are in `Tourism_index.css` unless stated.
 
-That's 17 sites on 16 rules: 13 from `66c3e7b` and 4 from `0840be5`.
+**`border-opacity-*` inert (12 sites):**
+- `.panel` (TI:113)
+- `.btn-secondary` (TI:133)
+- `.dashboard-year-select` (TI:467)
+- `.outline-action` (TI:486)
+- `.booking-search input` (TI:805)
+- `.arrival-date-btn, .arrival-export-btn` (TI:1401)
+- `.destination-search input` (TI:1708)
+- `.destination-card-stats div` (TI:2514)
+- `.feedback-reply` (TI:2765)
+- `.reports-actions button` (TI:2840)
+- `.gis-actions button` (TI:3256)
+- `.gis-location-item` (TI:3478)
+
+**`bg-opacity-*` inert (9 sites):**
+- `.primary-action` (TI:496)
+- `.destination-add-btn` (TI:1702)
+- `.destination-view-btn`, at rest and on `hover:` (TI:1783, 2 sites)
+- `.destination-card-stats div` (TI:2514)
+- `.feedback-reply` (TI:2765)
+- `.reports-actions .green` (TI:2844)
+- `.report-filter-card button` (TI:2882)
+- `.gis-actions .active` (TI:3260)
+
+**`text-opacity-*` inert (6 sites):**
+- `.btn-secondary` on `hover:` (TI:133)
+- `.metric-card span` (TI:521)
+- `.arrival-note` (TI:1579). This one is also overridden by the rule's own
+  `color` line.
+- `.destination-view-btn` (TI:1783)
+- `.feedback-reply strong` (TI:2769)
+- the photo drop-zone upload icon (JSX `text-[var(--th-primary)]`,
+  `DestinationManagement.js:1407`)
+
+**Totals: 27 sites.**
+- 26 of them are in `@apply` rules, on 21 rules.
+- 1 is a JSX class.
+
+By commit:
+- 13 from `66c3e7b`
+- 4 from `0840be5`
+- 10 from `3d1e2fd`: 9 `@apply` sites and the JSX icon
 
 **Why the trade was accepted:**
-- At `0840be5`, **no `*-opacity-*` utility existed anywhere in tourism code**,
+- At `3d1e2fd`, **no `*-opacity-*` utility exists anywhere in tourism code**,
   so nothing reads the dropped variables.
-- The built CSS was compared rule by rule. The only differences were the
-  dropped variable and the colour value.
-- The 13 earlier sites had already rendered correctly since `66c3e7b`.
+- The built CSS was compared rule by rule for every batch. The only differences
+  were the dropped variable and the colour value. Hover variants still emit as
+  their own `:hover` rules.
+- The 13 earliest sites had already rendered correctly since `66c3e7b`.
 
-The four modal backdrops use `bg-[var(--th-scrim)]` in JSX. Their original
-`bg-slate-950/55` had no opacity variable to lose.
+The four modal backdrops use `bg-[var(--th-scrim)]` in JSX (BookingManagement.js
+1607 and 1718, DestinationManagement.js 1330 and 1511). Their original
+`bg-slate-950/55` already emitted a literal alpha and had no opacity variable,
+so nothing was lost there.
 
 ## 7. Open items for Phase 3
 
@@ -232,6 +275,12 @@ The four modal backdrops use `bg-[var(--th-scrim)]` in JSX. Their original
   chosen colour's luminance, picking white or a dark ink. White text fails AA
   on most oranges, and it already fails on today's `#2fa34a` (3.25:1, for
   example on the wizard's Continue and Save buttons).
+- **The contrast derivation must cover graphics, not only text.** The photo
+  drop-zone upload icon (`--th-primary` on `#f8fafc`) is **3.11:1** against
+  the 3:1 non-text threshold. It was 3.15:1 before Phase 1. It passes, but only
+  just, and a lighter theme colour would push it under. Another pair close to
+  its threshold is the top-bar role line: `--th-text-tinted-muted` on
+  `--th-surface-tinted` is **4.57:1** against 4.5:1 for text.
 - **Charts need a JS bridge.** A `<canvas>` cannot read `var()`, so Chart.js
   colours in `Dashboard.js` and `AnalyticsAndReport.js` must be read with
   `getComputedStyle` on the tourism shell element. The same applies to the SVG
@@ -245,20 +294,14 @@ The four modal backdrops use `bg-[var(--th-scrim)]` in JSX. Their original
 - **Dead gradient on the Key Insights cards.** The inline
   `background: "#ffffff"` at `AnalyticsAndReport.js:648` overrides the
   stylesheet's `.analytics-question-item` background
-  (`linear-gradient(180deg, #ffffff 0%, #f4faf7 100%)`, TI:2993 at `0840be5`),
+  (`linear-gradient(180deg, #ffffff 0%, #f4faf7 100%)`, TI:2993 at `3d1e2fd`),
   so that gradient never paints. Delete it, or restore it on purpose.
-- **Green Tailwind palette classes:** the brand ones were converted in the
-  "tokenise brand palette classes" commit. One green palette class was
-  deliberately left:
-  - JSX `bg-green-700` on the gallery toast (`DestinationManagement.js`,
-    the "Toast message for gallery promotion" block). It is **status**: it
-    announces "✓ Photo successfully added to … slideshow!", so it stays
-    fixed. Its other message, "Photo is already included in … images.",
-    shares the same success styling. If that should read as information
-    rather than success, it is a design change, not a theming one.
-
-  Status palette classes (`.status.positive`, `.destination-status.active`,
-  `.badge-success`) stay fixed.
+- **Green Tailwind palette classes:** the brand ones were converted in
+  `3d1e2fd`. The ones still green are status and stay fixed:
+  - the gallery toast (a deliberate exception, see section 4)
+  - `.status.positive`
+  - `.destination-status.active`
+  - `.badge-success` (also dead)
 - **`body` / `--page-bg` migration.** This covers the legacy `--page-bg` and
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
 - **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
@@ -329,7 +372,10 @@ The four modal backdrops use `bg-[var(--th-scrim)]` in JSX. Their original
 
 ## 9. Commit range
 
-Phase 1 is the 20 commits `fb0107d` … `0840be5` on `tourism/theme-tokens`:
+Phase 1 is the 22 commits `fb0107d` … `3d1e2fd` on `tourism/theme-tokens`. That is 21 code
+commits and 1 docs commit (`7f3815c`). This file was refreshed in the commit
+after `3d1e2fd`.
+
 
 ```
 fb0107d chore(tourism): add theme colour tokens (defaults only)
@@ -352,4 +398,6 @@ c831cd4 refactor(tourism): add ink and selected tokens
 6e09b51 fix(tourism): tokenise analytics inline styles
 c09f498 refactor(tourism): tokenise brand colours in tailwind classes
 0840be5 refactor(tourism): tokenise remaining tailwind borders
+7f3815c docs(tourism): record the theme token contract
+3d1e2fd refactor(tourism): tokenise brand palette classes
 ```
