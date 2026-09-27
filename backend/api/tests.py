@@ -849,7 +849,7 @@ class MobilePublicApiTests(TestCase):
             {
                 "complainant_name": "Resident Reporter",
                 "contact_number": "09170000000",
-                "category": "Improper waste disposal",
+                "category": "Improper Garbage Disposal",
                 "barangay": "Poblacion",
                 "description": "Garbage pile near the walkway.",
                 "latitude": 14.186,
@@ -872,7 +872,7 @@ class MobilePublicApiTests(TestCase):
             {
                 "complainant_name": "Resident Reporter",
                 "contact_number": "09170000000",
-                "category": "Unsafe water source",
+                "category": "Contaminated Water Source",
                 "barangay": "Poblacion",
                 "description": "Water source needs inspection.",
             },
@@ -2535,7 +2535,7 @@ class SecureUploadTests(TestCase):
             {
                 "complainant_name": "Upload Tester",
                 "contact_number": "09171234567",
-                "category": "Solid Waste",
+                "category": "Improper Garbage Disposal",
                 "description": "Garbage dump near creek",
                 "photo": bad_file,
             },
@@ -2552,7 +2552,7 @@ class SecureUploadTests(TestCase):
                 {
                     "complainant_name": "Upload Tester",
                     "contact_number": "09171234567",
-                    "category": "Solid Waste",
+                    "category": "Improper Garbage Disposal",
                     "description": "Garbage dump near creek",
                     "photo": good_file,
                 },
@@ -4300,7 +4300,7 @@ class CommunityReportIdentityTests(TestCase):
             "complainant_name": "Juana Reporter",
             "contact_number": "0917 123 4567",
             "category": "Severe Sewage Overflow",
-            "priority": "high",
+            "priority": "low",
             "barangay": "Daungan",
             "description": "Tumatagas ang poso negro sa kanto.",
             "latitude": 14.19,
@@ -4350,6 +4350,55 @@ class CommunityReportIdentityTests(TestCase):
             complaint = SanitaryComplaint.objects.get()
             self.assertEqual(complaint.complainant_name, "Juana Reporter")
             self.assertEqual(complaint.contact_number, "09171234567")
-            # Urgency is derived from the category by the app and stored as sent.
+            # Urgency comes from the category, never from what the client sends.
             self.assertEqual(complaint.priority, "high")
             self.assertEqual(response.json()["priority"], "high")
+
+
+class CommunityReportUrgencyTests(TestCase):
+    """The server, not the reporter, decides urgency from the category."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def _post(self, **overrides):
+        payload = {
+            "complainant_name": "Juana Reporter",
+            "contact_number": "09171234567",
+            "category": "Improper Garbage Disposal",
+            "barangay": "Daungan",
+            "description": "Nakatambak ang basura.",
+        }
+        payload.update(overrides)
+        return APIClient().post(self.URL, payload, format="json")
+
+    def test_client_urgency_is_ignored_for_a_standard_category(self):
+        response = self._post(priority="high", urgency="urgent")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(SanitaryComplaint.objects.get().priority, "medium")
+
+    def test_each_group_gets_its_urgency(self):
+        expected = {
+            "Contaminated Water Source": "high",
+            "Hazardous / Medical Waste": "high",
+            "Severe Sewage Overflow": "high",
+            "Pest & Rodents Infestation": "medium",
+            "Other Sanitation Concern": "low",
+        }
+        for index, (category, priority) in enumerate(expected.items()):
+            response = self._post(
+                category=category, priority="low" if priority != "low" else "high",
+                contact_number=f"091700000{index:02d}",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, category)
+            self.assertEqual(response.json()["priority"], priority, category)
+
+    def test_unknown_category_is_rejected(self):
+        response = self._post(category="Something Else")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("category", response.json()["detail"].lower())
+        self.assertFalse(SanitaryComplaint.objects.exists())
+
+    def test_missing_category_is_rejected(self):
+        response = self._post(category="")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(SanitaryComplaint.objects.exists())

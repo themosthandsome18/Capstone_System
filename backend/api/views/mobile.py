@@ -19,7 +19,6 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     BOOKING_STATUS_ARRIVED,
-    COMPLAINT_PRIORITY_MEDIUM,
     COMPLAINT_STATUS_PENDING,
     COMPLAINT_STATUS_REJECTED,
     COMPLAINT_STATUS_RESOLVED,
@@ -69,6 +68,7 @@ from api.serializers import (
 from api.permissions import module_required
 from api.services.activity import log_activity
 from api.services.sanitation import (
+    community_report_category,
     generate_complaint_id,
     apply_default_next_due_date,
     sync_establishment_after_inspection,
@@ -588,8 +588,6 @@ def mobile_sanitation_report_submit(request):
         ).strip()
         data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
         data["status"] = COMPLAINT_STATUS_PENDING
-        data["priority"] = data.get("priority") or COMPLAINT_PRIORITY_MEDIUM
-        data["category"] = data.get("category") or "Community sanitation concern"
         data["barangay"] = data.get("barangay") or "Unspecified"
         data["description"] = (
             data.get("description") or data.get("message") or ""
@@ -609,6 +607,21 @@ def mobile_sanitation_report_submit(request):
         data["contact_number"] = normalize_contact_digits(data["contact_number"])
         for flag in ("is_anonymous", "anonymous"):
             data.pop(flag, None)
+
+        # Urgency comes from the category only; anything the client sends
+        # ("priority", "urgency") is discarded. Unknown categories fail fast.
+        known = community_report_category(data.get("category"))
+        if known is None:
+            message = (
+                "Pumili ng category mula sa listahan. / "
+                "Please choose a category from the list."
+            )
+            return Response(
+                {"error": message, "detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["category"], data["priority"] = known
+        data.pop("urgency", None)
 
         if uploads and not data.get("photo_documentation"):
             try:

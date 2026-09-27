@@ -69,6 +69,34 @@ STATUS_LABELS = {
     SANITARY_STATUS_NO_PERMIT: "No Permit",
 }
 
+# Community report categories and their urgency: the one server-side copy of
+# the list the mobile app offers (sanitationReportCategoryDefinitions). The
+# server derives urgency from the category; a reporter cannot choose it.
+COMMUNITY_REPORT_CATEGORY_PRIORITIES = {
+    "Contaminated Water Source": "high",
+    "Hazardous / Medical Waste": "high",
+    "Severe Sewage Overflow": "high",
+    "Food Establishment Hygiene": "medium",
+    "Public Market Sanitation": "medium",
+    "Public Restroom Maintenance": "medium",
+    "Pest & Rodents Infestation": "medium",
+    "Stagnant Water / Mosquito Breeding": "medium",
+    "Livestock / Poultry Odor": "medium",
+    "Open Burning of Waste": "medium",
+    "Improper Garbage Disposal": "medium",
+    "Other Sanitation Concern": "low",
+}
+
+
+def community_report_category(category):
+    """(canonical category, urgency) for a known category, else None."""
+    wanted = " ".join(str(category or "").split()).lower()
+    for name, priority in COMMUNITY_REPORT_CATEGORY_PRIORITIES.items():
+        if name.lower() == wanted:
+            return name, priority
+    return None
+
+
 PERMIT_STATUS_BY_COMPLIANCE = {
     SANITARY_STATUS_GOOD: PERMIT_STATUS_ACTIVE,
     SANITARY_STATUS_UPCOMING: PERMIT_STATUS_RENEWAL_DUE,
