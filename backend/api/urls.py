@@ -2,7 +2,6 @@ from django.urls import path
 
 from .auth_views import (
     current_user_view,
-    establishment_register_view,
     login_view,
     logout_view,
     tourist_register_view,
@@ -83,7 +82,6 @@ urlpatterns = [
     path("health/", health_check),
     path("auth/login/", login_view),
     path("auth/register/", tourist_register_view),
-    path("auth/register-establishment/", establishment_register_view),
     path("auth/me/", current_user_view),
     path("auth/logout/", logout_view),
     path("activity-logs/", activity_log_list),
@@ -110,7 +108,6 @@ urlpatterns = [
         mobile_sanitation_establishment_status,
     ),
     path("mobile/sanitation/household-surveys/", mobile_household_survey_submit),
-    path("mobile/sanitation/register-establishment/", establishment_register_view),
 
     # Tourism routes
     path("reference-tables/", reference_tables),

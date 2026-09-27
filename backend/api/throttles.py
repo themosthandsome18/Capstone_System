@@ -48,10 +48,6 @@ class _FixedScopeRateThrottle(ScopedRateThrottle):
         return allowed
 
 
-class EstablishmentClaimRateThrottle(_FixedScopeRateThrottle):
-    fixed_scope = "establishment_claim"
-
-
 class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
     """Failed Establishment Portal lookups per client address.
 

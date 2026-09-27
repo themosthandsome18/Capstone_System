@@ -2,14 +2,13 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from django.db import OperationalError, connection, transaction
-from .models import ROLE_ADMIN, ROLE_ESTABLISHMENT, ROLE_TOURIST, ROLE_TOURISM, UserProfile
+from django.db import OperationalError, connection
+from .models import ROLE_ADMIN, ROLE_TOURIST, ROLE_TOURISM, UserProfile
 from .serializers import AuthUserSerializer
-from .throttles import EstablishmentClaimRateThrottle
 
 
 def get_or_create_profile(user):
@@ -166,94 +165,4 @@ def current_user_view(request):
 def logout_view(request):
     Token.objects.filter(user=request.user).delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-@throttle_classes([EstablishmentClaimRateThrottle])
-def establishment_register_view(request):
-    """
-    Register or claim an establishment account.
-    """
-    from .models import SanitaryEstablishment
-
-    business_name = (request.data.get("business_name") or "").strip()
-    owner_name = (request.data.get("owner_name") or request.data.get("full_name") or "").strip()
-    permit_number = (request.data.get("permit_number") or "").strip()
-    barangay = (request.data.get("barangay") or "").strip()
-    contact_number = (request.data.get("contact_number") or request.data.get("contact") or "").strip()
-    email = (request.data.get("email") or "").strip().lower()
-    username = (request.data.get("username") or email or "").strip()
-    password = request.data.get("password") or ""
-
-    if not username:
-        return Response(
-            {"detail": "Username or Email is required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    if not password or len(password) < 6:
-        return Response(
-            {"detail": "Password must be at least 6 characters."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    if User.objects.filter(username=username).exists():
-        return Response(
-            {"detail": "An account with this username or email already exists."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    parts = owner_name.split(" ", 1) if owner_name else ["Establishment", "Owner"]
-    first_name = parts[0]
-    last_name = parts[1] if len(parts) > 1 else ""
-
-    # Claims are matched by permit number ONLY. business_name is display text and
-    # must never be used to find or link an establishment.
-    with transaction.atomic():
-        san_est = None
-        if permit_number:
-            # Lock matching rows so two concurrent claims cannot both win.
-            matches = list(
-                SanitaryEstablishment.objects.select_for_update()
-                .filter(permit_number__iexact=permit_number)
-                .order_by("id")
-            )
-            # Reject before any account is created if the permit is already claimed.
-            if any(item.user_id is not None for item in matches):
-                return Response(
-                    {
-                        "detail": (
-                            "This establishment already has a linked account. "
-                            "If you believe this is an error, please contact the Sanitary Office."
-                        )
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            san_est = matches[0] if matches else None
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        user.is_active = True
-        user.save()
-
-        profile = get_or_create_profile(user)
-        profile.role = ROLE_ESTABLISHMENT
-        profile.save()
-
-        if san_est:
-            san_est.user = user
-            if contact_number and not san_est.contact_number:
-                san_est.contact_number = contact_number
-            san_est.save()
-
-    token, _ = Token.objects.get_or_create(user=user)
-    payload = serialize_auth_payload(user, token)
-    payload["message"] = f"Establishment account created successfully for {business_name or username}!"
-    return Response(payload, status=status.HTTP_201_CREATED)
 

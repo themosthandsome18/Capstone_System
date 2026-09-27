@@ -136,153 +136,35 @@ class AuthApiTests(TestCase):
         self.assertNotEqual(resp_lookup.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class EstablishmentClaimSecurityTests(TestCase):
-    """Establishment claims are matched by permit number only and never overwrite an owner."""
+class RemovedEstablishmentRegistrationTests(TestCase):
+    """The establishment username/password registration is gone; owners use
+    the Establishment Portal with the code on their Owner's Slip."""
 
-    REGISTER_URL = "/api/auth/register-establishment/"
-
-    def setUp(self):
-        self.client = APIClient()
-        self.btype = SanitaryBusinessType.objects.create(
-            name="Claim Test Bakery",
-            inspection_frequency="monthly",
-        )
-        self.owner = User.objects.create_user(username="original_owner", password="Owner@12345")
-        UserProfile.objects.create(user=self.owner, role=ROLE_ESTABLISHMENT)
-        self.claimed = SanitaryEstablishment.objects.create(
-            business_name="Claimed Bakery",
-            owner_name="Original Owner",
-            business_type=self.btype,
-            barangay="Poblacion",
-            address="1 Claimed St",
-            permit_number="SP-2026-CLAIMED",
-            user=self.owner,
-        )
-        self.unclaimed = SanitaryEstablishment.objects.create(
-            business_name="Unclaimed Bakery",
-            owner_name="Nobody Yet",
-            business_type=self.btype,
-            barangay="Poblacion",
-            address="2 Open St",
-            permit_number="SP-2026-OPEN",
-        )
-
-    def test_claiming_already_linked_permit_is_rejected_and_writes_nothing(self):
+    def test_both_registration_routes_are_404_and_create_nothing(self):
         users_before = User.objects.count()
-        profiles_before = UserProfile.objects.count()
-        tokens_before = Token.objects.count()
-
-        response = self.client.post(
-            self.REGISTER_URL,
-            {
-                "username": "attacker",
-                "password": "Attacker@123",
-                "permit_number": "sp-2026-claimed",  # case-insensitive match must still be blocked
-                "business_name": "Claimed Bakery",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertIn("already has a linked account", response.json()["detail"])
-        self.assertNotIn("token", response.json())
-        self.assertEqual(User.objects.count(), users_before)
-        self.assertEqual(UserProfile.objects.count(), profiles_before)
-        self.assertEqual(Token.objects.count(), tokens_before)
-        self.assertFalse(User.objects.filter(username="attacker").exists())
-        self.claimed.refresh_from_db()
-        self.assertEqual(self.claimed.user_id, self.owner.id)
-
-    def test_business_name_alone_cannot_claim_an_establishment(self):
-        response = self.client.post(
-            self.REGISTER_URL,
-            {
-                "username": "name_only",
-                "password": "NameOnly@123",
-                "business_name": "Unclaimed Bakery",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("establishment", response.json())
-        self.unclaimed.refresh_from_db()
-        self.assertIsNone(self.unclaimed.user_id)
-        self.claimed.refresh_from_db()
-        self.assertEqual(self.claimed.user_id, self.owner.id)
-
-    def test_business_name_of_claimed_establishment_cannot_take_it_over(self):
-        response = self.client.post(
-            self.REGISTER_URL,
-            {
-                "username": "name_takeover",
-                "password": "Takeover@123",
-                "business_name": "Claimed Bakery",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertNotIn("establishment", response.json())
-        self.claimed.refresh_from_db()
-        self.assertEqual(self.claimed.user_id, self.owner.id)
-
-    def test_valid_permit_for_unclaimed_establishment_still_links(self):
-        response = self.client.post(
-            self.REGISTER_URL,
-            {
-                "username": "legit_owner",
-                "password": "Legit@12345",
-                "permit_number": "SP-2026-OPEN",
-                "contact_number": "09170000000",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_user = User.objects.get(username="legit_owner")
-        self.assertEqual(new_user.profile.role, ROLE_ESTABLISHMENT)
-        self.unclaimed.refresh_from_db()
-        self.assertEqual(self.unclaimed.user_id, new_user.id)
-        self.assertEqual(self.unclaimed.contact_number, "09170000000")
-        self.assertEqual(response.json()["establishment"]["id"], self.unclaimed.id)
-
-    def test_second_claim_of_same_permit_is_rejected_after_first_succeeds(self):
-        first = self.client.post(
-            self.REGISTER_URL,
-            {"username": "first_claim", "password": "First@12345", "permit_number": "SP-2026-OPEN"},
-            format="json",
-        )
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
-        users_after_first = User.objects.count()
-
-        second = self.client.post(
-            self.REGISTER_URL,
-            {"username": "second_claim", "password": "Second@12345", "permit_number": "SP-2026-OPEN"},
-            format="json",
-        )
-
-        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(User.objects.count(), users_after_first)
-        self.unclaimed.refresh_from_db()
-        self.assertEqual(self.unclaimed.user.username, "first_claim")
-
-    def test_missing_or_unknown_permit_creates_unlinked_account(self):
-        for username, extra in (
-            ("no_permit", {}),
-            ("unknown_permit", {"permit_number": "SP-DOES-NOT-EXIST"}),
+        for url in (
+            "/api/auth/register-establishment/",
+            "/api/mobile/sanitation/register-establishment/",
         ):
-            with self.subTest(username=username):
-                response = self.client.post(
-                    self.REGISTER_URL,
-                    {"username": username, "password": "Unlinked@123", **extra},
-                    format="json",
-                )
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                self.assertNotIn("establishment", response.json())
-                self.assertFalse(
-                    SanitaryEstablishment.objects.filter(user__username=username).exists()
-                )
+            response = APIClient().post(
+                url,
+                {"username": "would_be_owner", "password": "Owner@12345", "permit_number": "SP-1"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, url)
+        self.assertEqual(User.objects.count(), users_before)
+
+    def test_the_shared_login_still_signs_in_an_existing_establishment_account(self):
+        # Existing establishment users, their rows and tokens are left alone.
+        user = User.objects.create_user(username="old_owner", password="Owner@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ESTABLISHMENT)
+
+        response = APIClient().post(
+            "/api/auth/login/", {"username": "old_owner", "password": "Owner@12345"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.json()["user"]["profile"]["role"], ROLE_ESTABLISHMENT)
 
 
 def ensure_test_barangays():
@@ -3765,7 +3647,6 @@ class EstablishmentPermitNumberTests(TestCase):
     """Recording an existing sanitary permit number when registering an establishment."""
 
     LIST_URL = "/api/sanitation/establishments/"
-    CLAIM_URL = "/api/auth/register-establishment/"
 
     def setUp(self):
         self.client = APIClient()
@@ -3865,51 +3746,6 @@ class EstablishmentPermitNumberTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-
-    def test_owner_claim_of_a_recorded_permit_is_still_protected(self):
-        created = self.client.post(self.LIST_URL, self._with_permit(), format="json").json()
-        claimant = APIClient()
-
-        first = claimant.post(
-            self.CLAIM_URL,
-            {"username": "real_owner", "password": "Owner@12345", "permit_number": " sp-2026-777 "},
-            format="json",
-        )
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.content)
-        record = SanitaryEstablishment.objects.get(pk=created["id"])
-        self.assertEqual(record.user.username, "real_owner")
-
-        users_before = User.objects.count()
-        second = claimant.post(
-            self.CLAIM_URL,
-            {"username": "second_claimant", "password": "Other@12345", "permit_number": "SP-2026-777"},
-            format="json",
-        )
-        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(User.objects.count(), users_before)
-        record.refresh_from_db()
-        self.assertEqual(record.user.username, "real_owner")
-
-    def test_claim_locks_the_matching_rows(self):
-        from api import auth_views
-
-        self.client.post(self.LIST_URL, self._with_permit(), format="json")
-        with patch.object(
-            auth_views.transaction, "atomic", wraps=auth_views.transaction.atomic
-        ) as atomic, patch(
-            "django.db.models.query.QuerySet.select_for_update",
-            autospec=True,
-            side_effect=lambda qs, *a, **k: qs,
-        ) as select_for_update:
-            response = APIClient().post(
-                self.CLAIM_URL,
-                {"username": "lock_owner", "password": "Owner@12345", "permit_number": "SP-2026-777"},
-                format="json",
-            )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
-        self.assertTrue(atomic.called)
-        self.assertTrue(select_for_update.called)
 
 
 class PublicPermitVerifyExposureTests(TestCase):
@@ -4213,43 +4049,8 @@ class PublicSanitationBootstrapExposureTests(TestCase):
         )
 
 
-class EstablishmentClaimRateLimitTests(TestCase):
-    """Exploit: unlimited claim attempts let anyone guess permit numbers."""
-
-    def setUp(self):
-        from django.conf import settings
-        from django.core.cache import caches
-
-        if "throttle" in settings.CACHES:
-            caches["throttle"].clear()
-
-    def test_establishment_claim_is_limited_to_five_per_hour(self):
-        client = APIClient()
-        statuses = [
-            client.post(
-                "/api/auth/register-establishment/",
-                {"username": f"guess_{index}", "password": "short"},
-                format="json",
-            ).status_code
-            for index in range(6)
-        ]
-        self.assertNotIn(status.HTTP_429_TOO_MANY_REQUESTS, statuses[:5])
-        self.assertEqual(statuses[5], status.HTTP_429_TOO_MANY_REQUESTS)
-
-    def test_the_mobile_claim_route_shares_the_limit(self):
-        client = APIClient()
-        for index in range(5):
-            client.post(
-                "/api/auth/register-establishment/",
-                {"username": f"web_{index}", "password": "short"},
-                format="json",
-            )
-        response = client.post(
-            "/api/mobile/sanitation/register-establishment/",
-            {"username": "mobile_guess", "password": "short"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+class ThrottleSettingsTests(TestCase):
+    """General throttle settings."""
 
     def test_login_is_not_throttled(self):
         client = APIClient()
@@ -4270,9 +4071,10 @@ class EstablishmentClaimRateLimitTests(TestCase):
         )
 
 
+@override_settings(TRACKING_CODE_KEY="test-tracking-code-key")
 class ThrottleCacheTableMigrationTests(TransactionTestCase):
     """Render runs `migrate` but not build.sh, so a migration must create the
-    throttle cache table; without it every claim request would fail with 500."""
+    throttle cache table; without it every throttled request would fail with 500."""
 
     TABLE = "api_throttle_cache"
     BEFORE = [("api", "0036_set_client_inspection_frequencies")]
@@ -4284,7 +4086,7 @@ class ThrottleCacheTableMigrationTests(TransactionTestCase):
     def _tables(self):
         return connection.introspection.table_names()
 
-    def test_migrate_creates_the_table_and_claims_never_return_500(self):
+    def test_migrate_creates_the_table_and_throttled_requests_never_return_500(self):
         executor = MigrationExecutor(connection)
         executor.migrate(self.BEFORE)
         with connection.cursor() as cursor:
@@ -4300,11 +4102,11 @@ class ThrottleCacheTableMigrationTests(TransactionTestCase):
         client = APIClient(raise_request_exception=False)
         statuses = [
             client.post(
-                "/api/auth/register-establishment/",
-                {"username": f"cache_probe_{index}", "password": "short"},
+                "/api/mobile/sanitation/establishment-status/",
+                {"code": "MBN-2222-2222"},
                 format="json",
             ).status_code
-            for index in range(6)
+            for _ in range(21)
         ]
         self.assertTrue(all(code < 500 for code in statuses), statuses)
         self.assertEqual(statuses[-1], status.HTTP_429_TOO_MANY_REQUESTS)

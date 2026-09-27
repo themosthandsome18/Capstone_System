@@ -231,10 +231,9 @@ REST_FRAMEWORK = {
     ],
     # Render terminates TLS at one proxy that appends the client address to
     # X-Forwarded-For; trust exactly that one hop when identifying clients.
-    # Only used by throttles, and only the establishment claim is throttled.
+    # Only used by throttles (community reports and Establishment Portal lookups).
     "NUM_PROXIES": 1,
     "DEFAULT_THROTTLE_RATES": {
-        "establishment_claim": "5/hour",
         "community_report_contact": "5/day",
         "community_report_ip": "20/hour",
         "owner_status_ip": "20/hour",
