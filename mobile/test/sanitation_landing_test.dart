@@ -100,12 +100,12 @@ void main() {
     expect(find.byType(SanitationReportPage), findsOneWidget);
   });
 
-  testWidgets('Establishment Portal card keeps its current destination', (tester) async {
+  testWidgets('Establishment Portal card opens the tracking-code portal', (tester) async {
     await pumpLanding(tester);
 
     await tester.tap(find.text('Establishment Portal'));
     await tester.pumpAndSettle();
-    expect(find.text('Establishment Access'), findsOneWidget);
+    expect(find.byType(SanitationOwnerPortalPage), findsOneWidget);
   });
 
   testWidgets('the verify link opens the permit verification screen', (tester) async {

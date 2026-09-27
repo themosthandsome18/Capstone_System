@@ -115,6 +115,15 @@ class TourismApi {
     return parseList(data['rows'], MobileSanitationReceipt.fromJson);
   }
 
+  /// Establishment Portal: the owner's permit status by private tracking code.
+  /// No login; nothing is stored on the phone.
+  Future<OwnerPermitStatus> fetchOwnerPermitStatus(String code) async {
+    final data = await _post('/mobile/sanitation/establishment-status/', {
+      'code': code,
+    });
+    return OwnerPermitStatus.fromJson(data);
+  }
+
   Future<PermitVerificationResult> verifySanitaryPermit(String code) async {
     final data = await _getWithQuery('/mobile/sanitation/permits/verify/', {
       'code': code.trim(),
