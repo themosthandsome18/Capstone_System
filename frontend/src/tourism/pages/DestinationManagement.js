@@ -1404,7 +1404,7 @@ function DestinationManagement({ initialTab }) {
                 </span>
 
                 <label className="image-upload-dropzone">
-                  <FiUploadCloud size={28} className="text-green-600 mb-1" />
+                  <FiUploadCloud size={28} className="text-[var(--th-primary)] mb-1" />
                   <span className="text-xs font-bold text-slate-700">
                     {uploadingImages ? "Uploading images..." : "Click or drag photos to upload for mobile slideshow"}
                   </span>

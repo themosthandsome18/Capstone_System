@@ -247,17 +247,17 @@ The four modal backdrops use `bg-[var(--th-scrim)]` in JSX. Their original
   stylesheet's `.analytics-question-item` background
   (`linear-gradient(180deg, #ffffff 0%, #f4faf7 100%)`, TI:2993 at `0840be5`),
   so that gradient never paints. Delete it, or restore it on purpose.
-- **Remaining green Tailwind palette classes** (not arbitrary values, so not
-  covered in Phase 1):
-  - `.btn-secondary` `hover:text-green-700`
-  - `.metric-card span` `text-green-600`
-  - `.destination-view-btn` `bg-green-100 text-green-700 hover:bg-green-200`
-  - `.feedback-reply` (emerald)
-  - `.arrival-note` `text-green-700`, overridden by the rule's own `color`
-  - JSX `bg-green-700` (DestinationManagement.js:604, a toast)
-  - JSX `text-green-600` (DestinationManagement.js:1407, an upload icon)
+- **Green Tailwind palette classes:** the brand ones were converted in the
+  "tokenise brand palette classes" commit. One green palette class was
+  deliberately left:
+  - JSX `bg-green-700` on the gallery toast (`DestinationManagement.js`,
+    the "Toast message for gallery promotion" block). It is **status**: it
+    announces "✓ Photo successfully added to … slideshow!", so it stays
+    fixed. Its other message, "Photo is already included in … images.",
+    shares the same success styling. If that should read as information
+    rather than success, it is a design change, not a theming one.
 
-  Status ones (`.status.positive`, `.destination-status.active`,
+  Status palette classes (`.status.positive`, `.destination-status.active`,
   `.badge-success`) stay fixed.
 - **`body` / `--page-bg` migration.** This covers the legacy `--page-bg` and
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.

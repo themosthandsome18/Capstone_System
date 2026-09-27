@@ -130,7 +130,7 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-green-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-[var(--th-primary-hover)];
   }
 
   .badge {
@@ -518,7 +518,7 @@
 }
 
 .metric-card span {
-  @apply text-[11px] font-semibold text-green-600;
+  @apply text-[11px] font-semibold text-[var(--th-primary-ink)];
 }
 
 .metric-icon {
@@ -1576,7 +1576,7 @@
 /* ================= ARRIVAL AUTO-CALCULATED BAR ================= */
 
 .arrival-note {
-  @apply rounded-xl px-5 py-3 text-xs font-medium text-green-700;
+  @apply rounded-xl px-5 py-3 text-xs font-medium text-[var(--th-primary-ink)];
   background: var(--th-primary-tint);
   color: var(--th-primary-ink);
   box-shadow: 0 12px 22px rgba(var(--th-shadow-rgb), 0.2);
@@ -1780,7 +1780,7 @@
 }
 
 .destination-view-btn {
-  @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-green-100 text-xs font-bold text-green-700 hover:bg-green-200 transition-colors;
+  @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-[var(--th-primary-tint-strong)] text-xs font-bold text-[var(--th-primary-ink)] hover:bg-[var(--th-primary-selected)] transition-colors;
 }
 
 /* ================= RESORT CAROUSEL / SLIDESHOW ================= */
@@ -2762,11 +2762,11 @@
 }
 
 .feedback-reply {
-  @apply mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-slate-700;
+  @apply mt-4 rounded-xl border border-[var(--th-primary-border)] bg-[var(--th-primary-tint)] px-4 py-3 text-sm text-slate-700;
 }
 
 .feedback-reply strong {
-  @apply text-xs uppercase tracking-wide text-emerald-700;
+  @apply text-xs uppercase tracking-wide text-[var(--th-primary-ink)];
 }
 
 .feedback-reply p {
