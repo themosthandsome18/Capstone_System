@@ -30,7 +30,7 @@
 .wizard-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #f0faf4;
+  background: var(--th-primary-tint);
   padding: 28px 20px;
   display: flex;
   flex-direction: column;
@@ -64,7 +64,7 @@
 
 .wizard-step-item.clickable:hover:not(.active),
 .wizard-step-item.completed:hover:not(.active) {
-  background: #e2f7eb;
+  background: var(--th-primary-tint-strong);
 }
 
 .wizard-step-item.active {

@@ -863,7 +863,7 @@
 }
 
 .booking-table-card tbody tr:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 /* ================= TABLE CELL ================= */
@@ -1624,7 +1624,7 @@
 }
 
 .arrival-table-card tbody tr:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 /* ================= ARRIVAL TABLE CELL ================= */
@@ -1950,7 +1950,7 @@
 }
 
 .photo-action-btn.promote {
-  background: #ecfdf5;
+  background: var(--th-primary-tint);
   color: #15803d;
   border-color: #a7f3d0;
 }
@@ -2393,7 +2393,7 @@
   margin-top: 10px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: #ecfdf5;
+  background: var(--th-primary-tint);
   border-left: 3px solid var(--th-primary);
 }
 
@@ -2647,7 +2647,7 @@
 
 /* HOVER EFFECT */
 .feedback-filters select:hover {
-  background-color: #e9f3ee;
+  background-color: var(--th-primary-tint);
 }
 
 /* FOCUS */
@@ -3006,7 +3006,7 @@
 
 .analytics-question-top small {
   border-radius: 999px;
-  background: #e8f7ef;
+  background: var(--th-primary-tint);
   padding: 6px 12px;
   font-size: 11px;
   font-weight: 800;
@@ -3372,7 +3372,7 @@
 .gis-selected-destination span {
   width: fit-content;
   border-radius: 999px;
-  background: #e4f6ea;
+  background: var(--th-primary-tint);
   padding: 4px 9px;
   font-size: 10px;
   font-weight: 800;
@@ -3441,7 +3441,7 @@
 }
 
 .gis-location-items::-webkit-scrollbar-track {
-  background: #eef5f1;
+  background: var(--th-primary-tint);
   border-radius: 999px;
 }
 
@@ -3474,11 +3474,11 @@
 }
 
 .gis-location-item:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 .gis-location-item.selected {
-  background: #e4f6ea;
+  background: var(--th-primary-tint-strong);
   border-left: 3px solid var(--th-primary);
 }
 
