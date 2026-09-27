@@ -230,6 +230,8 @@ REST_FRAMEWORK = {
     "NUM_PROXIES": 1,
     "DEFAULT_THROTTLE_RATES": {
         "establishment_claim": "5/hour",
+        "community_report_contact": "5/day",
+        "community_report_ip": "20/hour",
     },
 }
 

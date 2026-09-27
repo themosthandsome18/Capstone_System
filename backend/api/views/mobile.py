@@ -9,7 +9,12 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    parser_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -66,6 +71,10 @@ from api.serializers import (
     TouristRecordSerializer,
 )
 from api.permissions import module_required
+from api.throttles import (
+    CommunityReportContactRateThrottle,
+    CommunityReportIpRateThrottle,
+)
 from api.services.activity import log_activity
 from api.services.sanitation import (
     community_report_category,
@@ -572,6 +581,7 @@ def mobile_feedback_submit(request):
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([AllowAny])
+@throttle_classes([CommunityReportIpRateThrottle, CommunityReportContactRateThrottle])
 def mobile_sanitation_report_submit(request):
     try:
         ensure_mobile_barangays()
@@ -669,6 +679,8 @@ def mobile_sanitation_report_submit(request):
             )
 
         complaint = serializer.save()
+        # Only a saved report counts toward the contact's daily limit.
+        CommunityReportContactRateThrottle.record_success(request)
 
         log_activity(
             request,

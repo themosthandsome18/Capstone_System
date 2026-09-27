@@ -4402,3 +4402,66 @@ class CommunityReportUrgencyTests(TestCase):
         response = self._post(category="")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(SanitaryComplaint.objects.exists())
+
+
+class CommunityReportRateLimitTests(TestCase):
+    """Server-side limits on public community reports (the device counter can be reset)."""
+
+    URL = "/api/mobile/sanitation/reports/"
+
+    def setUp(self):
+        from django.core.cache import caches
+
+        caches["throttle"].clear()
+
+    def _post(self, client=None, remote_addr="127.0.0.1", **overrides):
+        payload = {
+            "complainant_name": "Juana Reporter",
+            "contact_number": "09171234567",
+            "category": "Improper Garbage Disposal",
+            "barangay": "Daungan",
+            "description": "Nakatambak ang basura.",
+        }
+        payload.update(overrides)
+        return (client or APIClient()).post(
+            self.URL, payload, format="json", REMOTE_ADDR=remote_addr
+        )
+
+    def test_sixth_report_from_the_same_contact_in_a_day_is_refused(self):
+        for index in range(5):
+            response = self._post()
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, index)
+
+        response = self._post(contact_number="+63 917 123 4567")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn("ngayong araw", response.json()["detail"])
+        self.assertIn("today", response.json()["detail"])
+        self.assertEqual(SanitaryComplaint.objects.count(), 5)
+
+    def test_a_different_contact_still_succeeds(self):
+        for _ in range(5):
+            self._post()
+        response = self._post(contact_number="09179998888")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_rejected_reports_do_not_use_up_the_contact_quota(self):
+        for _ in range(3):
+            self.assertEqual(
+                self._post(category="Not A Category").status_code,
+                status.HTTP_400_BAD_REQUEST,
+            )
+        for index in range(5):
+            self.assertEqual(self._post().status_code, status.HTTP_201_CREATED, index)
+
+    def test_more_than_twenty_reports_an_hour_from_one_address_is_refused(self):
+        for index in range(20):
+            response = self._post(contact_number=f"091700{index:05d}")
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, index)
+
+        response = self._post(contact_number="09179990000")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn("oras", response.json()["detail"])
+        self.assertIn("hour", response.json()["detail"])
+
+        other_address = self._post(contact_number="09179990001", remote_addr="10.0.0.2")
+        self.assertEqual(other_address.status_code, status.HTTP_201_CREATED)
