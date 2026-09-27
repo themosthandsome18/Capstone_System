@@ -51,6 +51,7 @@
     --th-text-inverse: #ffffff;
 
     /* Overlay */
+    --th-shadow-rgb: 34, 72, 55;
     --th-scrim: rgba(2, 6, 23, 0.55);
 
     /* Status (fixed, never derived from the theme) */
@@ -832,7 +833,7 @@
   overflow: hidden;
   border-radius: 18px;
   background: var(--th-surface-alt);
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 /* ================= TABLE STRUCTURE ================= */
@@ -1309,7 +1310,7 @@
   padding: 0 22px;
   font-size: 14px;
   color: var(--th-text-main);
-  box-shadow: 0 10px 24px rgba(34, 72, 55, 0.15);
+  box-shadow: 0 10px 24px rgba(var(--th-shadow-rgb), 0.15);
 }
 
 /* LEFT TEXT */
@@ -1421,7 +1422,7 @@
   background: #ffffff;
   padding: 14px 20px;
   border-radius: 20px;
-  box-shadow: 0 8px 20px rgba(34, 72, 55, 0.08);
+  box-shadow: 0 8px 20px rgba(var(--th-shadow-rgb), 0.08);
 }
 
 .arrival-filter-group {
@@ -1545,7 +1546,7 @@
 
 .arrival-stat-card {
   @apply flex min-h-[106px] items-center justify-between rounded-[22px] bg-white/90 px-5 py-4;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .arrival-stat-card p {
@@ -1578,7 +1579,7 @@
   @apply rounded-xl px-5 py-3 text-xs font-medium text-green-700;
   background: var(--th-primary-tint);
   color: var(--th-primary-ink);
-  box-shadow: 0 12px 22px rgba(34, 72, 55, 0.2);
+  box-shadow: 0 12px 22px rgba(var(--th-shadow-rgb), 0.2);
 }
 
 /* ================= ARRIVAL TABLE CONTAINER ================= */
@@ -1587,7 +1588,7 @@
   overflow: hidden;
   border-radius: 18px;
   background: var(--th-surface-alt);
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .table-responsive {
@@ -1765,7 +1766,7 @@
   overflow: hidden;
   border-radius: 22px;
   background: var(--th-surface-alt);
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .destination-card.clickable {
@@ -1775,7 +1776,7 @@
 
 .destination-card.clickable:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 35px rgba(34, 72, 55, 0.28);
+  box-shadow: 0 20px 35px rgba(var(--th-shadow-rgb), 0.28);
 }
 
 .destination-view-btn {
@@ -2599,7 +2600,7 @@
 
 .feedback-stat-card {
   @apply flex min-h-[96px] items-center justify-between rounded-[22px] bg-white/90 px-6 py-4;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .feedback-stat-card p {
@@ -2644,7 +2645,7 @@
   color: #1f2937;
 
   background: #f3f4f6;
-  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
 
   cursor: pointer;
   position: relative;
@@ -2665,7 +2666,7 @@
 /* FOCUS */
 .feedback-filters select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--th-primary-alpha-20), 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 0 0 2px var(--th-primary-alpha-20), 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
 }
 
 .feedback-search {
@@ -2673,7 +2674,7 @@
   height: 52px;
   border-radius: 999px;
   background: #f3f4f6;
-  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2708,7 +2709,7 @@
   color: #6b7280;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.16);
+  box-shadow: 0 12px 24px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 /* ================= FEEDBACK LIST ================= */
@@ -2723,7 +2724,7 @@
 .feedback-card {
   @apply flex justify-between gap-6 rounded-[18px] bg-white/90 px-7 py-5;
   min-height: 120px;
-  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.2);
+  box-shadow: 0 12px 24px rgba(var(--th-shadow-rgb), 0.2);
 }
 
 .feedback-left {
@@ -2890,7 +2891,7 @@
 
 .report-chart-card {
   @apply rounded-[24px] bg-white/80 p-5;
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.16);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
   margin-bottom: 24px;
 }
 
@@ -2912,7 +2913,7 @@
   overflow: hidden;
   border-radius: 14px;
   background: var(--th-surface-alt);
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 .report-table-card table {
@@ -3279,7 +3280,7 @@
   padding: 24px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 .mauban-map-frame {
@@ -3326,7 +3327,7 @@
 .gis-heatmap-card,
 .gis-stat-box {
   @apply rounded-[18px] bg-white/85;
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 /* ================= INTERACTIVE MAP CARD ================= */
@@ -3776,7 +3777,7 @@
 
 .analytics-question-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(34, 72, 55, 0.18) !important;
+  box-shadow: 0 16px 32px rgba(var(--th-shadow-rgb), 0.18) !important;
 }
 
 /* ── INSTANT TABLE SORTING STYLES ── */
@@ -3788,7 +3789,7 @@
 }
 
 .sortable-th:hover {
-  background: rgba(34, 72, 55, 0.08) !important;
+  background: rgba(var(--th-shadow-rgb), 0.08) !important;
   color: var(--th-primary-ink) !important;
 }
 
@@ -3803,7 +3804,7 @@
 
 .sortable-th.active-sort {
   color: var(--th-primary-ink) !important;
-  background: rgba(34, 72, 55, 0.07) !important;
+  background: rgba(var(--th-shadow-rgb), 0.07) !important;
   font-weight: 800;
 }
 

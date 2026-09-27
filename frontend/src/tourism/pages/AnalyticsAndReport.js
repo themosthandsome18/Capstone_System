@@ -644,7 +644,7 @@ function AnalyticsAndReport() {
               key={item.id || item.question}
               className="analytics-question-item"
               style={{
-                boxShadow: "0 10px 25px rgba(34, 72, 55, 0.12)",
+                boxShadow: "0 10px 25px rgba(var(--th-shadow-rgb), 0.12)",
                 background: "#ffffff",
                 border: "1px solid #d7e5e1",
               }}
