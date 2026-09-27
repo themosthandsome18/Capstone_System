@@ -1327,7 +1327,7 @@ function DestinationManagement({ initialTab }) {
 
       {/* Edit / Add Destination Modal with Image Uploader */}
       {isFormOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <form
             className="tourist-record-form w-full max-w-[720px]"
             onSubmit={handleSubmit}
@@ -1508,7 +1508,7 @@ function DestinationManagement({ initialTab }) {
 
       {/* Delete Destination Modal */}
       {deleteTarget ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <div className="delete-record-confirm w-full max-w-[420px]">
             <p>
               Are you sure you want to delete{" "}
