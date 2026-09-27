@@ -264,6 +264,7 @@ class TourismApi {
     List<XFile> photos = const [],
     required String latitude,
     required String longitude,
+    String clientSubmissionId = '',
   }) {
     final fields = {
       'complainant_name': name,
@@ -275,6 +276,7 @@ class TourismApi {
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
+      if (clientSubmissionId.isNotEmpty) 'client_submission_id': clientSubmissionId,
     };
 
     if (photos.isNotEmpty) {

@@ -411,11 +411,20 @@ class SanitationReportPage extends StatefulWidget {
     required this.api,
     required this.barangays,
     this.initialDraft,
+    this.saveDraftOnFailure = false,
+    this.imagePicker,
   });
 
   final TourismApi api;
   final List<BarangayItem> barangays;
   final SanitationReportDraft? initialDraft;
+
+  /// Staff can see and retry drafts in their app; public reporters cannot,
+  /// so only the staff path keeps a failed report as a draft.
+  final bool saveDraftOnFailure;
+
+  /// Injectable for tests; defaults to the device picker.
+  final ImagePicker? imagePicker;
 
   @override
   State<SanitationReportPage> createState() => _SanitationReportPageState();
@@ -526,6 +535,33 @@ const sanitationReportCategories = [
 ];
 
 const sanitationReportPriorities = ['low', 'medium', 'high'];
+
+/// A random (version 4) UUID for one fill of the community report form.
+String newClientSubmissionId() {
+  final random = math.Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
+/// What a reporter is told when sending fails. Server answers for bad input
+/// (400) and limits (429) already carry a bilingual message; anything else
+/// gets a fixed one, never raw exception text.
+String communityReportFailureMessage(Object error) {
+  if (error is ApiException) {
+    if (error.statusCode >= 500) {
+      return 'May problema sa server. Subukan ulit mamaya. / '
+          'Server problem. Please try again later.';
+    }
+    final message = error.message.trim();
+    if (message.isNotEmpty) return message;
+  }
+  return 'Hindi naipadala. Tingnan ang internet at subukan ulit. / '
+      'Not sent. Check your connection and try again.';
+}
 
 /// Digits only, with a Philippine +63 prefix folded to a leading 0.
 String normalizePhMobileNumber(String value) {
@@ -822,7 +858,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   // Kept internally for the map pin; never shown as raw text fields.
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
-  final ImagePicker _imagePicker = ImagePicker();
+  late final ImagePicker _imagePicker = widget.imagePicker ?? ImagePicker();
   List<XFile> _photos = [];
   String? _category;
   String? _barangay;
@@ -831,6 +867,11 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   bool _showMap = false;
   bool _consentConfirmed = false;
   int _dailyCount = 0;
+
+  /// One id for this fill of the form, reused on every retry, so a resend
+  /// after a lost reply returns the saved report instead of a duplicate.
+  /// A new form (a new page) gets a new id.
+  final String _submissionId = newClientSubmissionId();
 
   /// Reporters cannot choose urgency; it always follows the category.
   String get _priority =>
@@ -1200,12 +1241,24 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         SizedBox(
           height: 52,
           child: SubmitButton(
+            key: const ValueKey('community-report-submit'),
             label: 'Isumite ang Report',
-            loadingLabel: 'Isinusumite...',
+            loadingLabel: 'Ipinapadala...',
             loading: _submitting,
             onPressed: _submit,
           ),
         ),
+        if (_submitting)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Maaaring umabot ng hanggang isang minuto ang unang pagpapadala '
+              'habang nagigising ang server. / The first submit can take up '
+              'to a minute while the server wakes up.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          ),
         const SizedBox(height: 6),
         Text(
           remaining > 0
@@ -1217,13 +1270,15 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             color: remaining > 0 ? AppColors.muted : AppColors.red,
           ),
         ),
-        Center(
-          child: TextButton.icon(
-            onPressed: _submitting ? null : _saveDraft,
-            icon: const Icon(Icons.save_outlined, size: 18),
-            label: const Text('I-save bilang draft'),
+        // Drafts are only visible (and retried) in the staff app.
+        if (widget.saveDraftOnFailure)
+          Center(
+            child: TextButton.icon(
+              onPressed: _submitting ? null : _saveDraft,
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: const Text('I-save bilang draft'),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1310,6 +1365,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (_dailyCount >= _dailyLimit) {
       showAppMessage(
         context,
@@ -1340,6 +1396,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         photos: _photos,
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
+        clientSubmissionId: _submissionId,
       );
 
       if (mounted) {
@@ -1368,12 +1425,13 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
-      await SanitationDraftStore.upsertReport(_buildDraft());
+      // The form keeps everything it has (including photos) so the reporter
+      // can send it again; only the staff app, which lists drafts, keeps one.
+      if (widget.saveDraftOnFailure) {
+        await SanitationDraftStore.upsertReport(_buildDraft());
+      }
       if (mounted) {
-        showAppMessage(
-          context,
-          'Hindi naisumite: ${conciseError(error)}. Na-save bilang draft.',
-        );
+        showAppMessage(context, communityReportFailureMessage(error));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -1798,6 +1856,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         builder: (context) => SanitationReportPage(
           api: widget.api,
           barangays: widget.bootstrap.barangays,
+          saveDraftOnFailure: true,
         ),
       ),
     );
@@ -1817,6 +1876,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           api: widget.api,
           barangays: widget.bootstrap.barangays,
           initialDraft: draft,
+          saveDraftOnFailure: true,
         ),
       ),
     );

@@ -24,6 +24,7 @@ class FakeReportApi extends TourismApi {
     List<XFile> photos = const [],
     required String latitude,
     required String longitude,
+    String clientSubmissionId = '',
   }) async {
     calls.add({
       'name': name,
@@ -158,7 +159,8 @@ void main() {
     expect(find.text('Mag-upload'), findsOneWidget);
     expect(find.text('Litrato (hanggang 5)'), findsOneWidget);
     expect(find.text('5 na lang ang natitirang report ngayong araw'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'I-save bilang draft'), findsOneWidget);
+    // Public reporters have no drafts screen, so there is no Save Draft here.
+    expect(find.text('I-save bilang draft'), findsNothing);
   });
 
   testWidgets('the urgency badge follows the chosen category', (tester) async {
