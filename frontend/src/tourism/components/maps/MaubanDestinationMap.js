@@ -198,8 +198,8 @@ function MaubanDestinationMap({
                   </p>
                   <span style={{
                     display: "inline-block",
-                    background: "#dcfce7",
-                    color: "#16a34a",
+                    background: "var(--th-primary-tint-strong)",
+                    color: "var(--th-primary-active)",
                     fontSize: "10px",
                     fontWeight: 600,
                     borderRadius: "999px",

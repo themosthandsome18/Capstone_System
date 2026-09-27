@@ -1569,7 +1569,7 @@ function BookingManagement() {
                     <button
                       type="button"
                       className="wizard-btn-back"
-                      style={{ color: "#16a34a", fontWeight: "600" }}
+                      style={{ color: "var(--th-primary)", fontWeight: "600" }}
                       onClick={() => jumpToStep(5)}
                       title="Return to Review"
                     >

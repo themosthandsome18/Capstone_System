@@ -2511,7 +2511,7 @@
 }
 
 .destination-card-stats h4:not(.negative) {
-  color: #16a34a;
+  color: var(--th-primary);
 }
 
 .destination-card-stats h4.negative {
