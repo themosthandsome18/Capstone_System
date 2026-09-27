@@ -453,7 +453,7 @@
 }
 
 .wizard-step-error {
-  color: #dc2626;
+  color: var(--th-danger-text);
   font-size: 0.8rem;
   font-weight: 500;
   margin-top: 8px;
@@ -492,7 +492,7 @@
 }
 
 .wizard-total-item strong.error {
-  color: #dc2626;
+  color: var(--th-danger-text);
 }
 
 /* ── Water source multi-select ── */
@@ -614,7 +614,7 @@
 }
 
 .ws-water-level-display.assigned {
-  color: #15803d;
+  color: var(--th-success-text);
   font-weight: 600;
   font-style: normal;
   background: #f0faf4;
