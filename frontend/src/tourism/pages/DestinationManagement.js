@@ -1283,7 +1283,7 @@ function DestinationManagement({ initialTab }) {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: "#64748b", fontSize: "13px", padding: "12px 0" }}>
+                  <p style={{ color: "var(--th-text-muted)", fontSize: "13px", padding: "12px 0" }}>
                     No reviews submitted for this resort yet.
                   </p>
                 )}

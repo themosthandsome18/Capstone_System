@@ -634,7 +634,7 @@ function AnalyticsAndReport() {
       {/* ── Key Insights & Analysis (Moved below main report) ── */}
       <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
         <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Computed from tourist records, selected filters, and arrival status</p>
+        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--th-text-muted)" }}>Computed from tourist records, selected filters, and arrival status</p>
       </div>
 
       <div className="analytics-question-grid" style={{ marginTop: 0 }}>
@@ -782,7 +782,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
-          <small style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+          <small style={{ fontSize: "11px", color: "var(--th-text-muted)", marginTop: "2px" }}>
             {Number(value).toLocaleString()} visitors
           </small>
         </div>
@@ -813,7 +813,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           <strong style={{ fontSize: "32px", fontWeight: "900", color: "#147c79", lineHeight: 1 }}>
             {value}
           </strong>
-          <span style={{ fontSize: "13px", fontWeight: "700", color: "#64748b", display: "block", marginTop: "2px" }}>
+          <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--th-text-muted)", display: "block", marginTop: "2px" }}>
             nights average length of stay
           </span>
         </div>
@@ -861,7 +861,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
           <span style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", marginTop: "4px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
             {label}
           </span>
-          <small style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+          <small style={{ fontSize: "11px", color: "var(--th-text-muted)", marginTop: "2px" }}>
             {Number(value).toLocaleString()} visitors
           </small>
         </div>

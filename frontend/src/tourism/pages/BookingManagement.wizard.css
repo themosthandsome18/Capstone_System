@@ -86,7 +86,7 @@
 
 .wizard-close-btn:hover {
   background: #f3f4f6;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .wizard-step-bubble {
@@ -99,7 +99,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--th-border);
   background: #fff;
   color: #9ca3af;
   transition: all 0.2s;
@@ -162,7 +162,7 @@
 .wizard-step-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .wizard-progress-label {
@@ -224,10 +224,10 @@
 .wizard-field select {
   height: 38px;
   padding: 0 12px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--th-text-main);
   background: #fff;
   transition: border-color 0.15s;
   width: 100%;
@@ -271,7 +271,7 @@
 .wizard-contact-row {
   display: flex;
   align-items: center;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -291,7 +291,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
-  border-right: 1.5px solid #d1d5db;
+  border-right: 1.5px solid var(--th-border-strong);
   flex-shrink: 0;
   user-select: none;
 }
@@ -310,7 +310,7 @@
   border-radius: 10px;
   padding: 16px 18px;
   margin-bottom: 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--th-border);
 }
 
 .wizard-review-section-header {
@@ -323,7 +323,7 @@
 .wizard-review-section-header h4 {
   font-size: 0.875rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
   margin: 0;
 }
 
@@ -364,7 +364,7 @@
 
 .wizard-review-item strong {
   font-size: 0.82rem;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 /* ── Footer ── */
@@ -389,7 +389,7 @@
 
 .wizard-btn-back {
   padding: 8px 20px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   background: #fff;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -472,7 +472,7 @@
   padding: 12px;
   background: #f9fafb;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--th-border);
 }
 
 .wizard-total-item {
@@ -503,10 +503,10 @@
 .ws-multiselect-trigger {
   height: 38px;
   padding: 0 12px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--th-text-main);
   background: #fff;
   cursor: pointer;
   display: flex;
@@ -547,7 +547,7 @@
   left: 0;
   right: 0;
   background: #fff;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
@@ -591,7 +591,7 @@
 .ws-option-label span {
   font-size: 0.82rem;
   font-weight: 500;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .ws-option-label small {
@@ -603,7 +603,7 @@
 .ws-water-level-display {
   height: 38px;
   padding: 0 12px;
-  border: 1.5px solid #e5e7eb;
+  border: 1.5px solid var(--th-border);
   border-radius: 8px;
   font-size: 0.875rem;
   background: #f9fafb;

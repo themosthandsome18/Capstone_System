@@ -193,7 +193,7 @@ function MaubanDestinationMap({
                       onError={(e) => { e.target.style.display = "none"; }}
                     />
                   )}
-                  <p style={{ fontWeight: 700, fontSize: "13px", color: "#111827", margin: "0 0 4px" }}>
+                  <p style={{ fontWeight: 700, fontSize: "13px", color: "var(--th-text-main)", margin: "0 0 4px" }}>
                     {destination.resort_name}
                   </p>
                   <span style={{
