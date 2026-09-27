@@ -237,7 +237,7 @@
 .wizard-field select:focus {
   outline: none;
   border-color: var(--th-primary);
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-10);
 }
 
 /* Same look as the existing .modal-field disabled inputs (Sanitation_index.css) */
@@ -279,7 +279,7 @@
 
 .wizard-contact-row:focus-within {
   border-color: var(--th-primary);
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-10);
 }
 
 .wizard-contact-prefix {

@@ -13,13 +13,14 @@
 
     /* Brand */
     --th-primary: #2fa34a;
-    --th-primary-hover: #278d3f;
+    --th-primary-hover: #15803d;
     --th-primary-active: #1f7f36;
     --th-primary-deep: #146c43;
     --th-primary-contrast: #ffffff;
     --th-primary-tint: #f0fdf4;
     --th-primary-tint-strong: #dff1e2;
     --th-primary-border: #bbf7d0;
+    --th-primary-alpha-10: rgba(47, 163, 74, 0.1);
     --th-primary-alpha-20: rgba(47, 163, 74, 0.2);
     --th-primary-alpha-30: rgba(47, 163, 74, 0.3);
 
