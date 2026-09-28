@@ -3,8 +3,9 @@ from django.core.files.storage import default_storage
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from api.models import (
@@ -15,6 +16,7 @@ from api.models import (
     ROLE_ADMIN,
     FeedbackEntry,
     Resort,
+    TourismThemeSetting,
     TouristRecord,
 )
 from api.permissions import get_user_role, module_required
@@ -27,6 +29,8 @@ from api.seeders import (
 from api.serializers import (
     FeedbackEntrySerializer,
     ResortSerializer,
+    TourismThemeReadSerializer,
+    TourismThemeWriteSerializer,
     TouristRecordSerializer,
 )
 from api.services.activity import log_activity
@@ -40,6 +44,8 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reports_payload,
     build_tourist_records_payload,
+    get_cached_tourism_theme,
+    invalidate_tourism_theme_cache,
 )
 from api.services.upload import (
     StorageServiceError,
@@ -395,3 +401,44 @@ def feedback_detail(request, feedback_id):
         record_id=entry.pk,
     )
     return Response(serializer.data)
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([AllowAny])
+def tourism_theme(request):
+    # Public read: the Flutter app calls its bootstrap before login and the
+    # login page works with no token. The colour is not sensitive; the read
+    # shape never includes updated_by or any username.
+    if request.method == "GET":
+        return Response(get_cached_tourism_theme())
+
+    return update_tourism_theme(request)
+
+
+@module_required("tourism")
+def update_tourism_theme(request):
+    if get_user_role(request.user) != ROLE_ADMIN:
+        return Response(
+            {"detail": "Only the system admin can change the tourism theme."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = TourismThemeWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    setting = TourismThemeSetting.load()
+    for field, value in serializer.validated_data.items():
+        setattr(setting, field, value)
+    setting.updated_by = request.user
+    setting.save()
+    invalidate_tourism_theme_cache()
+
+    log_activity(
+        request,
+        MODULE_TOURISM,
+        ACTION_UPDATE,
+        setting,
+        label=f"Tourism theme {setting.primary_color}",
+        record_id=setting.pk,
+    )
+    return Response(TourismThemeReadSerializer(setting).data)

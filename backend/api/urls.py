@@ -23,6 +23,7 @@ from .views.tourism import (
     resort_detail,
     resort_image_upload,
     resort_list,
+    tourism_theme,
     tourist_record_detail,
     tourist_record_list,
 )
@@ -124,6 +125,7 @@ urlpatterns = [
     path("feedback/<int:feedback_id>/", feedback_detail),
     path("tourist-records/", tourist_record_list),
     path("tourist-records/<str:survey_id>/", tourist_record_detail),
+    path("tourism-theme/", tourism_theme),
 
     # Sanitation routes
     path("sanitation/bootstrap/", sanitation_bootstrap_data),
