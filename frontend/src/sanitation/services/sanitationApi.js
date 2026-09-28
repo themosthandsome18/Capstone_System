@@ -74,6 +74,19 @@ export function deleteSanitationEstablishment(id) {
 }
 
 
+/** Issues a new private tracking code for the Owner's Slip (the old one stops working). */
+export function issueOwnerTrackingCode(id) {
+  return request(
+    sanitationPath(`/establishments/${encodeURIComponent(id)}/tracking-code/`),
+    { method: "POST" }
+  );
+}
+
+
+export function fetchSanitationInspectors() {
+  return request(sanitationPath("/inspectors/"));
+}
+
 export function fetchSanitationInspections() {
   return request(sanitationPath("/inspections/"));
 }

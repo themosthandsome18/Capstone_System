@@ -1616,6 +1616,22 @@
   background: #f8fafc;
 }
 
+/* Establishment Records only: larger table text (client request). Other
+   pages that reuse .establishment-table-card keep their sizes. */
+.establishment-records-table th {
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.establishment-records-table td {
+  padding: 16px 16px;
+  font-size: 15px;
+}
+
+.establishment-records-table td .status-pill {
+  font-size: 13px;
+}
+
 .establishment-empty {
   height: 80px;
   text-align: center;
@@ -3296,17 +3312,17 @@
   color: #888;
 }
 
+/* A sentence, not a row of items: `display: flex` made each text node and
+   inline element its own flex item, which split the wording into columns. */
 .inspection-warning {
   margin-top: 22px;
-  min-height: 52px;
   border: 1px solid #ffc933;
   border-radius: 8px;
   background: linear-gradient(90deg, #fff8da, #ffe9db);
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
+  padding: 15px 16px;
   color: #e5a700;
   font-size: 14.5px;
+  line-height: 1.5;
 }
 
 .inspection-warning strong {
@@ -3649,7 +3665,7 @@
   color: #9f1239;
 }
 
-/* 🟠 MODERATE / HINDI GANON KALALA: Conditional */
+/* 🟠 MODERATE / NOT AS SERIOUS: Conditional */
 .permit-alert-card.permit-alert--medium {
   border-left: 7px solid #f59e0b;
   background: #fffdf5;
@@ -11760,4 +11776,128 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Inspection history and read-only detail */
+.inspection-history-modal,
+.inspection-detail-modal {
+  position: relative;
+  width: 760px;
+  max-width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: white;
+  padding: 24px 32px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.inspection-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspection-history-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 130px 110px auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbd5d1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspection-history-row:hover {
+  border-color: #0f6b3f;
+  background: #f4fbf7;
+}
+
+.inspection-history-date {
+  font-weight: 700;
+}
+
+.inspection-history-draft {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inspection-detail-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.inspection-detail-fields dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.inspection-detail-fields dd {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.inspection-detail-checklist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspection-detail-check {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.inspection-detail-check small {
+  grid-column: 1 / -1;
+  color: #64748b;
+}
+
+/* Completed inspections on the calendar */
+.calendar-event.completed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.inspection-calendar-key .completed::before {
+  background: #1d4ed8;
+}
+
+/* Never inspected: no finding yet, so a neutral slate rather than a
+   compliance colour. Covers every place the status is rendered. */
+.status-pill.not-yet-inspected,
+.establishment-status.not-yet-inspected,
+.inspection-status.not-yet-inspected,
+.permit-status.not-yet-inspected,
+.permit-compliance.not-yet-inspected,
+.activity-status.not-yet-inspected,
+.establishment-standing-banner.not_yet_inspected {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.status-pill.not-yet-inspected::before {
+  background: #64748b;
 }

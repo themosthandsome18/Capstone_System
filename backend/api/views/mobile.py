@@ -1,14 +1,25 @@
 import json
+import re
 from datetime import timedelta
+from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings
+from django.http import QueryDict
+from django.core.files.uploadedfile import UploadedFile
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    parser_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -18,7 +29,6 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     BOOKING_STATUS_ARRIVED,
-    COMPLAINT_PRIORITY_MEDIUM,
     COMPLAINT_STATUS_PENDING,
     COMPLAINT_STATUS_REJECTED,
     COMPLAINT_STATUS_RESOLVED,
@@ -65,9 +75,23 @@ from api.serializers import (
     SanitaryInspectionSerializer,
     TouristRecordSerializer,
 )
+from api.permissions import module_required
+from api.services.tracking_codes import (
+    NOT_CONFIGURED_MESSAGE,
+    TrackingCodeNotConfigured,
+    find_establishment_by_code,
+    owner_status_payload,
+)
+from api.throttles import (
+    OwnerStatusRateThrottle,
+    CommunityReportContactRateThrottle,
+    CommunityReportIpRateThrottle,
+)
 from api.services.activity import log_activity
 from api.services.sanitation import (
+    community_report_category,
     generate_complaint_id,
+    apply_default_next_due_date,
     sync_establishment_after_inspection,
     with_establishment_rollups,
 )
@@ -569,11 +593,24 @@ def mobile_feedback_submit(request):
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([AllowAny])
+@throttle_classes([CommunityReportIpRateThrottle, CommunityReportContactRateThrottle])
 def mobile_sanitation_report_submit(request):
     try:
         ensure_mobile_barangays()
 
-        data = request.data.copy()
+        # A resend of a form that was already saved (the first reply was lost,
+        # e.g. to a timeout) gets that report back, and creates nothing.
+        submission_id = community_report_submission_id(request)
+        if submission_id:
+            existing = find_existing_community_report(submission_id)
+            if existing is not None:
+                return Response(
+                    SanitaryComplaintSerializer(existing, context={"request": request}).data,
+                    status=status.HTTP_200_OK,
+                )
+
+        data = copy_request_fields(request)
+        data.pop("client_submission_id", None)
         uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
 
         data["complaint_id"] = generate_complaint_id()
@@ -585,12 +622,60 @@ def mobile_sanitation_report_submit(request):
         ).strip()
         data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
         data["status"] = COMPLAINT_STATUS_PENDING
-        data["priority"] = data.get("priority") or COMPLAINT_PRIORITY_MEDIUM
-        data["category"] = data.get("category") or "Community sanitation concern"
         data["barangay"] = data.get("barangay") or "Unspecified"
         data["description"] = (
             data.get("description") or data.get("message") or ""
         ).strip()
+        data["location_address"] = " ".join(
+            str(data.get("location_address") or "").split()
+        )
+
+        # Client decision: anonymous reports are not acted on, so a name and a
+        # reachable Philippine mobile number are required. Any anonymous flag
+        # is ignored; a blank name is rejected whatever the flag says.
+        identity_error = community_report_identity_error(
+            data["complainant_name"], data["contact_number"]
+        )
+        if identity_error:
+            return Response(
+                {"error": identity_error, "detail": identity_error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not data["location_address"]:
+            message = (
+                "Please enter the location or address of the problem."
+            )
+            return Response(
+                {"error": message, "detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        official_barangay = official_barangay_name(data.get("barangay"))
+        if official_barangay is None:
+            message = (
+                "Please choose a Mauban barangay from the list."
+            )
+            return Response(
+                {"error": message, "detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["barangay"] = official_barangay
+        data["contact_number"] = normalize_contact_digits(data["contact_number"])
+        for flag in ("is_anonymous", "anonymous"):
+            data.pop(flag, None)
+
+        # Urgency comes from the category only; anything the client sends
+        # ("priority", "urgency") is discarded. Unknown categories fail fast.
+        known = community_report_category(data.get("category"))
+        if known is None:
+            message = (
+                "Please choose a category from the list."
+            )
+            return Response(
+                {"error": message, "detail": message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["category"], data["priority"] = known
+        data.pop("urgency", None)
 
         if uploads and not data.get("photo_documentation"):
             try:
@@ -637,7 +722,23 @@ def mobile_sanitation_report_submit(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        complaint = serializer.save()
+        try:
+            with transaction.atomic():
+                complaint = serializer.save(client_submission_id=submission_id)
+        except IntegrityError:
+            # Two requests with the same id raced past the check above; the
+            # other one saved first, so answer with its report.
+            existing = (
+                find_existing_community_report(submission_id) if submission_id else None
+            )
+            if existing is None:
+                raise
+            return Response(
+                SanitaryComplaintSerializer(existing, context={"request": request}).data,
+                status=status.HTTP_200_OK,
+            )
+        # Only a saved report counts toward the contact's daily limit.
+        CommunityReportContactRateThrottle.record_success(request)
 
         log_activity(
             request,
@@ -652,8 +753,12 @@ def mobile_sanitation_report_submit(request):
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception("Error in mobile_sanitation_report_submit: %s", exc)
+        # The details are in the log; the reporter gets a fixed message.
+        message = (
+            "Server problem. Please try again later."
+        )
         return Response(
-            {"detail": f"Failed to submit report: {str(exc)}"},
+            {"error": message, "detail": message},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -666,36 +771,96 @@ def mobile_sanitation_report_history(request):
     contact = (request.query_params.get("contact") or "").strip()
     reference = (request.query_params.get("reference") or "").strip()
 
-    if not contact and not reference:
+    # Public lookup of one's own report: both the complaint ID from the receipt
+    # and the exact contact number used are required. Either alone (or a
+    # partial number) would let anyone list other people's reports.
+    if not contact or not reference:
         return Response(
-            {"detail": "Enter a contact number or complaint ID."},
+            {"detail": "Enter both the contact number and the complaint ID from your receipt."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    complaints = SanitaryComplaint.objects.all()
-
-    if reference:
-        complaints = complaints.filter(
-            Q(complaint_id__iexact=reference)
-            | Q(id=parse_mobile_int(reference, 0))
-        )
-
-    if contact:
-        complaints = complaints.filter(contact_number__icontains=contact)
-
-    complaints = complaints.order_by("-reported_date", "-id")[:30]
+    wanted_contact = normalize_contact_digits(contact)
+    complaint = SanitaryComplaint.objects.filter(complaint_id__iexact=reference).first()
+    matches = (
+        [complaint]
+        if complaint is not None
+        and wanted_contact
+        and normalize_contact_digits(complaint.contact_number) == wanted_contact
+        else []
+    )
 
     return Response(
         {
-            "rows": [
-                serialize_mobile_sanitation_complaint(item)
-                for item in complaints
-            ],
+            "rows": [serialize_mobile_sanitation_complaint(item) for item in matches],
             "summary": {
-                "total": complaints.count(),
+                "total": len(matches),
             },
         }
     )
+
+
+def copy_request_fields(request):
+    """A mutable copy of the request's fields, without its uploaded files.
+
+    request.data also holds the uploads, and QueryDict.copy() deep-copies
+    every value. A photo over FILE_UPLOAD_MAX_MEMORY_SIZE (2.5 MB) is spooled
+    to a temporary file, which cannot be deep-copied ("cannot pickle
+    'BufferedRandom' instances"), so the uploads are left out here and read
+    from request.FILES instead.
+    """
+    data = request.data
+    if not isinstance(data, QueryDict):
+        return data.copy()
+    fields = QueryDict(mutable=True)
+    for key, values in data.lists():
+        kept = [value for value in values if not isinstance(value, UploadedFile)]
+        if kept:
+            fields.setlist(key, kept)
+    return fields
+
+
+def community_report_submission_id(request):
+    """The form's client_submission_id (at most 64 characters), or None."""
+    data = getattr(request, "data", {}) or {}
+    value = str(data.get("client_submission_id") or "").strip()
+    return value[:64] or None
+
+
+def official_barangay_name(name):
+    """The api_barangay spelling of an active barangay, ignoring case and
+    extra spaces; None when the name is not an active Mauban barangay."""
+    wanted = " ".join(str(name or "").split()).lower()
+    if not wanted:
+        return None
+    for official in Barangay.objects.filter(is_active=True).values_list("name", flat=True):
+        if " ".join(official.split()).lower() == wanted:
+            return official
+    return None
+
+
+def find_existing_community_report(submission_id):
+    return SanitaryComplaint.objects.filter(client_submission_id=submission_id).first()
+
+
+PH_MOBILE_NUMBER = re.compile(r"^09\d{9}$")
+
+
+def community_report_identity_error(name, contact):
+    """Message for a missing name or an invalid contact number, else ""."""
+    if not str(name or "").strip():
+        return "Please enter your name."
+    if not PH_MOBILE_NUMBER.match(normalize_contact_digits(contact)):
+        return "Please enter a valid mobile number (e.g. 09171234567)."
+    return ""
+
+
+def normalize_contact_digits(value):
+    """Digits only, with a Philippine +63 prefix folded to a leading 0."""
+    digits = "".join(character for character in str(value or "") if character.isdigit())
+    if digits.startswith("63") and len(digits) == 12:
+        digits = "0" + digits[2:]
+    return digits
 
 
 @api_view(["GET"])
@@ -717,14 +882,13 @@ def mobile_sanitation_permit_verify(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    query = Q(permit_number__iexact=code) | Q(business_name__iexact=code)
-    numeric_id = parse_mobile_int(code, 0)
-    if numeric_id:
-        query |= Q(id=numeric_id)
-
+    # Public lookup: the permit number only, never a business name or record
+    # id, so records cannot be enumerated. The answer confirms the permit and
+    # nothing about the owner, contact details, address or location.
     establishment = (
         SanitaryEstablishment.objects.select_related("business_type")
-        .filter(query)
+        .filter(permit_number__iexact=code)
+        .exclude(permit_number="")
         .first()
     )
 
@@ -732,7 +896,6 @@ def mobile_sanitation_permit_verify(request):
         return Response(
             {
                 "verified": False,
-                "code": code,
                 "detail": "No sanitary permit record matched this code.",
             },
             status=status.HTTP_404_NOT_FOUND,
@@ -741,10 +904,12 @@ def mobile_sanitation_permit_verify(request):
     return Response(
         {
             "verified": True,
-            "code": code,
-            "establishment": serialize_mobile_sanitation_establishment(
-                establishment
-            ),
+            "establishment": {
+                "business_name": establishment.business_name,
+                "business_type_name": establishment.business_type.name,
+                "barangay": establishment.barangay,
+                "permit_number": establishment.permit_number,
+            },
             "permit": {
                 "permit_number": establishment.permit_number,
                 "permit_status": establishment.permit_status,
@@ -755,13 +920,53 @@ def mobile_sanitation_permit_verify(request):
                 "permit_expiry_date": date_to_iso(
                     establishment.permit_expiry_date
                 ),
-                "compliance_status": establishment.compliance_status,
-                "compliance_status_label": (
-                    establishment.get_compliance_status_display()
-                ),
             },
         }
     )
+
+OWNER_STATUS_NOT_FOUND = "Tracking code not found. Check the code on your Owner's Slip."
+
+
+def no_store(view):
+    """Cache-Control: no-store on every answer of the view, including the
+    ones DRF makes itself (429, 405)."""
+
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        response = view(request, *args, **kwargs)
+        response["Cache-Control"] = "no-store"
+        return response
+
+    return wrapped
+
+
+@no_store
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([OwnerStatusRateThrottle])
+def mobile_sanitation_establishment_status(request):
+    """Establishment Portal: the owner's permit status by private tracking code.
+
+    No login. Every wrong code (wrong, empty, malformed, replaced) gets the
+    same 404, and only those count toward the per-address limit.
+    """
+    data = request.data if hasattr(request.data, "get") else {}
+    try:
+        establishment = find_establishment_by_code(data.get("code"))
+    except TrackingCodeNotConfigured:
+        return Response(
+            {"detail": NOT_CONFIGURED_MESSAGE},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if establishment is None:
+        OwnerStatusRateThrottle.record_failure(request)
+        return Response(
+            {"detail": OWNER_STATUS_NOT_FOUND},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(owner_status_payload(establishment, timezone.localdate()))
 
 
 MOBILE_SANITATION_BUSINESS_TYPES_CACHE_KEY = "mobile_sanitation_business_types_v1"
@@ -784,12 +989,31 @@ def get_cached_sanitary_business_types():
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
-def mobile_sanitation_bootstrap(request):
+@permission_classes([IsAuthenticated])
+@module_required("sanitation")
+def mobile_sanitation_staff_bootstrap(request):
+    """Sanitation staff records for the mobile staff app (admin/sanitation only).
+
+    Owners, contact numbers, permit numbers, complaints, households and
+    inspectors are staff data, so they are served here behind login instead of
+    in the public bootstrap. Shapes match what the mobile app already parses.
+    """
     ensure_initial_sanitation_data()
     ensure_initial_household_data()
-    ensure_mobile_barangays()
 
+    payload = build_sanitation_staff_payload()
+    return Response(
+        {
+            "establishments": payload["establishments"],
+            "inspections": payload["inspections"],
+            "complaintData": payload["complaintData"],
+            "householdRecords": payload["householdRecords"],
+            "notifications": payload["notifications"],
+        }
+    )
+
+
+def build_sanitation_staff_payload():
     today = timezone.localdate()
 
     establishments = list(
@@ -821,68 +1045,63 @@ def mobile_sanitation_bootstrap(request):
     expiring_establishments.sort(key=lambda e: (e.permit_expiry_date, e.id))
     notification_expiring_permits = expiring_establishments[:3]
 
-    total_establishments = len(establishments)
-    good_standing_count = sum(1 for e in establishments if e.compliance_status == "good_standing")
-    for_completion_count = sum(1 for e in establishments if e.compliance_status == "for_completion")
-    violators_count = sum(1 for e in establishments if e.compliance_status == "violation")
-    no_permit_count = sum(1 for e in establishments if e.permit_status == "no_permit")
-
-    active_permits_count = sum(1 for e in establishments if e.permit_status == "active")
-    renewal_due_count = sum(1 for e in establishments if e.permit_status == "renewal_due")
-    conditional_permits_count = sum(1 for e in establishments if e.permit_status == "conditional")
-    suspended_permits_count = sum(1 for e in establishments if e.permit_status == "suspended")
-
     total_complaints = len(all_complaints)
     pending_complaints = sum(1 for c in all_complaints if c.status == COMPLAINT_STATUS_PENDING)
     open_complaints_count = len(open_complaints)
 
+    return {
+        "establishments": [
+            serialize_mobile_sanitation_establishment(item)
+            for item in establishments
+        ],
+        "inspections": [
+            serialize_mobile_sanitation_inspection(item) for item in inspections
+        ],
+        "complaintData": {
+            "summary": {
+                "total": total_complaints,
+                "pending": pending_complaints,
+                "open": open_complaints_count,
+            },
+            "rows": [
+                serialize_mobile_sanitation_complaint(item)
+                for item in complaints
+            ],
+        },
+        "householdRecords": [
+            serialize_mobile_household_record(item) for item in household_records
+        ],
+        "notifications": build_mobile_sanitation_notifications(
+            expiring_permits=notification_expiring_permits,
+            open_complaints=notification_open_complaints,
+        ),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def mobile_sanitation_bootstrap(request):
+    """Public sanitation data only: business types, barangays and advisories.
+
+    Establishments, owners, permit numbers, inspections, complaints and
+    households are staff records served by the authenticated staff bootstrap.
+    Their keys stay here as empty lists so already-installed apps still parse
+    the response; dashboardData and permitData were unused by the app.
+    """
+    ensure_initial_sanitation_data()
+    ensure_mobile_barangays()
+
     return Response(
         {
             "businessTypes": get_cached_sanitary_business_types(),
-            "establishments": [
-                serialize_mobile_sanitation_establishment(item)
-                for item in establishments
-            ],
-            "inspections": [
-                serialize_mobile_sanitation_inspection(item) for item in inspections
-            ],
-            "dashboardData": {
-                "summary": {
-                    "totalEstablishments": total_establishments,
-                    "goodStanding": good_standing_count,
-                    "forCompletion": for_completion_count,
-                    "violators": violators_count,
-                    "noPermit": no_permit_count,
-                }
-            },
-            "permitData": {
-                "summary": {
-                    "active": active_permits_count,
-                    "renewalDue": renewal_due_count,
-                    "conditional": conditional_permits_count,
-                    "suspended": suspended_permits_count,
-                    "noPermit": no_permit_count,
-                },
-                "rows": [],
-            },
-            "complaintData": {
-                "summary": {
-                    "total": total_complaints,
-                    "pending": pending_complaints,
-                    "open": open_complaints_count,
-                },
-                "rows": [
-                    serialize_mobile_sanitation_complaint(item)
-                    for item in complaints
-                ],
-            },
-            "householdRecords": [
-                serialize_mobile_household_record(item) for item in household_records
-            ],
+            "establishments": [],
+            "inspections": [],
+            "complaintData": {"summary": {}, "rows": []},
+            "householdRecords": [],
             "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_sanitation_notifications(
-                expiring_permits=notification_expiring_permits,
-                open_complaints=notification_open_complaints,
+                expiring_permits=[],
+                open_complaints=[],
             ),
         }
     )
@@ -939,6 +1158,7 @@ def serialize_mobile_sanitation_complaint(complaint):
         "complaint_id": complaint.complaint_id,
         "category": complaint.category,
         "barangay": complaint.barangay,
+        "location_address": complaint.location_address,
         "reported_date": date_to_iso(complaint.reported_date),
         "status": complaint.status,
         "status_label": complaint.get_status_display(),
@@ -1009,14 +1229,13 @@ def mobile_sanitation_inspection_submit(request):
 
     ensure_initial_sanitation_data()
 
-    data = request.data.copy()
+    data = copy_request_fields(request)
     data["inspector_name"] = data.get("inspector_name") or data.get("inspector") or ""
     data["inspection_date"] = (
         data.get("inspection_date") or timezone.localdate().isoformat()
     )
-    data["status_after_inspection"] = (
-        data.get("status_after_inspection") or "good_standing"
-    )
+    # No default status: a final inspection must state its own result, and the
+    # serializer rejects it otherwise. The distributed app always sends one.
     data["is_draft"] = data.get("is_draft", False)
     upload = request.FILES.get("photo") or request.FILES.get("image")
 
@@ -1037,6 +1256,7 @@ def mobile_sanitation_inspection_submit(request):
     serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
 
     log_activity(

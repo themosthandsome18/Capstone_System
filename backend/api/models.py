@@ -572,12 +572,27 @@ SANITARY_STATUS_FOR_COMPLETION = "for_completion"
 SANITARY_STATUS_VIOLATION = "violation"
 SANITARY_STATUS_NO_PERMIT = "no_permit"
 
+# An establishment nobody has inspected yet has no compliance finding at all.
+# This is the default so a new record cannot claim Good Standing it has not
+# earned. It is deliberately excluded from compliance-rate arithmetic.
+SANITARY_STATUS_NOT_YET_INSPECTED = "not_yet_inspected"
+
 SANITARY_STATUS_CHOICES = [
+    (SANITARY_STATUS_NOT_YET_INSPECTED, "Not Yet Inspected"),
     (SANITARY_STATUS_GOOD, "Good Standing"),
     (SANITARY_STATUS_UPCOMING, "Upcoming"),
     (SANITARY_STATUS_FOR_COMPLETION, "For Completion"),
     (SANITARY_STATUS_VIOLATION, "Violation"),
     (SANITARY_STATUS_NO_PERMIT, "No Permit"),
+]
+
+# An inspection's own result can never be "not yet inspected": by the time one
+# is recorded, the visit has happened. Kept separate so the establishment's
+# status can carry that state without offering it as an inspection outcome.
+SANITARY_INSPECTION_RESULT_CHOICES = [
+    (value, label)
+    for value, label in SANITARY_STATUS_CHOICES
+    if value != SANITARY_STATUS_NOT_YET_INSPECTED
 ]
 
 PERMIT_STATUS_ACTIVE = "active"
@@ -720,7 +735,7 @@ class SanitaryEstablishment(models.Model):
     compliance_status = models.CharField(
         max_length=30,
         choices=SANITARY_STATUS_CHOICES,
-        default=SANITARY_STATUS_GOOD,
+        default=SANITARY_STATUS_NOT_YET_INSPECTED,
     )
     permit_status = models.CharField(
         max_length=30,
@@ -730,6 +745,19 @@ class SanitaryEstablishment(models.Model):
 
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+
+    # The owner's private tracking code (MBN-XXXX-XXXX) is shown once, on the
+    # printed Owner's Slip; only its HMAC-SHA256 is kept. Printing a new slip
+    # replaces it, so the old code stops working. NULL: no slip issued yet.
+    tracking_code_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    tracking_code_issued_at = models.DateTimeField(null=True, blank=True)
+    tracking_code_issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
 
     remarks = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -813,6 +841,13 @@ class SanitaryComplaint(models.Model):
     contact_number = models.CharField(max_length=60, blank=True)
     category = models.CharField(max_length=120)
     barangay = models.CharField(max_length=120)
+    # Where the reporter says the problem is (street, landmark, purok).
+    location_address = models.CharField(max_length=255, blank=True, default="")
+    # One id per filled-in public report form, so a resend (e.g. after a
+    # timeout) returns the existing report instead of creating another.
+    client_submission_id = models.CharField(
+        max_length=64, null=True, blank=True, unique=True
+    )
     reported_date = models.DateField()
     status = models.CharField(
         max_length=30,
@@ -873,7 +908,7 @@ class SanitaryInspection(models.Model):
 
     status_after_inspection = models.CharField(
         max_length=30,
-        choices=SANITARY_STATUS_CHOICES,
+        choices=SANITARY_INSPECTION_RESULT_CHOICES,
         default=SANITARY_STATUS_GOOD,
     )
 

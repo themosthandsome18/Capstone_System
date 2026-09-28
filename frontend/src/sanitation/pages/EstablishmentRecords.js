@@ -9,6 +9,7 @@ import {
   FiEdit2,
   FiEye,
   FiFileText,
+  FiKey,
   FiPlus,
   FiPrinter,
   FiRotateCcw,
@@ -18,7 +19,15 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
+import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { issueOwnerTrackingCode } from "../services/sanitationApi";
+import {
+  buildOwnerSlipHtml,
+  ownerSlipGeneratingHtml,
+  ownerSlipReplaceMessage,
+  ownerSlipStatusText,
+} from "../utils/ownerSlip";
 import {
   CLIENT_BUSINESS_TYPE_CATEGORIES,
   businessTypeDisplayLabel,
@@ -113,7 +122,7 @@ const initialForm = {
   permit_number: "",
   permit_issued_date: "",
   permit_expiry_date: "",
-  compliance_status: "good_standing",
+  compliance_status: "not_yet_inspected",
   permit_status: "active",
   latitude: "",
   longitude: "",
@@ -121,6 +130,7 @@ const initialForm = {
 };
 
 const statusOptions = [
+  { value: "not_yet_inspected", label: "Not Yet Inspected" },
   { value: "good_standing", label: "Good Standing" },
   { value: "upcoming", label: "Upcoming" },
   { value: "for_completion", label: "For Completion" },
@@ -146,7 +156,7 @@ const NEW_ESTABLISHMENT_PERMIT_STATE = {
   permit_number: "",
   permit_issued_date: null,
   permit_expiry_date: null,
-  compliance_status: "no_permit",
+  compliance_status: "not_yet_inspected",
   permit_status: "no_permit",
 };
 
@@ -202,6 +212,58 @@ function toApiValues(values) {
   };
 }
 
+/**
+ * Public verification link for a permit. It is keyed by the permit number:
+ * the public endpoint no longer accepts record ids, which could be counted
+ * through. No permit number means there is nothing to verify.
+ */
+export function permitVerifyPath(establishment) {
+  const permitNumber = String(establishment?.permit_number ?? "").trim();
+  return permitNumber ? `/verify-permit/${encodeURIComponent(permitNumber)}` : "";
+}
+
+/** A sanitary permit is valid for one year (29 February becomes 28 February). */
+export function addOneYear(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  if (!match) {
+    return "";
+  }
+
+  const [, year, month, day] = match;
+  const nextDay = month === "02" && day === "29" ? "28" : day;
+  return `${Number(year) + 1}-${month}-${nextDay}`;
+}
+
+function localToday() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The permit fields of a new record. Without a permit number nothing is
+ * recorded. With one, the permit is active until it expires; an already
+ * expired permit is recorded as renewal due, the same way the permit importer
+ * records expired permits. Compliance stays "not yet inspected" either way,
+ * because holding a permit is not an inspection result.
+ */
+function buildNewPermitState(values) {
+  if (!values.permit_number) {
+    return NEW_ESTABLISHMENT_PERMIT_STATE;
+  }
+
+  return {
+    has_permit: true,
+    permit_number: values.permit_number,
+    permit_issued_date: values.permit_issued_date,
+    permit_expiry_date: values.permit_expiry_date,
+    compliance_status: "not_yet_inspected",
+    permit_status:
+      values.permit_expiry_date >= localToday() ? "active" : "renewal_due",
+  };
+}
+
 function buildCreatePayload(values) {
   // Permit coverage (SP / Large) and remarks are not asked for at registration;
   // the backend model defaults apply ("sp" and "").
@@ -214,7 +276,7 @@ function buildCreatePayload(values) {
     contact_number: values.contact_number,
     latitude: values.latitude,
     longitude: values.longitude,
-    ...NEW_ESTABLISHMENT_PERMIT_STATE,
+    ...buildNewPermitState(values),
   };
 }
 
@@ -280,7 +342,14 @@ function EstablishmentRecords() {
     createEstablishment,
     updateEstablishment,
     deleteEstablishment,
+    refreshEstablishments,
   } = useSanitationData();
+  const { role } = useAuth();
+  // Owner's Slips (private tracking codes) are for sanitation staff only.
+  const canIssueOwnerSlips = role === "admin" || role === "sanitation";
+  const [slipConfirmFor, setSlipConfirmFor] = useState(null);
+  const [slipError, setSlipError] = useState("");
+  const [issuingSlipId, setIssuingSlipId] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingEstablishment, setEditingEstablishment] = useState(null);
@@ -425,9 +494,8 @@ function EstablishmentRecords() {
       if (!loaded.permit_expiry_date) {
         loaded.permit_expiry_date = `${new Date().getFullYear()}-12-31`;
       }
-      if (loaded.compliance_status === "no_permit") {
-        loaded.compliance_status = "good_standing";
-      }
+      // Issuing a permit is an administrative act, not an inspection finding,
+      // so it never sets a compliance status. Only an inspection does that.
       if (loaded.permit_status === "no_permit") {
         loaded.permit_status = "active";
       }
@@ -461,6 +529,67 @@ function EstablishmentRecords() {
     setEditingEstablishment(null);
     setForm(initialForm);
     setFormError("");
+  }
+
+  function startOwnerSlip(establishment) {
+    setSlipError("");
+    if (establishment.tracking_code_issued_at) {
+      setSlipConfirmFor(establishment);
+      return;
+    }
+    issueOwnerSlip(establishment);
+  }
+
+  function confirmOwnerSlip() {
+    const establishment = slipConfirmFor;
+    setSlipConfirmFor(null);
+    if (establishment) {
+      issueOwnerSlip(establishment);
+    }
+  }
+
+  // Runs inside the click handler: the print window must be opened before
+  // any await, or pop-up blockers stop it. The code goes from the answer
+  // straight into that window and is not kept anywhere on the page.
+  async function issueOwnerSlip(establishment) {
+    const slipWindow = window.open("", "_blank", "width=520,height=760");
+    if (!slipWindow) {
+      setSlipError(
+        "The browser blocked the print window. Allow pop-ups and try again."
+      );
+      return;
+    }
+    slipWindow.document.open();
+    slipWindow.document.write(ownerSlipGeneratingHtml());
+    slipWindow.document.close();
+    setIssuingSlipId(establishment.id);
+
+    try {
+      const slip = await issueOwnerTrackingCode(establishment.id);
+      slipWindow.document.open();
+      slipWindow.document.write(buildOwnerSlipHtml(slip));
+      slipWindow.document.close();
+      slipWindow.focus?.();
+      slipWindow.print?.();
+    } catch (requestError) {
+      slipWindow.close();
+      setSlipError(
+        `The Owner's Slip was not issued. ${getErrorMessage(
+          requestError
+        )}`
+      );
+      return;
+    } finally {
+      setIssuingSlipId(null);
+    }
+
+    const refreshed = refreshEstablishments ? await refreshEstablishments() : null;
+    const updated = (refreshed || []).find((item) => item.id === establishment.id);
+    if (updated) {
+      setSelectedEstablishment((current) =>
+        current && current.id === updated.id ? updated : current
+      );
+    }
   }
 
   function getErrorMessage(requestError) {
@@ -499,6 +628,34 @@ function EstablishmentRecords() {
 
     if (!payload.address) {
       return "Address is required.";
+    }
+
+    if (!editingEstablishment) {
+      return validateNewPermit(payload);
+    }
+
+    return "";
+  }
+
+  function validateNewPermit(payload) {
+    const hasDates = payload.permit_issued_date || payload.permit_expiry_date;
+
+    if (!payload.permit_number) {
+      return hasDates
+        ? "Enter the sanitary permit number, or clear the permit dates."
+        : "";
+    }
+
+    if (!payload.permit_issued_date) {
+      return "Enter the date the sanitary permit was issued.";
+    }
+
+    if (!payload.permit_expiry_date) {
+      return "Enter the sanitary permit expiry date.";
+    }
+
+    if (payload.permit_expiry_date <= payload.permit_issued_date) {
+      return "The expiry date must be after the date issued.";
     }
 
     return "";
@@ -664,8 +821,13 @@ function EstablishmentRecords() {
       ) : null}
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {slipError && !selectedEstablishment ? (
+        <p className="sanitation-error-text" role="alert">
+          {slipError}
+        </p>
+      ) : null}
 
-      <section className="establishment-table-card">
+      <section className="establishment-table-card establishment-records-table">
         <div className="establishment-tools">
           <div className="establishment-search">
             <FiSearch />
@@ -747,25 +909,6 @@ function EstablishmentRecords() {
                     <td>{item.id}</td>
                     <td>
                       <strong>{item.business_name}</strong>
-                      {item.account_username ? (
-                        <small
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            color: "#16a34a",
-                            fontSize: "11px",
-                            marginTop: "3px",
-                            background: "#f0fdf4",
-                            padding: "1px 6px",
-                            borderRadius: "4px",
-                            border: "1px solid #bbf7d0",
-                          }}
-                          title={`Linked Owner Account: @${item.account_username}`}
-                        >
-                          📱 @{item.account_username}
-                        </small>
-                      ) : null}
                     </td>
                     <td>{item.owner_name}</td>
                     {/* Client-facing category; the record keeps its real business type id. */}
@@ -799,6 +942,18 @@ function EstablishmentRecords() {
                         >
                           <FiEdit2 />
                         </button>
+
+                        {canIssueOwnerSlips ? (
+                          <button
+                            type="button"
+                            className="establishment-icon-btn view"
+                            title="Print Owner's Slip"
+                            disabled={issuingSlipId === item.id}
+                            onClick={() => startOwnerSlip(item)}
+                          >
+                            <FiKey />
+                          </button>
+                        ) : null}
 
                         <button
                           type="button"
@@ -861,7 +1016,41 @@ function EstablishmentRecords() {
           timeline={selectedTimeline}
           onClose={closeDetailModal}
           onEdit={editSelectedEstablishment}
+          canIssueOwnerSlips={canIssueOwnerSlips}
+          issuingOwnerSlip={issuingSlipId === selectedEstablishment.id}
+          onPrintOwnerSlip={() => startOwnerSlip(selectedEstablishment)}
+          slipError={slipError}
         />
+      ) : null}
+
+      {slipConfirmFor ? (
+        <div className="establishment-modal-backdrop">
+          <section
+            className="establishment-detail-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Issue a new Owner's Slip"
+          >
+            <h3>New Owner's Slip</h3>
+            <p>{ownerSlipReplaceMessage(slipConfirmFor)}</p>
+            <div className="establishment-detail-actions">
+              <button
+                type="button"
+                className="sanitation-export-btn"
+                onClick={() => setSlipConfirmFor(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="add-establishment-btn"
+                onClick={confirmOwnerSlip}
+              >
+                Issue new code
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );
@@ -872,6 +1061,10 @@ function EstablishmentDetailModal({
   timeline,
   onClose,
   onEdit,
+  canIssueOwnerSlips = false,
+  issuingOwnerSlip = false,
+  onPrintOwnerSlip,
+  slipError = "",
 }) {
   const displayLabel = businessTypeDisplayLabel(establishment.business_type_name);
   const hasCoordinates =
@@ -887,6 +1080,7 @@ function EstablishmentDetailModal({
   const mapsUrl = hasValidMapReference
     ? `https://www.google.com/maps/search/?api=1&query=${establishment.latitude},${establishment.longitude}`
     : "";
+  const verifyPath = permitVerifyPath(establishment);
   const openComplaints =
     establishment.open_complaints === null ||
     establishment.open_complaints === undefined
@@ -939,6 +1133,16 @@ function EstablishmentDetailModal({
             >
               <FiPrinter /> Print
             </button>
+            {canIssueOwnerSlips ? (
+              <button
+                type="button"
+                className="sanitation-export-btn"
+                disabled={issuingOwnerSlip}
+                onClick={onPrintOwnerSlip}
+              >
+                <FiKey /> {issuingOwnerSlip ? "Generating…" : "Print Owner's Slip"}
+              </button>
+            ) : null}
             <button type="button" className="add-establishment-btn" onClick={() => onEdit(false)}>
               <FiEdit2 /> Edit
             </button>
@@ -951,62 +1155,14 @@ function EstablishmentDetailModal({
           <InfoTile label="Owner / Proprietor" value={establishment.owner_name} />
           <InfoTile label="Business Type" value={displayLabel} />
           <InfoTile label="Contact Number" value={establishment.contact_number} />
-          <InfoTile
-            label="Mobile Portal Account"
-            value={
-              establishment.account_username ? (
-                <span style={{ color: "#16a34a", fontWeight: "600" }}>
-                  🟢 Linked (@{establishment.account_username})
-                </span>
-              ) : (
-                <span style={{ color: "#64748b" }}>
-                  ⚪ Not Linked (Register via Mobile)
-                </span>
-              )
-            }
-          />
+          <InfoTile label="Owner's Slip" value={ownerSlipStatusText(establishment)} />
         </div>
 
-        <div
-          style={{
-            margin: "14px 0",
-            padding: "12px 16px",
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            borderRadius: "8px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          <div>
-            <strong style={{ color: "#166534", display: "block" }}>
-              📱 Mobile Establishment Portal
-            </strong>
-            <span style={{ fontSize: "13px", color: "#15803d" }}>
-              {establishment.account_username
-                ? `Owner account active (@${establishment.account_username}). Can log in to view live permit, checklist & request re-inspection.`
-                : "Owner can register an account in the Mobile Sanitation Portal using their Permit / Business Name."}
-            </span>
-          </div>
-          <span
-            style={{
-              fontSize: "12px",
-              fontWeight: "600",
-              padding: "4px 10px",
-              borderRadius: "9999px",
-              background: establishment.account_username ? "#dcfce7" : "#f8fafc",
-              color: establishment.account_username ? "#15803d" : "#475569",
-              border: `1px solid ${
-                establishment.account_username ? "#86efac" : "#cbd5e1"
-              }`,
-            }}
-          >
-            {establishment.account_username ? "Account Linked" : "Mobile Portal Ready"}
-          </span>
-        </div>
+        {slipError ? (
+          <p className="sanitation-error-text" role="alert">
+            {slipError}
+          </p>
+        ) : null}
 
         <div className="establishment-detail-note">
           <FiFileText />
@@ -1074,15 +1230,17 @@ function EstablishmentDetailModal({
         </div>
 
         <div className="establishment-detail-qr-card">
-          <div className="qr-box">
-            <QRCodeSVG
-              id="establishment-detail-qr-svg"
-              value={`${window.location.origin}/verify-permit/${establishment.id}`}
-              size={130}
-              level="H"
-              includeMargin={true}
-            />
-          </div>
+          {verifyPath ? (
+            <div className="qr-box">
+              <QRCodeSVG
+                id="establishment-detail-qr-svg"
+                value={`${window.location.origin}${verifyPath}`}
+                size={130}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+          ) : null}
           <div className="qr-info">
             <div className="qr-badge-row">
               <span className="qr-badge official">Establishment Verification QR</span>
@@ -1095,21 +1253,29 @@ function EstablishmentDetailModal({
               )}
             </div>
             <h4>Verification QR Code</h4>
-            <p>
-              This code links to Establishment ID {establishment.id}. Scanning it
-              with the Mauban Mobile App or any smartphone camera opens the public
-              verification page, which shows the establishment's current permit
-              and compliance status.
-            </p>
+            {verifyPath ? (
+              <p>
+                This code links to permit {establishment.permit_number}. Scanning
+                it with the Mauban Mobile App or any smartphone camera opens the
+                public verification page, which confirms the permit and its
+                validity dates.
+              </p>
+            ) : (
+              <p>
+                No permit number is recorded, so there is no verification QR yet.
+              </p>
+            )}
             <div className="qr-actions">
-              <a
-                href={`/verify-permit/${establishment.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="qr-test-link"
-              >
-                Open Verification Page &rarr;
-              </a>
+              {verifyPath ? (
+                <a
+                  href={verifyPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="qr-test-link"
+                >
+                  Open Verification Page &rarr;
+                </a>
+              ) : null}
               {!establishment.has_permit && (
                 <button
                   type="button"
@@ -1372,8 +1538,10 @@ function RegisterEstablishmentModal({
                     const hasPermit = event.target.value === "yes";
                     onChange("has_permit", hasPermit);
 
+                    // Permit state only. Whether an establishment holds a
+                    // permit is an administrative fact; its compliance status
+                    // is an inspection finding and is left untouched here.
                     if (!hasPermit) {
-                      onChange("compliance_status", "no_permit");
                       onChange("permit_status", "no_permit");
                       onChange("permit_number", "");
                       onChange("permit_issued_date", "");
@@ -1381,7 +1549,6 @@ function RegisterEstablishmentModal({
                     } else {
                       const todayStr = new Date().toISOString().slice(0, 10);
                       const endOfYearStr = `${new Date().getFullYear()}-12-31`;
-                      onChange("compliance_status", "good_standing");
                       onChange("permit_status", "active");
                       if (
                         !form.permit_number ||
@@ -1516,10 +1683,57 @@ function RegisterEstablishmentModal({
             </p>
           </section>
         ) : (
-          <p className="establishment-form-hint">
-            A new establishment is registered with no sanitary permit on record.
-            Record or issue its permit afterwards from View or Edit.
-          </p>
+          <section className="establishment-form-section permit-record">
+            <h3>Sanitary Permit (optional)</h3>
+            <p className="establishment-form-hint">
+              If the establishment already holds a sanitary permit, record its
+              number here. Leave it blank if it has none yet. A permit is valid
+              for one year, so the expiry date defaults to one year after the
+              date issued; you can change it.
+            </p>
+
+            <label className="modal-field full">
+              <span>Sanitary Permit Number</span>
+              <input
+                type="text"
+                placeholder="e.g. SP-2026-001"
+                value={form.permit_number}
+                onChange={(event) => onChange("permit_number", event.target.value)}
+              />
+            </label>
+
+            <div className="modal-two-grid">
+              <label className="modal-field">
+                <span>Date Issued</span>
+                <input
+                  type="date"
+                  value={form.permit_issued_date}
+                  onChange={(event) => {
+                    const issued = event.target.value;
+                    const untouchedDefault =
+                      !form.permit_expiry_date ||
+                      form.permit_expiry_date === addOneYear(form.permit_issued_date);
+
+                    onChange("permit_issued_date", issued);
+                    if (untouchedDefault) {
+                      onChange("permit_expiry_date", addOneYear(issued));
+                    }
+                  }}
+                />
+              </label>
+
+              <label className="modal-field">
+                <span>Expiry Date</span>
+                <input
+                  type="date"
+                  value={form.permit_expiry_date}
+                  onChange={(event) =>
+                    onChange("permit_expiry_date", event.target.value)
+                  }
+                />
+              </label>
+            </div>
+          </section>
         )}
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
@@ -1717,7 +1931,8 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
     day: "2-digit",
   }).format(new Date());
 
-  const verifyUrl = `${window.location.origin}/verify-permit/${establishment.id}`;
+  const verifyPath = permitVerifyPath(establishment);
+  const verifyUrl = verifyPath ? `${window.location.origin}${verifyPath}` : "";
 
   const timelineRows = timeline.length
     ? timeline
@@ -1834,10 +2049,9 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
         <div class="print-qr-banner">
           <div class="print-qr-code">
             ${
-              qrSvgHtml ||
-              `<img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(
-                verifyUrl
-              )}" width="115" height="115" alt="Permit QR Code" />`
+              // Rendered locally only: the verification URL carries the permit
+              // number, so it is never sent to a third-party QR service.
+              verifyUrl ? qrSvgHtml : ""
             }
           </div>
           <div class="print-qr-details">
@@ -1850,7 +2064,9 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
               )}</strong>
             </div>
             <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
-            <div class="print-qr-url">${escapeHtml(verifyUrl)}</div>
+            <div class="print-qr-url">${escapeHtml(
+              verifyUrl || "No permit number recorded; no verification QR."
+            )}</div>
           </div>
         </div>
 

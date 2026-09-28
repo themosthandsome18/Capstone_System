@@ -39,13 +39,24 @@ jest.mock("../../shared/LocationPicker", () => ({ onChange }) => (
     Mock Apply Pin
   </button>
 ));
-jest.mock("qrcode.react", () => ({ QRCodeSVG: () => null }));
+jest.mock("qrcode.react", () => ({
+  QRCodeSVG: ({ value }) => {
+    const mockReact = require("react");
+    return mockReact.createElement("svg", { "data-testid": "verify-qr", "data-value": value });
+  },
+}));
+// The page reads the signed-in role (Owner's Slip is staff-only).
+jest.mock("../../auth/AuthContext", () => ({ useAuth: () => ({ role: "sanitation" }) }));
 jest.mock("../../shared/csvExport", () => ({
   datedCsvFilename: (name) => `${name}.csv`,
   exportCsv: jest.fn(),
 }));
 
-import EstablishmentRecords, { generatePermitNumber } from "./EstablishmentRecords";
+import EstablishmentRecords, {
+  addOneYear,
+  generatePermitNumber,
+  permitVerifyPath,
+} from "./EstablishmentRecords";
 import { exportCsv } from "../../shared/csvExport";
 import {
   BUSINESS_TYPE_DISPLAY_LABELS,
@@ -299,6 +310,28 @@ describe("client business type categories", () => {
     );
   });
 
+  // Stated by the client in person; see PROGRESS.md "client meeting".
+  test.each([
+    ["Drug Store", "Commercial / NF"],
+    ["Private Laboratory & Clinic", "Public Places"],
+    ["Massage / Physical Therapy", "Public Places"],
+    ["Funeral Parlor", "Public Places"],
+    ["Burial Ground", "Public Places"],
+    ["Resort / Picnic Ground", "Public Places"],
+    ["Karaoke / Video Bar / CSW", "Public Places"],
+    ["Sub-contractor", "Industrial Establishment"],
+    ["Boatman", "Public Transport"],
+  ])("client classification: %s is %s", (realName, category) => {
+    expect(businessTypeDisplayLabel(realName)).toBe(category);
+  });
+
+  test("Institutional Establishment (schools) has no real type mapped to it yet", () => {
+    expect(Object.values(BUSINESS_TYPE_DISPLAY_LABELS)).not.toContain(
+      "Institutional Establishment"
+    );
+    expect(CLIENT_BUSINESS_TYPE_CATEGORIES).toContain("Institutional Establishment");
+  });
+
   test.each(IMPORTER_AND_LEGACY_TYPE_MAPPINGS)(
     "%s maps legacy/importer data to %s without changing the stored type name",
     (storedName, category) => {
@@ -390,8 +423,13 @@ describe("Establishment Records table", () => {
     // Karaoke (502) and Resort (448) are both Public Places.
     expect(visibleIds().sort()).toEqual([448, 502]);
 
-    fireEvent.change(businessTypeFilter(), { target: { value: "Institutional Establishment" } });
+    // Drug Store (449) is Commercial / NF per the client's classification.
+    fireEvent.change(businessTypeFilter(), { target: { value: "Commercial / NF" } });
     expect(visibleIds()).toEqual([449]);
+
+    // Institutional Establishment (schools) has no real type yet.
+    fireEvent.change(businessTypeFilter(), { target: { value: "Institutional Establishment" } });
+    expect(visibleIds()).toEqual([]);
   });
 
   test("Ambulant Food Vendor can be filtered but has no records yet", () => {
@@ -405,7 +443,7 @@ describe("Establishment Records table", () => {
     renderPage();
     const search = screen.getByPlaceholderText(/Search by name/);
 
-    fireEvent.change(search, { target: { value: "institutional" } });
+    fireEvent.change(search, { target: { value: "commercial / nf" } });
     expect(visibleIds()).toEqual([449]);
 
     fireEvent.change(search, { target: { value: "drug store" } });
@@ -442,15 +480,17 @@ describe("Establishment Records table", () => {
 /* ================================================================== */
 
 describe("Register New Establishment", () => {
-  test("is organised as Establishment Profile then Location / Reference", () => {
+  test("is organised as Establishment Profile, Location / Reference, then an optional permit", () => {
     const form = openCreateForm();
     const headings = [...form.querySelectorAll(".establishment-form-section h3")].map(
       (h) => h.textContent
     );
-    expect(headings).toEqual(["Establishment Profile", "Location / Reference"]);
-    expect(
-      within(form).getByText(/registered with no sanitary permit on record/)
-    ).toBeTruthy();
+    expect(headings).toEqual([
+      "Establishment Profile",
+      "Location / Reference",
+      "Sanitary Permit (optional)",
+    ]);
+    expect(within(form).getByText(/Leave it blank if it has none yet/)).toBeTruthy();
   });
 
   test("Business Type groups the real types under the 9 client categories", () => {
@@ -470,13 +510,22 @@ describe("Register New Establishment", () => {
       "Food Establishment",
     ]);
     expect(namesIn("Public Places")).toEqual([
+      "Massage / Physical Therapy",
       "Resort / Picnic Ground",
       "Funeral Parlor",
       "Burial Ground",
+      "Private Laboratory & Clinic",
       "Karaoke / Video Bar / CSW",
     ]);
+    expect(namesIn("Commercial / NF")).toEqual(["Commercial Non Food", "Drug Store"]);
 
-    // No real type exists for Ambulant Food Vendor yet, so nothing can be chosen.
+    // Institutional Establishment (schools) has no real type yet, so it shows
+    // the same disabled placeholder as any empty category.
+    const institutional = namesIn("Institutional Establishment");
+    expect(institutional).toEqual(["No business type configured yet"]);
+
+    // This fixture has no real Ambulant Food Vendor type, so the empty category
+    // shows a disabled placeholder. See "Ambulant Food Vendor business type" below.
     const ambulant = groups.find((g) => g.label === "Ambulant Food Vendor");
     const ambulantOptions = [...ambulant.querySelectorAll("option")];
     expect(ambulantOptions).toHaveLength(1);
@@ -508,10 +557,94 @@ describe("Register New Establishment", () => {
       permit_number: "",
       permit_issued_date: null,
       permit_expiry_date: null,
-      compliance_status: "no_permit",
+      compliance_status: "not_yet_inspected",
       permit_status: "no_permit",
     });
     expect(mockCtx.updateEstablishment).not.toHaveBeenCalled();
+  });
+});
+
+/* ================================================================== */
+/* Ambulant Food Vendor business type (migration 0034)                  */
+/* ================================================================== */
+
+describe("Ambulant Food Vendor business type", () => {
+  const AMBULANT = {
+    id: 24,
+    name: "Ambulant Food Vendor",
+    inspection_frequency: "monthly",
+    requirements: [],
+  };
+
+  beforeEach(() => {
+    mockCtx.businessTypes = [...REAL_BUSINESS_TYPES, AMBULANT];
+  });
+
+  function ambulantGroup(form) {
+    return [...field(form, "Business Type").querySelectorAll("optgroup")].find(
+      (group) => group.label === "Ambulant Food Vendor"
+    );
+  }
+
+  test("the real type maps to the Ambulant Food Vendor category", () => {
+    expect(businessTypeDisplayLabel("Ambulant Food Vendor")).toBe("Ambulant Food Vendor");
+  });
+
+  test("is selectable in Register instead of the empty placeholder", () => {
+    const form = openCreateForm();
+    const options = [...ambulantGroup(form).querySelectorAll("option")];
+
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toBe("Ambulant Food Vendor");
+    expect(options[0].value).toBe("24");
+    expect(options[0].disabled).toBe(false);
+    expect(
+      within(ambulantGroup(form)).queryByText("No business type configured yet")
+    ).toBeNull();
+  });
+
+  test("the 9 categories are unchanged and no extra option is added", () => {
+    const form = openCreateForm();
+    const select = field(form, "Business Type");
+    expect([...select.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(
+      CLIENT_BUSINESS_TYPE_CATEGORIES
+    );
+    // Every real type sits inside a category group; none is listed loose.
+    expect(
+      [...select.children].filter((child) => child.tagName === "OPTION").map((o) => o.value)
+    ).toEqual([""]);
+  });
+
+  test("registering with it submits the real type id and no permit data", async () => {
+    const form = openCreateForm();
+    setField(form, "Business Name", "Mang Tomas Fishball Cart");
+    setField(form, "Owner / Proprietor", "Tomas Reyes");
+    setField(form, "Business Type", "24");
+    setField(form, "Barangay", "Daungan");
+    setField(form, "Complete Address", "Pier Rd");
+    setField(form, "Contact Number", "09170002222");
+    fireEvent.click(within(form).getByText("Mock Apply Pin"));
+    submit(form);
+
+    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
+    expect(mockCtx.createEstablishment.mock.calls[0][0]).toMatchObject({
+      business_type: 24,
+      has_permit: false,
+      permit_number: "",
+      permit_issued_date: null,
+      permit_expiry_date: null,
+      compliance_status: "not_yet_inspected",
+      permit_status: "no_permit",
+    });
+  });
+
+  test("is selectable in Edit and changing to it sends only the type id", async () => {
+    const form = openEditForm(501);
+    expect(ambulantGroup(form).querySelector("option").disabled).toBe(false);
+
+    setField(form, "Business Type", "24");
+    const [, payload] = await submittedEdit(form);
+    expect(payload).toEqual({ business_type: 24 });
   });
 });
 
@@ -666,7 +799,8 @@ describe("View Establishment", () => {
     ).toBeTruthy();
     expect(tileValue(modal, "Establishment ID")).toBe("501");
     expect(tileValue(modal, "Permit Number")).toBe("LG-2026-007");
-    expect(within(modal).getByText(/links to Establishment ID 501/)).toBeTruthy();
+    // The QR is keyed by the permit number, never the internal record id.
+    expect(within(modal).queryByText(/links to Establishment ID/)).toBeNull();
   });
 
   test("details, location and compliance come from the stored record", () => {
@@ -765,9 +899,11 @@ describe("View Establishment", () => {
       permit_number: expectedNumber,
       permit_issued_date: TODAY,
       permit_expiry_date: END_OF_YEAR,
-      compliance_status: "good_standing",
       permit_status: "active",
     });
+    // Issuing a permit is not an inspection finding, so it must not decide the
+    // compliance status.
+    expect(payload).not.toHaveProperty("compliance_status");
   });
 
   test("plain Edit of a no-permit record pre-fills nothing", () => {
@@ -777,5 +913,264 @@ describe("View Establishment", () => {
     expect(field(form, "Has Permit?").value).toBe("no");
     expect(field(form, "Permit Number").value).toBe("");
     cleanup();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Not Yet Inspected                                                    */
+/* ------------------------------------------------------------------ */
+
+const NOT_YET_INSPECTED = {
+  ...NO_PERMIT,
+  id: 505,
+  business_name: "Brand New Carinderia",
+  compliance_status: "not_yet_inspected",
+  compliance_status_label: "Not Yet Inspected",
+};
+
+describe("never-inspected establishments", () => {
+  function withNotYetInspected() {
+    const previous = mockCtx.establishments;
+    mockCtx.establishments = [...previous, NOT_YET_INSPECTED];
+    return () => {
+      mockCtx.establishments = previous;
+    };
+  }
+
+  test("the table shows the Not Yet Inspected label, not Good Standing", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      const row = rowFor(505);
+
+      expect(within(row).getByText("Not Yet Inspected")).toBeTruthy();
+      expect(within(row).queryByText("Good Standing")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("its status cell carries the neutral style, not the good one", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      const pill = rowFor(505).querySelector(".status-pill, .establishment-status");
+
+      expect(pill.className).toContain("not-yet-inspected");
+      expect(pill.className).not.toContain("good-standing");
+    } finally {
+      restore();
+    }
+  });
+
+  test("Not Yet Inspected is offered as a filter", () => {
+    renderPage();
+    const options = [...document.querySelectorAll("select option")].map(
+      (option) => option.value
+    );
+
+    expect(options).toContain("not_yet_inspected");
+  });
+
+  test("editing it offers Not Yet Inspected as the stored status", () => {
+    const restore = withNotYetInspected();
+
+    try {
+      renderPage();
+      fireEvent.click(within(rowFor(505)).getByTitle("Edit establishment"));
+      const form = document.querySelector("form.establishment-modal");
+
+      expect(field(form, "Compliance Status").value).toBe("not_yet_inspected");
+    } finally {
+      restore();
+    }
+  });
+});
+
+/* ================================================================== */
+/* Existing sanitary permit number at registration                     */
+/* ================================================================== */
+
+describe("Register records an existing sanitary permit", () => {
+  function fillProfile(form) {
+    setField(form, "Business Name", "Mauban Water Station");
+    setField(form, "Owner / Proprietor", "Lito Reyes");
+    setField(form, "Business Type", "8");
+    setField(form, "Barangay", "Daungan");
+    setField(form, "Complete Address", "5 Pier Rd");
+  }
+
+  async function submittedCreate(form) {
+    submit(form);
+    await waitFor(() => expect(mockCtx.createEstablishment).toHaveBeenCalledTimes(1));
+    return mockCtx.createEstablishment.mock.calls[0][0];
+  }
+
+  test("addOneYear adds one calendar year, clamping 29 February", () => {
+    expect(addOneYear("2026-03-01")).toBe("2027-03-01");
+    expect(addOneYear("2028-02-29")).toBe("2029-02-28");
+    expect(addOneYear("")).toBe("");
+  });
+
+  test("the register form offers optional permit number, date issued and expiry", () => {
+    const form = openCreateForm();
+    expect(field(form, "Sanitary Permit Number").value).toBe("");
+    expect(field(form, "Date Issued").value).toBe("");
+    expect(field(form, "Expiry Date").value).toBe("");
+  });
+
+  test("expiry defaults to one year after the date issued and stays editable", () => {
+    const form = openCreateForm();
+    setField(form, "Date Issued", "2026-03-01");
+    expect(field(form, "Expiry Date").value).toBe("2027-03-01");
+
+    // Changing the issue date moves an untouched default along with it.
+    setField(form, "Date Issued", "2026-04-15");
+    expect(field(form, "Expiry Date").value).toBe("2027-04-15");
+
+    // A date staff typed themselves is never overwritten.
+    setField(form, "Expiry Date", "2026-12-31");
+    setField(form, "Date Issued", "2026-05-01");
+    expect(field(form, "Expiry Date").value).toBe("2026-12-31");
+  });
+
+  test("with a permit number and a future expiry the permit is active, not inspected", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "  SP-2026-777 ");
+    setField(form, "Date Issued", "2098-03-01");
+
+    const payload = await submittedCreate(form);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        has_permit: true,
+        permit_number: "SP-2026-777",
+        permit_issued_date: "2098-03-01",
+        permit_expiry_date: "2099-03-01",
+        permit_status: "active",
+        compliance_status: "not_yet_inspected",
+      })
+    );
+  });
+
+  test("an already-expired permit is recorded as renewal due, never active", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2020-001");
+    setField(form, "Date Issued", "2020-01-10");
+
+    const payload = await submittedCreate(form);
+
+    expect(payload.permit_status).toBe("renewal_due");
+    expect(payload.permit_expiry_date).toBe("2021-01-10");
+    expect(payload.compliance_status).toBe("not_yet_inspected");
+  });
+
+  test("without a permit number nothing is fabricated", async () => {
+    const form = openCreateForm();
+    fillProfile(form);
+
+    const payload = await submittedCreate(form);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        has_permit: false,
+        permit_number: "",
+        permit_issued_date: null,
+        permit_expiry_date: null,
+        permit_status: "no_permit",
+        compliance_status: "not_yet_inspected",
+      })
+    );
+  });
+
+  test("a permit number needs its date issued", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2026-777");
+    submit(form);
+
+    expect(screen.getByText("Enter the date the sanitary permit was issued.")).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("permit dates without a permit number are not saved silently", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Date Issued", "2026-03-01");
+    submit(form);
+
+    expect(
+      screen.getByText("Enter the sanitary permit number, or clear the permit dates.")
+    ).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("an expiry on or before the date issued is rejected", () => {
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "SP-2026-777");
+    setField(form, "Date Issued", "2026-03-01");
+    setField(form, "Expiry Date", "2026-03-01");
+    submit(form);
+
+    expect(screen.getByText("The expiry date must be after the date issued.")).toBeTruthy();
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("a duplicate permit number from the server is shown to staff", async () => {
+    mockCtx.createEstablishment.mockRejectedValueOnce({
+      details: {
+        permit_number: [
+          'Sanitary permit number "LG-2026-007" is already recorded for another establishment.',
+        ],
+      },
+    });
+    const form = openCreateForm();
+    fillProfile(form);
+    setField(form, "Sanitary Permit Number", "LG-2026-007");
+    setField(form, "Date Issued", "2098-03-01");
+    submit(form);
+
+    expect(await screen.findByText(/is already recorded for another establishment/)).toBeTruthy();
+  });
+});
+
+/* ================================================================== */
+/* Verification QR is keyed by permit number                           */
+/* ================================================================== */
+
+describe("verification QR", () => {
+  test("permitVerifyPath uses the URL-encoded permit number", () => {
+    expect(permitVerifyPath({ id: 7, permit_number: "SP 2026/9" })).toBe(
+      "/verify-permit/SP%202026%2F9"
+    );
+    expect(permitVerifyPath({ id: 7, permit_number: "  " })).toBe("");
+  });
+
+  test("a permitted record's QR and link point at its permit number, not its id", () => {
+    const modal = openView(501);
+    const qr = within(modal).getByTestId("verify-qr");
+
+    expect(qr.getAttribute("data-value")).toBe(
+      `${window.location.origin}/verify-permit/LG-2026-007`
+    );
+    expect(within(modal).getByText(/Open Verification Page/).getAttribute("href")).toBe(
+      "/verify-permit/LG-2026-007"
+    );
+    expect(qr.getAttribute("data-value")).not.toMatch(/verify-permit\/501$/);
+  });
+
+  test("a record without a permit number has no verification QR", () => {
+    const modal = openView(502);
+
+    expect(within(modal).queryByTestId("verify-qr")).toBeNull();
+    expect(within(modal).queryByText(/Open Verification Page/)).toBeNull();
+    expect(
+      within(modal).getByText(/No permit number is recorded, so there is no verification QR yet/)
+    ).toBeTruthy();
   });
 });

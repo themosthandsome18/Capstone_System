@@ -59,6 +59,11 @@ def bool_config(name, default=False):
 # Core
 SECRET_KEY = config("SECRET_KEY")
 
+# HMAC key for establishment owners' tracking codes (set in the Render
+# dashboard; never commit it). Without it the tracking-code endpoints answer
+# 503, except under DEBUG, where SECRET_KEY stands in.
+TRACKING_CODE_KEY = config("TRACKING_CODE_KEY", default="").strip()
+
 DEBUG = bool_config("DEBUG", default=False)
 
 USE_SEED_DATA = bool_config("USE_SEED_DATA", default=False)
@@ -169,7 +174,14 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "capstone-local-cache",
-    }
+    },
+    # Rate-limit counters must be shared by every server process, so they are
+    # kept in the database. The table is created by migration
+    # 0037_create_throttle_cache_table (Render runs `migrate`, not build.sh).
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "api_throttle_cache",
+    },
 }
 
 
@@ -217,6 +229,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Render terminates TLS at one proxy that appends the client address to
+    # X-Forwarded-For; trust exactly that one hop when identifying clients.
+    # Only used by throttles (community reports and Establishment Portal lookups).
+    "NUM_PROXIES": 1,
+    "DEFAULT_THROTTLE_RATES": {
+        "community_report_contact": "5/day",
+        "community_report_ip": "20/hour",
+        "owner_status_ip": "20/hour",
+    },
 }
 
 

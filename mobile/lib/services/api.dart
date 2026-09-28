@@ -46,34 +46,6 @@ class TourismApi {
     });
   }
 
-  Future<Map<String, dynamic>> registerEstablishment({
-    required String username,
-    required String password,
-    String? businessName,
-    String? permitNumber,
-    String? ownerName,
-    String? contactNumber,
-    String? email,
-    String? barangay,
-  }) async {
-    return _post('/auth/register-establishment/', {
-      'username': username.trim(),
-      'password': password,
-      if (businessName != null && businessName.trim().isNotEmpty)
-        'business_name': businessName.trim(),
-      if (permitNumber != null && permitNumber.trim().isNotEmpty)
-        'permit_number': permitNumber.trim(),
-      if (ownerName != null && ownerName.trim().isNotEmpty)
-        'owner_name': ownerName.trim(),
-      if (contactNumber != null && contactNumber.trim().isNotEmpty)
-        'contact_number': contactNumber.trim(),
-      if (email != null && email.trim().isNotEmpty)
-        'email': email.trim(),
-      if (barangay != null && barangay.trim().isNotEmpty)
-        'barangay': barangay.trim(),
-    });
-  }
-
   Future<SanitationBootstrap> fetchSanitationBootstrap() async {
     try {
       final data = await _get('/mobile/sanitation/bootstrap/');
@@ -86,6 +58,24 @@ class TourismApi {
     }
   }
 
+  /// Staff-only sanitation records (establishments, inspections, complaints,
+  /// households, staff notifications). Requires a signed-in admin or
+  /// sanitation account; throws [ApiException] (401/403) otherwise.
+  Future<Map<String, dynamic>> fetchSanitationStaffRecords() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Your session expired, please sign in again.',
+      );
+    }
+    return _getWithQuery(
+      '/mobile/sanitation/staff-bootstrap/',
+      const {},
+      headers: {'Authorization': 'Token $token'},
+    );
+  }
+
   Future<List<MobileSanitationReceipt>> fetchSanitationReportHistory({
     required String contact,
     required String reference,
@@ -95,6 +85,15 @@ class TourismApi {
       if (reference.trim().isNotEmpty) 'reference': reference.trim(),
     });
     return parseList(data['rows'], MobileSanitationReceipt.fromJson);
+  }
+
+  /// Establishment Portal: the owner's permit status by private tracking code.
+  /// No login; nothing is stored on the phone.
+  Future<OwnerPermitStatus> fetchOwnerPermitStatus(String code) async {
+    final data = await _post('/mobile/sanitation/establishment-status/', {
+      'code': code,
+    });
+    return OwnerPermitStatus.fromJson(data);
   }
 
   Future<PermitVerificationResult> verifySanitaryPermit(String code) async {
@@ -241,10 +240,12 @@ class TourismApi {
     required String category,
     required String priority,
     required String barangay,
+    required String locationAddress,
     required String description,
     List<XFile> photos = const [],
     required String latitude,
     required String longitude,
+    String clientSubmissionId = '',
   }) {
     final fields = {
       'complainant_name': name,
@@ -252,9 +253,11 @@ class TourismApi {
       'category': category,
       'priority': priority,
       'barangay': barangay,
+      'location_address': locationAddress,
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
+      if (clientSubmissionId.isNotEmpty) 'client_submission_id': clientSubmissionId,
     };
 
     if (photos.isNotEmpty) {
@@ -269,10 +272,11 @@ class TourismApi {
   ) {
     return submitSanitationReport(
       name: draft.name,
-      contactNumber: draft.contactNumber,
+      contactNumber: normalizePhMobileNumber(draft.contactNumber),
       category: draft.category,
       priority: draft.priority,
       barangay: draft.barangay,
+      locationAddress: draft.address,
       description: draft.description,
       latitude: draft.latitude,
       longitude: draft.longitude,

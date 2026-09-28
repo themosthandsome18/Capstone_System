@@ -2289,6 +2289,7 @@ class DropdownTile<T> extends StatelessWidget {
     required this.items,
     required this.itemLabel,
     required this.onChanged,
+    this.hint,
   });
 
   final String label;
@@ -2296,6 +2297,9 @@ class DropdownTile<T> extends StatelessWidget {
   final List<T> items;
   final String Function(T item) itemLabel;
   final ValueChanged<T> onChanged;
+
+  /// Shown in place of a selection when [value] is null.
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -2306,6 +2310,7 @@ class DropdownTile<T> extends StatelessWidget {
       child: DropdownButtonFormField<T>(
         isExpanded: true,
         initialValue: value,
+        hint: hint == null ? null : Text(hint!),
         items: choices
             .map(
               (item) => DropdownMenuItem<T>(

@@ -488,7 +488,11 @@ function PermitRenewal() {
                     </label>
                   ))
                 ) : (
-                  <label>Select an establishment to load requirements.</label>
+                  <label>
+                    {form.establishment
+                      ? "No requirements configured yet."
+                      : "Select an establishment to load requirements."}
+                  </label>
                 )}
               </div>
             </div>
@@ -698,6 +702,9 @@ function RenewalDetailModal({
           />
         </div>
         <div className="renewal-detail-requirements">
+          {allRequirements.length === 0 ? (
+            <p className="renewal-req-empty">No requirements configured yet.</p>
+          ) : null}
           {allRequirements.map((requirement) => {
             const isComplied = submitted.includes(requirement);
             return (
@@ -899,15 +906,10 @@ export function getEstablishmentRequirements(
     return businessType.requirements.map((req) => req.requirement_name);
   }
 
-  return [
-    "Xerox copy of DTI/SEC/CDA",
-    "Barangay Clearance of owner",
-    "Chest X-ray Results (Owner & employees)",
-    "CTC/Cedula of owner and employees",
-    "1x1 picture of owner and employees",
-    "Potability of Water Supply - Physical/Chemical Examination",
-    "Potability of Water Supply - Microbiological Examination",
-  ];
+  // No requirements configured for this type (or no establishment selected).
+  // Never substitute a generic list: the official requirements for such a type
+  // (e.g. Ambulant Food Vendor) have not been provided yet.
+  return [];
 }
 
 function Info({ label, value }) {

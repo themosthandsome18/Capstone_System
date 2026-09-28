@@ -7,6 +7,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiClipboard,
+  FiClock,
   FiDownload,
   FiLock,
   FiMapPin,
@@ -17,6 +18,8 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
+
+const ROWS_PER_PAGE = 10;
 
 const statusOptions = [
   { value: "good_standing", label: "Good Standing" },
@@ -46,6 +49,9 @@ function InspectionManagement() {
   const [calendarMonth, setCalendarMonth] = useState(() =>
     getMonthStart(new Date())
   );
+  const [page, setPage] = useState(1);
+  const [historyEstablishment, setHistoryEstablishment] = useState(null);
+  const [detailInspection, setDetailInspection] = useState(null);
 
   const rows = useMemo(() => {
     return establishments.map((establishment) => {
@@ -88,6 +94,22 @@ function InspectionManagement() {
     });
   }, [dueFilter, rows, searchTerm, statusFilter]);
 
+  // Paging is presentation only: exports and the alert counts stay over the
+  // full filtered set, never just the visible page.
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = filteredRows.slice(
+    (currentPage - 1) * ROWS_PER_PAGE,
+    currentPage * ROWS_PER_PAGE
+  );
+
+  function changeFilter(setter) {
+    return (value) => {
+      setter(value);
+      setPage(1);
+    };
+  }
+
   const dueWithinSevenDays = rows.filter((row) => {
     if (!row.nextDueDate) return false;
 
@@ -101,8 +123,8 @@ function InspectionManagement() {
   }).length;
 
   const calendarCells = useMemo(() => {
-    return buildCalendarCells(rows, calendarMonth);
-  }, [calendarMonth, rows]);
+    return buildCalendarCells(rows, calendarMonth, inspections);
+  }, [calendarMonth, rows, inspections]);
 
   function openForm(row) {
     setSelectedEstablishment(row);
@@ -345,13 +367,13 @@ function InspectionManagement() {
                 type="text"
                 placeholder="Search records..."
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) => changeFilter(setSearchTerm)(event.target.value)}
               />
             </div>
 
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => changeFilter(setStatusFilter)(event.target.value)}
             >
               <option value="all">All Statuses</option>
               {statusOptions.map((status) => (
@@ -363,7 +385,7 @@ function InspectionManagement() {
 
             <select
               value={dueFilter}
-              onChange={(event) => setDueFilter(event.target.value)}
+              onChange={(event) => changeFilter(setDueFilter)(event.target.value)}
             >
               <option value="all">All Due Dates</option>
               <option value="overdue">Overdue</option>
@@ -387,8 +409,8 @@ function InspectionManagement() {
               </thead>
 
               <tbody>
-                {filteredRows.length ? (
-                  filteredRows.map((row) => (
+                {visibleRows.length ? (
+                  visibleRows.map((row) => (
                     <tr key={row.id}>
                       <td>
                         <strong>{row.business_name}</strong>
@@ -452,6 +474,16 @@ function InspectionManagement() {
                           </button>
                           <button
                             type="button"
+                            className="inspection-icon-action history"
+                            onClick={() => setHistoryEstablishment(row)}
+                            aria-label={`View inspection history for ${row.business_name}`}
+                            title="Inspection history"
+                            data-tooltip="Inspection history"
+                          >
+                            <FiClock />
+                          </button>
+                          <button
+                            type="button"
                             className="inspection-icon-action conduct"
                             onClick={() => openForm(row)}
                             aria-label={`Conduct inspection for ${row.business_name}`}
@@ -477,15 +509,26 @@ function InspectionManagement() {
 
           <div className="inspection-pagination">
             <p>
-              Showing {filteredRows.length} of {rows.length}
+              Showing {visibleRows.length} of {filteredRows.length} | Page{" "}
+              {currentPage} of {pageCount}
             </p>
 
             <div>
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                aria-label="Previous page"
+              >
                 <FiChevronLeft />
               </button>
 
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage >= pageCount}
+                aria-label="Next page"
+              >
                 <FiChevronRight />
               </button>
             </div>
@@ -524,6 +567,7 @@ function InspectionManagement() {
           <div className="inspection-calendar-key">
             <span className="good">Upcoming Due</span>
             <span className="violation">Overdue</span>
+            <span className="completed">Inspected</span>
           </div>
 
           <div className="calendar-weekdays">
@@ -562,6 +606,22 @@ function InspectionManagement() {
         </section>
       )}
 
+      {historyEstablishment ? (
+        <InspectionHistoryModal
+          establishment={historyEstablishment}
+          inspections={inspections}
+          onSelect={setDetailInspection}
+          onClose={() => setHistoryEstablishment(null)}
+        />
+      ) : null}
+
+      {detailInspection ? (
+        <InspectionDetailModal
+          inspection={detailInspection}
+          onClose={() => setDetailInspection(null)}
+        />
+      ) : null}
+
       {showForm && selectedEstablishment ? (
         <InspectionFormModal
           establishment={selectedEstablishment}
@@ -571,6 +631,137 @@ function InspectionManagement() {
           onClose={() => setShowForm(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function InspectionHistoryModal({
+  establishment,
+  inspections,
+  onSelect,
+  onClose,
+}) {
+  // Every inspection recorded for this establishment, newest first. Drafts are
+  // included but labelled, since they are part of the record of work done.
+  const history = inspections
+    .filter((item) => item.establishment === establishment.id)
+    .sort(
+      (a, b) =>
+        new Date(b.inspection_date || 0) - new Date(a.inspection_date || 0)
+    );
+
+  return (
+    <div className="inspection-modal-backdrop">
+      <div className="inspection-history-modal">
+        <button type="button" className="inspection-close-btn" onClick={onClose}>
+          <FiX />
+        </button>
+
+        <div className="inspection-form-title">
+          <h2>
+            Inspection History : <strong>{establishment.business_name}</strong>
+          </h2>
+          <p>{history.length} recorded</p>
+        </div>
+
+        {history.length ? (
+          <div className="inspection-history-list">
+            {history.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className="inspection-history-row"
+                onClick={() => onSelect(item)}
+              >
+                <span className="inspection-history-date">
+                  {item.inspection_date}
+                </span>
+                <span>{item.inspector_name || "Not recorded"}</span>
+                <span>
+                  {item.status_after_inspection_label ||
+                    item.status_after_inspection}
+                </span>
+                <span>{item.next_due_date || "Not set"}</span>
+                {item.is_draft ? (
+                  <span className="inspection-history-draft">Draft</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="inspection-empty">No inspections recorded yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InspectionDetailModal({ inspection, onClose }) {
+  // Read only on purpose: a past inspection is a record of a visit, so this
+  // view renders it without any control that could change it.
+  const checklist = inspection.checklist_items || [];
+
+  return (
+    <div className="inspection-modal-backdrop">
+      <div className="inspection-detail-modal">
+        <button type="button" className="inspection-close-btn" onClick={onClose}>
+          <FiX />
+        </button>
+
+        <div className="inspection-form-title">
+          <h2>
+            Inspection : <strong>{inspection.inspection_date}</strong>
+            {inspection.is_draft ? (
+              <span className="inspection-history-draft">Draft</span>
+            ) : null}
+          </h2>
+          <p>{inspection.establishment_name}</p>
+        </div>
+
+        <dl className="inspection-detail-fields">
+          <div>
+            <dt>Inspector</dt>
+            <dd>{inspection.inspector_name || "Not recorded"}</dd>
+          </div>
+          <div>
+            <dt>Status After Inspection</dt>
+            <dd>
+              {inspection.status_after_inspection_label ||
+                inspection.status_after_inspection}
+            </dd>
+          </div>
+          <div>
+            <dt>Next Due</dt>
+            <dd>{inspection.next_due_date || "Not set"}</dd>
+          </div>
+          <div>
+            <dt>Findings</dt>
+            <dd>{inspection.findings || "No findings recorded."}</dd>
+          </div>
+          <div>
+            <dt>Remarks</dt>
+            <dd>{inspection.remarks || "No remarks recorded."}</dd>
+          </div>
+        </dl>
+
+        <h3>Requirements Checklist</h3>
+        {checklist.length ? (
+          <ul className="inspection-detail-checklist">
+            {checklist.map((item, index) => (
+              <li
+                key={`${item.requirement_name}-${index}`}
+                className="inspection-detail-check"
+              >
+                <strong>{item.requirement_name}</strong>
+                <span>{item.is_complied ? "Complied" : "Not complied"}</span>
+                {item.notes ? <small>{item.notes}</small> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="inspection-empty">No checklist items recorded.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -586,46 +777,33 @@ function InspectionFormModal({
     (type) => String(type.id) === String(establishment.business_type)
   );
 
+  // Only the requirements configured for this business type and permit
+  // coverage. A type with none configured (e.g. Ambulant Food Vendor, whose
+  // official requirements are not yet provided) gets an empty checklist, never
+  // a substituted generic list.
   const defaultRequirements = (selectedType?.requirements || []).filter(
     (requirement) => requirement.permit_size === establishment.permit_size
   );
 
-  if (defaultRequirements.length === 0) {
-    const STANDARD_REQUIREMENT_NAMES = [
-      "1x1 picture of owner and employees",
-      "Barangay Clearance of owner",
-      "CTC/Cedula of owner and employees",
-      "Certificate of 40-hour Training Course (Owner)",
-      "Certificate of Potability of Product Water",
-      "Chest X-ray Results (Owner & employees)",
-      "DOH Operational Permit Certificate",
-      "Potability of Water Supply - Microbiological Examination",
-      "Potability of Water Supply - Physical/Chemical Examination",
-      "Xerox copy of DTI/SEC/CDA",
-    ];
-    defaultRequirements.push(
-      ...STANDARD_REQUIREMENT_NAMES.map((name) => ({
-        requirement_name: name,
-        permit_size: establishment.permit_size || "sp",
-        is_required: true,
-      }))
-    );
-  }
-
-  const isDraftOrRecent = establishment.latestInspection?.is_draft || 
-    establishment.latestInspection?.inspection_date === getTodayDate();
-    
-  const draft = isDraftOrRecent ? establishment.latestInspection : null;
+  // Only an unfinished draft is reopened for editing. A finalized inspection
+  // is a record of a visit that happened, so a second visit the same day
+  // creates a new inspection instead of overwriting the first.
+  const draft = establishment.latestInspection?.is_draft
+    ? establishment.latestInspection
+    : null;
 
   const { user } = useAuth();
+  // An inspection is a record of who carried it out, so it is attributed to
+  // the signed-in account and never to a stand-in name.
   const defaultInspector = useMemo(() => {
     if (draft?.inspector_name) return draft.inspector_name;
-    if (user?.display_name && user.display_name !== "admin" && user.display_name !== "System Admin") {
-      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
-    }
-    if (user?.username === "inspector_maria") return "Insp. Maria Santos";
-    if (user?.username === "inspector_juan") return "Insp. Juan Dela Cruz";
-    return "Insp. Juan Dela Cruz";
+
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return user?.display_name?.trim() || fullName || user?.username || "";
   }, [draft, user]);
 
   const inspectorName = defaultInspector;
@@ -640,45 +818,30 @@ function InspectionFormModal({
   const [remarks, setRemarks] = useState(draft?.remarks || "");
   const initialChecks = (() => {
     const existingChecks = draft?.checklist_items || [];
-    // Default to true only if in good standing or upcoming
-    const defaultComplied = establishment.compliance_status === "good_standing" || establishment.compliance_status === "upcoming";
-    
-    return defaultRequirements.map((requirement, index) => {
-      const existing = existingChecks.find(c => c.requirement_name === requirement.requirement_name);
-      if (existing) {
-        return {
-          requirement_name: existing.requirement_name,
-          is_complied: existing.is_complied,
-          notes: existing.notes || "",
-        };
-      }
-      
-      let isComplied = defaultComplied;
-      if (establishment.compliance_status === "for_completion") {
-        // To accurately reflect 'for_completion', we check all items EXCEPT the last one (if there are multiple)
-        isComplied = index < defaultRequirements.length - 1 || defaultRequirements.length === 1;
-      }
+
+    // A new inspection starts with nothing ticked: the inspector records what
+    // they observe on this visit, not what the previous status implies. Only a
+    // saved draft restores the ticks the inspector had already made.
+    return defaultRequirements.map((requirement) => {
+      const existing = existingChecks.find(
+        (item) => item.requirement_name === requirement.requirement_name
+      );
 
       return {
         requirement_name: requirement.requirement_name,
-        is_complied: isComplied,
-        notes: "",
+        is_complied: existing ? existing.is_complied : false,
+        notes: existing?.notes || "",
       };
     });
   })();
 
   const [checks, setChecks] = useState(initialChecks);
 
-  const [statusAfterInspection, setStatusAfterInspection] = useState(() => {
-    if (draft?.status_after_inspection) return draft.status_after_inspection;
-    
-    const completed = initialChecks.filter((item) => item.is_complied).length;
-    const total = initialChecks.length;
-    
-    if (total === 0 || completed === total) return "good_standing";
-    if (completed === 0) return "violation";
-    return "for_completion";
-  });
+  // The status is the inspector's judgement, never the form's. A new
+  // inspection starts with none chosen; only a saved draft restores one.
+  const [statusAfterInspection, setStatusAfterInspection] = useState(
+    () => draft?.status_after_inspection || ""
+  );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -687,23 +850,14 @@ function InspectionFormModal({
   const percentage = Math.round((completedCount / totalCount) * 100);
 
   function handleCheck(index) {
-    const updated = checks.map((item, itemIndex) =>
-      itemIndex === index
-        ? { ...item, is_complied: !item.is_complied }
-        : item
+    // Ticking records an observation; it never decides the status.
+    setChecks(
+      checks.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, is_complied: !item.is_complied }
+          : item
+      )
     );
-    setChecks(updated);
-
-    const completed = updated.filter((item) => item.is_complied).length;
-    const total = updated.length;
-
-    if (total === 0 || completed === total) {
-      setStatusAfterInspection("good_standing");
-    } else if (completed === 0) {
-      setStatusAfterInspection("violation");
-    } else {
-      setStatusAfterInspection("for_completion");
-    }
   }
 
   function getErrorMessage(requestError) {
@@ -731,6 +885,11 @@ function InspectionFormModal({
 
     if (!inspectionDate) {
       setFormError("Inspection date is required.");
+      return;
+    }
+
+    if (!statusAfterInspection) {
+      setFormError("Select the status after inspection.");
       return;
     }
 
@@ -790,7 +949,7 @@ function InspectionFormModal({
               <FiLock className="inspector-lock-icon" />
               <div className="inspector-name-badge">
                 <strong>{inspectorName}</strong>
-                <small>Logged-in Active Account • Verified Inspector</small>
+                <small>Signed-in account</small>
               </div>
             </div>
           </label>
@@ -833,6 +992,11 @@ function InspectionFormModal({
               value={statusAfterInspection}
               onChange={(event) => setStatusAfterInspection(event.target.value)}
             >
+              {statusAfterInspection ? null : (
+                <option value="" disabled>
+                  Select status
+                </option>
+              )}
               {statusOptions.map((status) => (
                 <option key={status.value} value={status.value}>
                   {status.label}
@@ -864,7 +1028,7 @@ function InspectionFormModal({
             ))
           ) : (
             <p className="inspection-empty">
-              No requirements found for this establishment type.
+              No requirements configured yet.
             </p>
           )}
         </div>
@@ -896,11 +1060,9 @@ function InspectionFormModal({
           Drag & drop photos here, or click to upload
         </div>
 
-        <div className="inspection-warning">
-          Warning: Status will be auto-set to <strong>For Completion</strong> if any
-          requirement is unchecked. You may manually change the final status
-          before submitting.
-        </div>
+        <p className="inspection-warning">
+          Choose the inspection status based on your findings.
+        </p>
 
         {formError ? <p className="sanitation-error-text">{formError}</p> : null}
 
@@ -932,20 +1094,30 @@ function getTodayDate() {
   return toIsoDate(new Date());
 }
 
-function getSuggestedNextDueDate(dateValue, frequency) {
-  if (!dateValue) return "";
+// One shared rule, matching the backend and the mobile app. An unrecognised
+// frequency suggests nothing rather than a silent monthly date, so a
+// misconfigured business type is visible instead of quietly wrong.
+const INSPECTION_FREQUENCY_MONTHS = {
+  monthly: 1,
+  quarterly: 3,
+  annual: 12,
+};
+
+export function getSuggestedNextDueDate(dateValue, frequency) {
+  const months = INSPECTION_FREQUENCY_MONTHS[frequency];
+
+  if (!dateValue || months === undefined) return "";
 
   const date = parseLocalDate(dateValue);
 
   if (!date) return "";
 
-  if (frequency === "annual") {
-    date.setFullYear(date.getFullYear() + 1);
-  } else if (frequency === "quarterly") {
-    date.setMonth(date.getMonth() + 3);
-  } else {
-    date.setMonth(date.getMonth() + 1);
-  }
+  // Keep the day of the month, clamping when the target month is shorter.
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
 
   return toIsoDate(date);
 }
@@ -1006,7 +1178,7 @@ function matchesDueFilter(dateValue, filter) {
   return true;
 }
 
-function buildCalendarCells(rows, monthStart) {
+function buildCalendarCells(rows, monthStart, inspections = []) {
   const todayIso = toIsoDate(new Date());
   const anchor = getMonthStart(monthStart || new Date());
   const firstVisibleDate = new Date(anchor);
@@ -1017,7 +1189,7 @@ function buildCalendarCells(rows, monthStart) {
     0
   ).getDate();
   const visibleCellCount = Math.ceil((anchor.getDay() + daysInMonth) / 7) * 7;
-  const eventsByDate = buildCalendarEventMap(rows);
+  const eventsByDate = buildCalendarEventMap(rows, inspections);
   const cells = [];
 
   for (let index = 0; index < visibleCellCount; index += 1) {
@@ -1038,7 +1210,7 @@ function buildCalendarCells(rows, monthStart) {
   return cells;
 }
 
-function buildCalendarEventMap(rows) {
+function buildCalendarEventMap(rows, inspections = []) {
   const eventsByDate = new Map();
 
   function addEvent(dateValue, event) {
@@ -1072,19 +1244,27 @@ function buildCalendarEventMap(rows) {
     }
   });
 
+  // Inspections that actually happened, on the day they happened. Drafts are
+  // left out: an unfinished draft is not a completed inspection.
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+  inspections.forEach((inspection) => {
+    if (inspection.is_draft || !inspection.inspection_date) return;
+
+    const row = rowsById.get(inspection.establishment);
+
+    if (!row) return;
+
+    addEvent(inspection.inspection_date, {
+      key: `${inspection.id}-inspected`,
+      row,
+      title: row.business_name,
+      typeLabel: "Inspected",
+      status: "completed",
+    });
+  });
+
   return eventsByDate;
-}
-
-// eslint-disable-next-line no-unused-vars
-function calendarStatusClass(status = "") {
-  const normalized = status.toLowerCase();
-
-  if (normalized.includes("good")) return "good";
-  if (normalized.includes("upcoming")) return "upcoming";
-  if (normalized.includes("completion")) return "completion";
-  if (normalized.includes("violation")) return "violation";
-
-  return "upcoming";
 }
 
 function statusClass(status = "") {

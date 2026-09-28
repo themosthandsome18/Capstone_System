@@ -53,6 +53,7 @@ const permitStatusOptions = [
 ];
 
 const complianceStatusOptions = [
+  { value: "not_yet_inspected", label: "Not Yet Inspected" },
   { value: "good_standing", label: "Good Standing" },
   { value: "upcoming", label: "Upcoming" },
   { value: "for_completion", label: "For Compliance" },

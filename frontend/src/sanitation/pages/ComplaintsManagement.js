@@ -16,6 +16,9 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { API_BASE_URL } from "../../shared/apiClient";
+import { fetchSanitationInspectors } from "../services/sanitationApi";
+// Reporter-typed text goes into the print window's HTML, so it is escaped.
+import { escapeSlipText } from "../utils/escapeSlipText";
 
 export const REPORT_LIMIT_MAX = 5;
 
@@ -176,7 +179,7 @@ export function getScheduleDateLimits(priority) {
 }
 
 const emptySchedule = {
-  inspector: "Insp. J. Cruz",
+  inspector: "",
   date: new Date().toISOString().slice(0, 10),
   time: "09:00",
   priority: "high",
@@ -196,13 +199,14 @@ function ComplaintsManagement() {
   } = useSanitationData();
 
   const { user } = useAuth();
+  // Attributed to the signed-in account, never to a stand-in name.
   const defaultInspectorName = useMemo(() => {
-    if (!user) return "Insp. Juan Dela Cruz";
-    if (user.display_name && user.display_name !== "admin") {
-      return user.display_name.startsWith("Insp") ? user.display_name : `Insp. ${user.display_name}`;
-    }
-    if (user.username === "inspector_maria") return "Insp. Maria Santos";
-    return "Insp. Juan Dela Cruz";
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return user?.display_name?.trim() || fullName || user?.username || "";
   }, [user]);
 
   const [filters, setFilters] = useState({
@@ -228,6 +232,22 @@ function ComplaintsManagement() {
   const [dayModalData, setDayModalData] = useState(null);
   const [inspectionModalData, setInspectionModalData] = useState(null);
   const [summaryModalReport, setSummaryModalReport] = useState(null);
+  const [inspectors, setInspectors] = useState([]);
+
+  // Names for the assignment dropdown come from real staff accounts.
+  useEffect(() => {
+    let active = true;
+    fetchSanitationInspectors()
+      .then((rows) => {
+        if (active) setInspectors(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (active) setInspectors([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const rows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const summary = complaintData?.summary || {};
@@ -251,6 +271,7 @@ function ComplaintsManagement() {
           item.complaint_id,
           item.category,
           item.barangay,
+          item.location_address,
           item.description,
           item.complainant_name,
         ]
@@ -560,6 +581,7 @@ function ComplaintsManagement() {
         <ScheduleInspectionModal
           report={selectedReport}
           schedule={schedule}
+          inspectors={inspectors}
           saving={saving}
           onClose={() => setScheduleOpen(false)}
           onSubmit={handleScheduleInspection}
@@ -945,7 +967,12 @@ export function printFieldworkActionSlip(report) {
         <div class="grid">
           <div class="box">
             <span>Location / Barangay</span>
-            <strong>Brgy. ${report.barangay || "Unspecified"}</strong>
+            <strong>Brgy. ${escapeSlipText(report.barangay || "Unspecified")}</strong>
+            ${
+              report.location_address
+                ? `<small>${escapeSlipText(report.location_address)}</small>`
+                : ""
+            }
           </div>
           <div class="box">
             <span>Inspection Urgency SLA</span>
@@ -957,7 +984,7 @@ export function printFieldworkActionSlip(report) {
           </div>
           <div class="box">
             <span>Assigned Sanitary Inspector</span>
-            <strong>${report.assigned_inspector || "Insp. Juan Dela Cruz"}</strong>
+            <strong>${report.assigned_inspector || "Not assigned"}</strong>
           </div>
           <div class="box">
             <span>Scheduled Date & Time</span>
@@ -1127,6 +1154,7 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
             </small>
           </span>
           <strong>{report.barangay || "Unspecified"}</strong>
+          {report.location_address ? <small>{report.location_address}</small> : null}
           <small>{reportTitle(report)}</small>
         </div>
       </div>
@@ -1218,15 +1246,24 @@ function ReportDetail({ report, saving, onDelete, onStatus, onSchedule, onLocati
   );
 }
 
-function ScheduleInspectionModal({
+export function ScheduleInspectionModal({
   report,
   schedule,
+  inspectors = [],
   saving,
   onClose,
   onSubmit,
   onPriorityChange,
   onChange,
 }) {
+  // Real staff accounts, plus whatever name an older record already carries so
+  // that history stays readable even if that person no longer has an account.
+  const inspectorNames = inspectors.map((item) => item.name);
+  const inspectorOptions =
+    schedule.inspector && !inspectorNames.includes(schedule.inspector)
+      ? [schedule.inspector, ...inspectorNames]
+      : inspectorNames;
+
   const isUrgentLocked =
     report.priority === "high" ||
     String(report.priority).toLowerCase() === "urgent";
@@ -1287,11 +1324,22 @@ function ScheduleInspectionModal({
               value={schedule.inspector}
               onChange={(event) => onChange("inspector", event.target.value)}
             >
-              <option>Insp. J. Cruz</option>
-              <option>Insp. M. Santos</option>
-              <option>Insp. R. Dela Pena</option>
-              <option>Insp. E. Alcantara</option>
+              {schedule.inspector ? null : (
+                <option value="" disabled>
+                  Select inspector
+                </option>
+              )}
+              {inspectorOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
             </select>
+            {inspectorOptions.length ? null : (
+              <small className="community-field-hint">
+                No inspector accounts available.
+              </small>
+            )}
           </label>
           <label>
             Inspection Date (Strict Constraint)
@@ -1678,6 +1726,7 @@ function ReportSummaryModal({
                 Brgy. {report.barangay || "Mauban"}
                 {report.establishment_name ? ` (${report.establishment_name})` : ""}
               </strong>
+              {report.location_address ? <small>{report.location_address}</small> : null}
               <small style={{ color: "#0ea5e9", marginTop: "4px", fontWeight: "600" }}>
                 View on GIS Map &rarr;
               </small>

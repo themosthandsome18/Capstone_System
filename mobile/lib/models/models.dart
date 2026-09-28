@@ -85,6 +85,83 @@ class MobileBootstrap {
   }
 }
 
+/// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the
+/// public bootstrap, which keeps supplying business types and barangays.
+SanitationBootstrap mergeSanitationStaffRecords(
+  SanitationBootstrap base,
+  Map<String, dynamic> staff,
+) {
+  return SanitationBootstrap(
+    businessTypes: base.businessTypes,
+    establishments: parseList(
+      staff['establishments'],
+      SanitationEstablishment.fromJson,
+    ),
+    inspections: parseList(
+      staff['inspections'],
+      SanitationInspectionItem.fromJson,
+    ),
+    complaints: parseList(
+      (staff['complaintData'] as Map<String, dynamic>?)?['rows'],
+      SanitationComplaintItem.fromJson,
+    ),
+    householdRecords: parseList(
+      staff['householdRecords'],
+      HouseholdSanitationItem.fromJson,
+    ),
+    barangays: base.barangays,
+    notifications: parseList(staff['notifications'], AppNotification.fromJson),
+    offlineMessage: base.offlineMessage,
+    isOffline: base.isOffline,
+  );
+}
+
+/// The 40 official Mauban barangays, spelled as in api_barangay and in its
+/// display_order (backend/api/seed_data.py MAUBAN_BARANGAYS). Used only when
+/// the server has not answered yet; ids are positions, not database ids.
+const sanitationBarangayFallback = [
+  BarangayItem(id: 1, name: 'Abo-abo'),
+  BarangayItem(id: 2, name: 'Alitap'),
+  BarangayItem(id: 3, name: 'Baao'),
+  BarangayItem(id: 4, name: 'Bagong Bayan'),
+  BarangayItem(id: 5, name: 'Balaybalay'),
+  BarangayItem(id: 6, name: 'Bato'),
+  BarangayItem(id: 7, name: 'Cagbalete I'),
+  BarangayItem(id: 8, name: 'Cagbalete II'),
+  BarangayItem(id: 9, name: 'Cagsiay I'),
+  BarangayItem(id: 10, name: 'Cagsiay II'),
+  BarangayItem(id: 11, name: 'Cagsiay III'),
+  BarangayItem(id: 12, name: 'Concepcion'),
+  BarangayItem(id: 13, name: 'Daungan'),
+  BarangayItem(id: 14, name: 'Liwayway'),
+  BarangayItem(id: 15, name: 'Lual'),
+  BarangayItem(id: 16, name: 'Lual Rural'),
+  BarangayItem(id: 17, name: 'Lucutan'),
+  BarangayItem(id: 18, name: 'Luya-luya'),
+  BarangayItem(id: 19, name: 'Mabato'),
+  BarangayItem(id: 20, name: 'Macasin'),
+  BarangayItem(id: 21, name: 'Polo'),
+  BarangayItem(id: 22, name: 'Remedios I'),
+  BarangayItem(id: 23, name: 'Remedios II'),
+  BarangayItem(id: 24, name: 'Rizaliana'),
+  BarangayItem(id: 25, name: 'Rosario'),
+  BarangayItem(id: 26, name: 'Sadsaran'),
+  BarangayItem(id: 27, name: 'San Gabriel'),
+  BarangayItem(id: 28, name: 'San Isidro'),
+  BarangayItem(id: 29, name: 'San Jose'),
+  BarangayItem(id: 30, name: 'San Lorenzo'),
+  BarangayItem(id: 31, name: 'San Miguel'),
+  BarangayItem(id: 32, name: 'San Rafael'),
+  BarangayItem(id: 33, name: 'San Roque'),
+  BarangayItem(id: 34, name: 'San Vicente'),
+  BarangayItem(id: 35, name: 'Santa Lucia'),
+  BarangayItem(id: 36, name: 'Santo Angel'),
+  BarangayItem(id: 37, name: 'Santo Niño'),
+  BarangayItem(id: 38, name: 'Santol'),
+  BarangayItem(id: 39, name: 'Soledad'),
+  BarangayItem(id: 40, name: 'Tapucan'),
+];
+
 class SanitationBootstrap {
   const SanitationBootstrap({
     required this.businessTypes,
@@ -143,11 +220,7 @@ class SanitationBootstrap {
       inspections: const [],
       complaints: const [],
       householdRecords: const [],
-      barangays: const [
-        BarangayItem(id: 1, name: 'Poblacion'),
-        BarangayItem(id: 2, name: 'San Isidro'),
-        BarangayItem(id: 3, name: 'Cagsiay'),
-      ],
+      barangays: sanitationBarangayFallback,
       notifications: const [
         AppNotification(
           id: 'offline-sanitation',
@@ -339,6 +412,13 @@ class SanitationInspectionItem {
   }
 }
 
+/// "Barangay · typed location" for staff lists; just the barangay when the
+/// report has no typed location (older reports).
+String complaintLocationLine(SanitationComplaintItem item) {
+  final address = item.locationAddress.trim();
+  return address.isEmpty ? item.barangay : '${item.barangay} · $address';
+}
+
 class SanitationComplaintItem {
   const SanitationComplaintItem({
     required this.reference,
@@ -349,11 +429,13 @@ class SanitationComplaintItem {
     required this.statusLabel,
     required this.priority,
     required this.actionTaken,
+    this.locationAddress = '',
   });
 
   final String reference;
   final String category;
   final String barangay;
+  final String locationAddress;
   final String description;
   final String status;
   final String statusLabel;
@@ -365,6 +447,7 @@ class SanitationComplaintItem {
       reference: '${json['complaint_id'] ?? json['id'] ?? ''}',
       category: '${json['category'] ?? 'Sanitation concern'}',
       barangay: '${json['barangay'] ?? 'Unspecified'}',
+      locationAddress: '${json['location_address'] ?? ''}',
       description: '${json['description'] ?? ''}',
       status: '${json['status'] ?? 'pending'}',
       statusLabel:
@@ -809,6 +892,7 @@ class SanitationReportDraft {
     required this.longitude,
     required this.isAnonymous,
     required this.createdAt,
+    this.address = '',
   });
 
   final String id;
@@ -818,8 +902,10 @@ class SanitationReportDraft {
   final String priority;
   final String barangay;
   final String description;
+  final String address;
   final String latitude;
   final String longitude;
+  // Kept so drafts saved by older builds still load; new drafts are never anonymous.
   final bool isAnonymous;
   final String createdAt;
 
@@ -832,6 +918,7 @@ class SanitationReportDraft {
       'priority': priority,
       'barangay': barangay,
       'description': description,
+      'address': address,
       'latitude': latitude,
       'longitude': longitude,
       'is_anonymous': isAnonymous,
@@ -846,8 +933,9 @@ class SanitationReportDraft {
       contactNumber: '${json['contact_number'] ?? ''}',
       category: '${json['category'] ?? sanitationReportCategories.first}',
       priority: '${json['priority'] ?? 'medium'}',
-      barangay: '${json['barangay'] ?? 'Poblacion'}',
+      barangay: '${json['barangay'] ?? ''}',
       description: '${json['description'] ?? ''}',
+      address: '${json['address'] ?? ''}',
       latitude: '${json['latitude'] ?? ''}',
       longitude: '${json['longitude'] ?? ''}',
       isAnonymous: json['is_anonymous'] == true,
@@ -863,6 +951,7 @@ class SanitationReportDraft {
     String? priority,
     String? barangay,
     String? description,
+    String? address,
     String? latitude,
     String? longitude,
     bool? isAnonymous,
@@ -876,6 +965,7 @@ class SanitationReportDraft {
       priority: priority ?? this.priority,
       barangay: barangay ?? this.barangay,
       description: description ?? this.description,
+      address: address ?? this.address,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       isAnonymous: isAnonymous ?? this.isAnonymous,
@@ -936,7 +1026,7 @@ class PermitVerificationResult {
     required this.code,
     required this.establishment,
     required this.permitStatusLabel,
-    required this.complianceStatusLabel,
+    required this.issuedDate,
     required this.expiryDate,
   });
 
@@ -944,13 +1034,12 @@ class PermitVerificationResult {
   final String code;
   final SanitationEstablishment establishment;
   final String permitStatusLabel;
-  final String complianceStatusLabel;
+  final String issuedDate;
   final String expiryDate;
 
   factory PermitVerificationResult.fromJson(Map<String, dynamic> json) {
     final permit = Map<String, dynamic>.from(json['permit'] as Map? ?? {});
     final permitStatus = '${permit['permit_status'] ?? ''}';
-    final complianceStatus = '${permit['compliance_status'] ?? ''}';
     return PermitVerificationResult(
       verified: jsonBool(json['verified']),
       code: '${json['code'] ?? ''}',
@@ -959,8 +1048,7 @@ class PermitVerificationResult {
       ),
       permitStatusLabel:
           '${permit['permit_status_label'] ?? sanitationStatusLabel(permitStatus)}',
-      complianceStatusLabel:
-          '${permit['compliance_status_label'] ?? sanitationStatusLabel(complianceStatus)}',
+      issuedDate: '${permit['permit_issued_date'] ?? ''}',
       expiryDate: '${permit['permit_expiry_date'] ?? ''}',
     );
   }
@@ -1063,4 +1151,86 @@ class IntroItem {
   final String title;
   final String text;
   final Color color;
+}
+
+/// One line of the Establishment Portal checklist. [submitted] is null when
+/// there is no open renewal to judge it against.
+class OwnerRequirementItem {
+  const OwnerRequirementItem({required this.name, required this.submitted});
+
+  final String name;
+  final bool? submitted;
+
+  factory OwnerRequirementItem.fromJson(Map<String, dynamic> json) {
+    final submitted = json['submitted'];
+    return OwnerRequirementItem(
+      name: '${json['name'] ?? ''}',
+      submitted: submitted is bool ? submitted : null,
+    );
+  }
+}
+
+/// The Establishment Portal answer (POST /mobile/sanitation/establishment-status/).
+class OwnerPermitStatus {
+  const OwnerPermitStatus({
+    required this.businessName,
+    required this.businessType,
+    required this.barangay,
+    required this.permitNumber,
+    required this.permitStatus,
+    required this.permitStatusLabel,
+    required this.permitExpiryDate,
+    required this.daysLeft,
+    required this.isExpired,
+    required this.renewalNotice,
+    required this.expiredNotice,
+    required this.suspendedNotice,
+    required this.requirements,
+    required this.requirementsNote,
+  });
+
+  final String businessName;
+  final String businessType;
+  final String barangay;
+  final String? permitNumber;
+  final String permitStatus;
+  final String permitStatusLabel;
+  final String? permitExpiryDate;
+  final int? daysLeft;
+  final bool isExpired;
+  final String? renewalNotice;
+  final String? expiredNotice;
+  final String? suspendedNotice;
+  final List<OwnerRequirementItem> requirements;
+  final String? requirementsNote;
+
+  factory OwnerPermitStatus.fromJson(Map<String, dynamic> json) {
+    String? text(String key) {
+      final value = json[key];
+      if (value == null) return null;
+      final trimmed = '$value'.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    final days = json['days_left'];
+    return OwnerPermitStatus(
+      businessName: text('business_name') ?? '',
+      businessType: text('business_type') ?? '',
+      barangay: text('barangay') ?? '',
+      permitNumber: text('permit_number'),
+      permitStatus: text('permit_status') ?? '',
+      permitStatusLabel: text('permit_status_label') ?? '',
+      permitExpiryDate: text('permit_expiry_date'),
+      daysLeft: days is int ? days : int.tryParse('${days ?? ''}'),
+      isExpired: json['is_expired'] == true,
+      renewalNotice: text('renewal_notice'),
+      expiredNotice: text('expired_notice'),
+      suspendedNotice: text('suspended_notice'),
+      requirements: (json['requirements'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => OwnerRequirementItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      requirementsNote: text('requirements_note'),
+    );
+  }
 }

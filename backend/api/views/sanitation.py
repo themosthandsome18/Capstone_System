@@ -41,6 +41,11 @@ from api.serializers import (
 )
 from api.services.activity import log_activity
 from api.services.household import build_household_dashboard_payload
+from api.services.tracking_codes import (
+    NOT_CONFIGURED_MESSAGE,
+    TrackingCodeNotConfigured,
+    issue_tracking_code,
+)
 from api.services.sanitation import (
     advance_renewal_stage,
     build_sanitation_complaints_payload,
@@ -54,6 +59,7 @@ from api.services.sanitation import (
     mark_renewal_paid,
     mark_renewal_unpaid,
     resolve_overdue_renewal,
+    apply_default_next_due_date,
     sync_establishment_after_inspection,
     sync_renewal_progress,
     with_establishment_rollups,
@@ -73,7 +79,7 @@ def sanitation_bootstrap_data(request):
             ).data,
             "establishments": SanitaryEstablishmentSerializer(
                 with_establishment_rollups(
-                    SanitaryEstablishment.objects.select_related("business_type").all()
+                    SanitaryEstablishment.objects.select_related("business_type", "tracking_code_issued_by").all()
                 ).order_by("-updated_at", "-id"),
                 many=True,
             ).data,
@@ -116,7 +122,7 @@ def sanitation_establishment_list(request):
 
     if request.method == "GET":
         establishments = with_establishment_rollups(
-            SanitaryEstablishment.objects.select_related("business_type").all()
+            SanitaryEstablishment.objects.select_related("business_type", "tracking_code_issued_by").all()
         ).order_by("-updated_at", "-id")
         return Response(SanitaryEstablishmentSerializer(establishments, many=True).data)
 
@@ -174,6 +180,57 @@ def sanitation_establishment_detail(request, establishment_id):
     return Response(serializer.data)
 
 
+@api_view(["POST"])
+@module_required("sanitation")
+def sanitation_establishment_tracking_code(request, establishment_id):
+    """Issue the owner's private tracking code for the Owner's Slip.
+
+    The plain code is in this answer only; the server keeps its hash. A new
+    code replaces the old one, which stops working at once.
+    """
+    try:
+        establishment, code = issue_tracking_code(establishment_id, request.user)
+    except SanitaryEstablishment.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    except TrackingCodeNotConfigured:
+        return Response(
+            {"detail": NOT_CONFIGURED_MESSAGE},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    log_activity(
+        request,
+        MODULE_SANITATION,
+        ACTION_UPDATE,
+        establishment,
+        label=f"Owner's tracking code issued: {establishment.business_name}"[:255],
+        record_id=establishment.pk,
+    )
+
+    response = Response(
+        {
+            "tracking_code": code,
+            "issued_at": timezone.localtime(establishment.tracking_code_issued_at).isoformat(),
+            "issued_by": staff_display_name(request.user),
+            "establishment": {
+                "id": establishment.id,
+                "business_name": establishment.business_name,
+                "permit_number": establishment.permit_number,
+                "business_type_name": establishment.business_type.name,
+                "barangay": establishment.barangay,
+            },
+        }
+    )
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def staff_display_name(user):
+    if user is None:
+        return ""
+    return user.get_full_name().strip() or user.username
+
+
 @api_view(["GET", "POST"])
 @module_required("sanitation")
 def sanitation_inspection_list(request):
@@ -189,6 +246,7 @@ def sanitation_inspection_list(request):
     serializer = SanitaryInspectionCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
     log_activity(
         request,
@@ -234,6 +292,7 @@ def sanitation_inspection_detail(request, inspection_id):
     )
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
+    apply_default_next_due_date(inspection)
     sync_establishment_after_inspection(inspection)
     log_activity(
         request,
@@ -559,6 +618,33 @@ def household_record_detail(request, household_id):
     )
 
     return Response(serializer.data)
+
+
+@api_view(["GET"])
+@module_required("sanitation")
+def sanitation_inspector_list(request):
+    """Names for the inspector pickers, and nothing else.
+
+    Deliberately narrower than `sanitation_staff_list`: it returns only an id
+    and a display name, so a dropdown never carries staff email addresses or
+    account metadata. Inactive accounts are left out because they cannot carry
+    out an inspection.
+    """
+    inspectors = (
+        User.objects.filter(
+            is_active=True,
+            profile__role__in=[ROLE_SANITATION, ROLE_ADMIN],
+        )
+        .select_related("profile")
+        .order_by("first_name", "last_name", "username")
+    )
+
+    return Response(
+        [
+            {"id": user.id, "name": user.get_full_name() or user.username}
+            for user in inspectors
+        ]
+    )
 
 
 @api_view(["GET", "POST"])

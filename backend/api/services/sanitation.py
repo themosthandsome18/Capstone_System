@@ -1,3 +1,4 @@
+import calendar
 from datetime import timedelta
 
 from django.db.models import Count, Q
@@ -34,6 +35,10 @@ from ..models import (
     RENEWAL_STAGE_PAYMENT_PENDING,
     RENEWAL_STAGE_RELEASED,
     RENEWAL_STAGE_REQUIREMENTS_REVIEW,
+    SANITARY_STATUS_NOT_YET_INSPECTED,
+    SANITARY_FREQUENCY_ANNUAL,
+    SANITARY_FREQUENCY_MONTHLY,
+    SANITARY_FREQUENCY_QUARTERLY,
     SANITARY_STATUS_FOR_COMPLETION,
     SANITARY_STATUS_GOOD,
     SANITARY_STATUS_NO_PERMIT,
@@ -63,6 +68,34 @@ STATUS_LABELS = {
     SANITARY_STATUS_VIOLATION: "Violation",
     SANITARY_STATUS_NO_PERMIT: "No Permit",
 }
+
+# Community report categories and their urgency: the one server-side copy of
+# the list the mobile app offers (sanitationReportCategoryDefinitions). The
+# server derives urgency from the category; a reporter cannot choose it.
+COMMUNITY_REPORT_CATEGORY_PRIORITIES = {
+    "Contaminated Water Source": "high",
+    "Hazardous / Medical Waste": "high",
+    "Severe Sewage Overflow": "high",
+    "Food Establishment Hygiene": "medium",
+    "Public Market Sanitation": "medium",
+    "Public Restroom Maintenance": "medium",
+    "Pest & Rodents Infestation": "medium",
+    "Stagnant Water / Mosquito Breeding": "medium",
+    "Livestock / Poultry Odor": "medium",
+    "Open Burning of Waste": "medium",
+    "Improper Garbage Disposal": "medium",
+    "Other Sanitation Concern": "low",
+}
+
+
+def community_report_category(category):
+    """(canonical category, urgency) for a known category, else None."""
+    wanted = " ".join(str(category or "").split()).lower()
+    for name, priority in COMMUNITY_REPORT_CATEGORY_PRIORITIES.items():
+        if name.lower() == wanted:
+            return name, priority
+    return None
+
 
 PERMIT_STATUS_BY_COMPLIANCE = {
     SANITARY_STATUS_GOOD: PERMIT_STATUS_ACTIVE,
@@ -146,6 +179,10 @@ def attach_establishment_rollups(establishments):
 def get_establishment_status_counts(establishments):
     return establishments.aggregate(
         total=Count("id"),
+        not_yet_inspected=Count(
+            "id",
+            filter=Q(compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED),
+        ),
         good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
         upcoming=Count("id", filter=Q(compliance_status=SANITARY_STATUS_UPCOMING)),
         for_completion=Count(
@@ -176,6 +213,10 @@ def get_business_type_counts(establishments):
             without_permit=Count("id", filter=Q(has_permit=False)),
             sp=Count("id", filter=Q(permit_size="sp")),
             large=Count("id", filter=Q(permit_size="large")),
+            not_yet_inspected=Count(
+                "id",
+                filter=Q(compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED),
+            ),
             good=Count("id", filter=Q(compliance_status=SANITARY_STATUS_GOOD)),
             for_completion=Count(
                 "id",
@@ -208,6 +249,7 @@ def build_dashboard_business_type_rows(establishments):
                 "total": counts.get("total", 0),
                 "sp": counts.get("sp", 0),
                 "large": counts.get("large", 0),
+                "not_yet_inspected": counts.get("not_yet_inspected", 0),
                 "good_standing": counts.get("good", 0),
                 "for_completion": counts.get("for_completion", 0),
                 "upcoming": counts.get("upcoming", 0),
@@ -1302,7 +1344,62 @@ def add_one_year(value):
         return value + timedelta(days=365)
 
 
+def add_months(date, months):
+    """Shift a date by whole months, clamping to the end of a shorter month."""
+    total = date.month - 1 + months
+    year = date.year + total // 12
+    month = total % 12 + 1
+    day = min(date.day, calendar.monthrange(year, month)[1])
+    return date.replace(year=year, month=month, day=day)
+
+
+# One shared rule for every client and for the server.
+INSPECTION_FREQUENCY_MONTHS = {
+    SANITARY_FREQUENCY_MONTHLY: 1,
+    SANITARY_FREQUENCY_QUARTERLY: 3,
+    SANITARY_FREQUENCY_ANNUAL: 12,
+}
+
+
+def suggested_next_due_date(inspection_date, frequency):
+    """The next due date for an inspection, or None for an unknown frequency.
+
+    An unrecognised frequency yields no suggestion rather than a silent
+    monthly one, so a misconfigured business type is visible instead of
+    quietly producing a wrong schedule.
+    """
+    months = INSPECTION_FREQUENCY_MONTHS.get(frequency)
+    if not inspection_date or months is None:
+        return None
+    return add_months(inspection_date, months)
+
+
+def apply_default_next_due_date(inspection):
+    """Fill in a final inspection's next due date when the client omitted it.
+
+    A date sent by the client always wins, and drafts are left alone because
+    they are not a scheduled result yet.
+    """
+    if inspection.is_draft or inspection.next_due_date:
+        return
+
+    business_type = getattr(inspection.establishment, "business_type", None)
+    suggested = suggested_next_due_date(
+        inspection.inspection_date,
+        getattr(business_type, "inspection_frequency", None),
+    )
+    if suggested:
+        inspection.next_due_date = suggested
+        inspection.save(update_fields=["next_due_date"])
+
+
 def sync_establishment_after_inspection(inspection):
+    # A draft is work in progress, not a result. It must not change the
+    # establishment's compliance or permit status, and must not raise a
+    # violation notification. Finalizing the draft runs this for real.
+    if inspection.is_draft:
+        return
+
     establishment = inspection.establishment
     previous_status = establishment.compliance_status
     new_status = inspection.status_after_inspection
@@ -1322,6 +1419,13 @@ def sync_establishment_after_inspection(inspection):
 
 def build_sanitation_question_answers(establishments):
     total = establishments.count()
+    # Never-inspected establishments have no finding, so they belong in neither
+    # side of the compliance rate. Counting them as non-compliant would be as
+    # wrong as counting them as compliant.
+    not_yet_inspected = establishments.filter(
+        compliance_status=SANITARY_STATUS_NOT_YET_INSPECTED
+    ).count()
+    inspected_total = total - not_yet_inspected
     good = establishments.filter(compliance_status=SANITARY_STATUS_GOOD).count()
     for_completion = establishments.filter(
         compliance_status=SANITARY_STATUS_FOR_COMPLETION
@@ -1330,7 +1434,9 @@ def build_sanitation_question_answers(establishments):
     violation = establishments.filter(compliance_status=SANITARY_STATUS_VIOLATION).count()
     no_permit = establishments.filter(compliance_status=SANITARY_STATUS_NO_PERMIT).count()
     without_permit = establishments.filter(has_permit=False).count()
-    compliance_rate = round((good / total) * 100, 1) if total else 0
+    compliance_rate = (
+        round((good / inspected_total) * 100, 1) if inspected_total else 0
+    )
     top_type = top_sanitation_group(establishments, "business_type__name")
     top_7_type = top_n_sanitation_group(establishments, "business_type__name", limit=7)
     top_violation_type = top_sanitation_group(

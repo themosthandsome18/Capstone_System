@@ -448,6 +448,8 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
         default=None,
     )
     is_account_linked = serializers.SerializerMethodField()
+    # When the current Owner's Slip was printed, and by whom; never the hash.
+    tracking_code_issued_by_name = serializers.SerializerMethodField()
     coordinates = serializers.SerializerMethodField()
     risk_score = serializers.SerializerMethodField()
     risk_level = serializers.SerializerMethodField()
@@ -484,9 +486,34 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "remarks",
             "account_username",
             "is_account_linked",
+            "tracking_code_issued_at",
+            "tracking_code_issued_by_name",
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["tracking_code_issued_at"]
+
+    def get_tracking_code_issued_by_name(self, obj):
+        user = obj.tracking_code_issued_by
+        if user is None:
+            return ""
+        return user.get_full_name().strip() or user.username
+
+    def validate_permit_number(self, value):
+        # Owners claim an establishment by permit number, so two records must
+        # never share one. Blank means "no permit" and may repeat.
+        value = (value or "").strip()
+        if not value:
+            return value
+
+        duplicates = SanitaryEstablishment.objects.filter(permit_number__iexact=value)
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError(
+                f'Sanitary permit number "{value}" is already recorded for another establishment.'
+            )
+        return value
 
     def get_is_account_linked(self, obj):
         return bool(getattr(obj, "user_id", None))
@@ -746,6 +773,7 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             "contact_number",
             "category",
             "barangay",
+            "location_address",
             "reported_date",
             "status",
             "status_label",
@@ -790,6 +818,26 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
             "is_draft",
             "checklist_items",
         ]
+
+    def validate(self, attrs):
+        # A finished inspection has to say what it found. Letting the model
+        # default fill in "good_standing" would record a compliance judgement
+        # that no inspector actually made. Drafts are still in progress.
+        is_draft = attrs.get(
+            "is_draft",
+            getattr(self.instance, "is_draft", False),
+        )
+
+        if not is_draft and not attrs.get("status_after_inspection"):
+            raise serializers.ValidationError(
+                {
+                    "status_after_inspection": (
+                        "Select the status after inspection before submitting."
+                    )
+                }
+            )
+
+        return attrs
 
     def create(self, validated_data):
         checklist_items = validated_data.pop("checklist_items", [])

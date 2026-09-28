@@ -12,7 +12,9 @@ function VerifyPermit() {
   useEffect(() => {
     async function verifyPermit() {
       try {
-        const response = await fetch(`${API_BASE_URL}/mobile/sanitation/permits/verify/?code=${code}`);
+        const response = await fetch(
+          `${API_BASE_URL}/mobile/sanitation/permits/verify/?code=${encodeURIComponent(code)}`
+        );
         const data = await response.json();
 
         if (!response.ok) {
@@ -59,15 +61,17 @@ function VerifyPermit() {
     );
   }
 
+  // The public endpoint confirms the permit only (no owner, contact, address,
+  // location or inspection result), so the headline follows the permit status.
   const { establishment, permit } = verificationResult;
-  const isGoodStanding = permit.compliance_status === "good_standing";
-  const isWarning = ["upcoming", "for_completion"].includes(permit.compliance_status);
-  
+  const isActive = permit.permit_status === "active";
+  const isWarning = ["renewal_due", "conditional"].includes(permit.permit_status);
+
   let statusColor = "#10b981"; // Green
   let StatusIcon = FiCheckCircle;
-  let statusTitle = "Verified: Good Standing";
+  let statusTitle = "Verified: Active Permit";
 
-  if (!isGoodStanding) {
+  if (!isActive) {
     if (isWarning) {
       statusColor = "#f59e0b"; // Orange/Yellow
       StatusIcon = FiAlertCircle;
@@ -75,7 +79,7 @@ function VerifyPermit() {
     } else {
       statusColor = "#ef4444"; // Red
       StatusIcon = FiXCircle;
-      statusTitle = "Verified: Non-Compliant";
+      statusTitle = "Verified: Permit Not Valid";
     }
   }
 
@@ -91,7 +95,6 @@ function VerifyPermit() {
         <div style={{ ...styles.statusBox, backgroundColor: `${statusColor}15`, borderColor: statusColor }}>
           <StatusIcon size={48} color={statusColor} style={styles.icon} />
           <h2 style={{ color: statusColor }}>{statusTitle}</h2>
-          <p style={{ fontWeight: 600 }}>{permit.compliance_status_label}</p>
         </div>
 
         <div style={styles.detailsGrid}>
@@ -104,12 +107,8 @@ function VerifyPermit() {
             <strong style={styles.value}>{establishment.business_type_name}</strong>
           </div>
           <div style={styles.detailItem}>
-            <span style={styles.label}>Owner / Proprietor</span>
-            <strong style={styles.value}>{establishment.owner_name}</strong>
-          </div>
-          <div style={styles.detailItem}>
-            <span style={styles.label}>Address</span>
-            <strong style={styles.value}>{establishment.address}, Brgy. {establishment.barangay}</strong>
+            <span style={styles.label}>Barangay</span>
+            <strong style={styles.value}>{establishment.barangay}</strong>
           </div>
         </div>
 
