@@ -8,28 +8,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const notFound =
-    "Hindi nahanap ang tracking code. Tingnan ang code sa iyong Owner's Slip. / "
-    "Tracking code not found. Check the code on your Owner's Slip.";
-const tooMany =
-    'Masyadong maraming pagsubok mula sa device na ito. Subukan muli '
-    'pagkalipas ng isang oras. / Too many attempts from this device. '
-    'Please try again in an hour.';
-const notAvailable =
-    "Hindi pa available ang serbisyong ito. Subukan ulit mamaya. / "
-    "This service isn't available yet. Please try again later.";
-const networkMessage =
-    'Hindi naipadala. Tingnan ang internet at subukan ulit. / '
-    'Not sent. Check your connection and try again.';
+const notFound = "Tracking code not found. Check the code on your Owner's Slip.";
+const tooMany = 'Too many attempts from this device. Please try again in an hour.';
+const notAvailable = "This service isn't available yet. Please try again later.";
+const networkMessage = 'Not sent. Check your connection and try again.';
 const renewalNotice =
-    'Mag-e-expire ang iyong sanitary permit sa loob ng 45 araw. Mag-renew sa '
-    'Sanitary Office. / Your sanitary permit expires in 45 days. Please renew '
-    'at the Sanitary Office.';
+    'Your sanitary permit expires in 45 days. Please renew at the Sanitary Office.';
 const expiredNotice =
-    'Expired na ang iyong sanitary permit. Mag-renew sa Sanitary Office. / '
     'Your sanitary permit has expired. Please renew at the Sanitary Office.';
-const suspendedNotice =
-    'Makipag-ugnayan sa Sanitary Office. / Please contact the Sanitary Office.';
+const suspendedNotice = 'Please contact the Sanitary Office.';
 
 Map<String, dynamic> activeStatus({Map<String, dynamic> changes = const {}}) => {
       'business_name': 'Aling Nena Carinderia',
@@ -122,19 +109,19 @@ void main() {
     await pumpPortal(tester, ScriptedPortalApi([]));
 
     expect(find.text('MUNICIPAL HEALTH OFFICE'), findsOneWidget);
-    expect(find.text('Tingnan ang status ng iyong sanitary permit'), findsOneWidget);
+    expect(find.text('Check your sanitary permit status'), findsOneWidget);
     expect(
       find.text(
-        'Walang account na kailangan. Ilagay ang tracking code na ibinigay ng Sanitary Office.',
+        'No account needed. Enter the tracking code given by the Sanitary Office.',
       ),
       findsOneWidget,
     );
     expect(find.text('TRACKING CODE'), findsOneWidget);
     expect(find.text('MBN-XXXX-XXXX'), findsOneWidget);
-    expect(find.text('Tingnan ang status'), findsOneWidget);
+    expect(find.text('Check status'), findsOneWidget);
     expect(
       find.text(
-        'Hindi ito ang permit number na nakapaskil sa tindahan. Wala kang code? Pumunta sa Sanitary Office.',
+        'This is not the permit number posted in your shop. No code? Visit the Sanitary Office.',
       ),
       findsOneWidget,
     );
@@ -169,7 +156,7 @@ void main() {
     await check(tester, '   ');
 
     expect(api.codes, isEmpty);
-    expect(find.text('Ilagay ang tracking code. / Enter the tracking code.'), findsOneWidget);
+    expect(find.text('Enter the tracking code.'), findsOneWidget);
   });
 
   testWidgets('while checking, the button is disabled and the wake-up note shows', (tester) async {
@@ -182,14 +169,14 @@ void main() {
 
     final button = tester.widget<FilledButton>(find.byKey(const ValueKey('owner-code-submit')));
     expect(button.onPressed, isNull);
-    expect(find.textContaining('hanggang isang minuto'), findsOneWidget);
+    expect(find.textContaining('can take up to a minute'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('owner-code-submit')));
     expect(api.codes, hasLength(1));
 
     api.gate!.complete();
     await tester.pumpAndSettle();
     expect(find.text('Aling Nena Carinderia'), findsOneWidget);
-    expect(find.textContaining('hanggang isang minuto'), findsNothing);
+    expect(find.textContaining('can take up to a minute'), findsNothing);
   });
 
   testWidgets('an active permit near expiry shows every part of the card', (tester) async {
@@ -201,17 +188,17 @@ void main() {
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('Permit no.'), findsOneWidget);
     expect(find.text('SP-2026-0101'), findsOneWidget);
-    expect(find.text('Mag-e-expire'), findsOneWidget);
-    expect(find.text('Nov 11, 2026 · 45 araw'), findsOneWidget);
+    expect(find.text('Expires'), findsOneWidget);
+    expect(find.text('Nov 11, 2026 · 45 days'), findsOneWidget);
     expect(find.text(renewalNotice), findsOneWidget);
     expect(find.byIcon(Icons.notifications_active_outlined), findsOneWidget);
     expect(find.text('Requirements'), findsOneWidget);
     expect(find.text('Health Certificate'), findsOneWidget);
     expect(find.text('Water Potability Test'), findsOneWidget);
-    expect(find.text('Naisumite'), findsOneWidget);
-    expect(find.text('Kulang'), findsOneWidget);
-    expect(textColor(tester, find.text('Kulang')), const Color(0xFF8A1C12));
-    expect(textColor(tester, find.text('Naisumite')), const Color(0xFF1E6B45));
+    expect(find.text('Submitted'), findsOneWidget);
+    expect(find.text('Missing'), findsOneWidget);
+    expect(textColor(tester, find.text('Missing')), const Color(0xFF8A1C12));
+    expect(textColor(tester, find.text('Submitted')), const Color(0xFF1E6B45));
     expect(find.text(expiredNotice), findsNothing);
     expect(find.text(suspendedNotice), findsNothing);
   });
@@ -234,7 +221,7 @@ void main() {
     expect(textColor(tester, find.text('Expired')), ownerStatusColors('expired').foreground);
     expect(ownerStatusColors('expired').foreground, const Color(0xFF8A1C12));
     expect(find.text(expiredNotice), findsOneWidget);
-    expect(find.text('Sep 20, 2026 · 7 araw nang lumipas'), findsOneWidget);
+    expect(find.text('Sep 20, 2026 · 7 days ago'), findsOneWidget);
     expect(find.text(renewalNotice), findsNothing);
   });
 
@@ -267,8 +254,8 @@ void main() {
       }),
     );
 
-    expect(find.text('Walang permit number pa'), findsOneWidget);
-    expect(find.text('Walang petsa'), findsOneWidget);
+    expect(find.text('No permit number yet'), findsOneWidget);
+    expect(find.text('No date'), findsOneWidget);
     expect(find.text('No Permit'), findsOneWidget);
   });
 
@@ -280,15 +267,15 @@ void main() {
           {'name': 'Health Certificate', 'submitted': null},
           {'name': 'Water Potability Test', 'submitted': null},
         ],
-        'requirements_note': 'Dalhin sa renewal',
+        'requirements_note': 'Bring at renewal',
       }),
     );
 
     expect(find.text('Health Certificate'), findsOneWidget);
     expect(find.text('Water Potability Test'), findsOneWidget);
-    expect(find.text('Naisumite'), findsNothing);
-    expect(find.text('Kulang'), findsNothing);
-    expect(find.text('Dalhin sa renewal'), findsOneWidget);
+    expect(find.text('Submitted'), findsNothing);
+    expect(find.text('Missing'), findsNothing);
+    expect(find.text('Bring at renewal'), findsOneWidget);
   });
 
   testWidgets('no requirements configured', (tester) async {
@@ -296,12 +283,12 @@ void main() {
       tester,
       activeStatus(changes: {
         'requirements': <Map<String, dynamic>>[],
-        'requirements_note': 'Wala pang naka-set na requirements',
+        'requirements_note': 'No requirements set yet',
       }),
     );
 
     expect(find.text('Requirements'), findsOneWidget);
-    expect(find.text('Wala pang naka-set na requirements'), findsOneWidget);
+    expect(find.text('No requirements set yet'), findsOneWidget);
   });
 
   for (final entry in <String, List<Object>>{
@@ -317,7 +304,7 @@ void main() {
     'no network': [const SocketException('Failed host lookup'), networkMessage],
     'timeout': [TimeoutException('slow'), networkMessage],
   }.entries) {
-    testWidgets('${entry.key}: a bilingual message, no raw error text', (tester) async {
+    testWidgets('${entry.key}: a plain message, no raw error text', (tester) async {
       await pumpPortal(tester, ScriptedPortalApi([entry.value[0]]));
       await check(tester, 'MBN-7KQ4-XP2M');
 

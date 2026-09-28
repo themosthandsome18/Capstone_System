@@ -15,18 +15,10 @@ import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const serverRateLimit =
-    'Naabot na ang 5 report ngayong araw para sa contact number na ito. '
-    'Subukan muli bukas. / This contact number has reached 5 reports today. '
-    'Please try again tomorrow.';
-const serverMissingAddress =
-    'Ilagay ang lokasyon o address ng nakitang problema. / '
-    'Please enter the location or address of the problem.';
-const networkMessage =
-    'Hindi naipadala. Tingnan ang internet at subukan ulit. / '
-    'Not sent. Check your connection and try again.';
-const serverProblemMessage =
-    'May problema sa server. Subukan ulit mamaya. / '
-    'Server problem. Please try again later.';
+    'This contact number has reached 5 reports today. Please try again tomorrow.';
+const serverMissingAddress = 'Please enter the location or address of the problem.';
+const networkMessage = 'Not sent. Check your connection and try again.';
+const serverProblemMessage = 'Server problem. Please try again later.';
 
 class ScriptedReportApi extends TourismApi {
   ScriptedReportApi(this.outcomes);
@@ -132,13 +124,13 @@ Future<void> fillForm(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();
-  await enter(tester, 'Lokasyon / Address *', 'Purok 3');
-  await enter(tester, 'Ilarawan ang nakita mo *', 'Nakatambak ang basura.');
-  await enter(tester, 'Pangalan *', 'Juana Reporter');
+  await enter(tester, 'Location / Address *', 'Purok 3');
+  await enter(tester, 'Describe what you saw *', 'Nakatambak ang basura.');
+  await enter(tester, 'Name *', 'Juana Reporter');
   await enter(tester, 'Contact no. *', '09171234567');
   await tester.tap(find.byKey(const ValueKey('community-report-consent')));
   await tester.pump();
-  await tester.tap(find.text('Mag-upload'));
+  await tester.tap(find.text('Upload'));
   await tester.pump();
   await tester.pump();
 }
@@ -163,11 +155,11 @@ String fieldText(WidgetTester tester, String label) {
 }
 
 Future<void> expectFormKept(WidgetTester tester) async {
-  expect(fieldText(tester, 'Lokasyon / Address *'), 'Purok 3');
-  expect(fieldText(tester, 'Ilarawan ang nakita mo *'), 'Nakatambak ang basura.');
-  expect(fieldText(tester, 'Pangalan *'), 'Juana Reporter');
+  expect(fieldText(tester, 'Location / Address *'), 'Purok 3');
+  expect(fieldText(tester, 'Describe what you saw *'), 'Nakatambak ang basura.');
+  expect(fieldText(tester, 'Name *'), 'Juana Reporter');
   expect(fieldText(tester, 'Contact no. *'), '09171234567');
-  expect(find.byTooltip('Alisin'), findsNWidgets(2), reason: 'photos kept');
+  expect(find.byTooltip('Remove'), findsNWidgets(2), reason: 'photos kept');
   expect(await SanitationDraftStore.loadReports(), isEmpty, reason: 'no draft');
   expect(find.textContaining('draft'), findsNothing);
   final button = tester.widget<FilledButton>(
@@ -269,7 +261,7 @@ void main() {
     await tester.pump();
 
     expect(api.calls, 1);
-    expect(find.textContaining('hanggang isang minuto'), findsOneWidget);
+    expect(find.textContaining('can take up to a minute'), findsOneWidget);
     gate.complete();
     await tester.pump(const Duration(milliseconds: 500));
   });
@@ -284,7 +276,7 @@ void main() {
     await send(tester);
 
     expect(await SanitationDraftStore.loadReports(), hasLength(1));
-    expect(find.text('I-save bilang draft'), findsOneWidget);
+    expect(find.text('Save as draft'), findsOneWidget);
   });
 }
 

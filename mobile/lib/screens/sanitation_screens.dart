@@ -441,7 +441,7 @@ class _BarangaySearchSheetState extends State<_BarangaySearchSheet> {
                   autofocus: true,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
-                    hintText: 'Hanapin ang barangay',
+                    hintText: 'Search barangay',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -451,7 +451,7 @@ class _BarangaySearchSheetState extends State<_BarangaySearchSheet> {
               ),
               Expanded(
                 child: matches.isEmpty
-                    ? const Center(child: Text('Walang tugmang barangay.'))
+                    ? const Center(child: Text('No matching barangay.'))
                     : ListView.builder(
                         itemCount: matches.length,
                         itemBuilder: (context, index) => ListTile(
@@ -617,19 +617,17 @@ String newClientSubmissionId() {
 }
 
 /// What a reporter is told when sending fails. Server answers for bad input
-/// (400) and limits (429) already carry a bilingual message; anything else
-/// gets a fixed one, never raw exception text.
+/// (400) and limits (429) already carry a message; anything else gets a
+/// fixed one, never raw exception text.
 String communityReportFailureMessage(Object error) {
   if (error is ApiException) {
     if (error.statusCode >= 500) {
-      return 'May problema sa server. Subukan ulit mamaya. / '
-          'Server problem. Please try again later.';
+      return 'Server problem. Please try again later.';
     }
     final message = error.message.trim();
     if (message.isNotEmpty) return message;
   }
-  return 'Hindi naipadala. Tingnan ang internet at subukan ulit. / '
-      'Not sent. Check your connection and try again.';
+  return 'Not sent. Check your connection and try again.';
 }
 
 /// Digits only, with a Philippine +63 prefix folded to a leading 0.
@@ -658,11 +656,11 @@ SanitationCategoryMeta? sanitationCategoryMetaFor(String category) {
 String communityReportUrgencyBadge(String category) {
   final priority = sanitationCategoryMetaFor(category)?.priority ?? 'medium';
   final (level, window) = switch (priority) {
-    'high' => ('Urgent', '24–48 oras'),
-    'low' => ('Low', '5–7 araw'),
-    _ => ('Standard', '3–5 araw'),
+    'high' => ('Urgent', '24–48 hours'),
+    'low' => ('Low', '5–7 days'),
+    _ => ('Standard', '3–5 days'),
   };
-  return '$level · awtomatiko batay sa category ($window)';
+  return '$level · set automatically by category ($window)';
 }
 
 void showSanitationScopeGuideDialog(BuildContext context) {
@@ -703,7 +701,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Gabay sa Pag-uulat',
+                            'Reporting guide',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -711,7 +709,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                             ),
                           ),
                           Text(
-                            'Ano-ano ang Sakop ng Sanitary Section?',
+                            "What's covered by the Sanitary Section?",
                             style: TextStyle(
                               fontSize: 11,
                               color: Color(0xFF64748B),
@@ -754,7 +752,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                                 SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    'Sakop na Pwedeng I-report (Sanitation):',
+                                    'Covered (you can report these):',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 12,
@@ -767,28 +765,28 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                             SizedBox(height: 10),
                             _GuideItem(
                               icon: '🍲',
-                              title: 'Pagkain at Inumin: ',
-                              desc: 'Maruming paghawak ng pagkain, panis/kontaminado, walang permit.',
+                              title: 'Food and drinks: ',
+                              desc: 'Unsanitary food handling, spoiled or contaminated food, no permit.',
                             ),
                             _GuideItem(
                               icon: '🚯',
-                              title: 'Basura at Dumi: ',
-                              desc: 'Tambak sa pampublikong lugar, illegal na tapunan.',
+                              title: 'Garbage and waste: ',
+                              desc: 'Dumping in public places, illegal dumpsites.',
                             ),
                             _GuideItem(
                               icon: '🦟',
-                              title: 'Kanal at Lamok: ',
-                              desc: 'Baradong kanal, stagnant water (Dengue hazard), masangsang.',
+                              title: 'Drainage and mosquitoes: ',
+                              desc: 'Clogged drainage, stagnant water (dengue hazard), foul smell.',
                             ),
                             _GuideItem(
                               icon: '🚽',
-                              title: 'Poso Negro & Sewerage: ',
-                              desc: 'Umapaw o tumagas na septic tank sa kalsada.',
+                              title: 'Septic tanks and sewerage: ',
+                              desc: 'Septic tank overflowing or leaking onto the road.',
                             ),
                             _GuideItem(
                               icon: '🐖',
-                              title: 'Amoy ng Alagang Hayop: ',
-                              desc: 'Masangsang na amoy mula sa babuyan o manukan malapit sa bahay.',
+                              title: 'Livestock odor: ',
+                              desc: 'Strong smell from a piggery or poultry farm near homes.',
                             ),
                           ],
                         ),
@@ -813,7 +811,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                                 SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    'HINDI Sakop (I-refer sa Tamang Tanggapan):',
+                                    'NOT covered (refer to the right office):',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 12,
@@ -826,18 +824,18 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                             SizedBox(height: 10),
                             _GuideItem(
                               icon: '👮',
-                              title: 'Krimen, away, o ingay: ',
-                              desc: 'I-report sa PNP Mauban o Barangay Lupon.',
+                              title: 'Crime, fights or noise: ',
+                              desc: 'Report to PNP Mauban or the Barangay Lupon.',
                             ),
                             _GuideItem(
                               icon: '🏗️',
-                              title: 'Boundary o sira sa gusali: ',
-                              desc: 'I-report sa Municipal Engineering Office.',
+                              title: 'Boundaries or damaged buildings: ',
+                              desc: 'Report to the Municipal Engineering Office.',
                             ),
                             _GuideItem(
                               icon: '⚡',
-                              title: 'Putol na kuryente/brownout: ',
-                              desc: 'I-report sa Quezelco / Electric Provider.',
+                              title: 'Power outages: ',
+                              desc: 'Report to Quezelco / your electric provider.',
                             ),
                           ],
                         ),
@@ -860,7 +858,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text(
-                    'Naintindihan Ko',
+                    'Got it',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
@@ -1077,7 +1075,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
       children: [
         // a) Header with the scope guide link.
         Text(
-          'I-report ang maruming kondisyon',
+          'Report an unsanitary condition',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w900,
                 color: AppColors.ink,
@@ -1087,21 +1085,21 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           children: [
             const Flexible(
               child: Text(
-                'Siguraduhing sakop ito ng Sanitary Section.',
+                'Make sure the Sanitary Section covers it.',
                 style: TextStyle(color: AppColors.muted, fontSize: 12.5),
               ),
             ),
             TextButton(
               onPressed: () => showSanitationScopeGuideDialog(context),
               style: TextButton.styleFrom(foregroundColor: AppColors.deepGreen),
-              child: const Text('Ano ang sakop?'),
+              child: const Text("What's covered?"),
             ),
           ],
         ),
         const SizedBox(height: 12),
 
         // b) Category chips (single select).
-        _sectionLabel('Ano ang ire-report mo? *'),
+        _sectionLabel('What are you reporting? *'),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1186,8 +1184,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
                 controller: _address,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: _fieldDecoration(
-                  'Lokasyon / Address *',
-                  hint: 'Kalye, landmark, o purok',
+                  'Location / Address *',
+                  hint: 'Street, landmark or purok',
                 ),
               ),
             ),
@@ -1214,7 +1212,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             child: TextButton.icon(
               onPressed: () => setState(() => _showMap = true),
               icon: const Icon(Icons.map_outlined, size: 18),
-              label: const Text('I-adjust sa mapa'),
+              label: const Text('Adjust on map'),
             ),
           )
         else ...[
@@ -1250,7 +1248,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           const Padding(
             padding: EdgeInsets.only(top: 4),
             child: Text(
-              'I-tap ang mapa para ilipat ang pin.',
+              'Tap the map to move the pin.',
               style: TextStyle(color: AppColors.muted, fontSize: 11.5),
             ),
           ),
@@ -1263,18 +1261,18 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           maxLines: 5,
           maxLength: 1000,
           textCapitalization: TextCapitalization.sentences,
-          decoration: _fieldDecoration('Ilarawan ang nakita mo *'),
+          decoration: _fieldDecoration('Describe what you saw *'),
         ),
         const SizedBox(height: 8),
 
         // g) Photos.
-        _sectionLabel('Litrato (hanggang $_maxPhotos)'),
+        _sectionLabel('Photos (up to $_maxPhotos)'),
         Row(
           children: [
             Expanded(
               child: _photoTile(
                 icon: Icons.photo_camera_outlined,
-                label: 'Kumuha ng litrato',
+                label: 'Take photo',
                 onTap: () => _pickPhoto(ImageSource.camera),
               ),
             ),
@@ -1282,7 +1280,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             Expanded(
               child: _photoTile(
                 icon: Icons.photo_library_outlined,
-                label: 'Mag-upload',
+                label: 'Upload',
                 onTap: () => _pickPhoto(ImageSource.gallery),
               ),
             ),
@@ -1310,7 +1308,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
               child: TextField(
                 controller: _name,
                 textCapitalization: TextCapitalization.words,
-                decoration: _fieldDecoration('Pangalan *'),
+                decoration: _fieldDecoration('Name *'),
               ),
             ),
             const SizedBox(width: 10),
@@ -1333,13 +1331,12 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           title: const Text(
-            'Pahintulot sa privacy *',
+            'Privacy consent *',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
           subtitle: const Text(
-            'Pinapayagan ko ang Sanitary Section na gamitin ang aking pangalan, '
-            'contact number, litrato, at lokasyon para sa beripikasyon at '
-            'follow-up ng report na ito.',
+            'I allow the Sanitary Section to use my name, contact number, '
+            'photos and location to verify and follow up this report.',
           ),
         ),
         const SizedBox(height: 8),
@@ -1349,8 +1346,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           height: 52,
           child: SubmitButton(
             key: const ValueKey('community-report-submit'),
-            label: 'Isumite ang Report',
-            loadingLabel: 'Ipinapadala...',
+            label: 'Submit report',
+            loadingLabel: 'Sending...',
             loading: _submitting,
             onPressed: _submit,
           ),
@@ -1359,9 +1356,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text(
-              'Maaaring umabot ng hanggang isang minuto ang unang pagpapadala '
-              'habang nagigising ang server. / The first submit can take up '
-              'to a minute while the server wakes up.',
+              'The first submit can take up to a minute while the server wakes up.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
@@ -1369,8 +1364,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         const SizedBox(height: 6),
         Text(
           remaining > 0
-              ? '$remaining na lang ang natitirang report ngayong araw'
-              : 'Naabot na ang $_dailyLimit report ngayong araw.',
+              ? '$remaining ${remaining == 1 ? 'report' : 'reports'} left today'
+              : 'You have reached $_dailyLimit reports today.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,
@@ -1383,7 +1378,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             child: TextButton.icon(
               onPressed: _submitting ? null : _saveDraft,
               icon: const Icon(Icons.save_outlined, size: 18),
-              label: const Text('I-save bilang draft'),
+              label: const Text('Save as draft'),
             ),
           ),
       ],
@@ -1444,7 +1439,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           top: -8,
           right: -8,
           child: IconButton(
-            tooltip: 'Alisin',
+            tooltip: 'Remove',
             visualDensity: VisualDensity.compact,
             style: IconButton.styleFrom(backgroundColor: Colors.white),
             icon: const Icon(Icons.close, size: 16),
@@ -1457,16 +1452,16 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
 
   /// First problem that blocks submission, mirroring the server's rules.
   String? _validationMessage() {
-    if (_category == null) return 'Pumili kung ano ang ire-report mo.';
-    if (_barangay == null) return 'Pumili ng barangay.';
-    if (_address.text.trim().isEmpty) return 'Ilagay ang lokasyon o address.';
-    if (_description.text.trim().isEmpty) return 'Ilarawan ang nakita mo.';
-    if (_name.text.trim().isEmpty) return 'Ilagay ang iyong pangalan.';
+    if (_category == null) return 'Choose what you are reporting.';
+    if (_barangay == null) return 'Choose a barangay.';
+    if (_address.text.trim().isEmpty) return 'Enter the location or address.';
+    if (_description.text.trim().isEmpty) return 'Describe what you saw.';
+    if (_name.text.trim().isEmpty) return 'Enter your name.';
     if (!isValidPhMobileNumber(_contact.text)) {
-      return 'Ilagay ang wastong contact number (hal. 09171234567).';
+      return 'Enter a valid mobile number (e.g. 09171234567).';
     }
     if (!_consentConfirmed) {
-      return 'Kailangan ang pahintulot sa privacy bago magsumite.';
+      return 'Privacy consent is required before submitting.';
     }
     return null;
   }
@@ -1476,7 +1471,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
     if (_dailyCount >= _dailyLimit) {
       showAppMessage(
         context,
-        'Naabot na ang $_dailyLimit report ngayong araw. Ang patakarang ito ay upang maiwasan ang spam.',
+        'You have reached $_dailyLimit reports today. This limit helps prevent spam.',
       );
       return;
     }
@@ -1516,10 +1511,10 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
         );
         await showSubmissionDialog(
           context,
-          title: 'Naisumite ang report',
+          title: 'Report submitted',
           referenceLabel: 'Complaint ID',
           referenceValue: receipt.reference,
-          message: 'Natanggap na ng Sanitary Section.',
+          message: 'The Sanitary Section has received it.',
           details: [
             'Category: ${receipt.category}',
             'Urgency: ${receipt.priorityLabel}',
@@ -1558,7 +1553,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             _photos.addAll(picked);
             if (_photos.length > _maxPhotos) {
               _photos = _photos.sublist(0, _maxPhotos);
-              showAppMessage(context, 'Hanggang $_maxPhotos litrato lamang.');
+              showAppMessage(context, 'Up to $_maxPhotos photos only.');
             }
           });
         }
@@ -1574,7 +1569,7 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
             _photos.add(picked);
             if (_photos.length > _maxPhotos) {
               _photos = _photos.sublist(0, _maxPhotos);
-              showAppMessage(context, 'Hanggang $_maxPhotos litrato lamang.');
+              showAppMessage(context, 'Up to $_maxPhotos photos only.');
             }
           });
         }
@@ -4671,9 +4666,8 @@ enum SanitationGatewayScreen {
 
 /// Shown when an establishment account signs in through Staff Sign In.
 const establishmentAccountRetiredMessage =
-    'Hindi na ginagamit ang establishment account. Gamitin ang Establishment '
-    'Portal at ang code sa iyong Owner\'s Slip. / Establishment accounts are no '
-    'longer used. Use the Establishment Portal with the code on your Owner\'s Slip.';
+    "Establishment accounts are no longer used. Use the Establishment Portal "
+    "with the code on your Owner's Slip.";
 
 class SanitationAccessGateway extends StatefulWidget {
   const SanitationAccessGateway({
@@ -4832,7 +4826,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                   ),
                   const SizedBox(height: 28),
                   Text(
-                    'Ano ang kailangan mo ngayon?',
+                    'What do you need today?',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                           color: AppColors.ink,
@@ -4840,24 +4834,24 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Pumili ng serbisyo para magpatuloy.',
+                    'Choose a service to continue.',
                     style: TextStyle(color: AppColors.muted, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
                   _buildChooserCard(
                     icon: Icons.campaign_rounded,
-                    label: 'PARA SA RESIDENTE',
+                    label: 'FOR RESIDENTS',
                     title: 'Community Report',
                     description:
-                        'I-report ang maruming lugar, tagas ng poso negro, o basura.',
+                        'Report dirty places, septic tank leaks or garbage.',
                     onTap: _openCommunityReport,
                   ),
                   const SizedBox(height: 12),
                   _buildChooserCard(
                     icon: Icons.storefront_outlined,
-                    label: 'PARA SA MAY-ARI NG NEGOSYO',
+                    label: 'FOR BUSINESS OWNERS',
                     title: 'Establishment Portal',
-                    description: 'Tingnan ang status ng sanitary permit.',
+                    description: 'Check your sanitary permit status.',
                     onTap: _openOwnerPortal,
                   ),
                   const SizedBox(height: 16),
@@ -4865,7 +4859,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                     child: TextButton.icon(
                       onPressed: _openPublicPermitVerification,
                       icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
-                      label: const Text('I-verify ang nakapaskil na permit'),
+                      label: const Text('Verify a posted permit'),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.deepGreen,
                         minimumSize: const Size(0, 44),
@@ -5345,8 +5339,7 @@ String normalizeOwnerTrackingCode(String value) =>
 String ownerPortalFailureMessage(Object error) {
   if (error is ApiException) {
     if (error.statusCode == 503) {
-      return "Hindi pa available ang serbisyong ito. Subukan ulit mamaya. / "
-          "This service isn't available yet. Please try again later.";
+      return "This service isn't available yet. Please try again later.";
     }
     if (error.statusCode == 404 || error.statusCode == 429) {
       final message = error.message.trim();
@@ -5384,16 +5377,18 @@ const _ownerMonths = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/// "Nov 11, 2026 · 45 araw", or "Walang petsa" without an expiry date.
+/// "Nov 11, 2026 · 45 days", or "No date" without an expiry date.
 String ownerExpiryText(String? isoDate, int? daysLeft) {
   final date = isoDate == null ? null : DateTime.tryParse(isoDate);
-  if (date == null) return 'Walang petsa';
+  if (date == null) return 'No date';
   final dateText = '${_ownerMonths[date.month - 1]} ${date.day}, ${date.year}';
   if (daysLeft == null) return dateText;
-  if (daysLeft == 0) return '$dateText · ngayong araw';
-  if (daysLeft < 0) return '$dateText · ${-daysLeft} araw nang lumipas';
-  return '$dateText · $daysLeft araw';
+  if (daysLeft == 0) return '$dateText · today';
+  if (daysLeft < 0) return '$dateText · ${_days(-daysLeft)} ago';
+  return '$dateText · ${_days(daysLeft)}';
 }
+
+String _days(int count) => count == 1 ? '1 day' : '$count days';
 
 class SanitationOwnerPortalPage extends StatefulWidget {
   const SanitationOwnerPortalPage({super.key, required this.api});
@@ -5423,7 +5418,7 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
     if (code.isEmpty) {
       setState(() {
         _status = null;
-        _error = 'Ilagay ang tracking code. / Enter the tracking code.';
+        _error = 'Enter the tracking code.';
       });
       return;
     }
@@ -5528,7 +5523,7 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Tingnan ang status ng iyong sanitary permit',
+                  'Check your sanitary permit status',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -5538,7 +5533,7 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Walang account na kailangan. Ilagay ang tracking code na ibinigay ng Sanitary Office.',
+                  'No account needed. Enter the tracking code given by the Sanitary Office.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.88),
                     fontSize: 13.5,
@@ -5640,7 +5635,7 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
                       child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
                     )
                   : const Text(
-                      'Tingnan ang status',
+                      'Check status',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                     ),
             ),
@@ -5649,16 +5644,14 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
-                'Maaaring umabot ng hanggang isang minuto ang unang pag-check habang '
-                'nagigising ang server. / The first check can take up to a minute '
-                'while the server wakes up.',
+                'The first check can take up to a minute while the server wakes up.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ),
           const SizedBox(height: 12),
           const Text(
-            'Hindi ito ang permit number na nakapaskil sa tindahan. Wala kang code? Pumunta sa Sanitary Office.',
+            'This is not the permit number posted in your shop. No code? Visit the Sanitary Office.',
             style: TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.35),
           ),
         ],
@@ -5749,12 +5742,12 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
           Row(
             children: [
               Expanded(
-                child: _tile('Permit no.', status.permitNumber ?? 'Walang permit number pa'),
+                child: _tile('Permit no.', status.permitNumber ?? 'No permit number yet'),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _tile(
-                  'Mag-e-expire',
+                  'Expires',
                   ownerExpiryText(status.permitExpiryDate, status.daysLeft),
                 ),
               ),
@@ -5857,12 +5850,12 @@ class _SanitationOwnerPortalPageState extends State<SanitationOwnerPortalPage> {
           ),
           if (submitted == true)
             const Text(
-              'Naisumite',
+              'Submitted',
               style: TextStyle(color: _portalGreen, fontWeight: FontWeight.w800, fontSize: 12.5),
             )
           else if (submitted == false)
             const Text(
-              'Kulang',
+              'Missing',
               style: TextStyle(color: _portalRed, fontWeight: FontWeight.w800, fontSize: 12.5),
             ),
         ],

@@ -8,9 +8,8 @@ import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const retiredMessage =
-    "Hindi na ginagamit ang establishment account. Gamitin ang Establishment "
-    "Portal at ang code sa iyong Owner's Slip. / Establishment accounts are no "
-    "longer used. Use the Establishment Portal with the code on your Owner's Slip.";
+    "Establishment accounts are no longer used. Use the Establishment Portal "
+    "with the code on your Owner's Slip.";
 
 const oldSession = {
   'staff_auth_token': '0123456789abcdef0123456789abcdef01234567',
@@ -74,7 +73,7 @@ void main() {
 
     await pumpGateway(tester, const TourismApi());
 
-    expect(find.text('Ano ang kailangan mo ngayon?'), findsOneWidget);
+    expect(find.text('What do you need today?'), findsOneWidget);
     expect(find.text('Old Owner Store'), findsNothing);
     final prefs = await SharedPreferences.getInstance();
     for (final key in oldSession.keys) {
@@ -89,7 +88,7 @@ void main() {
 
     await pumpGateway(tester, const TourismApi());
 
-    expect(find.text('Ano ang kailangan mo ngayon?'), findsOneWidget);
+    expect(find.text('What do you need today?'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.containsKey('establishment_data'), isFalse);
   });

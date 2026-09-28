@@ -52,22 +52,22 @@ Future<void> pumpLanding(WidgetTester tester) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('shows the Filipino heading, two services and the footer', (tester) async {
+  testWidgets('shows the heading, two services and the footer', (tester) async {
     await pumpLanding(tester);
 
     expect(find.text('Mauban Sanitary'), findsOneWidget);
     expect(find.text('Municipal Health Office'), findsOneWidget);
-    expect(find.text('Ano ang kailangan mo ngayon?'), findsOneWidget);
-    expect(find.text('Pumili ng serbisyo para magpatuloy.'), findsOneWidget);
-    expect(find.text('PARA SA RESIDENTE'), findsOneWidget);
+    expect(find.text('What do you need today?'), findsOneWidget);
+    expect(find.text('Choose a service to continue.'), findsOneWidget);
+    expect(find.text('FOR RESIDENTS'), findsOneWidget);
     expect(find.text('Community Report'), findsOneWidget);
     expect(
-      find.text('I-report ang maruming lugar, tagas ng poso negro, o basura.'),
+      find.text('Report dirty places, septic tank leaks or garbage.'),
       findsOneWidget,
     );
-    expect(find.text('PARA SA MAY-ARI NG NEGOSYO'), findsOneWidget);
+    expect(find.text('FOR BUSINESS OWNERS'), findsOneWidget);
     expect(find.text('Establishment Portal'), findsOneWidget);
-    expect(find.text('Tingnan ang status ng sanitary permit.'), findsOneWidget);
+    expect(find.text('Check your sanitary permit status.'), findsOneWidget);
     expect(find.text('Official Mauban LGU e-Service · Sanitary Section'), findsOneWidget);
     expect(find.text('Municipal Inspector Portal'), findsNothing);
   });
@@ -111,7 +111,7 @@ void main() {
   testWidgets('the verify link opens the permit verification screen', (tester) async {
     await pumpLanding(tester);
 
-    await tester.tap(find.text('I-verify ang nakapaskil na permit'));
+    await tester.tap(find.text('Verify a posted permit'));
     await tester.pumpAndSettle();
     expect(find.byType(PermitVerificationPage), findsOneWidget);
   });

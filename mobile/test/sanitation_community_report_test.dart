@@ -83,16 +83,16 @@ Future<void> fillEverything(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();
-  await enter(tester, 'Lokasyon / Address *', 'Kanto ng Rizal St.');
-  await enter(tester, 'Ilarawan ang nakita mo *', 'Umaapaw ang poso negro.');
-  await enter(tester, 'Pangalan *', 'juana dela cruz');
+  await enter(tester, 'Location / Address *', 'Kanto ng Rizal St.');
+  await enter(tester, 'Describe what you saw *', 'Umaapaw ang poso negro.');
+  await enter(tester, 'Name *', 'juana dela cruz');
   await enter(tester, 'Contact no. *', '0917 123 4567');
   await tester.tap(find.byKey(const ValueKey('community-report-consent')));
   await tester.pump();
 }
 
 Future<void> submit(WidgetTester tester) async {
-  await tester.tap(find.text('Isumite ang Report'));
+  await tester.tap(find.text('Submit report'));
   // The success dialog animates, so pump a fixed time instead of settling.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 500));
@@ -114,15 +114,15 @@ void main() {
     test('urgency comes from the category', () {
       expect(
         communityReportUrgencyBadge('Severe Sewage Overflow'),
-        'Urgent · awtomatiko batay sa category (24–48 oras)',
+        'Urgent · set automatically by category (24–48 hours)',
       );
       expect(
         communityReportUrgencyBadge('Improper Garbage Disposal'),
-        'Standard · awtomatiko batay sa category (3–5 araw)',
+        'Standard · set automatically by category (3–5 days)',
       );
       expect(
         communityReportUrgencyBadge('Other Sanitation Concern'),
-        'Low · awtomatiko batay sa category (5–7 araw)',
+        'Low · set automatically by category (5–7 days)',
       );
     });
 
@@ -144,9 +144,9 @@ void main() {
       (tester) async {
     await pumpForm(tester);
 
-    expect(find.text('I-report ang maruming kondisyon'), findsOneWidget);
-    expect(find.text('Ano ang sakop?'), findsOneWidget);
-    expect(find.text('Ano ang ire-report mo? *'), findsOneWidget);
+    expect(find.text('Report an unsanitary condition'), findsOneWidget);
+    expect(find.text("What's covered?"), findsOneWidget);
+    expect(find.text('What are you reporting? *'), findsOneWidget);
     for (final category in sanitationReportCategories) {
       expect(find.widgetWithText(ChoiceChip, category), findsOneWidget, reason: category);
     }
@@ -155,12 +155,12 @@ void main() {
     expect(find.text('Latitude'), findsNothing);
     expect(find.text('Longitude'), findsNothing);
     expect(find.text('Urgency'), findsNothing);
-    expect(find.text('Kumuha ng litrato'), findsOneWidget);
-    expect(find.text('Mag-upload'), findsOneWidget);
-    expect(find.text('Litrato (hanggang 5)'), findsOneWidget);
-    expect(find.text('5 na lang ang natitirang report ngayong araw'), findsOneWidget);
+    expect(find.text('Take photo'), findsOneWidget);
+    expect(find.text('Upload'), findsOneWidget);
+    expect(find.text('Photos (up to 5)'), findsOneWidget);
+    expect(find.text('5 reports left today'), findsOneWidget);
     // Public reporters have no drafts screen, so there is no Save Draft here.
-    expect(find.text('I-save bilang draft'), findsNothing);
+    expect(find.text('Save as draft'), findsNothing);
   });
 
   testWidgets('the urgency badge follows the chosen category', (tester) async {
@@ -168,12 +168,12 @@ void main() {
 
     await tester.tap(find.text('Severe Sewage Overflow'));
     await tester.pump();
-    expect(find.text('Urgent · awtomatiko batay sa category (24–48 oras)'), findsOneWidget);
+    expect(find.text('Urgent · set automatically by category (24–48 hours)'), findsOneWidget);
 
     await tester.tap(find.text('Improper Garbage Disposal'));
     await tester.pump();
-    expect(find.text('Standard · awtomatiko batay sa category (3–5 araw)'), findsOneWidget);
-    expect(find.textContaining('24–48 oras'), findsNothing);
+    expect(find.text('Standard · set automatically by category (3–5 days)'), findsOneWidget);
+    expect(find.textContaining('24–48 hours'), findsNothing);
   });
 
   testWidgets('submit is blocked until every required field is filled', (tester) async {
@@ -183,11 +183,11 @@ void main() {
     expect(api.calls, isEmpty);
 
     await fillEverything(tester);
-    await enter(tester, 'Pangalan *', '');
+    await enter(tester, 'Name *', '');
     await submit(tester);
     expect(api.calls, isEmpty);
 
-    await enter(tester, 'Pangalan *', 'Juana');
+    await enter(tester, 'Name *', 'Juana');
     await enter(tester, 'Contact no. *', '12345');
     await submit(tester);
     expect(api.calls, isEmpty);
