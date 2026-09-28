@@ -733,7 +733,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      // Sakop
+                      // Covered
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
@@ -792,7 +792,7 @@ void showSanitationScopeGuideDialog(BuildContext context) {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      // Hindi Sakop
+                      // Not covered
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),

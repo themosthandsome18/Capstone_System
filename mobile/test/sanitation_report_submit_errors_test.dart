@@ -125,7 +125,7 @@ Future<void> fillForm(WidgetTester tester) async {
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();
   await enter(tester, 'Location / Address *', 'Purok 3');
-  await enter(tester, 'Describe what you saw *', 'Nakatambak ang basura.');
+  await enter(tester, 'Describe what you saw *', 'Garbage is piling up.');
   await enter(tester, 'Name *', 'Juana Reporter');
   await enter(tester, 'Contact no. *', '09171234567');
   await tester.tap(find.byKey(const ValueKey('community-report-consent')));
@@ -156,7 +156,7 @@ String fieldText(WidgetTester tester, String label) {
 
 Future<void> expectFormKept(WidgetTester tester) async {
   expect(fieldText(tester, 'Location / Address *'), 'Purok 3');
-  expect(fieldText(tester, 'Describe what you saw *'), 'Nakatambak ang basura.');
+  expect(fieldText(tester, 'Describe what you saw *'), 'Garbage is piling up.');
   expect(fieldText(tester, 'Name *'), 'Juana Reporter');
   expect(fieldText(tester, 'Contact no. *'), '09171234567');
   expect(find.byTooltip('Remove'), findsNWidgets(2), reason: 'photos kept');

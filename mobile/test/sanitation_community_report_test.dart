@@ -83,8 +83,8 @@ Future<void> fillEverything(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Daungan').last);
   await tester.pumpAndSettle();
-  await enter(tester, 'Location / Address *', 'Kanto ng Rizal St.');
-  await enter(tester, 'Describe what you saw *', 'Umaapaw ang poso negro.');
+  await enter(tester, 'Location / Address *', 'Corner of Rizal St.');
+  await enter(tester, 'Describe what you saw *', 'The septic tank is overflowing.');
   await enter(tester, 'Name *', 'juana dela cruz');
   await enter(tester, 'Contact no. *', '0917 123 4567');
   await tester.tap(find.byKey(const ValueKey('community-report-consent')));
@@ -130,9 +130,9 @@ void main() {
       final item = SanitationComplaintItem.fromJson({
         'complaint_id': 'SAN-1',
         'barangay': 'Daungan',
-        'location_address': 'Kanto ng Rizal St.',
+        'location_address': 'Corner of Rizal St.',
       });
-      expect(complaintLocationLine(item), 'Daungan · Kanto ng Rizal St.');
+      expect(complaintLocationLine(item), 'Daungan · Corner of Rizal St.');
       expect(
         complaintLocationLine(SanitationComplaintItem.fromJson({'barangay': 'Daungan'})),
         'Daungan',
@@ -206,7 +206,7 @@ void main() {
     expect(payload['category'], 'Severe Sewage Overflow');
     expect(payload['priority'], 'high');
     expect(payload['barangay'], 'Daungan');
-    expect(payload['location_address'], 'Kanto ng Rizal St.');
-    expect(payload['description'], 'Umaapaw ang poso negro.');
+    expect(payload['location_address'], 'Corner of Rizal St.');
+    expect(payload['description'], 'The septic tank is overflowing.');
   });
 }

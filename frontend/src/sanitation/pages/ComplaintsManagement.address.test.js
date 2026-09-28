@@ -26,8 +26,8 @@ const mockRows = [
     contact_number: "09171234567",
     category: "Severe Sewage Overflow",
     barangay: "Daungan",
-    location_address: "Kanto ng Rizal St., tapat ng palengke",
-    description: "Umaapaw ang poso negro.",
+    location_address: "Corner of Rizal St., across from the market",
+    description: "The septic tank is overflowing.",
     status: "pending",
     status_label: "Pending",
     priority: "high",
@@ -41,8 +41,8 @@ const mockRows = [
     contact_number: "09179998888",
     category: "Improper Garbage Disposal",
     barangay: "Poblacion",
-    location_address: "Purok 3, likod ng simbahan",
-    description: "Nakatambak ang basura.",
+    location_address: "Purok 3, behind the church",
+    description: "Garbage is piling up.",
     status: "pending",
     status_label: "Pending",
     priority: "medium",
@@ -70,7 +70,7 @@ test("the selected report shows its typed location next to the barangay", () => 
   const detail = container.querySelector(".community-detail-panel, .community-detail") || container;
 
   expect(
-    within(detail).getAllByText("Kanto ng Rizal St., tapat ng palengke").length
+    within(detail).getAllByText("Corner of Rizal St., across from the market").length
   ).toBeGreaterThan(0);
 });
 
@@ -78,7 +78,7 @@ test("reports can be found by their typed location", () => {
   render(<ComplaintsManagement />);
 
   fireEvent.change(screen.getByPlaceholderText(/Search by location/), {
-    target: { value: "likod ng simbahan" },
+    target: { value: "behind the church" },
   });
 
   const cardIds = [...document.querySelectorAll(".community-report-card .community-card-meta small:first-child")]

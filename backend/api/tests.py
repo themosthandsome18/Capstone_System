@@ -4127,8 +4127,8 @@ class CommunityReportIdentityTests(TestCase):
             "category": "Severe Sewage Overflow",
             "priority": "low",
             "barangay": "Daungan",
-            "location_address": "Kanto ng Rizal St.",
-            "description": "Tumatagas ang poso negro sa kanto.",
+            "location_address": "Corner of Rizal St.",
+            "description": "The septic tank is leaking at the corner.",
             "latitude": 14.19,
             "longitude": 121.73,
         }
@@ -4198,7 +4198,7 @@ class CommunityReportUrgencyTests(TestCase):
             "category": "Improper Garbage Disposal",
             "barangay": "Daungan",
             "location_address": "Purok 3",
-            "description": "Nakatambak ang basura.",
+            "description": "Garbage is piling up.",
         }
         payload.update(overrides)
         return APIClient().post(self.URL, payload, format="json")
@@ -4254,7 +4254,7 @@ class CommunityReportRateLimitTests(TestCase):
             "category": "Improper Garbage Disposal",
             "barangay": "Daungan",
             "location_address": "Purok 3",
-            "description": "Nakatambak ang basura.",
+            "description": "Garbage is piling up.",
         }
         payload.update(overrides)
         return (client or APIClient()).post(
@@ -4319,8 +4319,8 @@ class CommunityReportAddressTests(TestCase):
             "contact_number": "09171234567",
             "category": "Improper Garbage Disposal",
             "barangay": "Daungan",
-            "location_address": "  Kanto ng Rizal St.  ",
-            "description": "Nakatambak ang basura.",
+            "location_address": "  Corner of Rizal St.  ",
+            "description": "Garbage is piling up.",
         }
         payload.update(overrides)
         return APIClient().post(self.URL, payload, format="json")
@@ -4339,7 +4339,7 @@ class CommunityReportAddressTests(TestCase):
                 "contact_number": "09171234567",
                 "category": "Improper Garbage Disposal",
                 "barangay": "Daungan",
-                "description": "Nakatambak ang basura.",
+                "description": "Garbage is piling up.",
             },
             format="json",
         )
@@ -4350,9 +4350,9 @@ class CommunityReportAddressTests(TestCase):
         response = self._post()
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         complaint = SanitaryComplaint.objects.get()
-        self.assertEqual(complaint.location_address, "Kanto ng Rizal St.")
-        self.assertEqual(complaint.description, "Nakatambak ang basura.")
-        self.assertEqual(response.json()["location_address"], "Kanto ng Rizal St.")
+        self.assertEqual(complaint.location_address, "Corner of Rizal St.")
+        self.assertEqual(complaint.description, "Garbage is piling up.")
+        self.assertEqual(response.json()["location_address"], "Corner of Rizal St.")
 
 
 class CommunityReportRateLimitMessageTests(TestCase):
@@ -4375,7 +4375,7 @@ class CommunityReportRateLimitMessageTests(TestCase):
                 "category": "Improper Garbage Disposal",
                 "barangay": "Daungan",
                 "location_address": "Purok 3",
-                "description": "Nakatambak ang basura.",
+                "description": "Garbage is piling up.",
             },
             format="json",
             REMOTE_ADDR=remote_addr,
@@ -4411,7 +4411,7 @@ def _community_report_payload(**overrides):
         "category": "Improper Garbage Disposal",
         "barangay": "Daungan",
         "location_address": "Purok 3",
-        "description": "Nakatambak ang basura.",
+        "description": "Garbage is piling up.",
     }
     payload.update(overrides)
     return payload
