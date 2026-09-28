@@ -555,8 +555,7 @@ function EstablishmentRecords() {
     const slipWindow = window.open("", "_blank", "width=520,height=760");
     if (!slipWindow) {
       setSlipError(
-        "Hinarang ng browser ang print window. Payagan ang pop-ups at subukan ulit. / " +
-          "The browser blocked the print window. Allow pop-ups and try again."
+        "The browser blocked the print window. Allow pop-ups and try again."
       );
       return;
     }
@@ -575,7 +574,7 @@ function EstablishmentRecords() {
     } catch (requestError) {
       slipWindow.close();
       setSlipError(
-        `Hindi nagawa ang Owner's Slip. / The Owner's Slip was not issued. ${getErrorMessage(
+        `The Owner's Slip was not issued. ${getErrorMessage(
           requestError
         )}`
       );
@@ -1032,7 +1031,7 @@ function EstablishmentRecords() {
             aria-modal="true"
             aria-label="Issue a new Owner's Slip"
           >
-            <h3>Bagong Owner's Slip / New Owner's Slip</h3>
+            <h3>New Owner's Slip</h3>
             <p>{ownerSlipReplaceMessage(slipConfirmFor)}</p>
             <div className="establishment-detail-actions">
               <button
@@ -1047,7 +1046,7 @@ function EstablishmentRecords() {
                 className="add-establishment-btn"
                 onClick={confirmOwnerSlip}
               >
-                Mag-isyu ng bagong code / Issue new code
+                Issue new code
               </button>
             </div>
           </section>

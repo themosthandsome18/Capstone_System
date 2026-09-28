@@ -154,18 +154,19 @@ describe("Print Owner's Slip", () => {
 
     // Opened synchronously, before the answer, with a placeholder.
     expect(window.open).toHaveBeenCalledTimes(1);
-    expect(written.join("")).toContain("Generating…");
+    expect(written.join("")).toContain("Generating the Owner's Slip…");
     expect(issueOwnerTrackingCode).toHaveBeenCalledWith(701);
 
     await waitFor(() => expect(written.join("")).toContain("MBN-7KQ4-XP2M"));
     const html = written.join("");
     expect(html).toContain("SP-2026-0101");
-    expect(html).toContain("PRIBADO ang code na ito. Huwag ipaskil. Iba ito sa permit number.");
     expect(html).toContain("This code is PRIVATE. Do not post it. It is different from the permit number.");
     expect(html).toContain("Mauban Municipal Health Office – Sanitary Section");
     expect(html).toContain("OWNER'S SLIP");
-    expect(html).toContain("Buksan ang Mauban Sanitary app → Establishment Portal → ilagay ang code.");
-    expect(html).toContain("Nawala ang slip? Pumunta sa Sanitary Office para sa bagong code.");
+    expect(html).toContain("Open the Mauban Sanitary app → Establishment Portal → enter the code.");
+    expect(html).toContain("Date issued");
+    expect(html).toContain("Issued by");
+    expect(html).toContain("Lost this slip? Visit the Sanitary Office for a new code.");
     expect(html).toContain("Maria Santos");
     expect(printWindow.close).not.toHaveBeenCalled();
   });
@@ -173,14 +174,14 @@ describe("Print Owner's Slip", () => {
   test("the record shows the new slip after printing, and the code is not kept on the page", async () => {
     issueOwnerTrackingCode.mockResolvedValue(SLIP);
     const modal = openView(701);
-    expect(within(modal).getByText("Wala pang Owner's Slip")).toBeTruthy();
+    expect(within(modal).getByText("No Owner's Slip yet")).toBeTruthy();
 
     fireEvent.click(within(modal).getByRole("button", { name: /Print Owner's Slip/ }));
 
     await waitFor(() => expect(mockCtx.refreshEstablishments).toHaveBeenCalled());
     await waitFor(() =>
       expect(
-        screen.getByText("Owner's Slip inisyu noong September 27, 2026 ni Maria Santos")
+        screen.getByText("Owner's Slip issued on September 27, 2026 by Maria Santos")
       ).toBeTruthy()
     );
     expect(document.body.innerHTML).not.toContain("MBN-7KQ4-XP2M");
@@ -194,7 +195,7 @@ describe("Print Owner's Slip", () => {
 
     const confirm = screen.getByRole("alertdialog");
     expect(confirm.textContent).toContain(
-      "Mag-iisyu ng bagong code. Hindi na gagana ang lumang slip na inisyu noong September 20, 2026 ni Maria Santos. / A new code will be issued; the old slip will stop working."
+      "A new code will be issued. The old slip issued on September 20, 2026 by Maria Santos will stop working."
     );
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
 
@@ -209,7 +210,7 @@ describe("Print Owner's Slip", () => {
 
     fireEvent.click(within(modal).getByRole("button", { name: /Print Owner's Slip/ }));
     fireEvent.click(
-      within(screen.getByRole("alertdialog")).getByRole("button", { name: /Mag-isyu ng bagong code/ })
+      within(screen.getByRole("alertdialog")).getByRole("button", { name: /Issue new code/ })
     );
 
     expect(window.open).toHaveBeenCalledTimes(1);
@@ -222,7 +223,7 @@ describe("Print Owner's Slip", () => {
     error.status = 503;
     error.details = {
       detail:
-        "Tracking codes are not configured on the server (TRACKING_CODE_KEY is not set). / Hindi pa naka-set ang tracking code sa server.",
+        "Tracking codes are not configured on the server (TRACKING_CODE_KEY is not set).",
     };
     issueOwnerTrackingCode.mockRejectedValue(error);
     const modal = openView(701);
@@ -296,7 +297,7 @@ describe("Owner's Slip text", () => {
 
   test("no permit number says so", () => {
     const html = buildOwnerSlipHtml({ ...SLIP, establishment: { ...SLIP.establishment, permit_number: "" } });
-    expect(html).toContain("Walang permit number pa");
+    expect(html).toContain("No permit number yet");
   });
 
   test("the date issued is the Manila date", () => {
@@ -306,9 +307,9 @@ describe("Owner's Slip text", () => {
   });
 
   test("the record's slip status in both states", () => {
-    expect(ownerSlipStatusText(BASE)).toBe("Wala pang Owner's Slip");
+    expect(ownerSlipStatusText(BASE)).toBe("No Owner's Slip yet");
     expect(ownerSlipStatusText(ISSUED)).toBe(
-      "Owner's Slip inisyu noong September 20, 2026 ni Maria Santos"
+      "Owner's Slip issued on September 20, 2026 by Maria Santos"
     );
   });
 
@@ -338,7 +339,7 @@ describe("Owner's Slip text", () => {
   test("the tile on the record shows the slip status instead of the old account link", () => {
     const modal = openView(702);
     expect(
-      within(modal).getByText("Owner's Slip inisyu noong September 20, 2026 ni Maria Santos")
+      within(modal).getByText("Owner's Slip issued on September 20, 2026 by Maria Santos")
     ).toBeTruthy();
     expect(within(modal).queryByText(/Mobile Portal Account/)).toBeNull();
     expect(within(modal).queryByText(/Not Linked/)).toBeNull();

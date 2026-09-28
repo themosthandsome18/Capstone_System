@@ -178,7 +178,7 @@ function PermitMonitoring() {
           <div>
             <h2>Permit Warnings & Action Alerts</h2>
             <p>
-              Categorized by severity: Malalang kaso (Suspended &amp; No Permit) hanggang sa katamtamang babala (Conditional &amp; Renewal)
+              Categorized by severity: serious cases (Suspended &amp; No Permit) to moderate warnings (Conditional &amp; Renewal)
             </p>
           </div>
 

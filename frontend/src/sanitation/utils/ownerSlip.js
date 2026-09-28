@@ -35,13 +35,13 @@ function formatManilaDateTime(value) {
 /** The slip status shown on the establishment record. */
 export function ownerSlipStatusText(establishment) {
   if (!establishment?.tracking_code_issued_at) {
-    return "Wala pang Owner's Slip";
+    return "No Owner's Slip yet";
   }
   const date = formatManilaDate(establishment.tracking_code_issued_at);
   const staff = establishment.tracking_code_issued_by_name;
   return staff
-    ? `Owner's Slip inisyu noong ${date} ni ${staff}`
-    : `Owner's Slip inisyu noong ${date}`;
+    ? `Owner's Slip issued on ${date} by ${staff}`
+    : `Owner's Slip issued on ${date}`;
 }
 
 /** Asked before a new code replaces one that is already on a printed slip. */
@@ -49,8 +49,8 @@ export function ownerSlipReplaceMessage(establishment) {
   const date = formatManilaDate(establishment.tracking_code_issued_at);
   const staff = establishment.tracking_code_issued_by_name || "staff";
   return (
-    `Mag-iisyu ng bagong code. Hindi na gagana ang lumang slip na inisyu noong ${date} ni ${staff}. / ` +
-    "A new code will be issued; the old slip will stop working."
+    `A new code will be issued. The old slip issued on ${date} by ${staff} ` +
+    "will stop working."
   );
 }
 
@@ -79,10 +79,10 @@ const SLIP_STYLES = `
 /** Shown in the print window while the code is being issued. */
 export function ownerSlipGeneratingHtml() {
   return `<!doctype html>
-<html lang="fil">
+<html lang="en">
 <head><meta charset="utf-8"><title>Owner's Slip</title></head>
 <body style="font-family: Arial, sans-serif; padding: 24px;">
-  <p>Generating… / Ginagawa ang Owner's Slip…</p>
+  <p>Generating the Owner's Slip…</p>
 </body>
 </html>`;
 }
@@ -93,7 +93,7 @@ export function buildOwnerSlipHtml(slip) {
   const permitNumber = (establishment.permit_number || "").trim();
 
   return `<!doctype html>
-<html lang="fil">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Owner's Slip – ${escapeSlipText(establishment.business_name)}</title>
@@ -106,7 +106,7 @@ export function buildOwnerSlipHtml(slip) {
     <table>
       <tr><th>Establishment</th><td>${escapeSlipText(establishment.business_name)}</td></tr>
       <tr><th>Permit No.</th><td>${
-        permitNumber ? escapeSlipText(permitNumber) : "Walang permit number pa"
+        permitNumber ? escapeSlipText(permitNumber) : "No permit number yet"
       }</td></tr>
       <tr><th>Business type</th><td>${escapeSlipText(establishment.business_type_name)}</td></tr>
       <tr><th>Barangay</th><td>${escapeSlipText(establishment.barangay)}</td></tr>
@@ -115,15 +115,14 @@ export function buildOwnerSlipHtml(slip) {
       <div class="code-label">TRACKING CODE</div>
       <div class="code">${escapeSlipText(slip.tracking_code)}</div>
     </div>
-    <p class="issued">Petsa ng pag-isyu / Date issued: <strong>${escapeSlipText(
+    <p class="issued">Date issued: <strong>${escapeSlipText(
       formatManilaDateTime(slip.issued_at)
-    )}</strong><br>Inisyu ni / Issued by: <strong>${escapeSlipText(slip.issued_by)}</strong></p>
+    )}</strong><br>Issued by: <strong>${escapeSlipText(slip.issued_by)}</strong></p>
     <div class="steps">
-      <p>Buksan ang Mauban Sanitary app → Establishment Portal → ilagay ang code.</p>
       <p>Open the Mauban Sanitary app → Establishment Portal → enter the code.</p>
     </div>
-    <div class="private">PRIBADO ang code na ito. Huwag ipaskil. Iba ito sa permit number. / This code is PRIVATE. Do not post it. It is different from the permit number.</div>
-    <p class="lost">Nawala ang slip? Pumunta sa Sanitary Office para sa bagong code.</p>
+    <div class="private">This code is PRIVATE. Do not post it. It is different from the permit number.</div>
+    <p class="lost">Lost this slip? Visit the Sanitary Office for a new code.</p>
   </main>
   <button type="button" class="print-btn" onclick="window.print()">Print</button>
 </body>
