@@ -1789,22 +1789,6 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.qr_code_scanner_outlined, color: AppColors.deepGreen),
-              title: const Text('Verify QR Permit', style: TextStyle(fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openPermitVerification();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.manage_search_outlined, color: AppColors.deepGreen),
-              title: const Text('Track Community Report', style: TextStyle(fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openReportTracker();
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.assignment_outlined, color: AppColors.deepGreen),
               title: const Text('Household Survey', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -1857,8 +1841,6 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         onOpenReport: _openReport,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenPermits: _openPermits,
-        onOpenPermitVerification: _openPermitVerification,
-        onOpenReportTracker: _openReportTracker,
         onOpenTab: (index) => setState(() => _index = index),
         onFilterEstablishments: _filterEstablishments,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
@@ -1888,7 +1870,6 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         complaints: _bootstrap.complaints,
         householdRecords: _bootstrap.householdRecords,
         onOpenReport: _openReport,
-        onOpenReportTracker: _openReportTracker,
         onEditDraft: _editReportDraft,
         onRetryDraft: _retryReportDraft,
         onDeleteDraft: _deleteReportDraft,
@@ -1903,8 +1884,6 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         householdSurveys: _householdSurveys,
         onOpenInspection: _openInspection,
         onOpenPermits: _openPermits,
-        onOpenPermitVerification: _openPermitVerification,
-        onOpenReportTracker: _openReportTracker,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenNotifications: _openNotifications,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
@@ -2074,22 +2053,6 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     );
   }
 
-  Future<void> _openPermitVerification() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => VerifyPermitPage(api: widget.api),
-      ),
-    );
-  }
-
-  Future<void> _openReportTracker() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => TrackReportStatusPage(api: widget.api),
-      ),
-    );
-  }
-
   Future<void> _openNotifications() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -2140,8 +2103,6 @@ class SanitationDashboardPage extends StatelessWidget {
     required this.onOpenReport,
     required this.onOpenHouseholdSurvey,
     required this.onOpenPermits,
-    this.onOpenPermitVerification,
-    this.onOpenReportTracker,
     required this.onOpenTab,
     this.onFilterEstablishments,
     this.onOpenMenu,
@@ -2157,8 +2118,6 @@ class SanitationDashboardPage extends StatelessWidget {
   final VoidCallback onOpenReport;
   final VoidCallback onOpenHouseholdSurvey;
   final VoidCallback onOpenPermits;
-  final VoidCallback? onOpenPermitVerification;
-  final VoidCallback? onOpenReportTracker;
   final ValueChanged<int> onOpenTab;
   final void Function({String? status, String? permit})? onFilterEstablishments;
   final VoidCallback? onOpenMenu;
@@ -2281,47 +2240,6 @@ class SanitationDashboardPage extends StatelessWidget {
                   permit: 'renewal_due',
                 ),
               ),
-            ),
-          ],
-        ),
-        SectionHeader(title: 'Quick Actions'),
-        Row(
-          children: [
-            QuickAction(
-              icon: Icons.fact_check_outlined,
-              label: 'Inspection',
-              onTap: () => onOpenInspection(null),
-            ),
-            QuickAction(
-              icon: Icons.qr_code_scanner,
-              label: 'Verify QR',
-              onTap: onOpenPermitVerification ??
-                  () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            VerifyPermitPage(api: api),
-                      ),
-                    );
-                  },
-            ),
-            QuickAction(
-              icon: Icons.assignment_outlined,
-              label: 'Household',
-              onTap: onOpenHouseholdSurvey,
-            ),
-            QuickAction(
-              icon: Icons.manage_search_outlined,
-              label: 'Track Report',
-              onTap: onOpenReportTracker ??
-                  () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            TrackReportStatusPage(api: api),
-                      ),
-                    );
-                  },
             ),
           ],
         ),
@@ -2991,7 +2909,6 @@ class SanitationReportsPage extends StatelessWidget {
     required this.complaints,
     required this.householdRecords,
     required this.onOpenReport,
-    required this.onOpenReportTracker,
     required this.onEditDraft,
     required this.onRetryDraft,
     required this.onDeleteDraft,
@@ -3006,7 +2923,6 @@ class SanitationReportsPage extends StatelessWidget {
   final List<SanitationComplaintItem> complaints;
   final List<HouseholdSanitationItem> householdRecords;
   final VoidCallback onOpenReport;
-  final VoidCallback onOpenReportTracker;
   final ValueChanged<SanitationReportDraft> onEditDraft;
   final ValueChanged<SanitationReportDraft> onRetryDraft;
   final ValueChanged<SanitationReportDraft> onDeleteDraft;
@@ -3044,12 +2960,6 @@ class SanitationReportsPage extends StatelessWidget {
           onPressed: onOpenReport,
           icon: const Icon(Icons.flag_outlined),
           label: const Text('New Community Report'),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: onOpenReportTracker,
-          icon: const Icon(Icons.manage_search_outlined),
-          label: const Text('Track Report Status'),
         ),
         if (drafts.isNotEmpty) ...[
           SectionHeader(title: 'Pending Sync Drafts'),
@@ -3522,8 +3432,6 @@ class SanitationActionsPage extends StatefulWidget {
     this.householdSurveys = const [],
     required this.onOpenInspection,
     required this.onOpenPermits,
-    required this.onOpenPermitVerification,
-    required this.onOpenReportTracker,
     required this.onOpenHouseholdSurvey,
     required this.onOpenNotifications,
     this.onOpenMenu,
@@ -3537,8 +3445,6 @@ class SanitationActionsPage extends StatefulWidget {
   final List<MobileHouseholdSurveyReceipt> householdSurveys;
   final ValueChanged<SanitationEstablishment?> onOpenInspection;
   final VoidCallback onOpenPermits;
-  final VoidCallback onOpenPermitVerification;
-  final VoidCallback onOpenReportTracker;
   final VoidCallback onOpenHouseholdSurvey;
   final VoidCallback onOpenNotifications;
   final VoidCallback? onOpenMenu;
@@ -3575,16 +3481,6 @@ class _SanitationActionsPageState extends State<SanitationActionsPage> {
           icon: Icons.badge_outlined,
           label: 'Sanitary Permits',
           onTap: widget.onOpenPermits,
-        ),
-        ProfileLink(
-          icon: Icons.qr_code_scanner_outlined,
-          label: 'Verify QR Permit',
-          onTap: widget.onOpenPermitVerification,
-        ),
-        ProfileLink(
-          icon: Icons.manage_search_outlined,
-          label: 'Track Community Report',
-          onTap: widget.onOpenReportTracker,
         ),
         ProfileLink(
           icon: Icons.assignment_outlined,
@@ -4862,6 +4758,17 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
                       ),
                     ),
                   ),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _openPublicReportTracker,
+                      icon: const Icon(Icons.manage_search_outlined, size: 18),
+                      label: const Text('Track a report'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.deepGreen,
+                        minimumSize: const Size(0, 44),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   const Text(
                     'Official Mauban LGU e-Service · Sanitary Section',
@@ -4881,6 +4788,14 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => SanitationOwnerPortalPage(api: widget.api),
+      ),
+    );
+  }
+
+  Future<void> _openPublicReportTracker() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ReportTrackerPage(api: widget.api),
       ),
     );
   }

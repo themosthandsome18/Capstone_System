@@ -2,6 +2,14 @@
 
 Comprehensive standalone codebase audit generated on September 18, 2026.
 
+## Current Update: Staff Mobile Cleanup - Slice 1 (2026-09-28; feature branch)
+- Branch `sanitation/staff-cleanup-public-shortcuts`, based on fetched `main`/`origin/main` at `af8af1e`. Sanitation Flutter UI only: removed the entire Home Quick Actions section, drawer Verify/Track entries, Community tracker button and Profile/Actions Verify/Track links, plus their staff callback plumbing.
+- Public Verify entry is unchanged. New public `Track a report` link opens the existing ReportTrackerPage. Both underlying pages and API methods remain intact. The tracker requires contact number plus complaint ID; backend exact normalized-contact matching is unchanged. No backend/API/schema change and no new lookup bypass.
+- New focused tests: pre-fix 5 expected failures and 3 passes; post-fix all 8 passed in the 22-test relevant suite. Full Flutter suite 97/97; `flutter analyze` found no issues. Tests cover Home/drawer/Community/Profile/Records absence, public Verify and Track navigation, missing-input blocking and the actual mocked GET path/query for the existing tracker API.
+- Real loopback Django server check with an explicitly confirmed throwaway SQLite engine: `/api/mobile/sanitation/reports/history/` returned 400 for missing contact, 200/zero rows for wrong contact, and 200/one fixture row for matching contact and reference. `/api/mobile/sanitation/permits/verify/?code=LOCAL-NOT-A-PERMIT` returned 404/`verified: false`. Initial temporary settings needed the throttle cache alias for migration; corrected outside the repo. Server stopped; temporary databases removed. No production API/DB or production settings access.
+- No Android device/emulator was available (Windows/Chrome/Edge only; no emulator sources). Widget navigation and real local HTTP checks passed, but actual Android public navigation and signed-in staff smoke tests remain for the user's phone. No APK build or device-verification claim.
+- No Households/nav/Profile/dashboard/household-form redesign, inspection text changes, filter changes, shared components/colors, tourism or shared-login changes. `tatus` untouched. Finalized as one feature-branch commit; not merged or pushed.
+
 ## Current Update: Mobile Household Remarks Removal (2026-09-28; feature branch)
 - Branch `sanitation/remove-mobile-household-remarks`, based on fetched `main`/`origin/main` at `0fcf75d`. This update supersedes any earlier description of Remarks as a mobile household form input; backend/model/web Remarks remain supported.
 - The client-confirmed household form does not include Remarks. Only the Flutter HouseholdSurveyPage input/controller and its submission argument were removed. The sanitation method `submitHouseholdSurvey` omits the JSON `remarks` key, rather than supplying an empty value. No other household field or scoring rule changed; inspection Findings/Remarks, tourism and shared login are unchanged.
