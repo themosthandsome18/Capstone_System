@@ -59,11 +59,7 @@ class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
     """
 
     fixed_scope = "owner_status_ip"
-    message = (
-        "Masyadong maraming pagsubok mula sa device na ito. Subukan muli "
-        "pagkalipas ng isang oras. / Too many attempts from this device. "
-        "Please try again in an hour."
-    )
+    message = "Too many attempts from this device. Please try again in an hour."
 
     def allow_request(self, request, view):
         self._use_scope()
@@ -113,11 +109,7 @@ class CommunityReportIpRateThrottle(_FixedScopeRateThrottle):
     except resends of an already-saved report)."""
 
     fixed_scope = "community_report_ip"
-    message = (
-        "Masyadong maraming report mula sa device na ito ngayong oras. "
-        "Subukan muli mamaya. / Too many reports from this device this hour. "
-        "Please try again later."
-    )
+    message = "Too many reports from this device this hour. Please try again later."
 
     def allow_request(self, request, view):
         if _is_resend_of_saved_report(request):
@@ -136,9 +128,8 @@ class CommunityReportContactRateThrottle(_FixedScopeRateThrottle):
 
     fixed_scope = "community_report_contact"
     message = (
-        "Naabot na ang 5 report ngayong araw para sa contact number na ito. "
-        "Subukan muli bukas. / This contact number has reached 5 reports "
-        "today. Please try again tomorrow."
+        "This contact number has reached 5 reports today. "
+        "Please try again tomorrow."
     )
 
     def get_cache_key(self, request, view):

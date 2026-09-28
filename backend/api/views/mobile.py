@@ -643,7 +643,6 @@ def mobile_sanitation_report_submit(request):
             )
         if not data["location_address"]:
             message = (
-                "Ilagay ang lokasyon o address ng nakitang problema. / "
                 "Please enter the location or address of the problem."
             )
             return Response(
@@ -653,7 +652,6 @@ def mobile_sanitation_report_submit(request):
         official_barangay = official_barangay_name(data.get("barangay"))
         if official_barangay is None:
             message = (
-                "Pumili ng barangay mula sa listahan ng Mauban. / "
                 "Please choose a Mauban barangay from the list."
             )
             return Response(
@@ -670,7 +668,6 @@ def mobile_sanitation_report_submit(request):
         known = community_report_category(data.get("category"))
         if known is None:
             message = (
-                "Pumili ng category mula sa listahan. / "
                 "Please choose a category from the list."
             )
             return Response(
@@ -758,7 +755,6 @@ def mobile_sanitation_report_submit(request):
         logging.getLogger(__name__).exception("Error in mobile_sanitation_report_submit: %s", exc)
         # The details are in the log; the reporter gets a fixed message.
         message = (
-            "May problema sa server. Subukan ulit mamaya. / "
             "Server problem. Please try again later."
         )
         return Response(
@@ -853,12 +849,9 @@ PH_MOBILE_NUMBER = re.compile(r"^09\d{9}$")
 def community_report_identity_error(name, contact):
     """Message for a missing name or an invalid contact number, else ""."""
     if not str(name or "").strip():
-        return "Ilagay ang iyong pangalan. / Please enter your name."
+        return "Please enter your name."
     if not PH_MOBILE_NUMBER.match(normalize_contact_digits(contact)):
-        return (
-            "Ilagay ang wastong contact number (hal. 09171234567). / "
-            "Please enter a valid mobile number (e.g. 09171234567)."
-        )
+        return "Please enter a valid mobile number (e.g. 09171234567)."
     return ""
 
 
@@ -931,10 +924,7 @@ def mobile_sanitation_permit_verify(request):
         }
     )
 
-OWNER_STATUS_NOT_FOUND = (
-    "Hindi nahanap ang tracking code. Tingnan ang code sa iyong Owner's Slip. / "
-    "Tracking code not found. Check the code on your Owner's Slip."
-)
+OWNER_STATUS_NOT_FOUND = "Tracking code not found. Check the code on your Owner's Slip."
 
 
 def no_store(view):

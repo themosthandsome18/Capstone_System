@@ -37,13 +37,12 @@ _GENERATE_ATTEMPTS = 5
 
 
 NOT_CONFIGURED_MESSAGE = (
-    "Tracking codes are not configured on the server (TRACKING_CODE_KEY is not "
-    "set). / Hindi pa naka-set ang tracking code sa server."
+    "Tracking codes are not configured on the server (TRACKING_CODE_KEY is not set)."
 )
 
 RENEWAL_NOTICE_DAYS = 60
-REQUIREMENTS_BRING_TO_RENEWAL = "Dalhin sa renewal"
-REQUIREMENTS_NOT_CONFIGURED = "Wala pang naka-set na requirements"
+REQUIREMENTS_BRING_TO_RENEWAL = "Bring at renewal"
+REQUIREMENTS_NOT_CONFIGURED = "No requirements set yet"
 
 
 class TrackingCodeNotConfigured(Exception):
@@ -127,16 +126,13 @@ def owner_status_payload(establishment, today):
     renewal_notice = None
     if days_left == 0:
         renewal_notice = (
-            "Mag-e-expire ang iyong sanitary permit ngayong araw. Mag-renew sa "
-            "Sanitary Office. / Your sanitary permit expires today. Please renew "
-            "at the Sanitary Office."
+            "Your sanitary permit expires today. Please renew at the Sanitary Office."
         )
     elif days_left is not None and 0 < days_left <= RENEWAL_NOTICE_DAYS:
         plural = "s" if days_left != 1 else ""
         renewal_notice = (
-            f"Mag-e-expire ang iyong sanitary permit sa loob ng {days_left} araw. "
-            "Mag-renew sa Sanitary Office. / Your sanitary permit expires in "
-            f"{days_left} day{plural}. Please renew at the Sanitary Office."
+            f"Your sanitary permit expires in {days_left} day{plural}. "
+            "Please renew at the Sanitary Office."
         )
 
     requirements, requirements_note = owner_requirements_checklist(establishment)
@@ -153,13 +149,12 @@ def owner_status_payload(establishment, today):
         "is_expired": is_expired,
         "renewal_notice": renewal_notice,
         "expired_notice": (
-            "Expired na ang iyong sanitary permit. Mag-renew sa Sanitary Office. / "
             "Your sanitary permit has expired. Please renew at the Sanitary Office."
             if is_expired
             else None
         ),
         "suspended_notice": (
-            "Makipag-ugnayan sa Sanitary Office. / Please contact the Sanitary Office."
+            "Please contact the Sanitary Office."
             if establishment.permit_status == PERMIT_STATUS_SUSPENDED
             else None
         ),

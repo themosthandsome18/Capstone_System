@@ -4141,13 +4141,15 @@ class CommunityReportIdentityTests(TestCase):
     def test_missing_name_is_rejected(self):
         response = self._post(complainant_name="  ")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("pangalan", response.json()["detail"].lower())
+        self.assertEqual(response.json()["detail"], "Please enter your name.")
         self.assertFalse(SanitaryComplaint.objects.exists())
 
     def test_missing_contact_is_rejected(self):
         response = self._post(contact_number="")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("contact", response.json()["detail"].lower())
+        self.assertEqual(
+            response.json()["detail"], "Please enter a valid mobile number (e.g. 09171234567)."
+        )
         self.assertFalse(SanitaryComplaint.objects.exists())
 
     def test_invalid_contact_is_rejected(self):
@@ -4266,8 +4268,10 @@ class CommunityReportRateLimitTests(TestCase):
 
         response = self._post(contact_number="+63 917 123 4567")
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        self.assertIn("ngayong araw", response.json()["detail"])
-        self.assertIn("today", response.json()["detail"])
+        self.assertEqual(
+            response.json()["detail"],
+            "This contact number has reached 5 reports today. Please try again tomorrow.",
+        )
         self.assertEqual(SanitaryComplaint.objects.count(), 5)
 
     def test_a_different_contact_still_succeeds(self):
@@ -4292,8 +4296,10 @@ class CommunityReportRateLimitTests(TestCase):
 
         response = self._post(contact_number="09179990000")
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        self.assertIn("oras", response.json()["detail"])
-        self.assertIn("hour", response.json()["detail"])
+        self.assertEqual(
+            response.json()["detail"],
+            "Too many reports from this device this hour. Please try again later.",
+        )
 
         other_address = self._post(contact_number="09179990001", remote_addr="10.0.0.2")
         self.assertEqual(other_address.status_code, status.HTTP_201_CREATED)
@@ -4323,9 +4329,8 @@ class CommunityReportAddressTests(TestCase):
         for value in ("", "   "):
             response = self._post(location_address=value)
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, repr(value))
-            detail = response.json()["detail"].lower()
-            self.assertIn("lokasyon", detail)
-            self.assertIn("address", detail)
+            detail = response.json()["detail"]
+            self.assertEqual(detail, "Please enter the location or address of the problem.")
         # The field left out entirely.
         response = APIClient().post(
             self.URL,
@@ -5073,10 +5078,7 @@ class EstablishmentStatusTests(TestCase):
         "requirements",
         "requirements_note",
     }
-    NOT_FOUND = (
-        "Hindi nahanap ang tracking code. Tingnan ang code sa iyong Owner's Slip. / "
-        "Tracking code not found. Check the code on your Owner's Slip."
-    )
+    NOT_FOUND = "Tracking code not found. Check the code on your Owner's Slip."
 
     def setUp(self):
         from django.core.cache import caches
@@ -5237,7 +5239,7 @@ class EstablishmentStatusTests(TestCase):
         self.assertEqual(refused["Cache-Control"], "no-store")
         self.assertTrue(int(refused["Retry-After"]) > 0)
         detail = refused.json()["detail"]
-        self.assertTrue(detail.startswith("Masyadong maraming"), detail)
+        self.assertEqual(detail, "Too many attempts from this device. Please try again in an hour.")
         self.assertNotIn("Expected available", detail)
 
         # Another address is not affected.
@@ -5280,7 +5282,10 @@ class EstablishmentStatusTests(TestCase):
     def test_sixty_days_left_shows_the_renewal_notice(self):
         body = self._status(permit_expiry_date=self.today + timedelta(days=60))
         self.assertEqual(body["days_left"], 60)
-        self.assertIn("60 araw", body["renewal_notice"])
+        self.assertEqual(
+            body["renewal_notice"],
+            "Your sanitary permit expires in 60 days. Please renew at the Sanitary Office.",
+        )
         self.assertIsNone(body["expired_notice"])
 
     def test_sixty_one_days_left_shows_no_notice(self):
@@ -5292,7 +5297,10 @@ class EstablishmentStatusTests(TestCase):
         self.assertEqual(body["days_left"], 0)
         self.assertFalse(body["is_expired"])
         self.assertEqual(body["permit_status"], "active")
-        self.assertIn("ngayong araw", body["renewal_notice"])
+        self.assertEqual(
+            body["renewal_notice"],
+            "Your sanitary permit expires today. Please renew at the Sanitary Office.",
+        )
         self.assertIsNone(body["expired_notice"])
 
     def test_a_past_date_is_expired_whatever_the_stored_status(self):
@@ -5303,7 +5311,10 @@ class EstablishmentStatusTests(TestCase):
         self.assertEqual(body["permit_status"], "expired")
         self.assertEqual(body["permit_status_label"], "Expired")
         self.assertIsNone(body["renewal_notice"])
-        self.assertIn("Expired", body["expired_notice"])
+        self.assertEqual(
+            body["expired_notice"],
+            "Your sanitary permit has expired. Please renew at the Sanitary Office.",
+        )
         self.establishment.refresh_from_db()
         self.assertEqual(self.establishment.permit_status, "active")  # stored field unchanged
 
@@ -5334,7 +5345,7 @@ class EstablishmentStatusTests(TestCase):
 
         self.assertEqual(body["permit_status"], "suspended")
         self.assertEqual(body["permit_status_label"], "Suspended")
-        self.assertTrue(body["suspended_notice"].startswith("Makipag-ugnayan sa Sanitary Office"))
+        self.assertEqual(body["suspended_notice"], "Please contact the Sanitary Office.")
         self.assertNotIn("violation", response_text := json.dumps(body))
         self.assertNotIn("grease", response_text)
 
@@ -5406,7 +5417,7 @@ class EstablishmentStatusTests(TestCase):
                 {"name": "Water Potability Test", "submitted": None},
             ],
         )
-        self.assertEqual(body["requirements_note"], "Dalhin sa renewal")
+        self.assertEqual(body["requirements_note"], "Bring at renewal")
 
     def test_a_type_without_requirements_says_so(self):
         from .models import SanitaryRequirement
@@ -5414,12 +5425,12 @@ class EstablishmentStatusTests(TestCase):
         SanitaryRequirement.objects.all().delete()
         body = self._status()
         self.assertEqual(body["requirements"], [])
-        self.assertEqual(body["requirements_note"], "Wala pang naka-set na requirements")
+        self.assertEqual(body["requirements_note"], "No requirements set yet")
 
         self._renewal()
         body = self._status()
         self.assertEqual(body["requirements"], [])
-        self.assertEqual(body["requirements_note"], "Wala pang naka-set na requirements")
+        self.assertEqual(body["requirements_note"], "No requirements set yet")
 
     def test_a_size_without_its_own_list_falls_back_to_the_type_list(self):
         from .models import SanitaryRequirement
