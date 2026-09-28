@@ -312,6 +312,29 @@ describe("Owner's Slip text", () => {
     );
   });
 
+  test("nothing tells owners to create or use an account any more", () => {
+    // A record still linked to an old establishment account (the link stays in the database).
+    mockCtx.establishments = [{ ...ISSUED, account_username: "old_owner" }, BASE];
+    try {
+      render(<EstablishmentRecords />);
+      expect(within(rowFor(702)).queryByText(/old_owner/)).toBeNull();
+      fireEvent.click(within(rowFor(702)).getByTitle("View establishment"));
+      const modal = document.querySelector(".establishment-detail-modal");
+      for (const text of [
+        /Mobile Establishment Portal/,
+        /register an account/i,
+        /Account Linked/,
+        /Mobile Portal Ready/,
+        /Owner account active/,
+        /old_owner/,
+      ]) {
+        expect(within(modal).queryByText(text)).toBeNull();
+      }
+    } finally {
+      mockCtx.establishments = [BASE, ISSUED];
+    }
+  });
+
   test("the tile on the record shows the slip status instead of the old account link", () => {
     const modal = openView(702);
     expect(
