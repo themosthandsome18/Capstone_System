@@ -96,16 +96,16 @@ describe("deriveTourismTheme", () => {
     expect(orange["--th-primary"]).toBe("#EF7C1F");
     expect(orange["--th-primary-hover"]).toBe("#D17B00");
     expect(orange["--th-primary-active"]).toBe("#D56305");
-    expect(orange["--th-primary-deep"]).toBe("#806000");
+    expect(orange["--th-primary-deep"]).toBe("#803900");
     expect(orange["--th-primary-ink"]).toBe("#7B4900");
     expect(orange["--th-primary-ink-strong"]).toBe("#482902");
     expect(orange["--th-primary-tint"]).toBe("#FFF7EE");
     expect(orange["--th-primary-tint-strong"]).toBe("#F6E5DA");
-    expect(orange["--th-primary-selected"]).toBe("#FFF0CC");
+    expect(orange["--th-primary-selected"]).toBe("#FFE3CC");
     expect(orange["--th-primary-border"]).toBe("#FFDEB3");
     expect(orange["--th-surface-tinted"]).toBe("#FDF3EB");
     expect(orange["--th-primary-alpha-20"]).toBe("rgba(239, 124, 31, 0.2)");
-    expect(orange["--th-shadow-rgb"]).toBe("83, 69, 23");
+    expect(orange["--th-shadow-rgb"]).toBe("83, 50, 23");
     // tints stay pale (additive deltas would have turned them white)
     ["--th-primary-tint", "--th-primary-tint-strong", "--th-surface-tinted"].forEach((name) =>
       expect(orange[name]).not.toBe("#FFFFFF")
@@ -122,17 +122,19 @@ describe("deriveTourismTheme", () => {
     expect(contrastRatio(v["--th-text-tinted-muted"], v["--th-surface-tinted"])).toBeGreaterThanOrEqual(4.5);
   });
 
-  test("the computed contrast colour passes AA on green, orange and a very light colour", () => {
-    const cases = { "#2FA34A": "#0B2B16", "#EF7C1F": "#482902", "#FFD84D": "#4A4200" };
-    Object.entries(cases).forEach(([base, expected]) => {
-      const contrast = deriveTourismTheme(base)["--th-primary-contrast"];
-      expect(contrast).toBe(expected);
-      expect(contrastRatio(contrast, base)).toBeGreaterThanOrEqual(4.5);
-    });
+  test("the contrast colour stays white, as the owner decided, for green and orange", () => {
+    // Below AA (3.25:1 and 2.77:1) but above the 2.5:1 floor: an accepted condition.
+    expect(green["--th-primary-contrast"]).toBe("#FFFFFF");
+    expect(green["--th-primary-contrast"]).toBe(root["--th-primary-contrast"].toUpperCase());
+    expect(deriveTourismTheme("#EF7C1F")["--th-primary-contrast"]).toBe("#FFFFFF");
+    expect(deriveTourismTheme("#1E40AF")["--th-primary-contrast"]).toBe("#FFFFFF");
   });
 
-  test("white is used when white already reaches AA", () => {
-    expect(deriveTourismTheme("#1E40AF")["--th-primary-contrast"]).toBe("#FFFFFF");
+  test("a colour where white falls below 2.5:1 falls back to a dark ink that reaches AA", () => {
+    expect(contrastRatio("#FFFFFF", "#FFD84D")).toBeLessThan(2.5);
+    const contrast = deriveTourismTheme("#FFD84D")["--th-primary-contrast"];
+    expect(contrast).toBe("#4A4200");
+    expect(contrastRatio(contrast, "#FFD84D")).toBeGreaterThanOrEqual(4.5);
   });
 
   test.each(["#2FA34A", "#EF7C1F", "#FFD84D", "#1E40AF", "#DB2777"])(

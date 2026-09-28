@@ -12,6 +12,13 @@
 // Additive lightness deltas were rejected: on #EF7C1F they push every tint to
 // pure white and drop ink-on-tint to 4.15:1.
 //
+// Hue drift: a measured hue offset above 10 degrees is historical drift, not
+// design intent (e.g. primary-deep was a blue-green beside a leaf green), so
+// those tokens use the base hue (offset 0) with their measured S and L.
+// EXEMPT: the three page gradient stops keep their measured offsets. At ~90%
+// lightness a hue offset is barely perceptible on any theme, and zeroing it
+// would visibly change the largest area on every page for no benefit.
+//
 // Tokens NOT derived here stay fixed on :root: every status token, white
 // surfaces, --th-text-main/-muted, --th-border/-strong, --th-surface-alt,
 // --th-scrim, --th-info*, --th-text-inverse, --th-page-bg.
@@ -24,25 +31,24 @@ const AA = 4.5;
 
 // [hue offset, saturation, lightness] measured from :root against #2FA34A.
 const ABSOLUTE_RULES = {
-  "--th-primary-deep": [18.08, 0.6875, 0.251],
+  "--th-primary-deep": [0, 0.6875, 0.251], // measured +18.08 (drift)
   "--th-primary-ink": [8.819, 0.6423, 0.2412],
   "--th-primary-ink-strong": [6.489, 0.5946, 0.1451],
-  "--th-primary-selected": [15.303, 0.8039, 0.9],
+  "--th-primary-selected": [0, 0.8039, 0.9], // measured +15.303 (drift)
   "--th-primary-tint": [4.496, 0.7647, 0.9667],
   "--th-primary-tint-strong": [-3.966, 0.3913, 0.9098],
   "--th-primary-border": [7.034, 0.7895, 0.851],
-  "--th-page-grad-1": [18.342, 0.4483, 0.9431],
-  "--th-page-grad-2": [21.489, 0.3929, 0.8902],
-  "--th-page-grad-3": [26.034, 0.2842, 0.8137],
+  "--th-page-grad-1": [18.342, 0.4483, 0.9431], // exempt from the drift rule
+  "--th-page-grad-2": [21.489, 0.3929, 0.8902], // exempt from the drift rule
+  "--th-page-grad-3": [26.034, 0.2842, 0.8137], // exempt from the drift rule
   "--th-surface-tinted": [1.034, 0.5455, 0.9569],
-  "--th-surface-tinted-strong": [21.034, 0.2667, 0.8235],
-  "--th-border-tinted": [13.034, 0.3333, 0.8824],
+  "--th-surface-tinted-strong": [0, 0.2667, 0.8235], // measured +21.034 (drift)
+  "--th-border-tinted": [0, 0.3333, 0.8824], // measured +13.034 (drift)
   "--th-border-tinted-strong": [8.534, 0.1429, 0.7804],
-  "--th-border-tinted-control": [16.034, 0.2857, 0.7804],
-  "--th-text-tinted-strong": [23.534, 0.2, 0.0784],
-  "--th-text-tinted": [18.342, 0.1057, 0.2412],
-  "--th-text-tinted-muted": [16.034, 0.0642, 0.4275],
-  "--th-chart-1": [44.304, 0.7222, 0.2824],
+  "--th-border-tinted-control": [0, 0.2857, 0.7804], // measured +16.034 (drift)
+  "--th-text-tinted-strong": [0, 0.2, 0.0784], // measured +23.534 (drift)
+  "--th-text-tinted": [0, 0.1057, 0.2412], // measured +18.342 (drift)
+  "--th-text-tinted-muted": [0, 0.0642, 0.4275], // measured +16.034 (drift)
 };
 
 // [hue offset, saturation, lightness DELTA]: darker states of the base itself.
@@ -51,20 +57,23 @@ const RELATIVE_RULES = {
   "--th-primary-active": [0.409, 0.6076, 0.3098 - GREEN_HSL[2]],
 };
 
-// Chart 2-5 are spread in LIGHTNESS (and a little hue, -20..+44 degrees
-// around the base) so slices stay distinguishable: the closest pair is at
-// least deltaE 27 on every base tested. Saturation is capped so orange and
-// other vivid bases do not turn neon.
+// The chart palette is DESIGNED from the base hue, not measured (the old teal
+// palette had no relationship to the brand green). Hues stay within a few
+// degrees of the base so the set reads as one family with the theme; the
+// separation comes from LIGHTNESS (0.40 to 0.81). Saturation is capped so vivid
+// bases do not turn neon. Closest pair: deltaE 12.2 on green, 17.6 on #EF7C1F.
+// Nothing reads chart-1..5 as text: the Key Insights digits and icon use ink.
 const CHART_RULES = {
-  "--th-chart-2": [-20, 0.6, 0.36],
-  "--th-chart-3": [36, 0.6, 0.6],
-  "--th-chart-4": [-20, 0.55, 0.68],
-  "--th-chart-5": [44, 0.5, 0.84],
+  "--th-chart-1": [0, 0.62, 0.4],
+  "--th-chart-2": [4, 0.58, 0.5],
+  "--th-chart-3": [-3, 0.55, 0.61],
+  "--th-chart-4": [6, 0.5, 0.71],
+  "--th-chart-5": [2, 0.45, 0.81],
 };
-const CHART_SATURATION_CAP = 0.7;
+const CHART_SATURATION_CAP = 0.78;
 
-const SHADOW_RULE = [19.192, 0.3585, 0.2078];
-const CHART_WASH_RULE = [48.128, 0.4057, 0.5843, 0.15];
+const SHADOW_RULE = [0, 0.3585, 0.2078]; // measured +19.192 (drift)
+const CHART_WASH_RULE = [0, 0.4057, 0.5843, 0.15]; // measured +48.128 (drift)
 const ALPHAS = { "--th-primary-alpha-10": 0.1, "--th-primary-alpha-20": 0.2, "--th-primary-alpha-30": 0.3 };
 
 // ---- colour maths ---------------------------------------------------------
@@ -155,10 +164,15 @@ function darkenToContrast(hex, against, target = AA) {
   return "#000000";
 }
 
-// Text colour for content sitting on the primary fill: white when white
-// reaches AA (4.5:1) against it, otherwise a dark ink of the same hue.
+// Text colour for content sitting on the primary fill. The owner keeps WHITE
+// text on primary fills (below AA for both green, 3.25:1, and orange, 2.77:1;
+// an accepted, app-wide condition). The floor below only rescues a genuinely
+// unusable colour: if white falls under 2.5:1 (e.g. pale yellow, 1.38:1), use
+// a dark ink of the same hue that reaches AA against it instead.
+export const CONTRAST_WHITE_FLOOR = 2.5;
+
 export function deriveContrastColor(primaryHex, inkStrongHex) {
-  if (contrastRatio("#FFFFFF", primaryHex) >= AA) return "#FFFFFF";
+  if (contrastRatio("#FFFFFF", primaryHex) >= CONTRAST_WHITE_FLOOR) return "#FFFFFF";
   return darkenToContrast(inkStrongHex, primaryHex);
 }
 

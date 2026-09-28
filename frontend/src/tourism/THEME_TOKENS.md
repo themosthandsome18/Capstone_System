@@ -47,7 +47,8 @@ hook Phase 3 will use to recolour it.
 All tokens are declared in the `:root` block at the top of `Tourism_index.css`.
 
 "Uses" counts `var(--th-…)` reads in the `.js` and `.css` files under
-`frontend/src`, measured at `3d1e2fd`.
+`frontend/src`, measured at `3d1e2fd` and updated in Phase 3 (ink and `chart-1`,
+after the Key Insights digits and icon moved from `chart-1` to ink).
 Some of those reads sit in dead rules (section 7).
 
 "Follows theme" records intent for Phase 3, as follows:
@@ -62,11 +63,11 @@ Some of those reads sit in dead rules (section 7).
 | `--th-primary` | `#2fa34a` | Primary fills, active nav/tabs, outline-control borders, focus borders, brand icons | 53 |
 | `--th-primary-hover` | `#15803d` | Hover fill of primary buttons, hover text of links and the secondary button. Chosen so white text is 5.02:1 | 5 |
 | `--th-primary-active` | `#1f7f36` | Pressed state, date-field focus outline | 3 |
-| `--th-primary-deep` | `#146c43` | Dark primary fills carrying white text (Save/Import buttons). White text 6.45:1 | 3 |
-| `--th-primary-ink` | `#166534` | Text sitting on a primary tint, and brand accent text on white | 18 |
+| `--th-primary-deep` | `#146c28` | Dark primary fills carrying white text (Save/Import buttons). White text 6.55:1 | 3 |
+| `--th-primary-ink` | `#166534` | Text sitting on a primary tint, and brand accent text on white (incl. the Key Insights digits and icon) | 23 |
 | `--th-primary-ink-strong` | `#0f3b1e` | Emphasis or hover text on a tint | 2 |
-| `--th-primary-selected` | `#d1fae5` | Selection / strong-hover fills (wizard active step, View button hover) | 4 |
-| `--th-primary-contrast` | `#ffffff` | Text on a primary fill. **Computed** by `deriveTourismTheme` (white if it reaches 4.5:1, otherwise a dark ink); no CSS reads it yet (section 7) | 0 |
+| `--th-primary-selected` | `#d1fadb` | Selection / strong-hover fills (wizard active step, View button hover) | 4 |
+| `--th-primary-contrast` | `#ffffff` | Text on a primary fill. **Computed**: white, unless white falls below 2.5:1 against the chosen colour, then a dark ink (owner decision, section 7). No CSS reads it yet | 0 |
 | `--th-primary-tint` | `#f0fdf4` | Pale brand surfaces and hovers | 19 |
 | `--th-primary-tint-strong` | `#dff1e2` | Table headers, totals rows, selected items, View button fill | 10 |
 | `--th-primary-border` | `#bbf7d0` | Pale brand borders | 4 |
@@ -86,23 +87,23 @@ Some of those reads sit in dead rules (section 7).
 | `--th-surface` | `#ffffff` | Plain surface. Unused, because white was deliberately left literal | 0 |
 | `--th-surface-alt` | `#f7fbf8` | Table-card and destination-card bodies | 7 |
 | `--th-surface-tinted` | `#eefaf1` | **Sidebar and top-bar background** | 2 |
-| `--th-surface-tinted-strong` | `#c6ded4` | Add/Edit Destination form panel | 1 |
+| `--th-surface-tinted-strong` | `#c6decc` | Add/Edit Destination form panel | 1 |
 | `--th-border` | `#e5e7eb` | Neutral light border | 4 |
 | `--th-border-strong` | `#d1d5db` | Neutral input/control border | 8 |
-| `--th-border-tinted` | `#d7ebe0` | Green-tinted borders (sidebar edge, top-bar line, cards) | 10 |
+| `--th-border-tinted` | `#d7ebdc` | Green-tinted borders (sidebar edge, top-bar line, cards) | 10 |
 | `--th-border-tinted-strong` | `#bfcfc5` | Top-bar divider, GIS list entries | 2 |
-| `--th-border-tinted-control` | `#b7d7c7` | Booking Management filter-field outlines | 1 |
+| `--th-border-tinted-control` | `#b7d7be` | Booking Management filter-field outlines | 1 |
 | `--th-text-main` | `#111827` | Main text | 27 |
 | `--th-text-muted` | `#64748b` | Muted text | 14 |
-| `--th-text-tinted-strong` | `#101815` | Sidebar title and menu labels | 2 |
-| `--th-text-tinted` | `#37443e` | Table headings, top-bar subtitle | 5 |
-| `--th-text-tinted-muted` | `#66746d` | Top-bar role line | 1 |
+| `--th-text-tinted-strong` | `#101812` | Sidebar title and menu labels | 2 |
+| `--th-text-tinted` | `#37443a` | Table headings, top-bar subtitle | 5 |
+| `--th-text-tinted-muted` | `#667469` | Top-bar role line | 1 |
 | `--th-text-inverse` | `#ffffff` | Text on dark non-primary surfaces. Unused | 0 |
 
 ### Elevation and overlay (2)
 | Token | Default | Role | Uses |
 |---|---|---|---|
-| `--th-shadow-rgb` | `34, 72, 55` | **Channels only.** Use it as `rgba(var(--th-shadow-rgb), <alpha>)` so each site keeps its own opacity | 27 |
+| `--th-shadow-rgb` | `34, 72, 43` | **Channels only.** Use it as `rgba(var(--th-shadow-rgb), <alpha>)` so each site keeps its own opacity | 27 |
 | `--th-scrim` | `rgba(2, 6, 23, 0.55)` | Modal backdrops | 4 |
 
 ### Status: fixed, never follows the theme (12)
@@ -127,9 +128,16 @@ different roles and will diverge once a theme is applied, so **do not merge them
 ### Charts (6)
 | Token | Default | Uses |
 |---|---|---|
-| `--th-chart-1` | `#147c79` | 4 (inline DOM styles in `AnalyticsAndReport.js`) |
-| `--th-chart-2` … `-5` | `#309325`, `#5cd6c2`, `#8ada81`, `#c2ebe9` (spread in lightness; changed in Phase 3 from near-duplicates) | 0 |
-| `--th-chart-wash` | `rgba(106, 189, 192, 0.15)` | 0 |
+| `--th-chart-1` | `#27a544` | 0 (the Key Insights digits and icon now use ink) |
+| `--th-chart-2` … `-5` | `#36c962`, `#65d279`, `#90daa9`, `#b9e4c4` | 0 |
+| `--th-chart-wash` | `rgba(106, 192, 126, 0.15)` | 0 |
+
+The chart palette is **designed, not measured** (Phase 3): the old teal palette
+had no relationship to the brand green. All five sit within a few degrees of
+the base hue and are separated by lightness (0.40 to 0.81), so they read as one
+family with any theme (closest pair ΔE 12.2 on green, 17.6 on `#EF7C1F`).
+Nothing reads `chart-1` … `-5` or `chart-wash` yet; they are ready for the chart
+batch.
 
 Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
 
@@ -154,6 +162,14 @@ Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
 7. **Inline JSX styles beat the stylesheet.** Tokenising a stylesheet rule does
    nothing if an inline `style={{…}}` on the same element sets that property.
    At `3d1e2fd` no such override of a tokenised property remains.
+8. **A hue offset above 10° is drift, not design.** When Phase 3 derived the
+   palette from the base colour, a token whose measured hue sat more than 10°
+   away from `#2FA34A` was given the base hue instead (with its measured
+   saturation and lightness), e.g. `--th-primary-deep` had been a blue-green
+   beside a leaf green. **One deliberate exception: the three page gradient
+   stops keep their measured offsets.** At around 90% lightness a hue offset is
+   barely perceptible on any theme, so zeroing it would buy nothing and would
+   visibly change the largest area on every page. Do not "fix" this.
 
 ## 4. Deliberate exceptions: leave these literal
 
@@ -277,12 +293,18 @@ so nothing was lost there.
 
 ## 7. Open items for Phase 3
 
-- **`--th-primary-contrast` is computed but not yet read.** `deriveTourismTheme`
-  now picks white when white reaches 4.5:1 against the primary, otherwise a dark
-  ink of the same hue (`#0B2B16` for green, 4.71:1). But the text on primary
-  fills is still literal white, so no screen uses it yet. White fails AA on most
-  oranges (2.77:1 on `#EF7C1F`) and already fails on `#2fa34a` (3.25:1). Wiring
-  those white-text rules to `--th-primary-contrast` is the next step.
+- **White text on primary fills is an owner decision.**
+  - White on the primary fill is **below WCAG AA (4.5:1)** for both green
+    (3.25:1) and orange `#EF7C1F` (2.77:1). This is a pre-existing, app-wide
+    condition, **accepted by the owner, not an oversight.**
+  - `--th-primary-contrast` is therefore white, unless white falls below
+    **2.5:1** against the chosen colour; then it becomes a dark ink of the same
+    hue that reaches AA (e.g. `#4A4200` on pale yellow `#FFD84D`, where white is
+    1.38:1). The 2.5:1 floor exists **only to prevent an unusable theme**.
+  - The text on primary fills is still literal white, so no screen reads the
+    token yet.
+  - **The Settings screen must WARN the admin** when the chosen colour gives
+    poor contrast, so the choice sits with the person picking it.
 - **The contrast derivation must cover graphics, not only text.** The photo
   drop-zone upload icon (`--th-primary` on `#f8fafc`) is **3.11:1** against
   the 3:1 non-text threshold. It was 3.15:1 before Phase 1. It passes, but only
@@ -314,10 +336,10 @@ so nothing was lost there.
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
 - **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
   green) and the other neutrals are derived or fixed.
-- **Unused tokens (15):** `--th-primary-contrast`, `--th-page-bg`,
+- **Unused tokens (16):** `--th-primary-contrast`, `--th-page-bg`,
   `--th-surface`, `--th-text-inverse`, `--th-success-text`, `--th-warning-bg`,
   `--th-warning-text`, `--th-info`, `--th-info-bg`, `--th-info-border`,
-  `--th-chart-2` … `-5`, `--th-chart-wash`. Each has a planned consumer; do not
+  `--th-chart-1` … `-5`, `--th-chart-wash`. Each has a planned consumer; do not
   prune them without deciding that.
 - **Dead code to delete.** None of it has been deleted yet.
   - **JS files nothing imports:** `components/layout/Topbar.js`,

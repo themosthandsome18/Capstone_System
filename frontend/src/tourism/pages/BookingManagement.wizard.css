@@ -341,6 +341,7 @@
 
 .wizard-review-edit-btn:hover {
   background: var(--th-primary-selected);
+  color: var(--th-primary-ink);
 }
 
 .wizard-review-grid {
