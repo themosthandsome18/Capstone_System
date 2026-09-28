@@ -35,7 +35,7 @@ void main() {
     expect(find.text('Household Survey'), findsOneWidget);
   });
 
-  for (final tab in ['Community', 'Profile', 'Records']) {
+  for (final tab in ['Households', 'Profile', 'Records']) {
     testWidgets('staff $tab has no public shortcuts', (tester) async {
       await pumpShell(tester, FakeStaffApi());
       await tester.tap(find.widgetWithText(NavigationDestination, tab));

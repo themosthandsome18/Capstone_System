@@ -2,6 +2,13 @@
 
 Comprehensive standalone codebase audit generated on September 18, 2026.
 
+## Current Update: Staff Mobile Cleanup - Slice 2A (2026-09-28; feature branch)
+- Branch `sanitation/staff-households-tab`, based on fetched `main`/`origin/main` at `c816c19`. Changed only sanitation staff navigation: Home / Records / Map / Households / Profile. SanitationHouseholdsPage displays existing householdRecords from staff bootstrap (head, barangay, supplied survey date and status), an honest empty state and a button to the existing HouseholdSurveyPage. No backend or model extension required.
+- Replacing Community would remove the sole staff complaints-screen entry. A new `Complaints` drawer item opens the unchanged SanitationReportsPage; a route wrapper preserves back navigation, refresh and existing report/draft/survey callbacks, rebuilding after actions to avoid stale data. Public Track Report remains public-only.
+- Five pre-fix tests failed as expected. Six new tests now cover nav labels, actual household content, empty state, unchanged survey form without Remarks, complaints navigation/back behavior and complaints refresh; the existing shortcut test now selects Households. Focused suite 17/17; full Flutter suite 103/103; analyzer reports no issues; diff whitespace check passed. Prior public Verify/Track and household Remarks tests remain green.
+- No backend/API changes, production API/DB access, tourism/shared-login edits, Profile/identity/dashboard redesign, survey-field changes, inspection-text changes or establishment-filter changes. Only existing bootstrap fields are displayed; a missing survey date is omitted.
+- Android device verification remains outstanding: only Windows/Chrome/Edge detected and no emulator sources. Widget tests used mocks with loopback API configuration. No APK build or real-phone smoke-test claim. `tatus` untouched; finalized as one feature-branch commit; not merged or pushed.
+
 ## Current Update: Staff Mobile Cleanup - Slice 1 (2026-09-28; feature branch)
 - Branch `sanitation/staff-cleanup-public-shortcuts`, based on fetched `main`/`origin/main` at `af8af1e`. Sanitation Flutter UI only: removed the entire Home Quick Actions section, drawer Verify/Track entries, Community tracker button and Profile/Actions Verify/Track links, plus their staff callback plumbing.
 - Public Verify entry is unchanged. New public `Track a report` link opens the existing ReportTrackerPage. Both underlying pages and API methods remain intact. The tracker requires contact number plus complaint ID; backend exact normalized-contact matching is unchanged. No backend/API/schema change and no new lookup bypass.

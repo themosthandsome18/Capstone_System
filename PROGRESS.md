@@ -1,5 +1,13 @@
 # Project Progress & Status Tracker
 
+## Staff Mobile Cleanup - Slice 2A: Households Tab (2026-09-28; feature branch)
+- Branch `sanitation/staff-households-tab`; preflight fetched and confirmed `main == origin/main == c816c1940ca1fda3d55c79638b7d0f786632e5a0`, clean tracked files and only `tatus` untracked.
+- Staff bottom navigation is now Home / Records / Map / Households / Profile. The fourth destination opens SanitationHouseholdsPage using existing staff-bootstrap householdRecords: head, barangay, existing survey date when present and existing status label. No invented dates or new model fields. Empty state says `No household records loaded`; `New Household Survey` opens the unchanged HouseholdSurveyPage.
+- The old Community tab was the only staff complaints-screen route. Added a `Complaints` drawer entry opening the existing SanitationReportsPage on a back-navigable route. Its contents are unchanged; refresh and draft/report/survey actions reuse existing callbacks and rebuild the route afterwards. Pull-to-refresh is retained. No staff public tracker entry was introduced.
+- Red -> green: the five initial new tests all failed before implementation (old Community label, complaints instead of household list, missing household empty state, missing survey action and missing drawer Complaints entry). After implementation and an additional complaint-refresh regression test, focused households/shortcuts/household-remarks tests passed 17/17; full Flutter suite passed 103/103. `flutter analyze`: `No issues found!`. `git diff --check` passed. Tests used a loopback API base URL and mocks; no production calls.
+- Existing mobile household Remarks omission and public Verify/Track routes remain intact. No backend/API/model changes were needed. No survey-form, dashboard, Profile/identity, inspection Findings/Remarks, establishment-filter, tourism or shared-login changes.
+- No Android device/emulator available: `flutter devices` listed Windows/Chrome/Edge; `flutter emulators` found no sources. Actual phone smoke testing of nav/list/survey/Complaints remains outstanding; no APK built. `tatus` untouched. Finalized as one feature-branch commit; not merged or pushed.
+
 ## Staff Mobile Cleanup - Slice 1 (2026-09-28; feature branch)
 - Branch `sanitation/staff-cleanup-public-shortcuts`; preflight fetched and confirmed clean tracked files, `main == origin/main == af8af1e799c2861618619c9da648c9a36f25fcea`, and only `tatus` untracked.
 - Removed the entire staff Home Quick Actions section and all Verify/Track Report entries from the staff drawer, Community and Profile/Actions screens, including their staff route callbacks. Existing inspection, household and permit-management routes remain available outside Quick Actions.

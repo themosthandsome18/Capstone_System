@@ -1789,6 +1789,14 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.flag_outlined, color: AppColors.deepGreen),
+              title: const Text('Complaints', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openComplaints();
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.assignment_outlined, color: AppColors.deepGreen),
               title: const Text('Household Survey', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -1864,15 +1872,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         refreshing: _refreshing,
         onEditHousehold: _openHouseholdSurvey,
       ),
-      SanitationReportsPage(
-        reports: _reports,
-        drafts: _drafts,
-        complaints: _bootstrap.complaints,
+      SanitationHouseholdsPage(
         householdRecords: _bootstrap.householdRecords,
-        onOpenReport: _openReport,
-        onEditDraft: _editReportDraft,
-        onRetryDraft: _retryReportDraft,
-        onDeleteDraft: _deleteReportDraft,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
@@ -1915,14 +1916,55 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           ),
           NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
           NavigationDestination(
-            icon: Icon(Icons.flag_outlined),
-            label: 'Community',
+            icon: Icon(Icons.home_work_outlined),
+            label: 'Households',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openComplaints() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => StatefulBuilder(
+          builder: (routeContext, refreshRoute) {
+            // Keep the existing screen current after refreshes and draft actions.
+            Future<void> runAndRefresh(Future<void> Function() action) async {
+              final pending = action();
+              if (routeContext.mounted) refreshRoute(() {});
+              try {
+                await pending;
+              } finally {
+                if (routeContext.mounted) refreshRoute(() {});
+              }
+            }
+
+            return Scaffold(
+              appBar: AppBar(title: const Text('Complaints')),
+              body: RefreshIndicator(
+                onRefresh: () => runAndRefresh(_refreshBootstrap),
+                child: SanitationReportsPage(
+                  reports: _reports,
+                  drafts: _drafts,
+                  complaints: _bootstrap.complaints,
+                  householdRecords: _bootstrap.householdRecords,
+                  onOpenReport: () => runAndRefresh(_openReport),
+                  onEditDraft: (draft) => runAndRefresh(() => _editReportDraft(draft)),
+                  onRetryDraft: (draft) => runAndRefresh(() => _retryReportDraft(draft)),
+                  onDeleteDraft: (draft) => runAndRefresh(() => _deleteReportDraft(draft)),
+                  onOpenHouseholdSurvey: () => runAndRefresh(_openHouseholdSurvey),
+                  onRefresh: () => runAndRefresh(_refreshBootstrap),
+                  refreshing: _refreshing,
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -2896,6 +2938,61 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           label,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
+      ],
+    );
+  }
+}
+
+class SanitationHouseholdsPage extends StatelessWidget {
+  const SanitationHouseholdsPage({
+    super.key,
+    required this.householdRecords,
+    required this.onOpenHouseholdSurvey,
+    this.onOpenMenu,
+    required this.onRefresh,
+    required this.refreshing,
+  });
+
+  final List<HouseholdSanitationItem> householdRecords;
+  final VoidCallback onOpenHouseholdSurvey;
+  final VoidCallback? onOpenMenu;
+  final Future<void> Function() onRefresh;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        SanitationTopBar(
+          title: 'Households',
+          onMenuTap: onOpenMenu,
+          onRefresh: onRefresh,
+          refreshing: refreshing,
+        ),
+        FilledButton.icon(
+          onPressed: onOpenHouseholdSurvey,
+          icon: const Icon(Icons.assignment_outlined),
+          label: const Text('New Household Survey'),
+        ),
+        const SizedBox(height: 12),
+        if (householdRecords.isEmpty)
+          const EmptyState(
+            icon: Icons.home_work_outlined,
+            title: 'No household records loaded',
+          )
+        else
+          ...householdRecords.map(
+            (item) => SimpleInfoCard(
+              icon: Icons.home_work_outlined,
+              title: item.householdHead,
+              subtitle: [
+                item.barangay,
+                if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
+              ].join(' - '),
+              trailing: householdStatusLabel(item.status),
+            ),
+          ),
       ],
     );
   }
