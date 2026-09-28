@@ -170,6 +170,22 @@ else:
     }
 
 
+# Test-run guard: the database configured above is the live Supabase instance
+# (there is no separate development database). `manage.py test` would create
+# and drop a test database on that host and use connections from its small
+# pool, so every test run is forced onto an in-memory SQLite database,
+# whatever .env says.
+import sys  # noqa: E402
+
+if sys.argv[1:2] == ["test"]:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
