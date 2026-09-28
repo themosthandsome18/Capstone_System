@@ -15,9 +15,9 @@
 // Hue drift: a measured hue offset above 10 degrees is historical drift, not
 // design intent (e.g. primary-deep was a blue-green beside a leaf green), so
 // those tokens use the base hue (offset 0) with their measured S and L.
-// EXEMPT: the three page gradient stops keep their measured offsets. At ~90%
-// lightness a hue offset is barely perceptible on any theme, and zeroing it
-// would visibly change the largest area on every page for no benefit.
+// The rule has NO exceptions: the page gradient was briefly exempt, but its
+// last stop sits at 81% lightness, where a 26 degree offset is visible (khaki
+// page behind a peach sidebar on orange).
 //
 // Tokens NOT derived here stay fixed on :root: every status token, white
 // surfaces, --th-text-main/-muted, --th-border/-strong, --th-surface-alt,
@@ -38,9 +38,9 @@ const ABSOLUTE_RULES = {
   "--th-primary-tint": [4.496, 0.7647, 0.9667],
   "--th-primary-tint-strong": [-3.966, 0.3913, 0.9098],
   "--th-primary-border": [7.034, 0.7895, 0.851],
-  "--th-page-grad-1": [18.342, 0.4483, 0.9431], // exempt from the drift rule
-  "--th-page-grad-2": [21.489, 0.3929, 0.8902], // exempt from the drift rule
-  "--th-page-grad-3": [26.034, 0.2842, 0.8137], // exempt from the drift rule
+  "--th-page-grad-1": [0, 0.4483, 0.9431], // measured +18.342 (drift)
+  "--th-page-grad-2": [0, 0.3929, 0.8902], // measured +21.489 (drift)
+  "--th-page-grad-3": [0, 0.2842, 0.8137], // measured +26.034 (drift)
   "--th-surface-tinted": [1.034, 0.5455, 0.9569],
   "--th-surface-tinted-strong": [0, 0.2667, 0.8235], // measured +21.034 (drift)
   "--th-border-tinted": [0, 0.3333, 0.8824], // measured +13.034 (drift)

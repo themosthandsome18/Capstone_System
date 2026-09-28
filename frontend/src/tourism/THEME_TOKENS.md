@@ -78,7 +78,7 @@ Some of those reads sit in dead rules (section 7).
 ### Page background (4)
 | Token | Default | Role | Uses |
 |---|---|---|---|
-| `--th-page-grad-1` / `-2` / `-3` | `#eaf7f1` / `#d8eee5` / `#c2ddd4` | The three stops of the `.tourism-layout` page gradient | 1 each |
+| `--th-page-grad-1` / `-2` / `-3` | `#eaf7ed` / `#d8eedd` / `#c2ddc8` | The three stops of the `.tourism-layout` page gradient | 1 each |
 | `--th-page-bg` | `#e6f4ef` | Flat page colour. **Unused.** Pairs with the legacy `--page-bg` and the `body` rule, which will be migrated separately | 0 |
 
 ### Surfaces, borders and text (15)
@@ -166,10 +166,11 @@ Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
    palette from the base colour, a token whose measured hue sat more than 10°
    away from `#2FA34A` was given the base hue instead (with its measured
    saturation and lightness), e.g. `--th-primary-deep` had been a blue-green
-   beside a leaf green. **One deliberate exception: the three page gradient
-   stops keep their measured offsets.** At around 90% lightness a hue offset is
-   barely perceptible on any theme, so zeroing it would buy nothing and would
-   visibly change the largest area on every page. Do not "fix" this.
+   beside a leaf green. **The rule has no exceptions.** The page gradient was
+   briefly exempt on the grounds that a hue offset is imperceptible at high
+   lightness, but its last stop is at 81% lightness, where its 26° offset is
+   visible: on orange the page came out khaki behind a peach sidebar. All three
+   stops now follow the rule and match the sidebar's hue on any theme.
 
 ## 4. Deliberate exceptions: leave these literal
 
