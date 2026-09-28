@@ -5441,3 +5441,68 @@ class EstablishmentStatusTests(TestCase):
             [item["name"] for item in body["requirements"]],
             ["Health Certificate", "Water Potability Test"],
         )
+
+
+class TourismThemeSettingTests(TestCase):
+    def setUp(self):
+        from .models import TourismThemeSetting
+
+        self.Model = TourismThemeSetting
+
+    def test_load_creates_the_row_once_and_returns_the_same_row(self):
+        self.assertEqual(self.Model.objects.count(), 0)
+        first = self.Model.load()
+        second = self.Model.load()
+        self.assertEqual(first.pk, 1)
+        self.assertEqual(second.pk, first.pk)
+        self.assertEqual(self.Model.objects.count(), 1)
+
+    def test_saving_a_second_instance_does_not_create_a_second_row(self):
+        self.Model.load()
+        self.Model(primary_color="#123456").save()
+        self.assertEqual(self.Model.objects.count(), 1)
+        self.assertEqual(self.Model.load().primary_color, "#123456")
+
+    def test_defaults_are_the_original_green(self):
+        setting = self.Model.load()
+        self.assertEqual(setting.primary_color, "#2FA34A")
+        self.assertTrue(setting.mobile_follows_web)
+        self.assertEqual(setting.mobile_primary_color, "")
+        self.assertEqual(
+            setting.saved_colors,
+            [{"hex": "#2FA34A", "label": "Original (Green)"}],
+        )
+
+    def test_lowercase_hex_is_stored_uppercase(self):
+        setting = self.Model.load()
+        setting.primary_color = "#ff8800"
+        setting.mobile_primary_color = "#00aabb"
+        setting.saved_colors = [{"hex": "#abcdef", "label": "Test"}]
+        setting.save()
+        setting.refresh_from_db()
+        self.assertEqual(setting.primary_color, "#FF8800")
+        self.assertEqual(setting.mobile_primary_color, "#00AABB")
+        self.assertEqual(setting.saved_colors, [{"hex": "#ABCDEF", "label": "Test"}])
+
+    def test_primary_color_must_be_a_six_digit_hex(self):
+        from django.core.exceptions import ValidationError
+
+        setting = self.Model.load()
+        for bad in ["2FA34A", "#2FA34", "#2FA34AA", "#GGGGGG", "", "red"]:
+            setting.primary_color = bad
+            with self.assertRaises(ValidationError, msg=bad):
+                setting.full_clean()
+        setting.primary_color = "#2fa34a"
+        setting.full_clean()
+
+    def test_mobile_primary_color_accepts_empty_and_rejects_malformed(self):
+        from django.core.exceptions import ValidationError
+
+        setting = self.Model.load()
+        setting.mobile_primary_color = ""
+        setting.full_clean()
+        setting.mobile_primary_color = "#12345"
+        with self.assertRaises(ValidationError):
+            setting.full_clean()
+        setting.mobile_primary_color = "#A1B2C3"
+        setting.full_clean()
