@@ -2,6 +2,15 @@
 
 Comprehensive standalone codebase audit generated on September 18, 2026.
 
+## Current Update: Mobile Household Remarks Removal (2026-09-28; feature branch)
+- Branch `sanitation/remove-mobile-household-remarks`, based on fetched `main`/`origin/main` at `0fcf75d`. This update supersedes any earlier description of Remarks as a mobile household form input; backend/model/web Remarks remain supported.
+- The client-confirmed household form does not include Remarks. Only the Flutter HouseholdSurveyPage input/controller and its submission argument were removed. The sanitation method `submitHouseholdSurvey` omits the JSON `remarks` key, rather than supplying an empty value. No other household field or scoring rule changed; inspection Findings/Remarks, tourism and shared login are unchanged.
+- Preservation dependency: `mobile_household_survey_submit` updates an existing `household_code` using `HouseholdSanitationRecordSerializer(..., partial=True)`. An omitted key preserves existing notes, while an explicit empty string clears them. Backend `HouseholdSanitationRecord.remarks` remains `TextField(blank=True)`; a new mobile record naturally gets an empty value. Web entry, detail, printing, CSV and backend search remain intact. No backend runtime/schema change or migration.
+- Red -> green: `sanitation_household_remarks_test.dart` tests actual mocked HTTP bodies for create/update and the absent form input. All 3 failed before the fix (the key was present and the widget existed), then passed. API-test invocation was adjusted for the removed required argument; expectations stayed the same. Full Flutter suite 89/89; after fixing one style info in the new test, focused tests 3/3 and `flutter analyze` reported `No issues found!`.
+- `api.test_household_remarks.MobileHouseholdRemarksTests`: 2 tests prove existing nonempty notes survive an omitted key and new records use the empty default. They passed before and after the mobile fix, pinning already-correct backend behavior. Engine explicitly confirmed `django.db.backends.sqlite3`; tests ran on an isolated in-memory SQLite database that Django destroyed afterwards.
+- Real local-server verification used a separate throwaway SQLite file, migrated to 0040, and a loopback-only Django server. POST `http://127.0.0.1:50824/api/mobile/sanitation/household-surveys/` omitted `remarks`, changed head/counts on `HH-REMARKS-LIVE`, and returned 201 with the original `Existing web notes must survive the mobile survey.` Direct SQLite SELECT confirmed one updated row, head `Local Survey Household`, male/female 2/3, and identical notes. No login endpoint was called; temporary authentication was never printed. Server stopped and database deleted (cleanup retried successfully after an initial Windows open-file lock).
+- Finalized as one feature-branch commit. No production API/DB access, merge, push or APK build. `tatus` untouched. This change has not been tested on a phone; the user's completed APK 1.0.4 phone review preceded it.
+
 ---
 
 ## 1. Project Overview

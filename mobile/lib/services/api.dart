@@ -294,7 +294,6 @@ class TourismApi {
     required String waterLevel,
     required String waterSource,
     required String wasteDisposal,
-    required String remarks,
     required String latitude,
     required String longitude,
   }) async {
@@ -308,7 +307,7 @@ class TourismApi {
       'water_level': waterLevel,
       'water_source': waterSource,
       'waste_disposal': wasteDisposal,
-      'remarks': remarks,
+      // Omit remarks: updates must preserve notes entered through the web.
       'latitude': latitude,
       'longitude': longitude,
     };

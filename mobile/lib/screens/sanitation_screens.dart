@@ -37,7 +37,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _waterSourceCustom = TextEditingController();
-  final TextEditingController _remarks = TextEditingController();
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
@@ -84,7 +83,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     _head.dispose();
     _address.dispose();
     _waterSourceCustom.dispose();
-    _remarks.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
@@ -187,7 +185,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           itemLabel: householdWasteLabel,
           onChanged: (item) => setState(() => _wasteDisposal = item),
         ),
-        AppTextField(controller: _remarks, label: 'Remarks', maxLines: 3),
         LocationCapturePanel(
           latitude: _latitude.text,
           longitude: _longitude.text,
@@ -286,7 +283,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         waterLevel: _waterLevel,
         waterSource: finalWaterSource,
         wasteDisposal: _wasteDisposal,
-        remarks: _remarks.text.trim(),
         latitude: _latitude.text.trim(),
         longitude: _longitude.text.trim(),
       );
