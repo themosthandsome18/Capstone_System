@@ -740,6 +740,12 @@ flutter run -d emulator --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
     - `import_sanitary_permits.py` contains hardcoded user directory paths (`C:\Users\This PC\Downloads\...`), rendering it unusable in automated CI/CD or production containers without providing explicit CLI arguments.
 12. **Tourism CSS Reaches Sanitation Pages**:
     - `frontend/src/index.js` imports `Tourism_index.css` globally, so tourism rules (for example `.btn-primary`, `.insight-bars`, and the `.ws-*` block in `BookingManagement.wizard.css`) also style Sanitation pages. The list, and the rule that theme colours must never be set on `:root`, is in `frontend/src/tourism/THEME_TOKENS.md` section 5.
+13. **No Development Database: Local Commands Hit Live Data** (affects tourism and sanitation):
+    - There is no separate development database. `backend/.env` points every local `manage.py` command at the live Supabase Postgres instance.
+    - `manage.py flush` would empty every table of the live database. `migrate` (including `migrate api zero`) and `dbshell` also act directly on it.
+    - The custom management commands (`create_default_users`, `evaluate_due_notifications`, the `import_*` commands, `purge_demo_households`) read and write live data when run locally; `purge_demo_households --confirm` deletes rows.
+    - Only test runs are guarded: `backend/backend/settings.py` forces `manage.py test` and `testserver` onto an in-memory SQLite database. Nothing else is.
+    - Fix, as a separate piece of work: a development database, or at minimum a second `.env` that local work points at instead of production.
 
 ---
 
