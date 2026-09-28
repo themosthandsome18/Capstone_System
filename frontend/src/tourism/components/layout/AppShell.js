@@ -7,6 +7,7 @@ import LoadingOverlay from "../../../shared/LoadingOverlay";
 import PageLoader from "../../../shared/PageLoader";
 import ErrorBoundary from "../../../shared/ErrorBoundary";
 import useDocumentBranding from "../../../shared/useDocumentBranding";
+import useTourismTheme from "../../theme/useTourismTheme";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -63,6 +64,7 @@ function AppShell() {
     error,
     reload,
     referenceTables,
+    theme,
   } = useTourismData();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
@@ -71,6 +73,9 @@ function AppShell() {
     module: "tourism",
     pageTitle: currentPage.title,
   });
+
+  // Theme colours go on the shell element only, never on :root (THEME_TOKENS.md section 1).
+  const shellRef = useTourismTheme(theme);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
@@ -116,7 +121,7 @@ function AppShell() {
   }
 
   return (
-    <div className="tourism-layout">
+    <div className="tourism-layout" ref={shellRef}>
       <LoadingOverlay visible={actionLoading} message="Please wait..." theme="tourism" />
       {sidebarOpen && <Sidebar />}
 

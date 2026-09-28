@@ -115,6 +115,7 @@ const emptyBootstrap = {
     },
   },
   dashboardAlerts: [],
+  theme: null,
   apiBaseUrl: "",
 };
 

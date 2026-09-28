@@ -35,6 +35,12 @@ hook Phase 3 will use to recolour it.
   - `body`
   - the full-screen `PageLoader` shown while tourism boots
   - canvas charts
+- **How it is applied.** `theme/deriveTourismTheme.js` derives every
+  theme-following token from the one stored `primary_color`, and
+  `theme/useTourismTheme.js` sets them as inline styles on `.tourism-layout`.
+  The theme arrives in the `/bootstrap/` payload. `deriveTourismTheme("#2FA34A")`
+  reproduces the `:root` defaults exactly, which `deriveTourismTheme.test.js`
+  checks against this file's `:root` block.
 
 ## 2. The tokens (53 at `3d1e2fd`)
 
@@ -60,7 +66,7 @@ Some of those reads sit in dead rules (section 7).
 | `--th-primary-ink` | `#166534` | Text sitting on a primary tint, and brand accent text on white | 18 |
 | `--th-primary-ink-strong` | `#0f3b1e` | Emphasis or hover text on a tint | 2 |
 | `--th-primary-selected` | `#d1fae5` | Selection / strong-hover fills (wizard active step, View button hover) | 4 |
-| `--th-primary-contrast` | `#ffffff` | Text on a primary fill. **Unused. Must be derived in Phase 3** (section 7) | 0 |
+| `--th-primary-contrast` | `#ffffff` | Text on a primary fill. **Computed** by `deriveTourismTheme` (white if it reaches 4.5:1, otherwise a dark ink); no CSS reads it yet (section 7) | 0 |
 | `--th-primary-tint` | `#f0fdf4` | Pale brand surfaces and hovers | 19 |
 | `--th-primary-tint-strong` | `#dff1e2` | Table headers, totals rows, selected items, View button fill | 10 |
 | `--th-primary-border` | `#bbf7d0` | Pale brand borders | 4 |
@@ -122,7 +128,7 @@ different roles and will diverge once a theme is applied, so **do not merge them
 | Token | Default | Uses |
 |---|---|---|
 | `--th-chart-1` | `#147c79` | 4 (inline DOM styles in `AnalyticsAndReport.js`) |
-| `--th-chart-2` … `-5` | `#359e9b`, `#6abdc0`, `#2f9c9c`, `#32a19b` | 0 |
+| `--th-chart-2` … `-5` | `#309325`, `#5cd6c2`, `#8ada81`, `#c2ebe9` (spread in lightness; changed in Phase 3 from near-duplicates) | 0 |
 | `--th-chart-wash` | `rgba(106, 189, 192, 0.15)` | 0 |
 
 Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
@@ -271,10 +277,12 @@ so nothing was lost there.
 
 ## 7. Open items for Phase 3
 
-- **`--th-primary-contrast` cannot stay white.** Phase 3 must derive it from the
-  chosen colour's luminance, picking white or a dark ink. White text fails AA
-  on most oranges, and it already fails on today's `#2fa34a` (3.25:1, for
-  example on the wizard's Continue and Save buttons).
+- **`--th-primary-contrast` is computed but not yet read.** `deriveTourismTheme`
+  now picks white when white reaches 4.5:1 against the primary, otherwise a dark
+  ink of the same hue (`#0B2B16` for green, 4.71:1). But the text on primary
+  fills is still literal white, so no screen uses it yet. White fails AA on most
+  oranges (2.77:1 on `#EF7C1F`) and already fails on `#2fa34a` (3.25:1). Wiring
+  those white-text rules to `--th-primary-contrast` is the next step.
 - **The contrast derivation must cover graphics, not only text.** The photo
   drop-zone upload icon (`--th-primary` on `#f8fafc`) is **3.11:1** against
   the 3:1 non-text threshold. It was 3.15:1 before Phase 1. It passes, but only
