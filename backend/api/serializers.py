@@ -911,6 +911,7 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "total_members",
             "toilet_type",
             "toilet_type_label",
+            "septic_tank_type",
             "water_level",
             "water_level_label",
             "water_source",
@@ -928,6 +929,13 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        toilet_type = attrs.get("toilet_type", getattr(self.instance, "toilet_type", None))
+        if toilet_type in ("pit_latrine", "none"):
+            # Clear submitted or legacy values, including on unrelated updates.
+            attrs["septic_tank_type"] = None
+        return attrs
 
     def get_coordinates(self, obj):
         return {
