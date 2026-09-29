@@ -347,6 +347,7 @@ class TourismApi {
 
   Future<Map<String, dynamic>> submitHouseholdSurvey({
     String? householdCode,
+    String? septicTankType,
     required String householdHead,
     required String barangay,
     required String address,
@@ -366,6 +367,9 @@ class TourismApi {
       'male_count': maleCount,
       'female_count': femaleCount,
       'toilet_type': toiletType,
+      if ((toiletType == 'water_sealed' || toiletType == 'pour_flush') &&
+          septicTankType != null)
+        'septic_tank_type': septicTankType,
       'water_level': waterLevel,
       'water_source': waterSource,
       'waste_disposal': wasteDisposal,

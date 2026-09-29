@@ -25,6 +25,12 @@ class HouseholdSurveyPage extends StatefulWidget {
 }
 
 class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
+  static const _septicTankOptions = {
+    'septic_tank': 'Septic tank',
+    'bottomless': 'Bottomless',
+    'vault_sealed': 'Vault-sealed',
+  };
+
   static const _waterSourceOptions = [
     'MWSS',
     'Level II (Communal Faucet)',
@@ -41,6 +47,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
   String _toiletType = 'water_sealed';
+  String? _septicTankType;
+  bool _requiresSepticSelection = true;
+  bool get _septicApplicable =>
+      _toiletType == 'water_sealed' || _toiletType == 'pour_flush';
   String _waterLevel = 'level_3';
   String _waterSourceSelection = 'MWSS';
   String _wasteDisposal = 'collected';
@@ -56,6 +66,17 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     super.initState();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
+      final toiletType = widget.household!.toiletType;
+      if (const ['water_sealed', 'pour_flush', 'pit_latrine', 'none']
+          .contains(toiletType)) {
+        _toiletType = toiletType!;
+      }
+      final septicTankType = widget.household!.septicTankType;
+      if (_septicApplicable && _septicTankOptions.containsKey(septicTankType)) {
+        _septicTankType = septicTankType;
+      }
+      // Allow untouched legacy applicable records to keep an absent value.
+      _requiresSepticSelection = !_septicApplicable;
       _head.text = widget.household!.householdHead;
       if (widget.household!.hasCoordinates) {
         _latitude.text = widget.household!.latitude.toString();
@@ -74,6 +95,16 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         _waterLevel = 'level_2';
       } else {
         _waterLevel = 'level_1';
+      }
+    });
+  }
+
+  void _setToiletType(String value) {
+    setState(() {
+      _toiletType = value;
+      if (!_septicApplicable) {
+        _septicTankType = null;
+        _requiresSepticSelection = true;
       }
     });
   }
@@ -139,8 +170,17 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           value: _toiletType,
           items: const ['water_sealed', 'pour_flush', 'pit_latrine', 'none'],
           itemLabel: householdToiletLabel,
-          onChanged: (item) => setState(() => _toiletType = item),
+          onChanged: _setToiletType,
         ),
+        if (_septicApplicable)
+          DropdownTile<String?>(
+            label: 'Septic tank type',
+            value: _septicTankType,
+            hint: 'Select septic tank type',
+            items: _septicTankOptions.keys.toList(),
+            itemLabel: (item) => _septicTankOptions[item]!,
+            onChanged: (item) => setState(() => _septicTankType = item),
+          ),
         DropdownTile<String>(
           label: 'Water source',
           value: _waterSourceSelection,
@@ -247,6 +287,12 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Household member count is required.');
       return;
     }
+    if (_septicApplicable &&
+        _requiresSepticSelection &&
+        _septicTankType == null) {
+      showAppMessage(context, 'Septic tank type is required.');
+      return;
+    }
     if (latLngFromText(_latitude.text, _longitude.text) == null) {
       showAppMessage(context, 'Capture or tap the household map location.');
       return;
@@ -280,6 +326,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         maleCount: _male,
         femaleCount: _female,
         toiletType: _toiletType,
+        septicTankType: _septicApplicable ? _septicTankType : null,
         waterLevel: _waterLevel,
         waterSource: finalWaterSource,
         wasteDisposal: _wasteDisposal,

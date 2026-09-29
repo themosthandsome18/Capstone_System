@@ -619,6 +619,8 @@ class HouseholdSanitationItem {
     this.surveyDate = '',
     this.waterAccessLevel = 'Level I',
     this.sanitaryToiletType = 'Pour Flush',
+    this.toiletType,
+    this.septicTankType,
   });
 
   final String householdCode;
@@ -630,6 +632,8 @@ class HouseholdSanitationItem {
   final String surveyDate;
   final String waterAccessLevel;
   final String sanitaryToiletType;
+  final String? toiletType;
+  final String? septicTankType;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
 
@@ -646,6 +650,8 @@ class HouseholdSanitationItem {
           '${json['water_access_level'] ?? json['water_source'] ?? 'Level I'}',
       sanitaryToiletType:
           '${json['sanitary_toilet_type'] ?? json['toilet_type'] ?? 'Pour Flush'}',
+      toiletType: json['toilet_type']?.toString(),
+      septicTankType: json['septic_tank_type']?.toString(),
     );
   }
 }
