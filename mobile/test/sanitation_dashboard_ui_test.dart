@@ -287,6 +287,47 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final state in [
+    const SanitationDashboardState.loading(),
+    SanitationDashboardState.unavailable(StateError('Local test')),
+    const SanitationDashboardState.loaded(SanitationDashboardData(
+      establishmentsCount: 123456789, newComplaintsCount: 12345,
+      householdsThisMonthCount: 123456, newComplaints: [], dueInspections: [],
+    )),
+  ]) {
+    testWidgets('360px cards align for ${state.status.name}', (tester) async {
+      tester.view.physicalSize = const Size(360, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SanitationDashboardPage(
+        identity: const SanitationStaffIdentity(), bootstrap: publicBootstrap(), dashboard: state,
+        onOpenInspection: (_) {}, onOpenComplaints: () {}, onOpenNotifications: () {},
+        onOpenEstablishments: () {}, onRefresh: () async {}, refreshing: false,
+      ))));
+      const labels = ['Establishments', 'Due for inspection', 'New complaints', 'Households this month'];
+      final heights = <double>[];
+      final labelOffsets = <double>[];
+      final valueOffsets = <double>[];
+      for (final label in labels) {
+        final card = tester.getRect(tile(label));
+        heights.add(card.height);
+        final text = find.descendant(of: tile(label), matching: find.text(label));
+        expect(text, findsOneWidget);
+        final rect = tester.getRect(text);
+        expect(rect.left, greaterThanOrEqualTo(card.left));
+        expect(rect.right, lessThanOrEqualTo(card.right));
+        expect(rect.bottom, lessThanOrEqualTo(card.bottom));
+        labelOffsets.add(rect.top - card.top);
+        final texts = find.descendant(of: tile(label), matching: find.byType(Text));
+        valueOffsets.add(tester.getRect(texts.first).top - card.top);
+      }
+      expect(heights.toSet(), hasLength(1));
+      expect(labelOffsets.toSet(), hasLength(1));
+      expect(valueOffsets.toSet(), hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('bell still opens existing notifications', (tester) async {
     await pumpHome(tester, DashboardUiApi());
     await tester.tap(find.byIcon(Icons.notifications_outlined));

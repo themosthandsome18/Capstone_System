@@ -2266,10 +2266,25 @@ class SanitationDashboardPage extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, color: _sanitationHomePrimary),
           const SizedBox(height: 10),
-          Text(text, style: TextStyle(color: _sanitationHomeDark,
-            fontSize: value == null ? 16 : 26, fontWeight: FontWeight.w800)),
+          // Fixed slots keep every metric aligned, including loading/error states.
+          SizedBox(
+            height: 34,
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: Text(text, maxLines: 1, style: TextStyle(
+                color: _sanitationHomeDark, height: 1.2,
+                fontSize: value == null ? 16 : 26, fontWeight: FontWeight.w800)),
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: _sanitationHomeDark)),
+          SizedBox(
+            height: 40,
+            width: double.infinity,
+            child: Text(label, maxLines: 2, style: const TextStyle(
+              color: _sanitationHomeDark, fontSize: 14, height: 1.4)),
+          ),
         ]),
       ),
       key: ValueKey('dashboard-stat-$label'),
