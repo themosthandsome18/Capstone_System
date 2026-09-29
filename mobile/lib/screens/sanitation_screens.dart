@@ -1704,6 +1704,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   List<SanitationReportDraft> _drafts = [];
   late SanitationBootstrap _bootstrap;
   SanitationStaffIdentity _identity = const SanitationStaffIdentity();
+  SanitationDashboardState _dashboard = const SanitationDashboardState.loading();
+  int _dashboardLoad = 0;
   bool _sessionExpired = false;
   int _index = 0;
   bool _refreshing = false;
@@ -1755,13 +1757,26 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   /// token and layered over the public bootstrap (business types, barangays).
   /// Returns false when they could not be loaded.
   Future<bool> _loadStaffRecords() async {
+    final load = ++_dashboardLoad;
+    setState(() => _dashboard = const SanitationDashboardState.loading());
     try {
       final staff = await widget.api.fetchSanitationStaffRecords();
       if (!mounted || _sessionExpired) return false;
+      if (load != _dashboardLoad) return false;
       setState(() => _bootstrap = mergeSanitationStaffRecords(_bootstrap, staff));
+      await for (final state in widget.api.loadSanitationDashboard(staffRecords: staff)) {
+        if (!mounted || _sessionExpired || load != _dashboardLoad) return false;
+        setState(() => _dashboard = state);
+        final error = state.error;
+        if (error is ApiException && error.isUnauthorized) {
+          await _expireSession();
+          return false;
+        }
+      }
       return true;
     } catch (error) {
-      if (!mounted || _sessionExpired) return false;
+      if (!mounted || _sessionExpired || load != _dashboardLoad) return false;
+      setState(() => _dashboard = SanitationDashboardState.unavailable(error));
       if (error is ApiException && error.isUnauthorized) {
         await _expireSession();
       } else if (error is ApiException && error.isForbidden) {
@@ -1896,15 +1911,11 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       SanitationDashboardPage(
         identity: _identity,
         bootstrap: _bootstrap,
-        api: widget.api,
-        reports: _reports,
-        inspections: _inspections,
+        dashboard: _dashboard,
         onOpenInspection: _openInspection,
-        onOpenReport: _openReport,
-        onOpenHouseholdSurvey: _openHouseholdSurvey,
-        onOpenPermits: _openPermits,
-        onOpenTab: (index) => setState(() => _index = index),
-        onFilterEstablishments: _filterEstablishments,
+        onOpenComplaints: _openComplaints,
+        onOpenNotifications: _openNotifications,
+        onOpenEstablishments: () => _filterEstablishments(),
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2162,24 +2173,35 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   }
 
   Future<void> _refreshBootstrap({bool silent = false}) async {
-    if (_refreshing) return;
-    setState(() => _refreshing = true);
-
-    final updated = await widget.onRefresh();
-    if (!mounted) return;
-
-    setState(() => _bootstrap = updated);
-    final staffLoaded = updated.isOffline ? false : await _loadStaffRecords();
-    if (!mounted) return;
-    setState(() => _refreshing = false);
-
-    if (!silent && (updated.isOffline || staffLoaded)) {
-      showAppMessage(
-        context,
-        updated.isOffline
-            ? 'Cannot reach Sanitary Web System.'
-            : 'Sanitation records refreshed.',
-      );
+    if (_refreshing || _sessionExpired) return;
+    ++_dashboardLoad; // Discard an older load while the refresh fetches bootstrap.
+    setState(() {
+      _refreshing = true;
+      _dashboard = const SanitationDashboardState.loading();
+    });
+    try {
+      final updated = await widget.onRefresh();
+      if (!mounted || _sessionExpired) return;
+      setState(() => _bootstrap = updated);
+      if (updated.isOffline) {
+        ++_dashboardLoad;
+        setState(() => _dashboard = SanitationDashboardState.unavailable(
+          StateError('Sanitation service unavailable'),
+        ));
+        if (!silent) showAppMessage(context, 'Cannot reach Sanitary Web System.');
+      } else {
+        final staffLoaded = await _loadStaffRecords();
+        if (mounted && !silent && staffLoaded) {
+          showAppMessage(context, 'Sanitation records refreshed.');
+        }
+      }
+    } catch (error) {
+      if (!mounted || _sessionExpired) return;
+      ++_dashboardLoad;
+      setState(() => _dashboard = SanitationDashboardState.unavailable(error));
+      if (error is ApiException && error.isUnauthorized) await _expireSession();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
@@ -2189,20 +2211,22 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   }
 }
 
+// Home-only styling; shared colors and other sanitation screens are unchanged.
+const _sanitationHomeBackground = Color(0xFFF3F7F4);
+const _sanitationHomePrimary = Color(0xFF1E6B45);
+const _sanitationHomeDark = Color(0xFF154F33);
+const _sanitationHomeBorder = Color(0xFFD5E2D9);
+
 class SanitationDashboardPage extends StatelessWidget {
   const SanitationDashboardPage({
     super.key,
-    this.identity = const SanitationStaffIdentity(),
+    required this.identity,
     required this.bootstrap,
-    this.api = const TourismApi(),
-    required this.reports,
-    required this.inspections,
+    required this.dashboard,
     required this.onOpenInspection,
-    required this.onOpenReport,
-    required this.onOpenHouseholdSurvey,
-    required this.onOpenPermits,
-    required this.onOpenTab,
-    this.onFilterEstablishments,
+    required this.onOpenComplaints,
+    required this.onOpenNotifications,
+    required this.onOpenEstablishments,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -2210,201 +2234,154 @@ class SanitationDashboardPage extends StatelessWidget {
 
   final SanitationStaffIdentity identity;
   final SanitationBootstrap bootstrap;
-  final TourismApi api;
-  final List<MobileSanitationReceipt> reports;
-  final List<MobileSanitationInspectionReceipt> inspections;
+  final SanitationDashboardState dashboard;
   final ValueChanged<SanitationEstablishment?> onOpenInspection;
-  final VoidCallback onOpenReport;
-  final VoidCallback onOpenHouseholdSurvey;
-  final VoidCallback onOpenPermits;
-  final ValueChanged<int> onOpenTab;
-  final void Function({String? status, String? permit})? onFilterEstablishments;
+  final VoidCallback onOpenComplaints;
+  final VoidCallback onOpenNotifications;
+  final VoidCallback onOpenEstablishments;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
+  Widget _card(Widget child, {Key? key}) => Container(
+    key: key,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: _sanitationHomeBorder),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: child,
+  );
+
+  Widget _stat(String label, int? value, IconData icon, {VoidCallback? onTap}) {
+    final text = switch (dashboard.status) {
+      SanitationDashboardStatus.loading => 'Loading',
+      SanitationDashboardStatus.unavailable => 'Unavailable',
+      SanitationDashboardStatus.loaded => '$value',
+    };
+    return _card(
+      InkWell(
+        onTap: onTap,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: _sanitationHomePrimary),
+          const SizedBox(height: 10),
+          Text(text, style: TextStyle(color: _sanitationHomeDark,
+            fontSize: value == null ? 16 : 26, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: _sanitationHomeDark)),
+        ]),
+      ),
+      key: ValueKey('dashboard-stat-$label'),
+    );
+  }
+
+  Widget _heading(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 18),
+    child: Text(text, style: const TextStyle(fontSize: 19,
+      fontWeight: FontWeight.w800, color: _sanitationHomeDark)),
+  );
+
+  String _time(DateTime? time) {
+    if (time == null) return 'Submission time unavailable';
+    final local = time.toLocal();
+    return '${shortDate(local)} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final violationCount = bootstrap.establishments
-        .where((item) => item.complianceStatus == 'violation')
-        .length;
-    final pendingPermitCount = bootstrap.establishments
-        .where((item) => item.permitStatus != 'active')
-        .length;
-    final urgentAlerts = bootstrap.establishments
-        .where(
-          (item) =>
-              item.complianceStatus == 'violation' ||
-              item.permitStatus != 'active',
-        )
-        .take(3)
-        .toList();
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-      children: [
-        SafeArea(
-          top: true,
-          bottom: false,
-          child: SanitationTopBar(
-            title: 'Dashboard',
-            onMenuTap: onOpenMenu,
-            onRefresh: onRefresh,
-            refreshing: refreshing,
-            onNotifications: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => NotificationPage(
-                    notifications: bootstrap.notifications,
-                    subtitle: 'Sanitary advisories and compliance updates',
-                  ),
+    final data = dashboard.data;
+    final loading = dashboard.status == SanitationDashboardStatus.loading;
+    return ColoredBox(
+      color: _sanitationHomeBackground,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: [
+          Row(children: [
+            IconButton(tooltip: 'Menu', onPressed: onOpenMenu,
+              icon: const Icon(Icons.menu, color: _sanitationHomePrimary)),
+            Expanded(child: Text('Good day, ${identity.name}',
+              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800,
+                color: _sanitationHomeDark))),
+            IconButton(tooltip: 'Refresh', onPressed: refreshing ? null : onRefresh,
+              icon: const Icon(Icons.refresh, color: _sanitationHomePrimary)),
+            IconButton(tooltip: 'Notifications', onPressed: onOpenNotifications,
+              icon: const Icon(Icons.notifications_outlined, color: _sanitationHomePrimary)),
+          ]),
+          const SizedBox(height: 16),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: _stat('Establishments', data?.establishmentsCount,
+              Icons.apartment_outlined, onTap: onOpenEstablishments)),
+            const SizedBox(width: 12),
+            Expanded(child: _stat('Due for inspection', data?.dueForInspectionCount,
+              Icons.fact_check_outlined)),
+          ]),
+          const SizedBox(height: 12),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: _stat('New complaints', data?.newComplaintsCount,
+              Icons.flag_outlined)),
+            const SizedBox(width: 12),
+            Expanded(child: _stat('Households this month', data?.householdsThisMonthCount,
+              Icons.home_work_outlined)),
+          ]),
+          Row(children: [
+            Expanded(child: _heading('New complaints from residents')),
+            TextButton(onPressed: onOpenComplaints,
+              style: TextButton.styleFrom(foregroundColor: _sanitationHomePrimary),
+              child: const Text('See all')),
+          ]),
+          // This title is client wording, not a resident-origin filter.
+          if (data == null)
+            _card(Text(loading ? 'Loading complaints...' : 'Complaints unavailable. Refresh to retry.'))
+          else if (data.newComplaints.isEmpty)
+            _card(const Text('No new complaints.'))
+          else
+            ...data.newComplaints.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: item.priorityTag == 'URGENT'
+                    ? const Color(0xFFFCE8E6) : _sanitationHomeBackground,
+                    borderRadius: BorderRadius.circular(16)),
+                  child: Text(item.priorityTag, style: TextStyle(fontWeight: FontWeight.w700,
+                    color: item.priorityTag == 'URGENT' ? const Color(0xFF9F2922) : _sanitationHomeDark)),
                 ),
+                const SizedBox(height: 8),
+                Text(item.category, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(item.barangay),
+                Text(_time(item.createdAt)),
+              ])),
+            )),
+          _heading('Due for inspection'),
+          if (data == null)
+            _card(Text(loading ? 'Loading due inspections...' : 'Due inspections unavailable. Refresh to retry.'))
+          else if (data.dueInspections.isEmpty)
+            _card(const Text('No inspections due in this window.'))
+          else
+            ...data.dueInspections.map((item) {
+              final establishment = bootstrap.establishments
+                  .where((record) => record.id == item.establishmentId).firstOrNull;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(item.establishmentName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text(item.businessTypeName),
+                  Text('Due: ${shortDate(item.nextDueDate!)}'),
+                  const SizedBox(height: 10),
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: _sanitationHomePrimary,
+                      foregroundColor: Colors.white),
+                    onPressed: establishment == null ? null : () => onOpenInspection(establishment),
+                    child: const Text('Inspect'),
+                  ),
+                  if (establishment == null) const Text('Establishment unavailable. Refresh to retry.'),
+                ])),
               );
-            },
-          ),
-        ),
-        Text(
-          'Good day, ${identity.name}',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        Text(
-          shortDate(DateTime.now()),
-          style: const TextStyle(color: AppColors.muted),
-        ),
-        const SizedBox(height: 14),
-        DataSourceBanner(
-          icon: bootstrap.isOffline
-              ? Icons.cloud_off_outlined
-              : Icons.cloud_done_outlined,
-          title: bootstrap.isOffline
-              ? 'Cannot reach Sanitary Web System'
-              : 'Connected to Sanitary Web System',
-          text: bootstrap.isOffline
-              ? bootstrap.offlineMessage
-              : '${bootstrap.establishments.length} establishment records loaded.',
-          warning: bootstrap.isOffline,
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                label: 'Establishments',
-                value: '${bootstrap.establishments.length}',
-                icon: Icons.apartment_outlined,
-                onTap: () => onFilterEstablishments?.call(
-                  status: 'All Status',
-                  permit: 'All Permits',
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: StatCard(
-                label: 'Inspections',
-                value: '${bootstrap.inspections.length + inspections.length}',
-                icon: Icons.fact_check_outlined,
-                onTap: () => onFilterEstablishments?.call(
-                  status: 'upcoming',
-                  permit: 'All Permits',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                label: 'Violations',
-                value: '$violationCount',
-                icon: Icons.warning_amber_outlined,
-                onTap: () => onFilterEstablishments?.call(
-                  status: 'violation',
-                  permit: 'All Permits',
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: StatCard(
-                label: 'Permit Follow-up',
-                value: '$pendingPermitCount',
-                icon: Icons.badge_outlined,
-                onTap: () => onFilterEstablishments?.call(
-                  status: 'All Status',
-                  permit: 'renewal_due',
-                ),
-              ),
-            ),
-          ],
-        ),
-        SectionHeader(title: 'Urgent Alerts'),
-        if (urgentAlerts.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
-            ),
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  color: Color(0xFF16A34A),
-                  size: 20,
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'No urgent sanitation alerts',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF15803D),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          ...urgentAlerts.map(
-            (item) => SanitationAlertCard(
-              title: item.businessName,
-              subtitle: '${item.barangay} - ${item.statusLabel}',
-              status: item.complianceStatus,
-            ),
-          ),
-        SectionHeader(title: 'Recent Activity'),
-        if (inspections.isEmpty && reports.isEmpty)
-          const EmptyState(
-            icon: Icons.history_outlined,
-            title: 'No mobile activity yet',
-          )
-        else ...[
-          ...inspections
-              .take(2)
-              .map(
-                (item) => ReceiptCard(
-                  icon: Icons.fact_check_outlined,
-                  title: item.establishmentName,
-                  reference: item.reference,
-                  lines: [
-                    'Inspector: ${item.inspectorName}',
-                    'Status: ${sanitationStatusLabel(item.status)}',
-                  ],
-                ),
-              ),
-          ...reports
-              .take(2)
-              .map((report) => SanitationReceiptCard(receipt: report)),
+            }),
         ],
-      ],
+      ),
     );
   }
 }

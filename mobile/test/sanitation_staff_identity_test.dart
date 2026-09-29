@@ -14,6 +14,14 @@ class IdentityTestApi extends TourismApi {
   final Object? recordsError;
 
   @override
+  Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async => {
+    'summary': {'pending': 0}, 'rows': [],
+  };
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchSanitationDashboardInspections() async => [];
+
+  @override
   Future<Map<String, dynamic>> fetchSanitationStaffRecords() async {
     if (recordsError != null) throw recordsError!;
     return {};
