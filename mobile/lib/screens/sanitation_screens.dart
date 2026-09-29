@@ -1648,6 +1648,34 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
   }
 }
 
+class SanitationStaffIdentity {
+  const SanitationStaffIdentity({
+    this.displayName = '',
+    this.username = '',
+    this.roleLabel = '',
+  });
+
+  final String displayName;
+  final String username;
+  final String roleLabel;
+
+  String get name => displayName.trim().isNotEmpty
+      ? displayName.trim()
+      : username.trim().isNotEmpty
+      ? username.trim()
+      : 'Sanitary Inspector';
+
+  factory SanitationStaffIdentity.fromJson(Map<String, dynamic> data) {
+    final user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+    final profile = Map<String, dynamic>.from(user['profile'] as Map? ?? {});
+    return SanitationStaffIdentity(
+      displayName: '${user['display_name'] ?? ''}'.trim(),
+      username: '${user['username'] ?? ''}'.trim(),
+      roleLabel: '${profile['role_label'] ?? profile['role'] ?? ''}'.trim(),
+    );
+  }
+}
+
 class SanitationMobileShell extends StatefulWidget {
   const SanitationMobileShell({
     super.key,
@@ -1675,6 +1703,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   final List<MobileHouseholdSurveyReceipt> _householdSurveys = [];
   List<SanitationReportDraft> _drafts = [];
   late SanitationBootstrap _bootstrap;
+  SanitationStaffIdentity _identity = const SanitationStaffIdentity();
+  bool _sessionExpired = false;
   int _index = 0;
   bool _refreshing = false;
   String _establishmentFilterStatus = 'All Status';
@@ -1686,7 +1716,39 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     setWebBranding(WebBrandingModule.sanitation);
     _bootstrap = widget.bootstrap;
     _loadDrafts();
+    _loadStaffIdentity();
     _loadStaffRecords();
+  }
+
+  Future<void> _loadStaffIdentity() async {
+    try {
+      final data = await widget.api.fetchSanitationStaffIdentity();
+      if (!mounted || _sessionExpired) return;
+      setState(() => _identity = SanitationStaffIdentity.fromJson(data));
+    } catch (error) {
+      if (!mounted || _sessionExpired) return;
+      if (error is ApiException && error.isUnauthorized) {
+        await _expireSession();
+      } else {
+        showAppMessage(context, 'Could not load staff identity.');
+      }
+    }
+  }
+
+  Future<void> _expireSession() async {
+    if (_sessionExpired) return;
+    _sessionExpired = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(staffAuthTokenKey);
+    await prefs.remove(staffAuthRoleKey);
+    await prefs.remove(staffAuthUsernameKey);
+    if (!mounted) return;
+    setState(() => _identity = const SanitationStaffIdentity());
+    if (widget.onSessionExpired != null) {
+      widget.onSessionExpired!();
+    } else {
+      showAppMessage(context, 'Your session expired, please sign in again.');
+    }
   }
 
   /// Staff records are served behind login, so they are loaded with the staff
@@ -1695,22 +1757,13 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
   Future<bool> _loadStaffRecords() async {
     try {
       final staff = await widget.api.fetchSanitationStaffRecords();
-      if (!mounted) return false;
+      if (!mounted || _sessionExpired) return false;
       setState(() => _bootstrap = mergeSanitationStaffRecords(_bootstrap, staff));
       return true;
     } catch (error) {
-      if (!mounted) return false;
+      if (!mounted || _sessionExpired) return false;
       if (error is ApiException && error.isUnauthorized) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
-        await prefs.remove(staffAuthRoleKey);
-        await prefs.remove(staffAuthUsernameKey);
-        if (!mounted) return false;
-        if (widget.onSessionExpired != null) {
-          widget.onSessionExpired!();
-        } else {
-          showAppMessage(context, 'Your session expired, please sign in again.');
-        }
+        await _expireSession();
       } else if (error is ApiException && error.isForbidden) {
         showAppMessage(context, 'This account cannot load sanitation records.');
       } else {
@@ -1752,9 +1805,9 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Sanitary Inspector',
-                    style: TextStyle(
+                  Text(
+                    _identity.name,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -1841,6 +1894,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     setWebBranding(WebBrandingModule.sanitation);
     final pages = [
       SanitationDashboardPage(
+        identity: _identity,
         bootstrap: _bootstrap,
         api: widget.api,
         reports: _reports,
@@ -1880,6 +1934,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         refreshing: _refreshing,
       ),
       SanitationActionsPage(
+        identity: _identity,
         bootstrap: _bootstrap,
         inspections: _inspections,
         householdSurveys: _householdSurveys,
@@ -2137,6 +2192,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
 class SanitationDashboardPage extends StatelessWidget {
   const SanitationDashboardPage({
     super.key,
+    this.identity = const SanitationStaffIdentity(),
     required this.bootstrap,
     this.api = const TourismApi(),
     required this.reports,
@@ -2152,6 +2208,7 @@ class SanitationDashboardPage extends StatelessWidget {
     required this.refreshing,
   });
 
+  final SanitationStaffIdentity identity;
   final SanitationBootstrap bootstrap;
   final TourismApi api;
   final List<MobileSanitationReceipt> reports;
@@ -2207,7 +2264,7 @@ class SanitationDashboardPage extends StatelessWidget {
           ),
         ),
         Text(
-          'Welcome, Sanitary Inspector',
+          'Good day, ${identity.name}',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -3521,9 +3578,10 @@ class PermitDetailRow extends StatelessWidget {
   }
 }
 
-class SanitationActionsPage extends StatefulWidget {
+class SanitationActionsPage extends StatelessWidget {
   const SanitationActionsPage({
     super.key,
+    this.identity = const SanitationStaffIdentity(),
     required this.bootstrap,
     required this.inspections,
     this.householdSurveys = const [],
@@ -3537,6 +3595,7 @@ class SanitationActionsPage extends StatefulWidget {
     required this.refreshing,
   });
 
+  final SanitationStaffIdentity identity;
   final SanitationBootstrap bootstrap;
   final List<MobileSanitationInspectionReceipt> inspections;
   final List<MobileHouseholdSurveyReceipt> householdSurveys;
@@ -3550,116 +3609,98 @@ class SanitationActionsPage extends StatefulWidget {
   final bool refreshing;
 
   @override
-  State<SanitationActionsPage> createState() => _SanitationActionsPageState();
-}
-
-class _SanitationActionsPageState extends State<SanitationActionsPage> {
-  String _filter = 'all';
-
-  @override
   Widget build(BuildContext context) {
-    final totalCount = widget.inspections.length + widget.householdSurveys.length;
+    final totalCount = inspections.length + householdSurveys.length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         SanitationTopBar(
-          title: 'Sanitary Monitor',
-          onMenuTap: widget.onOpenMenu,
-          onRefresh: widget.onRefresh,
-          refreshing: widget.refreshing,
+          title: 'Profile',
+          onMenuTap: onOpenMenu,
+          onRefresh: onRefresh,
+          refreshing: refreshing,
+        ),
+        Card(
+          elevation: 0,
+          child: ListTile(
+            leading: const Icon(Icons.person_outline, color: AppColors.green),
+            title: Text(
+              identity.name,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (identity.username.isNotEmpty)
+                  Text('Username: ${identity.username}'),
+                if (identity.roleLabel.isNotEmpty) Text(identity.roleLabel),
+              ],
+            ),
+          ),
         ),
         ProfileLink(
           icon: Icons.fact_check_outlined,
           label: 'New Establishment Inspection',
-          onTap: () => widget.onOpenInspection(null),
+          onTap: () => onOpenInspection(null),
         ),
         ProfileLink(
           icon: Icons.badge_outlined,
           label: 'Sanitary Permits',
-          onTap: widget.onOpenPermits,
+          onTap: onOpenPermits,
         ),
         ProfileLink(
           icon: Icons.assignment_outlined,
           label: 'Household Survey',
-          onTap: widget.onOpenHouseholdSurvey,
+          onTap: onOpenHouseholdSurvey,
         ),
         ProfileLink(
           icon: Icons.notifications_outlined,
           label: 'Notifications',
-          onTap: widget.onOpenNotifications,
+          onTap: onOpenNotifications,
         ),
-        if (widget.onLogout != null)
+        if (onLogout != null)
           ProfileLink(
             icon: Icons.logout_outlined,
             label: 'Sign out',
-            onTap: widget.onLogout!,
+            onTap: onLogout!,
           ),
         const SizedBox(height: 8),
         SectionHeader(title: 'Submitted Inspections & Surveys'),
-        if (totalCount > 0) ...[
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                ChoiceChip(
-                  label: Text('All ($totalCount)'),
-                  selected: _filter == 'all',
-                  onSelected: (_) => setState(() => _filter = 'all'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text('Establishments (${widget.inspections.length})'),
-                  selected: _filter == 'inspections',
-                  onSelected: (_) => setState(() => _filter = 'inspections'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text('Households (${widget.householdSurveys.length})'),
-                  selected: _filter == 'households',
-                  onSelected: (_) => setState(() => _filter = 'households'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
         if (totalCount == 0)
           const EmptyState(
             icon: Icons.fact_check_outlined,
             title: 'No mobile inspections or household surveys submitted yet',
           )
         else ...[
-          if (_filter == 'all' || _filter == 'inspections')
-            ...widget.inspections.map(
-              (item) => ReceiptCard(
-                icon: Icons.apartment_outlined,
-                title: item.establishmentName,
-                reference: item.reference,
-                lines: [
-                  'Record: Establishment Inspection',
-                  'Inspector: ${item.inspectorName}',
-                  'Date: ${item.inspectionDate}',
-                  'Status: ${sanitationStatusLabel(item.status)}',
-                ],
-              ),
+          ...inspections.map(
+            (item) => ReceiptCard(
+              icon: Icons.apartment_outlined,
+              title: item.establishmentName,
+              reference: item.reference,
+              lines: [
+                'Record: Establishment Inspection',
+                'Inspector: ${item.inspectorName}',
+                'Date: ${item.inspectionDate}',
+                'Status: ${sanitationStatusLabel(item.status)}',
+              ],
             ),
-          if (_filter == 'all' || _filter == 'households')
-            ...widget.householdSurveys.map(
-              (item) => ReceiptCard(
-                icon: Icons.family_restroom_outlined,
-                title: 'Household: ${item.householdHead}',
-                reference: item.householdCode,
-                lines: [
-                  'Record: Household Survey',
-                  'Barangay: ${item.barangay}',
-                  'Date: ${item.inspectionDate}',
-                  'Status: ${householdStatusLabel(item.status)}',
-                  'Water Access: ${item.waterSource}',
-                  'Toilet: ${item.toiletType.replaceAll('_', ' ')}',
-                ],
-              ),
+          ),
+          ...householdSurveys.map(
+            (item) => ReceiptCard(
+              icon: Icons.family_restroom_outlined,
+              title: 'Household: ${item.householdHead}',
+              reference: item.householdCode,
+              lines: [
+                'Record: Household Survey',
+                'Barangay: ${item.barangay}',
+                'Date: ${item.inspectionDate}',
+                'Status: ${householdStatusLabel(item.status)}',
+                'Water Access: ${item.waterSource}',
+                'Toilet: ${item.toiletType.replaceAll('_', ' ')}',
+              ],
             ),
+          ),
         ],
       ],
     );

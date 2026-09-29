@@ -58,6 +58,22 @@ class TourismApi {
     }
   }
 
+  /// Current sanitation staff identity using the existing authenticated session.
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Your session expired, please sign in again.',
+      );
+    }
+    return _getWithQuery(
+      '/auth/me/',
+      const {},
+      headers: {'Authorization': 'Token $token'},
+    );
+  }
+
   /// Staff-only sanitation records (establishments, inspections, complaints,
   /// households, staff notifications). Requires a signed-in admin or
   /// sanitation account; throws [ApiException] (401/403) otherwise.

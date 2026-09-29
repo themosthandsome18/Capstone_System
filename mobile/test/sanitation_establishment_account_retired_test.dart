@@ -25,6 +25,12 @@ class LoginApi extends TourismApi {
   int logins = 0;
 
   @override
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async => {};
+
+  @override
+  Future<Map<String, dynamic>> fetchSanitationStaffRecords() async => {};
+
+  @override
   Future<Map<String, dynamic>> login({
     required String username,
     required String password,
@@ -100,7 +106,7 @@ void main() {
       'staff_auth_username': 'inspector',
     });
 
-    await pumpGateway(tester, const TourismApi());
+    await pumpGateway(tester, LoginApi('sanitation'));
 
     expect(find.byType(SanitationMobileShell), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
