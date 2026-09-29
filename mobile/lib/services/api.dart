@@ -92,6 +92,52 @@ class TourismApi {
     );
   }
 
+  Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async {
+    return _getWithQuery('/sanitation/complaints/', {'status': 'pending'},
+        headers: await _sanitationDashboardHeaders());
+  }
+
+  /// This endpoint returns an uncapped JSON array, unlike the shared object decoder.
+  Future<List<Map<String, dynamic>>> fetchSanitationDashboardInspections() async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/sanitation/inspections/'),
+      headers: await _sanitationDashboardHeaders(),
+    ).timeout(_requestTimeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decode(response); // Preserve existing ApiException/401 behavior on errors.
+    }
+    return sanitationDashboardRows(jsonDecode(response.body));
+  }
+
+  Future<Map<String, String>> _sanitationDashboardHeaders() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(statusCode: 401,
+          message: 'Your session expired, please sign in again.');
+    }
+    return {'Authorization': 'Token $token'};
+  }
+
+  /// Subscribe once per load/refresh. An error has no data, never fabricated zeros.
+  /// Optional staffRecords must be a successfully loaded authenticated staff payload.
+  Stream<SanitationDashboardState> loadSanitationDashboard({
+    DateTime? now,
+    Map<String, dynamic>? staffRecords,
+  }) async* {
+    yield const SanitationDashboardState.loading();
+    try {
+      final staff = staffRecords ?? await fetchSanitationStaffRecords();
+      final complaints = await fetchSanitationPendingComplaints();
+      final inspections = await fetchSanitationDashboardInspections();
+      yield SanitationDashboardState.loaded(SanitationDashboardData.fromSources(
+        staff: staff, complaints: complaints, inspections: inspections,
+        now: now ?? DateTime.now(),
+      ));
+    } catch (error) {
+      yield SanitationDashboardState.unavailable(error);
+    }
+  }
+
   Future<List<MobileSanitationReceipt>> fetchSanitationReportHistory({
     required String contact,
     required String reference,

@@ -67,7 +67,7 @@ void main() {
               'household_code': 'HH-LOCAL',
               'household_head': 'Local Household Head',
               'barangay': 'Daungan',
-              'survey_date': '2026-09-28',
+              'last_survey_date': '2026-09-28',
               'status': 'for_compliance',
             },
           ],

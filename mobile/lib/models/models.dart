@@ -236,6 +236,151 @@ class SanitationBootstrap {
   }
 }
 
+enum SanitationDashboardStatus { loading, loaded, unavailable }
+
+class SanitationDashboardState {
+  const SanitationDashboardState.loading()
+    : status = SanitationDashboardStatus.loading, data = null, error = null;
+  const SanitationDashboardState.loaded(this.data)
+    : status = SanitationDashboardStatus.loaded, error = null;
+  const SanitationDashboardState.unavailable(this.error)
+    : status = SanitationDashboardStatus.unavailable, data = null;
+
+  final SanitationDashboardStatus status;
+  final SanitationDashboardData? data;
+  final Object? error;
+}
+
+/// Only complete, successfully loaded staff data becomes a dashboard snapshot.
+class SanitationDashboardData {
+  const SanitationDashboardData({
+    required this.establishmentsCount,
+    required this.newComplaintsCount,
+    required this.newComplaints,
+    required this.householdsThisMonthCount,
+    required this.dueInspections,
+  });
+
+  final int establishmentsCount;
+  final int newComplaintsCount;
+  final List<SanitationComplaintItem> newComplaints;
+  final int householdsThisMonthCount;
+  final List<SanitationDueInspection> dueInspections;
+  int get dueForInspectionCount => dueInspections.length;
+
+  factory SanitationDashboardData.fromSources({
+    required Map<String, dynamic> staff,
+    required Map<String, dynamic> complaints,
+    required List<Map<String, dynamic>> inspections,
+    required DateTime now,
+  }) {
+    final establishments = sanitationDashboardRows(staff['establishments']);
+    final households = sanitationDashboardRows(staff['householdRecords']);
+    final summary = complaints['summary'];
+    final pending = summary is Map ? summary['pending'] : null;
+    if (pending is! int || pending < 0) {
+      throw const FormatException('Pending complaint summary is unavailable.');
+    }
+    final pendingRows = sanitationDashboardRows(complaints['rows'])
+        .where((row) => row['status'] == 'pending')
+        .map(SanitationComplaintItem.fromJson).toList();
+    pendingRows.sort((a, b) {
+      if (a.createdAt == null && b.createdAt != null) return 1;
+      if (b.createdAt == null && a.createdAt != null) return -1;
+      final byTime = a.createdAt == null ? 0 : b.createdAt!.compareTo(a.createdAt!);
+      return byTime != 0 ? byTime : a.reference.compareTo(b.reference);
+    });
+
+    final localNow = now.toLocal();
+    final today = DateTime(localNow.year, localNow.month, localNow.day);
+    final end = DateTime(today.year, today.month, today.day + 7);
+    final latestSurveys = <String, DateTime>{};
+    for (final row in households) {
+      final date = sanitationDashboardDate(row['last_survey_date']);
+      if (date == null) continue;
+      final key = '${row['id'] ?? row['household_code'] ?? ''}';
+      if (key.isEmpty) throw const FormatException('Household identifier is missing.');
+      if (latestSurveys[key] == null || date.isAfter(latestSurveys[key]!)) {
+        latestSurveys[key] = date;
+      }
+    }
+
+    final latest = <int, SanitationDueInspection>{};
+    for (final row in inspections) {
+      if (row['is_draft'] == true) continue;
+      if (row['is_draft'] != false) {
+        throw const FormatException('Inspection finalization state is missing.');
+      }
+      final item = SanitationDueInspection.fromJson(row);
+      final previous = latest[item.establishmentId];
+      if (previous == null || item.inspectionDate.isAfter(previous.inspectionDate) ||
+          (item.inspectionDate == previous.inspectionDate && item.inspectionId > previous.inspectionId)) {
+        latest[item.establishmentId] = item;
+      }
+    }
+    // Select latest finalized first, then evaluate its schedule. Never revive an older due date.
+    final due = latest.values.where((item) =>
+        item.nextDueDate != null && !item.nextDueDate!.isAfter(end)).toList();
+    due.sort((a, b) {
+      final byDate = a.nextDueDate!.compareTo(b.nextDueDate!);
+      return byDate != 0 ? byDate : a.establishmentId.compareTo(b.establishmentId);
+    });
+    return SanitationDashboardData(
+      establishmentsCount: establishments.length,
+      newComplaintsCount: pending,
+      newComplaints: List.unmodifiable(pendingRows),
+      householdsThisMonthCount: latestSurveys.values.where((date) =>
+          date.year == today.year && date.month == today.month).length,
+      dueInspections: List.unmodifiable(due),
+    );
+  }
+}
+
+class SanitationDueInspection {
+  const SanitationDueInspection({required this.inspectionId, required this.establishmentId,
+    required this.establishmentName, required this.businessTypeName,
+    required this.inspectionDate, required this.nextDueDate});
+  final int inspectionId;
+  final int establishmentId;
+  final String establishmentName;
+  final String businessTypeName;
+  final DateTime inspectionDate;
+  final DateTime? nextDueDate;
+
+  factory SanitationDueInspection.fromJson(Map<String, dynamic> row) {
+    final date = sanitationDashboardDate(row['inspection_date']);
+    if (row['id'] is! int || row['establishment'] is! int || date == null) {
+      throw const FormatException('Inspection identity/date is missing.');
+    }
+    return SanitationDueInspection(
+      inspectionId: row['id'] as int, establishmentId: row['establishment'] as int,
+      establishmentName: '${row['establishment_name'] ?? ''}',
+      businessTypeName: '${row['business_type_name'] ?? ''}',
+      inspectionDate: date, nextDueDate: sanitationDashboardDate(row['next_due_date']),
+    );
+  }
+}
+
+List<Map<String, dynamic>> sanitationDashboardRows(Object? value) {
+  if (value is! List || value.any((row) => row is! Map<String, dynamic>)) {
+    throw const FormatException('Expected a complete sanitation record list.');
+  }
+  return value.cast<Map<String, dynamic>>();
+}
+
+DateTime? sanitationDashboardDate(Object? value) {
+  if (value == null || value == '') return null;
+  final text = '$value';
+  final parsed = DateTime.tryParse(text);
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) || parsed == null ||
+      parsed.year != int.parse(text.substring(0, 4)) ||
+      parsed.month != int.parse(text.substring(5, 7)) ||
+      parsed.day != int.parse(text.substring(8, 10))) {
+    throw const FormatException('Invalid sanitation calendar date.');
+  }
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
 class SanitationBusinessType {
   const SanitationBusinessType({
     required this.id,
@@ -430,6 +575,7 @@ class SanitationComplaintItem {
     required this.priority,
     required this.actionTaken,
     this.locationAddress = '',
+    this.createdAt,
   });
 
   final String reference;
@@ -441,6 +587,9 @@ class SanitationComplaintItem {
   final String statusLabel;
   final String priority;
   final String actionTaken;
+  final DateTime? createdAt;
+
+  String get priorityTag => priority == 'high' ? 'URGENT' : 'STANDARD';
 
   factory SanitationComplaintItem.fromJson(Map<String, dynamic> json) {
     return SanitationComplaintItem(
@@ -454,6 +603,7 @@ class SanitationComplaintItem {
           '${json['status_label'] ?? sanitationStatusLabel('${json['status'] ?? 'pending'}')}',
       priority: '${json['priority'] ?? 'medium'}',
       actionTaken: '${json['action_taken'] ?? ''}',
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
     );
   }
 }
@@ -491,7 +641,7 @@ class HouseholdSanitationItem {
       status: '${json['status'] ?? 'good_standing'}',
       latitude: jsonDouble(json['latitude']),
       longitude: jsonDouble(json['longitude']),
-      surveyDate: '${json['survey_date'] ?? json['date'] ?? ''}',
+      surveyDate: '${json['last_survey_date'] ?? ''}',
       waterAccessLevel:
           '${json['water_access_level'] ?? json['water_source'] ?? 'Level I'}',
       sanitaryToiletType:
