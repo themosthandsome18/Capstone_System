@@ -246,6 +246,76 @@ const emptyForm = {
   remarks: "",
 };
 
+const EDITABLE_HOUSEHOLD_FIELDS = [
+  "household_head",
+  "barangay",
+  "address",
+  "male_count",
+  "female_count",
+  "toilet_type",
+  "water_source",
+  "water_level",
+  "waste_disposal",
+  "remarks",
+  "latitude",
+  "longitude",
+  "last_survey_date",
+];
+
+function sourceTokens(value) {
+  return typeof value === "string"
+    ? value.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+}
+
+function sameArray(left = [], right = []) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function normalizeComparable(value) {
+  if (value === null || value === undefined) return null;
+  if (value === "") return "";
+  const number = Number(value);
+  return Number.isFinite(number) && String(value).trim() !== "" ? number : value;
+}
+
+export function buildHouseholdEditPayload(form, snapshot) {
+  const payload = {};
+  const originalSources = typeof snapshot.water_source === "string" ? snapshot.water_source : "";
+  const currentSources = Array.isArray(form.water_source) ? form.water_source : [];
+  const sourceUnchanged = sameArray(currentSources, sourceTokens(originalSources));
+
+  for (const field of EDITABLE_HOUSEHOLD_FIELDS) {
+    // Coordinates are intentionally not represented by this form. Omitting them
+    // from PATCH preserves the stored values under the backend partial-update contract.
+    if (!(field in form)) continue;
+    let current = form[field];
+    let original = snapshot[field];
+    if (field === "water_source") {
+      if (sourceUnchanged) continue;
+      current = currentSources.join(", ");
+      original = originalSources;
+    }
+    if (field === "male_count" || field === "female_count") {
+      current = Number(current) || 0;
+      original = Number(original) || 0;
+    }
+    if (field === "last_survey_date" && (current === "" || current === null) && (original === "" || original === null || original === undefined)) {
+      continue;
+    }
+    if (normalizeComparable(current) !== normalizeComparable(original)) {
+      payload[field] = field === "last_survey_date" && current === "" ? null : current;
+    }
+  }
+  return payload;
+}
+
+function unsupportedLegacySources(value) {
+  return sourceTokens(value).filter(
+    (source) => !WATER_SOURCE_OPTIONS.some((option) => option.value === source)
+  );
+}
+
 function HouseholdRecords() {
   const navigate = useNavigate();
   const { barangays, householdRecords, householdDashboardData, loading, error, createHousehold, updateHousehold } =
@@ -258,6 +328,7 @@ function HouseholdRecords() {
   // Modal states
   const [viewRecord, setViewRecord] = useState(null);
   const [editRecord, setEditRecord] = useState(null);
+  const [editSnapshot, setEditSnapshot] = useState(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -487,6 +558,7 @@ function HouseholdRecords() {
 
   function openAdd() {
     setForm(emptyForm);
+    setEditSnapshot(null);
     setFormError("");
     setIsAddOpen(true);
   }
@@ -530,6 +602,12 @@ function HouseholdRecords() {
       last_survey_date: record.last_survey_date || "",
       remarks: record.remarks || "",
     });
+    setEditSnapshot({
+      ...record,
+      water_source: record.water_source ?? "",
+      first_name: firstName,
+      last_name: lastName,
+    });
     setFormError("");
     setEditRecord(record);
   }
@@ -537,6 +615,7 @@ function HouseholdRecords() {
   function closeModals() {
     setIsAddOpen(false);
     setEditRecord(null);
+    setEditSnapshot(null);
     setViewRecord(null);
     setFormError("");
   }
@@ -595,20 +674,35 @@ function HouseholdRecords() {
       setFormError("Household Head is required.");
       return;
     }
+    if (!editRecord || !editSnapshot) {
+      setFormError("This household record cannot be edited safely because its original values are unavailable.");
+      return;
+    }
+    const legacySources = unsupportedLegacySources(editSnapshot.water_source);
+    const currentSources = Array.isArray(form.water_source) ? form.water_source : [];
+    const sourceUnchanged = sameArray(currentSources, sourceTokens(editSnapshot.water_source || ""));
+    if (legacySources.length && !sourceUnchanged) {
+      setFormError(
+        `This record uses an unsupported legacy water source (${legacySources.join(", ")}). Restore the original source before saving, or update it through a workflow that supports the value.`
+      );
+      return;
+    }
+    const nextForm = {
+      ...form,
+      household_head:
+        form.first_name === editSnapshot.first_name && form.last_name === editSnapshot.last_name
+          ? editSnapshot.household_head ?? ""
+          : finalHead,
+    };
+    const payload = buildHouseholdEditPayload(nextForm, editSnapshot);
+    if (!Object.keys(payload).length) {
+      closeModals();
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
-      const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
-      const waterLevel = computeWaterLevel(sourcesArray);
-      await updateHousehold(editRecord.id, {
-        ...form,
-        household_head: finalHead,
-        water_source: sourcesArray.join(", "),
-        water_level: waterLevel || form.water_level,
-        male_count: Number(form.male_count) || 0,
-        female_count: Number(form.female_count) || 0,
-        last_survey_date: form.last_survey_date || null,
-      });
+      await updateHousehold(editRecord.id, payload);
       closeModals();
     } catch (err) {
       setFormError(err?.message || "Failed to update household record.");
