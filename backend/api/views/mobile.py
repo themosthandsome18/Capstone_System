@@ -1192,6 +1192,7 @@ def serialize_mobile_household_record(record):
         "male_count": record.male_count,
         "female_count": record.female_count,
         "toilet_type": record.toilet_type,
+        "septic_tank_type": record.septic_tank_type,
         "water_level": record.water_level,
         "water_source": record.water_source,
         "waste_disposal": record.waste_disposal,
