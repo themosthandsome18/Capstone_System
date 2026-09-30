@@ -621,6 +621,7 @@ class HouseholdSanitationItem {
     this.sanitaryToiletType = 'Pour Flush',
     this.toiletType,
     this.septicTankType,
+    this.surveyValues,
   });
 
   final String householdCode;
@@ -634,6 +635,80 @@ class HouseholdSanitationItem {
   final String sanitaryToiletType;
   final String? toiletType;
   final String? septicTankType;
+
+  // Keep raw editable values separate from display fallbacks. Missing keys
+  // must never become defaults when an existing record is submitted.
+  final Map<String, dynamic>? surveyValues;
+  static const surveyFields = [
+    'id',
+    'household_code',
+    'household_head',
+    'barangay',
+    'address',
+    'male_count',
+    'female_count',
+    'toilet_type',
+    'septic_tank_type',
+    'water_source',
+    'water_level',
+    'waste_disposal',
+    'latitude',
+    'longitude',
+  ];
+
+  String? get editIncompatibility {
+    final values = surveyValues;
+    if (values == null) return 'stored household fields are unavailable';
+    for (final key in surveyFields) {
+      if (!values.containsKey(key)) return '$key is missing';
+    }
+    if (values['id'] is! int || (values['id'] as int) <= 0) {
+      return 'id is invalid';
+    }
+    for (final key in [
+      'household_code', 'household_head', 'barangay', 'address', 'water_source',
+    ]) {
+      if (values[key] is! String) return '$key is missing or invalid';
+    }
+    for (final key in ['household_code', 'household_head', 'barangay']) {
+      if ((values[key] as String).trim().isEmpty) return '$key is empty';
+    }
+    for (final key in ['male_count', 'female_count']) {
+      final value = values[key];
+      if (value is! int || value < 0 || value > 99) {
+        return '$key cannot be represented by the 0-99 counter';
+      }
+    }
+    for (final entry in {
+      'toilet_type': ['water_sealed', 'pour_flush', 'pit_latrine', 'none'],
+      'water_level': ['level_1', 'level_2', 'level_3'],
+      'waste_disposal': ['collected', 'composted', 'burned', 'dumped'],
+    }.entries) {
+      if (!entry.value.contains(values[entry.key])) {
+        return '${entry.key} is not supported by this form';
+      }
+    }
+    final septic = values['septic_tank_type'];
+    if (septic != null &&
+        septic != '' &&
+        !['septic_tank', 'bottomless', 'vault_sealed'].contains(septic)) {
+      return 'septic_tank_type is not supported by this form';
+    }
+    if (['pit_latrine', 'none'].contains(values['toilet_type']) && septic != null) {
+      return 'septic_tank_type conflicts with the stored toilet_type';
+    }
+    for (final key in ['latitude', 'longitude']) {
+      final value = values[key];
+      final limit = key == 'latitude' ? 90 : 180;
+      if (value is! num ||
+          !value.isFinite ||
+          value.abs() < 0.001 ||
+          value.abs() > limit) {
+        return '$key is missing or cannot be safely preserved';
+      }
+    }
+    return null;
+  }
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
 
@@ -652,6 +727,10 @@ class HouseholdSanitationItem {
           '${json['sanitary_toilet_type'] ?? json['toilet_type'] ?? 'Pour Flush'}',
       toiletType: json['toilet_type']?.toString(),
       septicTankType: json['septic_tank_type']?.toString(),
+      surveyValues: Map<String, dynamic>.unmodifiable({
+        for (final key in surveyFields)
+          if (json.containsKey(key)) key: json[key],
+      }),
     );
   }
 }

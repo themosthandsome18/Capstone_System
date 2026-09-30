@@ -60,12 +60,29 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool _locating = false;
   bool _locationConfirmed = false;
   bool _consentConfirmed = false;
+  String? _editIncompatibility;
 
   @override
   void initState() {
     super.initState();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
+      _editIncompatibility = widget.household!.editIncompatibility;
+      if (_editIncompatibility == null &&
+          !widget.barangays.any((item) => item.name == _barangay)) {
+        _editIncompatibility = 'barangay is not available in this form';
+      }
+      if (_editIncompatibility != null) return;
+      final stored = widget.household!.surveyValues!;
+      _address.text = stored['address'] as String;
+      _male = stored['male_count'] as int;
+      _female = stored['female_count'] as int;
+      _waterLevel = stored['water_level'] as String;
+      _wasteDisposal = stored['waste_disposal'] as String;
+      final source = stored['water_source'] as String;
+      _waterSourceSelection =
+          _waterSourceOptions.contains(source) ? source : 'Others';
+      if (!_waterSourceOptions.contains(source)) _waterSourceCustom.text = source;
       final toiletType = widget.household!.toiletType;
       if (const ['water_sealed', 'pour_flush', 'pit_latrine', 'none']
           .contains(toiletType)) {
@@ -89,6 +106,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   void _setWaterSource(String source) {
     setState(() {
       _waterSourceSelection = source;
+      // An existing water level is independent data, not a source default.
+      if (widget.household != null) return;
       if (source == 'MWSS') {
         _waterLevel = 'level_3';
       } else if (source == 'Level II (Communal Faucet)') {
@@ -121,6 +140,25 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_editIncompatibility != null) {
+      return FormPageScaffold(
+        title: 'Household Survey',
+        subtitle: 'Existing household',
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        children: [
+          DataSourceBanner(
+            icon: Icons.warning_amber_outlined,
+            title: 'Cannot safely edit this household',
+            text:
+                '$_editIncompatibility. No changes have been sent. Ask the sanitation office to review this record.',
+            warning: true,
+          ),
+        ],
+      );
+    }
     return FormPageScaffold(
       title: 'Household Survey',
       subtitle: 'Submit household sanitation profile',
@@ -275,6 +313,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _submit() async {
+    if (_editIncompatibility != null) return;
     if (_head.text.trim().isEmpty) {
       showAppMessage(context, 'Household head is required.');
       return;
@@ -312,17 +351,29 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     setState(() => _submitting = true);
 
     try {
-      final finalWaterSource = _waterSourceSelection == 'Others'
+      final stored = widget.household?.surveyValues;
+      final unchangedCustomSource = stored != null &&
+          _waterSourceSelection == 'Others' &&
+          !_waterSourceOptions.contains(stored['water_source']) &&
+          _waterSourceCustom.text == stored['water_source'];
+      final finalWaterSource = unchangedCustomSource
+          ? stored['water_source'] as String
+          : _waterSourceSelection == 'Others'
           ? (_waterSourceCustom.text.trim().isEmpty
               ? 'Others'
               : _waterSourceCustom.text.trim())
           : _waterSourceSelection;
 
       final response = await widget.api.submitHouseholdSurvey(
+        originalHousehold: widget.household,
         householdCode: widget.household?.householdCode,
-        householdHead: formatProperName(_head.text),
+        householdHead: stored != null && _head.text == stored['household_head']
+            ? _head.text
+            : formatProperName(_head.text),
         barangay: _barangay,
-        address: _address.text.trim(),
+        address: stored != null && _address.text == stored['address']
+            ? _address.text
+            : _address.text.trim(),
         maleCount: _male,
         femaleCount: _female,
         toiletType: _toiletType,

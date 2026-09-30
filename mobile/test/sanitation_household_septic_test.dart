@@ -18,6 +18,7 @@ class SurveyApi extends TourismApi {
 
   @override
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    HouseholdSanitationItem? originalHousehold,
     String? householdCode,
     String? septicTankType,
     required String householdHead,
@@ -47,9 +48,16 @@ class SurveyApi extends TourismApi {
 
 HouseholdSanitationItem record(String toilet, String? septic) =>
     HouseholdSanitationItem.fromJson({
+      'id': 1,
       'household_code': 'HH-EDIT',
       'household_head': 'Existing household',
       'barangay': 'Daungan',
+      'address': 'Stored address',
+      'male_count': 2,
+      'female_count': 3,
+      'water_level': 'level_2',
+      'water_source': 'Spring',
+      'waste_disposal': 'composted',
       'toilet_type': toilet,
       'septic_tank_type': septic,
       'latitude': 14.19,

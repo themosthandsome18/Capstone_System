@@ -346,6 +346,7 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    HouseholdSanitationItem? originalHousehold,
     String? householdCode,
     String? septicTankType,
     required String householdHead,
@@ -381,6 +382,34 @@ class TourismApi {
       body['household_code'] = householdCode;
     }
     final token = await _getStaffAuthToken();
+    if (originalHousehold != null) {
+      final problem = originalHousehold.editIncompatibility;
+      if (problem != null || householdCode != originalHousehold.householdCode) {
+        throw StateError(
+          'Cannot safely edit household: ${problem ?? 'household_code differs'}',
+        );
+      }
+      final stored = originalHousehold.surveyValues!;
+      // The mobile POST endpoint inserts defaults even for omitted fields.
+      // Existing records use the existing partial-update contract instead.
+      final changes = <String, dynamic>{};
+      for (final entry in body.entries) {
+        final value = entry.key == 'latitude' || entry.key == 'longitude'
+            ? double.parse(entry.value as String)
+            : entry.value;
+        if (value != stored[entry.key]) changes[entry.key] = value;
+      }
+      if (changes.isEmpty) return {...stored, 'status': originalHousehold.status};
+      final response = await http.patch(
+        Uri.parse('$apiBaseUrl/households/records/${stored['id']}/'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Token $token',
+        },
+        body: jsonEncode(changes),
+      ).timeout(_requestTimeout);
+      return _decode(response);
+    }
     return _post(
       '/mobile/sanitation/household-surveys/',
       body,
