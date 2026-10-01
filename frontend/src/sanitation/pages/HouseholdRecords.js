@@ -189,6 +189,27 @@ const toiletOptions = [
   { value: "none", label: "None" },
 ];
 
+const septicTankOptions = [
+  { value: "septic_tank", label: "Septic tank" },
+  { value: "bottomless", label: "Bottomless" },
+  { value: "vault_sealed", label: "Vault-sealed" },
+];
+
+function isSepticApplicable(toiletType) {
+  return toiletType === "water_sealed" || toiletType === "pour_flush";
+}
+
+function isMissingSepticValue(value) {
+  return value === null || value === undefined || value === "";
+}
+
+function isUnsupportedSepticValue(value) {
+  return (
+    !isMissingSepticValue(value) &&
+    !septicTankOptions.some((option) => option.value === value)
+  );
+}
+
 const waterLevelOptions = [
   { value: "level_1", label: "Level I" },
   { value: "level_2", label: "Level II" },
@@ -238,6 +259,7 @@ const emptyForm = {
   male_count: 0,
   female_count: 0,
   toilet_type: "none",
+  septic_tank_type: null,
   water_level: "",
   water_source: [],
   waste_disposal: "collected",
@@ -253,6 +275,7 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "male_count",
   "female_count",
   "toilet_type",
+  "septic_tank_type",
   "water_source",
   "water_level",
   "waste_disposal",
@@ -299,6 +322,13 @@ export function buildHouseholdEditPayload(form, snapshot) {
     if (field === "male_count" || field === "female_count") {
       current = Number(current) || 0;
       original = Number(original) || 0;
+    }
+    if (
+      field === "septic_tank_type" &&
+      isMissingSepticValue(current) &&
+      isMissingSepticValue(original)
+    ) {
+      continue;
     }
     if (field === "last_survey_date" && (current === "" || current === null) && (original === "" || original === null || original === undefined)) {
       continue;
@@ -595,6 +625,7 @@ function HouseholdRecords() {
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
       toilet_type: record.toilet_type || "none",
+      septic_tank_type: record.septic_tank_type ?? "",
       water_level: record.water_level || "",
       water_source: sourcesArray,
       waste_disposal: record.waste_disposal || "collected",
@@ -621,7 +652,12 @@ function HouseholdRecords() {
   }
 
   function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === "toilet_type" && !isSepticApplicable(value)) {
+        return { ...prev, toilet_type: value, septic_tank_type: null };
+      }
+      return { ...prev, [field]: value };
+    });
   }
 
   async function handleSaveAdd() {
@@ -640,12 +676,16 @@ function HouseholdRecords() {
       setFormError("Barangay is required.");
       return;
     }
+    if (isSepticApplicable(form.toilet_type) && isMissingSepticValue(form.septic_tank_type)) {
+      setFormError("Septic tank type is required.");
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
       const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
       const waterLevel = computeWaterLevel(sourcesArray);
-      await createHousehold({
+      const payload = {
         ...form,
         household_head: finalHead,
         water_source: sourcesArray.join(", "),
@@ -653,7 +693,11 @@ function HouseholdRecords() {
         male_count: Number(form.male_count) || 0,
         female_count: Number(form.female_count) || 0,
         last_survey_date: form.last_survey_date || null,
-      });
+      };
+      if (!isSepticApplicable(form.toilet_type)) {
+        delete payload.septic_tank_type;
+      }
+      await createHousehold(payload);
       closeModals();
     } catch (err) {
       setFormError(err?.message || "Failed to save household record.");
@@ -676,6 +720,25 @@ function HouseholdRecords() {
     }
     if (!editRecord || !editSnapshot) {
       setFormError("This household record cannot be edited safely because its original values are unavailable.");
+      return;
+    }
+    if (isUnsupportedSepticValue(editSnapshot.septic_tank_type)) {
+      setFormError(
+        `This record uses an unsupported legacy septic tank type (${editSnapshot.septic_tank_type}). It cannot be edited safely in this form.`
+      );
+      return;
+    }
+    const preservesLegacyMissingSeptic =
+      isSepticApplicable(editSnapshot.toilet_type) &&
+      form.toilet_type === editSnapshot.toilet_type &&
+      isMissingSepticValue(editSnapshot.septic_tank_type) &&
+      isMissingSepticValue(form.septic_tank_type);
+    if (
+      isSepticApplicable(form.toilet_type) &&
+      isMissingSepticValue(form.septic_tank_type) &&
+      !preservesLegacyMissingSeptic
+    ) {
+      setFormError("Septic tank type is required.");
       return;
     }
     const legacySources = unsupportedLegacySources(editSnapshot.water_source);
@@ -1353,6 +1416,23 @@ function HouseholdForm({ form, updateField, formError }) {
           ))}
         </select>
       </div>
+
+      {isSepticApplicable(form.toilet_type) && (
+        <div className="hh-form-group">
+          <label>Septic Tank Type *</label>
+          <select
+            value={form.septic_tank_type ?? ""}
+            onChange={(e) => updateField("septic_tank_type", e.target.value)}
+          >
+            <option value="">Select septic tank type...</option>
+            {septicTankOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="hh-form-group">
         <label>Waste Disposal*</label>
