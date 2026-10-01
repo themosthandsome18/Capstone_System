@@ -722,7 +722,7 @@ class HouseholdSanitationItem {
       longitude: jsonDouble(json['longitude']),
       surveyDate: '${json['last_survey_date'] ?? ''}',
       waterAccessLevel:
-          '${json['water_access_level'] ?? json['water_source'] ?? 'Level I'}',
+          '${json['water_level'] ?? json['water_access_level'] ?? ''}',
       sanitaryToiletType:
           '${json['sanitary_toilet_type'] ?? json['toilet_type'] ?? 'Pour Flush'}',
       toiletType: json['toilet_type']?.toString(),
@@ -1368,7 +1368,7 @@ class MobileHouseholdSurveyReceipt {
       barangay: record.barangay,
       status: record.status,
       inspectionDate: record.surveyDate,
-      waterSource: record.waterAccessLevel,
+      waterSource: '${record.surveyValues?['water_source'] ?? ''}',
       toiletType: record.sanitaryToiletType,
     );
   }

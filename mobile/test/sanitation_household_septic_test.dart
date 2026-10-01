@@ -8,7 +8,6 @@ import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const septicChoices = {
-  'septic_tank': 'Septic tank',
   'bottomless': 'Bottomless',
   'vault_sealed': 'Vault-sealed',
 };
@@ -65,13 +64,13 @@ HouseholdSanitationItem record(String toilet, String? septic) =>
     });
 
 Finder dropdown(String label) => find.byWidgetPredicate(
-  (widget) => widget is DropdownTile && widget.label == label,
+  (widget) => widget is HouseholdChoiceField && widget.label == label,
 );
 
 Future<void> choose(WidgetTester tester, String control, String label) async {
-  await tester.tap(dropdown(control));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last);
+  final chip = find.descendant(of: dropdown(control), matching: find.widgetWithText(ChoiceChip, label));
+  await tester.ensureVisible(chip);
+  await tester.tap(chip);
   await tester.pumpAndSettle();
 }
 
@@ -143,15 +142,13 @@ void main() {
   });
 
   for (final toilet in ['water_sealed', 'pour_flush']) {
-    testWidgets('$toilet shows the exact three septic choices', (tester) async {
+    testWidgets('$toilet shows the exact two septic choices', (tester) async {
       await pumpSurvey(tester);
       await choose(tester, 'Toilet facility', householdToiletLabel(toilet));
       expect(dropdown('Septic tank type'), findsOneWidget);
       final dynamic tile = tester.widget(dropdown('Septic tank type'));
       expect(tile.value, isNull);
       expect(tile.items, septicChoices.keys.toList());
-      await tester.tap(dropdown('Septic tank type'));
-      await tester.pumpAndSettle();
       for (final label in septicChoices.values) {
         expect(find.text(label).hitTestable(), findsOneWidget);
       }

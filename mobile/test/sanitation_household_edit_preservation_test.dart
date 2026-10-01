@@ -28,7 +28,7 @@ Map<String, dynamic> storedHousehold() => {
 
 Finder field(String label) => find.widgetWithText(AppTextField, label);
 Finder dropdown(String label) => find.byWidgetPredicate(
-  (widget) => widget is DropdownTile && widget.label == label,
+  (widget) => widget is HouseholdChoiceField && widget.label == label,
 );
 
 Future<void> pumpEdit(WidgetTester tester, Map<String, dynamic> stored) async {
@@ -82,7 +82,7 @@ void main() {
       );
     }
     final counters = tester
-        .widget<CounterPanel>(find.byType(CounterPanel))
+        .widget<HouseholdMembersPanel>(find.byType(HouseholdMembersPanel))
         .counters;
     expect(counters.map((counter) => counter.value), [7, 0]);
     for (final entry in {
@@ -143,14 +143,14 @@ void main() {
       addTearDown(client.close);
       await http.runWithClient(() async {
         await pumpEdit(tester, storedHousehold());
-        final tile = tester.widget<DropdownTile<String>>(
+        final tile = tester.widget<HouseholdChoiceField>(
           dropdown('Water source'),
         );
-        tile.onChanged('MWSS');
+        tile.onChanged('Barangay water system');
         await tester.pump();
         await submitEdit(tester);
       }, () => client);
-      expect(jsonDecode(sent!.body), {'water_source': 'MWSS'});
+      expect(jsonDecode(sent!.body), {'water_source': 'Barangay water system'});
     },
   );
 
@@ -188,7 +188,7 @@ void main() {
       await http.runWithClient(() async {
         await pumpEdit(tester, storedHousehold());
         tester
-            .widget<DropdownTile<String>>(dropdown(entry.key))
+            .widget<HouseholdChoiceField>(dropdown(entry.key))
             .onChanged(entry.value[0]);
         await tester.pump();
         await submitEdit(tester);
@@ -209,7 +209,7 @@ void main() {
       await http.runWithClient(() async {
         await pumpEdit(tester, {...storedHousehold(), 'female_count': 4});
         tester
-            .widget<CounterPanel>(find.byType(CounterPanel))
+            .widget<HouseholdMembersPanel>(find.byType(HouseholdMembersPanel))
             .counters
             .first
             .onChanged(0);

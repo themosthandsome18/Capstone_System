@@ -4,6 +4,131 @@ typedef NewInspectionPage = SanitationInspectionPage;
 typedef VerifyPermitPage = PermitVerificationPage;
 typedef TrackReportStatusPage = ReportTrackerPage;
 
+class HouseholdChoiceField extends StatelessWidget {
+  const HouseholdChoiceField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String? value;
+  final List<String> items;
+  final String Function(String) itemLabel;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final item in items)
+              ChoiceChip(
+                label: Text(itemLabel(item)),
+                selected: value == item,
+                onSelected: (_) => onChanged(item),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class HouseholdMembersPanel extends StatelessWidget {
+  const HouseholdMembersPanel({
+    super.key,
+    required this.title,
+    required this.counters,
+  });
+  final String title;
+  final List<CounterItem> counters;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = counters.fold<int>(0, (sum, item) => sum + item.value);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in counters)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(item.label),
+                        Text(
+                          '${item.value}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              tooltip: 'Decrease ${item.label}',
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 48,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: item.value > 0
+                                  ? () => item.onChanged(item.value - 1)
+                                  : null,
+                              icon: const Icon(Icons.remove),
+                            ),
+                            IconButton(
+                              tooltip: 'Increase ${item.label}',
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 48,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: item.value < 99
+                                  ? () => item.onChanged(item.value + 1)
+                                  : null,
+                              icon: const Icon(Icons.add),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text('Total'),
+                      Text(
+                        '$total',
+                        key: ValueKey('household-total-$total'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class HouseholdSurveyPage extends StatefulWidget {
   const HouseholdSurveyPage({
     super.key,
@@ -26,23 +151,20 @@ class HouseholdSurveyPage extends StatefulWidget {
 
 class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   static const _septicTankOptions = {
-    'septic_tank': 'Septic tank',
     'bottomless': 'Bottomless',
     'vault_sealed': 'Vault-sealed',
   };
 
   static const _waterSourceOptions = [
-    'MWSS',
-    'Level II (Communal Faucet)',
-    'Deep Well',
+    'Deep well',
+    'Poso-shallow well',
     'Spring',
-    'Rainwater',
-    'Others',
+    'Barangay water system',
+    'Other',
   ];
 
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
-  final TextEditingController _waterSourceCustom = TextEditingController();
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
@@ -52,7 +174,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool get _septicApplicable =>
       _toiletType == 'water_sealed' || _toiletType == 'pour_flush';
   String _waterLevel = 'level_3';
-  String _waterSourceSelection = 'MWSS';
+  String _waterSourceSelection = 'Deep well';
   String _wasteDisposal = 'collected';
   int _male = 1;
   int _female = 1;
@@ -80,16 +202,15 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       _waterLevel = stored['water_level'] as String;
       _wasteDisposal = stored['waste_disposal'] as String;
       final source = stored['water_source'] as String;
-      _waterSourceSelection =
-          _waterSourceOptions.contains(source) ? source : 'Others';
-      if (!_waterSourceOptions.contains(source)) _waterSourceCustom.text = source;
+      _waterSourceSelection = source;
       final toiletType = widget.household!.toiletType;
       if (const ['water_sealed', 'pour_flush', 'pit_latrine', 'none']
           .contains(toiletType)) {
         _toiletType = toiletType!;
       }
       final septicTankType = widget.household!.septicTankType;
-      if (_septicApplicable && _septicTankOptions.containsKey(septicTankType)) {
+      if (_septicApplicable &&
+          (_septicTankOptions.containsKey(septicTankType) || septicTankType == 'septic_tank')) {
         _septicTankType = septicTankType;
       }
       // Allow untouched legacy applicable records to keep an absent value.
@@ -104,22 +225,15 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   void _setWaterSource(String source) {
-    setState(() {
-      _waterSourceSelection = source;
-      // An existing water level is independent data, not a source default.
-      if (widget.household != null) return;
-      if (source == 'MWSS') {
-        _waterLevel = 'level_3';
-      } else if (source == 'Level II (Communal Faucet)') {
-        _waterLevel = 'level_2';
-      } else {
-        _waterLevel = 'level_1';
-      }
-    });
+    setState(() => _waterSourceSelection = source);
   }
 
   void _setToiletType(String value) {
     setState(() {
+      if (value != _toiletType && _septicTankType == 'septic_tank') {
+        _septicTankType = null;
+        _requiresSepticSelection = true;
+      }
       _toiletType = value;
       if (!_septicApplicable) {
         _septicTankType = null;
@@ -132,7 +246,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   void dispose() {
     _head.dispose();
     _address.dispose();
-    _waterSourceCustom.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
@@ -185,7 +298,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           label: 'Address',
           textCapitalization: TextCapitalization.words,
         ),
-        CounterPanel(
+        HouseholdMembersPanel(
           title: 'Household Members',
           counters: [
             CounterItem('Male', _male, (value) {
@@ -196,67 +309,43 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             }),
           ],
         ),
-        DataSourceBanner(
-          icon: Icons.groups_outlined,
-          title: '${_male + _female} household member(s)',
-          text:
-              'Household survey records are saved separately from establishment inspections.',
-        ),
-        const SizedBox(height: 12),
-        DropdownTile<String>(
+        HouseholdChoiceField(
           label: 'Toilet facility',
           value: _toiletType,
           items: const ['water_sealed', 'pour_flush', 'pit_latrine', 'none'],
           itemLabel: householdToiletLabel,
           onChanged: _setToiletType,
         ),
-        if (_septicApplicable)
-          DropdownTile<String?>(
+        if (_septicApplicable) ...[
+          if (_septicTankType == 'septic_tank')
+            const Text('Legacy value: Septic tank - no longer available. '
+                'Kept unless you replace it or change the toilet configuration.'),
+          HouseholdChoiceField(
             label: 'Septic tank type',
             value: _septicTankType,
-            hint: 'Select septic tank type',
             items: _septicTankOptions.keys.toList(),
             itemLabel: (item) => _septicTankOptions[item]!,
             onChanged: (item) => setState(() => _septicTankType = item),
           ),
-        DropdownTile<String>(
+        ],
+        if (!_waterSourceOptions.contains(_waterSourceSelection))
+          Text('Legacy water source: "$_waterSourceSelection" - no longer available. '
+              'Kept unless you select a replacement.'),
+        HouseholdChoiceField(
           label: 'Water source',
           value: _waterSourceSelection,
           items: _waterSourceOptions,
-          itemLabel: (item) {
-            switch (item) {
-              case 'MWSS':
-                return 'MWSS (Municipal Water Supply System)';
-              case 'Level II (Communal Faucet)':
-                return 'Level II (Communal Faucet / Standpost)';
-              case 'Deep Well':
-                return 'Deep Well (Protected)';
-              case 'Spring':
-                return 'Spring (Natural source)';
-              case 'Rainwater':
-                return 'Rainwater Collection';
-              case 'Others':
-                return 'Others (Specify custom source)';
-              default:
-                return item;
-            }
-          },
+          itemLabel: (item) => item,
           onChanged: _setWaterSource,
         ),
-        if (_waterSourceSelection == 'Others')
-          AppTextField(
-            controller: _waterSourceCustom,
-            label: 'Specify other water source',
-            textCapitalization: TextCapitalization.words,
-          ),
-        DropdownTile<String>(
+        HouseholdChoiceField(
           label: 'Water access level',
           value: _waterLevel,
           items: const ['level_1', 'level_2', 'level_3'],
           itemLabel: householdWaterLabel,
           onChanged: (item) => setState(() => _waterLevel = item),
         ),
-        DropdownTile<String>(
+        HouseholdChoiceField(
           label: 'Waste disposal',
           value: _wasteDisposal,
           items: const ['collected', 'composted', 'burned', 'dumped'],
@@ -352,17 +441,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
     try {
       final stored = widget.household?.surveyValues;
-      final unchangedCustomSource = stored != null &&
-          _waterSourceSelection == 'Others' &&
-          !_waterSourceOptions.contains(stored['water_source']) &&
-          _waterSourceCustom.text == stored['water_source'];
-      final finalWaterSource = unchangedCustomSource
-          ? stored['water_source'] as String
-          : _waterSourceSelection == 'Others'
-          ? (_waterSourceCustom.text.trim().isEmpty
-              ? 'Others'
-              : _waterSourceCustom.text.trim())
-          : _waterSourceSelection;
+      final finalWaterSource = _waterSourceSelection;
 
       final response = await widget.api.submitHouseholdSurvey(
         originalHousehold: widget.household,
