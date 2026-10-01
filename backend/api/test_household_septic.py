@@ -46,7 +46,7 @@ class HouseholdSepticTests(TestCase):
 
     def test_all_valid_values_persist_for_both_applicable_toilets(self):
         for toilet, septic in product(("water_sealed", "pour_flush"),
-                                      ("septic_tank", "bottomless", "vault_sealed")):
+                                      ("bottomless", "vault_sealed")):
             with self.subTest(toilet=toilet, septic=septic):
                 record, serializer = self.save_payload(toilet_type=toilet, septic_tank_type=septic)
                 self.assertEqual(serializer.data.get("septic_tank_type"), septic)
@@ -79,7 +79,7 @@ class HouseholdSepticTests(TestCase):
         for toilet in ("pit_latrine", "none"):
             for supplied in ({}, {"septic_tank_type": "vault_sealed"}):
                 with self.subTest(toilet=toilet, supplied=supplied):
-                    record, _ = self.save_payload(septic_tank_type="septic_tank")
+                    record = HouseholdSanitationRecord.objects.create(**self.payload(septic_tank_type="septic_tank"))
                     record, serializer = self.save_payload(record, partial=True, toilet_type=toilet, **supplied)
                     self.assertIn("septic_tank_type", serializer.data)
                     self.assertIsNone(record.septic_tank_type)
@@ -131,6 +131,98 @@ class HouseholdSepticTests(TestCase):
                     toilet_type=toilet, water_level=water, waste_disposal=waste))
                 record.refresh_from_db()
                 self.assertEqual(record.status, expected)
+
+
+class HouseholdSepticLegacyTests(TestCase):
+    def legacy(self, toilet="water_sealed", septic="septic_tank"):
+        return HouseholdSanitationRecord.objects.create(
+            household_code=f"HH-LEGACY-{HouseholdSanitationRecord.objects.count()}",
+            household_head="Legacy household", barangay="Daungan",
+            toilet_type=toilet, septic_tank_type=septic,
+            latitude=14.19, longitude=121.73,
+        )
+
+    def patch(self, record, data):
+        return HouseholdSanitationRecordSerializer(record, data=data, partial=True)
+
+    def test_new_deprecated_value_rejected(self):
+        serializer = HouseholdSanitationRecordSerializer(data={
+            "household_code": "HH-NEW", "household_head": "New", "barangay": "Daungan",
+            "toilet_type": "water_sealed", "septic_tank_type": "septic_tank",
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("septic_tank_type", serializer.errors)
+
+    def test_explicit_deprecated_replacement_rejected(self):
+        for stored in ("septic_tank", "bottomless", "vault_sealed", None, ""):
+            with self.subTest(stored=stored):
+                record = self.legacy(septic=stored)
+                serializer = self.patch(record, {"septic_tank_type": "septic_tank"})
+                self.assertFalse(serializer.is_valid())
+                self.assertIn("septic_tank_type", serializer.errors)
+                record.refresh_from_db()
+                self.assertEqual(record.septic_tank_type, stored)
+
+    def test_stored_legacy_serializes(self):
+        self.assertEqual(HouseholdSanitationRecordSerializer(self.legacy()).data["septic_tank_type"], "septic_tank")
+
+    def test_unrelated_and_same_toilet_patch_preserve_legacy(self):
+        for toilet in ("water_sealed", "pour_flush"):
+            for extra in ({}, {"toilet_type": toilet}):
+                record = self.legacy(toilet)
+                serializer = self.patch(record, {"address": "Changed address", **extra})
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+                serializer.save()
+                record.refresh_from_db()
+                self.assertEqual(record.septic_tank_type, "septic_tank")
+                self.assertEqual(record.address, "Changed address")
+
+    def test_applicable_transition_requires_approved_replacement(self):
+        for old, new in (("water_sealed", "pour_flush"), ("pour_flush", "water_sealed")):
+            for extra in ({}, {"septic_tank_type": None}, {"septic_tank_type": ""}):
+                with self.subTest(old=old, extra=extra):
+                    record = self.legacy(old)
+                    serializer = self.patch(record, {"toilet_type": new, **extra})
+                    self.assertFalse(serializer.is_valid())
+                    self.assertIn("septic_tank_type", serializer.errors)
+                    record.refresh_from_db()
+                    self.assertEqual(record.toilet_type, old)
+                    self.assertEqual(record.septic_tank_type, "septic_tank")
+
+    def test_approved_replacements_succeed_with_or_without_transition(self):
+        for old, new, septic in product(
+            ("water_sealed", "pour_flush"), ("water_sealed", "pour_flush"),
+            ("bottomless", "vault_sealed"),
+        ):
+            record = self.legacy(old)
+            serializer = self.patch(record, {"toilet_type": new, "septic_tank_type": septic})
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            serializer.save()
+            record.refresh_from_db()
+            self.assertEqual((record.toilet_type, record.septic_tank_type), (new, septic))
+
+    def test_inapplicable_transition_clears_legacy(self):
+        for toilet in ("pit_latrine", "none"):
+            record = self.legacy()
+            serializer = self.patch(record, {"toilet_type": toilet})
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            serializer.save()
+            record.refresh_from_db()
+            self.assertIsNone(record.septic_tank_type)
+
+    def test_unknown_replacement_rejected(self):
+        serializer = self.patch(self.legacy(), {"septic_tank_type": "unknown"})
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(serializer.errors["septic_tank_type"][0].code, "invalid_choice")
+
+    def test_non_deprecated_values_preserved_on_applicable_transition(self):
+        for septic in (None, "", "bottomless", "vault_sealed"):
+            record = self.legacy(septic=septic)
+            serializer = self.patch(record, {"toilet_type": "pour_flush"})
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            serializer.save()
+            record.refresh_from_db()
+            self.assertEqual(record.septic_tank_type, septic)
 
 
 class HouseholdSepticMigrationTests(TransactionTestCase):

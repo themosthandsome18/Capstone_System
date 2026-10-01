@@ -932,6 +932,21 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         toilet_type = attrs.get("toilet_type", getattr(self.instance, "toilet_type", None))
+        if attrs.get("septic_tank_type") == "septic_tank":
+            raise serializers.ValidationError({
+                "septic_tank_type": "Septic tank is a legacy value. Select Bottomless or Vault-sealed.",
+            })
+        if (
+            self.instance is not None
+            and self.instance.septic_tank_type == "septic_tank"
+            and self.instance.toilet_type in ("water_sealed", "pour_flush")
+            and toilet_type in ("water_sealed", "pour_flush")
+            and toilet_type != self.instance.toilet_type
+            and attrs.get("septic_tank_type") not in ("bottomless", "vault_sealed")
+        ):
+            raise serializers.ValidationError({
+                "septic_tank_type": "Select Bottomless or Vault-sealed when changing this legacy toilet configuration.",
+            })
         if toilet_type in ("pit_latrine", "none"):
             # Clear submitted or legacy values, including on unrelated updates.
             attrs["septic_tank_type"] = None
