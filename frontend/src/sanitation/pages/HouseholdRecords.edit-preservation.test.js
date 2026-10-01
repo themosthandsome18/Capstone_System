@@ -74,7 +74,7 @@ test("address-only edit produces a differential payload and preserves raw legacy
       male_count: 4,
       female_count: 6,
       toilet_type: "pour_flush",
-      water_source: ["Deep Well", "Private hand pump"],
+      water_source: snapshot.water_source,
       water_level: "level_2",
       waste_disposal: "composted",
       remarks: "Keep existing note",
@@ -98,7 +98,7 @@ test("no-op edit produces no write payload", () => {
         male_count: 4,
         female_count: 6,
         toilet_type: "pour_flush",
-        water_source: ["Deep Well", "Private hand pump"],
+        water_source: snapshot.water_source,
         water_level: "level_2",
         waste_disposal: "composted",
         remarks: snapshot.remarks,
@@ -159,6 +159,8 @@ test("new household interaction preserves POST payload behavior", async () => {
   fireEvent.change(screen.getByRole("option", { name: "Select barangay..." }).parentElement, {
     target: { value: "Abo-abo" },
   });
+  fireEvent.click(screen.getByRole("radio", { name: "Other", exact: true }));
+  fireEvent.click(screen.getByRole("radio", { name: "Level 2", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Save Household" }));
 
   await waitFor(() =>
@@ -171,8 +173,8 @@ test("new household interaction preserves POST payload behavior", async () => {
       male_count: 0,
       female_count: 0,
       toilet_type: "none",
-      water_level: "",
-      water_source: "",
+      water_level: "level_2",
+      water_source: "Other",
       waste_disposal: "collected",
       status: "good_standing",
       last_survey_date: new Date().toISOString().slice(0, 10),
@@ -182,13 +184,11 @@ test("new household interaction preserves POST payload behavior", async () => {
   expect(mockUpdateHousehold).not.toHaveBeenCalled();
 });
 
-test("changing a legacy custom source is blocked instead of rewriting it", () => {
+test("explicitly replacing a legacy custom source sends only the approved replacement", async () => {
   render(<HouseholdRecords />);
   fireEvent.click(screen.getByTitle("Edit Household Record"));
-  fireEvent.click(screen.getByRole("button", { name: /Deep Well, Private hand pump/ }));
-  fireEvent.click(screen.getByRole("checkbox", { name: /Deep Well Private/ }));
+  expect(screen.getByText(/Legacy water source:/).textContent).toContain(snapshot.water_source);
+  fireEvent.click(screen.getByRole("radio", { name: "Deep well", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
-
-  expect(screen.getByText(/unsupported legacy water source/i)).toBeTruthy();
-  expect(mockUpdateHousehold).not.toHaveBeenCalled();
+  await waitFor(() => expect(mockUpdateHousehold).toHaveBeenCalledWith(11, { water_source: "Deep well" }));
 });

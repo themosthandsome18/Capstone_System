@@ -10557,6 +10557,94 @@
   gap: 14px 18px;
 }
 
+/* Household form choices only; native radios retain keyboard behavior. */
+.hh-form-grid .hh-choice-group,
+.hh-form-grid .hh-members-row {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hh-form-grid .hh-choice-group legend,
+.hh-form-grid .hh-members-row legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.hh-form-grid .hh-choice-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+}
+
+.hh-form-grid .hh-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  min-height: 44px;
+  border: 1px solid #9ca3af;
+  border-radius: 7px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.hh-form-grid .hh-choice-card.is-selected {
+  border-color: #15803d;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.hh-form-grid .hh-choice-card:focus-within {
+  outline: 3px solid #166534;
+  outline-offset: 2px;
+}
+
+.hh-form-grid .hh-choice-card input[type="radio"] {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #15803d;
+}
+
+.hh-form-grid .hh-members-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hh-form-grid .hh-members-row input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hh-form-grid .hh-members-row output {
+  padding: 8px 0;
+  font-weight: 700;
+}
+
+.hh-form-grid .hh-legacy-value {
+  margin: 0 0 8px;
+  padding: 8px;
+  background: #fffbeb;
+  color: #78350f;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 540px) {
+  .hh-modal-form .hh-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hh-modal-form .hh-form-group {
+    min-width: 0;
+  }
+}
+
 .hh-form-group {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import HouseholdRecords from "./HouseholdRecords";
 
 const mockUpdateHousehold = jest.fn();
@@ -50,8 +50,14 @@ jest.mock("../context/SanitationDataContext", () => ({
   }),
 }));
 
-function selectFor(label) {
-  return screen.getByText(label).parentElement.querySelector("select");
+function radiosFor(label) {
+  return within(screen.getByRole("radiogroup", { name: label })).getAllByRole("radio");
+}
+function choose(label, value) {
+  fireEvent.click(radiosFor(label).find((radio) => radio.value === value));
+}
+function selectedFor(label) {
+  return radiosFor(label).find((radio) => radio.checked)?.value ?? "";
 }
 
 function openExistingRecord(record = baseRecord) {
@@ -69,18 +75,16 @@ function openNewRecord() {
   fireEvent.change(screen.getByRole("option", { name: "Select barangay..." }).parentElement, {
     target: { value: "Abo-abo" },
   });
+  choose("Water Source *", "Other");
+  choose("Water Level *", "level_2");
 }
 
 test("new applicable records show the exact septic choices and require one", () => {
   openNewRecord();
-  fireEvent.change(selectFor("Toilet Type *"), { target: { value: "water_sealed" } });
+  choose("Toilet Type *", "water_sealed");
 
-  const septic = selectFor("Septic Tank Type *");
-  expect(Array.from(septic.options).map((option) => [option.value, option.textContent])).toEqual([
-    ["", "Select septic tank type..."],
-    ["septic_tank", "Septic tank"],
-    ["bottomless", "Bottomless"],
-    ["vault_sealed", "Vault-sealed"],
+  expect(radiosFor("Septic Tank Type *").map((radio) => radio.value)).toEqual([
+    "bottomless", "vault_sealed",
   ]);
 
   fireEvent.click(screen.getByRole("button", { name: "Save Household" }));
@@ -92,8 +96,8 @@ test.each(["water_sealed", "pour_flush"])(
   "new %s record submits the selected septic value",
   async (toiletType) => {
     openNewRecord();
-    fireEvent.change(selectFor("Toilet Type *"), { target: { value: toiletType } });
-    fireEvent.change(selectFor("Septic Tank Type *"), { target: { value: "bottomless" } });
+    choose("Toilet Type *", toiletType);
+    choose("Septic Tank Type *", "bottomless");
     fireEvent.click(screen.getByRole("button", { name: "Save Household" }));
 
     await waitFor(() => expect(mockCreateHousehold).toHaveBeenCalledTimes(1));
@@ -106,7 +110,7 @@ test.each(["water_sealed", "pour_flush"])(
 
 test("existing applicable records initialize their stored septic value", () => {
   openExistingRecord();
-  expect(selectFor("Septic Tank Type *").value).toBe("vault_sealed");
+  expect(selectedFor("Septic Tank Type *")).toBe("vault_sealed");
 });
 
 test("an unrelated edit omits and preserves the existing septic value", async () => {
@@ -123,12 +127,12 @@ test("an unrelated edit omits and preserves the existing septic value", async ()
 
 test("changing only the septic value sends a one-field PATCH", async () => {
   openExistingRecord();
-  fireEvent.change(selectFor("Septic Tank Type *"), { target: { value: "septic_tank" } });
+  choose("Septic Tank Type *", "bottomless");
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
   await waitFor(() =>
     expect(mockUpdateHousehold).toHaveBeenCalledWith(21, {
-      septic_tank_type: "septic_tank",
+      septic_tank_type: "bottomless",
     })
   );
 });
@@ -137,7 +141,7 @@ test.each(["pit_latrine", "none"])(
   "switching to %s hides the selector and explicitly clears septic",
   async (toiletType) => {
     openExistingRecord();
-    fireEvent.change(selectFor("Toilet Type *"), { target: { value: toiletType } });
+    choose("Toilet Type *", toiletType);
 
     expect(screen.queryByText("Septic Tank Type *")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
@@ -152,14 +156,14 @@ test.each(["pit_latrine", "none"])(
 
 test("switching between applicable toilets retains the septic selection", () => {
   openExistingRecord();
-  fireEvent.change(selectFor("Toilet Type *"), { target: { value: "water_sealed" } });
-  expect(selectFor("Septic Tank Type *").value).toBe("vault_sealed");
+  choose("Toilet Type *", "water_sealed");
+  expect(selectedFor("Septic Tank Type *")).toBe("vault_sealed");
 });
 
 test("switching away and back requires a new septic selection", () => {
   openExistingRecord();
-  fireEvent.change(selectFor("Toilet Type *"), { target: { value: "none" } });
-  fireEvent.change(selectFor("Toilet Type *"), { target: { value: "pour_flush" } });
+  choose("Toilet Type *", "none");
+  choose("Toilet Type *", "pour_flush");
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
   expect(screen.getByText(/septic tank type is required/i)).toBeTruthy();
