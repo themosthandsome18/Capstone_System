@@ -2549,22 +2549,134 @@ class PublicBoatRenameMigrationTests(TestCase):
         self.assertEqual(BoatType.objects.get(id=901).name, self.OLD)
         self.assertEqual(BoatType.objects.get(id=902).name, self.NEW)
 
-    def test_seed_and_importer_use_the_new_name(self):
-        from .services.online_booking import normalize_boat_type
 
-        self.assertEqual(REFERENCE_TABLES["boat_types"][0], {"id": 1, "name": self.NEW})
-        self.assertEqual(normalize_boat_type(self.OLD), self.NEW)
-        self.assertEqual(normalize_boat_type("Public Boat"), self.NEW)
-        self.assertEqual(normalize_boat_type("  public boat (sabang)  "), self.NEW)
-        self.assertEqual(normalize_boat_type(""), self.NEW)
-        # Other boat types are untouched
-        self.assertEqual(
-            normalize_boat_type("Private Boat"),
-            "Private Boat (Rates depend on the capacity)",
+
+class _ProductionBoatRows:
+    """The seven boat rows production has before 0045, plus record helpers."""
+
+    PRIVATE_OLD = "Private Boat (Rates depend on the capacity)"
+    FARE = "1-2 pax (One-Way P1500, Two-way P2000)"
+    PRODUCTION_ROWS = {
+        1: "Public Boat",
+        2: PRIVATE_OLD,
+        3: "Boat Provided by Resort (As confirmed by both guests and resort)",
+        4: "2.0",
+        5: "Motorized Banca",
+        6: "Speedboat",
+        7: "Passenger Boat",
+    }
+    # Sheet text, old wording and new, and the row each must land on.
+    IMPORT_CELLS = {
+        "Public Boat": 1,
+        "  public boat (sabang)  ": 1,
+        "Tourist Boat": 1,
+        "": 1,
+        "Private Boat": 2,
+        PRIVATE_OLD: 2,
+        "passenger boat": 2,
+        "Boat provided by resort": 2,
+        "Boat Provided by Resort (As confirmed by both guests and resort)": 2,
+    }
+
+    def setUp(self):
+        ensure_test_reference_tables()
+        BoatType.objects.all().delete()
+        for boat_id, name in self.PRODUCTION_ROWS.items():
+            BoatType.objects.create(id=boat_id, name=name)
+
+    def _record(self, survey_id, boat_type_id, fare=""):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Boat Test Group",
+            contact_number="09170000000",
+            country=Country.objects.first(),
+            region=Region.objects.first(),
+            province=Province.objects.first(),
+            arrival_date="2026-04-02",
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type_id=boat_type_id,
+            boat_capacity_fare=fare,
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=4,
+            filipino_count=4,
+            total_male=2,
+            total_female=2,
+            age_8_59=4,
+            status="arrived",
         )
+
+    def _run(self, function):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from django.apps import apps
+
+        out = StringIO()
+        with redirect_stdout(out):
+            function(apps, None)
+        return out.getvalue()
+
+    def _names(self):
+        return dict(BoatType.objects.values_list("id", "name"))
+
+    def _resolve(self, cells):
+        from .services.online_booking import ReferenceResolver, resolve_boat_type
+
+        resolver = ReferenceResolver(commit=False)
+        return {cell: resolve_boat_type(resolver, cell) for cell in cells}
+
+    def assert_import_lands_on_rows_1_and_2(self):
+        rows_before = BoatType.objects.count()
+
+        resolved = self._resolve(self.IMPORT_CELLS)
+
+        self.assertEqual({cell: item.id for cell, item in resolved.items()}, self.IMPORT_CELLS)
+        self.assertTrue(all(not item._state.adding for item in resolved.values()))
+        self.assertEqual(BoatType.objects.count(), rows_before)
+
+
+class BoatCapacityFareFlagTests(_ProductionBoatRows, TestCase):
+    """0044 puts the capacity-fare rule on the row; the import maps by id."""
+
+    def setUp(self):
+        import importlib
+
+        super().setUp()
+        self.flag_migration = importlib.import_module(
+            "api.migrations.0044_boattype_requires_capacity_fare"
+        )
+
+    def test_flag_migration_sets_only_the_tourist_boat(self):
+        self._run(self.flag_migration.flag_tourist_boat)
+
         self.assertEqual(
-            normalize_boat_type("Boat provided by resort"),
-            "Boat Provided by Resort (As confirmed by both guests and resort)",
+            list(BoatType.objects.filter(requires_capacity_fare=True).values_list("id", flat=True)),
+            [1],
+        )
+        self.assertEqual(self._names(), self.PRODUCTION_ROWS)
+
+    def test_import_maps_old_and_new_names_while_the_old_names_are_stored(self):
+        self.assert_import_lands_on_rows_1_and_2()
+
+    def test_import_still_creates_a_row_for_unrecognised_text(self):
+        item = self._resolve(["3.0"])["3.0"]
+
+        self.assertTrue(item._state.adding)
+        self.assertEqual(item.name, "3.0")
+
+    def test_reference_payload_exposes_the_flag(self):
+        from .serializers import BoatTypeSerializer
+
+        self._run(self.flag_migration.flag_tourist_boat)
+
+        data = BoatTypeSerializer(BoatType.objects.filter(id__in=[1, 2]), many=True).data
+        self.assertEqual(
+            [dict(row) for row in data],
+            [
+                {"id": 1, "name": "Public Boat", "requires_capacity_fare": True},
+                {"id": 2, "name": self.PRIVATE_OLD, "requires_capacity_fare": False},
+            ],
         )
 
 

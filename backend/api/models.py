@@ -297,7 +297,9 @@ class TravelMode(NamedReference):
 
 
 class BoatType(NamedReference):
-    pass
+    # Whether a booking on this boat takes a Boat Capacity and Fare. The web
+    # form reads this instead of the boat's name.
+    requires_capacity_fare = models.BooleanField(default=False)
 
 
 class VisitPurpose(NamedReference):

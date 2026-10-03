@@ -414,9 +414,9 @@ def build_payload(sheet, row_number, status, resolver):
             TravelMode,
             normalize_travel_mode(cell_value(sheet, row_number, "travel_mode")),
         ).id,
-        "boat_type_id": resolver.named(
-            BoatType,
-            normalize_boat_type(cell_value(sheet, row_number, "boat_type")),
+        "boat_type_id": resolve_boat_type(
+            resolver,
+            cell_value(sheet, row_number, "boat_type"),
         ).id,
         "boat_capacity_fare": clean_text(
             cell_value(sheet, row_number, "boat_capacity_fare")
@@ -447,6 +447,7 @@ class ReferenceResolver:
     def __init__(self, commit=False):
         self.commit = commit
         self.named_cache = {}
+        self.id_cache = {}
         self.next_ids = {}
         self.new_resort_names = set()
         resorts = list(Resort.objects.all())
@@ -460,6 +461,12 @@ class ReferenceResolver:
         self.next_resort_id = (
             Resort.objects.aggregate(max_id=Max("resort_id"))["max_id"] or 0
         ) + 1
+
+    def by_id(self, model, pk):
+        key = (model, pk)
+        if key not in self.id_cache:
+            self.id_cache[key] = model.objects.filter(pk=pk).first()
+        return self.id_cache[key]
 
     def named(self, model, name, defaults=None):
         defaults = defaults or {}
@@ -703,16 +710,46 @@ def normalize_travel_mode(value):
     return text or "Private Vehicle"
 
 
+TOURIST_BOAT_ID = 1
+PASSENGER_BOAT_ID = 2
+
+# The LGU's sheets keep the old wording, so old and new names map to the same
+# rows. They map to ids, not names, so a renamed row still matches. "Boat
+# provided by resort" is a private trip with no public fare, so it joins the
+# passenger boat now that its own row is gone.
+BOAT_TYPE_IDS_BY_PREFIX = (
+    ("public boat", TOURIST_BOAT_ID),
+    ("tourist boat", TOURIST_BOAT_ID),
+    ("private boat", PASSENGER_BOAT_ID),
+    ("passenger boat", PASSENGER_BOAT_ID),
+    ("boat provided", PASSENGER_BOAT_ID),
+)
+
+BOAT_TYPE_NAMES = {
+    TOURIST_BOAT_ID: "Tourist Boat",
+    PASSENGER_BOAT_ID: "Passenger Boat",
+}
+
+
 def normalize_boat_type(value):
-    text = clean_text(value)
-    key = normalize_key(text)
-    if key.startswith("private boat"):
-        return "Private Boat (Rates depend on the capacity)"
-    if key.startswith("public boat"):
-        return "Public Boat"
-    if key.startswith("boat provided"):
-        return "Boat Provided by Resort (As confirmed by both guests and resort)"
-    return text or "Public Boat"
+    """Return the BoatType id a sheet's boat text belongs to, or None."""
+    key = normalize_key(value)
+    if not key:
+        return TOURIST_BOAT_ID
+    for prefix, boat_id in BOAT_TYPE_IDS_BY_PREFIX:
+        if key.startswith(prefix):
+            return boat_id
+    return None
+
+
+def resolve_boat_type(resolver, value):
+    boat_id = normalize_boat_type(value)
+    if boat_id is None:
+        # Unrecognised text still becomes a row of its own, as before.
+        return resolver.named(BoatType, clean_text(value))
+    return resolver.by_id(BoatType, boat_id) or resolver.named(
+        BoatType, BOAT_TYPE_NAMES[boat_id]
+    )
 
 
 def normalize_purpose(value):
