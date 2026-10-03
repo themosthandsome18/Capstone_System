@@ -212,6 +212,17 @@
   min-height: 100vh;
 }
 
+.auth-session-error {
+  flex-direction: column;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.auth-session-error p {
+  margin: 0;
+  max-width: 420px;
+}
+
 @media (max-width: 780px) {
   .login-page {
     padding: 18px;

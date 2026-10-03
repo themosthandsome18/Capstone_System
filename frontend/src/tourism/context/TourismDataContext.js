@@ -229,20 +229,36 @@ export function TourismDataProvider({ children }) {
     []
   );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    const version = dataVersionRef.current;
-    try {
-      const response = await tourismApi.getBootstrapData();
-      setBootstrap(response);
-      markFresh(["arrivalMonitoring", "dashboardData", "reportData"], version);
-      setError("");
-    } catch (requestError) {
-      setError(requestError.message || "Unable to load tourism data.");
-    } finally {
-      setLoading(false);
+  // A call made while a bootstrap is already in flight reuses that request.
+  // React.StrictMode runs the mount effect twice in development, which would
+  // otherwise fire two full concurrent bootstraps.
+  const loadPromiseRef = useRef(null);
+
+  const loadData = useCallback(() => {
+    if (loadPromiseRef.current) {
+      return loadPromiseRef.current;
     }
+
+    const promise = (async () => {
+      setLoading(true);
+      setError("");
+      const version = dataVersionRef.current;
+      try {
+        const response = await tourismApi.getBootstrapData();
+        setBootstrap(response);
+        markFresh(["arrivalMonitoring", "dashboardData", "reportData"], version);
+        setError("");
+      } catch (requestError) {
+        setError(requestError.message || "Unable to load tourism data.");
+      } finally {
+        setLoading(false);
+      }
+    })().finally(() => {
+      loadPromiseRef.current = null;
+    });
+
+    loadPromiseRef.current = promise;
+    return promise;
   }, [markFresh]);
 
   useEffect(() => {

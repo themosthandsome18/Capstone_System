@@ -134,11 +134,17 @@ WSGI_APPLICATION = "backend.wsgi.application"
 DATABASE_URL = config("DATABASE_URL", default="").strip()
 DB_ENGINE = config("DB_ENGINE", default="postgresql").strip().lower()
 
+# Persistent connections only help a server that keeps its threads, like
+# gunicorn in production. runserver (DEBUG) serves every request on a new
+# thread, so a kept-alive connection is never reused and only holds a slot in
+# the shared Supabase session pool until it expires.
+CONN_MAX_AGE = 0 if DEBUG else 600
+
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=CONN_MAX_AGE,
             ssl_require=True,
         )
     }
@@ -165,7 +171,7 @@ else:
             "HOST": config("DB_HOST", default="localhost"),
             "PORT": config("DB_PORT", default="5433"),
             "OPTIONS": DATABASE_OPTIONS,
-            "CONN_MAX_AGE": 600,
+            "CONN_MAX_AGE": CONN_MAX_AGE,
         }
     }
 

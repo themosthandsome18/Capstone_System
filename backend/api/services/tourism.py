@@ -316,11 +316,6 @@ def build_arrival_monitoring_payload(params=None):
 
 
 def build_booking_management_payload(params=None):
-    TouristRecord.objects.filter(
-        status=BOOKING_STATUS_PENDING,
-        arrival_date__lt=timezone.localdate()
-    ).update(status=BOOKING_STATUS_NO_SHOW)
-
     params = params or {}
     reporting_year = get_reporting_year(params)
     records = apply_reporting_year(TouristRecord.objects.all(), reporting_year)
