@@ -25,6 +25,11 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import {
+  CHART_PALETTE_DEFAULTS,
+  seriesColors,
+  useTourismChartPalette,
+} from "../theme/chartPalette";
 import { formatNumber } from "../utils/format";
 
 ChartJS.register(
@@ -55,7 +60,8 @@ const reportingYearOptions = [
   { value: "all", label: "All Years" },
 ];
 
-const lineOptions = {
+// Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
+const buildLineOptions = (palette) => ({
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
@@ -67,7 +73,7 @@ const lineOptions = {
       max: 400,
       ticks: {
         stepSize: 100,
-        color: "#a1aaa6",
+        color: palette.tick,
       },
       grid: {
         color: "rgba(190, 205, 198, 0.35)",
@@ -75,16 +81,16 @@ const lineOptions = {
     },
     x: {
       ticks: {
-        color: "#a1aaa6",
+        color: palette.tick,
       },
       grid: {
         display: false,
       },
     },
   },
-};
+});
 
-const barOptions = {
+const buildBarOptions = (palette) => ({
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
@@ -97,7 +103,7 @@ const barOptions = {
         color: "rgba(150, 180, 175, 0.35)",
       },
       ticks: {
-        color: "#6b7470",
+        color: palette.tick,
       },
     },
     x: {
@@ -105,11 +111,11 @@ const barOptions = {
         display: false,
       },
       ticks: {
-        color: "#4f5a55",
+        color: palette.tick,
       },
     },
   },
-};
+});
 
 const doughnutOptions = {
   maintainAspectRatio: false,
@@ -169,19 +175,26 @@ function Dashboard() {
   const stayType = dashboardData.stayType;
   const validation = dashboardData.validation;
 
+  // null until the shell's theme colours have been read; charts wait for it.
+  const chartPalette = useTourismChartPalette();
+  const palette = chartPalette || CHART_PALETTE_DEFAULTS;
+  const twoSeries = useMemo(() => seriesColors(palette, 2), [palette]);
+  const lineOptions = useMemo(() => buildLineOptions(palette), [palette]);
+  const barOptions = useMemo(() => buildBarOptions(palette), [palette]);
+
   const dailyVisitorData = useMemo(() => ({
     labels: dashboardData.trends.labels,
     datasets: [
       {
         data: dashboardData.trends.arrivals,
-        borderColor: "#6abdc0",
-        backgroundColor: "rgba(106, 189, 192, 0.15)",
+        borderColor: palette.series[0],
+        backgroundColor: palette.wash,
         tension: 0.4,
         pointRadius: 3,
-        pointBackgroundColor: "#6abdc0",
+        pointBackgroundColor: palette.series[0],
       },
     ],
-  }), [dashboardData.trends.labels, dashboardData.trends.arrivals]);
+  }), [dashboardData.trends.labels, dashboardData.trends.arrivals, palette]);
 
   const touristClassificationData = useMemo(() => ({
     labels: ["Domestic (Filipino)", "Foreign (International)"],
@@ -191,36 +204,36 @@ function Dashboard() {
           classification.filipino || 0,
           classification.foreign || 0,
         ],
-        backgroundColor: ["#147c79", "#ffc978"],
+        backgroundColor: twoSeries,
         borderWidth: 0,
         cutout: "62%",
       },
     ],
-  }), [classification.filipino, classification.foreign]);
+  }), [classification.filipino, classification.foreign, twoSeries]);
 
   const genderData = useMemo(() => ({
     labels: ["Male", "Female"],
     datasets: [
       {
         data: [gender.male, gender.female],
-        backgroundColor: ["#147c79", "#21b8c3"],
+        backgroundColor: twoSeries,
         borderRadius: 8,
         barThickness: 80,
       },
     ],
-  }), [gender.male, gender.female]);
+  }), [gender.male, gender.female, twoSeries]);
 
   const stayTypeData = useMemo(() => ({
     labels: ["Day Tour", "Overnight"],
     datasets: [
       {
         data: [stayType.dayTour, stayType.overnight],
-        backgroundColor: ["#359e9b", "#4698f2"],
+        backgroundColor: twoSeries,
         borderWidth: 0,
         cutout: "62%",
       },
     ],
-  }), [stayType.dayTour, stayType.overnight]);
+  }), [stayType.dayTour, stayType.overnight, twoSeries]);
 
 
 
@@ -377,7 +390,7 @@ function Dashboard() {
           <CardTitle title="Daily Visitor Trends" subtitle="Last 7 days" />
 
           <div className="line-chart-area">
-            <Line data={dailyVisitorData} options={lineOptions} />
+            {chartPalette ? <Line data={dailyVisitorData} options={lineOptions} /> : null}
           </div>
         </section>
 
@@ -386,14 +399,16 @@ function Dashboard() {
 
           <div className="classification-content">
             <div className="classification-chart">
-              <Doughnut
-                data={touristClassificationData}
-                options={doughnutOptions}
-              />
+              {chartPalette ? (
+                <Doughnut
+                  data={touristClassificationData}
+                  options={doughnutOptions}
+                />
+              ) : null}
             </div>
 
-            <LegendRow color="#147c79" label="Domestic (Filipino)" value={classification.filipino || 0} />
-            <LegendRow color="#ffc978" label="Foreign (International)" value={classification.foreign || 0} />
+            <LegendRow color={twoSeries[0]} label="Domestic (Filipino)" value={classification.filipino || 0} />
+            <LegendRow color={twoSeries[1]} label="Foreign (International)" value={classification.foreign || 0} />
           </div>
         </section>
       </div>
@@ -403,7 +418,7 @@ function Dashboard() {
           <CardTitle title="Gender Distribution" subtitle="Active tourists this month" />
 
           <div className="bar-chart-area">
-            <Bar data={genderData} options={barOptions} />
+            {chartPalette ? <Bar data={genderData} options={barOptions} /> : null}
           </div>
         </section>
 
@@ -412,18 +427,18 @@ function Dashboard() {
 
           <div className="stay-content">
             <div className="stay-chart">
-              <Doughnut data={stayTypeData} options={doughnutOptions} />
+              {chartPalette ? <Doughnut data={stayTypeData} options={doughnutOptions} /> : null}
             </div>
 
             <div className="stay-summary">
               <StayBox
-                color="#359e9b"
+                color={twoSeries[0]}
                 title="Day Tour"
                 value={formatNumber(stayType.dayTour)}
                 percentage="Backend computed"
               />
               <StayBox
-                color="#4698f2"
+                color={twoSeries[1]}
                 title="Overnight"
                 value={formatNumber(stayType.overnight)}
                 percentage="Backend computed"

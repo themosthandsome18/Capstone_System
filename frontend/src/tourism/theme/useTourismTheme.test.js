@@ -2,8 +2,9 @@ import { render } from "@testing-library/react";
 import useTourismTheme from "./useTourismTheme";
 import { deriveTourismTheme } from "./deriveTourismTheme";
 
-function Shell({ theme }) {
-  const shellRef = useTourismTheme(theme);
+function Shell({ theme, onPalette }) {
+  const { shellRef, chartPalette } = useTourismTheme(theme);
+  if (onPalette) onPalette(chartPalette);
   return <div className="tourism-layout" data-testid="shell" ref={shellRef} />;
 }
 
@@ -45,6 +46,23 @@ describe("useTourismTheme", () => {
       expect(shell.style.getPropertyValue(name)).toBe("");
     });
     expect(rootHasThemeProperties()).toBe(false);
+  });
+
+  test("reads the chart palette back from the shell after setting it", () => {
+    const seen = [];
+    render(<Shell theme={{ primary_color: "#EF7C1F" }} onPalette={(p) => seen.push(p)} />);
+    const orange = deriveTourismTheme("#EF7C1F");
+    expect(seen[0]).toBeNull(); // the first pass, before the shell exists, is never painted
+    expect(seen[seen.length - 1].series).toEqual([1, 2, 3, 4, 5].map((n) => orange[`--th-chart-${n}`]));
+    expect(seen[seen.length - 1].wash).toBe(orange["--th-chart-wash"]);
+  });
+
+  test("re-reads the chart palette when the theme changes", () => {
+    let latest = null;
+    const { rerender } = render(<Shell theme={{ primary_color: "#2FA34A" }} onPalette={(p) => { latest = p; }} />);
+    expect(latest.series[0]).toBe(deriveTourismTheme("#2FA34A")["--th-chart-1"]);
+    rerender(<Shell theme={{ primary_color: "#EF7C1F" }} onPalette={(p) => { latest = p; }} />);
+    expect(latest.series[0]).toBe(deriveTourismTheme("#EF7C1F")["--th-chart-1"]);
   });
 
   test.each([

@@ -128,16 +128,37 @@ different roles and will diverge once a theme is applied, so **do not merge them
 ### Charts (6)
 | Token | Default | Uses |
 |---|---|---|
-| `--th-chart-1` | `#27a544` | 0 (the Key Insights digits and icon now use ink) |
-| `--th-chart-2` … `-5` | `#36c962`, `#65d279`, `#90daa9`, `#b9e4c4` | 0 |
-| `--th-chart-wash` | `rgba(106, 192, 126, 0.15)` | 0 |
+| `--th-chart-1` | `#27a544` | the chart bridge (the Key Insights digits and icon use ink) |
+| `--th-chart-2` … `-5` | `#36c962`, `#65d279`, `#90daa9`, `#b9e4c4` | the chart bridge |
+| `--th-chart-wash` | `rgba(106, 192, 126, 0.15)` | the chart bridge (no visible effect, see below) |
 
 The chart palette is **designed, not measured** (Phase 3): the old teal palette
 had no relationship to the brand green. All five sit within a few degrees of
 the base hue and are separated by lightness (0.40 to 0.81), so they read as one
 family with any theme (closest pair ΔE 12.2 on green, 17.6 on `#EF7C1F`).
-Nothing reads `chart-1` … `-5` or `chart-wash` yet; they are ready for the chart
-batch.
+**How charts read them.** A `<canvas>` cannot resolve `var()`, so
+`useTourismTheme` reads `--th-chart-1` … `-5`, `--th-chart-wash` and
+`--th-text-muted` back from the shell with `getComputedStyle`, in the same
+layout effect that sets them, and hands them to the pages through
+`TourismChartPaletteContext` (`theme/chartPalette.js`). Nothing derives a
+colour a second time. Charts wait (render nothing) until that first read,
+which happens before paint, and redraw whenever the theme changes. A slot that
+cannot be read falls back to the green `:root` value; `chartPalette.test.js`
+pins those fallbacks to `:root`.
+
+**Rules for chart colours. Do not "fix" these.**
+- **Two-slice charts use `chart-1` and `chart-4`, not `chart-1` and
+  `chart-2`.** Side by side, 1 and 2 are too close (ΔE 13.6 on green, 18.6 on
+  `#EF7C1F`); 1 and 4 are ΔE 37.9 on both. Charts with three or more series
+  take the palette in order. Single-series charts use `chart-1`.
+- Axis tick text uses `--th-text-muted`. Grid lines, legend text (`#475569`)
+  and tooltips (Chart.js defaults) stay fixed.
+- **The Data Quality & Validation doughnut stays fixed**
+  (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`). Its slices are
+  statuses, not series (see section 7).
+- `--th-chart-wash` is mapped to the Daily Visitor Trends line fill, but that
+  chart does not enable area fill (no `fill` option, Filler plugin not
+  registered), so it shows nothing. Turning fill on would be a design change.
 
 Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
 
@@ -312,16 +333,24 @@ so nothing was lost there.
   just, and a lighter theme colour would push it under. Another pair close to
   its threshold is the top-bar role line: `--th-text-tinted-muted` on
   `--th-surface-tinted` is **4.57:1** against 4.5:1 for text.
-- **Charts need a JS bridge.** A `<canvas>` cannot read `var()`, so Chart.js
-  colours in `Dashboard.js` and `AnalyticsAndReport.js` must be read with
-  `getComputedStyle` on the tourism shell element. The same applies to the SVG
-  `stroke=` attributes of the donut rings in `AnalyticsAndReport.js`, because
-  SVG attributes don't reliably resolve `var()`.
-- **The Dashboard metric icons** (`.metric-icon`, `text-[#32a6b4]`) were assigned
-  to the chart batch.
-- **`#e6f4f3` at `AnalyticsAndReport.js:802`** (the clock-icon circle). It is
-  ΔE 1.37 from `--th-chart-wash` composited over the card's white. Decide in
-  the chart batch.
+- **Data Quality & Validation doughnut should use the status tokens.** Its four
+  slices (Pending, No-show, Duplicates, Incomplete) are real statuses but use
+  generic colours (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`).
+  It is deliberately fixed, not themed; move it to the status tokens later.
+- **Bug, not a theme problem: Visitor Demographics in Key Insights renders
+  empty.** The backend sends that visual as `left` / `right`
+  (`backend/api/services/tourism.py:1022-1024`), but the chart reads
+  `visual.items` (`AnalyticsAndReport.js:699`), which is missing, so the card
+  is blank. Confirmed on screen.
+- **Dashboard grid lines are faintly green-grey** (`Dashboard.js:79`,
+  `rgba(190, 205, 198, 0.35)`; `:103`, `rgba(150, 180, 175, 0.35)`), while
+  the Analytics grids are neutral slate. Left fixed; making them neutral is a
+  separate decision.
+- **The Dashboard metric icons** (`.metric-icon`, `text-[#32a6b4]`) are still
+  literal teal. They are not charts, so the chart bridge left them; undecided.
+- **`#e6f4f3` at `AnalyticsAndReport.js:824`** (the clock-icon circle). It is
+  ΔE 1.37 from `--th-chart-wash` composited over the card's white. It is not a
+  chart, so the chart batch left it literal; still undecided.
 - **Dead gradient on the Key Insights cards.** The inline
   `background: "#ffffff"` at `AnalyticsAndReport.js:648` overrides the
   stylesheet's `.analytics-question-item` background
@@ -337,15 +366,18 @@ so nothing was lost there.
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
 - **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
   green) and the other neutrals are derived or fixed.
-- **Unused tokens (16):** `--th-primary-contrast`, `--th-page-bg`,
+- **Unused tokens (10):** `--th-primary-contrast`, `--th-page-bg`,
   `--th-surface`, `--th-text-inverse`, `--th-success-text`, `--th-warning-bg`,
-  `--th-warning-text`, `--th-info`, `--th-info-bg`, `--th-info-border`,
-  `--th-chart-1` … `-5`, `--th-chart-wash`. Each has a planned consumer; do not
-  prune them without deciding that.
+  `--th-warning-text`, `--th-info`, `--th-info-bg`, `--th-info-border`.
+  Each has a planned consumer; do not prune them without deciding that.
 - **Dead code to delete.** None of it has been deleted yet.
   - **JS files nothing imports:** `components/layout/Topbar.js`,
     `pages/FeedbackMonitoring.js`, and all of `components/ui/`
     (`Badge`, `ChartCard`, `DataTable`, `Modal`, `PageHeader`, `Panel`, `StatCard`).
+  - **Unreachable branch:** the stack/split doughnut in `VisualAnswer`
+    (`AnalyticsAndReport.js:936`). Every question that produces those types is
+    caught earlier by its question id, so it never renders; its colours were
+    left literal.
   - **CSS selectors with no live markup:**
     - generic helpers: `.page-title`, `.page-subtitle`, `.input-base`,
       `.badge*`, `.topbar-pill`

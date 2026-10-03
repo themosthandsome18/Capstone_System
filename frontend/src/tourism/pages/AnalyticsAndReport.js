@@ -13,6 +13,11 @@ import { Bar, Doughnut, Pie } from "react-chartjs-2";
 import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import {
+  CHART_PALETTE_DEFAULTS,
+  seriesColors,
+  useTourismChartPalette,
+} from "../theme/chartPalette";
 
 ChartJS.register(
   CategoryScale,
@@ -142,7 +147,8 @@ const tourismTitleMap = {
 
 
 
-const mainReportChartOptions = {
+// Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
+const buildMainReportChartOptions = (palette) => ({
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
@@ -152,7 +158,7 @@ const mainReportChartOptions = {
     y: {
       beginAtZero: true,
       ticks: {
-        color: "#5f6f6b",
+        color: palette.tick,
         font: { size: 16 },
       },
       grid: {
@@ -162,13 +168,18 @@ const mainReportChartOptions = {
     },
     x: {
       ticks: {
-        color: "#5f6f6b",
+        color: palette.tick,
         font: { size: 15 },
       },
       grid: { display: false },
     },
   },
-};
+});
+
+// Data Quality & Validation is a STATUS chart (Pending, No-show, Duplicates,
+// Incomplete): its slices stay fixed and never follow the theme. Follow-up:
+// move them to the status tokens (THEME_TOKENS.md section 7).
+const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
 
 function AnalyticsAndReport() {
   const { referenceTables, reportData, refreshReportData } = useTourismData();
@@ -194,17 +205,22 @@ function AnalyticsAndReport() {
   const totalVisitors = reportData.totals?.visitors || 0;
   const totalRevenue = reportData.totals?.revenue || 0;
 
+  // null until the shell's theme colours have been read; charts wait for it.
+  const chartPalette = useTourismChartPalette();
+  const palette = chartPalette || CHART_PALETTE_DEFAULTS;
+  const mainReportChartOptions = useMemo(() => buildMainReportChartOptions(palette), [palette]);
+
   const chartData = useMemo(() => ({
     labels: rows.map((item) => item.name),
     datasets: [
       {
         data: rows.map((item) => item.visitors),
-        backgroundColor: "#2f9c9c",
+        backgroundColor: palette.series[0],
         borderRadius: 8,
         barThickness: reportType === "resort" ? 80 : 55,
       },
     ],
-  }), [rows, reportType]);
+  }), [rows, reportType, palette]);
 
   useEffect(() => {
     let active = true;
@@ -518,10 +534,12 @@ function AnalyticsAndReport() {
           </div>
 
           <div className="report-chart-area">
-            <Bar
-              data={chartData}
-              options={mainReportChartOptions}
-            />
+            {chartPalette ? (
+              <Bar
+                data={chartData}
+                options={mainReportChartOptions}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -666,6 +684,10 @@ function AnalyticsAndReport() {
 }
 
 const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
+  // null until the shell's theme colours have been read; charts wait for it.
+  const chartPalette = useTourismChartPalette();
+  const palette = chartPalette || CHART_PALETTE_DEFAULTS;
+
   if (!visual) {
     return null;
   }
@@ -685,9 +707,9 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
       datasets: [
         {
           data: items.map((item) => item.value),
-          backgroundColor: isPie 
-            ? ["#147c79", "#ffc978"]
-            : ["#147c79", "#359e9b", "#ffc978", "#ff8b21"],
+          backgroundColor: questionId === "validation"
+            ? VALIDATION_SLICE_COLORS
+            : seriesColors(palette, items.length),
           borderWidth: 0,
         },
       ],
@@ -695,7 +717,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
 
     return (
       <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
-        {isPie ? (
+        {!chartPalette ? null : isPie ? (
           <Pie
             data={chartData}
             options={{
@@ -769,7 +791,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
             cy="50"
             r={radius}
             fill="transparent"
-            stroke="#147c79"
+            stroke={palette.series[0]}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -848,7 +870,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
             cy="50"
             r={radius}
             fill="transparent"
-            stroke="#147c79"
+            stroke={palette.series[0]}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -875,7 +897,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
       datasets: [
         {
           data: (visual.items || []).map((item) => item.value),
-          backgroundColor: ["#32a19b", "#2f9c9c", "#6abdc0", "#8fdcda"],
+          backgroundColor: seriesColors(palette, (visual.items || []).length),
           borderRadius: 4,
           maxBarThickness: 35,
         },
@@ -884,27 +906,29 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
 
     return (
       <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
-        <Bar
-          data={chartData}
-          options={{
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: { enabled: true },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { font: { size: 11 }, color: "#64748b" },
-                grid: { color: "rgba(148, 163, 184, 0.1)" },
+        {chartPalette ? (
+          <Bar
+            data={chartData}
+            options={{
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true },
               },
-              x: {
-                ticks: { font: { size: 11 }, color: "#64748b" },
-                grid: { display: false },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { font: { size: 11 }, color: palette.tick },
+                  grid: { color: "rgba(148, 163, 184, 0.1)" },
+                },
+                x: {
+                  ticks: { font: { size: 11 }, color: palette.tick },
+                  grid: { display: false },
+                },
               },
-            },
-          }}
-        />
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -968,7 +992,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
       datasets: [
         {
           data: (visual.items || []).map((item) => item.value),
-          backgroundColor: "#147c79",
+          backgroundColor: palette.series[0],
           borderRadius: 4,
           maxBarThickness: 16,
         },
@@ -977,28 +1001,30 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
 
     return (
       <div style={{ height: `${Math.max(150, (visual.items || []).length * 36)}px`, position: "relative", margin: "10px 0" }}>
-        <Bar
-          data={chartData}
-          options={{
-            indexAxis: "y",
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: { enabled: true },
-            },
-            scales: {
-              x: {
-                beginAtZero: true,
-                ticks: { font: { size: 11 }, color: "#64748b" },
-                grid: { color: "rgba(148, 163, 184, 0.1)" },
+        {chartPalette ? (
+          <Bar
+            data={chartData}
+            options={{
+              indexAxis: "y",
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true },
               },
-              y: {
-                ticks: { font: { size: 11 }, color: "#64748b" },
-                grid: { display: false },
+              scales: {
+                x: {
+                  beginAtZero: true,
+                  ticks: { font: { size: 11 }, color: palette.tick },
+                  grid: { color: "rgba(148, 163, 184, 0.1)" },
+                },
+                y: {
+                  ticks: { font: { size: 11 }, color: palette.tick },
+                  grid: { display: false },
+                },
               },
-            },
-          }}
-        />
+            }}
+          />
+        ) : null}
       </div>
     );
   }

@@ -8,6 +8,7 @@ import PageLoader from "../../../shared/PageLoader";
 import ErrorBoundary from "../../../shared/ErrorBoundary";
 import useDocumentBranding from "../../../shared/useDocumentBranding";
 import useTourismTheme from "../../theme/useTourismTheme";
+import { TourismChartPaletteContext } from "../../theme/chartPalette";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -75,7 +76,8 @@ function AppShell() {
   });
 
   // Theme colours go on the shell element only, never on :root (THEME_TOKENS.md section 1).
-  const shellRef = useTourismTheme(theme);
+  // Charts read their colours back from the shell (chartPalette.js).
+  const { shellRef, chartPalette } = useTourismTheme(theme);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
@@ -199,7 +201,9 @@ function AppShell() {
 
         <section className="tourism-content">
           <ErrorBoundary featureName="Tourism Section">
-            <Outlet context={{ addEntryRequestId }} />
+            <TourismChartPaletteContext.Provider value={chartPalette}>
+              <Outlet context={{ addEntryRequestId }} />
+            </TourismChartPaletteContext.Provider>
           </ErrorBoundary>
         </section>
       </main>
