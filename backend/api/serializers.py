@@ -173,6 +173,7 @@ class TravelModeSerializer(NamedReferenceSerializer):
 class BoatTypeSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = BoatType
+        fields = ["id", "name", "requires_capacity_fare"]
 
 
 class VisitPurposeSerializer(NamedReferenceSerializer):

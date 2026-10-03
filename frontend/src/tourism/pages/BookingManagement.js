@@ -15,6 +15,7 @@ import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
+import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
 
 const pageSize = 10;
 
@@ -412,18 +413,20 @@ function BookingManagement() {
     setCurrentStep(1);
   }
 
-  // Boat Capacity and Fare applies only to the public boat, identified by name.
-  function isPublicBoat(boatTypeId) {
-    const boat = referenceTables.boatTypes.find((b) => String(b.id) === String(boatTypeId));
-    return (boat?.name || "").trim().toLowerCase().startsWith("public boat");
-  }
-
   function updateField(field, value) {
     setForm((current) => ({
       ...current,
       [field]: value,
       ...(field === "region_id" ? { province_id: "" } : {}),
-      ...(field === "boat_type_id" && !isPublicBoat(value) ? { boat_capacity_fare: "" } : {}),
+      ...(field === "boat_type_id"
+        ? {
+            boat_capacity_fare: capacityFareForBoatType(
+              referenceTables.boatTypes,
+              value,
+              current.boat_capacity_fare
+            ),
+          }
+        : {}),
       ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
     }));
   }
@@ -467,7 +470,11 @@ function BookingManagement() {
       itinerary_id: Number(form.itinerary_id),
       travel_mode_id: Number(form.travel_mode_id),
       boat_type_id: Number(form.boat_type_id),
-      boat_capacity_fare: isPublicBoat(form.boat_type_id) ? form.boat_capacity_fare.trim() : "",
+      boat_capacity_fare: capacityFareForBoatType(
+        referenceTables.boatTypes,
+        form.boat_type_id,
+        form.boat_capacity_fare.trim()
+      ),
       parking_space: "",
       visit_purpose_id: Number(form.visit_purpose_id),
       arrival_date: form.arrival_date,
@@ -1438,7 +1445,7 @@ function BookingManagement() {
                       <select
                         value={form.boat_capacity_fare}
                         onChange={(e) => updateField("boat_capacity_fare", e.target.value)}
-                        disabled={!isPublicBoat(form.boat_type_id)}
+                        disabled={!requiresCapacityFare(referenceTables.boatTypes, form.boat_type_id)}
                       >
                         <option value="">Select capacity and fare</option>
                         {boatCapacityFareOptions.map((o) => (
