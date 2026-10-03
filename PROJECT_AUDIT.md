@@ -1,5 +1,15 @@
 # PROJECT AUDIT: Mauban LGU Tourism & Sanitary Compliance Portal
 
+## Household Survey A+B+C - COMPLETE and Accepted (2026-10-03)
+- **CLOSED:** Household Survey correction work is complete, published and accepted. This closeout supersedes the unpublished, held-off-main and pending-acceptance statuses in the historical Household Survey entries below.
+- Published main commit: `ae183ed0272d931fd2c52f8082b6712948255566`.
+- Verified release results: backend full suite **276/276 passed**; Flutter full suite **215/215 passed**; frontend full suite **277/277 passed**; production frontend build **passed**.
+- Sanitation APK: package `com.mauban.sanitation`; version **1.0.4**, version code **5**. Signing certificate SHA-256: `98214ff2f499cbb6bd5f18938e6a50dac789a26143dd3ca39011e8e44c01c86b`.
+- Real-phone acceptance: **PASSED**. Hosted deployed-browser acceptance: **PASSED**.
+- Final household contract: septic choices are **Bottomless / Vault-sealed only**; legacy `septic_tank` remains preserved/readable but unavailable for new selection. Water source is single-select with the five approved values: **Deep well, Poso-shallow well, Spring, Barangay water system, Other**. Water level remains independent. Male/Female/Total displays a live read-only Total. Web/mobile differential PATCH preservation remains intact.
+- Separate outstanding work, **not part of this release**: satellite map/provider work; GPS Map Camera / front-of-house photo persistence workflow. These remain open independently of the closed Household Survey corrections.
+- Documentation-only closeout records the verified release and acceptance facts supplied by the user; no tests or acceptance checks were rerun, and no production API/DB access was performed for this closeout.
+
 ## Household Survey - Slice C: Final Web UI and Water Contract (2026-10-02; uncommitted)
 - Stack/preflight: verified `sanitation/household-final-mobile` at `f49aab2f48d1e2de475444c518e36f888b4e3790`, clean tracked state and only unrelated untracked `tatus`; created `sanitation/household-final-web` directly on A/B. A and B are committed but intentionally unpublished. Main/origin/main remain `3932a812860ff4dcd6861db9355f5d6572e6f268`; do not publish the backend guard separately from compatible clients.
 - Septic: selectable choices are only Bottomless/`bottomless` and Vault-sealed/`vault_sealed`. Stored `septic_tank` displays as legacy/unavailable and is preserved on unrelated/no-op edits. Changing the legacy applicable toilet configuration clears the selection and requires an approved replacement. Pit/None transitions explicitly PATCH NULL; switching back requires selection. Existing NULL/blank compatibility and unknown-value blocking remain covered.
