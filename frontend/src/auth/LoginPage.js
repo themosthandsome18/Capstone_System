@@ -39,7 +39,7 @@ function LoginPage() {
         getDefaultRouteForRole(authenticatedRole);
       navigate(nextPath, { replace: true });
     } catch (requestError) {
-      setError(requestError.details?.detail || "Invalid username or password.");
+      setError(getLoginErrorMessage(requestError));
     } finally {
       setSubmitting(false);
     }
@@ -105,6 +105,37 @@ function LoginPage() {
       </section>
     </main>
   );
+}
+
+
+const UNREACHABLE_MESSAGE =
+  "We couldn't reach the server. Please try again in a moment.";
+const SERVER_ERROR_MESSAGE =
+  "The server ran into a problem. Please try again in a moment.";
+
+
+// Only a 401 means the credentials were rejected. Anything else is the
+// server's problem, not the user's, and must not be reported as bad credentials.
+function getLoginErrorMessage(requestError) {
+  const status = requestError?.status;
+  const detail = requestError?.details?.detail;
+
+  if (status === 401) {
+    return detail || "Invalid username or password.";
+  }
+
+  // 400: the server's own validation message, e.g. an empty field.
+  if (status === 400 && typeof detail === "string" && detail) {
+    return detail;
+  }
+
+  // No status: the request never got an answer (refused, offline, CORS).
+  // 408: apiClient's own timeout.
+  if (!status || status === 408) {
+    return UNREACHABLE_MESSAGE;
+  }
+
+  return SERVER_ERROR_MESSAGE;
 }
 
 

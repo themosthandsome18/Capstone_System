@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   getCurrentUser,
@@ -10,43 +18,64 @@ import { getStoredAuthToken, setStoredAuthToken } from "../shared/apiClient";
 
 const AuthContext = createContext(null);
 
+export const SESSION_CHECK_FAILED_MESSAGE =
+  "We couldn't confirm your session because the server could not be reached " +
+  "or returned an error. Please try again in a moment.";
+
+
+// Only these mean the stored token itself is bad (expired, revoked, or the
+// user was deactivated). Anything else is a server or network problem and
+// must not log the user out.
+function isRejectedToken(error) {
+  return error?.status === 401 || error?.status === 403;
+}
+
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(getStoredAuthToken()));
+  const [sessionError, setSessionError] = useState("");
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function restoreSession() {
-      if (!getStoredAuthToken()) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const currentUser = await getCurrentUser();
-        if (mounted) {
-          setUser(currentUser);
-        }
-      } catch {
-        setStoredAuthToken("");
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
+  const restoreSession = useCallback(async () => {
+    if (!getStoredAuthToken()) {
+      setLoading(false);
+      return;
     }
 
+    setLoading(true);
+    setSessionError("");
+
+    try {
+      const currentUser = await getCurrentUser();
+      if (mountedRef.current) {
+        setUser(currentUser);
+      }
+    } catch (error) {
+      if (isRejectedToken(error)) {
+        setStoredAuthToken("");
+      } else if (mountedRef.current) {
+        setSessionError(SESSION_CHECK_FAILED_MESSAGE);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
     restoreSession();
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
     };
-  }, []);
+  }, [restoreSession]);
 
   async function login(username, password) {
     const authenticatedUser = await requestLogin(username, password);
+    setSessionError("");
     setUser(authenticatedUser);
     return authenticatedUser;
   }
@@ -64,8 +93,10 @@ export function AuthProvider({ children }) {
       login,
       logout,
       isAuthenticated: Boolean(user),
+      sessionError,
+      retrySession: restoreSession,
     }),
-    [user, loading]
+    [user, loading, sessionError, restoreSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
