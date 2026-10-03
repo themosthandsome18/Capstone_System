@@ -394,7 +394,7 @@ REFERENCE_TABLES = {
     ],
     "itineraries": [
         {"id": 1, "name": "Overnight"},
-        {"id": 2, "name": "Day Tour"},
+        {"id": 2, "name": "Same Day"},
         {"id": 3, "name": "2 Nights"},
         {"id": 4, "name": "3 Nights"},
         {"id": 5, "name": "4 Nights"},

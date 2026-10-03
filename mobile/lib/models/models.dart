@@ -58,7 +58,7 @@ class MobileBootstrap {
       regions: const [RefItem(id: 4, name: 'CALABARZON Region')],
       provinces: const [RefItem(id: 1, name: 'Quezon')],
       itineraries: const [
-        RefItem(id: 2, name: 'Day Tour'),
+        RefItem(id: 2, name: 'Same Day'),
         RefItem(id: 1, name: 'Overnight'),
         RefItem(id: 3, name: '2 Nights'),
       ],

@@ -1509,7 +1509,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 const SizedBox(height: 8),
                 _buildInfoLine(Icons.place_outlined, 'Resort', _currentRecord['resort_name'] ?? 'Cagbalete Swimmingan'),
                 _buildInfoLine(Icons.explore_outlined, 'Region / Province', '${_currentRecord['region_name'] ?? 'Region VII'}, ${_currentRecord['province_name'] ?? 'Cebu'}'),
-                _buildInfoLine(Icons.navigation_outlined, 'Itinerary', _currentRecord['itinerary_name'] ?? 'Day Tour'),
+                _buildInfoLine(Icons.navigation_outlined, 'Itinerary', _currentRecord['itinerary_name'] ?? 'Same Day'),
                 _buildInfoLine(Icons.directions_bus_outlined, 'Travel Mode', _currentRecord['travel_mode_name'] ?? 'Public Vehicle'),
                 _buildInfoLine(Icons.directions_boat_outlined, 'Boat Type', _currentRecord['boat_type_name'] ?? 'Public Boat'),
                 _buildInfoLine(Icons.flag_outlined, 'Visit Purpose', _currentRecord['visit_purpose_name'] ?? 'Vacation / Leisure'),
@@ -1743,7 +1743,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
             step: '3',
             title: 'Trip details',
             children: [
-              _buildStaticField('ITINERARY', widget.recordData['itinerary_name'] ?? 'Day Tour'),
+              _buildStaticField('ITINERARY', widget.recordData['itinerary_name'] ?? 'Same Day'),
               _buildStaticField('VISIT PURPOSE', widget.recordData['visit_purpose_name'] ?? 'Leisure'),
               _buildStaticField('TRAVEL MODE', widget.recordData['travel_mode_name'] ?? 'Public Vehicle'),
               _buildStaticField('BOAT TYPE', widget.recordData['boat_type_name'] ?? 'Public Boat'),

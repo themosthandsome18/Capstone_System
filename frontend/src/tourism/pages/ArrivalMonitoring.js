@@ -411,7 +411,7 @@ function ArrivalMonitoring() {
                 <th>Female</th>
                 <th>Travel Itinerary</th>
                 <th>Overnight</th>
-                <th>Sameday</th>
+                <th>Same Day</th>
                 <th>Resort</th>
                 <th>Fee Paid</th>
               </tr>
