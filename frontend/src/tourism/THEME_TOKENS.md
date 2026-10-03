@@ -228,16 +228,20 @@ Sanitation wins on equal specificity because it loads later.
 | `.status` (base rule) | `SubmissionTracking.js` | Layout only (`capitalize`, padding). No colour |
 | `body` (`color: var(--text-main)` = `#163046`, `background: var(--page-bg)`) | every Sanitation page | The text colour, which Sanitation inherits wherever it doesn't set one |
 
-**Rules shared by both modules, tokenised for tourism, but overridden on
-Sanitation:**
-- `.sortable-th:hover`, `.sortable-th.active-sort`,
-  `.sortable-th.active-sort .sort-indicator`, `.report-sort-select:focus`.
-  They're used by `AnalyticsAndReport.js` and `SanitaryReportAnalytics.js`.
-  `Sanitation_index.css` (around lines 5886–5940 at `3d1e2fd`) redefines each
-  colour property, with `!important` where tourism uses it, so the tourism
-  tokens never paint Sanitation.
-- `.report-sort-label`, `.report-sort-select`, `.report-sort-dir-btn` (and its
-  `:hover`) are literal and identical in both files.
+**Rules shared by both modules: tourism's copy is scoped to the shell.**
+- The table sort rules (`.sortable-th` and its `:hover` / `.active-sort`,
+  `.sort-indicator`, and the `.report-sort-*` controls) are used by
+  `AnalyticsAndReport.js` and `SanitaryReportAnalytics.js`.
+  `Sanitation_index.css` (around lines 5895–5978) defines the same selectors
+  with fixed green `#0f7a45`, `!important` where tourism uses it, and loads
+  later. On equal specificity it won **on tourism pages too**: the sorted
+  Reports column stayed green on an orange theme.
+- Tourism's copies are therefore written as `.tourism-layout .sortable-th…`.
+  The extra class outranks Sanitation inside the tourism shell only, without
+  adding any `!important`. Sanitation pages never render inside
+  `.tourism-layout`, so they keep exactly their own rules (verified by computed
+  style: 0 differences). **Do not drop the prefix.**
+- Copying a selector that Sanitation also defines? Scope it the same way.
 
 **Before changing any rule above, check Sanitation.** In Phase 1, six wizard
 lines in the `.ws-*` block and the `.search-box` border were tokenised by

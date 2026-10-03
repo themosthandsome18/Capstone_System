@@ -2910,7 +2910,10 @@
 /* ================= REPORT TABLE ================= */
 
 .report-table-card {
-  overflow: hidden;
+  /* Scrolls sideways when the card is narrower than the table's minimum
+     width, rather than wrapping or overlapping the headers. */
+  overflow-x: auto;
+  overflow-y: hidden;
   border-radius: 14px;
   background: var(--th-surface-alt);
   box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
@@ -2920,6 +2923,23 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  /* Fixed layout, so sorting never resizes a column (the sorted header turns
+     bold and changes its arrow). The name column takes 36% and the three
+     figures share the rest equally. 664px is the narrowest width at which
+     the longest resort name ("Dona Choleng Camping Resort", 239px with
+     padding) and the widest bold header ("Total Revenue" plus its arrow,
+     140px) both fit on one line. */
+  table-layout: fixed;
+  min-width: 664px;
+}
+
+.report-table-card th:nth-child(1) {
+  width: 36%;
+}
+
+.report-table-card th:nth-child(n + 2) {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .report-table-card thead {
@@ -3618,6 +3638,15 @@
     box-shadow: none !important;
     border: 1px solid var(--th-border-strong) !important;
   }
+
+  /* Paper cannot scroll: let the table fit the page instead of clipping. */
+  .report-table-card {
+    overflow: visible;
+  }
+
+  .report-table-card table {
+    min-width: 0;
+  }
 }
 
 .compact-actions {
@@ -3780,40 +3809,49 @@
   box-shadow: 0 16px 32px rgba(var(--th-shadow-rgb), 0.18) !important;
 }
 
-/* ── INSTANT TABLE SORTING STYLES ── */
-.sortable-th {
+/* ── INSTANT TABLE SORTING STYLES ──
+   Scoped to the tourism shell. Sanitation_index.css defines the same selectors
+   with fixed green (#0f7a45, !important) and is imported after this file, so an
+   unscoped copy here loses to it even on tourism pages. The shell selector
+   adds one class of specificity, which wins inside .tourism-layout only;
+   sanitation pages keep their own rules. Do not drop the .tourism-layout prefix. */
+.tourism-layout .sortable-th {
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
-.sortable-th:hover {
+.tourism-layout .sortable-th:hover {
   background: rgba(var(--th-shadow-rgb), 0.08) !important;
   color: var(--th-primary-ink) !important;
 }
 
-.sort-indicator {
+/* A fixed-width box, so the idle and sorted arrows take the same space,
+   with room between the label and the arrow. */
+.tourism-layout .sort-indicator {
   display: inline-flex;
   align-items: center;
-  margin-left: 5px;
+  justify-content: center;
+  width: 12px;
+  margin-left: 8px;
   font-size: 11px;
   opacity: 0.45;
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-.sortable-th.active-sort {
+.tourism-layout .sortable-th.active-sort {
   color: var(--th-primary-ink) !important;
   background: rgba(var(--th-shadow-rgb), 0.07) !important;
   font-weight: 800;
 }
 
-.sortable-th.active-sort .sort-indicator {
+.tourism-layout .sortable-th.active-sort .sort-indicator {
   opacity: 1;
   color: var(--th-primary-ink);
 }
 
-.report-sort-controls {
+.tourism-layout .report-sort-controls {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3821,14 +3859,14 @@
   font-size: 13px;
 }
 
-.report-sort-label {
+.tourism-layout .report-sort-label {
   font-size: 12.5px;
   font-weight: 700;
   color: #475569;
   white-space: nowrap;
 }
 
-.report-sort-select {
+.tourism-layout .report-sort-select {
   padding: 6px 12px;
   border-radius: 7px;
   border: 1px solid #cbd5e1;
@@ -3841,11 +3879,11 @@
   transition: border-color 0.15s ease;
 }
 
-.report-sort-select:focus {
+.tourism-layout .report-sort-select:focus {
   border-color: var(--th-primary);
 }
 
-.report-sort-dir-btn {
+.tourism-layout .report-sort-dir-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3861,7 +3899,7 @@
   transition: all 0.15s ease;
 }
 
-.report-sort-dir-btn:hover {
+.tourism-layout .report-sort-dir-btn:hover {
   background: #e2e8f0;
   color: #0f172a;
 }
