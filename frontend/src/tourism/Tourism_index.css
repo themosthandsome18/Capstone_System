@@ -954,14 +954,6 @@
   color: #ff3b30;
 }
 
-/* Fixed like the other status chips. Shown on the Settings page; tourism has
-   no cancelled booking status yet. */
-.booking-badge.cancelled {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
-  color: #475569;
-}
-
 /* ================= ROW ACTION BUTTONS ================= */
 
 .booking-row-actions {
@@ -4258,11 +4250,28 @@
   border-radius: 10px;
 }
 
+.settings-status-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0 0;
+}
+
+.settings-status-groups dt {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--th-text-muted);
+}
+
 .settings-chip-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  margin-top: 16px;
+  margin: 0;
 }
 
 .settings-radio-group {

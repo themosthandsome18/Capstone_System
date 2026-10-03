@@ -369,6 +369,16 @@ so nothing was lost there.
     note, not a warning; the original green (3.3:1) gets this. At 4.5:1 or
     above, the note says it is easy to read. The mobile colour gets the same
     check when it is set separately.
+  - **No button on the Settings page saves on its own (deliberate).** Picking
+    a colour, choosing a saved swatch and "Reset to original green" all only
+    PREVIEW the colour; only Save writes it, and Cancel undoes any of them.
+    Every colour choice behaves the same way. Do not make reset save
+    immediately.
+  - **"Colours that never change" shows only real tourism statuses:**
+    bookings (Pending, Arrived, No-show: `BOOKING_STATUS_CHOICES`), feedback
+    (Positive, Neutral, Negative: `FeedbackEntry.STATUS_CHOICES`) and the
+    destination permit chip (Active / No Permit, from `with_mayors_permit`).
+    There is no Cancelled status; do not add a chip for one.
 - **The contrast derivation must cover graphics, not only text.** The photo
   drop-zone upload icon (`--th-primary` on `#f8fafc`) is **3.11:1** against
   the 3:1 non-text threshold. It was 3.15:1 before Phase 1. It passes, but only

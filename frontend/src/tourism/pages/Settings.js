@@ -192,6 +192,8 @@ function AppearanceSettings() {
     setStatus({ kind: "", text: "" });
   }
 
+  // Deliberate: like every colour choice on this page, reset only previews.
+  // Nothing is saved until the admin presses Save (THEME_TOKENS.md section 7).
   function handleResetToGreen() {
     choosePrimary(ORIGINAL.hex);
     setStatus({ kind: "info", text: "Original green selected. Press Save to keep it." });
@@ -407,12 +409,34 @@ function AppearanceSettings() {
               <h3 id="settings-fixed">Colours that never change</h3>
               <p>Status colours keep their meaning whatever the system colour is.</p>
             </div>
-            <div className="settings-chip-row">
-              <span className="booking-badge arrived">Arrived</span>
-              <span className="booking-badge noshow">No-show</span>
-              <span className="booking-badge pending">Pending</span>
-              <span className="booking-badge cancelled">Cancelled</span>
-            </div>
+            {/* Only statuses tourism really has, with the same chips the pages use:
+                bookings (BOOKING_STATUS_CHOICES), feedback (FeedbackEntry.STATUS_CHOICES),
+                and the destination permit chip (from with_mayors_permit). */}
+            <dl className="settings-status-groups">
+              <div>
+                <dt>Bookings</dt>
+                <dd className="settings-chip-row">
+                  <span className="booking-badge pending">Pending</span>
+                  <span className="booking-badge arrived">Arrived</span>
+                  <span className="booking-badge noshow">No-show</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Feedback</dt>
+                <dd className="settings-chip-row">
+                  <span className="status positive">Positive</span>
+                  <span className="status neutral">Neutral</span>
+                  <span className="status negative">Negative</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Destinations</dt>
+                <dd className="settings-chip-row">
+                  <span className="destination-status active">Active</span>
+                  <span className="destination-status maintenance">No Permit</span>
+                </dd>
+              </div>
+            </dl>
           </section>
 
           <section className="settings-card" aria-labelledby="settings-mobile">

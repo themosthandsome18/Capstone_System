@@ -120,12 +120,30 @@ describe("Settings: system colour", () => {
     expect(shellPrimary()).toBe(GREEN);
   });
 
-  test("reset to original green previews green until saved", () => {
-    render(<Shell initialTheme={savedTheme({ primary_color: ORANGE })} onSave={jest.fn()} />);
+  test("reset to original green previews green and never saves on its own", () => {
+    const onSave = jest.fn();
+    render(<Shell initialTheme={savedTheme({ primary_color: ORANGE })} onSave={onSave} />);
     expect(shellPrimary()).toBe(ORANGE);
     fireEvent.click(screen.getByRole("button", { name: "Reset to original green" }));
     expect(shellPrimary()).toBe(GREEN);
     expect(screen.getByRole("status").textContent).toMatch(/Press Save to keep it/);
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(shellPrimary()).toBe(ORANGE);
+  });
+
+  test("shows only the statuses tourism really has", () => {
+    const { container } = render(<Shell initialTheme={savedTheme()} onSave={jest.fn()} />);
+    const groups = Array.from(container.querySelectorAll(".settings-status-groups > div")).map((group) => [
+      group.querySelector("dt").textContent,
+      Array.from(group.querySelectorAll("dd span")).map((chip) => chip.textContent),
+    ]);
+    expect(groups).toEqual([
+      ["Bookings", ["Pending", "Arrived", "No-show"]],
+      ["Feedback", ["Positive", "Neutral", "Negative"]],
+      ["Destinations", ["Active", "No Permit"]],
+    ]);
+    expect(screen.queryByText("Cancelled")).toBeNull();
   });
 });
 
