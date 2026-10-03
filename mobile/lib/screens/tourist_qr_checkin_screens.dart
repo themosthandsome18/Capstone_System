@@ -1511,7 +1511,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 _buildInfoLine(Icons.explore_outlined, 'Region / Province', '${_currentRecord['region_name'] ?? 'Region VII'}, ${_currentRecord['province_name'] ?? 'Cebu'}'),
                 _buildInfoLine(Icons.navigation_outlined, 'Itinerary', _currentRecord['itinerary_name'] ?? 'Same Day'),
                 _buildInfoLine(Icons.directions_bus_outlined, 'Travel Mode', _currentRecord['travel_mode_name'] ?? 'Public Vehicle'),
-                _buildInfoLine(Icons.directions_boat_outlined, 'Boat Type', _currentRecord['boat_type_name'] ?? 'Public Boat'),
+                _buildInfoLine(Icons.directions_boat_outlined, 'Boat Type', _currentRecord['boat_type_name'] ?? 'Tourist Boat'),
                 _buildInfoLine(Icons.flag_outlined, 'Visit Purpose', _currentRecord['visit_purpose_name'] ?? 'Vacation / Leisure'),
                 const Divider(height: 28),
 
@@ -1746,7 +1746,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
               _buildStaticField('ITINERARY', widget.recordData['itinerary_name'] ?? 'Same Day'),
               _buildStaticField('VISIT PURPOSE', widget.recordData['visit_purpose_name'] ?? 'Leisure'),
               _buildStaticField('TRAVEL MODE', widget.recordData['travel_mode_name'] ?? 'Public Vehicle'),
-              _buildStaticField('BOAT TYPE', widget.recordData['boat_type_name'] ?? 'Public Boat'),
+              _buildStaticField('BOAT TYPE', widget.recordData['boat_type_name'] ?? 'Tourist Boat'),
               _buildStaticField('ARRIVAL DATE', widget.recordData['arrival_date'] ?? '2026-08-20'),
             ],
           ),

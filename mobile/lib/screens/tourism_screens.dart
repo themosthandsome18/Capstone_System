@@ -3851,7 +3851,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         const RefItem(id: 1, name: 'Private Vehicle');
     _boatType =
         widget.bootstrap.boatTypes.firstOrNull ??
-        const RefItem(id: 1, name: 'Public Boat');
+        const RefItem(id: 1, name: 'Tourist Boat');
     _purpose =
         widget.bootstrap.visitPurposes.firstOrNull ??
         const RefItem(id: 1, name: 'Leisure');
