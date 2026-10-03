@@ -224,7 +224,7 @@ function Dashboard() {
   }), [gender.male, gender.female, twoSeries]);
 
   const stayTypeData = useMemo(() => ({
-    labels: ["Day Tour", "Overnight"],
+    labels: ["Same Day", "Overnight"],
     datasets: [
       {
         data: [stayType.dayTour, stayType.overnight],
@@ -278,7 +278,7 @@ function Dashboard() {
       ["Foreign (International)", classification.foreign || 0],
       ["Male", gender.male],
       ["Female", gender.female],
-      ["Day Tour", stayType.dayTour],
+      ["Same Day", stayType.dayTour],
       ["Overnight", stayType.overnight],
       ["Verified Entries", validation.verifiedEntries],
       ["Duplicate Entries", validation.duplicateEntries],
@@ -423,7 +423,7 @@ function Dashboard() {
         </section>
 
         <section className="dashboard-card stay-card">
-          <CardTitle title="Stay Type Distribution" subtitle="Day Tour vs Overnight" />
+          <CardTitle title="Stay Type Distribution" subtitle="Same Day vs Overnight" />
 
           <div className="stay-content">
             <div className="stay-chart">
@@ -433,7 +433,7 @@ function Dashboard() {
             <div className="stay-summary">
               <StayBox
                 color={twoSeries[0]}
-                title="Day Tour"
+                title="Same Day"
                 value={formatNumber(stayType.dayTour)}
                 percentage="Backend computed"
               />

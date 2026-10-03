@@ -690,7 +690,7 @@ def normalize_itinerary(value):
     if "5" in key and "night" in key:
         return "5 Nights and above"
     if "day" in key:
-        return "Day Tour"
+        return "Same Day"
     if "overnight" in key or not key:
         return "Overnight"
     return text.title()

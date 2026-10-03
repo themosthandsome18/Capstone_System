@@ -135,7 +135,7 @@ const tourismTitleMap = {
   month_compare: "Month-over-Month Arrivals",
   peak_month: "Peak Season Analysis",
   classification: "Visitor Demographics",
-  stay_type: "Same-Day vs. Overnight Stays",
+  stay_type: "Same Day vs. Overnight Stays",
   overnight_resort: "Top Destination for Overnight Stays",
   average_stay: "Average Length of Stay",
   top_origin: "Top Visitor Origins",
@@ -1068,7 +1068,7 @@ function buildFallbackVisual(item) {
     return {
       type: "split",
       items: [
-        { label: "Same-day", value: numbers[0] || 0 },
+        { label: "Same Day", value: numbers[0] || 0 },
         { label: "Overnight / multi-day", value: numbers[1] || 0 },
       ],
     };
