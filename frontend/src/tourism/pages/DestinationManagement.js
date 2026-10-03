@@ -1283,7 +1283,7 @@ function DestinationManagement({ initialTab }) {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: "#64748b", fontSize: "13px", padding: "12px 0" }}>
+                  <p style={{ color: "var(--th-text-muted)", fontSize: "13px", padding: "12px 0" }}>
                     No reviews submitted for this resort yet.
                   </p>
                 )}
@@ -1327,7 +1327,7 @@ function DestinationManagement({ initialTab }) {
 
       {/* Edit / Add Destination Modal with Image Uploader */}
       {isFormOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <form
             className="tourist-record-form w-full max-w-[720px]"
             onSubmit={handleSubmit}
@@ -1404,7 +1404,7 @@ function DestinationManagement({ initialTab }) {
                 </span>
 
                 <label className="image-upload-dropzone">
-                  <FiUploadCloud size={28} className="text-green-600 mb-1" />
+                  <FiUploadCloud size={28} className="text-[var(--th-primary)] mb-1" />
                   <span className="text-xs font-bold text-slate-700">
                     {uploadingImages ? "Uploading images..." : "Click or drag photos to upload for mobile slideshow"}
                   </span>
@@ -1508,7 +1508,7 @@ function DestinationManagement({ initialTab }) {
 
       {/* Delete Destination Modal */}
       {deleteTarget ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <div className="delete-record-confirm w-full max-w-[420px]">
             <p>
               Are you sure you want to delete{" "}

@@ -1023,3 +1023,81 @@ class NotificationPublicSerializer(serializers.ModelSerializer):
             "expires_at",
         ]
         read_only_fields = ["id", "notification_type", "created_at"]
+
+
+import re
+
+from .models import TOURISM_THEME_DEFAULT_COLOR, TourismThemeSetting
+
+TOURISM_THEME_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+TOURISM_THEME_MAX_SAVED_COLORS = 12
+TOURISM_THEME_MAX_LABEL_LENGTH = 40
+TOURISM_THEME_ORIGINAL_LABEL = "Original (Green)"
+
+
+class TourismThemeReadSerializer(serializers.ModelSerializer):
+    """Public read shape. Never includes updated_by or any username."""
+
+    class Meta:
+        model = TourismThemeSetting
+        fields = [
+            "primary_color",
+            "mobile_follows_web",
+            "mobile_primary_color",
+            "saved_colors",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class TourismThemeWriteSerializer(serializers.Serializer):
+    primary_color = serializers.CharField(max_length=7)
+    mobile_follows_web = serializers.BooleanField(required=False)
+    mobile_primary_color = serializers.CharField(max_length=7, required=False, allow_blank=True)
+    saved_colors = serializers.JSONField(required=False)
+
+    def validate_primary_color(self, value):
+        if not TOURISM_THEME_HEX_RE.match(value):
+            raise serializers.ValidationError("Enter a colour as #RRGGBB.")
+        return value.upper()
+
+    def validate_mobile_primary_color(self, value):
+        if value and not TOURISM_THEME_HEX_RE.match(value):
+            raise serializers.ValidationError("Enter a colour as #RRGGBB, or leave it empty.")
+        return value.upper()
+
+    def validate_saved_colors(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Saved colours must be a list.")
+        if len(value) > TOURISM_THEME_MAX_SAVED_COLORS:
+            raise serializers.ValidationError(
+                f"Saved colours can hold at most {TOURISM_THEME_MAX_SAVED_COLORS} entries."
+            )
+
+        cleaned = []
+        for index, item in enumerate(value):
+            if not isinstance(item, dict) or set(item.keys()) != {"hex", "label"}:
+                raise serializers.ValidationError(
+                    f"Entry {index + 1} must be an object with exactly \"hex\" and \"label\"."
+                )
+            hex_value, label = item["hex"], item["label"]
+            if not isinstance(hex_value, str) or not TOURISM_THEME_HEX_RE.match(hex_value):
+                raise serializers.ValidationError(f"Entry {index + 1}: hex must be #RRGGBB.")
+            if not isinstance(label, str) or not label.strip():
+                raise serializers.ValidationError(f"Entry {index + 1}: label must be a non-empty string.")
+            if len(label.strip()) > TOURISM_THEME_MAX_LABEL_LENGTH:
+                raise serializers.ValidationError(
+                    f"Entry {index + 1}: label can be at most {TOURISM_THEME_MAX_LABEL_LENGTH} characters."
+                )
+            cleaned.append({"hex": hex_value.upper(), "label": label.strip()})
+
+        # The original green is always available to return to: the server
+        # restores it rather than trusting the UI to keep it.
+        if not any(item["hex"] == TOURISM_THEME_DEFAULT_COLOR for item in cleaned):
+            cleaned.insert(0, {"hex": TOURISM_THEME_DEFAULT_COLOR, "label": TOURISM_THEME_ORIGINAL_LABEL})
+            if len(cleaned) > TOURISM_THEME_MAX_SAVED_COLORS:
+                raise serializers.ValidationError(
+                    f"Saved colours can hold at most {TOURISM_THEME_MAX_SAVED_COLORS} entries, "
+                    "including the Original (Green)."
+                )
+        return cleaned

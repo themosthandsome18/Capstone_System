@@ -7,12 +7,15 @@ import DestinationManagement from "./pages/DestinationManagement";
 import AnalyticsAndReport from "./pages/AnalyticsAndReport";
 import GISMap from "./pages/GISMap";
 import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
+import Settings from "./pages/Settings";
+import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
 
 /**
  * Modular Tourism Routes
  * Each route is guarded with its own ErrorBoundary for Fault Isolation.
  * If any feature crashes, only that section shows a fallback UI while
  * the rest of the application remains fully functional.
+ * A route with allowedRoles is reachable only by those roles (App.js).
  */
 export const tourismRoutes = [
   {
@@ -50,6 +53,11 @@ export const tourismRoutes = [
     element: React.createElement(
       withErrorBoundary(() => <ActivityLogsPage module="tourism" />, "Activity Logs")
     ),
+  },
+  {
+    path: SETTINGS_PATH,
+    allowedRoles: SETTINGS_ROLES,
+    element: React.createElement(withErrorBoundary(Settings, "Settings")),
   },
 ];
 

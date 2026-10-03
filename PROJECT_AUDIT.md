@@ -198,6 +198,7 @@ Comprehensive standalone codebase audit generated on September 18, 2026.
 - **Framework & Runtime**: **React 19.2.4**, `react-dom 19.2.4`, Create React App (`react-scripts 5.0.1`)
 - **Routing**: `react-router-dom 7.14.0`
 - **Styling**: Tailwind CSS 3.x (`tailwindcss`, `postcss 8.4.49`, `autoprefixer 10.4.20`), custom scoped CSS files
+- **Tourism theming**: tourism colours are `--th-*` CSS tokens. The contract, exceptions and verification method are in `frontend/src/tourism/THEME_TOKENS.md`; read it before editing `Tourism_index.css`.
 - **Charts & Data Visualization**: `chart.js 4.5.1`, `react-chartjs-2 5.3.1`
 - **GIS Mapping**: `leaflet 1.9.4`, `react-leaflet 5.0.0`, `leaflet.heat 0.2.0`
 - **QR Code Generation**: `qrcode.react 4.2.0`
@@ -895,6 +896,18 @@ flutter run -d emulator --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
     - The React frontend has no unit or integration tests (`0` test files in `frontend/src/`). Any regression in API response parsing or routing can only be detected via manual browser testing.
 11. **Hardcoded Absolute File Paths in Management Commands**:
     - `import_sanitary_permits.py` contains hardcoded user directory paths (`C:\Users\This PC\Downloads\...`), rendering it unusable in automated CI/CD or production containers without providing explicit CLI arguments.
+12. **Tourism CSS Reaches Sanitation Pages**:
+    - `frontend/src/index.js` imports `Tourism_index.css` globally, so tourism rules (for example `.btn-primary`, `.insight-bars`, and the `.ws-*` block in `BookingManagement.wizard.css`) also style Sanitation pages. The list, and the rule that theme colours must never be set on `:root`, is in `frontend/src/tourism/THEME_TOKENS.md` section 5.
+13. **No Development Database: Local Commands Hit Live Data** (affects tourism and sanitation):
+    - There is no separate development database. `backend/.env` points every local `manage.py` command at the live Supabase Postgres instance.
+    - `manage.py flush` would empty every table of the live database. `migrate` (including `migrate api zero`) and `dbshell` also act directly on it.
+    - The custom management commands (`create_default_users`, `evaluate_due_notifications`, the `import_*` commands, `purge_demo_households`) read and write live data when run locally; `purge_demo_households --confirm` deletes rows.
+    - Only test runs are guarded: `backend/backend/settings.py` forces `manage.py test` and `testserver` onto an in-memory SQLite database. Nothing else is.
+    - Fix, as a separate piece of work: a development database, or at minimum a second `.env` that local work points at instead of production.
+14. **Known Local-Only Test Flake: `CommunityReportConcurrentSubmitTests`** (recorded October 3, 2026):
+    - `test_concurrent_duplicates_create_exactly_one_row` fails in a full `manage.py test` run from the usual `backend/` working folder: two threaded requests get an HTML 500 instead of JSON, and threads log `no such table: api_sanitaryestablishment`.
+    - Evidence that it is not a code regression: run alone it passes (3/3); the full suite at the same commit (`b3ca8ab`) passes 268/268 in a clean `git worktree` checkout, as do `1e8ebf7` (247/247) and `88a8d31` (268/268); no backend file changed between `88a8d31` and `b3ca8ab`. It fails only in the working folder (3/3 full runs). `DEBUG=True` alone does not reproduce it; the trigger in that folder (a `.env` value or an untracked file) was not isolated.
+    - It is a threaded concurrency test, and the test guard forces an in-memory SQLite database, which locks far more readily than Postgres under concurrent writes. That is a likely cause, worth checking first by whoever chases it.
 
 ---
 

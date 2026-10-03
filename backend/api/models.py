@@ -1,6 +1,7 @@
 import random
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 
 
@@ -1217,3 +1218,64 @@ class Notification(models.Model):
     def __str__(self):
         return f"[{self.notification_type}] {self.title}"
 
+
+
+TOURISM_THEME_DEFAULT_COLOR = "#2FA34A"
+hex_color_validator = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message="Enter a colour as #RRGGBB.",
+)
+
+
+def default_tourism_saved_colors():
+    return [{"hex": TOURISM_THEME_DEFAULT_COLOR, "label": "Original (Green)"}]
+
+
+class TourismThemeSetting(models.Model):
+    """Singleton (pk = 1) holding the admin-chosen tourism theme colour.
+
+    Only the BASE colour is stored. Hover, tint, ink, the chart palette and
+    the contrast colour are derived on the client: the base colour stays the
+    one source of truth, and the derivation formula can change without a
+    migration.
+    """
+
+    primary_color = models.CharField(
+        max_length=7,
+        default=TOURISM_THEME_DEFAULT_COLOR,
+        validators=[hex_color_validator],
+    )
+    mobile_follows_web = models.BooleanField(default=True)
+    mobile_primary_color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        validators=[hex_color_validator],
+    )
+    saved_colors = models.JSONField(default=default_tourism_saved_colors)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tourism_theme_updates",
+    )
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        self.primary_color = (self.primary_color or "").upper()
+        self.mobile_primary_color = (self.mobile_primary_color or "").upper()
+        self.saved_colors = [
+            {**item, "hex": str(item.get("hex", "")).upper()} if isinstance(item, dict) else item
+            for item in (self.saved_colors or [])
+        ]
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        setting, _ = cls.objects.get_or_create(pk=1)
+        return setting
+
+    def __str__(self):
+        return f"Tourism theme {self.primary_color}"

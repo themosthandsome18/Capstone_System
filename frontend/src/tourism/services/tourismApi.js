@@ -249,6 +249,7 @@ function mergeBootstrapData(remote = {}) {
     },
     reportData: normalizeReportData(remote.reportData),
     arrivalMonitoring: normalizeArrivalMonitoring(remote.arrivalMonitoring),
+    theme: remote.theme || null,
     apiBaseUrl: API_BASE_URL,
   };
 }
@@ -320,6 +321,14 @@ export const tourismApi = {
     });
 
     return normalizeReportData(await apiRequest(`/reports/${query}`));
+  },
+
+  // Admin only; the server refuses everyone else. Returns the saved theme.
+  async updateTheme(payload) {
+    return apiRequest("/tourism-theme/", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
   },
 
   async createTouristRecord(payload) {

@@ -7,6 +7,8 @@ import LoadingOverlay from "../../../shared/LoadingOverlay";
 import PageLoader from "../../../shared/PageLoader";
 import ErrorBoundary from "../../../shared/ErrorBoundary";
 import useDocumentBranding from "../../../shared/useDocumentBranding";
+import { TourismChartPaletteContext } from "../../theme/chartPalette";
+import { TourismThemePreviewContext, useTourismShellTheme } from "../../theme/themePreview";
 import Sidebar from "./Sidebar";
 
 const pageInfo = {
@@ -42,6 +44,10 @@ const pageInfo = {
     title: "Activity Logs",
     showAdd: false,
   },
+  "/settings": {
+    title: "Settings",
+    showAdd: false,
+  },
 };
 
 function formatToday() {
@@ -63,6 +69,7 @@ function AppShell() {
     error,
     reload,
     referenceTables,
+    theme,
   } = useTourismData();
 
   const currentPage = pageInfo[location.pathname] || pageInfo["/"];
@@ -71,6 +78,11 @@ function AppShell() {
     module: "tourism",
     pageTitle: currentPage.title,
   });
+
+  // Theme colours go on the shell element only, never on :root (THEME_TOKENS.md section 1).
+  // Charts read their colours back from the shell (chartPalette.js). The Settings
+  // page can preview an unsaved colour on the whole shell (themePreview.js).
+  const { shellRef, chartPalette, preview } = useTourismShellTheme(theme);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [addEntryRequestId, setAddEntryRequestId] = useState(0);
@@ -116,7 +128,7 @@ function AppShell() {
   }
 
   return (
-    <div className="tourism-layout">
+    <div className="tourism-layout" ref={shellRef}>
       <LoadingOverlay visible={actionLoading} message="Please wait..." theme="tourism" />
       {sidebarOpen && <Sidebar />}
 
@@ -194,7 +206,11 @@ function AppShell() {
 
         <section className="tourism-content">
           <ErrorBoundary featureName="Tourism Section">
-            <Outlet context={{ addEntryRequestId }} />
+            <TourismThemePreviewContext.Provider value={preview}>
+              <TourismChartPaletteContext.Provider value={chartPalette}>
+                <Outlet context={{ addEntryRequestId }} />
+              </TourismChartPaletteContext.Provider>
+            </TourismThemePreviewContext.Provider>
           </ErrorBoundary>
         </section>
       </main>

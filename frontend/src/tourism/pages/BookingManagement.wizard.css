@@ -30,12 +30,12 @@
 .wizard-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #f0faf4;
+  background: var(--th-primary-tint);
   padding: 28px 20px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-right: 1px solid #d1fae5;
+  border-right: 1px solid var(--th-border-tinted);
 }
 
 .wizard-sidebar-title {
@@ -64,11 +64,11 @@
 
 .wizard-step-item.clickable:hover:not(.active),
 .wizard-step-item.completed:hover:not(.active) {
-  background: #e2f7eb;
+  background: var(--th-primary-tint-strong);
 }
 
 .wizard-step-item.active {
-  background: #d1fae5;
+  background: var(--th-primary-selected);
 }
 
 .wizard-close-btn {
@@ -86,7 +86,7 @@
 
 .wizard-close-btn:hover {
   background: #f3f4f6;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .wizard-step-bubble {
@@ -99,21 +99,21 @@
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--th-border);
   background: #fff;
   color: #9ca3af;
   transition: all 0.2s;
 }
 
 .wizard-step-item.completed .wizard-step-bubble {
-  background: #16a34a;
-  border-color: #16a34a;
+  background: var(--th-primary);
+  border-color: var(--th-primary);
   color: #fff;
 }
 
 .wizard-step-item.active .wizard-step-bubble {
-  border-color: #16a34a;
-  color: #16a34a;
+  border-color: var(--th-primary);
+  color: var(--th-primary);
   background: #fff;
 }
 
@@ -131,7 +131,7 @@
 }
 
 .wizard-step-item.active .wizard-step-label strong {
-  color: #15803d;
+  color: var(--th-primary-ink);
 }
 
 .wizard-step-label small {
@@ -162,7 +162,7 @@
 .wizard-step-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .wizard-progress-label {
@@ -181,7 +181,7 @@
 
 .wizard-progress-bar {
   height: 100%;
-  background: #16a34a;
+  background: var(--th-primary);
   border-radius: 99px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -224,10 +224,10 @@
 .wizard-field select {
   height: 38px;
   padding: 0 12px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--th-text-main);
   background: #fff;
   transition: border-color 0.15s;
   width: 100%;
@@ -236,8 +236,8 @@
 .wizard-field input:focus,
 .wizard-field select:focus {
   outline: none;
-  border-color: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  border-color: var(--th-primary);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-10);
 }
 
 /* Same look as the existing .modal-field disabled inputs (Sanitation_index.css) */
@@ -259,7 +259,7 @@
 .wizard-subfield {
   margin-left: 12px;
   padding-left: 12px;
-  border-left: 2px solid #d1fae5;
+  border-left: 2px solid var(--th-border-tinted);
   min-width: 0;
 }
 
@@ -271,15 +271,15 @@
 .wizard-contact-row {
   display: flex;
   align-items: center;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .wizard-contact-row:focus-within {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  border-color: var(--th-primary);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-10);
 }
 
 .wizard-contact-prefix {
@@ -291,7 +291,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
-  border-right: 1.5px solid #d1d5db;
+  border-right: 1.5px solid var(--th-border-strong);
   flex-shrink: 0;
   user-select: none;
 }
@@ -310,7 +310,7 @@
   border-radius: 10px;
   padding: 16px 18px;
   margin-bottom: 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--th-border);
 }
 
 .wizard-review-section-header {
@@ -323,14 +323,14 @@
 .wizard-review-section-header h4 {
   font-size: 0.875rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
   margin: 0;
 }
 
 .wizard-review-edit-btn {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #16a34a;
+  color: var(--th-primary);
   background: none;
   border: none;
   cursor: pointer;
@@ -340,7 +340,8 @@
 }
 
 .wizard-review-edit-btn:hover {
-  background: #d1fae5;
+  background: var(--th-primary-selected);
+  color: var(--th-primary-ink);
 }
 
 .wizard-review-grid {
@@ -364,7 +365,7 @@
 
 .wizard-review-item strong {
   font-size: 0.82rem;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 /* ── Footer ── */
@@ -389,7 +390,7 @@
 
 .wizard-btn-back {
   padding: 8px 20px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   background: #fff;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -406,7 +407,7 @@
 
 .wizard-btn-continue {
   padding: 8px 22px;
-  background: #16a34a;
+  background: var(--th-primary);
   border: none;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -420,7 +421,7 @@
 }
 
 .wizard-btn-continue:hover:not(:disabled) {
-  background: #15803d;
+  background: var(--th-primary-hover);
 }
 
 .wizard-btn-continue:disabled {
@@ -430,7 +431,7 @@
 
 .wizard-btn-save {
   padding: 8px 22px;
-  background: #16a34a;
+  background: var(--th-primary);
   border: none;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -444,7 +445,7 @@
 }
 
 .wizard-btn-save:hover:not(:disabled) {
-  background: #15803d;
+  background: var(--th-primary-hover);
 }
 
 .wizard-btn-save:disabled {
@@ -453,7 +454,7 @@
 }
 
 .wizard-step-error {
-  color: #dc2626;
+  color: var(--th-danger-text);
   font-size: 0.8rem;
   font-weight: 500;
   margin-top: 8px;
@@ -472,7 +473,7 @@
   padding: 12px;
   background: #f9fafb;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--th-border);
 }
 
 .wizard-total-item {
@@ -488,11 +489,11 @@
 }
 
 .wizard-total-item strong.ok {
-  color: #16a34a;
+  color: var(--th-success);
 }
 
 .wizard-total-item strong.error {
-  color: #dc2626;
+  color: var(--th-danger-text);
 }
 
 /* ── Water source multi-select ── */

@@ -115,6 +115,7 @@ const emptyBootstrap = {
     },
   },
   dashboardAlerts: [],
+  theme: null,
   apiBaseUrl: "",
 };
 
@@ -562,6 +563,14 @@ export function TourismDataProvider({ children }) {
     }
   }
 
+  // Saves the theme and puts the server's answer straight into the app: the
+  // shell and the charts follow it with no reload.
+  const saveTheme = useCallback(async (payload) => {
+    const theme = await tourismApi.updateTheme(payload);
+    setBootstrap((current) => ({ ...current, theme }));
+    return theme;
+  }, []);
+
   return (
     <TourismDataContext.Provider
       value={{
@@ -588,6 +597,7 @@ export function TourismDataProvider({ children }) {
         deleteResort,
         uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
+        saveTheme,
       }}
     >
       {children}

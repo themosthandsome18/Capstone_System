@@ -1569,7 +1569,7 @@ function BookingManagement() {
                     <button
                       type="button"
                       className="wizard-btn-back"
-                      style={{ color: "#16a34a", fontWeight: "600" }}
+                      style={{ color: "var(--th-primary)", fontWeight: "600" }}
                       onClick={() => jumpToStep(5)}
                       title="Return to Review"
                     >
@@ -1604,7 +1604,7 @@ function BookingManagement() {
       ) : null}
 
       {importPreview || importError || importing ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <div className="import-preview-modal w-full max-w-[720px]">
             <h2>Online Booking Import Preview</h2>
             <p>
@@ -1715,7 +1715,7 @@ function BookingManagement() {
       ) : null}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-10">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <div className="delete-record-confirm w-full max-w-[420px]">
             <p>
               Are you sure you want to delete{" "}

@@ -65,13 +65,23 @@ function App() {
               {/* Tourism Module Routes */}
               <Route element={<ProtectedRoute allowedRoles={["admin", "tourism"]} />}>
                 <Route element={<AppShell />}>
-                  {tourismRoutes.map((route) => (
-                    <Route
-                      key={route.path}
-                      path={route.path}
-                      element={route.element}
-                    />
-                  ))}
+                  {tourismRoutes.map((route) =>
+                    route.allowedRoles ? (
+                      // Narrower than the module: e.g. Settings is admin-only.
+                      <Route
+                        key={route.path}
+                        element={<ProtectedRoute allowedRoles={route.allowedRoles} />}
+                      >
+                        <Route path={route.path} element={route.element} />
+                      </Route>
+                    ) : (
+                      <Route
+                        key={route.path}
+                        path={route.path}
+                        element={route.element}
+                      />
+                    )
+                  )}
                 </Route>
               </Route>
 

@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
 import logo from "../../assets/Tourismlogo.jpg";
+import { useAuth } from "../../../auth/AuthContext";
+import { SETTINGS_PATH, canOpenSettings } from "../../settingsAccess";
 
 const navigation = [
   { to: "/", label: "Dashboard" },
@@ -11,7 +13,26 @@ const navigation = [
   { to: "/activity-logs", label: "Activity Logs" },
 ];
 
+// Shown only to roles that may open them; the routes are guarded too.
+const administration = [{ to: SETTINGS_PATH, label: "Settings" }];
+
+function SidebarLink({ item }) {
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === "/"}
+      className={({ isActive }) =>
+        `sidebar-nav-link ${isActive ? "active" : ""}`
+      }
+    >
+      {item.label}
+    </NavLink>
+  );
+}
+
 function Sidebar() {
+  const { role } = useAuth();
+
   return (
     <aside className="tourism-sidebar">
       <div className="sidebar-brand">
@@ -21,17 +42,17 @@ function Sidebar() {
 
       <nav className="sidebar-nav">
         {navigation.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) =>
-              `sidebar-nav-link ${isActive ? "active" : ""}`
-            }
-          >
-            {item.label}
-          </NavLink>
+          <SidebarLink key={item.to} item={item} />
         ))}
+
+        {canOpenSettings(role) ? (
+          <>
+            <p className="sidebar-nav-heading">Administration</p>
+            {administration.map((item) => (
+              <SidebarLink key={item.to} item={item} />
+            ))}
+          </>
+        ) : null}
       </nav>
     </aside>
   );

@@ -5441,3 +5441,229 @@ class EstablishmentStatusTests(TestCase):
             [item["name"] for item in body["requirements"]],
             ["Health Certificate", "Water Potability Test"],
         )
+
+
+class TourismThemeSettingTests(TestCase):
+    def setUp(self):
+        from .models import TourismThemeSetting
+
+        self.Model = TourismThemeSetting
+
+    def test_load_creates_the_row_once_and_returns_the_same_row(self):
+        self.assertEqual(self.Model.objects.count(), 0)
+        first = self.Model.load()
+        second = self.Model.load()
+        self.assertEqual(first.pk, 1)
+        self.assertEqual(second.pk, first.pk)
+        self.assertEqual(self.Model.objects.count(), 1)
+
+    def test_saving_a_second_instance_does_not_create_a_second_row(self):
+        self.Model.load()
+        self.Model(primary_color="#123456").save()
+        self.assertEqual(self.Model.objects.count(), 1)
+        self.assertEqual(self.Model.load().primary_color, "#123456")
+
+    def test_defaults_are_the_original_green(self):
+        setting = self.Model.load()
+        self.assertEqual(setting.primary_color, "#2FA34A")
+        self.assertTrue(setting.mobile_follows_web)
+        self.assertEqual(setting.mobile_primary_color, "")
+        self.assertEqual(
+            setting.saved_colors,
+            [{"hex": "#2FA34A", "label": "Original (Green)"}],
+        )
+
+    def test_lowercase_hex_is_stored_uppercase(self):
+        setting = self.Model.load()
+        setting.primary_color = "#ff8800"
+        setting.mobile_primary_color = "#00aabb"
+        setting.saved_colors = [{"hex": "#abcdef", "label": "Test"}]
+        setting.save()
+        setting.refresh_from_db()
+        self.assertEqual(setting.primary_color, "#FF8800")
+        self.assertEqual(setting.mobile_primary_color, "#00AABB")
+        self.assertEqual(setting.saved_colors, [{"hex": "#ABCDEF", "label": "Test"}])
+
+    def test_primary_color_must_be_a_six_digit_hex(self):
+        from django.core.exceptions import ValidationError
+
+        setting = self.Model.load()
+        for bad in ["2FA34A", "#2FA34", "#2FA34AA", "#GGGGGG", "", "red"]:
+            setting.primary_color = bad
+            with self.assertRaises(ValidationError, msg=bad):
+                setting.full_clean()
+        setting.primary_color = "#2fa34a"
+        setting.full_clean()
+
+    def test_mobile_primary_color_accepts_empty_and_rejects_malformed(self):
+        from django.core.exceptions import ValidationError
+
+        setting = self.Model.load()
+        setting.mobile_primary_color = ""
+        setting.full_clean()
+        setting.mobile_primary_color = "#12345"
+        with self.assertRaises(ValidationError):
+            setting.full_clean()
+        setting.mobile_primary_color = "#A1B2C3"
+        setting.full_clean()
+
+
+class TourismThemeApiTests(TestCase):
+    URL = "/api/tourism-theme/"
+    READ_KEYS = {"primary_color", "mobile_follows_web", "mobile_primary_color", "saved_colors", "updated_at"}
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.anon = APIClient()
+
+    def _client_for(self, username, role, is_staff=True):
+        user = User.objects.create_user(username=username, password="pass-12345", is_staff=is_staff)
+        UserProfile.objects.create(user=user, role=role)
+        token = Token.objects.create(user=user)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        return user, client
+
+    def _admin(self):
+        return self._client_for("theme_admin", ROLE_ADMIN)
+
+    def _put(self, client, **payload):
+        body = {"primary_color": "#FF8800", **payload}
+        return client.put(self.URL, body, format="json")
+
+    # --- read -------------------------------------------------------------
+
+    def test_unauthenticated_get_returns_the_public_keys(self):
+        response = self.anon.get(self.URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.json().keys()), self.READ_KEYS)
+        self.assertEqual(response.json()["primary_color"], "#2FA34A")
+
+    def test_read_never_exposes_updated_by_or_a_username(self):
+        admin, client = self._admin()
+        self.assertEqual(self._put(client).status_code, status.HTTP_200_OK)
+        for response in (self.anon.get(self.URL), client.get(self.URL)):
+            body = response.json()
+            self.assertNotIn("updated_by", body)
+            self.assertNotIn(admin.username, response.content.decode())
+
+    # --- write gate -------------------------------------------------------
+
+    def test_anonymous_put_is_forbidden(self):
+        self.assertEqual(self._put(self.anon).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_tourism_staff_cannot_write_even_with_is_staff(self):
+        _, client = self._client_for("tourism_staff", ROLE_TOURISM, is_staff=True)
+        self.assertEqual(self._put(client).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#2FA34A")
+
+    def test_sanitation_staff_cannot_write(self):
+        _, client = self._client_for("sanitation_staff", ROLE_SANITATION, is_staff=True)
+        self.assertEqual(self._put(client).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_write_and_updated_by_is_set(self):
+        from .models import TourismThemeSetting
+
+        admin, client = self._admin()
+        response = self._put(client, mobile_follows_web=False, mobile_primary_color="#00aabb")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["primary_color"], "#FF8800")
+        setting = TourismThemeSetting.load()
+        self.assertEqual(setting.updated_by, admin)
+        self.assertFalse(setting.mobile_follows_web)
+        self.assertEqual(setting.mobile_primary_color, "#00AABB")
+
+    # --- validation -------------------------------------------------------
+
+    def test_primary_color_is_required_and_must_be_hex(self):
+        _, client = self._admin()
+        self.assertEqual(client.put(self.URL, {}, format="json").status_code, status.HTTP_400_BAD_REQUEST)
+        for bad in ["FF8800", "#FF880", "#FF88000", "#GG8800", "", "orange"]:
+            response = self._put(client, primary_color=bad)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
+            self.assertIn("primary_color", response.json())
+
+    def test_mobile_primary_color_accepts_empty_and_rejects_malformed(self):
+        _, client = self._admin()
+        self.assertEqual(self._put(client, mobile_primary_color="").status_code, status.HTTP_200_OK)
+        response = self._put(client, mobile_primary_color="#12345")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("mobile_primary_color", response.json())
+
+    def test_saved_colors_rejects_malformed_payloads(self):
+        _, client = self._admin()
+        green = {"hex": "#2FA34A", "label": "Original (Green)"}
+        bad_payloads = {
+            "not a list": {"hex": "#112233", "label": "x"},
+            "too many": [green] + [{"hex": f"#1122{i:02d}", "label": f"c{i}"} for i in range(12)],
+            "extra key": [green, {"hex": "#112233", "label": "x", "note": "y"}],
+            "missing label": [green, {"hex": "#112233"}],
+            "entry not an object": [green, "#112233"],
+            "bad hex": [green, {"hex": "#11223", "label": "x"}],
+            "hex not a string": [green, {"hex": 112233, "label": "x"}],
+            "empty label": [green, {"hex": "#112233", "label": ""}],
+            "blank label": [green, {"hex": "#112233", "label": "   "}],
+            "label too long": [green, {"hex": "#112233", "label": "x" * 41}],
+            "label not a string": [green, {"hex": "#112233", "label": 7}],
+        }
+        for name, saved in bad_payloads.items():
+            response = self._put(client, saved_colors=saved)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, name)
+            self.assertIn("saved_colors", response.json(), name)
+        ok = self._put(client, saved_colors=[green, {"hex": "#112233", "label": "x" * 40}])
+        self.assertEqual(ok.status_code, status.HTTP_200_OK)
+
+    def test_original_green_is_restored_when_omitted(self):
+        _, client = self._admin()
+        response = self._put(client, saved_colors=[{"hex": "#ff8800", "label": "Orange"}])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.json()["saved_colors"],
+            [{"hex": "#2FA34A", "label": "Original (Green)"}, {"hex": "#FF8800", "label": "Orange"}],
+        )
+        self.assertEqual(self.anon.get(self.URL).json()["saved_colors"][0]["hex"], "#2FA34A")
+
+    def test_green_given_in_lowercase_is_not_duplicated(self):
+        _, client = self._admin()
+        response = self._put(client, saved_colors=[{"hex": "#2fa34a", "label": "Green"}])
+        self.assertEqual(response.json()["saved_colors"], [{"hex": "#2FA34A", "label": "Green"}])
+
+    def test_twelve_colours_without_green_is_rejected(self):
+        _, client = self._admin()
+        saved = [{"hex": f"#1122{i:02d}", "label": f"c{i}"} for i in range(12)]
+        response = self._put(client, saved_colors=saved)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("saved_colors", response.json())
+
+    # --- cache ------------------------------------------------------------
+
+    def test_a_write_invalidates_the_cache(self):
+        self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#2FA34A")
+        _, client = self._admin()
+        self.assertEqual(self._put(client, primary_color="#123ABC").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#123ABC")
+
+    def test_a_cache_hit_runs_no_queries(self):
+        from .services.tourism import get_cached_tourism_theme
+
+        get_cached_tourism_theme()
+        with self.assertNumQueries(0):
+            get_cached_tourism_theme()
+
+    # --- bootstrap wiring -------------------------------------------------
+
+    def test_both_bootstrap_endpoints_include_the_theme(self):
+        _, client = self._admin()
+        self.assertEqual(self._put(client, primary_color="#AA5500").status_code, status.HTTP_200_OK)
+
+        web = client.get("/api/bootstrap/")
+        self.assertEqual(web.status_code, status.HTTP_200_OK)
+        self.assertEqual(web.json()["theme"]["primary_color"], "#AA5500")
+        self.assertEqual(set(web.json()["theme"].keys()), self.READ_KEYS)
+
+        mobile = self.anon.get("/api/mobile/tourism/bootstrap/")
+        self.assertEqual(mobile.status_code, status.HTTP_200_OK)
+        self.assertEqual(mobile.json()["theme"]["primary_color"], "#AA5500")
+        self.assertNotIn("updated_by", mobile.json()["theme"])

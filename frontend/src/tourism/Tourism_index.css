@@ -8,6 +8,73 @@
   :root {
     --page-bg: #e6f4ef;
     --text-main: #163046;
+
+    /* Tourism theme tokens. Defaults match the current literals exactly. */
+
+    /* Brand */
+    --th-primary: #2fa34a;
+    --th-primary-hover: #15803d;
+    --th-primary-active: #1f7f36;
+    --th-primary-deep: #146c28;
+    --th-primary-ink: #166534;
+    --th-primary-ink-strong: #0f3b1e;
+    --th-primary-selected: #d1fadb;
+    --th-primary-contrast: #ffffff;
+    --th-primary-tint: #f0fdf4;
+    --th-primary-tint-strong: #dff1e2;
+    --th-primary-border: #bbf7d0;
+    --th-primary-alpha-10: rgba(47, 163, 74, 0.1);
+    --th-primary-alpha-20: rgba(47, 163, 74, 0.2);
+    --th-primary-alpha-30: rgba(47, 163, 74, 0.3);
+
+    /* Page background */
+    --th-page-grad-1: #eaf7ed;
+    --th-page-grad-2: #d8eedd;
+    --th-page-grad-3: #c2ddc8;
+    --th-page-bg: #e6f4ef;
+
+    /* Surfaces and text */
+    --th-surface: #ffffff;
+    --th-surface-alt: #f7fbf8;
+    --th-surface-tinted: #eefaf1;
+    --th-surface-tinted-strong: #c6decc;
+    --th-border: #e5e7eb;
+    --th-border-strong: #d1d5db;
+    --th-border-tinted: #d7ebdc;
+    --th-border-tinted-strong: #bfcfc5;
+    --th-border-tinted-control: #b7d7be;
+    --th-text-main: #111827;
+    --th-text-muted: #64748b;
+    --th-text-tinted-strong: #101812;
+    --th-text-tinted: #37443a;
+    --th-text-tinted-muted: #667469;
+    --th-text-inverse: #ffffff;
+
+    /* Overlay */
+    --th-shadow-rgb: 34, 72, 43;
+    --th-scrim: rgba(2, 6, 23, 0.55);
+
+    /* Status (fixed, never derived from the theme) */
+    --th-success: #16a34a;
+    --th-success-bg: #dcfce7;
+    --th-success-text: #15803d;
+    --th-warning: #eab308;
+    --th-warning-bg: #fef9c3;
+    --th-warning-text: #a16207;
+    --th-danger: #ef4444;
+    --th-danger-bg: #fee2e2;
+    --th-danger-text: #dc2626;
+    --th-info: #2563eb;
+    --th-info-bg: #dbeafe;
+    --th-info-border: #93c5fd;
+
+    /* Charts */
+    --th-chart-1: #27a544;
+    --th-chart-2: #36c962;
+    --th-chart-3: #65d279;
+    --th-chart-4: #90daa9;
+    --th-chart-5: #b9e4c4;
+    --th-chart-wash: rgba(106, 192, 126, 0.15);
   }
 
   * {
@@ -43,7 +110,7 @@
   /* GLOBAL COMPONENTS */
 
   .panel {
-    @apply rounded-[22px] border border-[#cfe5e1] bg-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.15)];
+    @apply rounded-[22px] border border-[var(--th-border-tinted)] bg-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.15)];
   }
 
   .page-title {
@@ -63,7 +130,7 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-green-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-[var(--th-primary-hover)];
   }
 
   .badge {
@@ -86,7 +153,7 @@
 
   .tourism-layout {
     @apply flex min-h-screen;
-    background: linear-gradient(135deg, #eaf7f1, #d8eee5, #c2ddd4);
+    background: linear-gradient(135deg, var(--th-page-grad-1), var(--th-page-grad-2), var(--th-page-grad-3));
   }
 
   .tourism-main {
@@ -106,8 +173,8 @@
   position: sticky;
   top: 0;
   flex-shrink: 0;
-  background: #eefaf1;
-  border-right: 1px solid #d7ebe0;
+  background: var(--th-surface-tinted);
+  border-right: 1px solid var(--th-border-tinted);
   padding: 58px 22px 0;
   overflow: hidden;
 }
@@ -131,7 +198,7 @@
 .sidebar-brand span {
   font-size: 15px;
   font-weight: 800;
-  color: #101815;
+  color: var(--th-text-tinted-strong);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -152,7 +219,7 @@
   padding: 0 24px;
   font-size: 14px;
   font-weight: 500;
-  color: #101815;
+  color: var(--th-text-tinted-strong);
   text-decoration: none;
   line-height: 1.2;
   transition: 0.2s ease;
@@ -162,8 +229,18 @@
   background: rgba(255, 255, 255, 0.55);
 }
 
+.sidebar-nav-heading {
+  margin: 10px 0 -8px;
+  padding: 0 24px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--th-text-tinted-muted);
+}
+
 .sidebar-nav-link.active {
-  background: #2fa34a;
+  background: var(--th-primary);
   color: white;
   font-size: 14px;
   font-weight: 800;
@@ -176,8 +253,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #eefaf1;
-  border-bottom: 1px solid #d6e6dc;
+  background: var(--th-surface-tinted);
+  border-bottom: 1px solid var(--th-border-tinted);
   padding: 0 30px;
 }
 
@@ -194,7 +271,7 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: #37443e;
+  color: var(--th-text-tinted);
   font-size: 24px;
   display: flex;
   align-items: center;
@@ -204,20 +281,20 @@
 .topbar-divider {
   width: 1px;
   height: 40px;
-  background: #bfcfc5;
+  background: var(--th-border-tinted-strong);
 }
 
 .topbar-left h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .topbar-left p {
   margin: 2px 0 0;
   font-size: 14px;
-  color: #3f4f48;
+  color: var(--th-text-tinted);
 }
 
 /* RIGHT SIDE */
@@ -252,7 +329,7 @@
 .topbar-pill {
   height: 40px;
   border-radius: 999px;
-  border: 1.5px solid #2fa34a;
+  border: 1.5px solid var(--th-primary);
   background: white;
   padding: 0 15px;
   display: flex;
@@ -267,7 +344,7 @@
   width: 54px;
   height: 40px;
   border-radius: 999px;
-  border: 1.5px solid #2fa34a;
+  border: 1.5px solid var(--th-primary);
   background: white;
   display: flex;
   align-items: center;
@@ -283,13 +360,13 @@
 }
 
 .topbar-user span {
-  color: #111827;
+  color: var(--th-text-main);
   font-size: 13px;
   font-weight: 800;
 }
 
 .topbar-user small {
-  color: #66746d;
+  color: var(--th-text-tinted-muted);
   font-size: 11px;
   font-weight: 600;
 }
@@ -297,8 +374,8 @@
 .add-entry-btn {
   height: 40px;
   border-radius: 999px;
-  border: 1.5px solid #2fa34a;
-  background: #2fa34a;
+  border: 1.5px solid var(--th-primary);
+  background: var(--th-primary);
   padding: 0 18px;
   font-size: 14px;
   font-weight: 800;
@@ -367,7 +444,7 @@
 /* HOVER EFFECT */
 
 .topbar-menu-btn:hover .custom-burger span {
-  background: #2fa34a;
+  background: var(--th-primary);
 }
 
 /* =================================================================== DASHBOARD ======================================================== */
@@ -397,7 +474,7 @@
 }
 
 .dashboard-year-select {
-  @apply h-10 rounded-full border border-[#2fa34a] bg-white px-4 text-sm font-semibold text-black outline-none;
+  @apply h-10 rounded-full border border-[var(--th-primary)] bg-white px-4 text-sm font-semibold text-black outline-none;
   min-width: 126px;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23111827' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -416,7 +493,7 @@
 /* Export Button */
 
 .outline-action {
-  @apply flex items-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 py-2 text-sm font-semibold text-black;
+  @apply flex items-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-5 py-2 text-sm font-semibold text-black;
 }
 
 .booking-import-btn {
@@ -426,7 +503,7 @@
 /* Generate Report Button */
 
 .primary-action {
-  @apply flex items-center gap-2 rounded-full bg-[#2fa34a] px-5 py-2 text-sm font-semibold text-white;
+  @apply flex items-center gap-2 rounded-full bg-[var(--th-primary)] px-5 py-2 text-sm font-semibold text-white;
 }
 
 
@@ -437,7 +514,7 @@
 }
 
 .metric-card {
-  @apply flex items-center justify-between rounded-[24px] bg-white px-6 py-5 shadow-[0_20px_30px_rgba(34,72,55,0.2)];
+  @apply flex items-center justify-between rounded-[24px] bg-white px-6 py-5 shadow-[0_20px_30px_rgba(var(--th-shadow-rgb),0.2)];
 }
 
 .metric-card p {
@@ -451,7 +528,7 @@
 }
 
 .metric-card span {
-  @apply text-[11px] font-semibold text-green-600;
+  @apply text-[11px] font-semibold text-[var(--th-primary-ink)];
 }
 
 .metric-icon {
@@ -475,7 +552,7 @@
 /* ================= CARD CONTAINER (All white boxes) ================= */
 
 .dashboard-card {
-  @apply rounded-[28px] bg-white px-6 py-5 shadow-[0_25px_35px_rgba(34,72,55,0.2)];
+  @apply rounded-[28px] bg-white px-6 py-5 shadow-[0_25px_35px_rgba(var(--th-shadow-rgb),0.2)];
 }
 
 /* Card titles (Daily Visitor Trends, Tourist Classification, etc.) */
@@ -550,7 +627,7 @@
 /* Bottom section with 3 colored boxes */
 
 .validation-panel {
-  @apply rounded-[28px] bg-white px-6 py-6 shadow-[0_25px_35px_rgba(34,72,55,0.2)];
+  @apply rounded-[28px] bg-white px-6 py-6 shadow-[0_25px_35px_rgba(var(--th-shadow-rgb),0.2)];
 }
 
 /* Header (Title + Review All button) */
@@ -632,9 +709,9 @@
   height: 42px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1.5px solid #2fa34a;
+  border: 1.5px solid var(--th-primary);
   background: #ffffff;
-  color: #111827;
+  color: var(--th-text-main);
   font-size: 14px;
   font-weight: 800;
   line-height: 1;
@@ -677,7 +754,7 @@
 }
 
 .booking-status-card {
-  @apply min-h-[82px] rounded-[14px] px-6 py-4 shadow-[0_14px_24px_rgba(34,72,55,0.2)];
+  @apply min-h-[82px] rounded-[14px] px-6 py-4 shadow-[0_14px_24px_rgba(var(--th-shadow-rgb),0.2)];
 }
 
 .booking-status-card p {
@@ -715,7 +792,7 @@
 }
 
 .booking-status-card.noshow p {
-  color: #ef4444;
+  color: var(--th-danger);
 }
 
 
@@ -735,7 +812,7 @@
 }
 
 .booking-search input {
-  @apply h-10 w-full rounded-full border border-[#2fa34a] bg-white pl-12 pr-4 text-sm outline-none;
+  @apply h-10 w-full rounded-full border border-[var(--th-primary)] bg-white pl-12 pr-4 text-sm outline-none;
 }
 
 .booking-filter-grid {
@@ -749,12 +826,12 @@
 .booking-filter-grid input {
   min-width: 0;
   height: 38px;
-  border: 1px solid #b7d7c7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 8px;
   background: #ffffff;
   padding: 0 10px;
   font-size: 12px;
-  color: #111827;
+  color: var(--th-text-main);
   outline: none;
 }
 
@@ -765,8 +842,8 @@
 .booking-table-card {
   overflow: hidden;
   border-radius: 18px;
-  background: #f7fbf8;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  background: var(--th-surface-alt);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 /* ================= TABLE STRUCTURE ================= */
@@ -781,7 +858,7 @@
 /* ================= TABLE HEADER ================= */
 
 .booking-table-card thead {
-  background: #dff1e2;
+  background: var(--th-primary-tint-strong);
 }
 
 .booking-table-card th {
@@ -789,13 +866,13 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
 }
 
 /* ================= TABLE BODY ================= */
 
 .booking-table-card tbody {
-  background: #f7fbf8;
+  background: var(--th-surface-alt);
 }
 
 /* ================= TABLE ROW ================= */
@@ -809,7 +886,7 @@
 }
 
 .booking-table-card tbody tr:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 /* ================= TABLE CELL ================= */
@@ -945,7 +1022,7 @@
 .delete-record-confirm p {
   margin: 0;
   font-size: 14px;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .delete-record-confirm strong {
@@ -979,7 +1056,7 @@
 
 .tourist-record-form {
   border-radius: 10px;
-  background: #c6ded4;
+  background: var(--th-surface-tinted-strong);
   padding: 22px 28px 24px;
 }
 
@@ -999,7 +1076,7 @@
 .tourist-record-field span {
   font-size: 12px;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .tourist-record-field input,
@@ -1012,7 +1089,7 @@
   background: #ffffff;
   padding: 0 12px;
   font-size: 12px;
-  color: #111827;
+  color: var(--th-text-main);
   outline: none;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -1056,14 +1133,14 @@
 }
 
 .tourist-record-cancel {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--th-border-strong);
   background: #ffffff;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .tourist-record-save {
-  border: 1px solid #146c43;
-  background: #146c43;
+  border: 1px solid var(--th-primary-deep);
+  background: var(--th-primary-deep);
   color: #ffffff;
 }
 
@@ -1076,7 +1153,7 @@
 .tourist-record-error {
   margin: 14px 0 0;
   border-radius: 8px;
-  background: #fee2e2;
+  background: var(--th-danger-bg);
   padding: 10px 12px;
   font-size: 12px;
   font-weight: 600;
@@ -1084,7 +1161,7 @@
 }
 
 .tourist-record-error.success-message {
-  background: #dcfce7;
+  background: var(--th-success-bg);
   color: #166534;
 }
 
@@ -1099,7 +1176,7 @@
   border-radius: 8px;
   padding: 10px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--th-border-strong);
 }
 
 .total-check-item span {
@@ -1113,7 +1190,7 @@
   display: block;
   margin-top: 3px;
   font-size: 13px;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .total-check-item.ok {
@@ -1136,18 +1213,18 @@
   margin: 0;
   font-size: 20px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .import-preview-modal > p {
   margin: 8px 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 .import-status {
   font-weight: 700;
-  color: #146c43 !important;
+  color: var(--th-primary-deep) !important;
 }
 
 .import-summary-grid {
@@ -1159,8 +1236,8 @@
 
 .import-summary-grid div {
   border-radius: 8px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--th-primary-tint);
+  border: 1px solid var(--th-primary-border);
   padding: 12px;
 }
 
@@ -1176,7 +1253,7 @@
   display: block;
   margin-top: 4px;
   font-size: 20px;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .import-sample-grid {
@@ -1188,7 +1265,7 @@
 
 .import-sample-grid section {
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--th-border);
   padding: 12px;
   max-height: 220px;
   overflow: auto;
@@ -1242,8 +1319,8 @@
   background: #ffffff;
   padding: 0 22px;
   font-size: 14px;
-  color: #111827;
-  box-shadow: 0 10px 24px rgba(34, 72, 55, 0.15);
+  color: var(--th-text-main);
+  box-shadow: 0 10px 24px rgba(var(--th-shadow-rgb), 0.15);
 }
 
 /* LEFT TEXT */
@@ -1278,7 +1355,7 @@
 
 .booking-page-btn.prev,
 .booking-page-btn.next {
-  background: #2fa34a;
+  background: var(--th-primary);
   color: white;
 }
 
@@ -1286,7 +1363,7 @@
 
 .booking-page-btn:active:not(.disabled):not(:disabled) {
   transform: scale(0.92);
-  background: #1f7f36;
+  background: var(--th-primary-active);
 }
 
 /* ================= HOVER ================= */
@@ -1331,13 +1408,13 @@
 
 .arrival-date-btn,
 .arrival-export-btn {
-  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-4 text-sm font-bold text-black;
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-4 text-sm font-bold text-black;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .arrival-export-btn:hover:not(:disabled) {
-  background: #f0fdf4;
+  background: var(--th-primary-tint);
 }
 
 .arrival-export-btn:disabled {
@@ -1355,7 +1432,7 @@
   background: #ffffff;
   padding: 14px 20px;
   border-radius: 20px;
-  box-shadow: 0 8px 20px rgba(34, 72, 55, 0.08);
+  box-shadow: 0 8px 20px rgba(var(--th-shadow-rgb), 0.08);
 }
 
 .arrival-filter-group {
@@ -1381,62 +1458,62 @@
 .arrival-date-picker-icon {
   position: absolute;
   left: 14px;
-  color: #2fa34a;
+  color: var(--th-primary);
   pointer-events: none;
 }
 
 .arrival-date-input {
   height: 40px;
   border-radius: 9999px;
-  border: 1px solid #2fa34a;
+  border: 1px solid var(--th-primary);
   background: #ffffff;
   padding: 0 16px 0 38px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--th-text-main);
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
 .arrival-date-input:focus {
-  border-color: #1f7a33;
-  box-shadow: 0 0 0 2px rgba(47, 163, 74, 0.2);
+  border-color: var(--th-primary-active);
+  box-shadow: 0 0 0 2px var(--th-primary-alpha-20);
 }
 
 .arrival-pill-btn {
   height: 40px;
   padding: 0 16px;
   border-radius: 9999px;
-  border: 1px solid #2fa34a;
+  border: 1px solid var(--th-primary);
   background: #ffffff;
   font-size: 13px;
   font-weight: 700;
-  color: #111827;
+  color: var(--th-text-main);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .arrival-pill-btn:hover {
-  background: #f0fdf4;
+  background: var(--th-primary-tint);
 }
 
 .arrival-pill-btn.active {
-  background: #2fa34a;
+  background: var(--th-primary);
   color: #ffffff;
 }
 
 .arrival-resort-select {
   height: 40px;
   border-radius: 9999px;
-  border: 1px solid #2fa34a;
+  border: 1px solid var(--th-primary);
   background: #ffffff;
   padding-left: 16px;
   padding-right: 40px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--th-text-main);
   outline: none;
   min-width: 220px;
   max-width: 320px;
@@ -1454,21 +1531,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--th-primary-tint);
+  border: 1px solid var(--th-primary-border);
   border-radius: 14px;
   padding: 10px 18px;
   font-size: 13px;
-  color: #166534;
+  color: var(--th-primary-ink);
 }
 
 .arrival-filter-summary-chip strong {
-  color: #0f3b1e;
+  color: var(--th-primary-ink-strong);
 }
 
 .arrival-filter-summary-chip .chip-sub {
   font-size: 12px;
-  color: #15803d;
+  color: var(--th-primary-ink);
 }
 
 /* ================= ARRIVAL MINI CARDS ================= */
@@ -1479,7 +1556,7 @@
 
 .arrival-stat-card {
   @apply flex min-h-[106px] items-center justify-between rounded-[22px] bg-white/90 px-5 py-4;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .arrival-stat-card p {
@@ -1509,10 +1586,10 @@
 /* ================= ARRIVAL AUTO-CALCULATED BAR ================= */
 
 .arrival-note {
-  @apply rounded-xl px-5 py-3 text-xs font-medium text-green-700;
-  background: #2fa34a;
-  color: #0f3b1e;
-  box-shadow: 0 12px 22px rgba(34, 72, 55, 0.2);
+  @apply rounded-xl px-5 py-3 text-xs font-medium text-[var(--th-primary-ink)];
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+  box-shadow: 0 12px 22px rgba(var(--th-shadow-rgb), 0.2);
 }
 
 /* ================= ARRIVAL TABLE CONTAINER ================= */
@@ -1520,8 +1597,8 @@
 .arrival-table-card {
   overflow: hidden;
   border-radius: 18px;
-  background: #f7fbf8;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  background: var(--th-surface-alt);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .table-responsive {
@@ -1542,7 +1619,7 @@
 /* ================= ARRIVAL TABLE HEADER ================= */
 
 .arrival-table-card thead {
-  background: #dff1e2;
+  background: var(--th-primary-tint-strong);
 }
 
 .arrival-table-card th {
@@ -1550,7 +1627,7 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1558,7 +1635,7 @@
 /* ================= ARRIVAL TABLE BODY ================= */
 
 .arrival-table-card tbody {
-  background: #f7fbf8;
+  background: var(--th-surface-alt);
 }
 
 .arrival-table-card tbody tr {
@@ -1570,7 +1647,7 @@
 }
 
 .arrival-table-card tbody tr:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 /* ================= ARRIVAL TABLE CELL ================= */
@@ -1600,7 +1677,7 @@
 /* ================= DAILY TOTAL ROW ================= */
 
 .daily-total {
-  background: #e2f5e7;
+  background: var(--th-primary-tint-strong);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -1632,13 +1709,13 @@
 }
 
 .destination-add-btn {
-  @apply inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#2fa34a] px-5 text-sm font-bold text-white;
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--th-primary)] px-5 text-sm font-bold text-white;
 }
 
 /* ================= DESTINATION SEARCH ================= */
 
 .destination-search input {
-  @apply h-11 w-[420px] rounded-full border border-[#2fa34a] bg-white px-5 text-sm outline-none;
+  @apply h-11 w-[420px] rounded-full border border-[var(--th-primary)] bg-white px-5 text-sm outline-none;
 }
 
 .destination-filter-tabs {
@@ -1670,21 +1747,21 @@
   border-radius: 9999px;
   font-size: 14px;
   font-weight: 700;
-  border: 1px solid #2fa34a;
+  border: 1px solid var(--th-primary);
   background: #ffffff;
-  color: #111827;
+  color: var(--th-text-main);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .destination-tab-btn:hover {
-  background: #f0fdf4;
+  background: var(--th-primary-tint);
 }
 
 .destination-tab-btn.active {
-  background: #2fa34a;
+  background: var(--th-primary);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(47, 163, 74, 0.3);
+  box-shadow: 0 4px 12px var(--th-primary-alpha-30);
 }
 
 /* ================= DESTINATION CARD GRID ================= */
@@ -1698,8 +1775,8 @@
 .destination-card {
   overflow: hidden;
   border-radius: 22px;
-  background: #f7fbf8;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  background: var(--th-surface-alt);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .destination-card.clickable {
@@ -1709,11 +1786,11 @@
 
 .destination-card.clickable:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 35px rgba(34, 72, 55, 0.28);
+  box-shadow: 0 20px 35px rgba(var(--th-shadow-rgb), 0.28);
 }
 
 .destination-view-btn {
-  @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-green-100 text-xs font-bold text-green-700 hover:bg-green-200 transition-colors;
+  @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-[var(--th-primary-tint-strong)] text-xs font-bold text-[var(--th-primary-ink)] hover:bg-[var(--th-primary-selected)] transition-colors;
 }
 
 /* ================= RESORT CAROUSEL / SLIDESHOW ================= */
@@ -1812,7 +1889,7 @@
 .resort-carousel-dot.active {
   width: 18px;
   border-radius: 9999px;
-  background: #22c55e;
+  background: var(--th-primary);
 }
 
 /* ================= FEEDBACK PHOTO GRID & ACTIONS ================= */
@@ -1827,7 +1904,7 @@
 .feedback-photos-label {
   font-size: 11px;
   font-weight: 800;
-  color: #64748b;
+  color: var(--th-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1896,14 +1973,14 @@
 }
 
 .photo-action-btn.promote {
-  background: #ecfdf5;
-  color: #15803d;
-  border-color: #a7f3d0;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+  border-color: var(--th-primary-border);
 }
 
 .photo-action-btn.promote:hover {
-  background: #d1fae5;
-  color: #14532d;
+  background: var(--th-primary-selected);
+  color: var(--th-primary-ink-strong);
 }
 
 /* ================= RESORT IMAGE UPLOAD SECTION ================= */
@@ -1923,8 +2000,8 @@
 }
 
 .image-upload-dropzone:hover {
-  border-color: #2fa34a;
-  background: #f0fdf4;
+  border-color: var(--th-primary);
+  background: var(--th-primary-tint);
 }
 
 .image-upload-preview-grid {
@@ -2081,7 +2158,7 @@
 }
 
 .gmaps-permit-badge.unverified {
-  background: #eab308;
+  background: var(--th-warning);
   color: #713f12;
 }
 
@@ -2146,7 +2223,7 @@
 
 .gmaps-review-count {
   font-size: 13px;
-  color: #64748b;
+  color: var(--th-text-muted);
   font-weight: 600;
 }
 
@@ -2186,13 +2263,13 @@
 }
 
 .gmaps-action-btn.primary {
-  background: #2fa34a;
-  border-color: #2fa34a;
+  background: var(--th-primary);
+  border-color: var(--th-primary);
   color: #ffffff;
 }
 
 .gmaps-action-btn.primary:hover {
-  background: #26893e;
+  background: var(--th-primary-hover);
 }
 
 /* Info list */
@@ -2212,7 +2289,7 @@
 
 .gmaps-info-icon {
   font-size: 18px;
-  color: #2fa34a;
+  color: var(--th-primary);
   margin-top: 2px;
   flex-shrink: 0;
 }
@@ -2223,7 +2300,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 .gmaps-info-val {
@@ -2272,7 +2349,7 @@
 .gmaps-view-all-reviews-btn {
   font-size: 13px;
   font-weight: 700;
-  color: #2fa34a;
+  color: var(--th-primary);
   background: none;
   border: none;
   cursor: pointer;
@@ -2280,7 +2357,7 @@
 }
 
 .gmaps-view-all-reviews-btn:hover {
-  color: #1f7a33;
+  color: var(--th-primary-hover);
   text-decoration: underline;
 }
 
@@ -2339,20 +2416,20 @@
   margin-top: 10px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: #ecfdf5;
-  border-left: 3px solid #2fa34a;
+  background: var(--th-primary-tint);
+  border-left: 3px solid var(--th-primary);
 }
 
 .gmaps-review-reply small {
   font-weight: 700;
-  color: #15803d;
+  color: var(--th-primary-ink);
   font-size: 11px;
 }
 
 .gmaps-review-reply p {
   margin: 2px 0 0 0;
   font-size: 12px;
-  color: #166534;
+  color: var(--th-primary-ink);
 }
 
 /* ================= DESTINATION IMAGE ================= */
@@ -2373,12 +2450,12 @@
   height: 100%;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #dff1e2, #d8eef4);
+  background: linear-gradient(135deg, var(--th-primary-tint-strong), var(--th-primary-tint));
   padding: 18px;
   text-align: center;
   font-size: 16px;
   font-weight: 800;
-  color: #14532d;
+  color: var(--th-primary-ink);
 }
 
 .destination-rating {
@@ -2444,7 +2521,7 @@
 }
 
 .destination-card-stats div {
-  @apply rounded-xl border border-[#cfe5d8] bg-[#f4fbf7] px-4 py-3;
+  @apply rounded-xl border border-[var(--th-border-tinted)] bg-[var(--th-surface-alt)] px-4 py-3;
 }
 
 .destination-card-stats p {
@@ -2456,7 +2533,7 @@
 }
 
 .destination-card-stats h4:not(.negative) {
-  color: #16a34a;
+  color: var(--th-primary);
 }
 
 .destination-card-stats h4.negative {
@@ -2484,7 +2561,7 @@
 /* ================= DESTINATION FOOTER ================= */
 
 .destination-footer {
-  @apply flex items-center justify-between rounded-[18px] bg-white/90 px-6 py-5 shadow-[0_14px_28px_rgba(34,72,55,0.2)];
+  @apply flex items-center justify-between rounded-[18px] bg-white/90 px-6 py-5 shadow-[0_14px_28px_rgba(var(--th-shadow-rgb),0.2)];
 }
 
 .destination-footer p {
@@ -2533,7 +2610,7 @@
 
 .feedback-stat-card {
   @apply flex min-h-[96px] items-center justify-between rounded-[22px] bg-white/90 px-6 py-4;
-  box-shadow: 0 14px 28px rgba(34, 72, 55, 0.22);
+  box-shadow: 0 14px 28px rgba(var(--th-shadow-rgb), 0.22);
 }
 
 .feedback-stat-card p {
@@ -2578,7 +2655,7 @@
   color: #1f2937;
 
   background: #f3f4f6;
-  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
 
   cursor: pointer;
   position: relative;
@@ -2593,13 +2670,13 @@
 
 /* HOVER EFFECT */
 .feedback-filters select:hover {
-  background-color: #e9f3ee;
+  background-color: var(--th-primary-tint);
 }
 
 /* FOCUS */
 .feedback-filters select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #2fa34a33, 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 0 0 2px var(--th-primary-alpha-20), 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
 }
 
 .feedback-search {
@@ -2607,7 +2684,7 @@
   height: 52px;
   border-radius: 999px;
   background: #f3f4f6;
-  box-shadow: 0 12px 20px rgba(34, 72, 55, 0.25);
+  box-shadow: 0 12px 20px rgba(var(--th-shadow-rgb), 0.25);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2635,14 +2712,14 @@
 
 .feedback-empty {
   background: #ffffff;
-  border: 1px solid #d7e5e1;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 18px;
   padding: 32px;
   text-align: center;
   color: #6b7280;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.16);
+  box-shadow: 0 12px 24px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 /* ================= FEEDBACK LIST ================= */
@@ -2657,7 +2734,7 @@
 .feedback-card {
   @apply flex justify-between gap-6 rounded-[18px] bg-white/90 px-7 py-5;
   min-height: 120px;
-  box-shadow: 0 12px 24px rgba(34, 72, 55, 0.2);
+  box-shadow: 0 12px 24px rgba(var(--th-shadow-rgb), 0.2);
 }
 
 .feedback-left {
@@ -2695,11 +2772,11 @@
 }
 
 .feedback-reply {
-  @apply mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-slate-700;
+  @apply mt-4 rounded-xl border border-[var(--th-primary-border)] bg-[var(--th-primary-tint)] px-4 py-3 text-sm text-slate-700;
 }
 
 .feedback-reply strong {
-  @apply text-xs uppercase tracking-wide text-emerald-700;
+  @apply text-xs uppercase tracking-wide text-[var(--th-primary-ink)];
 }
 
 .feedback-reply p {
@@ -2770,11 +2847,11 @@
 }
 
 .reports-actions button {
-  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 text-sm font-bold text-black;
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-5 text-sm font-bold text-black;
 }
 
 .reports-actions .green {
-  @apply bg-[#2fa34a] text-white;
+  @apply bg-[var(--th-primary)] text-white;
 }
 
 /* ================= REPORT TABS ================= */
@@ -2812,7 +2889,7 @@
 }
 
 .report-filter-card button {
-  @apply h-10 rounded-lg bg-[#2fa34a] px-5 text-sm font-bold text-white;
+  @apply h-10 rounded-lg bg-[var(--th-primary)] px-5 text-sm font-bold text-white;
 }
 
 .report-filter-card button:disabled {
@@ -2824,7 +2901,7 @@
 
 .report-chart-card {
   @apply rounded-[24px] bg-white/80 p-5;
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.16);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
   margin-bottom: 24px;
 }
 
@@ -2843,20 +2920,40 @@
 /* ================= REPORT TABLE ================= */
 
 .report-table-card {
-  overflow: hidden;
+  /* Scrolls sideways when the card is narrower than the table's minimum
+     width, rather than wrapping or overlapping the headers. */
+  overflow-x: auto;
+  overflow-y: hidden;
   border-radius: 14px;
-  background: #f7fbf8;
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  background: var(--th-surface-alt);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 .report-table-card table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  /* Fixed layout, so sorting never resizes a column (the sorted header turns
+     bold and changes its arrow). The name column takes 36% and the three
+     figures share the rest equally. 664px is the narrowest width at which
+     the longest resort name ("Dona Choleng Camping Resort", 239px with
+     padding) and the widest bold header ("Total Revenue" plus its arrow,
+     140px) both fit on one line. */
+  table-layout: fixed;
+  min-width: 664px;
+}
+
+.report-table-card th:nth-child(1) {
+  width: 36%;
+}
+
+.report-table-card th:nth-child(n + 2) {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .report-table-card thead {
-  background: #dff1e2;
+  background: var(--th-primary-tint-strong);
 }
 
 .report-table-card th {
@@ -2864,7 +2961,7 @@
   text-align: left;
   font-size: 14px;
   font-weight: 500;
-  color: #37443e;
+  color: var(--th-text-tinted);
 }
 
 .report-table-card td {
@@ -2893,7 +2990,7 @@
 }
 
 .report-table-card .total-row {
-  background: #dff6e4;
+  background: var(--th-primary-tint-strong);
 }
 
 .report-table-card .total-row td {
@@ -2921,7 +3018,7 @@
 .analytics-question-item {
   min-width: 0;
   min-height: 290px;
-  border: 1px solid #cfe4d8;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f4faf7 100%);
   padding: 22px 24px;
@@ -2944,7 +3041,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #2fa34a;
+  background: var(--th-primary);
   color: #ffffff;
   font-size: 12px;
   font-weight: 800;
@@ -2952,11 +3049,11 @@
 
 .analytics-question-top small {
   border-radius: 999px;
-  background: #e8f7ef;
+  background: var(--th-primary-tint);
   padding: 6px 12px;
   font-size: 11px;
   font-weight: 800;
-  color: #0f7a45;
+  color: var(--th-primary-ink);
 }
 
 .analytics-question-item h4 {
@@ -3003,7 +3100,7 @@
   min-width: 0;
   font-size: 12px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
   overflow-wrap: anywhere;
 }
 
@@ -3028,7 +3125,7 @@
   margin-top: 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 .insight-bars {
@@ -3141,7 +3238,7 @@
 .insight-metric {
   border-radius: 10px;
   background: #ffffff;
-  border: 1px solid #e0eee7;
+  border: 1px solid var(--th-border-tinted);
   padding: 16px;
   text-align: center;
 }
@@ -3150,7 +3247,7 @@
   display: block;
   font-size: 46px;
   line-height: 1;
-  color: #0f7a45;
+  color: var(--th-primary-ink);
 }
 
 .insight-metric span {
@@ -3158,7 +3255,7 @@
   margin-top: 4px;
   font-size: 13px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 /* ======================================================================= GIS MAP PAGE ================================================== */
@@ -3186,11 +3283,11 @@
 }
 
 .gis-actions button {
-  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#2fa34a] bg-white px-5 text-sm font-bold text-black;
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-5 text-sm font-bold text-black;
 }
 
 .gis-actions .active {
-  @apply bg-[#2fa34a] text-white;
+  @apply bg-[var(--th-primary)] text-white;
 }
 
 /* ================= GIS MAIN GRID ================= */
@@ -3213,7 +3310,7 @@
   padding: 24px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 .mauban-map-frame {
@@ -3260,7 +3357,7 @@
 .gis-heatmap-card,
 .gis-stat-box {
   @apply rounded-[18px] bg-white/85;
-  box-shadow: 0 18px 32px rgba(34, 72, 55, 0.18);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
 }
 
 /* ================= INTERACTIVE MAP CARD ================= */
@@ -3312,17 +3409,17 @@
 .gis-selected-destination strong {
   font-size: 14px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .gis-selected-destination span {
   width: fit-content;
   border-radius: 999px;
-  background: #e4f6ea;
+  background: var(--th-primary-tint);
   padding: 4px 9px;
   font-size: 10px;
   font-weight: 800;
-  color: #17643a;
+  color: var(--th-primary-ink);
 }
 
 .gis-selected-destination p {
@@ -3336,7 +3433,7 @@
   gap: 5px;
   font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 /* ================= ALL LOCATIONS BOX ================= */
@@ -3362,7 +3459,7 @@
   width: 100%;
   padding: 7px 10px;
   font-size: 12px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 8px;
   outline: none;
   background: white;
@@ -3372,7 +3469,7 @@
 }
 
 .gis-search-input:focus {
-  border-color: #2fa34a;
+  border-color: var(--th-primary);
 }
 
 .gis-location-items {
@@ -3387,12 +3484,12 @@
 }
 
 .gis-location-items::-webkit-scrollbar-track {
-  background: #eef5f1;
+  background: var(--th-primary-tint);
   border-radius: 999px;
 }
 
 .gis-location-items::-webkit-scrollbar-thumb {
-  background: #2fa34a;
+  background: var(--th-primary);
   border-radius: 999px;
 }
 
@@ -3404,11 +3501,11 @@
   padding: 12px;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 .gis-location-item {
-  @apply w-full items-center border border-[#cbd5d1] bg-white/30 px-3 py-2 text-left transition;
+  @apply w-full items-center border border-[var(--th-border-tinted-strong)] bg-white/30 px-3 py-2 text-left transition;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
@@ -3420,12 +3517,12 @@
 }
 
 .gis-location-item:hover {
-  background: #eef8f1;
+  background: var(--th-primary-tint);
 }
 
 .gis-location-item.selected {
-  background: #e4f6ea;
-  border-left: 3px solid #2fa34a;
+  background: var(--th-primary-tint-strong);
+  border-left: 3px solid var(--th-primary);
 }
 
 .gis-location-item p {
@@ -3549,7 +3646,16 @@
   .report-chart-card,
   .report-table-card {
     box-shadow: none !important;
-    border: 1px solid #d1d5db !important;
+    border: 1px solid var(--th-border-strong) !important;
+  }
+
+  /* Paper cannot scroll: let the table fit the page instead of clipping. */
+  .report-table-card {
+    overflow: visible;
+  }
+
+  .report-table-card table {
+    min-width: 0;
   }
 }
 
@@ -3591,19 +3697,19 @@
 }
 
 .booking-icon-btn.delete {
-  color: #ef4444;
+  color: var(--th-danger);
   border-color: #f5b5b5;
   background: #fef2f2;
 }
 
 .booking-icon-btn.arrived {
-  color: #16a34a;
+  color: var(--th-success);
   border-color: #86efac;
   background: #f0fdf4;
 }
 
 .booking-icon-btn.noshow {
-  color: #ef4444;
+  color: var(--th-danger);
   border-color: #fca5a5;
   background: #fff1f2;
 }
@@ -3657,14 +3763,14 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
 }
 
 .booking-detail-header p {
   margin: 4px 0 0;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--th-text-muted);
 }
 
 .booking-detail-grid {
@@ -3685,7 +3791,7 @@
   display: block;
   font-size: 11px;
   font-weight: 800;
-  color: #64748b;
+  color: var(--th-text-muted);
   text-transform: uppercase;
 }
 
@@ -3694,7 +3800,7 @@
   margin-top: 3px;
   font-size: 13px;
   font-weight: 800;
-  color: #111827;
+  color: var(--th-text-main);
   overflow-wrap: anywhere;
 }
 
@@ -3710,43 +3816,52 @@
 
 .analytics-question-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(34, 72, 55, 0.18) !important;
+  box-shadow: 0 16px 32px rgba(var(--th-shadow-rgb), 0.18) !important;
 }
 
-/* ── INSTANT TABLE SORTING STYLES ── */
-.sortable-th {
+/* ── INSTANT TABLE SORTING STYLES ──
+   Scoped to the tourism shell. Sanitation_index.css defines the same selectors
+   with fixed green (#0f7a45, !important) and is imported after this file, so an
+   unscoped copy here loses to it even on tourism pages. The shell selector
+   adds one class of specificity, which wins inside .tourism-layout only;
+   sanitation pages keep their own rules. Do not drop the .tourism-layout prefix. */
+.tourism-layout .sortable-th {
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
-.sortable-th:hover {
-  background: rgba(34, 72, 55, 0.08) !important;
-  color: #1f7655 !important;
+.tourism-layout .sortable-th:hover {
+  background: rgba(var(--th-shadow-rgb), 0.08) !important;
+  color: var(--th-primary-ink) !important;
 }
 
-.sort-indicator {
+/* A fixed-width box, so the idle and sorted arrows take the same space,
+   with room between the label and the arrow. */
+.tourism-layout .sort-indicator {
   display: inline-flex;
   align-items: center;
-  margin-left: 5px;
+  justify-content: center;
+  width: 12px;
+  margin-left: 8px;
   font-size: 11px;
   opacity: 0.45;
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-.sortable-th.active-sort {
-  color: #1f7655 !important;
-  background: rgba(34, 72, 55, 0.07) !important;
+.tourism-layout .sortable-th.active-sort {
+  color: var(--th-primary-ink) !important;
+  background: rgba(var(--th-shadow-rgb), 0.07) !important;
   font-weight: 800;
 }
 
-.sortable-th.active-sort .sort-indicator {
+.tourism-layout .sortable-th.active-sort .sort-indicator {
   opacity: 1;
-  color: #1f7655;
+  color: var(--th-primary-ink);
 }
 
-.report-sort-controls {
+.tourism-layout .report-sort-controls {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3754,14 +3869,14 @@
   font-size: 13px;
 }
 
-.report-sort-label {
+.tourism-layout .report-sort-label {
   font-size: 12.5px;
   font-weight: 700;
   color: #475569;
   white-space: nowrap;
 }
 
-.report-sort-select {
+.tourism-layout .report-sort-select {
   padding: 6px 12px;
   border-radius: 7px;
   border: 1px solid #cbd5e1;
@@ -3774,11 +3889,11 @@
   transition: border-color 0.15s ease;
 }
 
-.report-sort-select:focus {
-  border-color: #1f7655;
+.tourism-layout .report-sort-select:focus {
+  border-color: var(--th-primary);
 }
 
-.report-sort-dir-btn {
+.tourism-layout .report-sort-dir-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3794,7 +3909,7 @@
   transition: all 0.15s ease;
 }
 
-.report-sort-dir-btn:hover {
+.tourism-layout .report-sort-dir-btn:hover {
   background: #e2e8f0;
   color: #0f172a;
 }
@@ -3847,4 +3962,334 @@
 .destination-add-btn {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* ================= SETTINGS (admin only) =================
+   Same soft card language as Reports: white/80 cards, 24px radius, the
+   themed shadow. Everything reads the shell's --th-* tokens, so the page
+   itself follows the colour being previewed. */
+
+.settings-page .reports-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-status {
+  margin: 0;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.settings-status.success {
+  background: var(--th-success-bg);
+  color: var(--th-success-text);
+}
+
+.settings-status.error {
+  background: var(--th-danger-bg);
+  color: var(--th-danger-text);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-card {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 20px;
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
+}
+
+.settings-card .report-card-title p {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.settings-picker-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.settings-color-input {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border: 1px solid var(--th-border-strong);
+  border-radius: 16px;
+  padding: 4px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--th-text-muted);
+}
+
+.settings-field input {
+  height: 40px;
+  width: 160px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.settings-field input:focus {
+  border-color: var(--th-primary);
+}
+
+.settings-field-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--th-danger-text);
+}
+
+.settings-contrast {
+  margin: 16px 0 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--th-surface-alt);
+  color: var(--th-text-muted);
+}
+
+.settings-contrast.poor,
+.settings-contrast.severe {
+  border: 1px solid var(--th-warning);
+  background: var(--th-warning-bg);
+  color: var(--th-warning-text);
+  font-weight: 600;
+}
+
+.settings-subsection {
+  margin-top: 24px;
+}
+
+.settings-subsection h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.settings-derived {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.settings-derived-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-derived-item strong,
+.settings-derived-item small {
+  display: block;
+}
+
+.settings-derived-item strong {
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.settings-derived-item small {
+  font-size: 11px;
+  color: var(--th-text-muted);
+}
+
+.settings-swatch-square {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+}
+
+.settings-saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-saved-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 80px;
+}
+
+.settings-swatch {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+.settings-swatch.selected {
+  box-shadow: 0 0 0 3px var(--th-primary-ink);
+}
+
+.settings-swatch-remove {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.settings-swatch-remove:hover {
+  border-color: var(--th-danger);
+  color: var(--th-danger-text);
+}
+
+.settings-saved-label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--th-text-muted);
+}
+
+.settings-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--th-text-muted);
+}
+
+.settings-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.settings-secondary-btn {
+  height: 40px;
+  border: 1px solid var(--th-primary);
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--th-text-main);
+  cursor: pointer;
+}
+
+.settings-secondary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-chart-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.settings-chart-swatch {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.settings-status-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0 0;
+}
+
+.settings-status-groups dt {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--th-text-muted);
+}
+
+.settings-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--th-text-main);
+}
+
+.settings-radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.settings-radio-group input {
+  accent-color: var(--th-primary);
 }

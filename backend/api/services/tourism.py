@@ -13,6 +13,7 @@ from ..models import (
     Province,
     Region,
     Resort,
+    TourismThemeSetting,
     TouristRecord,
     TravelMode,
     VisitPurpose,
@@ -24,6 +25,7 @@ from ..serializers import (
     ProvinceSerializer,
     RegionSerializer,
     ResortSerializer,
+    TourismThemeReadSerializer,
     TravelModeSerializer,
     VisitPurposeSerializer,
 )
@@ -54,6 +56,28 @@ REFERENCE_TABLE_SERIALIZERS = {
 
 MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v1"
 MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
+
+# Tourism theme: read on every page load, so it is cached. Unlike the caches
+# above it IS invalidated, on every successful write. The per-process
+# LocMemCache is acceptable only because production runs gunicorn with
+# --workers 1 --threads 4 (the Render start command, which is not in this
+# repo): one process, so one cache. If the worker count ever rises above 1,
+# other workers would serve the old colour for up to the timeout; move this
+# key to a shared cache before doing that.
+TOURISM_THEME_CACHE_KEY = "tourism_theme_v1"
+TOURISM_THEME_CACHE_TIMEOUT = 300  # 5 minutes
+
+
+def get_cached_tourism_theme():
+    data = cache.get(TOURISM_THEME_CACHE_KEY)
+    if data is None:
+        data = TourismThemeReadSerializer(TourismThemeSetting.load()).data
+        cache.set(TOURISM_THEME_CACHE_KEY, data, timeout=TOURISM_THEME_CACHE_TIMEOUT)
+    return data
+
+
+def invalidate_tourism_theme_cache():
+    cache.delete(TOURISM_THEME_CACHE_KEY)
 
 
 TOURIST_RECORD_PAYLOAD_FIELDS = [

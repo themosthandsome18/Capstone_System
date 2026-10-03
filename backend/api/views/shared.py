@@ -23,6 +23,7 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reference_tables_payload,
     build_reports_payload,
+    get_cached_tourism_theme,
 )
 
 
@@ -78,6 +79,7 @@ def bootstrap_data(request):
             "arrivalMonitoring": build_arrival_monitoring_payload(),
             "dashboardData": build_dashboard_payload(),
             "reportData": build_reports_payload({"include_questions": True}),
+            "theme": get_cached_tourism_theme(),
         }
     )
 
