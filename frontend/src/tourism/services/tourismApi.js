@@ -323,6 +323,14 @@ export const tourismApi = {
     return normalizeReportData(await apiRequest(`/reports/${query}`));
   },
 
+  // Admin only; the server refuses everyone else. Returns the saved theme.
+  async updateTheme(payload) {
+    return apiRequest("/tourism-theme/", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async createTouristRecord(payload) {
     return apiRequest("/tourist-records/", {
       method: "POST",

@@ -229,6 +229,16 @@
   background: rgba(255, 255, 255, 0.55);
 }
 
+.sidebar-nav-heading {
+  margin: 10px 0 -8px;
+  padding: 0 24px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--th-text-tinted-muted);
+}
+
 .sidebar-nav-link.active {
   background: var(--th-primary);
   color: white;
@@ -942,6 +952,14 @@
   border-color: #ff8c83;
   background: #fff1ed;
   color: #ff3b30;
+}
+
+/* Fixed like the other status chips. Shown on the Settings page; tourism has
+   no cancelled booking status yet. */
+.booking-badge.cancelled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
 }
 
 /* ================= ROW ACTION BUTTONS ================= */
@@ -3952,4 +3970,317 @@
 .destination-add-btn {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* ================= SETTINGS (admin only) =================
+   Same soft card language as Reports: white/80 cards, 24px radius, the
+   themed shadow. Everything reads the shell's --th-* tokens, so the page
+   itself follows the colour being previewed. */
+
+.settings-page .reports-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-status {
+  margin: 0;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.settings-status.success {
+  background: var(--th-success-bg);
+  color: var(--th-success-text);
+}
+
+.settings-status.error {
+  background: var(--th-danger-bg);
+  color: var(--th-danger-text);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-card {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 20px;
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
+}
+
+.settings-card .report-card-title p {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.settings-picker-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.settings-color-input {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border: 1px solid var(--th-border-strong);
+  border-radius: 16px;
+  padding: 4px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--th-text-muted);
+}
+
+.settings-field input {
+  height: 40px;
+  width: 160px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.settings-field input:focus {
+  border-color: var(--th-primary);
+}
+
+.settings-field-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--th-danger-text);
+}
+
+.settings-contrast {
+  margin: 16px 0 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--th-surface-alt);
+  color: var(--th-text-muted);
+}
+
+.settings-contrast.poor,
+.settings-contrast.severe {
+  border: 1px solid var(--th-warning);
+  background: var(--th-warning-bg);
+  color: var(--th-warning-text);
+  font-weight: 600;
+}
+
+.settings-subsection {
+  margin-top: 24px;
+}
+
+.settings-subsection h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.settings-derived {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.settings-derived-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-derived-item strong,
+.settings-derived-item small {
+  display: block;
+}
+
+.settings-derived-item strong {
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.settings-derived-item small {
+  font-size: 11px;
+  color: var(--th-text-muted);
+}
+
+.settings-swatch-square {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+}
+
+.settings-saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-saved-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 80px;
+}
+
+.settings-swatch {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+.settings-swatch.selected {
+  box-shadow: 0 0 0 3px var(--th-primary-ink);
+}
+
+.settings-swatch-remove {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.settings-swatch-remove:hover {
+  border-color: var(--th-danger);
+  color: var(--th-danger-text);
+}
+
+.settings-saved-label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--th-text-muted);
+}
+
+.settings-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--th-text-muted);
+}
+
+.settings-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.settings-secondary-btn {
+  height: 40px;
+  border: 1px solid var(--th-primary);
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--th-text-main);
+  cursor: pointer;
+}
+
+.settings-secondary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-chart-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.settings-chart-swatch {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.settings-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--th-text-main);
+}
+
+.settings-radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.settings-radio-group input {
+  accent-color: var(--th-primary);
 }

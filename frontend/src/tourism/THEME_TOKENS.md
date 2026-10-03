@@ -361,8 +361,14 @@ so nothing was lost there.
     1.38:1). The 2.5:1 floor exists **only to prevent an unusable theme**.
   - The text on primary fills is still literal white, so no screen reads the
     token yet.
-  - **The Settings screen must WARN the admin** when the chosen colour gives
-    poor contrast, so the choice sits with the person picking it.
+  - **The Settings screen warns the admin** (done: `pages/Settings.js`,
+    `assessWhiteContrast`). It measures white text on the chosen colour and
+    never blocks saving. Below **2.5:1** it says "very hard to read". Below
+    **3:1** (WCAG's minimum for large text and controls) it says "hard to
+    read"; orange `#EF7C1F` (2.8:1) gets this. Below **4.5:1** it shows a plain
+    note, not a warning; the original green (3.3:1) gets this. At 4.5:1 or
+    above, the note says it is easy to read. The mobile colour gets the same
+    check when it is set separately.
 - **The contrast derivation must cover graphics, not only text.** The photo
   drop-zone upload icon (`--th-primary` on `#f8fafc`) is **3.11:1** against
   the 3:1 non-text threshold. It was 3.15:1 before Phase 1. It passes, but only
@@ -402,9 +408,10 @@ so nothing was lost there.
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
 - **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
   green) and the other neutrals are derived or fixed.
-- **Unused tokens (10):** `--th-primary-contrast`, `--th-page-bg`,
-  `--th-surface`, `--th-text-inverse`, `--th-success-text`, `--th-warning-bg`,
-  `--th-warning-text`, `--th-info`, `--th-info-bg`, `--th-info-border`.
+- **Unused tokens (7):** `--th-primary-contrast`, `--th-page-bg`,
+  `--th-surface`, `--th-text-inverse`, `--th-info`, `--th-info-bg`,
+  `--th-info-border`. (`--th-success-text`, `--th-warning-bg` and
+  `--th-warning-text` are now used by the Settings page.)
   Each has a planned consumer; do not prune them without deciding that.
 - **Dead code to delete.** None of it has been deleted yet.
   - **JS files nothing imports:** `components/layout/Topbar.js`,
