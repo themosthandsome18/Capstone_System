@@ -58,6 +58,22 @@ class TourismApi {
     }
   }
 
+  /// Current sanitation staff identity using the existing authenticated session.
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Your session expired, please sign in again.',
+      );
+    }
+    return _getWithQuery(
+      '/auth/me/',
+      const {},
+      headers: {'Authorization': 'Token $token'},
+    );
+  }
+
   /// Staff-only sanitation records (establishments, inspections, complaints,
   /// households, staff notifications). Requires a signed-in admin or
   /// sanitation account; throws [ApiException] (401/403) otherwise.
@@ -74,6 +90,52 @@ class TourismApi {
       const {},
       headers: {'Authorization': 'Token $token'},
     );
+  }
+
+  Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async {
+    return _getWithQuery('/sanitation/complaints/', {'status': 'pending'},
+        headers: await _sanitationDashboardHeaders());
+  }
+
+  /// This endpoint returns an uncapped JSON array, unlike the shared object decoder.
+  Future<List<Map<String, dynamic>>> fetchSanitationDashboardInspections() async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/sanitation/inspections/'),
+      headers: await _sanitationDashboardHeaders(),
+    ).timeout(_requestTimeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decode(response); // Preserve existing ApiException/401 behavior on errors.
+    }
+    return sanitationDashboardRows(jsonDecode(response.body));
+  }
+
+  Future<Map<String, String>> _sanitationDashboardHeaders() async {
+    final token = await _getStaffAuthToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(statusCode: 401,
+          message: 'Your session expired, please sign in again.');
+    }
+    return {'Authorization': 'Token $token'};
+  }
+
+  /// Subscribe once per load/refresh. An error has no data, never fabricated zeros.
+  /// Optional staffRecords must be a successfully loaded authenticated staff payload.
+  Stream<SanitationDashboardState> loadSanitationDashboard({
+    DateTime? now,
+    Map<String, dynamic>? staffRecords,
+  }) async* {
+    yield const SanitationDashboardState.loading();
+    try {
+      final staff = staffRecords ?? await fetchSanitationStaffRecords();
+      final complaints = await fetchSanitationPendingComplaints();
+      final inspections = await fetchSanitationDashboardInspections();
+      yield SanitationDashboardState.loaded(SanitationDashboardData.fromSources(
+        staff: staff, complaints: complaints, inspections: inspections,
+        now: now ?? DateTime.now(),
+      ));
+    } catch (error) {
+      yield SanitationDashboardState.unavailable(error);
+    }
   }
 
   Future<List<MobileSanitationReceipt>> fetchSanitationReportHistory({
@@ -284,7 +346,9 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    HouseholdSanitationItem? originalHousehold,
     String? householdCode,
+    String? septicTankType,
     required String householdHead,
     required String barangay,
     required String address,
@@ -294,7 +358,6 @@ class TourismApi {
     required String waterLevel,
     required String waterSource,
     required String wasteDisposal,
-    required String remarks,
     required String latitude,
     required String longitude,
   }) async {
@@ -305,10 +368,13 @@ class TourismApi {
       'male_count': maleCount,
       'female_count': femaleCount,
       'toilet_type': toiletType,
+      if ((toiletType == 'water_sealed' || toiletType == 'pour_flush') &&
+          septicTankType != null)
+        'septic_tank_type': septicTankType,
       'water_level': waterLevel,
       'water_source': waterSource,
       'waste_disposal': wasteDisposal,
-      'remarks': remarks,
+      // Omit remarks: updates must preserve notes entered through the web.
       'latitude': latitude,
       'longitude': longitude,
     };
@@ -316,6 +382,34 @@ class TourismApi {
       body['household_code'] = householdCode;
     }
     final token = await _getStaffAuthToken();
+    if (originalHousehold != null) {
+      final problem = originalHousehold.editIncompatibility;
+      if (problem != null || householdCode != originalHousehold.householdCode) {
+        throw StateError(
+          'Cannot safely edit household: ${problem ?? 'household_code differs'}',
+        );
+      }
+      final stored = originalHousehold.surveyValues!;
+      // The mobile POST endpoint inserts defaults even for omitted fields.
+      // Existing records use the existing partial-update contract instead.
+      final changes = <String, dynamic>{};
+      for (final entry in body.entries) {
+        final value = entry.key == 'latitude' || entry.key == 'longitude'
+            ? double.parse(entry.value as String)
+            : entry.value;
+        if (value != stored[entry.key]) changes[entry.key] = value;
+      }
+      if (changes.isEmpty) return {...stored, 'status': originalHousehold.status};
+      final response = await http.patch(
+        Uri.parse('$apiBaseUrl/households/records/${stored['id']}/'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Token $token',
+        },
+        body: jsonEncode(changes),
+      ).timeout(_requestTimeout);
+      return _decode(response);
+    }
     return _post(
       '/mobile/sanitation/household-surveys/',
       body,

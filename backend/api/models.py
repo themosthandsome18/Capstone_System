@@ -974,6 +974,16 @@ HOUSEHOLD_TOILET_CHOICES = [
     (HOUSEHOLD_TOILET_NONE, "None"),
 ]
 
+HOUSEHOLD_SEPTIC_TANK = "septic_tank"
+HOUSEHOLD_SEPTIC_BOTTOMLESS = "bottomless"
+HOUSEHOLD_SEPTIC_VAULT_SEALED = "vault_sealed"
+
+HOUSEHOLD_SEPTIC_CHOICES = [
+    (HOUSEHOLD_SEPTIC_TANK, "Septic tank"),
+    (HOUSEHOLD_SEPTIC_BOTTOMLESS, "Bottomless"),
+    (HOUSEHOLD_SEPTIC_VAULT_SEALED, "Vault-sealed"),
+]
+
 HOUSEHOLD_WASTE_COLLECTED = "collected"
 HOUSEHOLD_WASTE_COMPOSTED = "composted"
 HOUSEHOLD_WASTE_BURNED = "burned"
@@ -1010,6 +1020,12 @@ class HouseholdSanitationRecord(models.Model):
         max_length=30,
         choices=HOUSEHOLD_TOILET_CHOICES,
         default=HOUSEHOLD_TOILET_WATER_SEALED,
+    )
+    septic_tank_type = models.CharField(
+        max_length=30,
+        choices=HOUSEHOLD_SEPTIC_CHOICES,
+        null=True,
+        blank=True,
     )
     water_level = models.CharField(
         max_length=30,
@@ -1077,7 +1093,9 @@ class HouseholdSanitationRecord(models.Model):
         if self.toilet_type == "none" or self.water_level == "none" or self.waste_disposal == "dumped":
             self.status = "violation"
         elif 7 <= total_score <= 9:
-            self.status = "good_standing"
+            self.status = (
+                "for_completion" if self.toilet_type == "pit_latrine" else "good_standing"
+            )
         elif 4 <= total_score <= 6:
             self.status = "for_completion"
         else:

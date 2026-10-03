@@ -63,6 +63,17 @@ class FakeStaffApi extends TourismApi {
   int calls = 0;
 
   @override
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async => {};
+
+  @override
+  Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async => {
+    'summary': {'pending': 0}, 'rows': [],
+  };
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchSanitationDashboardInspections() async => [];
+
+  @override
   Future<Map<String, dynamic>> fetchSanitationStaffRecords() async {
     calls++;
     if (error != null) throw error!;
@@ -126,7 +137,10 @@ void main() {
       await pumpShell(tester, api);
 
       expect(api.calls, 1);
-      expect(find.text('2 establishment records loaded.'), findsOneWidget);
+      expect(find.descendant(
+        of: find.byKey(const ValueKey('dashboard-stat-Establishments')),
+        matching: find.text('2'),
+      ), findsOneWidget);
     });
 
     testWidgets('a rejected token ends the session instead of crashing', (tester) async {

@@ -1,5 +1,57 @@
 part of '../main.dart';
 
+const sanitationOsmTileUrl =
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const sanitationOsmUserAgentPackageName = 'mauban_sanitation_mobile';
+
+class SanitationOsmMapFrame extends StatelessWidget {
+  const SanitationOsmMapFrame({
+    super.key,
+    required this.mapHeight,
+    required this.borderRadius,
+    required this.map,
+  });
+
+  final double mapHeight;
+  final double borderRadius;
+  final Widget map;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: mapHeight, child: map),
+          const SizedBox(
+            height: 24,
+            child: ColoredBox(
+              color: Color(0xFFF8FAFC),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    '© OpenStreetMap contributors',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFF475569),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class PhotoPickerPanel extends StatelessWidget {
   const PhotoPickerPanel({
     super.key,
@@ -800,11 +852,10 @@ class LocationConfirmationPanel extends StatelessWidget {
               style: TextStyle(color: AppColors.muted, fontSize: 12),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 220,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: FlutterMap(
+            SanitationOsmMapFrame(
+              mapHeight: 220,
+              borderRadius: 14,
+              map: FlutterMap(
                   key: ValueKey('${center.latitude},${center.longitude}'),
                   options: MapOptions(
                     initialCenter: center,
@@ -815,9 +866,8 @@ class LocationConfirmationPanel extends StatelessWidget {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'mauban_sanitation_mobile',
+                      urlTemplate: sanitationOsmTileUrl,
+                      userAgentPackageName: sanitationOsmUserAgentPackageName,
                     ),
                     if (point != null)
                       MarkerLayer(
@@ -832,7 +882,6 @@ class LocationConfirmationPanel extends StatelessWidget {
                       ),
                   ],
                 ),
-              ),
             ),
             const SizedBox(height: 10),
             FilledButton.tonalIcon(

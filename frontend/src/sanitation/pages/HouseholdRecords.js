@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiAlertTriangle,
@@ -189,32 +189,36 @@ const toiletOptions = [
   { value: "none", label: "None" },
 ];
 
-const waterLevelOptions = [
-  { value: "level_1", label: "Level I" },
-  { value: "level_2", label: "Level II" },
-  { value: "level_3", label: "Level III" },
+const septicTankOptions = [
+  { value: "bottomless", label: "Bottomless" },
+  { value: "vault_sealed", label: "Vault-sealed" },
 ];
 
-// Water source options with their auto-assigned level
-const WATER_SOURCE_OPTIONS = [
-  { value: "MWSS", label: "MWSS", sublabel: "Municipal Water Supply System", level: "level_3" },
-  { value: "Level II (Communal Faucet)", label: "Level II (Communal Faucet)", sublabel: "Shared piped water", level: "level_2" },
-  { value: "Deep Well", label: "Deep Well", sublabel: "Private or shared deep well", level: "level_1" },
-  { value: "Spring", label: "Spring", sublabel: "Natural spring source", level: "level_1" },
-  { value: "Rainwater", label: "Rainwater", sublabel: "Collected rainwater", level: "level_1" },
-  { value: "Others", label: "Others", sublabel: "Other water sources", level: "level_1" },
-];
-
-function computeWaterLevel(sources = []) {
-  if (!sources.length) return "";
-  const levels = sources.map((s) => {
-    const opt = WATER_SOURCE_OPTIONS.find((o) => o.value === s);
-    return opt?.level || "level_1";
-  });
-  if (levels.includes("level_3")) return "level_3";
-  if (levels.includes("level_2")) return "level_2";
-  return "level_1";
+function isSepticApplicable(toiletType) {
+  return toiletType === "water_sealed" || toiletType === "pour_flush";
 }
+
+function isMissingSepticValue(value) {
+  return value === null || value === undefined || value === "";
+}
+
+function isUnsupportedSepticValue(value) {
+  return (
+    !isMissingSepticValue(value) &&
+    value !== "septic_tank" &&
+    !septicTankOptions.some((option) => option.value === value)
+  );
+}
+
+const waterLevelOptions = [
+  { value: "level_1", label: "Level 1" },
+  { value: "level_2", label: "Level 2" },
+  { value: "level_3", label: "Level 3" },
+];
+
+const WATER_SOURCE_OPTIONS = [
+  "Deep well", "Poso-shallow well", "Spring", "Barangay water system", "Other",
+].map((value) => ({ value, label: value }));
 
 const wasteOptions = [
   { value: "collected", label: "Collected by LGU" },
@@ -238,13 +242,67 @@ const emptyForm = {
   male_count: 0,
   female_count: 0,
   toilet_type: "none",
+  septic_tank_type: null,
   water_level: "",
-  water_source: [],
+  water_source: "",
   waste_disposal: "collected",
   status: "good_standing",
   last_survey_date: new Date().toISOString().slice(0, 10),
   remarks: "",
 };
+
+const EDITABLE_HOUSEHOLD_FIELDS = [
+  "household_head",
+  "barangay",
+  "address",
+  "male_count",
+  "female_count",
+  "toilet_type",
+  "septic_tank_type",
+  "water_source",
+  "water_level",
+  "waste_disposal",
+  "remarks",
+  "latitude",
+  "longitude",
+  "last_survey_date",
+];
+
+function normalizeComparable(value) {
+  if (value === null || value === undefined) return null;
+  if (value === "") return "";
+  const number = Number(value);
+  return Number.isFinite(number) && String(value).trim() !== "" ? number : value;
+}
+
+export function buildHouseholdEditPayload(form, snapshot) {
+  const payload = {};
+  for (const field of EDITABLE_HOUSEHOLD_FIELDS) {
+    // Coordinates are intentionally not represented by this form. Omitting them
+    // from PATCH preserves the stored values under the backend partial-update contract.
+    if (!(field in form)) continue;
+    let current = form[field];
+    let original = snapshot[field];
+    if (field === "male_count" || field === "female_count") {
+      current = Number(current) || 0;
+      original = Number(original) || 0;
+    }
+    if (
+      field === "septic_tank_type" &&
+      isMissingSepticValue(current) &&
+      isMissingSepticValue(original)
+    ) {
+      continue;
+    }
+    if (field === "last_survey_date" && (current === "" || current === null) && (original === "" || original === null || original === undefined)) {
+      continue;
+    }
+    if (normalizeComparable(current) !== normalizeComparable(original)) {
+      payload[field] = field === "last_survey_date" && current === "" ? null : current;
+    }
+  }
+  return payload;
+}
 
 function HouseholdRecords() {
   const navigate = useNavigate();
@@ -258,6 +316,7 @@ function HouseholdRecords() {
   // Modal states
   const [viewRecord, setViewRecord] = useState(null);
   const [editRecord, setEditRecord] = useState(null);
+  const [editSnapshot, setEditSnapshot] = useState(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -487,15 +546,12 @@ function HouseholdRecords() {
 
   function openAdd() {
     setForm(emptyForm);
+    setEditSnapshot(null);
     setFormError("");
     setIsAddOpen(true);
   }
 
   function openEdit(record) {
-    const sourcesArray = record.water_source
-      ? record.water_source.split(",").map((s) => s.trim()).filter(Boolean)
-      : [];
-
     let firstName = "";
     let lastName = "";
     if (record.household_head) {
@@ -523,12 +579,18 @@ function HouseholdRecords() {
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
       toilet_type: record.toilet_type || "none",
-      water_level: record.water_level || "",
-      water_source: sourcesArray,
+      septic_tank_type: record.septic_tank_type ?? "",
+      water_level: record.water_level,
+      water_source: record.water_source,
       waste_disposal: record.waste_disposal || "collected",
       status: record.status || "good_standing",
       last_survey_date: record.last_survey_date || "",
       remarks: record.remarks || "",
+    });
+    setEditSnapshot({
+      ...record,
+      first_name: firstName,
+      last_name: lastName,
     });
     setFormError("");
     setEditRecord(record);
@@ -537,12 +599,21 @@ function HouseholdRecords() {
   function closeModals() {
     setIsAddOpen(false);
     setEditRecord(null);
+    setEditSnapshot(null);
     setViewRecord(null);
     setFormError("");
   }
 
   function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === "toilet_type" && (
+        !isSepticApplicable(value) ||
+        (value !== prev.toilet_type && prev.septic_tank_type === "septic_tank")
+      )) {
+        return { ...prev, toilet_type: value, septic_tank_type: null };
+      }
+      return { ...prev, [field]: value };
+    });
   }
 
   async function handleSaveAdd() {
@@ -561,20 +632,32 @@ function HouseholdRecords() {
       setFormError("Barangay is required.");
       return;
     }
+    if (isSepticApplicable(form.toilet_type) && isMissingSepticValue(form.septic_tank_type)) {
+      setFormError("Septic tank type is required.");
+      return;
+    }
+    if (!WATER_SOURCE_OPTIONS.some((option) => option.value === form.water_source)) {
+      setFormError("Select a water source.");
+      return;
+    }
+    if (!waterLevelOptions.some((option) => option.value === form.water_level)) {
+      setFormError("Select a water level.");
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
-      const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
-      const waterLevel = computeWaterLevel(sourcesArray);
-      await createHousehold({
+      const payload = {
         ...form,
         household_head: finalHead,
-        water_source: sourcesArray.join(", "),
-        water_level: waterLevel || form.water_level,
         male_count: Number(form.male_count) || 0,
         female_count: Number(form.female_count) || 0,
         last_survey_date: form.last_survey_date || null,
-      });
+      };
+      if (!isSepticApplicable(form.toilet_type)) {
+        delete payload.septic_tank_type;
+      }
+      await createHousehold(payload);
       closeModals();
     } catch (err) {
       setFormError(err?.message || "Failed to save household record.");
@@ -595,20 +678,45 @@ function HouseholdRecords() {
       setFormError("Household Head is required.");
       return;
     }
+    if (!editRecord || !editSnapshot) {
+      setFormError("This household record cannot be edited safely because its original values are unavailable.");
+      return;
+    }
+    if (isUnsupportedSepticValue(editSnapshot.septic_tank_type)) {
+      setFormError(
+        `This record uses an unsupported legacy septic tank type (${editSnapshot.septic_tank_type}). It cannot be edited safely in this form.`
+      );
+      return;
+    }
+    const preservesLegacyMissingSeptic =
+      isSepticApplicable(editSnapshot.toilet_type) &&
+      form.toilet_type === editSnapshot.toilet_type &&
+      isMissingSepticValue(editSnapshot.septic_tank_type) &&
+      isMissingSepticValue(form.septic_tank_type);
+    if (
+      isSepticApplicable(form.toilet_type) &&
+      isMissingSepticValue(form.septic_tank_type) &&
+      !preservesLegacyMissingSeptic
+    ) {
+      setFormError("Septic tank type is required.");
+      return;
+    }
+    const nextForm = {
+      ...form,
+      household_head:
+        form.first_name === editSnapshot.first_name && form.last_name === editSnapshot.last_name
+          ? editSnapshot.household_head ?? ""
+          : finalHead,
+    };
+    const payload = buildHouseholdEditPayload(nextForm, editSnapshot);
+    if (!Object.keys(payload).length) {
+      closeModals();
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
-      const sourcesArray = Array.isArray(form.water_source) ? form.water_source : [];
-      const waterLevel = computeWaterLevel(sourcesArray);
-      await updateHousehold(editRecord.id, {
-        ...form,
-        household_head: finalHead,
-        water_source: sourcesArray.join(", "),
-        water_level: waterLevel || form.water_level,
-        male_count: Number(form.male_count) || 0,
-        female_count: Number(form.female_count) || 0,
-        last_survey_date: form.last_survey_date || null,
-      });
+      await updateHousehold(editRecord.id, payload);
       closeModals();
     } catch (err) {
       setFormError(err?.message || "Failed to update household record.");
@@ -1139,6 +1247,7 @@ function HouseholdRecords() {
                 form={form}
                 updateField={updateField}
                 formError={formError}
+                isEditing
               />
             </div>
 
@@ -1158,7 +1267,7 @@ function HouseholdRecords() {
 }
 
 /* ── Reusable form matching groupmate's exact UI design ── */
-function HouseholdForm({ form, updateField, formError }) {
+function HouseholdForm({ form, updateField, formError, isEditing = false }) {
   return (
     <div className="hh-form-grid">
       {formError && <p className="hh-form-error">{formError}</p>}
@@ -1224,81 +1333,55 @@ function HouseholdForm({ form, updateField, formError }) {
         />
       </div>
 
-      {/* Row 3: Male & Female Members */}
-      <div className="hh-form-group">
-        <label>Male Members *</label>
-        <input
-          type="number"
-          min="0"
-          value={form.male_count}
-          onChange={(e) => updateField("male_count", parseInt(e.target.value, 10) || 0)}
-        />
-      </div>
+      <fieldset className="hh-members-row" aria-label="Household Members">
+        <legend>Household Members</legend>
+        <div className="hh-form-group">
+          <label htmlFor="hh-male">Male</label>
+          <input id="hh-male" type="number" min="0" value={form.male_count}
+            onChange={(e) => updateField("male_count", parseInt(e.target.value, 10) || 0)} />
+        </div>
+        <div className="hh-form-group">
+          <label htmlFor="hh-female">Female</label>
+          <input id="hh-female" type="number" min="0" value={form.female_count}
+            onChange={(e) => updateField("female_count", parseInt(e.target.value, 10) || 0)} />
+        </div>
+        <div className="hh-form-group">
+          <label htmlFor="hh-total">Total</label>
+          <output id="hh-total" htmlFor="hh-male hh-female" aria-live="polite">
+            {(Number(form.male_count) || 0) + (Number(form.female_count) || 0)}
+          </output>
+        </div>
+      </fieldset>
 
-      <div className="hh-form-group">
-        <label>Female Members *</label>
-        <input
-          type="number"
-          min="0"
-          value={form.female_count}
-          onChange={(e) => updateField("female_count", parseInt(e.target.value, 10) || 0)}
-        />
-      </div>
-
-      {/* Row 4: Toilet Type & Waste Disposal */}
-      <div className="hh-form-group">
-        <label>Toilet Type *</label>
-        <select
-          value={form.toilet_type}
-          onChange={(e) => updateField("toilet_type", e.target.value)}
-        >
-          {toiletOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="hh-form-group">
-        <label>Waste Disposal*</label>
-        <select
-          value={form.waste_disposal}
-          onChange={(e) => updateField("waste_disposal", e.target.value)}
-        >
-          {wasteOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Row 5: Water Source Multi-select */}
+      <HouseholdChoices label="Toilet Type *" name="toilet_type" value={form.toilet_type}
+        options={toiletOptions} onChange={updateField} />
+      {isSepticApplicable(form.toilet_type) && (
+        <div className="hh-form-group hh-full">
+          {form.septic_tank_type === "septic_tank" && (
+            <p className="hh-legacy-value">Legacy value: Septic tank - no longer available.
+              Kept unless you replace it or change the toilet configuration.</p>
+          )}
+          <HouseholdChoices label="Septic Tank Type *" name="septic_tank_type"
+            value={form.septic_tank_type} options={septicTankOptions} onChange={updateField} />
+        </div>
+      )}
+      <HouseholdChoices label="Waste Disposal*" name="waste_disposal" value={form.waste_disposal}
+        options={wasteOptions} onChange={updateField} />
       <div className="hh-form-group hh-full">
-        <label>Water Source *</label>
-        <WaterSourceMultiSelect
-          selected={Array.isArray(form.water_source) ? form.water_source : []}
-          onChange={(sources) => updateField("water_source", sources)}
-        />
-        <small style={{ color: "#6b7280", marginTop: "4px", display: "block" }}>
-          Choose one or more source - the water level is assigned automatically.
-        </small>
+        {!WATER_SOURCE_OPTIONS.some((option) => option.value === form.water_source) && (isEditing || form.water_source !== "") && (
+          <p className="hh-legacy-value">Legacy water source: "{form.water_source ?? "(missing)"}" - unavailable.
+            Kept unless you select an approved replacement.</p>
+        )}
+        <HouseholdChoices label="Water Source *" name="water_source" value={form.water_source}
+          options={WATER_SOURCE_OPTIONS} onChange={updateField} />
       </div>
-
-      {/* Row 6: Water Level Display */}
       <div className="hh-form-group hh-full">
-        <label>Water Level (auto-assigned)</label>
-        {(() => {
-          const sources = Array.isArray(form.water_source) ? form.water_source : [];
-          const level = computeWaterLevel(sources);
-          const levelLabel = waterLevelOptions.find((o) => o.value === level)?.label;
-          return (
-            <div className={`ws-water-level-display${level ? " assigned" : ""}`}>
-              {level ? levelLabel : "Select a water source to assign a level"}
-            </div>
-          );
-        })()}
+        {!waterLevelOptions.some((option) => option.value === form.water_level) && (isEditing || form.water_level !== "") && (
+          <p className="hh-legacy-value">Legacy water level: {form.water_level ?? "(missing)"} - unavailable.
+            Kept unless you select a replacement.</p>
+        )}
+        <HouseholdChoices label="Water Level *" name="water_level" value={form.water_level}
+          options={waterLevelOptions} onChange={updateField} />
       </div>
 
       {/* Row 7: Survey Date & Status */}
@@ -1339,65 +1422,20 @@ function HouseholdForm({ form, updateField, formError }) {
   );
 }
 
-function WaterSourceMultiSelect({ selected, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
-
-  function toggle(value) {
-    if (selected.includes(value)) {
-      onChange(selected.filter((s) => s !== value));
-    } else {
-      onChange([...selected, value]);
-    }
-  }
-
-  const label = selected.length
-    ? selected.join(", ")
-    : null;
-
+function HouseholdChoices({ label, name, value, options, onChange }) {
   return (
-    <div className="ws-multiselect" ref={ref}>
-      <button
-        type="button"
-        className={`ws-multiselect-trigger${open ? " open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={label ? undefined : "placeholder"}>
-          {label || "Select water source(s)...."}
-        </span>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d={open ? "M2 8l4-4 4 4" : "M2 4l4 4 4-4"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <div className="ws-dropdown">
-          {WATER_SOURCE_OPTIONS.map((opt) => (
-            <label key={opt.value} className="ws-option">
-              <input
-                type="checkbox"
-                checked={selected.includes(opt.value)}
-                onChange={() => toggle(opt.value)}
-              />
-              <div className="ws-option-label">
-                <span>{opt.label}</span>
-                <small>{opt.sublabel}</small>
-              </div>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
+    <fieldset className="hh-choice-group" role="radiogroup" aria-label={label}>
+      <legend>{label}</legend>
+      <div className="hh-choice-options">
+        {options.map((option) => (
+          <label key={option.value} className={`hh-choice-card${value === option.value ? " is-selected" : ""}`}>
+            <input type="radio" name={name} value={option.value} checked={value === option.value}
+              onChange={() => onChange(name, option.value)} />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
