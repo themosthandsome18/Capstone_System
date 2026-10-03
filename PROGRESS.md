@@ -1,5 +1,11 @@
 # Project Progress & Status Tracker
 
+## Sanitation Mobile OpenStreetMap Attribution (2026-10-03; feature branch)
+- Added one sanitation-local map frame that keeps `© OpenStreetMap contributors` continuously visible below the tile canvas on the community report **Adjust on map**, staff **GIS Map**, and household **Confirm GIS Pin** surfaces. Each existing map retains its 200px, 360px, or 220px canvas height; the separate 24px footer does not overlay markers, polygons, map taps, switching controls, or the household confirmation button.
+- Provider/request configuration is unchanged: `https://tile.openstreetmap.org/{z}/{x}/{y}.png` and `userAgentPackageName: mauban_sanitation_mobile`. The current `flutter_map 8.3.0` native configuration path produces `User-Agent: flutter_map (mauban_sanitation_mobile)`; this is static source/configuration evidence, not packet-level proof of what OSM receives. No custom headers, caching behavior, external-link package, provider, or satellite functionality was added.
+- Red -> green: four focused tests initially failed because all three maps lacked the exact visible attribution; after the correction, 4/4 passed. The suite verifies the footer is outside `FlutterMap`, exact tile URL/User-Agent configuration, existing pins, staff markers/polygons and overlay control, absence of Satellite UI, and a 360px no-overflow layout. Relevant sanitation suites passed 64/64; full Flutter suite passed 219/219; `flutter analyze` reported no issues; `git diff --check` passed.
+- Scope: sanitation mobile map presentation and focused tests plus the two project documents only. No web, backend, tourism, shared-auth, map coordinate/filter behavior, provider, satellite, `pubspec.yaml`, or `pubspec.lock` changes. No production access. Real-phone acceptance remains pending.
+
 ## Household Survey A+B+C - COMPLETE and Accepted (2026-10-03)
 - **CLOSED:** Household Survey correction work is complete, published and accepted. This closeout supersedes the unpublished, held-off-main and pending-acceptance statuses in the historical Household Survey entries below.
 - Published main commit: `ae183ed0272d931fd2c52f8082b6712948255566`.

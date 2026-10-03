@@ -1390,11 +1390,10 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
           )
         else ...[
           const SizedBox(height: 10),
-          SizedBox(
-            height: 200,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: FlutterMap(
+          SanitationOsmMapFrame(
+            mapHeight: 200,
+            borderRadius: 12,
+            map: FlutterMap(
                 key: ValueKey('${pin?.latitude},${pin?.longitude}'),
                 options: MapOptions(
                   initialCenter: pin ?? const LatLng(14.185, 121.731),
@@ -1405,8 +1404,8 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'mauban_sanitation_mobile',
+                    urlTemplate: sanitationOsmTileUrl,
+                    userAgentPackageName: sanitationOsmUserAgentPackageName,
                   ),
                   if (pin != null)
                     MarkerLayer(
@@ -1416,7 +1415,6 @@ class _SanitationReportPageState extends State<SanitationReportPage> {
                     ),
                 ],
               ),
-            ),
           ),
           const Padding(
             padding: EdgeInsets.only(top: 4),
@@ -3000,11 +2998,10 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           warning: pinCount == 0,
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 360,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: FlutterMap(
+        SanitationOsmMapFrame(
+          mapHeight: 360,
+          borderRadius: 18,
+          map: FlutterMap(
               options: MapOptions(
                 initialCenter: const LatLng(14.185, 121.731),
                 initialZoom: 12,
@@ -3013,8 +3010,8 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'mauban_sanitation_mobile',
+                  urlTemplate: sanitationOsmTileUrl,
+                  userAgentPackageName: sanitationOsmUserAgentPackageName,
                 ),
                 if (_showHouseholds && selectedBgyPolygons.isNotEmpty)
                   StripedPolygonLayer(
@@ -3065,7 +3062,6 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                 ),
               ],
             ),
-          ),
         ),
         Container(
           margin: const EdgeInsets.only(top: 8),
