@@ -904,6 +904,10 @@ flutter run -d emulator --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
     - The custom management commands (`create_default_users`, `evaluate_due_notifications`, the `import_*` commands, `purge_demo_households`) read and write live data when run locally; `purge_demo_households --confirm` deletes rows.
     - Only test runs are guarded: `backend/backend/settings.py` forces `manage.py test` and `testserver` onto an in-memory SQLite database. Nothing else is.
     - Fix, as a separate piece of work: a development database, or at minimum a second `.env` that local work points at instead of production.
+14. **Known Local-Only Test Flake: `CommunityReportConcurrentSubmitTests`** (recorded October 3, 2026):
+    - `test_concurrent_duplicates_create_exactly_one_row` fails in a full `manage.py test` run from the usual `backend/` working folder: two threaded requests get an HTML 500 instead of JSON, and threads log `no such table: api_sanitaryestablishment`.
+    - Evidence that it is not a code regression: run alone it passes (3/3); the full suite at the same commit (`b3ca8ab`) passes 268/268 in a clean `git worktree` checkout, as do `1e8ebf7` (247/247) and `88a8d31` (268/268); no backend file changed between `88a8d31` and `b3ca8ab`. It fails only in the working folder (3/3 full runs). `DEBUG=True` alone does not reproduce it; the trigger in that folder (a `.env` value or an untracked file) was not isolated.
+    - It is a threaded concurrency test, and the test guard forces an in-memory SQLite database, which locks far more readily than Postgres under concurrent writes. That is a likely cause, worth checking first by whoever chases it.
 
 ---
 
