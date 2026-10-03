@@ -532,7 +532,7 @@
 }
 
 .metric-icon {
-  @apply text-[24px] text-[#32a6b4];
+  @apply text-[24px] text-[var(--th-primary-ink)];
 }
 
 
