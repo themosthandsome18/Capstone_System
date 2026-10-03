@@ -1156,9 +1156,7 @@ class HouseholdSanitationRecord(models.Model):
         else:
             self.status = "violation"
 
-        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
-            self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
-
+        # Household coordinates are supplied locations; missing values stay unmapped.
         super().save(*args, **kwargs)
 
     @property
