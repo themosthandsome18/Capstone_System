@@ -243,6 +243,38 @@ Sanitation wins on equal specificity because it loads later.
   style: 0 differences). **Do not drop the prefix.**
 - Copying a selector that Sanitation also defines? Scope it the same way.
 
+**Sanitation rules that still paint tourism pages: open, deferred on
+purpose.** Neither is a theme bug: they do not change under orange. Both are
+pre-existing size and weight differences from what tourism intends.
+- **`.status`** (`Sanitation_index.css:4229`, no `!important`) makes the
+  Destinations sentiment badges (Feedback tab, `DestinationManagement.js:930`;
+  the Google reviews list, `:1172`) larger and bolder than tourism's own
+  `.status` (`Tourism_index.css:2795`): 12.5px / 800, padding `0 11px`,
+  instead of 10px / 600, padding `4px 12px`. The colours are tourism's own
+  (Sanitation's `.status.*` variants cannot match positive / neutral /
+  negative). A shell-scoped rule would win without `!important`.
+- **`.leaflet-control-zoom`** and **`.leaflet-control-zoom a`**
+  (`Sanitation_index.css:7302`, `:7307`) make the map zoom buttons 54×54,
+  35.5px, navy `#0f1f38`, with no border or shadow, instead of Leaflet's
+  30×30, 22px, black. This affects the GIS Map, the destination map
+  (`DestinationManagement.js:1122`) and the location picker (shared
+  `LocationPicker`). Every declaration is `!important`, so a fix from our
+  side needs `!important` too.
+
+**Swept and cleared: do not re-run this sweep.** Every selector in
+`Sanitation_index.css` was checked against the class names that live tourism
+markup can produce (tourism pages and layout, the maps, the shared components
+tourism renders, Leaflet's generated classes). It has **no element
+selectors** (no bare `body`, `table`, `th`, `input`, `:root`). Besides the
+sort rules and the two leaks above, three groups matched by name only:
+- `.admin` (212): `"admin"` is a role string in tourism, never a class.
+- `.gis-map` (7207, and `@media` copies at 7570, 8083) and
+  `.gis-map .leaflet-container` (7216): `"/gis-map"` is a route path;
+  tourism's classes are `gis-map-card` / `gis-map-title`.
+- `.sanitation-spinner` (11756): rendered only by `PageLoader`'s sanitation
+  branch. Tourism's loader uses the tourism theme and renders before the
+  shell exists.
+
 **Before changing any rule above, check Sanitation.** In Phase 1, six wizard
 lines in the `.ws-*` block and the `.search-box` border were tokenised by
 mistake and then returned to literals in `facaac5`.
