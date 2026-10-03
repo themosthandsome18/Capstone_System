@@ -199,7 +199,7 @@ Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
 |---|---|---|
 | Top-bar **"Sanitation" module-switch button** | `.module-switch-btn` (`#0f6b42`, hover `#0b5836`) | It keeps Sanitation's own green on purpose, to signal that it leaves the tourism module. |
 | **`.btn-primary`**, including `hover:bg-[#278d3f]` | `Tourism_index.css` (TI:128–129 at `3d1e2fd`) | Dead in tourism, but **live on Sanitation's Submission Tracking page** (`SubmissionTracking.js`). Its hover colour paints that page. Tokenising it would let a tourism theme repaint Sanitation. |
-| **"View & Review record" 👁 button** on booking rows | `.booking-icon-btn.view` (`#0f766e` / `#99f6e4` / `#f0fdfa`) | A fixed functional action colour (Tailwind teal-700/200/50), part of the row's colour-coded actions: view teal, delete red, arrived green, no-show red. It stays fixed like status colours. |
+| **"View & Review record" 👁 button** on booking rows | `.booking-icon-btn.view` (`#0f766e` / `#99f6e4` / `#f0fdfa`) | A fixed functional action colour (Tailwind teal-700/200/50), part of the row's colour-coded actions: view teal, delete red, arrived green, no-show red. It stays fixed like status colours. Reviewed after Phase 3 and deliberately kept, because the view icon belongs to the row's colour-coded action set (view, delete, arrived, no-show) and carries meaning. |
 | **Wizard auto-fill buttons** ("Balance female count", "Balance age 8-59") | `.tourist-auto-fill-row button` (`#0f766e` text, `#94d3bd` border) | The same fixed functional teal. Not part of any system that should follow the brand. |
 | **Gallery toast** (appears after promoting a feedback photo) | JSX `bg-green-700` in `DestinationManagement.js` (line 604 at `3d1e2fd`, the "Toast message for gallery promotion" block) | **Status.** It announces "✓ Photo successfully added to … slideshow!", so it stays fixed like other status colours. Its other message, "Photo is already included in … images.", shares the same success styling. Changing that is a design change, not a theming one. |
 | Plain white (`#ffffff`, `bg-white`) | many | White is not a theme colour. Tokenising it would be churn. |
@@ -279,7 +279,7 @@ sort rules and the two leaks above, three groups matched by name only:
 lines in the `.ws-*` block and the `.search-box` border were tokenised by
 mistake and then returned to literals in `facaac5`.
 
-## 6. Tailwind opacity limitation: 27 sites
+## 6. Tailwind opacity limitation: 28 sites
 
 These rules use arbitrary `var()` colours, for example
 `border-[var(--th-primary)]`. Tailwind compiles those **without** its
@@ -317,9 +317,10 @@ Measured at `3d1e2fd`. Line numbers are in `Tourism_index.css` unless stated.
 - `.report-filter-card button` (TI:2882)
 - `.gis-actions .active` (TI:3260)
 
-**`text-opacity-*` inert (6 sites):**
+**`text-opacity-*` inert (7 sites):**
 - `.btn-secondary` on `hover:` (TI:133)
 - `.metric-card span` (TI:521)
+- `.metric-icon` (TI:535, added after Phase 3)
 - `.arrival-note` (TI:1579). This one is also overridden by the rule's own
   `color` line.
 - `.destination-view-btn` (TI:1783)
@@ -327,14 +328,15 @@ Measured at `3d1e2fd`. Line numbers are in `Tourism_index.css` unless stated.
 - the photo drop-zone upload icon (JSX `text-[var(--th-primary)]`,
   `DestinationManagement.js:1407`)
 
-**Totals: 27 sites.**
-- 26 of them are in `@apply` rules, on 21 rules.
+**Totals: 28 sites.**
+- 27 of them are in `@apply` rules, on 22 rules.
 - 1 is a JSX class.
 
 By commit:
 - 13 from `66c3e7b`
 - 4 from `0840be5`
 - 10 from `3d1e2fd`: 9 `@apply` sites and the JSX icon
+- 1 from the metric-icon fix (`fix(tourism): theme the dashboard metric icons`)
 
 **Why the trade was accepted:**
 - At `3d1e2fd`, **no `*-opacity-*` utility exists anywhere in tourism code**,
@@ -398,8 +400,11 @@ so nothing was lost there.
   `rgba(190, 205, 198, 0.35)`; `:103`, `rgba(150, 180, 175, 0.35)`), while
   the Analytics grids are neutral slate. Left fixed; making them neutral is a
   separate decision.
-- **The Dashboard metric icons** (`.metric-icon`, `text-[#32a6b4]`) are still
-  literal teal. They are not charts, so the chart bridge left them; undecided.
+- **The Dashboard metric icons: resolved.** The 8 Dashboard metric-card icons
+  (`.metric-icon`) now use `var(--th-primary-ink)`, the same token as the Key
+  Insights digits. The previous literal `#32a6b4` measured 2.90:1 on the
+  white card and failed the 3:1 AA floor for graphics; the token measures
+  7.13:1 under green and 7.51:1 under orange.
 - **`#e6f4f3` at `AnalyticsAndReport.js:824`** (the clock-icon circle). It is
   ΔE 1.37 from `--th-chart-wash` composited over the card's white. It is not a
   chart, so the chart batch left it literal; still undecided.
