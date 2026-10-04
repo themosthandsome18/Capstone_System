@@ -182,15 +182,27 @@ const buildMainReportChartOptions = (palette) => ({
 const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
 
 function AnalyticsAndReport() {
-  const { referenceTables, reportData, refreshReportData } = useTourismData();
+  const { referenceTables, reportData, refreshReportData, isComputedDataStale } = useTourismData();
 
-  const [reportType, setReportType] = useState("resort");
+  // Start on what is already loaded (the app-start bootstrap or this page's last
+  // view), so opening the page needs no request unless that data is stale.
+  const loadedFilters = reportData.filters || {};
+  const [reportType, setReportType] = useState(loadedFilters.type || "resort");
   const [filters, setFilters] = useState({
-    year: currentReportingYear,
-    from: "",
-    to: "",
-    resort_id: "",
+    year: loadedFilters.year || currentReportingYear,
+    from: loadedFilters.from || "",
+    to: loadedFilters.to || "",
+    resort_id: loadedFilters.resort_id || "",
   });
+  // Titles and the export describe the loaded report, never a pending tab.
+  const loadedType = reportData.type || loadedFilters.type || reportType;
+  // The filters the loaded data (and its question answers) were built with.
+  const appliedFilters = {
+    year: loadedFilters.year || currentReportingYear,
+    from: loadedFilters.from || "",
+    to: loadedFilters.to || "",
+    resort_id: loadedFilters.resort_id || "",
+  };
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportError, setReportError] = useState("");
 
@@ -217,12 +229,18 @@ function AnalyticsAndReport() {
         data: rows.map((item) => item.visitors),
         backgroundColor: palette.series[0],
         borderRadius: 8,
-        barThickness: reportType === "resort" ? 80 : 55,
+        barThickness: loadedType === "resort" ? 80 : 55,
       },
     ],
-  }), [rows, reportType, palette]);
+  }), [rows, loadedType, palette]);
 
   useEffect(() => {
+    // The bootstrap (or this page's last visit) already loaded this report and
+    // its question answers; refetch only if a record changed since.
+    if (!isComputedDataStale("reportData")) {
+      return undefined;
+    }
+
     let active = true;
 
     async function loadReportInsights() {
@@ -251,7 +269,7 @@ function AnalyticsAndReport() {
     return () => {
       active = false;
     };
-    // Load once on page entry; explicit filter controls handle later refreshes.
+    // Checked once on page entry; explicit controls handle later refreshes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -291,6 +309,9 @@ function AnalyticsAndReport() {
     });
   }
 
+  // A tab switch asks for the report only, with the filters already applied:
+  // the question answers depend on the filters, not the report type, so the
+  // loaded ones are kept. If a record changed since, they are refetched too.
   async function changeReportType(type) {
     setReportType(type);
     setLoadingReport(true);
@@ -298,9 +319,9 @@ function AnalyticsAndReport() {
 
     try {
       await refreshReportData({
-        ...filters,
+        ...appliedFilters,
         type,
-        include_questions: true,
+        include_questions: isComputedDataStale("reportData"),
       });
     } catch (error) {
       setReportError(error.message || "Unable to load reports.");
@@ -330,27 +351,30 @@ function AnalyticsAndReport() {
     window.print();
   }
 
+  // Exports the report on screen: its loaded type and filters, in the order the
+  // table is sorted.
   function handleExportCsv() {
     const selectedResort =
       referenceTables.resorts.find(
-        (resort) => String(resort.resort_id) === String(filters.resort_id)
+        (resort) => String(resort.resort_id) === String(appliedFilters.resort_id)
       )?.resort_name || "All Resorts";
+    const yearLabel = appliedFilters.year === "all" ? "All Years" : appliedFilters.year;
     const headers = [
       "Report Type",
       "Reporting Year",
       "Date From",
       "Date To",
       "Resort Filter",
-      getFirstColumnLabel(reportType),
+      getFirstColumnLabel(loadedType),
       "Total Visitors",
       "Total Revenue",
       "Average Per Visitor",
     ];
-    const csvRows = rows.map((row) => [
-      getReportTitle(reportType),
-      filters.year === "all" ? "All Years" : filters.year,
-      filters.from || "All",
-      filters.to || "All",
+    const csvRows = sortedRows.map((row) => [
+      getReportTitle(loadedType),
+      yearLabel,
+      appliedFilters.from || "All",
+      appliedFilters.to || "All",
       selectedResort,
       row.name,
       row.visitors,
@@ -359,17 +383,17 @@ function AnalyticsAndReport() {
     ]);
 
     csvRows.push([
-      getReportTitle(reportType),
-      filters.year === "all" ? "All Years" : filters.year,
-      filters.from || "All",
-      filters.to || "All",
+      getReportTitle(loadedType),
+      yearLabel,
+      appliedFilters.from || "All",
+      appliedFilters.to || "All",
       selectedResort,
       "Total",
       totalVisitors,
       totalRevenue,
       "",
     ]);
-    exportCsv(datedCsvFilename(`tourism-${reportType}-report`), headers, csvRows);
+    exportCsv(datedCsvFilename(`tourism-${loadedType}-report`), headers, csvRows);
   }
 
   function handleExportPDF() {
@@ -406,9 +430,9 @@ function AnalyticsAndReport() {
         <strong>Municipality of Mauban</strong>
         <h2>Tourism Office Report</h2>
         <p>
-          {getReportTitle(reportType)} | {filters.from || "All dates"} to{" "}
-          {filters.to || "All dates"} | Year:{" "}
-          {filters.year === "all" ? "All Years" : filters.year}
+          {getReportTitle(loadedType)} | {appliedFilters.from || "All dates"} to{" "}
+          {appliedFilters.to || "All dates"} | Year:{" "}
+          {appliedFilters.year === "all" ? "All Years" : appliedFilters.year}
         </p>
       </div>
 
@@ -416,6 +440,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "daily" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("daily")}
         >
           Daily Report
@@ -424,6 +449,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "monthly" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("monthly")}
         >
           Monthly Report
@@ -432,6 +458,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "resort" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("resort")}
         >
           Resort Report
@@ -440,6 +467,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "origin" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("origin")}
         >
           Origin Report
@@ -448,6 +476,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "purpose" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("purpose")}
         >
           Purpose Report
@@ -456,6 +485,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "transport" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("transport")}
         >
           Vehicle Report
@@ -464,6 +494,7 @@ function AnalyticsAndReport() {
         <button
           type="button"
           className={reportType === "no_show" ? "active" : ""}
+          disabled={loadingReport}
           onClick={() => changeReportType("no_show")}
         >
           No-show Report
@@ -529,8 +560,8 @@ function AnalyticsAndReport() {
       <div className="report-print-area">
         <div className="report-chart-card">
           <div className="report-card-title">
-            <h3>{getReportTitle(reportType)}</h3>
-            <p>{getReportSubtitle(reportType)}</p>
+            <h3>{getReportTitle(loadedType)}</h3>
+            <p>{getReportSubtitle(loadedType)}</p>
           </div>
 
           <div className="report-chart-area">
@@ -582,7 +613,7 @@ function AnalyticsAndReport() {
                   onClick={() => handleSort("name")}
                   title="Click to sort by Name"
                 >
-                  {getFirstColumnLabel(reportType)}
+                  {getFirstColumnLabel(loadedType)}
                   <span className="sort-indicator">
                     {sortConfig.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
                   </span>

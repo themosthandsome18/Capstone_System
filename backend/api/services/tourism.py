@@ -983,8 +983,7 @@ def build_tourism_question_answers(params=None):
         all_records = all_records.filter(arrival_date__lte=date_to)
 
     total_visitors = sum_visitors(arrived)
-    top_resort = top_group(arrived, "resort__resort_name")
-    top_6_resorts = top_n_groups(arrived, "resort__resort_name", limit=6)
+    top_resort, top_6_resorts = leader_and_top_groups(arrived, "resort__resort_name", limit=6)
     previous_month, current_month = get_month_comparison(arrived)
     peak_month = get_peak_month(arrived)
     classification = arrived.aggregate(
@@ -1035,14 +1034,13 @@ def build_tourism_question_answers(params=None):
         key=lambda item: (-item[1], item[0])
     )[:6]
 
-    top_origin = top_group(with_origin(arrived), "origin")
-    top_6_origins = top_n_groups(with_origin(arrived), "origin", limit=6)
+    # Each pair below comes from one query: the leader is the first of the top 6.
+    top_origin, top_6_origins = leader_and_top_groups(with_origin(arrived), "origin", limit=6)
+    top_purpose, top_6_purposes = leader_and_top_groups(arrived, "visit_purpose__name", limit=6)
 
-    top_purpose = top_group(arrived, "visit_purpose__name")
-    top_6_purposes = top_n_groups(arrived, "visit_purpose__name", limit=6)
-
-    demand = get_recent_demand_signal(arrived)
-    validation = get_validation_summary(all_records)
+    # The answer text and its chart share one set of queries each.
+    demand, demand_visual = get_recent_demand(arrived)
+    validation, validation_visual = get_validation(all_records)
     average_stay = round(stay_nights_total / total_visitors, 1) if total_visitors else 0
 
     return [
@@ -1157,13 +1155,13 @@ def build_tourism_question_answers(params=None):
             "id": "high_demand",
             "question": "Which resorts or destinations may experience high visitor demand based on recent arrival trends?",
             "answer": demand,
-            "visual": get_recent_demand_visual(arrived),
+            "visual": demand_visual,
         },
         {
             "id": "validation",
             "question": "Which tourist records need validation due to pending status, no-show status, duplicate entries, or incomplete information?",
             "answer": validation,
-            "visual": get_validation_visual(all_records),
+            "visual": validation_visual,
         },
     ]
 
@@ -1226,6 +1224,16 @@ def top_n_groups(queryset, group_field, limit=5):
         {"name": item.get(group_field) or "Unspecified", "total": item["total"] or 0}
         for item in items
     ]
+
+
+def leader_and_top_groups(queryset, group_field, limit=6):
+    """(top_group, top_n_groups) from one query.
+
+    Both order by total, then name, so the leader is the first of the top
+    `limit`; with no records it is the same empty leader top_group returns.
+    """
+    items = top_n_groups(queryset, group_field, limit=limit)
+    return (items[0] if items else {"name": "", "total": 0}), items
 
 
 def format_top_answer(item, denominator, unit):
@@ -1293,50 +1301,25 @@ def get_peak_month(arrived_records=None):
     return max(monthly_data.values(), key=lambda item: item["total"])
 
 
-def get_recent_demand_signal(arrived_records=None):
+def get_recent_demand(arrived_records=None):
+    """The high-demand answer and its chart, from one set of queries.
+
+    The latest 30 days of arrivals (ending at the latest arrival date) against
+    the 30 days before, for the resort with the most recent visitors.
+    """
     if arrived_records is None:
         arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
-        return "No recent arrival trend is available yet."
+        return "No recent arrival trend is available yet.", {"type": "comparison", "items": []}
 
     recent_start = latest_date - timedelta(days=29)
     previous_start = recent_start - timedelta(days=30)
     previous_end = recent_start - timedelta(days=1)
-    recent = arrived_records.filter(
-        arrival_date__range=(recent_start, latest_date),
+    recent_top = top_group(
+        arrived_records.filter(arrival_date__range=(recent_start, latest_date)),
+        "resort__resort_name",
     )
-    previous = arrived_records.filter(
-        arrival_date__range=(previous_start, previous_end),
-    )
-    recent_top = top_group(recent, "resort__resort_name")
-    previous_total = sum_visitors(previous.filter(resort__resort_name=recent_top["name"]))
-    growth = recent_top["total"] - previous_total
-
-    if not recent_top["name"]:
-        return "No recent high-demand resort is available yet."
-
-    return (
-        f"{recent_top['name']} shows the strongest recent demand with "
-        f"{recent_top['total']} visitors in the latest 30-day window "
-        f"({growth:+d} versus the previous 30 days)."
-    )
-
-
-def get_recent_demand_visual(arrived_records=None):
-    if arrived_records is None:
-        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
-    latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
-    if not latest_date:
-        return {"type": "comparison", "items": []}
-
-    recent_start = latest_date - timedelta(days=29)
-    previous_start = recent_start - timedelta(days=30)
-    previous_end = recent_start - timedelta(days=1)
-    recent = arrived_records.filter(
-        arrival_date__range=(recent_start, latest_date),
-    )
-    recent_top = top_group(recent, "resort__resort_name")
     previous_total = sum_visitors(
         arrived_records.filter(
             arrival_date__range=(previous_start, previous_end),
@@ -1344,16 +1327,27 @@ def get_recent_demand_visual(arrived_records=None):
         )
     )
 
-    return {
+    visual = {
         "type": "comparison",
         "items": [
             {"label": "Previous 30 days", "value": previous_total},
             {"label": "Latest 30 days", "value": recent_top["total"]},
         ],
     }
+    if not recent_top["name"]:
+        return "No recent high-demand resort is available yet.", visual
+
+    growth = recent_top["total"] - previous_total
+    answer = (
+        f"{recent_top['name']} shows the strongest recent demand with "
+        f"{recent_top['total']} visitors in the latest 30-day window "
+        f"({growth:+d} versus the previous 30 days)."
+    )
+    return answer, visual
 
 
-def get_validation_summary(records):
+def get_validation(records):
+    """The validation answer and its chart, from one set of counts."""
     pending = records.filter(status=BOOKING_STATUS_PENDING).count()
     no_show = records.filter(status=BOOKING_STATUS_NO_SHOW).count()
     duplicates = (
@@ -1371,31 +1365,11 @@ def get_validation_summary(records):
         | Q(total_female__isnull=True)
     ).count()
 
-    return (
+    answer = (
         f"Needs review: {pending} pending, {no_show} no-show, "
         f"{duplicates} possible duplicates, and {incomplete} incomplete records."
     )
-
-
-def get_validation_visual(records):
-    pending = records.filter(status=BOOKING_STATUS_PENDING).count()
-    no_show = records.filter(status=BOOKING_STATUS_NO_SHOW).count()
-    duplicates = (
-        records.exclude(contact_number="")
-        .values("full_name", "contact_number", "arrival_date", "resort_id")
-        .annotate(total=Count("survey_id"))
-        .filter(total__gt=1)
-        .count()
-    )
-    incomplete = records.filter(
-        Q(full_name="")
-        | Q(contact_number="")
-        | Q(total_visitors=0)
-        | Q(total_male__isnull=True)
-        | Q(total_female__isnull=True)
-    ).count()
-
-    return {
+    visual = {
         "type": "stack",
         "items": [
             {"label": "Pending", "value": pending},
@@ -1404,6 +1378,7 @@ def get_validation_visual(records):
             {"label": "Incomplete", "value": incomplete},
         ],
     }
+    return answer, visual
 
 
 def build_share_visual(label, value, total):

@@ -353,9 +353,14 @@ export function TourismDataProvider({ children }) {
   const refreshReportData = useCallback(async function refreshReportData(filters = {}) {
     const version = dataVersionRef.current;
     const reportData = await tourismApi.getReportsData(filters);
+    // A report-only request (include_questions false) keeps the question
+    // answers already loaded: they depend on the filters, not the report type.
+    const reportOnly = String(filters.include_questions) === "false";
     setBootstrap((current) => ({
       ...current,
-      reportData,
+      reportData: reportOnly
+        ? { ...reportData, questionAnswers: current.reportData?.questionAnswers || [] }
+        : reportData,
     }));
     markFresh(["reportData"], version);
   }, [markFresh]);

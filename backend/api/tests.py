@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.db.models import Count, Max, Q
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -3842,6 +3843,186 @@ class NoShowSweepTests(TestCase):
         self.assertFalse(
             [q["sql"] for q in queries if q["sql"].lstrip().upper().startswith("UPDATE")]
         )
+
+
+class QuestionAnswersDeduplicationTests(TestCase):
+    """The de-duplicated question answers equal the old, separate computations.
+
+    The oracle below is the code that was replaced: a separate query for each
+    leader and its top 6, and separate text and chart functions for the demand
+    and validation answers.
+    """
+
+    AFFECTED = ("top_resort", "top_origin", "visit_purpose", "high_demand", "validation")
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        cls.quezon = Province.objects.get(name="Quezon")
+        cls.resorts = list(Resort.objects.order_by("resort_id")[:2])
+        cls.purposes = list(VisitPurpose.objects.order_by("id")[:2])
+        cls.us = Country.objects.get(name="United States")
+
+    def _record(self, survey_id, day, visitors, resort=0, purpose=0, booking_status="arrived",
+                foreign=False, full_name="Group", contact="09170000000"):
+        return TouristRecord(
+            survey_id=survey_id,
+            full_name=full_name,
+            contact_number=contact,
+            country=self.us if foreign else Country.objects.get(name="Philippines"),
+            region=None if foreign else self.quezon.region,
+            province=None if foreign else self.quezon,
+            arrival_date=day,
+            resort=self.resorts[resort],
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=self.purposes[purpose],
+            total_visitors=visitors,
+            filipino_count=visitors,
+            total_male=visitors,
+            age_8_59=visitors,
+            status=booking_status,
+        )
+
+    # --- the oracle: the replaced code --------------------------------------
+
+    def _old(self, params):
+        from .services import tourism as t
+
+        reporting_year = t.get_reporting_year(params)
+        arrived = t.apply_reporting_year(
+            TouristRecord.objects.exclude(status="no_show"), reporting_year
+        )
+        records = t.apply_reporting_year(TouristRecord.objects.all(), reporting_year)
+        if params.get("from"):
+            arrived = arrived.filter(arrival_date__gte=params["from"])
+            records = records.filter(arrival_date__gte=params["from"])
+        if params.get("to"):
+            arrived = arrived.filter(arrival_date__lte=params["to"])
+            records = records.filter(arrival_date__lte=params["to"])
+        total = t.sum_visitors(arrived)
+
+        def ranking(field, queryset):
+            top = t.top_group(queryset, field)
+            return (
+                t.format_top_answer(top, total, "visitors"),
+                [{"label": r["name"], "value": r["total"]} for r in t.top_n_groups(queryset, field, limit=6)],
+            )
+
+        def demand_signal():
+            latest = arrived.aggregate(latest=Max("arrival_date"))["latest"]
+            if not latest:
+                return "No recent arrival trend is available yet."
+            recent_start = latest - timedelta(days=29)
+            previous = arrived.filter(arrival_date__range=(recent_start - timedelta(days=30), recent_start - timedelta(days=1)))
+            recent_top = t.top_group(arrived.filter(arrival_date__range=(recent_start, latest)), "resort__resort_name")
+            growth = recent_top["total"] - t.sum_visitors(previous.filter(resort__resort_name=recent_top["name"]))
+            if not recent_top["name"]:
+                return "No recent high-demand resort is available yet."
+            return (
+                f"{recent_top['name']} shows the strongest recent demand with "
+                f"{recent_top['total']} visitors in the latest 30-day window "
+                f"({growth:+d} versus the previous 30 days)."
+            )
+
+        def demand_visual():
+            latest = arrived.aggregate(latest=Max("arrival_date"))["latest"]
+            if not latest:
+                return {"type": "comparison", "items": []}
+            recent_start = latest - timedelta(days=29)
+            recent_top = t.top_group(arrived.filter(arrival_date__range=(recent_start, latest)), "resort__resort_name")
+            previous_total = t.sum_visitors(arrived.filter(
+                arrival_date__range=(recent_start - timedelta(days=30), recent_start - timedelta(days=1)),
+                resort__resort_name=recent_top["name"],
+            ))
+            return {"type": "comparison", "items": [
+                {"label": "Previous 30 days", "value": previous_total},
+                {"label": "Latest 30 days", "value": recent_top["total"]},
+            ]}
+
+        def counts():
+            return (
+                records.filter(status="pending").count(),
+                records.filter(status="no_show").count(),
+                records.exclude(contact_number="").values("full_name", "contact_number", "arrival_date", "resort_id")
+                .annotate(total=Count("survey_id")).filter(total__gt=1).count(),
+                records.filter(Q(full_name="") | Q(contact_number="") | Q(total_visitors=0)
+                               | Q(total_male__isnull=True) | Q(total_female__isnull=True)).count(),
+            )
+
+        pending, no_show, duplicates, incomplete = counts()
+        resort_answer, resort_items = ranking("resort__resort_name", arrived)
+        origin_answer, origin_items = ranking("origin", t.with_origin(arrived))
+        purpose_answer, purpose_items = ranking("visit_purpose__name", arrived)
+        return {
+            "top_resort": (resort_answer, {"type": "ranking", "items": resort_items}),
+            "top_origin": (origin_answer, {"type": "ranking", "items": origin_items}),
+            "visit_purpose": (purpose_answer, {"type": "ranking", "items": purpose_items}),
+            "high_demand": (demand_signal(), demand_visual()),
+            "validation": (
+                f"Needs review: {pending} pending, {no_show} no-show, "
+                f"{duplicates} possible duplicates, and {incomplete} incomplete records.",
+                {"type": "stack", "items": [
+                    {"label": "Pending", "value": pending},
+                    {"label": "No-show", "value": no_show},
+                    {"label": "Duplicates", "value": duplicates},
+                    {"label": "Incomplete", "value": incomplete},
+                ]},
+            ),
+        }
+
+    def _new(self, params):
+        from .services.tourism import build_tourism_question_answers
+
+        answers = {item["id"]: item for item in build_tourism_question_answers(params)}
+        return {key: (answers[key]["answer"], answers[key]["visual"]) for key in self.AFFECTED}
+
+    def _assert_same(self, params):
+        self.assertEqual(self._new(params), self._old(params))
+
+    # --- cases ----------------------------------------------------------------
+
+    def test_same_with_no_records(self):
+        self._assert_same({"year": "2026"})
+
+    def test_same_with_mixed_records(self):
+        TouristRecord.objects.bulk_create([
+            self._record("QA-01", "2026-09-10", 5, resort=0, purpose=0),
+            self._record("QA-02", "2026-09-20", 3, resort=1, purpose=1),
+            self._record("QA-03", "2026-08-05", 2, resort=0, purpose=0, foreign=True),
+            self._record("QA-04", "2026-09-25", 4, resort=1, purpose=1, booking_status="pending"),
+            self._record("QA-05", "2026-09-15", 6, resort=0, booking_status="no_show"),
+            self._record("QA-06", "2026-09-10", 1, resort=0, purpose=1),  # duplicate of QA-01's key
+            self._record("QA-07", "2026-09-01", 2, resort=1, contact=""),  # incomplete
+            self._record("QA-08", "2026-07-30", 3, resort=1, purpose=0),  # previous 30-day window
+        ])
+
+        for params in (
+            {"year": "2026"},
+            {"year": "all"},
+            {"year": "2026", "from": "2026-09-01", "to": "2026-09-30"},
+            {"year": "2026", "from": "2026-12-01", "to": "2026-12-31"},
+        ):
+            with self.subTest(params=params):
+                self._assert_same(params)
+
+    def test_same_with_a_tie(self):
+        TouristRecord.objects.bulk_create([
+            self._record("QA-11", "2026-09-10", 4, resort=0, purpose=0),
+            self._record("QA-12", "2026-09-11", 4, resort=1, purpose=1),
+        ])
+
+        self._assert_same({"year": "2026"})
+
+    def test_question_answers_run_17_queries(self):
+        from .services.tourism import build_tourism_question_answers
+
+        TouristRecord.objects.bulk_create([self._record("QA-21", "2026-09-10", 2)])
+        with CaptureQueriesContext(connection) as queries:
+            build_tourism_question_answers({"year": "2026"})
+
+        self.assertEqual(len(queries), 17)
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):
