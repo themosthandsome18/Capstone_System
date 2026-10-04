@@ -8,6 +8,18 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import { tourismApi } from "../services/tourismApi";
+import {
+  ARRIVAL_EXPORT_HEADERS,
+  VIEW_DAY,
+  VIEW_MONTH,
+  VIEW_YEAR,
+  arrivalExportRows,
+  arrivalRequestParams,
+  exportDateSlug,
+  monthLabel,
+  viewFromFilters,
+} from "../utils/arrivalView";
 import { formatNumber } from "../utils/format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -64,19 +76,18 @@ function ArrivalMonitoring() {
   } = useTourismData();
 
   const todayStr = useMemo(() => getTodayDateString(), []);
-  const initialDate = arrivalMonitoring.filters?.date || todayStr;
-  const initialMode = initialDate === "all" ? "all" : "day";
+  // Reopen on the view the stored data was requested for. The backend echoes
+  // its filters back: date "all" was a year, a "from" was a month, a date a day.
+  const initialView = viewFromFilters(arrivalMonitoring.filters || {}, todayStr);
 
-  const [selectedDate, setSelectedDate] = useState(
-    initialMode === "all" ? todayStr : initialDate
-  );
-  const [dateMode, setDateMode] = useState(initialMode); // "day" or "all"
+  const [view, setView] = useState(initialView.view); // VIEW_DAY, VIEW_MONTH or VIEW_YEAR
+  const [selectedDate, setSelectedDate] = useState(initialView.date);
+  const [selectedMonth, setSelectedMonth] = useState(initialView.month); // "01".."12"
   const [selectedResort, setSelectedResort] = useState(
     arrivalMonitoring.filters?.resort_id || "all"
   );
-  const [selectedYear, setSelectedYear] = useState(
-    arrivalMonitoring.filters?.year || currentReportingYear
-  );
+  const [selectedYear, setSelectedYear] = useState(initialView.year || currentReportingYear);
+  const [exporting, setExporting] = useState(false);
   const [arrivalError, setArrivalError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   // A record changed since arrival data was last loaded: refetch on open, never show stale.
@@ -126,94 +137,100 @@ function ArrivalMonitoring() {
     return match ? match.resort_name : "Selected Resort";
   }, [resorts, selectedResort]);
 
+  // The current view, with any of its parts overridden.
+  const currentView = useCallback(
+    (overrides = {}) => ({
+      view,
+      date: selectedDate,
+      month: selectedMonth,
+      year: selectedYear,
+      resortId: selectedResort,
+      ...overrides,
+    }),
+    [selectedDate, selectedMonth, selectedResort, selectedYear, view]
+  );
+
   const loadData = useCallback(
     async (overrides = {}) => {
-      const nextDateMode =
-        overrides.dateMode !== undefined ? overrides.dateMode : dateMode;
-      const nextDate =
-        overrides.selectedDate !== undefined ? overrides.selectedDate : selectedDate;
-      const nextResort =
-        overrides.selectedResort !== undefined ? overrides.selectedResort : selectedResort;
-      const nextYear =
-        overrides.selectedYear !== undefined ? overrides.selectedYear : selectedYear;
-
       setArrivalError("");
       setRefreshing(true);
 
       try {
-        await refreshArrivalMonitoring({
-          year: nextYear,
-          date: nextDateMode === "all" ? "all" : nextDate,
-          resort_id: nextResort,
-        });
+        await refreshArrivalMonitoring(arrivalRequestParams(currentView(overrides)));
       } catch (requestError) {
         setArrivalError(requestError.message || "Unable to load arrival data.");
       } finally {
         setRefreshing(false);
       }
     },
-    [dateMode, refreshArrivalMonitoring, selectedDate, selectedResort, selectedYear]
+    [currentView, refreshArrivalMonitoring]
   );
+
+  // A month needs a real year; "All Years" falls back to the current one.
+  function monthYear(year) {
+    return year === "all" ? currentReportingYear : year;
+  }
+
+  async function handleViewChange(nextView) {
+    if (nextView === view) return;
+    const year = nextView === VIEW_MONTH ? monthYear(selectedYear) : selectedYear;
+    setView(nextView);
+    setSelectedYear(year);
+    await loadData({ view: nextView, year });
+  }
 
   async function handleDateChange(event) {
     const date = event.target.value;
     if (!date) return;
     setSelectedDate(date);
-    setDateMode("day");
-    await loadData({ selectedDate: date, dateMode: "day" });
+    setView(VIEW_DAY);
+    await loadData({ view: VIEW_DAY, date });
   }
 
   async function handleQuickToday() {
     setSelectedDate(todayStr);
-    setDateMode("day");
-    await loadData({ selectedDate: todayStr, dateMode: "day" });
+    setView(VIEW_DAY);
+    await loadData({ view: VIEW_DAY, date: todayStr });
   }
 
-  async function handleToggleAllDates() {
-    const nextMode = dateMode === "all" ? "day" : "all";
-    setDateMode(nextMode);
-    await loadData({ dateMode: nextMode });
+  async function handleMonthChange(event) {
+    const month = event.target.value;
+    setSelectedMonth(month);
+    await loadData({ month });
   }
 
   async function handleResortChange(event) {
     const resortId = event.target.value;
     setSelectedResort(resortId);
-    await loadData({ selectedResort: resortId });
+    await loadData({ resortId });
   }
 
   async function handleYearChange(event) {
     const year = event.target.value;
     setSelectedYear(year);
-    await loadData({ selectedYear: year });
+    await loadData({ year });
   }
 
-  function handleExport() {
-    const headers = [
-      "Date",
-      "Group/Guest",
-      "Male",
-      "Female",
-      "Travel Itinerary",
-      "Overnight",
-      "Same Day",
-      "Resort",
-      "Fee Paid",
-    ];
-    const csvRows = rows.map((row) => [
-      row.date,
-      row.group,
-      row.male,
-      row.female,
-      row.itinerary,
-      row.overnight,
-      row.sameDay,
-      row.resort,
-      row.feePaid,
-    ]);
+  // Exports every row in the current view, in date order. The on-screen table
+  // is capped, so this asks the export endpoint rather than reusing `rows`.
+  async function handleExport() {
+    const viewNow = currentView();
+    setArrivalError("");
+    setExporting(true);
 
-    const dateSlug = dateMode === "all" ? `all-dates-${selectedYear}` : selectedDate;
-    const resortSlug = selectedResort === "all" ? "all-resorts" : `resort-${selectedResort}`;
-    exportCsv(datedCsvFilename(`arrival-monitoring-${dateSlug}-${resortSlug}`), headers, csvRows);
+    try {
+      const exported = await tourismApi.getArrivalMonitoringExport(arrivalRequestParams(viewNow));
+      const resortSlug = selectedResort === "all" ? "all-resorts" : `resort-${selectedResort}`;
+      exportCsv(
+        datedCsvFilename(`arrival-monitoring-${exportDateSlug(viewNow)}-${resortSlug}`),
+        ARRIVAL_EXPORT_HEADERS,
+        arrivalExportRows(exported.rows)
+      );
+    } catch (requestError) {
+      setArrivalError(requestError.message || "Unable to export arrival data.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (loading || staleLoading) {
@@ -224,7 +241,25 @@ function ArrivalMonitoring() {
     return <div className="panel p-10 text-center">{error}</div>;
   }
 
-  const isFilteredForToday = dateMode === "day" && selectedDate === todayStr;
+  const isFilteredForToday = view === VIEW_DAY && selectedDate === todayStr;
+  // Every arrived record in the view; the table shows at most `rows.length`.
+  const rowCount = arrivalMonitoring.rowCount ?? rows.length;
+  const yearOptions =
+    view === VIEW_MONTH
+      ? reportingYearOptions.filter((option) => option.value !== "all")
+      : reportingYearOptions;
+  const monthOptions = Array.from({ length: 12 }, (_, index) => {
+    const value = String(index + 1).padStart(2, "0");
+    return { value, label: monthLabel(2000, value).replace(" 2000", "") };
+  });
+  const viewDescription =
+    view === VIEW_MONTH
+      ? monthLabel(selectedYear, selectedMonth)
+      : view === VIEW_YEAR
+        ? selectedYear === "all"
+          ? "All Years"
+          : `Year ${selectedYear}`
+        : formatDate(selectedDate);
 
   return (
     <div className="arrival-page">
@@ -237,42 +272,75 @@ function ArrivalMonitoring() {
 
       {/* Filters Bar */}
       <div className="arrival-filters-bar">
-        {/* Date Filter */}
-        <div className="arrival-filter-group">
-          <label className="arrival-filter-label" htmlFor="arrival-date-input">Date:</label>
-          <div className="arrival-date-picker-wrap">
-            <FiCalendar className="arrival-date-picker-icon" size={16} />
-            <input
-              id="arrival-date-input"
-              type="date"
-              className="arrival-date-input"
-              value={dateMode === "all" ? "" : selectedDate}
+        {/* View: Day / Month / Year */}
+        <div className="arrival-filter-group" role="group" aria-label="Arrival view">
+          {[
+            [VIEW_DAY, "Day"],
+            [VIEW_MONTH, "Month"],
+            [VIEW_YEAR, "Year"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`arrival-pill-btn ${view === value ? "active" : ""}`}
+              aria-pressed={view === value}
               disabled={refreshing}
-              onChange={handleDateChange}
-              title="Select arrival date"
-            />
-          </div>
-
-          <button
-            type="button"
-            className={`arrival-pill-btn ${isFilteredForToday ? "active" : ""}`}
-            disabled={refreshing}
-            onClick={handleQuickToday}
-            title="Filter arrivals for Today"
-          >
-            Today
-          </button>
-
-          <button
-            type="button"
-            className={`arrival-pill-btn ${dateMode === "all" ? "active" : ""}`}
-            disabled={refreshing}
-            onClick={handleToggleAllDates}
-            title="View arrivals across all dates"
-          >
-            {dateMode === "all" ? "Single Day View" : "All Dates (Year)"}
-          </button>
+              onClick={() => handleViewChange(value)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* Day: date picker and Today */}
+        {view === VIEW_DAY && (
+          <div className="arrival-filter-group">
+            <label className="arrival-filter-label" htmlFor="arrival-date-input">Date:</label>
+            <div className="arrival-date-picker-wrap">
+              <FiCalendar className="arrival-date-picker-icon" size={16} />
+              <input
+                id="arrival-date-input"
+                type="date"
+                className="arrival-date-input"
+                value={selectedDate}
+                disabled={refreshing}
+                onChange={handleDateChange}
+                title="Select arrival date"
+              />
+            </div>
+
+            <button
+              type="button"
+              className={`arrival-pill-btn ${isFilteredForToday ? "active" : ""}`}
+              disabled={refreshing}
+              onClick={handleQuickToday}
+              title="Filter arrivals for Today"
+            >
+              Today
+            </button>
+          </div>
+        )}
+
+        {/* Month: month picker (the year picker follows) */}
+        {view === VIEW_MONTH && (
+          <div className="arrival-filter-group">
+            <label className="arrival-filter-label" htmlFor="arrival-month-select">Month:</label>
+            <select
+              id="arrival-month-select"
+              className="dashboard-year-select"
+              aria-label="Arrival month"
+              value={selectedMonth}
+              disabled={refreshing}
+              onChange={handleMonthChange}
+            >
+              {monthOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Resort Dropdown */}
         <div className="arrival-filter-group">
@@ -294,8 +362,8 @@ function ArrivalMonitoring() {
           </select>
         </div>
 
-        {/* Year Select (shown when in All Dates mode) */}
-        {dateMode === "all" && (
+        {/* Year select (Month and Year views; a month has no "All Years") */}
+        {view !== VIEW_DAY && (
           <div className="arrival-filter-group">
             <label className="arrival-filter-label" htmlFor="arrival-year-select">Year:</label>
             <select
@@ -306,7 +374,7 @@ function ArrivalMonitoring() {
               disabled={refreshing}
               onChange={handleYearChange}
             >
-              {reportingYearOptions.map((option) => (
+              {yearOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -321,10 +389,10 @@ function ArrivalMonitoring() {
             type="button"
             className="arrival-export-btn"
             onClick={handleExport}
-            disabled={refreshing || !rows.length}
+            disabled={refreshing || exporting || !rows.length}
           >
             <FiDownload size={15} />
-            Export CSV
+            {exporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
       </div>
@@ -333,19 +401,13 @@ function ArrivalMonitoring() {
       <div className="arrival-filter-summary-chip">
         <div>
           <span>
-            Showing {dateMode === "all" ? "all recorded arrivals for " : "daily arrivals on "}
-            <strong>
-              {dateMode === "all"
-                ? selectedYear === "all"
-                  ? "All Years"
-                  : `Year ${selectedYear}`
-                : formatDate(selectedDate)}
-            </strong>
+            Showing {view === VIEW_DAY ? "daily arrivals on " : "all recorded arrivals for "}
+            <strong>{viewDescription}</strong>
             {" "}at <strong>{activeResortName}</strong>
           </span>
           <div className="chip-sub">
-            {summary.totalArrivals} total visitor(s) across {rows.length} arrived booking group(s)
-            {dateMode === "day" ? " • Resets daily at 00:00" : ""}
+            {summary.totalArrivals} total visitor(s) across {rowCount} arrived booking group(s)
+            {view === VIEW_DAY ? " • Resets daily at 00:00" : ""}
           </div>
         </div>
 
@@ -394,10 +456,19 @@ function ArrivalMonitoring() {
       </div>
 
       <div className="arrival-note">
-        {dateMode === "day"
+        {view === VIEW_DAY
           ? `Daily Monitoring: Counts reset each day for real-time tracking. All totals are calculated from records marked Arrived.`
-          : `Year View: Displaying aggregate arrivals for ${selectedYear === "all" ? "all years" : selectedYear}.`}
+          : view === VIEW_MONTH
+            ? `Month View: Displaying aggregate arrivals for ${monthLabel(selectedYear, selectedMonth)}.`
+            : `Year View: Displaying aggregate arrivals for ${selectedYear === "all" ? "all years" : selectedYear}.`}
       </div>
+
+      {rowCount > rows.length ? (
+        <div className="arrival-note" role="status">
+          Showing the {formatNumber(rows.length)} most recently updated of {formatNumber(rowCount)} arrivals.
+          The totals above and Export CSV include all {formatNumber(rowCount)}.
+        </div>
+      ) : null}
 
       {/* Table */}
       <div className="arrival-table-card">
@@ -435,15 +506,17 @@ function ArrivalMonitoring() {
               ) : (
                 <tr>
                   <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
-                    {dateMode === "day"
+                    {view === VIEW_DAY
                       ? `No arrivals recorded for ${formatDate(selectedDate)} at ${activeResortName}.`
-                      : `No arrived tourist records found for ${activeResortName}.`}
+                      : `No arrived tourist records found for ${viewDescription} at ${activeResortName}.`}
                   </td>
                 </tr>
               )}
 
               <tr className="daily-total">
-                <td>{dateMode === "all" ? "TOTAL ARRIVALS" : "DAILY TOTAL"}</td>
+                <td>
+                  {view === VIEW_YEAR ? "TOTAL ARRIVALS" : view === VIEW_MONTH ? "MONTH TOTAL" : "DAILY TOTAL"}
+                </td>
                 <td />
                 <td>{dailyTotals.male || 0}</td>
                 <td>{dailyTotals.female || 0}</td>

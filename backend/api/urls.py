@@ -14,6 +14,7 @@ from .views.shared import (
 )
 from .views.tourism import (
     arrival_monitoring_data,
+    arrival_monitoring_export,
     booking_management_data,
     dashboard_data,
     feedback_detail,
@@ -115,6 +116,7 @@ urlpatterns = [
     path("booking-management/", booking_management_data),
     path("online-booking-import/", online_booking_import),
     path("arrival-monitoring/", arrival_monitoring_data),
+    path("arrival-monitoring/export/", arrival_monitoring_export),
     path("dashboard/", dashboard_data),
     path("reports/", reports_data),
     path("resorts/", resort_list),

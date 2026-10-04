@@ -39,6 +39,7 @@ from api.services.online_booking import (
     preview_online_booking_workbook,
 )
 from api.services.tourism import (
+    build_arrival_monitoring_export,
     build_arrival_monitoring_payload,
     build_booking_management_payload,
     build_dashboard_payload,
@@ -69,6 +70,15 @@ def arrival_monitoring_data(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
     return Response(build_arrival_monitoring_payload(request.query_params))
+
+
+@api_view(["GET"])
+@module_required("tourism")
+def arrival_monitoring_export(request):
+    # Same parameters and records as arrival_monitoring_data, every row, in date order.
+    ensure_initial_tourism_data()
+    auto_update_no_show_bookings()
+    return Response(build_arrival_monitoring_export(request.query_params))
 
 
 @api_view(["GET"])

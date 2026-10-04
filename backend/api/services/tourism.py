@@ -227,7 +227,23 @@ def apply_reporting_year(queryset, reporting_year):
     return queryset.filter(arrival_date__year=int(reporting_year))
 
 
-def build_arrival_monitoring_payload(params=None):
+# The on-screen table shows at most this many rows; the summary counts every
+# record, and the export (build_arrival_monitoring_export) returns them all.
+ARRIVAL_MONITORING_TABLE_LIMIT = 300
+
+ARRIVAL_ROW_FIELDS = (
+    "survey_id", "arrival_date", "full_name", "total_male", "total_female",
+    "total_visitors", "discounted_count", "itinerary__name", "resort__resort_name", "updated_at",
+)
+
+
+def filter_arrival_records(params=None):
+    """The arrived records for an Arrival Monitoring view, and the filters it used.
+
+    One day (`date`), a whole year (`date=all`), or a range (`from`/`to`, also
+    limited to `year`); with none of them, today. The table and the export both
+    use this, so they always cover the same records.
+    """
     params = params or {}
     reporting_year = get_reporting_year(params)
     date_from = (params.get("from") or "").strip()
@@ -264,9 +280,45 @@ def build_arrival_monitoring_payload(params=None):
         except (ValueError, TypeError):
             pass
 
-    records = records.select_related("itinerary", "resort").order_by("-updated_at", "-arrival_date")
+    filters = {
+        "year": reporting_year,
+        "date": active_date or "",
+        "resort_id": resort_id if resort_id else "all",
+        "from": date_from,
+        "to": date_to,
+    }
+    return records.select_related("itinerary", "resort"), filters, active_date, today_iso
+
+
+def arrival_row(val):
+    """One Arrival Monitoring row from a record's ARRIVAL_ROW_FIELDS values."""
+    itinerary_name = (val["itinerary__name"] or "").lower()
+    if "day" in itinerary_name or "same" in itinerary_name:
+        overnight = 0
+        same_day = val["total_visitors"]
+    else:
+        overnight = val["total_visitors"]
+        same_day = 0
+
+    return {
+        "survey_id": val["survey_id"],
+        "date": val["arrival_date"].isoformat(),
+        "group": val["full_name"],
+        "male": val["total_male"],
+        "female": val["total_female"],
+        "itinerary": val["itinerary__name"] or "",
+        "overnight": overnight,
+        "sameDay": same_day,
+        "resort": val["resort__resort_name"] or "",
+        "feePaid": entrance_fee(val["total_visitors"], val["discounted_count"]),
+    }
+
+
+def build_arrival_monitoring_payload(params=None):
+    records, filters, active_date, today_iso = filter_arrival_records(params)
 
     rows = []
+    row_count = 0
     totals = {
         "totalArrivals": 0,
         "totalMale": 0,
@@ -276,58 +328,31 @@ def build_arrival_monitoring_payload(params=None):
         "feesCollected": 0,
     }
 
-    values_list = records.values(
-        "survey_id", "arrival_date", "full_name", "total_male", "total_female",
-        "total_visitors", "discounted_count", "itinerary__name", "resort__resort_name", "updated_at"
-    )
-
     first_arrival_date = None
 
-    for val in values_list:
+    for val in records.order_by("-updated_at", "-arrival_date").values(*ARRIVAL_ROW_FIELDS):
         if not first_arrival_date:
             first_arrival_date = val["arrival_date"]
 
-        itinerary_name = (val["itinerary__name"] or "").lower()
-        if "day" in itinerary_name or "same" in itinerary_name:
-            overnight = 0
-            same_day = val["total_visitors"]
-        else:
-            overnight = val["total_visitors"]
-            same_day = 0
-            
-        fee_paid = entrance_fee(val["total_visitors"], val["discounted_count"])
+        row = arrival_row(val)
+        row_count += 1
 
         totals["totalArrivals"] += val["total_visitors"]
         totals["totalMale"] += val["total_male"]
         totals["totalFemale"] += val["total_female"]
-        totals["overnight"] += overnight
-        totals["sameDay"] += same_day
-        totals["feesCollected"] += fee_paid
+        totals["overnight"] += row["overnight"]
+        totals["sameDay"] += row["sameDay"]
+        totals["feesCollected"] += row["feePaid"]
 
-        if len(rows) < 300:
-            rows.append({
-                "survey_id": val["survey_id"],
-                "date": val["arrival_date"].isoformat(),
-                "group": val["full_name"],
-                "male": val["total_male"],
-                "female": val["total_female"],
-                "itinerary": val["itinerary__name"] or "",
-                "overnight": overnight,
-                "sameDay": same_day,
-                "resort": val["resort__resort_name"] or "",
-                "feePaid": fee_paid,
-            })
+        if len(rows) < ARRIVAL_MONITORING_TABLE_LIMIT:
+            rows.append(row)
 
     latest_arrival_date_str = first_arrival_date.isoformat() if first_arrival_date else None
 
     return {
-        "filters": {
-            "year": reporting_year,
-            "date": active_date or "",
-            "resort_id": resort_id if resort_id else "all",
-            "from": date_from,
-            "to": date_to,
-        },
+        "filters": filters,
+        # Every record in the view; "rows" holds at most ARRIVAL_MONITORING_TABLE_LIMIT.
+        "rowCount": row_count,
         "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "reportDate": active_date if (active_date and active_date != "all") else (latest_arrival_date_str or today_iso),
         "summary": totals,
@@ -340,6 +365,20 @@ def build_arrival_monitoring_payload(params=None):
             "feesCollected": totals["feesCollected"],
         },
     }
+
+
+def build_arrival_monitoring_export(params=None):
+    """Every row of an Arrival Monitoring view, in date order, for Export CSV.
+
+    Same records as the on-screen view (filter_arrival_records), but without
+    the table's row limit.
+    """
+    records, filters, _active_date, _today_iso = filter_arrival_records(params)
+    rows = [
+        arrival_row(val)
+        for val in records.order_by("arrival_date", "survey_id").values(*ARRIVAL_ROW_FIELDS)
+    ]
+    return {"filters": filters, "rowCount": len(rows), "rows": rows}
 
 
 def build_booking_management_payload(params=None):

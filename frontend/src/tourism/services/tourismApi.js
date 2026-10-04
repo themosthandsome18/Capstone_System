@@ -302,6 +302,20 @@ export const tourismApi = {
     );
   },
 
+  // Every row of an Arrival Monitoring view, in date order, for Export CSV.
+  // Same parameters as getArrivalMonitoringData; the on-screen table is capped.
+  async getArrivalMonitoringExport(params = {}) {
+    const query = buildQueryString({
+      year: params.year,
+      date: params.date,
+      resort_id: params.resort_id,
+      from: params.from,
+      to: params.to,
+    });
+    const payload = await apiRequest(`/arrival-monitoring/export/${query}`);
+    return { rowCount: payload?.rowCount || 0, rows: payload?.rows || [] };
+  },
+
   async getDashboardData(params = {}) {
     const query = buildQueryString({
       year: params.year,

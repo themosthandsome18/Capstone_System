@@ -3593,6 +3593,106 @@ class DiscountedCountSpecialNeedsMigrationTests(TestCase):
         self.assertEqual(self._discounted(), {"SPN-0001": 2, "SPN-0002": 2, "SPN-0003": 4})
 
 
+class ArrivalMonitoringViewsTests(TestCase):
+    """Month ranges, the capped table, and the complete date-ordered export.
+
+    305 arrived records spread over September 2026 (one visitor each), two
+    arrived in October, and a pending September record that is never counted.
+    """
+
+    SEPTEMBER = {"year": "2026", "from": "2026-09-01", "to": "2026-09-30"}
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        quezon = Province.objects.get(name="Quezon")
+        common = dict(
+            full_name="Arrival Group",
+            contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"),
+            region=quezon.region,
+            province=quezon,
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=1,
+            filipino_count=1,
+            total_male=1,
+            age_8_59=1,
+        )
+        records = [
+            TouristRecord(
+                survey_id=f"ARR-{index:04d}",
+                arrival_date=f"2026-09-{(index % 30) + 1:02d}",
+                status="arrived",
+                **common,
+            )
+            for index in range(305)
+        ]
+        records += [
+            TouristRecord(survey_id="ARR-OCT-1", arrival_date="2026-10-01", status="arrived", **common),
+            TouristRecord(survey_id="ARR-OCT-2", arrival_date="2026-10-31", status="arrived", **common),
+            TouristRecord(survey_id="ARR-PEND", arrival_date="2026-09-15", status="pending", **common),
+        ]
+        TouristRecord.objects.bulk_create(records)
+
+    def test_table_is_capped_but_counts_every_record(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        payload = build_arrival_monitoring_payload(self.SEPTEMBER)
+
+        self.assertEqual(len(payload["rows"]), 300)
+        self.assertEqual(payload["rowCount"], 305)
+        self.assertEqual(payload["summary"]["totalArrivals"], 305)
+
+    def test_export_returns_every_row_in_date_order(self):
+        from .services.tourism import build_arrival_monitoring_export
+
+        payload = build_arrival_monitoring_export(self.SEPTEMBER)
+        dates = [row["date"] for row in payload["rows"]]
+
+        self.assertEqual(payload["rowCount"], 305)
+        self.assertEqual(len(payload["rows"]), 305)
+        self.assertEqual(dates, sorted(dates))
+        self.assertEqual((dates[0], dates[-1]), ("2026-09-01", "2026-09-30"))
+        self.assertEqual(
+            {row["survey_id"] for row in payload["rows"]},
+            {f"ARR-{index:04d}" for index in range(305)},
+        )
+
+    def test_month_range_selects_only_that_month(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        october = build_arrival_monitoring_payload(
+            {"year": "2026", "from": "2026-10-01", "to": "2026-10-31"}
+        )
+
+        self.assertEqual(october["rowCount"], 2)
+        self.assertEqual(sorted(row["survey_id"] for row in october["rows"]), ["ARR-OCT-1", "ARR-OCT-2"])
+
+    def test_a_range_with_a_different_year_returns_nothing(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        payload = build_arrival_monitoring_payload({**self.SEPTEMBER, "year": "2025"})
+
+        self.assertEqual(payload["rowCount"], 0)
+
+    def test_export_endpoint(self):
+        user = User.objects.create_user(username="arrival_admin", password="Arrival@123")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+        response = client.get("/api/arrival-monitoring/export/", self.SEPTEMBER)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["rowCount"], 305)
+        self.assertEqual(len(response.json()["rows"]), 305)
+        self.assertEqual(APIClient().get("/api/arrival-monitoring/export/").status_code, 401)
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
