@@ -937,14 +937,16 @@ def build_tourism_question_answers(params=None):
 
     for val in arrived.values("itinerary__name", "total_visitors", "resort__resort_name"):
         itinerary_name = (val["itinerary__name"] or "").lower()
-        total_visitors = val["total_visitors"] or 0
+        # This record's head count. The year total stays in total_visitors,
+        # which the answers below divide by.
+        record_visitors = val["total_visitors"] or 0
 
         if "day" in itinerary_name or "same" in itinerary_name:
             record_overnight = 0
-            record_same_day = total_visitors
+            record_same_day = record_visitors
             nights = 0
         else:
-            record_overnight = total_visitors
+            record_overnight = record_visitors
             record_same_day = 0
             if "2" in itinerary_name: nights = 2
             elif "3" in itinerary_name: nights = 3
@@ -954,12 +956,12 @@ def build_tourism_question_answers(params=None):
 
         same_day += record_same_day
         overnight += record_overnight
-        stay_nights_total += nights * total_visitors
+        stay_nights_total += nights * record_visitors
 
         if nights > 0:
             resort_name = val["resort__resort_name"] or "Unspecified"
             overnight_by_resort[resort_name] = (
-                overnight_by_resort.get(resort_name, 0) + total_visitors
+                overnight_by_resort.get(resort_name, 0) + record_visitors
             )
 
     top_overnight_resort = max(

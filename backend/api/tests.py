@@ -3132,6 +3132,79 @@ class ClearSurv2026013OriginMigrationTests(TestCase):
         self.assertEqual(self._origin(self.other), (self.united_states.id, 9, 42, 4))
 
 
+class AnalyticsPercentageTests(TestCase):
+    """The Analytics answers divide by the year's visitor total.
+
+    Three records of 6, 3 and 1 visitors (total 10): no single record's head
+    count equals the total, so an answer that divides by one record instead
+    of the total is wrong whichever record the loop ends on.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        quezon = Province.objects.get(name="Quezon")
+        resorts = list(Resort.objects.order_by("resort_id")[:2])
+        purposes = list(VisitPurpose.objects.order_by("id")[:2])
+        cls.main_resort, cls.main_purpose = resorts[0], purposes[0]
+        rows = [
+            # survey_id, visitors, itinerary, resort, purpose, country, province
+            ("PCT-0001", 6, "Overnight", resorts[0], purposes[0], "Philippines", quezon),
+            ("PCT-0002", 3, "2 Nights", resorts[0], purposes[1], "Philippines", quezon),
+            ("PCT-0003", 1, "Same Day", resorts[1], purposes[0], "United States", None),
+        ]
+        for survey_id, visitors, itinerary, resort, purpose, country, province in rows:
+            TouristRecord.objects.create(
+                survey_id=survey_id,
+                full_name="Percentage Group",
+                contact_number=f"0917000{survey_id[-4:]}",
+                country=Country.objects.get(name=country),
+                region=province.region if province else None,
+                province=province,
+                arrival_date="2026-04-02",
+                resort=resort,
+                itinerary=Itinerary.objects.get(name=itinerary),
+                travel_mode=TravelMode.objects.first(),
+                boat_type=BoatType.objects.first(),
+                visit_purpose=purpose,
+                total_visitors=visitors,
+                filipino_count=visitors,
+                total_male=visitors,
+                age_8_59=visitors,
+                status="arrived",
+            )
+
+    def setUp(self):
+        from .services.tourism import build_tourism_question_answers
+
+        self.answers = {
+            item["id"]: item for item in build_tourism_question_answers({"year": "2026"})
+        }
+
+    def test_top_resort_percentage_is_of_the_year_total(self):
+        self.assertEqual(
+            self.answers["top_resort"]["answer"],
+            f"{self.main_resort.resort_name} leads with 9 visitors, equal to 90.0% of the selected total.",
+        )
+
+    def test_top_origin_percentage_is_of_the_year_total(self):
+        self.assertEqual(
+            self.answers["top_origin"]["answer"],
+            "Quezon leads with 9 visitors, equal to 90.0% of the selected total.",
+        )
+
+    def test_visit_purpose_percentage_is_of_the_year_total(self):
+        self.assertEqual(
+            self.answers["visit_purpose"]["answer"],
+            f"{self.main_purpose.name} leads with 7 visitors, equal to 70.0% of the selected total.",
+        )
+
+    def test_average_stay_divides_nights_by_the_year_total(self):
+        # 6 x 1 night + 3 x 2 nights + 1 x 0 (same day) = 12 nights / 10 visitors.
+        self.assertEqual(self.answers["average_stay"]["visual"]["value"], 1.2)
+        self.assertIn("1.2 night(s) per visitor", self.answers["average_stay"]["answer"])
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
