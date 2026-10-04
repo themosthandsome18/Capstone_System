@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.db.models import Count, Max, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ..models import (
@@ -56,6 +57,16 @@ REFERENCE_TABLE_SERIALIZERS = {
 
 MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v1"
 MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
+
+
+def with_origin(queryset):
+    """Annotate each record's origin: its province, or its country if it has none.
+
+    Every origin figure groups on this, so a foreign record without a province
+    counts under its country. Country is required, so origin is never empty.
+    """
+    return queryset.annotate(origin=Coalesce("province__name", "country__name"))
+
 
 # Tourism theme: read on every page load, so it is cached. Unlike the caches
 # above it IS invalidated, on every successful write. The per-process
@@ -595,9 +606,10 @@ def build_dashboard_payload(params=None):
         .first()
     )
     top_origin = (
-        month_records.values("province__name")
+        with_origin(month_records)
+        .values("origin")
         .annotate(visitors=Sum("total_visitors"))
-        .order_by("-visitors", "province__name")
+        .order_by("-visitors", "origin")
         .first()
     )
     total_bookings = record_summary["total_bookings"] or 0
@@ -621,7 +633,7 @@ def build_dashboard_payload(params=None):
             "topResortThisMonth": top_resort["resort__resort_name"]
             if top_resort
             else "No arrivals yet",
-            "topOriginThisMonth": top_origin["province__name"]
+            "topOriginThisMonth": top_origin["origin"] or "Unspecified"
             if top_origin
             else "No arrivals yet",
         },
@@ -742,9 +754,10 @@ def build_reports_payload(params=None):
 
     elif report_type == "origin":
         grouped = (
-            records.values("province__name")
+            with_origin(records)
+            .values("origin")
             .annotate(visitors=Sum("total_visitors"))
-            .order_by("-visitors", "province__name")
+            .order_by("-visitors", "origin")
         )
 
         for item in grouped:
@@ -754,8 +767,8 @@ def build_reports_payload(params=None):
             totals["revenue"] += revenue
             rows.append(
                 {
-                    "id": item["province__name"] or "Unspecified",
-                    "name": item["province__name"] or "Unspecified",
+                    "id": item["origin"] or "Unspecified",
+                    "name": item["origin"] or "Unspecified",
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -959,14 +972,8 @@ def build_tourism_question_answers(params=None):
         key=lambda item: (-item[1], item[0])
     )[:6]
 
-    top_origin = first_non_empty(
-        [
-            top_group(arrived, "province__name"),
-            top_group(arrived, "region__name"),
-            top_group(arrived, "country__name"),
-        ]
-    )
-    top_6_origins = top_n_groups(arrived, "province__name", limit=6)
+    top_origin = top_group(with_origin(arrived), "origin")
+    top_6_origins = top_n_groups(with_origin(arrived), "origin", limit=6)
 
     top_purpose = top_group(arrived, "visit_purpose__name")
     top_6_purposes = top_n_groups(arrived, "visit_purpose__name", limit=6)
@@ -1061,7 +1068,7 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "top_origin",
-            "question": "Which province, region, or country contributes the highest number of tourist arrivals?",
+            "question": "Which province (or, for foreign visitors, country) contributes the highest number of tourist arrivals?",
             "answer": format_top_answer(top_origin, total_visitors, "visitors"),
             "visual": {
                 "type": "ranking",
@@ -1156,13 +1163,6 @@ def top_n_groups(queryset, group_field, limit=5):
         {"name": item.get(group_field) or "Unspecified", "total": item["total"] or 0}
         for item in items
     ]
-
-
-def first_non_empty(items):
-    for item in items:
-        if item.get("name"):
-            return item
-    return {"name": "", "total": 0}
 
 
 def format_top_answer(item, denominator, unit):

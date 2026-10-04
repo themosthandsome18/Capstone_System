@@ -2772,6 +2772,295 @@ class BoatTypeConsolidationTests(_ProductionBoatRows, TestCase):
         )
 
 
+class ForeignOriginTests(TestCase):
+    """Region and province are required for a Philippine record only, and a
+    foreign record without them is counted under its country."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        user = User.objects.create_user(username="origin_admin", password="Origin@123")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        cls.token = Token.objects.create(user=user)
+        ensure_test_reference_tables()
+        cls.philippines = Country.objects.get(name="Philippines")
+        cls.united_states = Country.objects.get(name="United States")
+        cls.calabarzon = Region.objects.get(name__icontains="CALABARZON")
+        cls.quezon = Province.objects.get(name="Quezon")
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+
+    def _web_payload(self, **overrides):
+        payload = {
+            "first_name": "Ana",
+            "last_name": "Cruz",
+            "full_name": "Ana Cruz",
+            "email": "ana@example.com",
+            "contact_number": "+639171234567",
+            "country_id": self.philippines.id,
+            "region_id": self.calabarzon.id,
+            "province_id": self.quezon.id,
+            "country_of_origin": "",
+            "resort_id": Resort.objects.first().resort_id,
+            "itinerary_id": Itinerary.objects.first().id,
+            "travel_mode_id": TravelMode.objects.first().id,
+            "boat_type_id": BoatType.objects.first().id,
+            "visit_purpose_id": VisitPurpose.objects.first().id,
+            "arrival_date": "2026-04-01",
+            "filipino_count": 0,
+            "foreigner_count": 2,
+            "total_visitors": 2,
+            "total_male": 1,
+            "total_female": 1,
+            "age_8_59": 2,
+            "status": "pending",
+        }
+        payload.update(overrides)
+        return payload
+
+    def _record(self, survey_id, country, province=None, region=None, visitors=1):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Origin Group",
+            contact_number=f"0917{survey_id[-7:]}",
+            country=country,
+            region=region,
+            province=province,
+            arrival_date="2026-04-02",
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=visitors,
+            foreigner_count=visitors,
+            total_male=visitors,
+            age_8_59=visitors,
+            status="arrived",
+        )
+
+    # --- validation ---------------------------------------------------------
+
+    def test_philippine_record_still_requires_region_and_province(self):
+        for missing in ({"region_id": None, "province_id": None}, {"region_id": "", "province_id": ""}):
+            with self.subTest(missing=missing):
+                response = self.client.post(
+                    "/api/tourist-records/", self._web_payload(**missing), format="json"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("region_id", response.json())
+                self.assertIn("province_id", response.json())
+
+        payload = self._web_payload()
+        del payload["region_id"], payload["province_id"]
+        response = self.client.post("/api/tourist-records/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(TouristRecord.objects.count(), 0)
+
+    def test_foreign_record_saves_with_no_region_or_province(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._web_payload(
+                country_id=self.united_states.id, region_id=None, province_id=None
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+        record = TouristRecord.objects.get()
+        self.assertEqual((record.region_id, record.province_id), (None, None))
+        self.assertEqual(record.country_id, self.united_states.id)
+
+    def test_country_stays_required(self):
+        response = self.client.post(
+            "/api/tourist-records/",
+            self._web_payload(country_id=None, region_id=None, province_id=None),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("country_id", response.json())
+
+    def test_rule_follows_the_country_type_not_its_name(self):
+        renamed = Country.objects.create(id=950, name="Republika ng Pilipinas", type="local")
+        untyped_default = Country.objects.create(id=951, name="Canada")
+
+        for country in (renamed, untyped_default):
+            with self.subTest(country=country.name):
+                response = self.client.post(
+                    "/api/tourist-records/",
+                    self._web_payload(country_id=country.id, region_id=None, province_id=None),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("region_id", response.json())
+
+    # --- origin groupings ---------------------------------------------------
+
+    def _seed_origins(self):
+        self._record("ORIGIN-0000001", self.philippines, self.quezon, self.calabarzon, visitors=2)
+        self._record("ORIGIN-0000002", self.united_states, visitors=5)
+
+    def test_dashboard_top_origin_reports_the_country(self):
+        from .services.tourism import build_dashboard_payload
+
+        self._seed_origins()
+
+        metrics = build_dashboard_payload({"year": "2026"})["metrics"]
+
+        self.assertEqual(metrics["topOriginThisMonth"], "United States")
+
+    def test_origin_report_groups_a_record_without_province_under_its_country(self):
+        from .services.tourism import build_reports_payload
+
+        self._seed_origins()
+
+        rows = build_reports_payload(
+            {"type": "origin", "year": "2026", "include_questions": "false"}
+        )["rows"]
+
+        self.assertEqual(
+            [(row["name"], row["visitors"]) for row in rows],
+            [("United States", 5), ("Quezon", 2)],
+        )
+
+    def test_analytics_top_origin_and_top_six_report_the_country(self):
+        from .services.tourism import build_tourism_question_answers
+
+        self._seed_origins()
+
+        answers = {item["id"]: item for item in build_tourism_question_answers({"year": "2026"})}
+        top_origin = answers["top_origin"]
+
+        self.assertTrue(top_origin["answer"].startswith("United States leads with 5 visitors"))
+        self.assertEqual(
+            [(item["label"], item["value"]) for item in top_origin["visual"]["items"]],
+            [("United States", 5), ("Quezon", 2)],
+        )
+
+    # --- mobile -------------------------------------------------------------
+
+    def _mobile_payload(self, **overrides):
+        payload = {
+            "first_name": "Ana",
+            "last_name": "Cruz",
+            "contact_number": "+639171234500",
+            "arrival_date": "2026-04-01",
+            "resort_id": Resort.objects.first().resort_id,
+            "filipino_count": 0,
+            "foreigner_count": 2,
+            "total_visitors": 2,
+            "total_male": 1,
+            "total_female": 1,
+            "age_8_59": 2,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_mobile_foreign_record_without_region_is_not_given_quezon(self):
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            self._mobile_payload(country_id=self.united_states.id),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = TouristRecord.objects.get()
+        self.assertEqual((record.region_id, record.province_id), (None, None))
+        self.assertEqual(record.country_of_origin, "")
+
+    def test_mobile_philippine_record_still_defaults_to_calabarzon_quezon(self):
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            self._mobile_payload(country_id=self.philippines.id),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = TouristRecord.objects.get()
+        self.assertEqual((record.region_id, record.province_id), (self.calabarzon.id, self.quezon.id))
+        self.assertEqual(record.country_of_origin, "Philippines")
+
+    def test_mobile_payload_from_the_current_app_still_saves(self):
+        # The installed APK always sends a region and province, even for a
+        # foreign country. That must keep working; the values are kept.
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            self._mobile_payload(
+                country_id=self.united_states.id,
+                region_id=self.calabarzon.id,
+                province_id=self.quezon.id,
+                country_of_origin="Philippines",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        record = TouristRecord.objects.get()
+        self.assertEqual((record.region_id, record.province_id), (self.calabarzon.id, self.quezon.id))
+
+    # --- Excel import -------------------------------------------------------
+
+    def _import(self, rows):
+        import datetime
+        from io import BytesIO
+        from openpyxl import Workbook
+        from .services.online_booking import COLUMNS, process_online_booking_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Form Responses 1"
+        for offset, row in enumerate(rows):
+            values = {
+                "arrival_date": datetime.datetime(2026, 4, 2),
+                "resort": Resort.objects.first().resort_name,
+                "total_visitors": 2,
+                "total_male": 1,
+                "total_female": 1,
+                "itinerary": "Overnight",
+                "maubanin_count": 0,
+                "special_group_count": 0,
+                "foreigner_count": 2,
+                "filipino_count": 0,
+                "age_0_7": 0,
+                "age_8_59": 2,
+                "age_60_above": 0,
+                "travel_mode": "Private Vehicle",
+                "boat_type": "Public Boat",
+                "visit_purpose": "Leisure",
+                "consent": "Yes",
+                **row,
+            }
+            for key, value in values.items():
+                sheet.cell(row=3 + offset, column=COLUMNS[key], value=value)
+        file_obj = BytesIO()
+        workbook.save(file_obj)
+        file_obj.seek(0)
+        return process_online_booking_workbook(file_obj, commit=True)
+
+    def test_import_no_longer_forces_quezon_onto_a_foreign_record(self):
+        result = self._import(
+            [
+                {"full_name": "Foreign Guest", "contact_number": "09170000001", "country": "United States"},
+                {"full_name": "New Country Guest", "contact_number": "09170000002", "country": "Canada"},
+                {"full_name": "Local Guest", "contact_number": "09170000003", "country": "Philippines"},
+            ]
+        )
+
+        self.assertEqual(result["valid_count"], 3, result["error_samples"])
+        by_guest = {record.full_name: record for record in TouristRecord.objects.all()}
+        for guest in ("Foreign Guest", "New Country Guest"):
+            with self.subTest(guest=guest):
+                record = by_guest[guest]
+                self.assertEqual((record.region_id, record.province_id), (None, None))
+        self.assertEqual(Country.objects.get(name="Canada").type, "foreign")
+        local = by_guest["Local Guest"]
+        self.assertEqual((local.region_id, local.province_id), (self.calabarzon.id, self.quezon.id))
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 

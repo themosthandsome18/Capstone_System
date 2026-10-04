@@ -75,7 +75,7 @@ function getReportSubtitle(type) {
   }
 
   if (type === "origin") {
-    return "Visitor totals grouped by province of residence";
+    return "Visitor totals grouped by province of residence, or by country for foreign visitors";
   }
 
   if (type === "purpose") {
@@ -103,7 +103,7 @@ function getFirstColumnLabel(type) {
   }
 
   if (type === "origin") {
-    return "Province";
+    return "Province / Country";
   }
 
   if (type === "purpose") {

@@ -16,6 +16,7 @@ import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
+import { countryRequiresLocation } from "../utils/countryLocation";
 
 const pageSize = 10;
 
@@ -267,6 +268,9 @@ function BookingManagement() {
   };
   const totalPages = bookingPagination.totalPages || 1;
   const paginatedRows = bookingRows;
+  // Region and Province are asked for, and required, only for a Philippine record.
+  const requiresLocation = countryRequiresLocation(referenceTables.countries, form.country_id);
+
   const provinceOptions = useMemo(() => {
     if (!form.region_id) {
       return referenceTables.provinces;
@@ -418,6 +422,11 @@ function BookingManagement() {
       ...current,
       [field]: value,
       ...(field === "region_id" ? { province_id: "" } : {}),
+      // A foreign country has no region or province, so a place picked
+      // earlier must not be submitted with it.
+      ...(field === "country_id" && !countryRequiresLocation(referenceTables.countries, value)
+        ? { region_id: "", province_id: "" }
+        : {}),
       ...(field === "boat_type_id"
         ? {
             boat_capacity_fare: capacityFareForBoatType(
@@ -463,8 +472,8 @@ function BookingManagement() {
       consent_confirmed: true,
       contact_number: contactNumber,
       country_id: Number(form.country_id),
-      region_id: Number(form.region_id),
-      province_id: Number(form.province_id),
+      region_id: form.region_id ? Number(form.region_id) : null,
+      province_id: form.province_id ? Number(form.province_id) : null,
       country_of_origin: "",
       resort_id: Number(form.resort_id),
       itinerary_id: Number(form.itinerary_id),
@@ -504,8 +513,8 @@ function BookingManagement() {
         if (!form.country_id) return "Country is required.";
         return "";
       case 2:
-        if (!form.region_id) return "Region is required.";
-        if (!form.province_id) return "Province is required.";
+        if (requiresLocation && !form.region_id) return "Region is required.";
+        if (requiresLocation && !form.province_id) return "Province is required.";
         if (!form.resort_id) return "Resort is required.";
         if (!form.itinerary_id) return "Travel Itinerary is required.";
         return "";
@@ -1337,29 +1346,33 @@ function BookingManagement() {
                 {/* ── Step 2: Location ── */}
                 {currentStep === 2 && (
                   <div className="wizard-grid">
-                    <WizardField label="Region" required>
-                      <select
-                        value={form.region_id}
-                        onChange={(e) => updateField("region_id", e.target.value)}
-                      >
-                        <option value="">Select region</option>
-                        {referenceTables.regions.map((r) => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </WizardField>
-                    <WizardField label="Province" required>
-                      <select
-                        value={form.province_id}
-                        onChange={(e) => updateField("province_id", e.target.value)}
-                        disabled={!form.region_id}
-                      >
-                        <option value="">{form.region_id ? "Select province" : "Select region first"}</option>
-                        {provinceOptions.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </WizardField>
+                    {requiresLocation && (
+                      <>
+                        <WizardField label="Region" required>
+                          <select
+                            value={form.region_id}
+                            onChange={(e) => updateField("region_id", e.target.value)}
+                          >
+                            <option value="">Select region</option>
+                            {referenceTables.regions.map((r) => (
+                              <option key={r.id} value={r.id}>{r.name}</option>
+                            ))}
+                          </select>
+                        </WizardField>
+                        <WizardField label="Province" required>
+                          <select
+                            value={form.province_id}
+                            onChange={(e) => updateField("province_id", e.target.value)}
+                            disabled={!form.region_id}
+                          >
+                            <option value="">{form.region_id ? "Select province" : "Select region first"}</option>
+                            {provinceOptions.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </WizardField>
+                      </>
+                    )}
                     <WizardField label="Resort" required>
                       <select
                         value={form.resort_id}
