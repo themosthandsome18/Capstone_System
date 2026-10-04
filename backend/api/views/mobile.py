@@ -56,6 +56,7 @@ from api.models import (
     TouristRecord,
     TravelMode,
     VisitPurpose,
+    country_requires_location,
 )
 from api.seeders import (
     ensure_initial_barangays,
@@ -1621,15 +1622,22 @@ def normalize_mobile_visit_payload(data):
         Country,
         name__iexact="Philippines",
     )
-    data["region_id"] = data.get("region_id") or default_reference_id(
-        Region,
-        name__icontains="CALABARZON",
-    )
-    data["province_id"] = data.get("province_id") or default_reference_id(
-        Province,
-        name__iexact="Quezon",
-    )
-    data["country_of_origin"] = data.get("country_of_origin") or "Philippines"
+    # Only a Philippine record falls back to CALABARZON / Quezon. A foreign
+    # record keeps the region and province it was sent, or none at all.
+    if country_requires_location(data["country_id"]):
+        data["region_id"] = data.get("region_id") or default_reference_id(
+            Region,
+            name__icontains="CALABARZON",
+        )
+        data["province_id"] = data.get("province_id") or default_reference_id(
+            Province,
+            name__iexact="Quezon",
+        )
+        data["country_of_origin"] = data.get("country_of_origin") or "Philippines"
+    else:
+        data["region_id"] = data.get("region_id") or None
+        data["province_id"] = data.get("province_id") or None
+        data["country_of_origin"] = data.get("country_of_origin") or ""
     data["itinerary_id"] = data.get("itinerary_id") or default_reference_id(Itinerary)
     data["resort_id"] = (
         data.get("resort_id")

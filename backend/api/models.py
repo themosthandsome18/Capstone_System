@@ -185,13 +185,47 @@ BOOKING_STATUS_CHOICES = [
 ]
 
 
+COUNTRY_TYPE_LOCAL = "local"
+COUNTRY_TYPE_FOREIGN = "foreign"
+
+# Required only when the country is the Philippines (type "local").
+TOURIST_RECORD_LOCATION_FIELDS = ("region", "province")
+
+
+def country_requires_location(country):
+    """Whether a record from this country must name a region and province.
+
+    `country` is a Country or its id. Only a country typed "foreign" may leave
+    them empty; a missing or unknown country keeps them required, so the
+    record fails the old way rather than slipping through.
+    """
+    if country in (None, "", 0):
+        return True
+
+    country_type = getattr(country, "type", None)
+    if country_type is None:
+        try:
+            country_type = (
+                Country.objects.filter(pk=country).values_list("type", flat=True).first()
+            )
+        except (TypeError, ValueError, ValidationError):
+            return True
+
+    return country_type != COUNTRY_TYPE_FOREIGN
+
+
 def validate_tourist_record_values(values):
     errors = {}
 
     def add_error(field, message):
         errors.setdefault(field, []).append(message)
 
+    requires_location = country_requires_location(values.get("country"))
+
     for field in TOURIST_RECORD_REQUIRED_FIELDS:
+        if field in TOURIST_RECORD_LOCATION_FIELDS and not requires_location:
+            continue
+
         value = values.get(field)
         if value in (None, "", 0) or (
             isinstance(value, str) and not value.strip()
@@ -417,13 +451,19 @@ class TouristRecord(models.Model):
         on_delete=models.PROTECT,
         related_name="tourist_records",
     )
+    # Only a Philippine (local) country needs a region and province; a
+    # foreign record may leave both empty. See validate_tourist_record_values.
     region = models.ForeignKey(
         Region,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="tourist_records",
     )
     province = models.ForeignKey(
         Province,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="tourist_records",
     )

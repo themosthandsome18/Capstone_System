@@ -269,13 +269,19 @@ class TouristRecordSerializer(serializers.ModelSerializer):
         source="country",
         queryset=Country.objects.all(),
     )
+    # Optional for a foreign country; validate() still requires both for the
+    # Philippines (see validate_tourist_record_values).
     region_id = serializers.PrimaryKeyRelatedField(
         source="region",
         queryset=Region.objects.all(),
+        allow_null=True,
+        required=False,
     )
     province_id = serializers.PrimaryKeyRelatedField(
         source="province",
         queryset=Province.objects.all(),
+        allow_null=True,
+        required=False,
     )
     itinerary_id = serializers.PrimaryKeyRelatedField(
         source="itinerary",

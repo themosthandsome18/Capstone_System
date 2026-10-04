@@ -10,6 +10,8 @@ from openpyxl import load_workbook
 
 from ..models import (
     BOOKING_STATUS_CHOICES,
+    COUNTRY_TYPE_FOREIGN,
+    COUNTRY_TYPE_LOCAL,
     BoatType,
     Country,
     Itinerary,
@@ -21,6 +23,7 @@ from ..models import (
     TouristRecord,
     TravelMode,
     VisitPurpose,
+    country_requires_location,
     validate_tourist_record_values,
 )
 from ..seeders import ensure_initial_reference_data
@@ -226,7 +229,10 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
 
         workbook_duplicate_keys.add(duplicate_key)
 
-        errors = validate_payload(payload)
+        errors = validate_payload(
+            payload,
+            country=resolver.cached(Country, payload["country_id"]),
+        )
         if errors:
             skipped_count += 1
             if len(error_samples) < 10:
@@ -270,12 +276,16 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
     }
 
 
-def validate_payload(payload):
+def validate_payload(payload, country=None):
     values = {}
 
     for field in TOURIST_RECORD_REQUIRED_FIELDS:
         api_field = RELATED_FIELD_API_NAMES.get(field)
         values[field] = payload.get(api_field or field)
+
+    if country is not None:
+        # The Country itself, so a row a dry run has not saved still has a type.
+        values["country"] = country
 
     for field in TOURIST_RECORD_COUNT_FIELDS:
         values[field] = payload.get(field, 0)
@@ -367,6 +377,13 @@ def build_payload(sheet, row_number, status, resolver):
     filipino_count = parse_int(cell_value(sheet, row_number, "filipino_count"))
     maubanin_count = parse_int(cell_value(sheet, row_number, "maubanin_count"))
 
+    country_name = normalize_country(cell_value(sheet, row_number, "country"))
+    country = resolver.named(
+        Country,
+        country_name,
+        defaults={"type": country_type_for(country_name)},
+    )
+
     payload = {
         "survey_id": f"OBR-{arrival_date.year}-{row_number - 2:05d}",
         "submitted_at": parse_datetime(cell_value(sheet, row_number, "timestamp")),
@@ -374,19 +391,21 @@ def build_payload(sheet, row_number, status, resolver):
         "consent_confirmed": is_yes(cell_value(sheet, row_number, "consent")),
         "full_name": full_name,
         "contact_number": contact_number,
-        "country_id": resolver.named(
-            Country,
-            normalize_country(cell_value(sheet, row_number, "country")),
-            defaults={"type": "local"},
-        ).id,
-        "region_id": resolver.named(
+        "country_id": country.id,
+        "region_id": resolve_location(
+            resolver,
             Region,
-            normalize_region(cell_value(sheet, row_number, "region")),
-        ).id,
-        "province_id": resolver.named(
+            normalize_region,
+            cell_value(sheet, row_number, "region"),
+            country,
+        ),
+        "province_id": resolve_location(
+            resolver,
             Province,
-            normalize_province(cell_value(sheet, row_number, "province")),
-        ).id,
+            normalize_province,
+            cell_value(sheet, row_number, "province"),
+            country,
+        ),
         "country_of_origin": clean_text(
             cell_value(sheet, row_number, "country_of_origin")
         ),
@@ -467,6 +486,13 @@ class ReferenceResolver:
         if key not in self.id_cache:
             self.id_cache[key] = model.objects.filter(pk=pk).first()
         return self.id_cache[key]
+
+    def cached(self, model, pk):
+        """A row this resolver has already returned, saved or not."""
+        for item in self.named_cache.get(model, {}).values():
+            if item.pk == pk:
+                return item
+        return self.by_id(model, pk)
 
     def named(self, model, name, defaults=None):
         defaults = defaults or {}
@@ -662,6 +688,26 @@ def normalize_country(value):
     if not text:
         return "Philippines"
     return text.title()
+
+
+def country_type_for(country_name):
+    # A country the import has to create is foreign unless it is the
+    # Philippines, so a new row never wrongly demands a Philippine region.
+    if country_name == "Philippines":
+        return COUNTRY_TYPE_LOCAL
+    return COUNTRY_TYPE_FOREIGN
+
+
+def resolve_location(resolver, model, normalize, value, country):
+    """The id of the region or province row for a sheet cell, or None.
+
+    A blank cell on a Philippine record falls back to CALABARZON / Quezon as
+    before. A blank cell on a foreign record stays empty rather than being
+    given a Philippine place.
+    """
+    if not clean_text(value) and not country_requires_location(country):
+        return None
+    return resolver.named(model, normalize(value)).id
 
 
 def normalize_region(value):
