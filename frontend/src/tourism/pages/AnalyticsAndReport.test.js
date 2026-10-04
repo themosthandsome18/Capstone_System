@@ -173,10 +173,13 @@ describe("Reports tabs while loading", () => {
 });
 
 describe("Reports table columns", () => {
-  it("shows Name, Male, Female, Total Visitors, Total Revenue, with no Avg column or sort dropdown", () => {
+  it("shows Name, Male, Female, Total Visitors, Expected Entrance Fee, with no Avg column or sort dropdown", () => {
     setup();
 
-    expect(headerLabels()).toEqual(["Resort Name", "Male", "Female", "Total Visitors", "Total Revenue"]);
+    expect(headerLabels()).toEqual(["Resort Name", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(screen.queryByText(/Revenue/)).toBeNull();
+    expect(screen.queryByTitle(/Revenue/)).toBeNull();
+    expect(screen.getByTitle("Click to sort by Expected Entrance Fee")).toBeTruthy();
     expect(screen.queryByText(/Avg/)).toBeNull();
     expect(screen.queryByText(/Sort Table/)).toBeNull();
     expect(breakdownTable().closest(".report-table-card").querySelector("select, button")).toBeNull();
@@ -205,7 +208,7 @@ describe("Reports table columns", () => {
       "Male",
       "Female",
       "Total Visitors",
-      "Total Revenue",
+      "Expected Entrance Fee",
     ]);
     expect(rows.map((row) => row.slice(5))).toEqual([
       ["Alpha", 18, 12, 30, 2400],

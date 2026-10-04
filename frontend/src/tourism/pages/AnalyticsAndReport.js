@@ -426,7 +426,7 @@ function AnalyticsAndReport() {
       "Male",
       "Female",
       "Total Visitors",
-      "Total Revenue",
+      "Expected Entrance Fee",
     ];
     const csvRows = sortedRows.map((row) => [
       getReportTitle(loadedType),
@@ -647,7 +647,7 @@ function AnalyticsAndReport() {
                   {renderSortHeader("male", "Male", "Male", "num report-col-male")}
                   {renderSortHeader("female", "Female", "Female", "num report-col-female")}
                   {renderSortHeader("visitors", "Total Visitors", "Total Visitors", "num report-col-visitors")}
-                  {renderSortHeader("revenue", "Total Revenue", "Total Revenue", "money report-col-revenue")}
+                  {renderSortHeader("revenue", "Expected Entrance Fee", "Expected Entrance Fee", "money report-col-revenue")}
                 </tr>
               </thead>
 
