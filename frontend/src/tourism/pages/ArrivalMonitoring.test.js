@@ -28,9 +28,8 @@ function row(index) {
   };
 }
 
-function setup(filters, extra = {}) {
-  const refreshArrivalMonitoring = jest.fn().mockResolvedValue({});
-  useTourismData.mockReturnValue({
+function contextValue(filters, extra = {}, refreshArrivalMonitoring = jest.fn().mockResolvedValue({})) {
+  return {
     arrivalMonitoring: {
       filters: { year: "2026", date: "", resort_id: "all", from: "", to: "", ...filters },
       summary: { totalArrivals: 2 },
@@ -45,9 +44,14 @@ function setup(filters, extra = {}) {
     refreshArrivalMonitoring,
     refreshArrivalMonitoringIfStale: jest.fn().mockResolvedValue(false),
     isComputedDataStale: () => false,
-  });
-  render(<ArrivalMonitoring />);
-  return { refreshArrivalMonitoring };
+  };
+}
+
+function setup(filters, extra = {}, refresh) {
+  const value = contextValue(filters, extra, refresh);
+  useTourismData.mockReturnValue(value);
+  const result = render(<ArrivalMonitoring />);
+  return { ...result, refreshArrivalMonitoring: value.refreshArrivalMonitoring };
 }
 
 function pressed(name) {
@@ -148,6 +152,73 @@ describe("Arrival Monitoring reopens on the view it was showing", () => {
     expect(pressed("Year")).toBe("true");
     expect(screen.queryByLabelText("Arrival month")).toBeNull();
     expect(screen.getByLabelText("Arrival reporting year").value).toBe("2025");
+  });
+});
+
+describe("Arrival Monitoring labels describe the data on screen", () => {
+  const SEPTEMBER = { year: "2026", date: "", from: "2026-09-01", to: "2026-09-30" };
+  const OCTOBER = { year: "2026", date: "", from: "2026-10-01", to: "2026-10-31" };
+
+  function labelsSay(text) {
+    screen.getByText(new RegExp(`Month View: Displaying aggregate arrivals for ${text}`));
+    expect(screen.getByText(/all recorded arrivals for/).textContent).toContain(text);
+  }
+
+  it("keeps the loaded month's labels while another month is still loading", async () => {
+    setup(SEPTEMBER, {}, jest.fn(() => new Promise(() => {})));
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Arrival month"), { target: { value: "10" } });
+    });
+
+    expect(screen.getByLabelText("Arrival month").value).toBe("10");
+    labelsSay("September 2026");
+    expect(screen.queryByText(/October 2026/)).toBeNull();
+  });
+
+  it("changes the labels together with the numbers when the response arrives", async () => {
+    const { rerender } = setup(SEPTEMBER);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Arrival month"), { target: { value: "10" } });
+    });
+    useTourismData.mockReturnValue(contextValue(OCTOBER, { summary: { totalArrivals: 7 } }));
+    rerender(<ArrivalMonitoring />);
+
+    labelsSay("October 2026");
+    screen.getByText(/7 total visitor\(s\)/);
+  });
+
+  it("after a failed request, the labels and numbers still describe the previous view", async () => {
+    setup(SEPTEMBER, {}, jest.fn().mockRejectedValue(new Error("Network down")));
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Arrival month"), { target: { value: "10" } });
+    });
+
+    screen.getByText("Network down");
+    expect(screen.getByLabelText("Arrival month").value).toBe("10");
+    labelsSay("September 2026");
+    screen.getByText(/2 total visitor\(s\)/);
+    expect(screen.queryByText(/October 2026/)).toBeNull();
+  });
+
+  it("exports the view on screen, not a pending selection", async () => {
+    tourismApi.getArrivalMonitoringExport.mockResolvedValue({ rowCount: 1, rows: [row(1)] });
+    setup(SEPTEMBER, {}, jest.fn().mockRejectedValue(new Error("Network down")));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Arrival month"), { target: { value: "10" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
+    });
+    await waitFor(() => expect(exportCsv).toHaveBeenCalled());
+
+    expect(tourismApi.getArrivalMonitoringExport).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "2026-09-01", to: "2026-09-30" })
+    );
+    expect(exportCsv.mock.calls.at(-1)[0]).toBe("arrival-monitoring-month-2026-09-all-resorts.csv");
   });
 });
 

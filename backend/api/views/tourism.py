@@ -55,13 +55,9 @@ from api.services.upload import (
 )
 
 
-def auto_update_no_show_bookings():
-    from django.utils import timezone
-    from api.models import BOOKING_STATUS_PENDING, BOOKING_STATUS_NO_SHOW
-    TouristRecord.objects.filter(
-        status=BOOKING_STATUS_PENDING,
-        arrival_date__lt=timezone.localdate()
-    ).update(status=BOOKING_STATUS_NO_SHOW)
+# Runs at most once a day (and again after any tourist record is written); see
+# api/services/no_show.py. Imported here under its old name for its callers.
+from api.services.no_show import sweep_no_shows as auto_update_no_show_bookings  # noqa: E402
 
 
 @api_view(["GET"])

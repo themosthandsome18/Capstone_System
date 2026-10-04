@@ -7,6 +7,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -3691,6 +3692,156 @@ class ArrivalMonitoringViewsTests(TestCase):
         self.assertEqual(response.json()["rowCount"], 305)
         self.assertEqual(len(response.json()["rows"]), 305)
         self.assertEqual(APIClient().get("/api/arrival-monitoring/export/").status_code, 401)
+
+
+class NoShowSweepTests(TestCase):
+    """The no-show sweep runs at most once a day, plus after any record write."""
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        cls.quezon = Province.objects.get(name="Quezon")
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def _record(self, survey_id, arrival_date, booking_status="pending"):
+        return TouristRecord(
+            survey_id=survey_id,
+            full_name="Sweep Group",
+            contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"),
+            region=self.quezon.region,
+            province=self.quezon,
+            arrival_date=arrival_date,
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=1,
+            filipino_count=1,
+            total_male=1,
+            age_8_59=1,
+            status=booking_status,
+        )
+
+    def _insert_without_signal(self, *records):
+        # bulk_create sends no post_save, so it does not ask for a new sweep.
+        TouristRecord.objects.bulk_create(records)
+
+    def _status(self, survey_id):
+        return TouristRecord.objects.get(pk=survey_id).status
+
+    def _days(self, offset):
+        return timezone.localdate() + timedelta(days=offset)
+
+    def test_past_dated_pending_booking_becomes_no_show(self):
+        from .services.no_show import sweep_no_shows
+
+        self._insert_without_signal(
+            self._record("SWP-PAST", self._days(-1)),
+            self._record("SWP-TODAY", self._days(0)),
+            self._record("SWP-FUTURE", self._days(3)),
+            self._record("SWP-ARRIVED", self._days(-1), "arrived"),
+        )
+
+        sweep_no_shows()
+
+        self.assertEqual(self._status("SWP-PAST"), "no_show")
+        self.assertEqual(self._status("SWP-TODAY"), "pending")
+        self.assertEqual(self._status("SWP-FUTURE"), "pending")
+        self.assertEqual(self._status("SWP-ARRIVED"), "arrived")
+
+    def test_first_request_of_the_day_sweeps_and_a_second_does_not(self):
+        from .services.no_show import sweep_no_shows
+
+        self._insert_without_signal(self._record("SWP-1", self._days(-1)))
+        sweep_no_shows()
+        self.assertEqual(self._status("SWP-1"), "no_show")
+
+        self._insert_without_signal(self._record("SWP-2", self._days(-1)))
+        with CaptureQueriesContext(connection) as queries:
+            sweep_no_shows()
+
+        self.assertEqual(len(queries), 0)
+        self.assertEqual(self._status("SWP-2"), "pending")
+
+    def test_a_new_day_sweeps_again(self):
+        from .services import no_show
+
+        no_show.sweep_no_shows()
+        self._insert_without_signal(self._record("SWP-1", self._days(0)))
+
+        tomorrow = self._days(1)
+        tomorrow_noon = timezone.localtime().replace(
+            year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=12
+        )
+        with patch.object(no_show.timezone, "localdate", return_value=tomorrow), patch.object(
+            no_show.timezone, "localtime", return_value=tomorrow_noon
+        ):
+            no_show.sweep_no_shows()
+
+        self.assertEqual(self._status("SWP-1"), "no_show")
+
+    def test_saving_a_record_today_makes_the_next_request_sweep(self):
+        from .services.no_show import sweep_no_shows
+
+        sweep_no_shows()
+        self._record("SWP-SAVED", self._days(-2)).save()
+
+        sweep_no_shows()
+
+        self.assertEqual(self._status("SWP-SAVED"), "no_show")
+
+    def test_an_import_makes_the_next_request_sweep(self):
+        from .services.no_show import sweep_no_shows
+
+        sweep_no_shows()
+        ForeignOriginTests._import(
+            self,
+            [{"full_name": "Imported Past Guest", "contact_number": "09170001111", "country": "Philippines"}],
+        )
+
+        sweep_no_shows()
+
+        self.assertEqual(TouristRecord.objects.get(full_name="Imported Past Guest").status, "no_show")
+
+    def test_a_cache_failure_sweeps_instead_of_skipping(self):
+        from .services import no_show
+
+        self._insert_without_signal(self._record("SWP-1", self._days(-1)))
+
+        with patch.object(no_show.cache, "get", side_effect=RuntimeError("cache down")), patch.object(
+            no_show.cache, "set", side_effect=RuntimeError("cache down")
+        ):
+            no_show.sweep_no_shows()
+
+        self.assertEqual(self._status("SWP-1"), "no_show")
+
+    def test_the_marker_expires_at_midnight(self):
+        from .services import no_show
+
+        late = timezone.localtime().replace(hour=23, minute=59, second=30, microsecond=0)
+        with patch.object(no_show.timezone, "localtime", return_value=late):
+            self.assertEqual(no_show._seconds_until_midnight(), 30)
+
+    def test_a_second_get_of_a_page_does_not_write(self):
+        user = User.objects.create_user(username="sweep_admin", password="Sweep@123")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+        client.get("/api/dashboard/")
+        with CaptureQueriesContext(connection) as queries:
+            response = client.get("/api/dashboard/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            [q["sql"] for q in queries if q["sql"].lstrip().upper().startswith("UPDATE")]
+        )
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):

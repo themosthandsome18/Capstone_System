@@ -129,13 +129,21 @@ function ArrivalMonitoring() {
     [referenceTables?.resorts]
   );
 
+  // What the data on screen is for: the filters of the loaded response, not
+  // the controls' pending selection. Every label is built from this, so the
+  // labels and the numbers change together, and a failed request leaves both
+  // on the previous view.
+  const loadedFilters = arrivalMonitoring.filters || {};
+  const loadedView = viewFromFilters(loadedFilters, todayStr);
+  const loadedResort = loadedFilters.resort_id || "all";
+
   const activeResortName = useMemo(() => {
-    if (!selectedResort || selectedResort === "all") return "All Resorts";
+    if (!loadedResort || loadedResort === "all") return "All Resorts";
     const match = resorts.find(
-      (r) => String(r.resort_id) === String(selectedResort)
+      (r) => String(r.resort_id) === String(loadedResort)
     );
     return match ? match.resort_name : "Selected Resort";
-  }, [resorts, selectedResort]);
+  }, [resorts, loadedResort]);
 
   // The current view, with any of its parts overridden.
   const currentView = useCallback(
@@ -214,13 +222,14 @@ function ArrivalMonitoring() {
   // Exports every row in the current view, in date order. The on-screen table
   // is capped, so this asks the export endpoint rather than reusing `rows`.
   async function handleExport() {
-    const viewNow = currentView();
+    // The view on screen (the loaded one), which a failed request leaves in place.
+    const viewNow = { ...loadedView, resortId: loadedResort };
     setArrivalError("");
     setExporting(true);
 
     try {
       const exported = await tourismApi.getArrivalMonitoringExport(arrivalRequestParams(viewNow));
-      const resortSlug = selectedResort === "all" ? "all-resorts" : `resort-${selectedResort}`;
+      const resortSlug = loadedResort === "all" ? "all-resorts" : `resort-${loadedResort}`;
       exportCsv(
         datedCsvFilename(`arrival-monitoring-${exportDateSlug(viewNow)}-${resortSlug}`),
         ARRIVAL_EXPORT_HEADERS,
@@ -252,14 +261,15 @@ function ArrivalMonitoring() {
     const value = String(index + 1).padStart(2, "0");
     return { value, label: monthLabel(2000, value).replace(" 2000", "") };
   });
+  // Labels describe the loaded data (loadedView), never the pending selection.
   const viewDescription =
-    view === VIEW_MONTH
-      ? monthLabel(selectedYear, selectedMonth)
-      : view === VIEW_YEAR
-        ? selectedYear === "all"
+    loadedView.view === VIEW_MONTH
+      ? monthLabel(loadedView.year, loadedView.month)
+      : loadedView.view === VIEW_YEAR
+        ? loadedView.year === "all"
           ? "All Years"
-          : `Year ${selectedYear}`
-        : formatDate(selectedDate);
+          : `Year ${loadedView.year}`
+        : formatDate(loadedView.date);
 
   return (
     <div className="arrival-page">
@@ -401,13 +411,13 @@ function ArrivalMonitoring() {
       <div className="arrival-filter-summary-chip">
         <div>
           <span>
-            Showing {view === VIEW_DAY ? "daily arrivals on " : "all recorded arrivals for "}
+            Showing {loadedView.view === VIEW_DAY ? "daily arrivals on " : "all recorded arrivals for "}
             <strong>{viewDescription}</strong>
             {" "}at <strong>{activeResortName}</strong>
           </span>
           <div className="chip-sub">
             {summary.totalArrivals} total visitor(s) across {rowCount} arrived booking group(s)
-            {view === VIEW_DAY ? " • Resets daily at 00:00" : ""}
+            {loadedView.view === VIEW_DAY ? " • Resets daily at 00:00" : ""}
           </div>
         </div>
 
@@ -456,11 +466,11 @@ function ArrivalMonitoring() {
       </div>
 
       <div className="arrival-note">
-        {view === VIEW_DAY
+        {loadedView.view === VIEW_DAY
           ? `Daily Monitoring: Counts reset each day for real-time tracking. All totals are calculated from records marked Arrived.`
-          : view === VIEW_MONTH
-            ? `Month View: Displaying aggregate arrivals for ${monthLabel(selectedYear, selectedMonth)}.`
-            : `Year View: Displaying aggregate arrivals for ${selectedYear === "all" ? "all years" : selectedYear}.`}
+          : loadedView.view === VIEW_MONTH
+            ? `Month View: Displaying aggregate arrivals for ${monthLabel(loadedView.year, loadedView.month)}.`
+            : `Year View: Displaying aggregate arrivals for ${loadedView.year === "all" ? "all years" : loadedView.year}.`}
       </div>
 
       {rowCount > rows.length ? (
@@ -506,8 +516,8 @@ function ArrivalMonitoring() {
               ) : (
                 <tr>
                   <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
-                    {view === VIEW_DAY
-                      ? `No arrivals recorded for ${formatDate(selectedDate)} at ${activeResortName}.`
+                    {loadedView.view === VIEW_DAY
+                      ? `No arrivals recorded for ${formatDate(loadedView.date)} at ${activeResortName}.`
                       : `No arrived tourist records found for ${viewDescription} at ${activeResortName}.`}
                   </td>
                 </tr>
@@ -515,7 +525,11 @@ function ArrivalMonitoring() {
 
               <tr className="daily-total">
                 <td>
-                  {view === VIEW_YEAR ? "TOTAL ARRIVALS" : view === VIEW_MONTH ? "MONTH TOTAL" : "DAILY TOTAL"}
+                  {loadedView.view === VIEW_YEAR
+                    ? "TOTAL ARRIVALS"
+                    : loadedView.view === VIEW_MONTH
+                      ? "MONTH TOTAL"
+                      : "DAILY TOTAL"}
                 </td>
                 <td />
                 <td>{dailyTotals.male || 0}</td>

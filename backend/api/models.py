@@ -437,6 +437,15 @@ def update_resort_rating_on_delete(sender, instance, **kwargs):
     FeedbackEntry._recalculate_rating(instance.destination)
 
 
+@receiver(post_save, sender="api.TouristRecord")
+def request_no_show_sweep_on_save(sender, instance, **kwargs):
+    # The once-a-day no-show sweep must also catch a booking saved today with a
+    # past arrival date, so any tourist record write makes the next GET sweep.
+    from .services.no_show import mark_no_show_sweep_needed
+
+    mark_no_show_sweep_needed()
+
+
 class TouristStat(models.Model):
     total_arrivals = models.IntegerField()
     monthly_visits = models.IntegerField()

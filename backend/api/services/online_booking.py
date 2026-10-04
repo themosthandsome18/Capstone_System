@@ -27,6 +27,7 @@ from ..models import (
     validate_tourist_record_values,
 )
 from ..seeders import ensure_initial_reference_data
+from .no_show import mark_no_show_sweep_needed
 
 
 COLUMNS = {
@@ -340,6 +341,9 @@ def persist_valid_records(valid_payloads):
         update_fields=TOURIST_RECORD_UPSERT_FIELDS,
         unique_fields=["survey_id"],
     )
+    # bulk_create sends no post_save; imported past-dated pending bookings must
+    # still be swept on the next request.
+    mark_no_show_sweep_needed()
 
     updated_count = len(existing_survey_ids)
     imported_count = len(valid_payloads) - updated_count
