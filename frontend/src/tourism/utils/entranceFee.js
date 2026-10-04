@@ -1,6 +1,8 @@
 // Entrance fee for the booking form. The backend computes every stored figure
 // with the same rates (services/tourism.py entrance_fee); these drive the
 // live breakdown in the Head Count step.
+import { formatNumber } from "./format";
+
 export const REGULAR_ENTRANCE_FEE = 80;
 export const DISCOUNTED_ENTRANCE_FEE = 64;
 
@@ -22,6 +24,17 @@ export function entranceFeeBreakdown(visitors, discounted) {
     discountedAmount,
     total: regularAmount + discountedAmount,
   };
+}
+
+// The one-line fee shown under the Discounted field, e.g.
+// "Entrance fee: PHP 256 (0 x PHP 80 + 4 x PHP 64)".
+export function entranceFeeSummary(visitors, discounted) {
+  const fee = entranceFeeBreakdown(visitors, discounted);
+  return (
+    `Entrance fee: PHP ${formatNumber(fee.total)} ` +
+    `(${fee.regularCount} x PHP ${REGULAR_ENTRANCE_FEE} + ` +
+    `${fee.discountedCount} x PHP ${DISCOUNTED_ENTRANCE_FEE})`
+  );
 }
 
 // Children aged 0-7, seniors aged 60+ and special needs are the suggested

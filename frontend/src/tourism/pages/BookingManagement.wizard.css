@@ -464,76 +464,12 @@
   border: 1px solid #fecaca;
 }
 
-/* ── Number totals check (step 4) ── */
-.wizard-totals-check {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid var(--th-border);
-}
-
-.wizard-total-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.78rem;
-  padding: 4px 0;
-}
-
-.wizard-total-item span {
-  color: #6b7280;
-}
-
-.wizard-total-item strong.ok {
-  color: var(--th-success);
-}
-
-.wizard-total-item strong.error {
-  color: var(--th-danger-text);
-}
-
-/* Explanatory line under a Head Count field */
+/* Explanatory line under a Head Count field, including the entrance fee line */
 .wizard-field-hint {
   display: block;
   margin-top: 4px;
   font-size: 0.72rem;
   color: var(--th-text-muted);
-}
-
-/* Entrance fee breakdown, full width inside the totals check */
-.wizard-fee-breakdown {
-  grid-column: 1 / -1;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--th-border);
-  font-size: 0.78rem;
-}
-
-.wizard-fee-title {
-  font-weight: 600;
-  color: var(--th-text-main);
-  margin-bottom: 4px;
-}
-
-.wizard-fee-line {
-  display: flex;
-  justify-content: space-between;
-  padding: 2px 0;
-  color: var(--th-text-muted);
-}
-
-.wizard-fee-line .error {
-  color: var(--th-danger-text);
-}
-
-.wizard-fee-total {
-  margin-top: 2px;
-  font-weight: 600;
-  color: var(--th-text-main);
 }
 
 /* ── Water source multi-select ── */

@@ -20,10 +20,10 @@ import { countryRequiresLocation } from "../utils/countryLocation";
 import { formatNumber } from "../utils/format";
 import {
   DISCOUNTED_ENTRANCE_FEE,
-  REGULAR_ENTRANCE_FEE,
   editDiscountedCount,
   effectiveDiscountedCount,
   entranceFeeBreakdown,
+  entranceFeeSummary,
   followDiscountedSuggestion,
   isDiscountedCountEdited,
   suggestedDiscountedCount,
@@ -320,29 +320,17 @@ function BookingManagement() {
       (province) => String(province.region_id || "") === String(filters.region_id)
     );
   }, [filters.region_id, referenceTables.provinces]);
+  // The entrance fee shown under the Discounted field and in the review step.
+  // The balance rules are not checked here: validateTotals enforces them on
+  // Continue (via validateStep) and again on save (handleSubmit).
   const formTotals = useMemo(() => {
-    const classification =
-      toInteger(form.filipino_count) +
-      toInteger(form.foreigner_count);
-    const gender = toInteger(form.total_male) + toInteger(form.total_female);
-    const ages =
-      toInteger(form.age_0_7) +
-      toInteger(form.age_8_59) +
-      toInteger(form.age_60_above);
-    const special = toInteger(form.special_group_count);
+    const visitors = toInteger(form.filipino_count) + toInteger(form.foreigner_count);
     const discounted = effectiveDiscountedCount(form);
 
     return {
-      classification,
-      gender,
-      ages,
-      special,
+      visitors,
       discounted,
-      fee: entranceFeeBreakdown(classification, discounted),
-      genderMatches: classification === gender,
-      agesMatch: classification === ages,
-      specialValid: special <= classification,
-      discountedValid: discounted <= classification,
+      fee: entranceFeeBreakdown(visitors, discounted),
     };
   }, [form]);
 
@@ -1548,42 +1536,10 @@ function BookingManagement() {
                         <small className="wizard-field-hint">
                           Suggested from Age 0-7 + Age 60+ + Special Needs. Lower it if one person is counted twice (for example a senior with special needs); raise it if someone else qualifies.
                         </small>
+                        <small className="wizard-field-hint">
+                          {entranceFeeSummary(formTotals.visitors, formTotals.discounted)}
+                        </small>
                       </WizardField>
-                    </div>
-                    <div className="wizard-totals-check">
-                      <div className="wizard-total-item">
-                        <span>Visitor total</span>
-                        <strong className="ok">{formTotals.classification}</strong>
-                      </div>
-                      <div className="wizard-total-item">
-                        <span>Male + Female</span>
-                        <strong className={formTotals.genderMatches ? "ok" : "error"}>{formTotals.gender}</strong>
-                      </div>
-                      <div className="wizard-total-item">
-                        <span>Age groups total</span>
-                        <strong className={formTotals.agesMatch ? "ok" : "error"}>{formTotals.ages}</strong>
-                      </div>
-                      <div className="wizard-total-item">
-                        <span>Special Needs</span>
-                        <strong className={formTotals.specialValid ? "ok" : "error"}>{formTotals.special}</strong>
-                      </div>
-                      <div className="wizard-fee-breakdown">
-                        <div className="wizard-fee-title">Entrance fee</div>
-                        <div className="wizard-fee-line">
-                          <span>{formTotals.fee.regularCount} regular x PHP {REGULAR_ENTRANCE_FEE}</span>
-                          <span>PHP {formatNumber(formTotals.fee.regularAmount)}</span>
-                        </div>
-                        <div className="wizard-fee-line">
-                          <span>{formTotals.fee.discountedCount} discounted x PHP {DISCOUNTED_ENTRANCE_FEE}</span>
-                          <span className={formTotals.discountedValid ? "" : "error"}>
-                            PHP {formatNumber(formTotals.fee.discountedAmount)}
-                          </span>
-                        </div>
-                        <div className="wizard-fee-line wizard-fee-total">
-                          <span>Total</span>
-                          <span>PHP {formatNumber(formTotals.fee.total)}</span>
-                        </div>
-                      </div>
                     </div>
                     <div className="tourist-auto-fill-row" style={{ marginTop: 8 }}>
                       <button type="button" onClick={fillGenderBalance}>Balance female count</button>

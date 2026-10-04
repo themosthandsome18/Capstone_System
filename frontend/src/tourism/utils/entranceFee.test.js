@@ -2,6 +2,7 @@ import {
   editDiscountedCount,
   effectiveDiscountedCount,
   entranceFeeBreakdown,
+  entranceFeeSummary,
   followDiscountedSuggestion,
   isDiscountedCountEdited,
   suggestedDiscountedCount,
@@ -53,6 +54,22 @@ describe("entranceFeeBreakdown", () => {
 
   it("is zero for zero visitors", () => {
     expect(entranceFeeBreakdown(0, 0).total).toBe(0);
+  });
+});
+
+describe("entranceFeeSummary", () => {
+  it("shows the total and how it is made up", () => {
+    expect(entranceFeeSummary(4, 4)).toBe("Entrance fee: PHP 256 (0 x PHP 80 + 4 x PHP 64)");
+    expect(entranceFeeSummary(4, 3)).toBe("Entrance fee: PHP 272 (1 x PHP 80 + 3 x PHP 64)");
+  });
+
+  it("shows all regular when no one is discounted", () => {
+    expect(entranceFeeSummary(5, 0)).toBe("Entrance fee: PHP 400 (5 x PHP 80 + 0 x PHP 64)");
+  });
+
+  it("groups thousands and is zero for no visitors", () => {
+    expect(entranceFeeSummary(20, 5)).toBe("Entrance fee: PHP 1,520 (15 x PHP 80 + 5 x PHP 64)");
+    expect(entranceFeeSummary(0, 0)).toBe("Entrance fee: PHP 0 (0 x PHP 80 + 0 x PHP 64)");
   });
 });
 
