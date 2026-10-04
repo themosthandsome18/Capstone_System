@@ -3205,6 +3205,85 @@ class AnalyticsPercentageTests(TestCase):
         self.assertIn("1.2 night(s) per visitor", self.answers["average_stay"]["answer"])
 
 
+class EntranceFeeRateTests(TestCase):
+    """Every fee and revenue figure is head count x PHP 80 (no fee is stored).
+
+    Two arrived records of 3 and 2 visitors on Apr 2, a no-show of 5 on Apr 2
+    (counted nowhere), and a pending record of 4 on Apr 3 (counted only by
+    Reports, which exclude no-shows but not pending bookings).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        quezon = Province.objects.get(name="Quezon")
+        resort = Resort.objects.order_by("resort_id").first()
+        rows = [
+            ("FEE-0001", 3, "2026-04-02", "arrived"),
+            ("FEE-0002", 2, "2026-04-02", "arrived"),
+            ("FEE-0003", 5, "2026-04-02", "no_show"),
+            ("FEE-0004", 4, "2026-04-03", "pending"),
+        ]
+        for survey_id, visitors, arrival_date, booking_status in rows:
+            TouristRecord.objects.create(
+                survey_id=survey_id,
+                full_name="Fee Group",
+                contact_number=f"0917000{survey_id[-4:]}",
+                country=Country.objects.get(name="Philippines"),
+                region=quezon.region,
+                province=quezon,
+                arrival_date=arrival_date,
+                resort=resort,
+                itinerary=Itinerary.objects.first(),
+                travel_mode=TravelMode.objects.first(),
+                boat_type=BoatType.objects.first(),
+                visit_purpose=VisitPurpose.objects.first(),
+                total_visitors=visitors,
+                filipino_count=visitors,
+                total_male=visitors,
+                age_8_59=visitors,
+                status=booking_status,
+            )
+
+    def test_the_rate_is_80_per_visitor(self):
+        from .services.tourism import ARRIVAL_FEE_PER_VISITOR
+
+        self.assertEqual(ARRIVAL_FEE_PER_VISITOR, 80)
+
+    def test_arrival_monitoring_fee_paid_and_fees_collected(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        payload = build_arrival_monitoring_payload({"date": "2026-04-02"})
+
+        self.assertEqual(
+            sorted((row["survey_id"], row["feePaid"]) for row in payload["rows"]),
+            [("FEE-0001", 240), ("FEE-0002", 160)],
+        )
+        self.assertEqual(payload["summary"]["feesCollected"], 400)
+        self.assertEqual(payload["dailyTotals"]["feesCollected"], 400)
+        self.assertEqual(payload["feePerVisitor"], 80)
+
+    def test_dashboard_total_revenue_collected(self):
+        from .services.tourism import build_dashboard_payload
+
+        payload = build_dashboard_payload({"year": "2026"})
+
+        self.assertEqual(payload["metrics"]["totalRevenueCollected"], 400)
+
+    def test_daily_report_revenue_and_average_per_visitor(self):
+        from .services.tourism import build_reports_payload
+
+        payload = build_reports_payload(
+            {"type": "daily", "year": "2026", "include_questions": "false"}
+        )
+
+        self.assertEqual(
+            [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
+            [("2026-04-02", 5, 400, 80), ("2026-04-03", 4, 320, 80)],
+        )
+        self.assertEqual(payload["totals"], {"visitors": 9, "revenue": 720, "avg": 80})
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
