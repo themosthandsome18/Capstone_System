@@ -3061,6 +3061,77 @@ class ForeignOriginTests(TestCase):
         self.assertEqual((local.region_id, local.province_id), (self.calabarzon.id, self.quezon.id))
 
 
+class ClearSurv2026013OriginMigrationTests(TestCase):
+    """0047 clears the Philippine region and province forced onto SURV-2026-013."""
+
+    def setUp(self):
+        import importlib
+
+        ensure_test_reference_tables()
+        self.migration = importlib.import_module("api.migrations.0047_clear_surv_2026_013_origin")
+        self.western_visayas, _ = Region.objects.get_or_create(
+            id=9, defaults={"name": "Region VI - Western Visayas"}
+        )
+        self.guimaras, _ = Province.objects.get_or_create(
+            id=42, defaults={"name": "Guimaras", "region": self.western_visayas}
+        )
+        self.united_states = Country.objects.get(name="United States")
+        self.target = self._record("SURV-2026-013", self.united_states)
+        self.other = self._record("SURV-2026-099", self.united_states)
+
+    def _record(self, survey_id, country):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Origin Group",
+            contact_number="09170000000",
+            country=country,
+            region=self.western_visayas,
+            province=self.guimaras,
+            arrival_date="2026-10-27",
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=4,
+            filipino_count=4,
+            total_male=2,
+            total_female=2,
+            age_8_59=4,
+            status="pending",
+        )
+
+    def _run(self, function):
+        from django.apps import apps
+
+        function(apps, None)
+
+    def _origin(self, record):
+        record.refresh_from_db()
+        return (record.country_id, record.region_id, record.province_id, record.total_visitors)
+
+    def test_forward_clears_only_that_record_and_keeps_its_country_and_counts(self):
+        self._run(self.migration.clear_origin)
+
+        self.assertEqual(self._origin(self.target), (self.united_states.id, None, None, 4))
+        self.assertEqual(self._origin(self.other), (self.united_states.id, 9, 42, 4))
+
+    def test_forward_does_nothing_once_the_values_have_changed(self):
+        TouristRecord.objects.filter(pk="SURV-2026-013").update(province=Province.objects.get(id=1))
+
+        self._run(self.migration.clear_origin)
+
+        self.assertEqual(self._origin(self.target), (self.united_states.id, 9, 1, 4))
+
+    def test_reverse_restores_the_exact_ids(self):
+        self._run(self.migration.clear_origin)
+
+        self._run(self.migration.restore_origin)
+
+        self.assertEqual(self._origin(self.target), (self.united_states.id, 9, 42, 4))
+        self.assertEqual(self._origin(self.other), (self.united_states.id, 9, 42, 4))
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
