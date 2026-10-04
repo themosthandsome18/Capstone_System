@@ -751,8 +751,11 @@ def build_reports_payload(params=None):
     if resort_id:
         records = records.filter(resort_id=resort_id)
 
+    # Male and female are summed in the same query as the visitors on every tab.
     totals = {
         "visitors": 0,
+        "male": 0,
+        "female": 0,
         "revenue": 0,
     }
 
@@ -761,20 +764,31 @@ def build_reports_payload(params=None):
     if report_type == "daily":
         grouped = (
             records.values("arrival_date")
-            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
             .order_by("arrival_date")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
             revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             totals["revenue"] += revenue
 
             rows.append(
                 {
                     "id": item["arrival_date"].isoformat(),
                     "name": item["arrival_date"].strftime("%b %d, %Y"),
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -786,7 +800,9 @@ def build_reports_payload(params=None):
 
         monthly_discounted = {}
 
-        for val in records.values("arrival_date", "total_visitors", "discounted_count"):
+        for val in records.values(
+            "arrival_date", "total_visitors", "total_male", "total_female", "discounted_count"
+        ):
             key = val["arrival_date"].strftime("%Y-%m")
             label = val["arrival_date"].strftime("%B %Y")
 
@@ -794,12 +810,16 @@ def build_reports_payload(params=None):
                 monthly_data[key] = {
                     "id": key,
                     "name": label,
+                    "male": 0,
+                    "female": 0,
                     "visitors": 0,
                     "revenue": 0,
                     "avg": 0,
                 }
 
             monthly_data[key]["visitors"] += val["total_visitors"]
+            monthly_data[key]["male"] += val["total_male"]
+            monthly_data[key]["female"] += val["total_female"]
             monthly_discounted[key] = monthly_discounted.get(key, 0) + val["discounted_count"]
 
         for key in sorted(monthly_data.keys()):
@@ -810,6 +830,8 @@ def build_reports_payload(params=None):
             )
 
             totals["visitors"] += row["visitors"]
+            totals["male"] += row["male"]
+            totals["female"] += row["female"]
             totals["revenue"] += row["revenue"]
             rows.append(row)
 
@@ -817,19 +839,30 @@ def build_reports_payload(params=None):
         grouped = (
             with_origin(records)
             .values("origin")
-            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
             .order_by("-visitors", "origin")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
             revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             totals["revenue"] += revenue
             rows.append(
                 {
                     "id": item["origin"] or "Unspecified",
                     "name": item["origin"] or "Unspecified",
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -839,19 +872,30 @@ def build_reports_payload(params=None):
     elif report_type == "purpose":
         grouped = (
             records.values("visit_purpose__name")
-            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
             .order_by("-visitors", "visit_purpose__name")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
             revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             totals["revenue"] += revenue
             rows.append(
                 {
                     "id": item["visit_purpose__name"] or "Unspecified",
                     "name": item["visit_purpose__name"] or "Unspecified",
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -861,19 +905,30 @@ def build_reports_payload(params=None):
     elif report_type == "transport":
         grouped = (
             records.values("travel_mode__name")
-            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
             .order_by("-visitors", "travel_mode__name")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
             revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             totals["revenue"] += revenue
             rows.append(
                 {
                     "id": item["travel_mode__name"] or "Unspecified",
                     "name": item["travel_mode__name"] or "Unspecified",
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -883,17 +938,27 @@ def build_reports_payload(params=None):
     elif report_type == "no_show":
         grouped = (
             records.values("resort__resort_name")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+            )
             .order_by("-visitors", "resort__resort_name")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             rows.append(
                 {
                     "id": item["resort__resort_name"] or "Unspecified",
                     "name": item["resort__resort_name"] or "Unspecified",
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": 0,
                     "avg": 0,
@@ -903,9 +968,18 @@ def build_reports_payload(params=None):
     else:
         resort_queryset = Resort.objects.order_by("resort_name")
         resort_totals = {
-            item["resort_id"]: (item["visitors"] or 0, item["discounted"] or 0)
-            for item in records.values("resort_id")
-            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
+            item["resort_id"]: (
+                item["visitors"] or 0,
+                item["male"] or 0,
+                item["female"] or 0,
+                item["discounted"] or 0,
+            )
+            for item in records.values("resort_id").annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
         }
 
         if resort_id:
@@ -914,11 +988,13 @@ def build_reports_payload(params=None):
             resort_queryset = resort_queryset.filter(resort_id__in=resort_totals.keys())
 
         for resort in resort_queryset:
-            visitors, discounted = resort_totals.get(resort.resort_id, (0, 0))
+            visitors, male, female, discounted = resort_totals.get(resort.resort_id, (0, 0, 0, 0))
 
             revenue = entrance_fee(visitors, discounted)
 
             totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
             totals["revenue"] += revenue
 
             rows.append(
@@ -926,6 +1002,8 @@ def build_reports_payload(params=None):
                     "id": resort.resort_id,
                     "resort_id": resort.resort_id,
                     "name": resort.resort_name,
+                    "male": male,
+                    "female": female,
                     "visitors": visitors,
                     "revenue": revenue,
                     "avg": round(revenue / visitors) if visitors else 0,
@@ -951,6 +1029,8 @@ def build_reports_payload(params=None):
         else [],
         "totals": {
             "visitors": totals["visitors"],
+            "male": totals["male"],
+            "female": totals["female"],
             "revenue": totals["revenue"],
             "avg": round(totals["revenue"] / totals["visitors"])
             if totals["visitors"]

@@ -2919,14 +2919,31 @@
 
 /* ================= REPORT TABLE ================= */
 
+/* Padded like the chart card above it. The title stays put; only the table
+   scrolls sideways (.report-table-scroll) when the card is narrower than the
+   table's minimum width. */
 .report-table-card {
-  /* Scrolls sideways when the card is narrower than the table's minimum
-     width, rather than wrapping or overlapping the headers. */
-  overflow-x: auto;
-  overflow-y: hidden;
+  padding: 20px;
   border-radius: 14px;
   background: var(--th-surface-alt);
   box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.18);
+}
+
+.report-table-header {
+  margin-bottom: 16px;
+}
+
+.report-table-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.report-table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 10px;
 }
 
 .report-table-card table {
@@ -2934,22 +2951,29 @@
   border-collapse: collapse;
   font-size: 14px;
   /* Fixed layout, so sorting never resizes a column (the sorted header turns
-     bold and changes its arrow). The name column takes 36% and the three
-     figures share the rest equally. 664px is the narrowest width at which
-     the longest resort name ("Dona Choleng Camping Resort", 239px with
-     padding) and the widest bold header ("Total Revenue" plus its arrow,
-     140px) both fit on one line. */
+     bold and changes its arrow). Each figure column is as wide as its bold
+     header plus arrow and padding, measured at 14px (Male 78px, Female 93px,
+     Total Visitors 137px, Total Revenue 143px; PHP 12,345,678.00 is 131px):
+     110 / 110 / 156 / 170px. The name column takes the rest. 870px is the
+     narrowest width at which the longest resort name ("Villa Escaparde
+     Camping and Beach Resort", 324px with padding) still fits on one line
+     beside them (546px), so every row keeps one line and the same height;
+     below it the table scrolls sideways. */
   table-layout: fixed;
-  min-width: 664px;
+  min-width: 870px;
 }
 
-.report-table-card th:nth-child(1) {
-  width: 36%;
+.report-table-card th.report-col-male,
+.report-table-card th.report-col-female {
+  width: 110px;
 }
 
-.report-table-card th:nth-child(n + 2) {
-  padding-left: 12px;
-  padding-right: 12px;
+.report-table-card th.report-col-visitors {
+  width: 156px;
+}
+
+.report-table-card th.report-col-revenue {
+  width: 170px;
 }
 
 .report-table-card thead {
@@ -2970,22 +2994,21 @@
   color: #1f2937;
 }
 
-.report-table-card td:first-child {
+.report-table-card td.report-col-name {
   font-weight: 800;
   color: #050505;
 }
 
-.report-table-card td:nth-child(2),
-.report-table-card td:nth-child(3),
-.report-table-card td:nth-child(4),
-.report-table-card th:nth-child(2),
-.report-table-card th:nth-child(3),
-.report-table-card th:nth-child(4) {
+/* Figures are centred and revenue is bold. Set by class, not by column
+   position, so adding or moving a column cannot misalign them. */
+.report-table-card .num,
+.report-table-card .money {
+  padding-left: 12px;
+  padding-right: 12px;
   text-align: center;
 }
 
-.report-table-card td:nth-child(3),
-.report-table-card td:nth-child(4) {
+.report-table-card td.money {
   font-weight: 800;
 }
 
@@ -2995,6 +3018,24 @@
 
 .report-table-card .total-row td {
   font-weight: 800;
+}
+
+/* Male + Female does not equal Total Visitors: shown as stored and marked,
+   in the fixed status colours (they never follow the theme). */
+.report-table-card .report-row-unbalanced td {
+  background: var(--th-warning-bg);
+}
+
+.report-unbalanced-mark {
+  margin-left: 8px;
+  color: var(--th-warning-text);
+}
+
+.report-table-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--th-warning-text);
 }
 
 .report-print-heading {
@@ -3650,7 +3691,7 @@
   }
 
   /* Paper cannot scroll: let the table fit the page instead of clipping. */
-  .report-table-card {
+  .report-table-scroll {
     overflow: visible;
   }
 
@@ -3859,59 +3900,6 @@
 .tourism-layout .sortable-th.active-sort .sort-indicator {
   opacity: 1;
   color: var(--th-primary-ink);
-}
-
-.tourism-layout .report-sort-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  font-size: 13px;
-}
-
-.tourism-layout .report-sort-label {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #475569;
-  white-space: nowrap;
-}
-
-.tourism-layout .report-sort-select {
-  padding: 6px 12px;
-  border-radius: 7px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #1e293b;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.tourism-layout .report-sort-select:focus {
-  border-color: var(--th-primary);
-}
-
-.tourism-layout .report-sort-dir-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 7px;
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tourism-layout .report-sort-dir-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
 }
 }
 

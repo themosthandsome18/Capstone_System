@@ -3283,7 +3283,7 @@ class EntranceFeeRateTests(TestCase):
             [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
             [("2026-04-02", 5, 400, 80), ("2026-04-03", 4, 320, 80)],
         )
-        self.assertEqual(payload["totals"], {"visitors": 9, "revenue": 720, "avg": 80})
+        self.assertEqual(payload["totals"], {"visitors": 9, "male": 9, "female": 0, "revenue": 720, "avg": 80})
 
 
 class DiscountedEntranceFeeTests(TestCase):
@@ -3436,7 +3436,7 @@ class DiscountedEntranceFeeTests(TestCase):
             [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
             [("2026-04-02", 11, 800, 73), ("2026-04-03", 3, 224, 75)],
         )
-        self.assertEqual(payload["totals"], {"visitors": 14, "revenue": 1024, "avg": 73})
+        self.assertEqual(payload["totals"], {"visitors": 14, "male": 14, "female": 0, "revenue": 1024, "avg": 73})
 
     def test_monthly_report_uses_the_months_discounted_count(self):
         payload = self._report("monthly")
@@ -4023,6 +4023,107 @@ class QuestionAnswersDeduplicationTests(TestCase):
             build_tourism_question_answers({"year": "2026"})
 
         self.assertEqual(len(queries), 17)
+
+
+class ReportsMaleFemaleTests(TestCase):
+    """Every report tab carries male and female, summed in its existing query."""
+
+    TABS = ("daily", "monthly", "resort", "origin", "purpose", "transport", "no_show")
+    # Queries per tab without the question answers; the male and female sums
+    # must not add one.
+    QUERIES = {"daily": 1, "monthly": 1, "resort": 2, "origin": 1, "purpose": 1, "transport": 1, "no_show": 1}
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        cls.quezon = Province.objects.get(name="Quezon")
+        cls.us = Country.objects.get(name="United States")
+        cls.resorts = list(Resort.objects.order_by("resort_id")[:2])
+        cls.purposes = list(VisitPurpose.objects.order_by("id")[:2])
+        cls.modes = list(TravelMode.objects.order_by("id")[:2])
+        TouristRecord.objects.bulk_create([
+            cls._record("MF-01", "2026-08-10", 3, 2, resort=0, purpose=0, mode=0),
+            cls._record("MF-02", "2026-09-05", 1, 3, resort=1, purpose=1, mode=1, foreign=True),
+            cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, booking_status="pending"),
+            cls._record("MF-04", "2026-09-20", 0, 4, resort=1, purpose=0, mode=1, booking_status="no_show"),
+        ])
+
+    @classmethod
+    def _record(cls, survey_id, day, male, female, resort, purpose, mode,
+                booking_status="arrived", foreign=False):
+        visitors = male + female
+        return TouristRecord(
+            survey_id=survey_id,
+            full_name="Group",
+            contact_number="09170000000",
+            country=cls.us if foreign else Country.objects.get(name="Philippines"),
+            region=None if foreign else cls.quezon.region,
+            province=None if foreign else cls.quezon,
+            arrival_date=day,
+            resort=cls.resorts[resort],
+            itinerary=Itinerary.objects.first(),
+            travel_mode=cls.modes[mode],
+            boat_type=BoatType.objects.first(),
+            visit_purpose=cls.purposes[purpose],
+            total_visitors=visitors,
+            foreigner_count=visitors if foreign else 0,
+            filipino_count=0 if foreign else visitors,
+            total_male=male,
+            total_female=female,
+            age_8_59=visitors,
+            status=booking_status,
+        )
+
+    def _report(self, report_type):
+        from .services.tourism import build_reports_payload
+
+        return build_reports_payload({"type": report_type, "year": "2026", "include_questions": "false"})
+
+    def test_each_tab_reports_male_and_female(self):
+        r0, r1 = (resort.resort_name for resort in self.resorts)
+        p0, p1 = (purpose.name for purpose in self.purposes)
+        m0, m1 = (mode.name for mode in self.modes)
+        # (name, male, female, visitors) per row, then the totals. No-show
+        # counts only MF-04; every other tab counts MF-01 to MF-03 (pending included).
+        expected = {
+            "daily": ([("Aug 10, 2026", 3, 2, 5), ("Sep 05, 2026", 3, 3, 6)], (6, 5, 11)),
+            "monthly": ([("August 2026", 3, 2, 5), ("September 2026", 3, 3, 6)], (6, 5, 11)),
+            "resort": ([(r0, 5, 2, 7), (r1, 1, 3, 4)], (6, 5, 11)),
+            "origin": ([("Quezon", 5, 2, 7), ("United States", 1, 3, 4)], (6, 5, 11)),
+            "purpose": ([(p1, 3, 3, 6), (p0, 3, 2, 5)], (6, 5, 11)),
+            "transport": ([(m0, 5, 2, 7), (m1, 1, 3, 4)], (6, 5, 11)),
+            "no_show": ([(r1, 0, 4, 4)], (0, 4, 4)),
+        }
+        for report_type, (rows, totals) in expected.items():
+            with self.subTest(report_type=report_type):
+                payload = self._report(report_type)
+                self.assertEqual(
+                    [(row["name"], row["male"], row["female"], row["visitors"]) for row in payload["rows"]],
+                    rows,
+                )
+                self.assertEqual(
+                    (payload["totals"]["male"], payload["totals"]["female"], payload["totals"]["visitors"]),
+                    totals,
+                )
+
+    def test_male_plus_female_equals_visitors_on_every_row_and_total(self):
+        for report_type in self.TABS:
+            with self.subTest(report_type=report_type):
+                payload = self._report(report_type)
+                self.assertTrue(payload["rows"])
+                for row in payload["rows"]:
+                    self.assertEqual(row["male"] + row["female"], row["visitors"], row)
+                totals = payload["totals"]
+                self.assertEqual(totals["male"] + totals["female"], totals["visitors"])
+                self.assertEqual(totals["male"], sum(row["male"] for row in payload["rows"]))
+                self.assertEqual(totals["female"], sum(row["female"] for row in payload["rows"]))
+
+    def test_query_count_per_tab(self):
+        for report_type in self.TABS:
+            with self.subTest(report_type=report_type):
+                with CaptureQueriesContext(connection) as queries:
+                    self._report(report_type)
+                self.assertEqual(len(queries), self.QUERIES[report_type])
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):

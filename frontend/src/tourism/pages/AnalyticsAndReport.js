@@ -181,6 +181,39 @@ const buildMainReportChartOptions = (palette) => ({
 // move them to the status tokens (THEME_TOKENS.md section 7).
 const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
 
+// Daily and Monthly rows are dates: the name is a label ("Sep 05, 2026",
+// "September 2026") and the id is the ISO date ("2026-09-05", "2026-09"),
+// which sorts by date. Those tabs start in date order, earliest first; every
+// other tab starts with the most visitors first.
+const DATE_ROW_TYPES = ["daily", "monthly"];
+
+function defaultSortFor(type) {
+  return DATE_ROW_TYPES.includes(type)
+    ? { key: "name", direction: "asc" }
+    : { key: "visitors", direction: "desc" };
+}
+
+function sortValue(row, key, type) {
+  if (key === "name" && DATE_ROW_TYPES.includes(type)) {
+    return String(row.id ?? "");
+  }
+  return row[key] ?? 0;
+}
+
+// Male + Female should equal Total Visitors. A row that does not is shown as
+// stored, never adjusted, and marked. A row without the two figures (an older
+// backend during a deploy) is not judged.
+function isUnbalanced(row) {
+  if (row.male == null || row.female == null) {
+    return false;
+  }
+  return Number(row.male) + Number(row.female) !== Number(row.visitors || 0);
+}
+
+function formatCount(value) {
+  return value == null ? "—" : Number(value).toLocaleString();
+}
+
 function AnalyticsAndReport() {
   const { referenceTables, reportData, refreshReportData, isComputedDataStale } = useTourismData();
 
@@ -216,6 +249,8 @@ function AnalyticsAndReport() {
 
   const totalVisitors = reportData.totals?.visitors || 0;
   const totalRevenue = reportData.totals?.revenue || 0;
+  const totalMale = reportData.totals?.male;
+  const totalFemale = reportData.totals?.female;
 
   // null until the shell's theme colours have been read; charts wait for it.
   const chartPalette = useTourismChartPalette();
@@ -280,34 +315,56 @@ function AnalyticsAndReport() {
     }));
   }
 
-  const [sortConfig, setSortConfig] = useState({
-    key: "visitors",
-    direction: "desc",
-  });
+  // A sort picked in a column header belongs to the report type it was picked
+  // on; a newly loaded type starts on its own default (date order on Daily and
+  // Monthly, most visitors first elsewhere).
+  const [sortChoice, setSortChoice] = useState(null);
+  const sortConfig =
+    sortChoice && sortChoice.type === loadedType
+      ? sortChoice
+      : { type: loadedType, ...defaultSortFor(loadedType) };
+  const { key: sortKey, direction: sortDirection } = sortConfig;
 
   const sortedRows = useMemo(() => {
     const list = [...rows];
-    const { key, direction } = sortConfig;
     list.sort((a, b) => {
-      let valA = a[key] ?? 0;
-      let valB = b[key] ?? 0;
+      let valA = sortValue(a, sortKey, loadedType);
+      let valB = sortValue(b, sortKey, loadedType);
       if (typeof valA === "string") {
         const cmp = valA.localeCompare(valB);
-        return direction === "asc" ? cmp : -cmp;
+        return sortDirection === "asc" ? cmp : -cmp;
       }
-      return direction === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+      return sortDirection === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
     });
     return list;
-  }, [rows, sortConfig]);
+  }, [rows, sortKey, sortDirection, loadedType]);
 
   function handleSort(key) {
-    setSortConfig((prev) => {
-      if (prev.key === key) {
-        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
-      }
-      return { key, direction: key === "name" ? "asc" : "desc" };
-    });
+    const next =
+      sortKey === key
+        ? { key, direction: sortDirection === "asc" ? "desc" : "asc" }
+        : { key, direction: key === "name" ? "asc" : "desc" };
+    setSortChoice({ type: loadedType, ...next });
   }
+
+  function renderSortHeader(key, label, sortName, className) {
+    return (
+      <th
+        className={`sortable-th ${className} ${sortKey === key ? "active-sort" : ""}`}
+        onClick={() => handleSort(key)}
+        title={`Click to sort by ${sortName}`}
+      >
+        {label}
+        <span className="sort-indicator">
+          {sortKey === key ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </th>
+    );
+  }
+
+  // The note counts the data rows; the Total row (their sum) is only marked.
+  const unbalancedCount = sortedRows.filter(isUnbalanced).length;
+  const totalsUnbalanced = isUnbalanced({ male: totalMale, female: totalFemale, visitors: totalVisitors });
 
   // A tab switch asks for the report only, with the filters already applied:
   // the question answers depend on the filters, not the report type, so the
@@ -366,9 +423,10 @@ function AnalyticsAndReport() {
       "Date To",
       "Resort Filter",
       getFirstColumnLabel(loadedType),
+      "Male",
+      "Female",
       "Total Visitors",
       "Total Revenue",
-      "Average Per Visitor",
     ];
     const csvRows = sortedRows.map((row) => [
       getReportTitle(loadedType),
@@ -377,9 +435,10 @@ function AnalyticsAndReport() {
       appliedFilters.to || "All",
       selectedResort,
       row.name,
+      row.male ?? "",
+      row.female ?? "",
       row.visitors,
       row.revenue,
-      row.avg,
     ]);
 
     csvRows.push([
@@ -389,9 +448,10 @@ function AnalyticsAndReport() {
       appliedFilters.to || "All",
       selectedResort,
       "Total",
+      totalMale ?? "",
+      totalFemale ?? "",
       totalVisitors,
       totalRevenue,
-      "",
     ]);
     exportCsv(datedCsvFilename(`tourism-${loadedType}-report`), headers, csvRows);
   }
@@ -575,108 +635,74 @@ function AnalyticsAndReport() {
         </div>
 
         <div className="report-table-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
-            <h4 style={{ margin: 0, fontSize: "15px", fontWeight: "800", color: "#1e293b" }}>Table Data Breakdown</h4>
-            <div className="report-sort-controls">
-              <span className="report-sort-label">Sort Table:</span>
-              <select
-                className="report-sort-select"
-                value={sortConfig.key}
-                onChange={(e) => setSortConfig((prev) => ({ ...prev, key: e.target.value }))}
-              >
-                <option value="visitors">Most Visitors</option>
-                <option value="revenue">Highest Revenue</option>
-                <option value="avg">Highest Avg / Visitor</option>
-                <option value="name">Name (A-Z)</option>
-              </select>
-              <button
-                type="button"
-                className="report-sort-dir-btn"
-                onClick={() =>
-                  setSortConfig((prev) => ({
-                    ...prev,
-                    direction: prev.direction === "asc" ? "desc" : "asc",
-                  }))
-                }
-                title="Toggle Ascending / Descending"
-              >
-                {sortConfig.direction === "asc" ? "▲ Asc" : "▼ Desc"}
-              </button>
-            </div>
+          <div className="report-table-header">
+            <h4>Table Data Breakdown</h4>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th
-                  className={`sortable-th ${sortConfig.key === "name" ? "active-sort" : ""}`}
-                  onClick={() => handleSort("name")}
-                  title="Click to sort by Name"
-                >
-                  {getFirstColumnLabel(loadedType)}
-                  <span className="sort-indicator">
-                    {sortConfig.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-th ${sortConfig.key === "visitors" ? "active-sort" : ""}`}
-                  onClick={() => handleSort("visitors")}
-                  title="Click to sort by Total Visitors"
-                >
-                  Total Visitors
-                  <span className="sort-indicator">
-                    {sortConfig.key === "visitors" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-th ${sortConfig.key === "revenue" ? "active-sort" : ""}`}
-                  onClick={() => handleSort("revenue")}
-                  title="Click to sort by Total Revenue"
-                >
-                  Total Revenue
-                  <span className="sort-indicator">
-                    {sortConfig.key === "revenue" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-th ${sortConfig.key === "avg" ? "active-sort" : ""}`}
-                  onClick={() => handleSort("avg")}
-                  title="Click to sort by Average Per Visitor"
-                >
-                  Avg / Visitor
-                  <span className="sort-indicator">
-                    {sortConfig.key === "avg" ? (sortConfig.direction === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {sortedRows.length ? (
-                sortedRows.map((row) => (
-                  <tr key={row.id || row.resort_id || row.name}>
-                    <td>{row.name}</td>
-                    <td>{Number(row.visitors || 0).toLocaleString()}</td>
-                    <td>{formatCurrency(row.revenue)}</td>
-                    <td>{formatCurrency(row.avg)}</td>
-                  </tr>
-                ))
-              ) : (
+          <div className="report-table-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan="4" style={{ textAlign: "center" }}>
-                    No report data found.
-                  </td>
+                  {renderSortHeader("name", getFirstColumnLabel(loadedType), "Name", "report-col-name")}
+                  {renderSortHeader("male", "Male", "Male", "num report-col-male")}
+                  {renderSortHeader("female", "Female", "Female", "num report-col-female")}
+                  {renderSortHeader("visitors", "Total Visitors", "Total Visitors", "num report-col-visitors")}
+                  {renderSortHeader("revenue", "Total Revenue", "Total Revenue", "money report-col-revenue")}
                 </tr>
-              )}
+              </thead>
 
-              <tr className="total-row">
-                <td>Total</td>
-                <td>{Number(totalVisitors || 0).toLocaleString()}</td>
-                <td>{formatCurrency(totalRevenue)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
+              <tbody>
+                {sortedRows.length ? (
+                  sortedRows.map((row) => {
+                    const unbalanced = isUnbalanced(row);
+                    return (
+                      <tr
+                        key={row.id || row.resort_id || row.name}
+                        className={unbalanced ? "report-row-unbalanced" : undefined}
+                      >
+                        <td className="report-col-name">
+                          {row.name}
+                          {unbalanced ? (
+                            <span
+                              className="report-unbalanced-mark"
+                              title="Male + Female does not equal Total Visitors"
+                            >
+                              {"⚠"}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="num">{formatCount(row.male)}</td>
+                        <td className="num">{formatCount(row.female)}</td>
+                        <td className="num">{Number(row.visitors || 0).toLocaleString()}</td>
+                        <td className="money">{formatCurrency(row.revenue)}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: "center" }}>
+                      No report data found.
+                    </td>
+                  </tr>
+                )}
+
+                <tr className={totalsUnbalanced ? "total-row report-row-unbalanced" : "total-row"}>
+                  <td className="report-col-name">Total</td>
+                  <td className="num">{formatCount(totalMale)}</td>
+                  <td className="num">{formatCount(totalFemale)}</td>
+                  <td className="num">{Number(totalVisitors || 0).toLocaleString()}</td>
+                  <td className="money">{formatCurrency(totalRevenue)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {unbalancedCount ? (
+            <p className="report-table-note" role="note">
+              {unbalancedCount} {unbalancedCount === 1 ? "row" : "rows"}: Male + Female does not
+              equal Total Visitors; check these records.
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -26,21 +26,47 @@ const RESORT_REPORT = {
   type: "resort",
   filters: { year: "2026", type: "resort", from: "", to: "", resort_id: "" },
   rows: [
-    { id: 2, name: "Bravo", visitors: 10, revenue: 800, avg: 80 },
-    { id: 1, name: "Alpha", visitors: 30, revenue: 2400, avg: 80 },
-    { id: 3, name: "Charlie", visitors: 20, revenue: 1600, avg: 80 },
+    { id: 2, name: "Bravo", male: 4, female: 6, visitors: 10, revenue: 800, avg: 80 },
+    { id: 1, name: "Alpha", male: 18, female: 12, visitors: 30, revenue: 2400, avg: 80 },
+    { id: 3, name: "Charlie", male: 11, female: 9, visitors: 20, revenue: 1600, avg: 80 },
   ],
-  totals: { visitors: 60, revenue: 4800, avg: 80 },
+  totals: { visitors: 60, male: 33, female: 27, revenue: 4800, avg: 80 },
   questionAnswers: [
     { id: "top_resort", question: "Which resort?", answer: "Alpha leads.", visual: { type: "ranking", items: [] } },
   ],
 };
 
-function setup({ stale = false, refresh } = {}) {
+// Alphabetically the labels run Aug, Oct, Sep; by date Aug, Sep, Oct. The most
+// visitors are on Oct 01, so neither order is the visitors order either.
+const DAILY_REPORT = {
+  type: "daily",
+  filters: { year: "2026", type: "daily", from: "", to: "", resort_id: "" },
+  rows: [
+    { id: "2026-09-05", name: "Sep 05, 2026", male: 2, female: 3, visitors: 5, revenue: 400, avg: 80 },
+    { id: "2026-10-01", name: "Oct 01, 2026", male: 5, female: 4, visitors: 9, revenue: 720, avg: 80 },
+    { id: "2026-08-20", name: "Aug 20, 2026", male: 1, female: 1, visitors: 2, revenue: 160, avg: 80 },
+  ],
+  totals: { visitors: 16, male: 8, female: 8, revenue: 1280, avg: 80 },
+  questionAnswers: [],
+};
+
+const MONTHLY_REPORT = {
+  type: "monthly",
+  filters: { year: "2026", type: "monthly", from: "", to: "", resort_id: "" },
+  rows: [
+    { id: "2026-09", name: "September 2026", male: 2, female: 3, visitors: 5, revenue: 400, avg: 80 },
+    { id: "2026-10", name: "October 2026", male: 5, female: 4, visitors: 9, revenue: 720, avg: 80 },
+    { id: "2026-08", name: "August 2026", male: 1, female: 1, visitors: 2, revenue: 160, avg: 80 },
+  ],
+  totals: { visitors: 16, male: 8, female: 8, revenue: 1280, avg: 80 },
+  questionAnswers: [],
+};
+
+function setup({ stale = false, refresh, reportData = RESORT_REPORT } = {}) {
   const refreshReportData = refresh || jest.fn().mockResolvedValue({});
   useTourismData.mockReturnValue({
     referenceTables: { resorts: [] },
-    reportData: RESORT_REPORT,
+    reportData,
     refreshReportData,
     isComputedDataStale: () => stale,
   });
@@ -50,6 +76,28 @@ function setup({ stale = false, refresh } = {}) {
 
 function tab(name) {
   return screen.getByRole("button", { name });
+}
+
+function breakdownTable() {
+  return screen.getByText("Table Data Breakdown").closest(".report-table-card").querySelector("table");
+}
+
+function headerLabels() {
+  // Each header is its label followed by the sort arrow.
+  return [...breakdownTable().querySelectorAll("thead th")].map((th) =>
+    th.firstChild.textContent.trim()
+  );
+}
+
+function bodyNames() {
+  return [...breakdownTable().querySelectorAll("tbody tr:not(.total-row) td:first-child")].map((td) =>
+    td.firstChild.textContent
+  );
+}
+
+function exported() {
+  fireEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
+  return exportCsv.mock.calls.at(-1);
 }
 
 beforeEach(() => {
@@ -124,12 +172,118 @@ describe("Reports tabs while loading", () => {
   });
 });
 
-describe("Reports CSV", () => {
-  function exported() {
-    fireEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
-    return exportCsv.mock.calls.at(-1);
-  }
+describe("Reports table columns", () => {
+  it("shows Name, Male, Female, Total Visitors, Total Revenue, with no Avg column or sort dropdown", () => {
+    setup();
 
+    expect(headerLabels()).toEqual(["Resort Name", "Male", "Female", "Total Visitors", "Total Revenue"]);
+    expect(screen.queryByText(/Avg/)).toBeNull();
+    expect(screen.queryByText(/Sort Table/)).toBeNull();
+    expect(breakdownTable().closest(".report-table-card").querySelector("select, button")).toBeNull();
+
+    const alpha = [...breakdownTable().querySelectorAll("tbody tr")].find((tr) =>
+      tr.textContent.startsWith("Alpha")
+    );
+    expect([...alpha.cells].map((td) => td.textContent)).toEqual(["Alpha", "18", "12", "30", "₱2,400"]);
+
+    const total = breakdownTable().querySelector("tr.total-row");
+    expect([...total.cells].map((td) => td.textContent)).toEqual(["Total", "33", "27", "60", "₱4,800"]);
+  });
+
+  it("exports the same columns in the same order, rows and Total", () => {
+    setup();
+
+    const [, headers, rows] = exported();
+
+    expect(headers).toEqual([
+      "Report Type",
+      "Reporting Year",
+      "Date From",
+      "Date To",
+      "Resort Filter",
+      "Resort Name",
+      "Male",
+      "Female",
+      "Total Visitors",
+      "Total Revenue",
+    ]);
+    expect(rows.map((row) => row.slice(5))).toEqual([
+      ["Alpha", 18, 12, 30, 2400],
+      ["Charlie", 11, 9, 20, 1600],
+      ["Bravo", 4, 6, 10, 800],
+      ["Total", 33, 27, 60, 4800],
+    ]);
+    rows.forEach((row) => expect(row).toHaveLength(headers.length));
+  });
+
+  it("sorts by Male from its header", () => {
+    setup();
+
+    fireEvent.click(screen.getByTitle("Click to sort by Male"));
+
+    expect(bodyNames()).toEqual(["Alpha", "Charlie", "Bravo"]);
+    fireEvent.click(screen.getByTitle("Click to sort by Male"));
+    expect(bodyNames()).toEqual(["Bravo", "Charlie", "Alpha"]);
+  });
+});
+
+describe("Reports date order", () => {
+  it("starts the Daily tab in date order and sorts its first column by date, not alphabetically", () => {
+    setup({ reportData: DAILY_REPORT });
+
+    expect(bodyNames()).toEqual(["Aug 20, 2026", "Sep 05, 2026", "Oct 01, 2026"]);
+
+    fireEvent.click(screen.getByTitle("Click to sort by Name"));
+    expect(bodyNames()).toEqual(["Oct 01, 2026", "Sep 05, 2026", "Aug 20, 2026"]);
+
+    fireEvent.click(screen.getByTitle("Click to sort by Name"));
+    expect(bodyNames()).toEqual(["Aug 20, 2026", "Sep 05, 2026", "Oct 01, 2026"]);
+
+    const [, , rows] = exported();
+    expect(rows.map((row) => row[5])).toEqual(["Aug 20, 2026", "Sep 05, 2026", "Oct 01, 2026", "Total"]);
+  });
+
+  it("starts the Monthly tab in date order", () => {
+    setup({ reportData: MONTHLY_REPORT });
+
+    expect(bodyNames()).toEqual(["August 2026", "September 2026", "October 2026"]);
+  });
+
+  it("keeps most visitors first on the other tabs", () => {
+    setup();
+
+    expect(bodyNames()).toEqual(["Alpha", "Charlie", "Bravo"]);
+  });
+});
+
+describe("Reports male and female balance", () => {
+  it("shows no note when every row balances", () => {
+    setup();
+
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(breakdownTable().querySelector(".report-row-unbalanced")).toBeNull();
+  });
+
+  it("marks a row that does not balance, keeps its numbers, and adds the note", () => {
+    // The backend's totals are the sums of the rows, so they are off too.
+    const rows = RESORT_REPORT.rows.map((row) => (row.name === "Bravo" ? { ...row, female: 5 } : row));
+    const totals = { ...RESORT_REPORT.totals, female: 26 };
+    setup({ reportData: { ...RESORT_REPORT, rows, totals } });
+
+    const note = screen.getByRole("note");
+    expect(note.textContent).toBe("1 row: Male + Female does not equal Total Visitors; check these records.");
+
+    const marked = breakdownTable().querySelectorAll("tbody tr:not(.total-row).report-row-unbalanced");
+    expect(marked).toHaveLength(1);
+    expect([...marked[0].cells].map((td) => td.textContent)).toEqual(["Bravo⚠", "4", "5", "10", "₱800"]);
+
+    const total = breakdownTable().querySelector("tr.total-row");
+    expect(total.classList.contains("report-row-unbalanced")).toBe(true);
+    expect([...total.cells].map((td) => td.textContent)).toEqual(["Total", "33", "26", "60", "₱4,800"]);
+  });
+});
+
+describe("Reports CSV", () => {
   it("exports the rows in the order the table shows them", () => {
     setup();
 
