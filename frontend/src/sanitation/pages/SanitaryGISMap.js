@@ -145,7 +145,7 @@ function getDeterministicOffset(seedStr) {
   return [latOff, lngOff];
 }
 
-function getMapPosition(item) {
+function getMapPosition(item, allowFallback = true) {
   const lat =
     parseCoordinate(item.latitude) ?? parseCoordinate(item.coordinates?.lat);
   const lng =
@@ -156,6 +156,9 @@ function getMapPosition(item) {
       return [lat, lng];
     }
   }
+
+  // Households without usable stored coordinates remain unmapped.
+  if (!allowFallback) return null;
 
   // Fallback: derive realistic coordinates from barangay center
   const bgyName = item.barangay || "Bagong Bayan";
@@ -297,7 +300,7 @@ function SanitaryGISMap() {
 
     return source.map((item) => ({
       ...item,
-      position: getMapPosition(item),
+      position: getMapPosition(item, !isHouseholdMode),
     }));
   }, [establishments, householdRecords, complaintData, isHouseholdMode, isCommunityMode]);
 
