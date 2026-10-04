@@ -3246,9 +3246,9 @@ class EntranceFeeRateTests(TestCase):
             )
 
     def test_the_rate_is_80_per_visitor(self):
-        from .services.tourism import ARRIVAL_FEE_PER_VISITOR
+        from .services.tourism import DISCOUNTED_ENTRANCE_FEE, REGULAR_ENTRANCE_FEE
 
-        self.assertEqual(ARRIVAL_FEE_PER_VISITOR, 80)
+        self.assertEqual((REGULAR_ENTRANCE_FEE, DISCOUNTED_ENTRANCE_FEE), (80, 64))
 
     def test_arrival_monitoring_fee_paid_and_fees_collected(self):
         from .services.tourism import build_arrival_monitoring_payload
@@ -3282,6 +3282,242 @@ class EntranceFeeRateTests(TestCase):
             [("2026-04-02", 5, 400, 80), ("2026-04-03", 4, 320, 80)],
         )
         self.assertEqual(payload["totals"], {"visitors": 9, "revenue": 720, "avg": 80})
+
+
+class DiscountedEntranceFeeTests(TestCase):
+    """fee = (visitors - discounted) x 80 + discounted x 64, per record and per group.
+
+    Mixed records, so a group that used the wrong discounted count would be off:
+      A arrived Apr 2: 4 visitors, 3 discounted, resort 1, purpose 1 -> 272
+      B arrived Apr 2: 5 visitors, 0 discounted, resort 1, purpose 2 -> 400
+      C arrived Apr 2: 2 visitors, 2 discounted, resort 2, purpose 1 -> 128
+      D pending Apr 3: 3 visitors, 1 discounted, resort 2, purpose 2 -> 224
+      E no-show Apr 2: 6 visitors, 6 discounted (counted nowhere)
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        cls.quezon = Province.objects.get(name="Quezon")
+        cls.resorts = list(Resort.objects.order_by("resort_id")[:2])
+        cls.purposes = list(VisitPurpose.objects.order_by("id")[:2])
+        rows = [
+            ("DSC-0001", "arrived", "2026-04-02", 4, 3, 0, 0),
+            ("DSC-0002", "arrived", "2026-04-02", 5, 0, 0, 1),
+            ("DSC-0003", "arrived", "2026-04-02", 2, 2, 1, 0),
+            ("DSC-0004", "pending", "2026-04-03", 3, 1, 1, 1),
+            ("DSC-0005", "no_show", "2026-04-02", 6, 6, 0, 0),
+        ]
+        for survey_id, booking_status, arrival_date, visitors, discounted, resort, purpose in rows:
+            cls._record(survey_id, booking_status, arrival_date, visitors, discounted, resort, purpose)
+
+    @classmethod
+    def _record(cls, survey_id, booking_status, arrival_date, visitors, discounted, resort=0, purpose=0):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Discount Group",
+            contact_number=f"0917000{survey_id[-4:]}",
+            country=Country.objects.get(name="Philippines"),
+            region=cls.quezon.region,
+            province=cls.quezon,
+            arrival_date=arrival_date,
+            resort=cls.resorts[resort],
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=cls.purposes[purpose],
+            total_visitors=visitors,
+            filipino_count=visitors,
+            total_male=visitors,
+            age_8_59=visitors,
+            discounted_count=discounted,
+            status=booking_status,
+        )
+
+    # --- the helper ---------------------------------------------------------
+
+    def test_fee_helper(self):
+        from .services.tourism import entrance_fee
+
+        self.assertEqual(entrance_fee(5, 0), 400)  # all regular
+        self.assertEqual(entrance_fee(3, 3), 192)  # all discounted
+        self.assertEqual(entrance_fee(4, 3), 272)  # mixed
+        self.assertEqual(entrance_fee(0, 0), 0)  # nobody
+
+    # --- validation ---------------------------------------------------------
+
+    def _web_payload(self, **overrides):
+        payload = {
+            "first_name": "Ana",
+            "last_name": "Cruz",
+            "full_name": "Ana Cruz",
+            "email": "ana@example.com",
+            "contact_number": "+639171234567",
+            "country_id": Country.objects.get(name="Philippines").id,
+            "region_id": self.quezon.region_id,
+            "province_id": self.quezon.id,
+            "resort_id": self.resorts[0].resort_id,
+            "itinerary_id": Itinerary.objects.first().id,
+            "travel_mode_id": TravelMode.objects.first().id,
+            "boat_type_id": BoatType.objects.first().id,
+            "visit_purpose_id": self.purposes[0].id,
+            "arrival_date": "2026-05-01",
+            "filipino_count": 3,
+            "foreigner_count": 0,
+            "total_visitors": 3,
+            "total_male": 3,
+            "total_female": 0,
+            "age_8_59": 3,
+            "status": "pending",
+        }
+        payload.update(overrides)
+        return payload
+
+    def _client(self):
+        user = User.objects.create_user(username="fee_admin", password="Fee@12345")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        return client
+
+    def test_discounted_count_above_total_visitors_is_rejected(self):
+        response = self._client().post(
+            "/api/tourist-records/", self._web_payload(discounted_count=4), format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["discounted_count"],
+            ["Discounted count cannot be greater than the total number of visitors."],
+        )
+
+    def test_discounted_count_equal_to_total_visitors_is_allowed(self):
+        response = self._client().post(
+            "/api/tourist-records/", self._web_payload(discounted_count=3), format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+        self.assertEqual(response.json()["discounted_count"], 3)
+
+    # --- totals -------------------------------------------------------------
+
+    def test_dashboard_total_revenue_collected(self):
+        from .services.tourism import build_dashboard_payload
+
+        # A + B + C: 11 visitors, 5 discounted -> 6 x 80 + 5 x 64.
+        self.assertEqual(
+            build_dashboard_payload({"year": "2026"})["metrics"]["totalRevenueCollected"], 800
+        )
+
+    def test_arrival_monitoring_fee_paid_and_fees_collected(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        payload = build_arrival_monitoring_payload({"date": "2026-04-02"})
+
+        self.assertEqual(
+            sorted((row["survey_id"], row["feePaid"]) for row in payload["rows"]),
+            [("DSC-0001", 272), ("DSC-0002", 400), ("DSC-0003", 128)],
+        )
+        self.assertEqual(payload["summary"]["feesCollected"], 800)
+
+    def _report(self, report_type):
+        from .services.tourism import build_reports_payload
+
+        return build_reports_payload(
+            {"type": report_type, "year": "2026", "include_questions": "false"}
+        )
+
+    def test_daily_report_uses_each_days_discounted_count(self):
+        payload = self._report("daily")
+
+        self.assertEqual(
+            [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
+            [("2026-04-02", 11, 800, 73), ("2026-04-03", 3, 224, 75)],
+        )
+        self.assertEqual(payload["totals"], {"visitors": 14, "revenue": 1024, "avg": 73})
+
+    def test_monthly_report_uses_the_months_discounted_count(self):
+        payload = self._report("monthly")
+
+        # April: 14 visitors, 6 discounted -> 8 x 80 + 6 x 64.
+        self.assertEqual(
+            [(row["id"], row["visitors"], row["revenue"]) for row in payload["rows"]],
+            [("2026-04", 14, 1024)],
+        )
+
+    def test_purpose_report_uses_each_purposes_discounted_count(self):
+        payload = self._report("purpose")
+
+        # Purpose 2 (B + D): 8 visitors, 1 discounted. Purpose 1 (A + C): 6 visitors, 5 discounted.
+        self.assertEqual(
+            [(row["name"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
+            [(self.purposes[1].name, 8, 624, 78), (self.purposes[0].name, 6, 400, 67)],
+        )
+
+    def test_resort_report_uses_each_resorts_discounted_count(self):
+        payload = self._report("resort")
+
+        # Resort 1 (A + B): 9 visitors, 3 discounted. Resort 2 (C + D): 5 visitors, 3 discounted.
+        self.assertEqual(
+            [(row["resort_id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
+            [(self.resorts[0].resort_id, 9, 672, 75), (self.resorts[1].resort_id, 5, 352, 70)],
+        )
+        self.assertEqual(payload["totals"]["revenue"], 1024)
+
+    # --- other writers ------------------------------------------------------
+
+    def test_mobile_payload_without_discounted_count_saves_zero(self):
+        # Today's APK does not know the field.
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "first_name": "Ana",
+                "last_name": "Cruz",
+                "contact_number": "+639171234599",
+                "arrival_date": "2026-05-01",
+                "resort_id": self.resorts[0].resort_id,
+                "filipino_count": 3,
+                "foreigner_count": 0,
+                "total_visitors": 3,
+                "total_male": 2,
+                "total_female": 1,
+                "age_0_7": 1,
+                "age_8_59": 2,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(TouristRecord.objects.get(contact_number__endswith="1234599").discounted_count, 0)
+
+    def test_excel_import_saves_zero(self):
+        ForeignOriginTests._import(
+            self,
+            [
+                {
+                    "full_name": "Imported Guest",
+                    "contact_number": "09170009999",
+                    "country": "Philippines",
+                    "age_0_7": 1,
+                    "age_8_59": 1,
+                }
+            ],
+        )
+
+        self.assertEqual(TouristRecord.objects.get(full_name="Imported Guest").discounted_count, 0)
+
+    def test_migration_backfills_children_plus_seniors(self):
+        import importlib
+        from django.apps import apps
+
+        migration = importlib.import_module("api.migrations.0048_touristrecord_discounted_count")
+        record = self._record("DSC-0006", "arrived", "2026-04-05", 5, 0)
+        TouristRecord.objects.filter(pk=record.pk).update(age_0_7=2, age_8_59=2, age_60_above=1)
+
+        migration.backfill_discounted_count(apps, None)
+
+        record.refresh_from_db()
+        self.assertEqual(record.discounted_count, 3)
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):

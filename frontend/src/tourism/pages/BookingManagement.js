@@ -17,6 +17,17 @@ import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
 import { countryRequiresLocation } from "../utils/countryLocation";
+import { formatNumber } from "../utils/format";
+import {
+  DISCOUNTED_ENTRANCE_FEE,
+  REGULAR_ENTRANCE_FEE,
+  editDiscountedCount,
+  effectiveDiscountedCount,
+  entranceFeeBreakdown,
+  followDiscountedSuggestion,
+  isDiscountedCountEdited,
+  suggestedDiscountedCount,
+} from "../utils/entranceFee";
 
 const pageSize = 10;
 
@@ -43,6 +54,9 @@ const initialForm = {
   age_0_7: "0",
   age_8_59: "0",
   age_60_above: "0",
+  discounted_count: "0",
+  // Form-only: whether staff set the discounted count themselves. Not sent.
+  discounted_edited: false,
   maubanin_count: "0",
   status: "",
 };
@@ -316,15 +330,19 @@ function BookingManagement() {
       toInteger(form.age_8_59) +
       toInteger(form.age_60_above);
     const special = toInteger(form.special_group_count);
+    const discounted = effectiveDiscountedCount(form);
 
     return {
       classification,
       gender,
       ages,
       special,
+      discounted,
+      fee: entranceFeeBreakdown(classification, discounted),
       genderMatches: classification === gender,
       agesMatch: classification === ages,
       specialValid: special <= classification,
+      discountedValid: discounted <= classification,
     };
   }, [form]);
 
@@ -381,6 +399,8 @@ function BookingManagement() {
       age_0_7: String(record.age_0_7 || 0),
       age_8_59: String(record.age_8_59 || 0),
       age_60_above: String(record.age_60_above || 0),
+      discounted_count: String(record.discounted_count || 0),
+      discounted_edited: isDiscountedCountEdited(record),
       maubanin_count: String(record.maubanin_count || 0),
       status: record.status || "arrived",
     });
@@ -418,7 +438,13 @@ function BookingManagement() {
   }
 
   function updateField(field, value) {
-    setForm((current) => ({
+    if (field === "discounted_count") {
+      setForm((current) => editDiscountedCount(current, value));
+      return;
+    }
+
+    // The discounted count follows Age 0-7 + Age 60+ until staff set it.
+    setForm((current) => followDiscountedSuggestion({
       ...current,
       [field]: value,
       ...(field === "region_id" ? { province_id: "" } : {}),
@@ -497,6 +523,7 @@ function BookingManagement() {
       age_0_7: toInteger(form.age_0_7),
       age_8_59: toInteger(form.age_8_59),
       age_60_above: toInteger(form.age_60_above),
+      discounted_count: effectiveDiscountedCount(form),
       // New records are always saved as pending; staff update status later via Edit or QR check-in.
       status: editingRecord ? form.status || editingRecord.status || "" : "pending",
     };
@@ -576,6 +603,10 @@ function BookingManagement() {
     // Filipino count (and therefore never the total head count).
     if (payload.maubanin_count > payload.filipino_count) {
       return "Maubanin count cannot be greater than the Filipino count.";
+    }
+
+    if (payload.discounted_count > payload.total_visitors) {
+      return "Discounted count cannot be greater than total visitors.";
     }
 
     if (payload.special_group_count > payload.total_visitors) {
@@ -758,12 +789,12 @@ function BookingManagement() {
       const age0To7 = Math.min(toInteger(current.age_0_7), total);
       const age60Above = Math.min(toInteger(current.age_60_above), Math.max(total - age0To7, 0));
 
-      return {
+      return followDiscountedSuggestion({
         ...current,
         age_0_7: String(age0To7),
         age_60_above: String(age60Above),
         age_8_59: String(Math.max(total - age0To7 - age60Above, 0)),
-      };
+      });
     });
   }
 
@@ -1504,6 +1535,19 @@ function BookingManagement() {
                       </WizardField>
                       <WizardField label="Senior / PWD / 7 below">
                         <input type="number" min="0" value={form.special_group_count} onChange={(e) => updateField("special_group_count", e.target.value)} />
+                        <small className="wizard-field-hint">PWD, pregnant, special needs</small>
+                      </WizardField>
+                      <WizardField label={`Discounted (PHP ${DISCOUNTED_ENTRANCE_FEE})`}>
+                        <input
+                          type="number"
+                          min="0"
+                          value={form.discounted_count}
+                          placeholder={String(suggestedDiscountedCount(form))}
+                          onChange={(e) => updateField("discounted_count", e.target.value)}
+                        />
+                        <small className="wizard-field-hint">
+                          Suggested from Age 0-7 + Age 60+. Raise it if someone aged 8-59 also qualifies.
+                        </small>
                       </WizardField>
                     </div>
                     <div className="wizard-totals-check">
@@ -1522,6 +1566,23 @@ function BookingManagement() {
                       <div className="wizard-total-item">
                         <span>Senior/PWD/7 below</span>
                         <strong className={formTotals.specialValid ? "ok" : "error"}>{formTotals.special}</strong>
+                      </div>
+                      <div className="wizard-fee-breakdown">
+                        <div className="wizard-fee-title">Entrance fee</div>
+                        <div className="wizard-fee-line">
+                          <span>{formTotals.fee.regularCount} regular x PHP {REGULAR_ENTRANCE_FEE}</span>
+                          <span>PHP {formatNumber(formTotals.fee.regularAmount)}</span>
+                        </div>
+                        <div className="wizard-fee-line">
+                          <span>{formTotals.fee.discountedCount} discounted x PHP {DISCOUNTED_ENTRANCE_FEE}</span>
+                          <span className={formTotals.discountedValid ? "" : "error"}>
+                            PHP {formatNumber(formTotals.fee.discountedAmount)}
+                          </span>
+                        </div>
+                        <div className="wizard-fee-line wizard-fee-total">
+                          <span>Total</span>
+                          <span>PHP {formatNumber(formTotals.fee.total)}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="tourist-auto-fill-row" style={{ marginTop: 8 }}>
@@ -1562,6 +1623,10 @@ function BookingManagement() {
                       <WizardReviewItem label="Age 0-7" value={form.age_0_7} />
                       <WizardReviewItem label="Age 8-59" value={form.age_8_59} />
                       <WizardReviewItem label="Age 60+" value={form.age_60_above} />
+                      <WizardReviewItem
+                        label="Discounted"
+                        value={`${formTotals.discounted} (entrance fee PHP ${formatNumber(formTotals.fee.total)})`}
+                      />
                       <WizardReviewItem label="Maubanin Count" value={form.maubanin_count} />
                     </WizardReviewSection>
                     {formError && <p className="wizard-step-error">{formError}</p>}
