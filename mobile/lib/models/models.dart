@@ -67,8 +67,8 @@ class MobileBootstrap {
         RefItem(id: 2, name: 'Public Utility Vehicle'),
       ],
       boatTypes: const [
-        RefItem(id: 1, name: 'Public Boat'),
-        RefItem(id: 2, name: 'Private Boat'),
+        RefItem(id: 1, name: 'Tourist Boat'),
+        RefItem(id: 2, name: 'Passenger Boat'),
       ],
       visitPurposes: const [
         RefItem(id: 1, name: 'Leisure'),

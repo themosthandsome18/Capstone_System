@@ -2680,6 +2680,98 @@ class BoatCapacityFareFlagTests(_ProductionBoatRows, TestCase):
         )
 
 
+class BoatTypeConsolidationTests(_ProductionBoatRows, TestCase):
+    """0045 renames ids 1 and 2 and removes the other rows."""
+
+    def setUp(self):
+        import importlib
+
+        super().setUp()
+        self.migration = importlib.import_module("api.migrations.0045_consolidate_boat_types")
+
+    def test_forwards_renames_moves_the_passenger_record_and_deletes_the_rest(self):
+        public = self._record("SURV-BOAT-001", 1, self.FARE)
+        moved = self._record("SURV-BOAT-002", 7, self.FARE)
+        private = self._record("SURV-BOAT-003", 2)
+
+        self._run(self.migration.forwards)
+
+        self.assertEqual(self._names(), {1: "Tourist Boat", 2: "Passenger Boat"})
+        moved.refresh_from_db()
+        self.assertEqual(moved.boat_type_id, 2)
+        self.assertEqual(moved.boat_capacity_fare, self.FARE)
+        public.refresh_from_db()
+        self.assertEqual((public.boat_type_id, public.boat_capacity_fare), (1, self.FARE))
+        private.refresh_from_db()
+        self.assertEqual(private.boat_type_id, 2)
+
+    def test_forwards_is_a_no_op_when_run_again(self):
+        self._record("SURV-BOAT-001", 7, self.FARE)
+        self._run(self.migration.forwards)
+
+        self._run(self.migration.forwards)
+
+        self.assertEqual(self._names(), {1: "Tourist Boat", 2: "Passenger Boat"})
+        self.assertEqual(TouristRecord.objects.get().boat_type_id, 2)
+
+    def test_forwards_keeps_a_row_that_still_has_records(self):
+        self._record("SURV-BOAT-001", 5)
+
+        output = self._run(self.migration.forwards)
+
+        self.assertIn("WARNING", output)
+        self.assertEqual(
+            self._names(),
+            {1: "Tourist Boat", 2: "Passenger Boat", 5: "Motorized Banca"},
+        )
+        self.assertEqual(TouristRecord.objects.get().boat_type_id, 5)
+
+    def test_forwards_leaves_rows_whose_name_does_not_match(self):
+        BoatType.objects.filter(id=4).update(name="Something Else")
+
+        self._run(self.migration.forwards)
+
+        self.assertEqual(
+            self._names(),
+            {1: "Tourist Boat", 2: "Passenger Boat", 4: "Something Else"},
+        )
+
+    def test_backwards_restores_names_and_rows_but_not_the_moved_record(self):
+        self._record("SURV-BOAT-001", 7, self.FARE)
+        self._run(self.migration.forwards)
+
+        self._run(self.migration.backwards)
+
+        self.assertEqual(self._names(), self.PRODUCTION_ROWS)
+        record = TouristRecord.objects.get()
+        self.assertEqual((record.boat_type_id, record.boat_capacity_fare), (2, self.FARE))
+
+    def test_import_maps_old_and_new_names_after_the_rename(self):
+        self._run(self.migration.forwards)
+
+        self.assert_import_lands_on_rows_1_and_2()
+
+    def test_import_creates_a_row_for_2_0_again_once_it_is_deleted(self):
+        self._run(self.migration.forwards)
+
+        item = self._resolve(["2.0"])["2.0"]
+
+        self.assertTrue(item._state.adding)
+        self.assertEqual(item.name, "2.0")
+
+    def test_seed_matches_the_consolidated_rows(self):
+        self.assertEqual(
+            REFERENCE_TABLES["boat_types"],
+            [
+                {"id": 1, "name": "Tourist Boat", "requires_capacity_fare": True},
+                {"id": 2, "name": "Passenger Boat", "requires_capacity_fare": False},
+            ],
+        )
+        self.assertTrue(
+            all(record["boat_type_id"] in (1, 2) for record in INITIAL_TOURIST_RECORDS)
+        )
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
