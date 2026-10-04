@@ -1479,7 +1479,7 @@ function BookingManagement() {
                         </WizardField>
                         {toInteger(form.filipino_count) > 0 && (
                           <div className="wizard-field wizard-subfield">
-                            <label>Sub Maubanin</label>
+                            <label>Maubanin</label>
                             <input type="number" min="0" value={form.maubanin_count} onChange={(e) => updateField("maubanin_count", e.target.value)} />
                           </div>
                         )}
