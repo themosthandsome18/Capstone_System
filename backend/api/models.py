@@ -158,6 +158,7 @@ TOURIST_RECORD_COUNT_FIELDS = [
     "age_0_7",
     "age_8_59",
     "age_60_above",
+    "discounted_count",
 ]
 
 TOURIST_RECORD_REQUIRED_FIELDS = [
@@ -282,6 +283,12 @@ def validate_tourist_record_values(values):
         add_error(
             "special_group_count",
             "Cannot be greater than total_visitors.",
+        )
+
+    if counts["discounted_count"] > total_visitors:
+        add_error(
+            "discounted_count",
+            "Discounted count cannot be greater than the total number of visitors.",
         )
 
     return errors
@@ -475,6 +482,12 @@ class TouristRecord(models.Model):
     total_male = models.PositiveIntegerField(default=0)
     total_female = models.PositiveIntegerField(default=0)
     special_group_count = models.PositiveIntegerField(default=0)
+    # How many people in this booking pay the discounted entrance fee. One
+    # person counts once; it is not part of the nationality, gender or age
+    # balances, and special_group_count has nothing to do with money.
+    # db_default keeps a database default, so code that does not know this
+    # column (the old instance during a deploy) can still insert records.
+    discounted_count = models.PositiveIntegerField(default=0, db_default=0)
     age_0_7 = models.PositiveIntegerField(default=0)
     age_8_59 = models.PositiveIntegerField(default=0)
     age_60_above = models.PositiveIntegerField(default=0)

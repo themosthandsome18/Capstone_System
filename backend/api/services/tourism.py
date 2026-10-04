@@ -32,7 +32,22 @@ from ..serializers import (
 )
 
 
-ARRIVAL_FEE_PER_VISITOR = 80
+REGULAR_ENTRANCE_FEE = 80
+DISCOUNTED_ENTRANCE_FEE = 64
+
+
+def entrance_fee(visitors, discounted):
+    """The entrance fee for `visitors` people, `discounted` of whom pay the
+    discounted rate.
+
+    The fee is linear, so it is equally right for one record or for a group of
+    records whose visitors and discounted counts have been summed together.
+    """
+    visitors = visitors or 0
+    discounted = discounted or 0
+    return (visitors - discounted) * REGULAR_ENTRANCE_FEE + discounted * DISCOUNTED_ENTRANCE_FEE
+
+
 DEFAULT_TOURISM_REPORTING_YEAR = str(timezone.now().year)
 TOURISM_REPORTING_YEAR_CHOICES = ("2024", "2025", "2026")
 ALL_TOURISM_REPORTING_YEARS = "all"
@@ -114,6 +129,7 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
     "age_0_7",
     "age_8_59",
     "age_60_above",
+    "discounted_count",
     "arrival_date",
     "itinerary_id",
     "resort_id",
@@ -261,8 +277,8 @@ def build_arrival_monitoring_payload(params=None):
     }
 
     values_list = records.values(
-        "survey_id", "arrival_date", "full_name", "total_male", "total_female", 
-        "total_visitors", "itinerary__name", "resort__resort_name", "updated_at"
+        "survey_id", "arrival_date", "full_name", "total_male", "total_female",
+        "total_visitors", "discounted_count", "itinerary__name", "resort__resort_name", "updated_at"
     )
 
     first_arrival_date = None
@@ -279,7 +295,7 @@ def build_arrival_monitoring_payload(params=None):
             overnight = val["total_visitors"]
             same_day = 0
             
-        fee_paid = val["total_visitors"] * ARRIVAL_FEE_PER_VISITOR
+        fee_paid = entrance_fee(val["total_visitors"], val["discounted_count"])
 
         totals["totalArrivals"] += val["total_visitors"]
         totals["totalMale"] += val["total_male"]
@@ -312,7 +328,7 @@ def build_arrival_monitoring_payload(params=None):
             "from": date_from,
             "to": date_to,
         },
-        "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
+        "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "reportDate": active_date if (active_date and active_date != "all") else (latest_arrival_date_str or today_iso),
         "summary": totals,
         "rows": rows,
@@ -413,6 +429,7 @@ def build_booking_management_payload(params=None):
             "age_0_7": record["age_0_7"],
             "age_8_59": record["age_8_59"],
             "age_60_above": record["age_60_above"],
+            "discounted_count": record["discounted_count"],
             "arrival_date": record["arrival_date"].isoformat(),
             "itinerary_id": record["itinerary_id"],
             "itinerary_name": record["itinerary__name"],
@@ -455,6 +472,7 @@ def build_booking_management_payload(params=None):
             "age_0_7",
             "age_8_59",
             "age_60_above",
+            "discounted_count",
             "arrival_date",
             "itinerary_id",
             "itinerary__name",
@@ -556,6 +574,7 @@ def build_dashboard_payload(params=None):
             filter=Q(arrival_date__gte=month_start),
         ),
         total_arrivals=Sum("total_visitors"),
+        total_discounted=Sum("discounted_count"),
         filipino=Sum("filipino_count"),
         foreign=Sum("foreigner_count"),
         male=Sum("total_male"),
@@ -598,7 +617,7 @@ def build_dashboard_payload(params=None):
     )
 
     total_arrivals = arrived_summary["total_arrivals"] or 0
-    total_revenue = total_arrivals * ARRIVAL_FEE_PER_VISITOR
+    total_revenue = entrance_fee(total_arrivals, arrived_summary["total_discounted"])
     top_resort = (
         month_records.values("resort__resort_name")
         .annotate(visitors=Sum("total_visitors"))
@@ -620,7 +639,7 @@ def build_dashboard_payload(params=None):
             "year": reporting_year,
         },
         "reportingDate": reporting_date.isoformat(),
-        "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
+        "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "metrics": {
             "todayArrivals": arrived_summary["today_arrivals"] or 0,
             "weekArrivals": arrived_summary["week_arrivals"] or 0,
@@ -703,13 +722,13 @@ def build_reports_payload(params=None):
     if report_type == "daily":
         grouped = (
             records.values("arrival_date")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
             .order_by("arrival_date")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
-            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
             totals["revenue"] += revenue
 
@@ -726,7 +745,9 @@ def build_reports_payload(params=None):
     elif report_type == "monthly":
         monthly_data = {}
 
-        for val in records.values("arrival_date", "total_visitors"):
+        monthly_discounted = {}
+
+        for val in records.values("arrival_date", "total_visitors", "discounted_count"):
             key = val["arrival_date"].strftime("%Y-%m")
             label = val["arrival_date"].strftime("%B %Y")
 
@@ -740,10 +761,11 @@ def build_reports_payload(params=None):
                 }
 
             monthly_data[key]["visitors"] += val["total_visitors"]
+            monthly_discounted[key] = monthly_discounted.get(key, 0) + val["discounted_count"]
 
         for key in sorted(monthly_data.keys()):
             row = monthly_data[key]
-            row["revenue"] = row["visitors"] * ARRIVAL_FEE_PER_VISITOR
+            row["revenue"] = entrance_fee(row["visitors"], monthly_discounted[key])
             row["avg"] = (
                 round(row["revenue"] / row["visitors"]) if row["visitors"] else 0
             )
@@ -756,13 +778,13 @@ def build_reports_payload(params=None):
         grouped = (
             with_origin(records)
             .values("origin")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
             .order_by("-visitors", "origin")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
-            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
             totals["revenue"] += revenue
             rows.append(
@@ -778,13 +800,13 @@ def build_reports_payload(params=None):
     elif report_type == "purpose":
         grouped = (
             records.values("visit_purpose__name")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
             .order_by("-visitors", "visit_purpose__name")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
-            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
             totals["revenue"] += revenue
             rows.append(
@@ -800,13 +822,13 @@ def build_reports_payload(params=None):
     elif report_type == "transport":
         grouped = (
             records.values("travel_mode__name")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
             .order_by("-visitors", "travel_mode__name")
         )
 
         for item in grouped:
             visitors = item["visitors"] or 0
-            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            revenue = entrance_fee(visitors, item["discounted"])
             totals["visitors"] += visitors
             totals["revenue"] += revenue
             rows.append(
@@ -842,9 +864,9 @@ def build_reports_payload(params=None):
     else:
         resort_queryset = Resort.objects.order_by("resort_name")
         resort_totals = {
-            item["resort_id"]: item["visitors"] or 0
+            item["resort_id"]: (item["visitors"] or 0, item["discounted"] or 0)
             for item in records.values("resort_id")
-            .annotate(visitors=Sum("total_visitors"))
+            .annotate(visitors=Sum("total_visitors"), discounted=Sum("discounted_count"))
         }
 
         if resort_id:
@@ -853,9 +875,9 @@ def build_reports_payload(params=None):
             resort_queryset = resort_queryset.filter(resort_id__in=resort_totals.keys())
 
         for resort in resort_queryset:
-            visitors = resort_totals.get(resort.resort_id, 0)
+            visitors, discounted = resort_totals.get(resort.resort_id, (0, 0))
 
-            revenue = visitors * ARRIVAL_FEE_PER_VISITOR
+            revenue = entrance_fee(visitors, discounted)
 
             totals["visitors"] += visitors
             totals["revenue"] += revenue
@@ -883,7 +905,7 @@ def build_reports_payload(params=None):
             "to": date_to or "",
             "resort_id": resort_id or "",
         },
-        "feePerVisitor": ARRIVAL_FEE_PER_VISITOR,
+        "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "rows": rows,
         "questionAnswers": build_tourism_question_answers(params)
         if include_questions

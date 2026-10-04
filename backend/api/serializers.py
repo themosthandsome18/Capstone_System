@@ -329,6 +329,7 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             "age_0_7",
             "age_8_59",
             "age_60_above",
+            "discounted_count",
             "arrival_date",
             "itinerary_id",
             "resort_id",

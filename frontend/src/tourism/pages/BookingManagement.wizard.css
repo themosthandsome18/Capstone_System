@@ -496,6 +496,46 @@
   color: var(--th-danger-text);
 }
 
+/* Explanatory line under a Head Count field */
+.wizard-field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--th-text-muted);
+}
+
+/* Entrance fee breakdown, full width inside the totals check */
+.wizard-fee-breakdown {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--th-border);
+  font-size: 0.78rem;
+}
+
+.wizard-fee-title {
+  font-weight: 600;
+  color: var(--th-text-main);
+  margin-bottom: 4px;
+}
+
+.wizard-fee-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  color: var(--th-text-muted);
+}
+
+.wizard-fee-line .error {
+  color: var(--th-danger-text);
+}
+
+.wizard-fee-total {
+  margin-top: 2px;
+  font-weight: 600;
+  color: var(--th-text-main);
+}
+
 /* ── Water source multi-select ── */
 .ws-multiselect {
   position: relative;
