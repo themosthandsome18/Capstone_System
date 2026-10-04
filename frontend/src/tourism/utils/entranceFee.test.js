@@ -7,9 +7,13 @@ import {
   suggestedDiscountedCount,
 } from "./entranceFee";
 
+// Ten visitors, so the cap only matters where a test says so.
 const blankForm = {
+  filipino_count: "10",
+  foreigner_count: "0",
   age_0_7: "0",
   age_60_above: "0",
+  special_group_count: "0",
   discounted_count: "0",
   discounted_edited: false,
 };
@@ -52,20 +56,45 @@ describe("entranceFeeBreakdown", () => {
   });
 });
 
-describe("discounted count auto-fill", () => {
-  it("suggests children 0-7 plus seniors 60+", () => {
-    expect(suggestedDiscountedCount({ age_0_7: "2", age_60_above: "1" })).toBe(3);
+describe("suggested discounted count", () => {
+  it("adds children 0-7, seniors 60+ and special needs", () => {
+    expect(
+      suggestedDiscountedCount({ ...blankForm, age_0_7: "2", age_60_above: "1", special_group_count: "1" })
+    ).toBe(4);
   });
 
-  it("follows the ages while the user has not edited it", () => {
+  it("includes special needs on its own", () => {
+    expect(suggestedDiscountedCount({ ...blankForm, special_group_count: "2" })).toBe(2);
+  });
+
+  it("is capped at the visitor total", () => {
+    // 3 visitors: 1 child, 2 seniors, and both seniors also recorded as special needs.
+    const form = {
+      ...blankForm,
+      filipino_count: "2",
+      foreigner_count: "1",
+      age_0_7: "1",
+      age_60_above: "2",
+      special_group_count: "2",
+    };
+
+    expect(suggestedDiscountedCount(form)).toBe(3);
+  });
+});
+
+describe("discounted count auto-fill", () => {
+  it("follows the ages and special needs while the user has not edited it", () => {
     let form = change(blankForm, "age_0_7", "2");
     expect(form.discounted_count).toBe("2");
 
     form = change(form, "age_60_above", "1");
     expect(form.discounted_count).toBe("3");
 
-    form = change(form, "age_0_7", "1");
-    expect(form.discounted_count).toBe("2");
+    form = change(form, "special_group_count", "1");
+    expect(form.discounted_count).toBe("4");
+
+    form = change(form, "filipino_count", "3");
+    expect(form.discounted_count).toBe("3");
   });
 
   it("stops following after a manual edit and keeps the user's value", () => {
@@ -73,6 +102,7 @@ describe("discounted count auto-fill", () => {
     form = change(form, "discounted_count", "4");
 
     form = change(form, "age_60_above", "1");
+    form = change(form, "special_group_count", "2");
     form = change(form, "age_0_7", "0");
 
     expect(form.discounted_count).toBe("4");
@@ -87,12 +117,14 @@ describe("discounted count auto-fill", () => {
     expect(form.discounted_count).toBe("");
     expect(effectiveDiscountedCount(form)).toBe(2);
 
-    form = change(form, "age_60_above", "1");
+    form = change(form, "special_group_count", "1");
     expect(form.discounted_count).toBe("3");
   });
 
-  it("treats a stored record as edited only when its count differs from the ages", () => {
-    expect(isDiscountedCountEdited({ age_0_7: "1", age_60_above: "1", discounted_count: "2" })).toBe(false);
-    expect(isDiscountedCountEdited({ age_0_7: "1", age_60_above: "1", discounted_count: "3" })).toBe(true);
+  it("treats a stored record as edited only when its count differs from the suggestion", () => {
+    const record = { ...blankForm, age_0_7: "1", age_60_above: "1", special_group_count: "1" };
+
+    expect(isDiscountedCountEdited({ ...record, discounted_count: "3" })).toBe(false);
+    expect(isDiscountedCountEdited({ ...record, discounted_count: "2" })).toBe(true);
   });
 });

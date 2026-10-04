@@ -1546,7 +1546,7 @@ function BookingManagement() {
                           onChange={(e) => updateField("discounted_count", e.target.value)}
                         />
                         <small className="wizard-field-hint">
-                          Suggested from Age 0-7 + Age 60+. Raise it if someone aged 8-59 also qualifies.
+                          Suggested from Age 0-7 + Age 60+ + Special Needs. Lower it if one person is counted twice (for example a senior with special needs); raise it if someone else qualifies.
                         </small>
                       </WizardField>
                     </div>

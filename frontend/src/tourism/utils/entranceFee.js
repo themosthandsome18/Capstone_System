@@ -24,9 +24,14 @@ export function entranceFeeBreakdown(visitors, discounted) {
   };
 }
 
-// Children aged 0-7 and seniors aged 60+ are the suggested discounted count.
+// Children aged 0-7, seniors aged 60+ and special needs are the suggested
+// discounted count, capped at the visitor total: one person can be both a
+// senior and special needs, and would otherwise be counted twice.
 export function suggestedDiscountedCount(form) {
-  return toCount(form.age_0_7) + toCount(form.age_60_above);
+  const visitors = toCount(form.filipino_count) + toCount(form.foreigner_count);
+  const suggestion =
+    toCount(form.age_0_7) + toCount(form.age_60_above) + toCount(form.special_group_count);
+  return Math.min(suggestion, visitors);
 }
 
 // While the user has not set the discounted count themselves

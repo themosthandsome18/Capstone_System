@@ -3520,6 +3520,79 @@ class DiscountedEntranceFeeTests(TestCase):
         self.assertEqual(record.discounted_count, 3)
 
 
+class DiscountedCountSpecialNeedsMigrationTests(TestCase):
+    """0049 moves records still on the age-only suggestion to the new one."""
+
+    def setUp(self):
+        import importlib
+
+        ensure_test_reference_tables()
+        self.migration = importlib.import_module(
+            "api.migrations.0049_discounted_count_includes_special_needs"
+        )
+
+    def _record(self, survey_id, visitors, age_0_7, age_60_above, special, discounted):
+        quezon = Province.objects.get(name="Quezon")
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Special Needs Group",
+            contact_number=f"0917000{survey_id[-4:]}",
+            country=Country.objects.get(name="Philippines"),
+            region=quezon.region,
+            province=quezon,
+            arrival_date="2026-04-02",
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=visitors,
+            filipino_count=visitors,
+            total_male=visitors,
+            age_0_7=age_0_7,
+            age_60_above=age_60_above,
+            age_8_59=visitors - age_0_7 - age_60_above,
+            special_group_count=special,
+            discounted_count=discounted,
+            status="arrived",
+        )
+
+    def _run(self, function):
+        from django.apps import apps
+
+        function(apps, None)
+
+    def _discounted(self):
+        return dict(TouristRecord.objects.values_list("survey_id", "discounted_count"))
+
+    def test_forward_adds_special_needs_capped_and_keeps_manual_counts(self):
+        # Age-only 2, plus 1 special needs -> 3.
+        self._record("SPN-0001", 5, 1, 1, 1, 2)
+        # 3 visitors, 2 seniors who are also special needs: 2 + 2 = 4, capped at 3.
+        self._record("SPN-0002", 3, 0, 2, 2, 2)
+        # Staff set 4 by hand (age-only would be 1): left alone.
+        self._record("SPN-0003", 5, 1, 0, 1, 4)
+        # Nothing to add: unchanged.
+        self._record("SPN-0004", 2, 0, 0, 0, 0)
+
+        self._run(self.migration.include_special_needs)
+
+        self.assertEqual(
+            self._discounted(),
+            {"SPN-0001": 3, "SPN-0002": 3, "SPN-0003": 4, "SPN-0004": 0},
+        )
+
+    def test_reverse_returns_to_the_age_only_value(self):
+        self._record("SPN-0001", 5, 1, 1, 1, 2)
+        self._record("SPN-0002", 3, 0, 2, 2, 2)
+        self._record("SPN-0003", 5, 1, 0, 1, 4)
+        self._run(self.migration.include_special_needs)
+
+        self._run(self.migration.back_to_age_only)
+
+        self.assertEqual(self._discounted(), {"SPN-0001": 2, "SPN-0002": 2, "SPN-0003": 4})
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
