@@ -4069,9 +4069,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           ],
         ),
         CounterPanel(
-          title: 'Special Groups (Within Total Visitors)',
+          title: 'Special Needs (Within Total Visitors)',
           counters: [
-            CounterItem('Senior / PWD / Pregnant / 7 below', _specialGroup, (value) {
+            CounterItem('Special Needs', _specialGroup, (value) {
               setState(() {
                 _specialGroup = clampInt(value, 0, _visitors);
               });
@@ -4240,7 +4240,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       return 'Age group counts must equal total visitors.';
     }
     if (_specialGroup > _visitors) {
-      return 'Special group count cannot exceed total visitors.';
+      return 'Special Needs count cannot exceed total visitors.';
     }
 
     return null;

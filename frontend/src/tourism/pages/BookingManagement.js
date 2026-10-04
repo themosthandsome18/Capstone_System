@@ -610,7 +610,7 @@ function BookingManagement() {
     }
 
     if (payload.special_group_count > payload.total_visitors) {
-      return "Senior/PWD/7 below count cannot be greater than total visitors.";
+      return "Special Needs count cannot be greater than total visitors.";
     }
 
     return "";
@@ -1533,9 +1533,9 @@ function BookingManagement() {
                       <WizardField label="Age 60+" required>
                         <input type="number" min="0" value={form.age_60_above} onChange={(e) => updateField("age_60_above", e.target.value)} />
                       </WizardField>
-                      <WizardField label="Senior / PWD / 7 below">
+                      <WizardField label="Special Needs">
                         <input type="number" min="0" value={form.special_group_count} onChange={(e) => updateField("special_group_count", e.target.value)} />
-                        <small className="wizard-field-hint">PWD, pregnant, special needs</small>
+                        <small className="wizard-field-hint">PWD, pregnant, or other special needs</small>
                       </WizardField>
                       <WizardField label={`Discounted (PHP ${DISCOUNTED_ENTRANCE_FEE})`}>
                         <input
@@ -1564,7 +1564,7 @@ function BookingManagement() {
                         <strong className={formTotals.agesMatch ? "ok" : "error"}>{formTotals.ages}</strong>
                       </div>
                       <div className="wizard-total-item">
-                        <span>Senior/PWD/7 below</span>
+                        <span>Special Needs</span>
                         <strong className={formTotals.specialValid ? "ok" : "error"}>{formTotals.special}</strong>
                       </div>
                       <div className="wizard-fee-breakdown">
