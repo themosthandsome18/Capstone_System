@@ -55,7 +55,7 @@ const emptyBootstrap = {
   dashboardData: {
     filters: { year: currentReportingYear },
     reportingDate: "",
-    feePerVisitor: 300,
+    feePerVisitor: 80,
     metrics: {
       todayArrivals: 0,
       weekArrivals: 0,
@@ -80,7 +80,7 @@ const emptyBootstrap = {
       to: "",
       resort_id: "",
     },
-    feePerVisitor: 300,
+    feePerVisitor: 80,
     rows: [],
     questionAnswers: [],
     totals: { visitors: 0, revenue: 0, avg: 0 },
@@ -95,7 +95,7 @@ const emptyBootstrap = {
   },
   arrivalMonitoring: {
     filters: { year: currentReportingYear, date: "", resort_id: "all", from: "", to: "" },
-    feePerVisitor: 300,
+    feePerVisitor: 80,
     reportDate: "",
     summary: {
       totalArrivals: 0,
