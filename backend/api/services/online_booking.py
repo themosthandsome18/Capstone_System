@@ -101,7 +101,12 @@ RELATED_FIELD_API_NAMES = {
 BOOKING_STATUS_VALUES = {status for status, _label in BOOKING_STATUS_CHOICES}
 BULK_BATCH_SIZE = 500
 CREATE_RETRY_LIMIT = 5
-ONLINE_BOOKING_ARRIVAL_YEARS = {2024, 2025, 2026}
+# An imported arrival date must fall within this many years of today. The
+# window moves with the calendar (no year is written down): it only catches
+# typo years such as 1926 or 2206, and allows old registrations and advance
+# bookings (the app itself books up to a year ahead).
+ONLINE_BOOKING_ARRIVAL_YEARS_BACK = 10
+ONLINE_BOOKING_ARRIVAL_YEARS_AHEAD = 2
 TOURIST_RECORD_UPSERT_FIELDS = [
     "submitted_at",
     "email",
@@ -303,13 +308,14 @@ def validate_payload(payload, country=None):
         errors.setdefault("status", []).append("Invalid booking status.")
 
     arrival_date = payload.get("arrival_date")
-    if (
-        arrival_date
-        and arrival_date.year not in ONLINE_BOOKING_ARRIVAL_YEARS
-    ):
-        errors.setdefault("arrival_date", []).append(
-            "Must be a 2024, 2025, or 2026 online booking arrival date."
-        )
+    if arrival_date:
+        this_year = timezone.localdate().year
+        earliest = this_year - ONLINE_BOOKING_ARRIVAL_YEARS_BACK
+        latest = this_year + ONLINE_BOOKING_ARRIVAL_YEARS_AHEAD
+        if not earliest <= arrival_date.year <= latest:
+            errors.setdefault("arrival_date", []).append(
+                f"Must be an arrival date from {earliest} to {latest}."
+            )
 
     return {
         RELATED_FIELD_API_NAMES.get(field, field): messages

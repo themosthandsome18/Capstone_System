@@ -329,6 +329,34 @@ describe("Reports year filter", () => {
   });
 });
 
+describe("Reports when the server rejects the year", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("shows the server's message, not a raw response or a blank page", async () => {
+    const detail = 'Unknown year "2027x". Use a four-digit year such as 2026, or "all".';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ detail }),
+    });
+    // The real request path: fetch, apiClient, tourismApi, then the page.
+    const { tourismApi } = jest.requireActual("../services/tourismApi");
+    setup({ refresh: (filters) => tourismApi.getReportsData(filters) });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Apply Filters/ }));
+    });
+
+    expect(global.fetch).toHaveBeenCalled();
+    expect(screen.getByText(detail).className).toBe("tourist-record-error");
+    expect(screen.queryByText(/\{"detail"/)).toBeNull();
+    expect(screen.getByText("Table Data Breakdown")).toBeTruthy();
+  });
+});
+
 describe("Reports subtitles", () => {
   it("say the visitor tabs count arrived and pending bookings, not only arrived ones", () => {
     const expected = {

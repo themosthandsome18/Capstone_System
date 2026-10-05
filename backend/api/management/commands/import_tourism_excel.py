@@ -32,11 +32,12 @@ class Command(BaseCommand):
             help="Path to MONITORING_FORM_2025.xlsx",
         )
 
+        # Required: a default year would file another year's sheet under it.
         parser.add_argument(
             "--year",
             type=int,
-            default=2025,
-            help="Year of the monitoring data. Default is 2025.",
+            required=True,
+            help="Year of the monitoring data in the workbook, e.g. 2025.",
         )
 
     def handle(self, *args, **options):

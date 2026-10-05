@@ -3043,6 +3043,62 @@ class ForeignOriginTests(TestCase):
         file_obj.seek(0)
         return process_online_booking_workbook(file_obj, commit=True)
 
+    def test_import_accepts_a_2027_arrival_and_creates_the_record(self):
+        import datetime
+
+        result = self._import(
+            [{"full_name": "Advance Guest", "contact_number": "09170000004", "country": "Philippines",
+              "arrival_date": datetime.datetime(2027, 9, 21)}]
+        )
+
+        self.assertEqual(result["valid_count"], 1, result["error_samples"])
+        record = TouristRecord.objects.get(full_name="Advance Guest")
+        self.assertEqual(record.arrival_date, datetime.date(2027, 9, 21))
+
+    def test_import_window_moves_with_today(self):
+        import datetime
+        from unittest import mock
+
+        this_year = timezone.localdate().year
+        rows = [
+            {"full_name": f"Guest {year}", "contact_number": f"0917000{year}", "country": "Philippines",
+             "arrival_date": datetime.datetime(year, 6, 1)}
+            for year in (this_year - 10, this_year + 2)
+        ]
+        self.assertEqual(self._import(rows)["valid_count"], 2)
+
+        # The same years are outside the window once today is far enough away.
+        later = datetime.date(this_year + 20, 1, 1)
+        with mock.patch("api.services.online_booking.timezone.localdate", return_value=later):
+            result = self._import(
+                [{"full_name": "Old Guest", "contact_number": "09170009999", "country": "Philippines",
+                  "arrival_date": datetime.datetime(this_year, 6, 1)}]
+            )
+        self.assertEqual(result["valid_count"], 0)
+
+    def test_import_rejects_an_absurd_year_with_a_readable_message(self):
+        import datetime
+
+        this_year = timezone.localdate().year
+        for year in (this_year - 11, this_year + 3, 1926, 2206):
+            with self.subTest(year=year):
+                result = self._import(
+                    [{"full_name": "Typo Guest", "contact_number": "09170000005", "country": "Philippines",
+                      "arrival_date": datetime.datetime(year, 6, 1)}]
+                )
+                self.assertEqual(result["valid_count"], 0)
+                self.assertEqual(
+                    result["error_samples"][0]["message"],
+                    f"arrival_date: Must be an arrival date from {this_year - 10} to {this_year + 2}.",
+                )
+        self.assertFalse(TouristRecord.objects.filter(full_name="Typo Guest").exists())
+
+    def test_monitoring_import_requires_the_year(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaisesMessage(CommandError, "--year"):
+            call_command("import_tourism_excel", "MONITORING_FORM.xlsx")
+
     def test_import_no_longer_forces_quezon_onto_a_foreign_record(self):
         result = self._import(
             [
