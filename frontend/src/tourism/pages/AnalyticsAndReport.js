@@ -63,6 +63,10 @@ function getReportTitle(type) {
     return "Vehicle Classification Report";
   }
 
+  if (type === "boat") {
+    return "Boat Classification Report";
+  }
+
   if (type === "no_show") {
     return "No-show Booking Report";
   }
@@ -95,6 +99,10 @@ function getReportSubtitle(type) {
     return "Visitor totals grouped by vehicle classification";
   }
 
+  if (type === "boat") {
+    return "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)";
+  }
+
   if (type === "no_show") {
     return "No-show bookings grouped by resort";
   }
@@ -125,6 +133,10 @@ function getFirstColumnLabel(type) {
 
   if (type === "transport") {
     return "Vehicle";
+  }
+
+  if (type === "boat") {
+    return "Boat Type";
   }
 
   if (type === "no_show") {
@@ -567,6 +579,15 @@ function AnalyticsAndReport() {
           onClick={() => changeReportType("transport")}
         >
           Vehicle Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "boat" ? "active" : ""}
+          disabled={loadingReport}
+          onClick={() => changeReportType("boat")}
+        >
+          Boat Report
         </button>
 
         <button

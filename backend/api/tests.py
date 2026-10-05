@@ -4084,12 +4084,12 @@ class QuestionAnswersDeduplicationTests(TestCase):
 class ReportsMaleFemaleTests(TestCase):
     """Every report tab carries male and female, summed in its existing query."""
 
-    TABS = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "no_show")
+    TABS = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show")
     # Queries per tab without the question answers; the male and female sums
     # must not add one.
     QUERIES = {
         "daily": 1, "monthly": 1, "yearly": 1, "resort": 2,
-        "origin": 1, "purpose": 1, "transport": 1, "no_show": 1,
+        "origin": 1, "purpose": 1, "transport": 1, "boat": 1, "no_show": 1,
     }
 
     @classmethod
@@ -4100,10 +4100,13 @@ class ReportsMaleFemaleTests(TestCase):
         cls.resorts = list(Resort.objects.order_by("resort_id")[:2])
         cls.purposes = list(VisitPurpose.objects.order_by("id")[:2])
         cls.modes = list(TravelMode.objects.order_by("id")[:2])
+        cls.boats = list(BoatType.objects.order_by("id")[:2])
         TouristRecord.objects.bulk_create([
             cls._record("MF-01", "2026-08-10", 3, 2, resort=0, purpose=0, mode=0),
-            cls._record("MF-02", "2026-09-05", 1, 3, resort=1, purpose=1, mode=1, foreign=True),
-            cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, booking_status="pending"),
+            cls._record("MF-02", "2026-09-05", 1, 3, resort=1, purpose=1, mode=1, foreign=True, boat=1),
+            # MF-03 shares MF-01's travel mode but not its boat, so the two groupings differ.
+            cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, booking_status="pending",
+                        boat=1),
             cls._record("MF-04", "2026-09-20", 0, 4, resort=1, purpose=0, mode=1, booking_status="no_show"),
             # A pending advance booking in a second year, shaped like SURV-2026-011.
             cls._record("MF-05", "2027-09-21", 2, 2, resort=0, purpose=0, mode=0,
@@ -4112,7 +4115,7 @@ class ReportsMaleFemaleTests(TestCase):
 
     @classmethod
     def _record(cls, survey_id, day, male, female, resort, purpose, mode,
-                booking_status="arrived", foreign=False, discounted=0):
+                booking_status="arrived", foreign=False, discounted=0, boat=0):
         visitors = male + female
         return TouristRecord(
             survey_id=survey_id,
@@ -4125,7 +4128,7 @@ class ReportsMaleFemaleTests(TestCase):
             resort=cls.resorts[resort],
             itinerary=Itinerary.objects.first(),
             travel_mode=cls.modes[mode],
-            boat_type=BoatType.objects.first(),
+            boat_type=cls.boats[boat],
             visit_purpose=cls.purposes[purpose],
             total_visitors=visitors,
             foreigner_count=visitors if foreign else 0,
@@ -4156,6 +4159,7 @@ class ReportsMaleFemaleTests(TestCase):
             "origin": ([("Quezon", 5, 2, 7), ("United States", 1, 3, 4)], (6, 5, 11)),
             "purpose": ([(p1, 3, 3, 6), (p0, 3, 2, 5)], (6, 5, 11)),
             "transport": ([(m0, 5, 2, 7), (m1, 1, 3, 4)], (6, 5, 11)),
+            "boat": ([(self.boats[1].name, 3, 3, 6), (self.boats[0].name, 3, 2, 5)], (6, 5, 11)),
             "no_show": ([(r1, 0, 4, 4)], (0, 4, 4)),
         }
         for report_type, (rows, totals) in expected.items():
@@ -4216,6 +4220,7 @@ class ReportsMaleFemaleTests(TestCase):
             "origin": [("Quezon", 2, 2, 4, 304)],
             "purpose": [(self.purposes[0].name, 2, 2, 4, 304)],
             "transport": [(self.modes[0].name, 2, 2, 4, 304)],
+            "boat": [(self.boats[0].name, 2, 2, 4, 304)],
             "no_show": [],
         }
         for report_type, rows in expected.items():
@@ -4226,6 +4231,34 @@ class ReportsMaleFemaleTests(TestCase):
                     rows,
                 )
                 self.assertEqual(payload["filters"]["year"], "2027")
+
+    def test_boat_tab_gives_one_row_per_boat_type_with_its_fee(self):
+        payload = self._report("boat")
+
+        # Boat 1: MF-02 + MF-03, 6 visitors. Boat 0: MF-01, 5. None discounted.
+        self.assertEqual(
+            [(r["name"], r["male"], r["female"], r["visitors"], r["revenue"]) for r in payload["rows"]],
+            [(self.boats[1].name, 3, 3, 6, 480), (self.boats[0].name, 3, 2, 5, 400)],
+        )
+        self.assertEqual(payload["type"], "boat")
+
+    def test_boat_tab_total_equals_the_daily_total(self):
+        for year in ("2026", "2027", "all"):
+            with self.subTest(year=year):
+                boat = self._report("boat", year=year)["totals"]
+                daily = self._report("daily", year=year)["totals"]
+                self.assertEqual(boat, daily)
+
+    def test_vehicle_tab_is_unchanged_by_the_boat_tab(self):
+        m0, m1 = (mode.name for mode in self.modes)
+
+        payload = self._report("transport")
+
+        self.assertEqual(payload["type"], "transport")
+        self.assertEqual(
+            [(r["id"], r["name"], r["male"], r["female"], r["visitors"], r["revenue"]) for r in payload["rows"]],
+            [(m0, m0, 5, 2, 7, 560), (m1, m1, 1, 3, 4, 320)],
+        )
 
     def test_query_count_per_tab(self):
         for report_type in self.TABS:
@@ -4336,10 +4369,10 @@ class ReportingYearTests(TestCase):
         self._record("RY-01", "2026-09-21")
         client = self._client()
 
-        response = client.get("/api/reports/", {"type": "boat", "year": "2026"})
+        response = client.get("/api/reports/", {"type": "helicopter", "year": "2026"})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Unknown report type "boat"', response.json()["detail"])
+        self.assertIn('Unknown report type "helicopter"', response.json()["detail"])
         self.assertNotIn("rows", response.json())
 
     def test_no_report_type_is_still_the_resort_report(self):

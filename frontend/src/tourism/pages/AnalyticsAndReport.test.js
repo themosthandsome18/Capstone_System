@@ -19,6 +19,7 @@ const TAB_NAMES = [
   "Origin Report",
   "Purpose Report",
   "Vehicle Report",
+  "Boat Report",
   "No-show Report",
 ];
 
@@ -244,6 +245,82 @@ describe("Reports table columns", () => {
     expect(bodyNames()).toEqual(["Alpha", "Charlie", "Bravo"]);
     fireEvent.click(screen.getByTitle("Click to sort by Male"));
     expect(bodyNames()).toEqual(["Bravo", "Charlie", "Alpha"]);
+  });
+});
+
+// Backend order: most visitors first.
+const BOAT_REPORT = {
+  type: "boat",
+  filters: { year: "2026", type: "boat", from: "", to: "", resort_id: "" },
+  rows: [
+    { id: "Passenger Boat", name: "Passenger Boat", male: 12, female: 8, visitors: 20, revenue: 1536, avg: 77 },
+    { id: "Tourist Boat", name: "Tourist Boat", male: 7, female: 9, visitors: 16, revenue: 1200, avg: 75 },
+  ],
+  totals: { visitors: 36, male: 19, female: 17, revenue: 2736, avg: 76 },
+  questionAnswers: [],
+};
+
+const VEHICLE_REPORT = {
+  type: "transport",
+  filters: { year: "2026", type: "transport", from: "", to: "", resort_id: "" },
+  rows: [
+    { id: "Private Vehicle", name: "Private Vehicle", male: 10, female: 10, visitors: 20, revenue: 1600, avg: 80 },
+    { id: "Public Bus", name: "Public Bus", male: 9, female: 7, visitors: 16, revenue: 1136, avg: 71 },
+  ],
+  totals: { visitors: 36, male: 19, female: 17, revenue: 2736, avg: 76 },
+  questionAnswers: [],
+};
+
+describe("Reports Boat tab", () => {
+  it("sits right after Vehicle Report", () => {
+    setup();
+
+    const tabs = [...document.querySelectorAll(".report-tabs button")].map((button) => button.textContent);
+    expect(tabs).toEqual(TAB_NAMES);
+    expect(tabs.indexOf("Boat Report")).toBe(tabs.indexOf("Vehicle Report") + 1);
+  });
+
+  it("shows Boat Type, Male, Female, Total Visitors, Expected Entrance Fee, most visitors first, and exports the same", () => {
+    setup({ reportData: BOAT_REPORT });
+
+    expect(headerLabels()).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(screen.getByRole("heading", { level: 3, name: "Boat Classification Report" })).toBeTruthy();
+    expect(document.querySelector(".report-card-title p").textContent).toBe(
+      "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)"
+    );
+    expect(bodyNames()).toEqual(["Passenger Boat", "Tourist Boat"]);
+
+    const [name, headers, rows] = exported();
+    expect(name).toBe("tourism-boat-report.csv");
+    expect(headers.slice(5)).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(rows.map((row) => row.slice(5))).toEqual([
+      ["Passenger Boat", 12, 8, 20, 1536],
+      ["Tourist Boat", 7, 9, 16, 1200],
+      ["Total", 19, 17, 36, 2736],
+    ]);
+    expect(rows[0][0]).toBe("Boat Classification Report");
+  });
+
+  it("applies the imbalance guard", () => {
+    const rows = BOAT_REPORT.rows.map((row) => (row.id === "Tourist Boat" ? { ...row, female: 8 } : row));
+    setup({ reportData: { ...BOAT_REPORT, rows, totals: { ...BOAT_REPORT.totals, female: 16 } } });
+
+    expect(screen.getByRole("note").textContent).toBe(
+      "1 row: Male + Female does not equal Total Visitors; check these records."
+    );
+  });
+
+  it("leaves the Vehicle tab as it was", () => {
+    setup({ reportData: VEHICLE_REPORT });
+
+    expect(headerLabels()).toEqual(["Vehicle", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(screen.getByRole("heading", { level: 3, name: "Vehicle Classification Report" })).toBeTruthy();
+    expect(document.querySelector(".report-card-title p").textContent).toBe(
+      "Visitor totals grouped by vehicle classification"
+    );
+    expect(bodyNames()).toEqual(["Private Vehicle", "Public Bus"]);
+    const [name] = exported();
+    expect(name).toBe("tourism-transport-report.csv");
   });
 });
 

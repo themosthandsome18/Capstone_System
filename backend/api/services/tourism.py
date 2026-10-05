@@ -49,7 +49,7 @@ def entrance_fee(visitors, discounted):
 
 
 ALL_TOURISM_REPORTING_YEARS = "all"
-REPORT_TYPES = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "no_show")
+REPORT_TYPES = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show")
 
 
 from django.core.cache import cache
@@ -995,6 +995,42 @@ def build_reports_payload(params=None):
                 {
                     "id": item["travel_mode__name"] or "Unspecified",
                     "name": item["travel_mode__name"] or "Unspecified",
+                    "male": male,
+                    "female": female,
+                    "visitors": visitors,
+                    "revenue": revenue,
+                    "avg": round(revenue / visitors) if visitors else 0,
+                }
+            )
+
+    elif report_type == "boat":
+        # Grouped like the Vehicle tab. boat_type is required (NOT NULL), so
+        # "Not specified" cannot occur today; it is there so a record without a
+        # boat type would still be counted, never dropped.
+        grouped = (
+            records.values("boat_type__name")
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
+            .order_by("-visitors", "boat_type__name")
+        )
+
+        for item in grouped:
+            visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
+            revenue = entrance_fee(visitors, item["discounted"])
+            totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
+            totals["revenue"] += revenue
+            rows.append(
+                {
+                    "id": item["boat_type__name"] or "Not specified",
+                    "name": item["boat_type__name"] or "Not specified",
                     "male": male,
                     "female": female,
                     "visitors": visitors,
