@@ -191,13 +191,15 @@ describe("Reports tabs while loading", () => {
 });
 
 describe("Reports table columns", () => {
-  it("shows Name, Male, Female, Total Visitors, Expected Entrance Fee, with no Avg column or sort dropdown", () => {
+  it("shows Name, Male, Female, Total Visitors, Total Fee, with no Avg column or sort dropdown", () => {
     setup();
 
-    expect(headerLabels()).toEqual(["Resort Name", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headerLabels()).toEqual(["Resort Name", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(screen.queryByText(/Revenue/)).toBeNull();
     expect(screen.queryByTitle(/Revenue/)).toBeNull();
-    expect(screen.getByTitle("Click to sort by Expected Entrance Fee")).toBeTruthy();
+    expect(screen.getByTitle("Click to sort by Total Fee")).toBeTruthy();
+    expect(screen.queryByText(/Expected Entrance Fee/)).toBeNull();
+    expect(screen.queryByTitle(/Expected Entrance Fee/)).toBeNull();
     expect(screen.queryByText(/Avg/)).toBeNull();
     expect(screen.queryByText(/Sort Table/)).toBeNull();
     expect(breakdownTable().closest(".report-table-card").querySelector("select, button")).toBeNull();
@@ -226,7 +228,7 @@ describe("Reports table columns", () => {
       "Male",
       "Female",
       "Total Visitors",
-      "Expected Entrance Fee",
+      "Total Fee",
     ]);
     expect(rows.map((row) => row.slice(5))).toEqual([
       ["Alpha", 18, 12, 30, 2400],
@@ -280,10 +282,10 @@ describe("Reports Boat tab", () => {
     expect(tabs.indexOf("Boat Report")).toBe(tabs.indexOf("Vehicle Report") + 1);
   });
 
-  it("shows Boat Type, Male, Female, Total Visitors, Expected Entrance Fee, most visitors first, and exports the same", () => {
+  it("shows Boat Type, Male, Female, Total Visitors, Total Fee, most visitors first, and exports the same", () => {
     setup({ reportData: BOAT_REPORT });
 
-    expect(headerLabels()).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headerLabels()).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(screen.getByRole("heading", { level: 3, name: "Boat Classification Report" })).toBeTruthy();
     expect(document.querySelector(".report-card-title p").textContent).toBe(
       "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)"
@@ -292,7 +294,7 @@ describe("Reports Boat tab", () => {
 
     const [name, headers, rows] = exported();
     expect(name).toBe("tourism-boat-report.csv");
-    expect(headers.slice(5)).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headers.slice(5)).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(rows.map((row) => row.slice(5))).toEqual([
       ["Passenger Boat", 12, 8, 20, 1536],
       ["Tourist Boat", 7, 9, 16, 1200],
@@ -313,7 +315,7 @@ describe("Reports Boat tab", () => {
   it("leaves the Vehicle tab as it was", () => {
     setup({ reportData: VEHICLE_REPORT });
 
-    expect(headerLabels()).toEqual(["Vehicle", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headerLabels()).toEqual(["Vehicle", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(screen.getByRole("heading", { level: 3, name: "Vehicle Classification Report" })).toBeTruthy();
     expect(document.querySelector(".report-card-title p").textContent).toBe(
       "Visitor totals grouped by vehicle classification"
@@ -332,10 +334,10 @@ describe("Reports Yearly tab", () => {
     expect(tabs).toEqual(TAB_NAMES);
   });
 
-  it("shows Year, Male, Female, Total Visitors, Expected Entrance Fee, and exports the same", () => {
+  it("shows Year, Male, Female, Total Visitors, Total Fee, and exports the same", () => {
     setup({ reportData: YEARLY_REPORT });
 
-    expect(headerLabels()).toEqual(["Year", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headerLabels()).toEqual(["Year", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(screen.queryByText(/Avg/)).toBeNull();
     expect(screen.getByRole("heading", { level: 3, name: "Yearly Tourist Arrival Report" })).toBeTruthy();
     const total = breakdownTable().querySelector("tr.total-row");
@@ -343,7 +345,7 @@ describe("Reports Yearly tab", () => {
 
     const [name, headers, rows] = exported();
     expect(name).toBe("tourism-yearly-report.csv");
-    expect(headers.slice(5)).toEqual(["Year", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(headers.slice(5)).toEqual(["Year", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(rows.map((row) => row.slice(5))).toEqual([
       ["2025", 3, 3, 6, 480],
       ["2026", 19, 17, 36, 2736],

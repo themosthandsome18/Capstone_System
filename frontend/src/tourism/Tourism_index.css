@@ -2951,16 +2951,16 @@
   border-collapse: collapse;
   font-size: 14px;
   /* Fixed layout, so sorting never resizes a column (the sorted header turns
-     bold and changes its arrow). Each figure column is as wide as its bold
-     header plus arrow and padding, measured at 14px (Male 78px, Female 93px,
-     Total Visitors 137px, Expected Entrance Fee 198px; PHP 12,345,678.00 is
-     131px): 110 / 110 / 156 / 200px. The name column takes the rest. 900px is
-     the narrowest width at which the longest resort name ("Villa Escaparde
-     Camping and Beach Resort", 324px with padding) still fits on one line
-     beside them (576px), so every row keeps one line and the same height;
-     below it the table scrolls sideways. */
+     bold and changes its arrow). Each figure column fits its bold header plus
+     arrow and padding, measured at 14px (Male 78px, Female 93px, Total
+     Visitors 137px, Total Fee 107px), and its widest figure (a nine-digit fee,
+     PHP 123,456,789, is 118px): 110 / 110 / 156 / 130px. The name column takes
+     the rest. 830px is the narrowest width at which the longest resort name
+     ("Villa Escaparde Camping and Beach Resort", 324px with padding) still
+     fits on one line beside them (506px), so every row keeps one line and the
+     same height; below it the table scrolls sideways. */
   table-layout: fixed;
-  min-width: 900px;
+  min-width: 830px;
 }
 
 .report-table-card th.report-col-male,
@@ -2973,7 +2973,7 @@
 }
 
 .report-table-card th.report-col-revenue {
-  width: 200px;
+  width: 130px;
 }
 
 .report-table-card thead {
