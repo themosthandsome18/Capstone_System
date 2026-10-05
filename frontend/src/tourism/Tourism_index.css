@@ -3698,6 +3698,54 @@
   .report-table-card table {
     min-width: 0;
   }
+
+  /* ---- Reports print layout, Phase 1 (Reports page only, print only) ---- */
+
+  /* The print heading above replaces the screen heading. */
+  .reports-page .reports-header {
+    display: none !important;
+  }
+
+  /* A card never splits across pages, and nothing it holds paints outside
+     it: a chart that was not redrawn for the paper is cut at its own card's
+     edge instead of being drawn over the neighbouring card. */
+  .reports-page .report-chart-card,
+  .reports-page .analytics-question-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    overflow: hidden;
+  }
+
+  /* A table that continues onto the next page keeps whole rows and repeats
+     its header. */
+  .reports-page .report-table-card thead {
+    display: table-header-group;
+  }
+
+  .reports-page .report-table-card tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Chart.js keeps a chart at its on-screen pixel size when printing (it
+     only resizes through a ResizeObserver, which printing does not trigger).
+     Scale an oversized canvas down to its box instead of letting it run off
+     the page. Phase 2 redraws the charts at the paper size. */
+  .reports-page canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Even rows: every Key Insights row as tall as the tallest, and one height
+     for every chart box. The boxes are the card's children with an inline
+     height (180px, or the ranking's 150-216px), so !important wins here. */
+  .reports-page .analytics-question-grid {
+    grid-auto-rows: 1fr;
+  }
+
+  .reports-page .analytics-question-item > div[style*="height"] {
+    height: 180px !important;
+  }
 }
 
 .compact-actions {
