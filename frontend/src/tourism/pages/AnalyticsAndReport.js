@@ -46,6 +46,10 @@ function getReportTitle(type) {
     return "Monthly Tourist Arrival Report";
   }
 
+  if (type === "yearly") {
+    return "Yearly Tourist Arrival Report";
+  }
+
   if (type === "origin") {
     return "Visitor Origin Report";
   }
@@ -74,6 +78,10 @@ function getReportSubtitle(type) {
     return "Monthly visitor totals based on arrived tourist records";
   }
 
+  if (type === "yearly") {
+    return "Yearly visitor totals based on arrived tourist records";
+  }
+
   if (type === "origin") {
     return "Visitor totals grouped by province of residence, or by country for foreign visitors";
   }
@@ -100,6 +108,10 @@ function getFirstColumnLabel(type) {
 
   if (type === "monthly") {
     return "Month";
+  }
+
+  if (type === "yearly") {
+    return "Year";
   }
 
   if (type === "origin") {
@@ -181,11 +193,12 @@ const buildMainReportChartOptions = (palette) => ({
 // move them to the status tokens (THEME_TOKENS.md section 7).
 const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
 
-// Daily and Monthly rows are dates: the name is a label ("Sep 05, 2026",
-// "September 2026") and the id is the ISO date ("2026-09-05", "2026-09"),
-// which sorts by date. Those tabs start in date order, earliest first; every
-// other tab starts with the most visitors first.
-const DATE_ROW_TYPES = ["daily", "monthly"];
+// Daily, Monthly and Yearly rows are dates: the name is a label ("Sep 05,
+// 2026", "September 2026", "2026") and the id sorts by date: the ISO date
+// ("2026-09-05", "2026-09") or the year as a number (2026). Those tabs start
+// in date order, earliest first; every other tab starts with the most
+// visitors first.
+const DATE_ROW_TYPES = ["daily", "monthly", "yearly"];
 
 function defaultSortFor(type) {
   return DATE_ROW_TYPES.includes(type)
@@ -195,7 +208,7 @@ function defaultSortFor(type) {
 
 function sortValue(row, key, type) {
   if (key === "name" && DATE_ROW_TYPES.includes(type)) {
-    return String(row.id ?? "");
+    return row.id ?? "";
   }
   return row[key] ?? 0;
 }
@@ -513,6 +526,15 @@ function AnalyticsAndReport() {
           onClick={() => changeReportType("monthly")}
         >
           Monthly Report
+        </button>
+
+        <button
+          type="button"
+          className={reportType === "yearly" ? "active" : ""}
+          disabled={loadingReport}
+          onClick={() => changeReportType("yearly")}
+        >
+          Yearly Report
         </button>
 
         <button

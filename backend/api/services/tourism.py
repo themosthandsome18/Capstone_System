@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.db.models import Count, Max, Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, ExtractYear
 from django.utils import timezone
 
 from ..models import (
@@ -834,6 +834,43 @@ def build_reports_payload(params=None):
             totals["female"] += row["female"]
             totals["revenue"] += row["revenue"]
             rows.append(row)
+
+    elif report_type == "yearly":
+        # One grouped query, like Daily. The year filter applies as on every
+        # tab: All Years gives one row per year present, a single year one row.
+        grouped = (
+            records.annotate(year=ExtractYear("arrival_date"))
+            .values("year")
+            .annotate(
+                visitors=Sum("total_visitors"),
+                male=Sum("total_male"),
+                female=Sum("total_female"),
+                discounted=Sum("discounted_count"),
+            )
+            .order_by("year")
+        )
+
+        for item in grouped:
+            visitors = item["visitors"] or 0
+            male = item["male"] or 0
+            female = item["female"] or 0
+            revenue = entrance_fee(visitors, item["discounted"])
+            totals["visitors"] += visitors
+            totals["male"] += male
+            totals["female"] += female
+            totals["revenue"] += revenue
+            rows.append(
+                {
+                    # The year as a number, so the page sorts it as a number.
+                    "id": item["year"],
+                    "name": str(item["year"]),
+                    "male": male,
+                    "female": female,
+                    "visitors": visitors,
+                    "revenue": revenue,
+                    "avg": round(revenue / visitors) if visitors else 0,
+                }
+            )
 
     elif report_type == "origin":
         grouped = (

@@ -14,6 +14,7 @@ jest.mock("../../shared/csvExport", () => ({
 const TAB_NAMES = [
   "Daily Report",
   "Monthly Report",
+  "Yearly Report",
   "Resort Report",
   "Origin Report",
   "Purpose Report",
@@ -59,6 +60,21 @@ const MONTHLY_REPORT = {
     { id: "2026-08", name: "August 2026", male: 1, female: 1, visitors: 2, revenue: 160, avg: 80 },
   ],
   totals: { visitors: 16, male: 8, female: 8, revenue: 1280, avg: 80 },
+  questionAnswers: [],
+};
+
+// The backend sends years in order; here they arrive out of order, and the
+// most visitors are in 2026, so neither the visitors order nor the given order
+// is year order.
+const YEARLY_REPORT = {
+  type: "yearly",
+  filters: { year: "all", type: "yearly", from: "", to: "", resort_id: "" },
+  rows: [
+    { id: 2027, name: "2027", male: 2, female: 2, visitors: 4, revenue: 304, avg: 76 },
+    { id: 2025, name: "2025", male: 3, female: 3, visitors: 6, revenue: 480, avg: 80 },
+    { id: 2026, name: "2026", male: 19, female: 17, visitors: 36, revenue: 2736, avg: 76 },
+  ],
+  totals: { visitors: 46, male: 24, female: 22, revenue: 3520, avg: 77 },
   questionAnswers: [],
 };
 
@@ -227,6 +243,69 @@ describe("Reports table columns", () => {
     expect(bodyNames()).toEqual(["Alpha", "Charlie", "Bravo"]);
     fireEvent.click(screen.getByTitle("Click to sort by Male"));
     expect(bodyNames()).toEqual(["Bravo", "Charlie", "Alpha"]);
+  });
+});
+
+describe("Reports Yearly tab", () => {
+  it("sits next to Monthly Report", () => {
+    setup();
+
+    const tabs = [...document.querySelectorAll(".report-tabs button")].map((button) => button.textContent);
+    expect(tabs).toEqual(TAB_NAMES);
+  });
+
+  it("shows Year, Male, Female, Total Visitors, Expected Entrance Fee, and exports the same", () => {
+    setup({ reportData: YEARLY_REPORT });
+
+    expect(headerLabels()).toEqual(["Year", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(screen.queryByText(/Avg/)).toBeNull();
+    expect(screen.getByRole("heading", { level: 3, name: "Yearly Tourist Arrival Report" })).toBeTruthy();
+    const total = breakdownTable().querySelector("tr.total-row");
+    expect([...total.cells].map((td) => td.textContent)).toEqual(["Total", "24", "22", "46", "₱3,520"]);
+
+    const [name, headers, rows] = exported();
+    expect(name).toBe("tourism-yearly-report.csv");
+    expect(headers.slice(5)).toEqual(["Year", "Male", "Female", "Total Visitors", "Expected Entrance Fee"]);
+    expect(rows.map((row) => row.slice(5))).toEqual([
+      ["2025", 3, 3, 6, 480],
+      ["2026", 19, 17, 36, 2736],
+      ["2027", 2, 2, 4, 304],
+      ["Total", 24, 22, 46, 3520],
+    ]);
+    expect(rows[0][0]).toBe("Yearly Tourist Arrival Report");
+  });
+
+  it("opens in year order, earliest first, and the first column sorts by year", () => {
+    setup({ reportData: YEARLY_REPORT });
+
+    expect(bodyNames()).toEqual(["2025", "2026", "2027"]);
+
+    fireEvent.click(screen.getByTitle("Click to sort by Name"));
+    expect(bodyNames()).toEqual(["2027", "2026", "2025"]);
+
+    fireEvent.click(screen.getByTitle("Click to sort by Name"));
+    expect(bodyNames()).toEqual(["2025", "2026", "2027"]);
+  });
+
+  it("sorts the year as a number, not as text", () => {
+    // Text order would put "10000" before "2025"; no real year does that, so
+    // this pins the comparator's numeric path directly.
+    const rows = [
+      { id: 10000, name: "10000", male: 1, female: 0, visitors: 1, revenue: 80, avg: 80 },
+      ...YEARLY_REPORT.rows,
+    ];
+    setup({ reportData: { ...YEARLY_REPORT, rows } });
+
+    expect(bodyNames()).toEqual(["2025", "2026", "2027", "10000"]);
+  });
+
+  it("applies the imbalance guard", () => {
+    const rows = YEARLY_REPORT.rows.map((row) => (row.id === 2027 ? { ...row, female: 1 } : row));
+    setup({ reportData: { ...YEARLY_REPORT, rows, totals: { ...YEARLY_REPORT.totals, female: 21 } } });
+
+    expect(screen.getByRole("note").textContent).toBe(
+      "1 row: Male + Female does not equal Total Visitors; check these records."
+    );
   });
 });
 

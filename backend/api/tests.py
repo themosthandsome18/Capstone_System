@@ -4028,10 +4028,13 @@ class QuestionAnswersDeduplicationTests(TestCase):
 class ReportsMaleFemaleTests(TestCase):
     """Every report tab carries male and female, summed in its existing query."""
 
-    TABS = ("daily", "monthly", "resort", "origin", "purpose", "transport", "no_show")
+    TABS = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "no_show")
     # Queries per tab without the question answers; the male and female sums
     # must not add one.
-    QUERIES = {"daily": 1, "monthly": 1, "resort": 2, "origin": 1, "purpose": 1, "transport": 1, "no_show": 1}
+    QUERIES = {
+        "daily": 1, "monthly": 1, "yearly": 1, "resort": 2,
+        "origin": 1, "purpose": 1, "transport": 1, "no_show": 1,
+    }
 
     @classmethod
     def setUpTestData(cls):
@@ -4046,11 +4049,14 @@ class ReportsMaleFemaleTests(TestCase):
             cls._record("MF-02", "2026-09-05", 1, 3, resort=1, purpose=1, mode=1, foreign=True),
             cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, booking_status="pending"),
             cls._record("MF-04", "2026-09-20", 0, 4, resort=1, purpose=0, mode=1, booking_status="no_show"),
+            # A pending advance booking in a second year, shaped like SURV-2026-011.
+            cls._record("MF-05", "2027-09-21", 2, 2, resort=0, purpose=0, mode=0,
+                        booking_status="pending", discounted=1),
         ])
 
     @classmethod
     def _record(cls, survey_id, day, male, female, resort, purpose, mode,
-                booking_status="arrived", foreign=False):
+                booking_status="arrived", foreign=False, discounted=0):
         visitors = male + female
         return TouristRecord(
             survey_id=survey_id,
@@ -4070,14 +4076,15 @@ class ReportsMaleFemaleTests(TestCase):
             filipino_count=0 if foreign else visitors,
             total_male=male,
             total_female=female,
+            discounted_count=discounted,
             age_8_59=visitors,
             status=booking_status,
         )
 
-    def _report(self, report_type):
+    def _report(self, report_type, year="2026"):
         from .services.tourism import build_reports_payload
 
-        return build_reports_payload({"type": report_type, "year": "2026", "include_questions": "false"})
+        return build_reports_payload({"type": report_type, "year": year, "include_questions": "false"})
 
     def test_each_tab_reports_male_and_female(self):
         r0, r1 = (resort.resort_name for resort in self.resorts)
@@ -4088,6 +4095,7 @@ class ReportsMaleFemaleTests(TestCase):
         expected = {
             "daily": ([("Aug 10, 2026", 3, 2, 5), ("Sep 05, 2026", 3, 3, 6)], (6, 5, 11)),
             "monthly": ([("August 2026", 3, 2, 5), ("September 2026", 3, 3, 6)], (6, 5, 11)),
+            "yearly": ([("2026", 6, 5, 11)], (6, 5, 11)),
             "resort": ([(r0, 5, 2, 7), (r1, 1, 3, 4)], (6, 5, 11)),
             "origin": ([("Quezon", 5, 2, 7), ("United States", 1, 3, 4)], (6, 5, 11)),
             "purpose": ([(p1, 3, 3, 6), (p0, 3, 2, 5)], (6, 5, 11)),
@@ -4117,6 +4125,29 @@ class ReportsMaleFemaleTests(TestCase):
                 self.assertEqual(totals["male"] + totals["female"], totals["visitors"])
                 self.assertEqual(totals["male"], sum(row["male"] for row in payload["rows"]))
                 self.assertEqual(totals["female"], sum(row["female"] for row in payload["rows"]))
+
+    def test_yearly_tab_gives_one_row_per_year(self):
+        payload = self._report("yearly", year="all")
+
+        # 2026: MF-01 to MF-03, 11 visitors, none discounted -> 11 x 80.
+        # 2027: MF-05 alone, 4 visitors, 1 discounted -> 3 x 80 + 64.
+        self.assertEqual(
+            [(row["id"], row["name"], row["male"], row["female"], row["visitors"], row["revenue"])
+             for row in payload["rows"]],
+            [(2026, "2026", 6, 5, 11, 880), (2027, "2027", 2, 2, 4, 304)],
+        )
+        totals = payload["totals"]
+        self.assertEqual(
+            (totals["male"], totals["female"], totals["visitors"], totals["revenue"]), (8, 7, 15, 1184)
+        )
+        self.assertEqual(totals["male"] + totals["female"], totals["visitors"])
+
+    def test_yearly_tab_respects_the_year_filter(self):
+        # Only the selectable years (2024-2026) filter; 2027 records show under All Years.
+        for year, expected in (("2026", [(2026, 11)]), ("2025", []), ("all", [(2026, 11), (2027, 4)])):
+            with self.subTest(year=year):
+                payload = self._report("yearly", year=year)
+                self.assertEqual([(row["id"], row["visitors"]) for row in payload["rows"]], expected)
 
     def test_query_count_per_tab(self):
         for report_type in self.TABS:
