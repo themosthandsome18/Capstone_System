@@ -170,7 +170,7 @@ def mobile_tourism_bootstrap(request):
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": get_cached_active_barangays(),
-            "notifications": build_mobile_notifications(request, top_destination=top_destination),
+            "notifications": build_mobile_notifications(top_destination=top_destination),
             "theme": get_cached_tourism_theme(),
         }
     )
@@ -212,12 +212,39 @@ def mobile_destination_detail(request, resort_id):
     )
     feedback = FeedbackEntry.objects.filter(destination=resort).order_by("-date", "-id")[:5]
 
+    # Public: the byline is the reviewer's initials. Staff see the typed name
+    # through /api/feedback/, which needs a login.
+    recent_feedback = [
+        {**item, "reviewer": public_reviewer_initials(item.get("reviewer"))}
+        for item in FeedbackEntrySerializer(feedback, many=True).data
+    ]
+
     return Response(
         {
             "destination": ResortSerializer(resort).data,
-            "recentFeedback": FeedbackEntrySerializer(feedback, many=True).data,
+            "recentFeedback": recent_feedback,
         }
     )
+
+
+ANONYMOUS_REVIEWER = "Mobile Tourist"
+
+
+def public_reviewer_initials(name):
+    """A public review's byline: "Juan Dela Cruz" -> "J.D.C.".
+
+    The first letter of each word, uppercase, dot-separated. A name with no
+    letters, and the app's own anonymous default, stay "Mobile Tourist".
+    """
+    name = (name or "").strip()
+    if name == ANONYMOUS_REVIEWER:
+        return ANONYMOUS_REVIEWER
+    initials = [
+        next((char for char in word if char.isalpha()), "").upper()
+        for word in name.split()
+    ]
+    initials = [initial for initial in initials if initial]
+    return "".join(f"{initial}." for initial in initials) or ANONYMOUS_REVIEWER
 
 
 MOBILE_EXCLUDED_DESTINATION_NAMES = {
@@ -1346,61 +1373,11 @@ def mobile_household_survey_submit(request):
 _TOP_DESTINATION_UNSET = object()
 
 
-def build_mobile_notifications(request=None, top_destination=_TOP_DESTINATION_UNSET):
+def build_mobile_notifications(top_destination=_TOP_DESTINATION_UNSET):
+    # Public: anyone can read these without a login, and the app shows them to
+    # every user. Only public advisories and the trending destination; never a
+    # tourist record (no name, survey ID or booking), under any parameter.
     notifications = []
-
-    # 1. Query approved tourist records (status == arrived)
-    # When admin checks / verifies a record in Record Management, status becomes BOOKING_STATUS_ARRIVED
-    approved_query = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED).select_related("resort")
-
-    contact = ""
-    reference = ""
-    if request:
-        contact = (request.query_params.get("contact") or "").strip()
-        reference = (request.query_params.get("reference") or "").strip()
-
-    if reference:
-        user_approved = approved_query.filter(survey_id__iexact=reference).first()
-        if user_approved:
-            resort_title = user_approved.resort.resort_name if user_approved.resort else "Mauban Destination"
-            notifications.append({
-                "id": f"approved-{user_approved.survey_id}",
-                "type": "approval",
-                "title": "Registration Approved!",
-                "message": (
-                    f"Hello {user_approved.full_name or 'Visitor'}! Na-check at naaprubahan na ng Admin sa Record Management "
-                    f"ang inyong tourist registration ({user_approved.survey_id}) para sa {resort_title}. Welcome to Mauban!"
-                ),
-            })
-    elif contact:
-        user_approved = approved_query.filter(contact_number__icontains=contact).first()
-        if user_approved:
-            resort_title = user_approved.resort.resort_name if user_approved.resort else "Mauban Destination"
-            notifications.append({
-                "id": f"approved-{user_approved.survey_id}",
-                "type": "approval",
-                "title": "Registration Approved!",
-                "message": (
-                    f"Hello {user_approved.full_name or 'Visitor'}! Na-check at naaprubahan na ng Admin sa Record Management "
-                    f"ang inyong tourist registration ({user_approved.survey_id}) para sa {resort_title}. Welcome to Mauban!"
-                ),
-            })
-
-    # Include recent approved records so any tourist in the mobile app sees the official approval notices
-    recent_approved = approved_query.order_by("-arrival_date", "-created_at")[:4]
-    for rec in recent_approved:
-        rec_id = f"approved-{rec.survey_id}"
-        if not any(n["id"] == rec_id for n in notifications):
-            resort_title = rec.resort.resort_name if rec.resort else "Mauban Destination"
-            notifications.append({
-                "id": rec_id,
-                "type": "approval",
-                "title": "Registration Approved!",
-                "message": (
-                    f"Ang tourist record ({rec.survey_id}) ni {rec.full_name or 'Visitor'} para sa {resort_title} "
-                    f"ay opisyal nang na-verify at naaprubahan ng Admin sa Record Management."
-                ),
-            })
 
     now = timezone.now()
     advisories = (

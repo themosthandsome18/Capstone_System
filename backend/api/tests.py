@@ -4386,6 +4386,121 @@ class ReportingYearTests(TestCase):
         self.assertEqual(len(payload["rows"]), 1)
 
 
+class PublicMobileTourismPrivacyTests(TestCase):
+    """The public mobile tourism endpoints carry no visitor's personal data."""
+
+    NAMES = ("Juana Dela Cruz", "Pedro Santos")
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        from api.views.mobile import get_mobile_destination_queryset
+
+        cls.resort = get_mobile_destination_queryset().order_by("resort_id").first()
+        quezon = Province.objects.get(name="Quezon")
+        common = dict(
+            country=Country.objects.get(name="Philippines"),
+            region=quezon.region,
+            province=quezon,
+            resort=cls.resort,
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=2,
+            filipino_count=2,
+            total_male=1,
+            total_female=1,
+            age_8_59=2,
+            status="arrived",
+        )
+        TouristRecord.objects.create(
+            survey_id="SURV-2026-001", full_name=cls.NAMES[0], contact_number="09171234567",
+            arrival_date="2026-09-20", **common,
+        )
+        TouristRecord.objects.create(
+            survey_id="SURV-2026-002", full_name=cls.NAMES[1], contact_number="09179876543",
+            arrival_date="2026-09-21", **common,
+        )
+        cls.reviews = {
+            name: FeedbackEntry.objects.create(
+                destination=cls.resort, reviewer=name, rating=5, date="2026-09-22",
+                title="Visit", message="Clean.",
+            )
+            for name in ("Juan Dela Cruz", "   ", "123 !!", "Mobile Tourist", "maria")
+        }
+
+    def _bootstrap(self, query=None):
+        response = APIClient().get("/api/mobile/tourism/bootstrap/", query or {})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response
+
+    def test_the_public_bootstrap_carries_no_survey_id_or_name(self):
+        body = self._bootstrap().content.decode()
+
+        self.assertNotIn("SURV-", body)
+        for name in self.NAMES:
+            self.assertNotIn(name, body)
+        self.assertNotIn("approval", body)
+
+    def test_lookup_parameters_change_nothing(self):
+        expected = self._bootstrap().json()
+
+        for query in (
+            {"contact": "9"},
+            {"contact": "09171234567"},
+            {"reference": "SURV-2026-001"},
+            {"reference": "surv-2026-001"},
+            {"contact": "09171234567", "reference": "SURV-2026-001"},
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(self._bootstrap(query).json(), expected)
+
+    def test_notifications_is_always_a_list(self):
+        notifications = self._bootstrap().json()["notifications"]
+
+        self.assertIsInstance(notifications, list)
+        for item in notifications:
+            self.assertEqual(set(item) & {"id", "type", "title", "message"}, {"id", "type", "title", "message"})
+            self.assertNotEqual(item["type"], "approval")
+
+    def test_public_reviews_show_initials_never_the_typed_name(self):
+        from api.views.mobile import public_reviewer_initials
+
+        cases = {
+            "Juan Dela Cruz": "J.D.C.",
+            "maria": "M.",
+            "  ana   de la paz ": "A.D.L.P.",
+            "J.R. Santos-Reyes": "J.S.",
+            "": "Mobile Tourist",
+            "   ": "Mobile Tourist",
+            "123 !!": "Mobile Tourist",
+            None: "Mobile Tourist",
+            "Mobile Tourist": "Mobile Tourist",
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(public_reviewer_initials(name), expected)
+
+        response = APIClient().get(f"/api/mobile/tourism/destinations/{self.resort.resort_id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bylines = sorted(item["reviewer"] for item in response.json()["recentFeedback"])
+        self.assertEqual(bylines, sorted(["J.D.C.", "Mobile Tourist", "Mobile Tourist", "Mobile Tourist", "M."]))
+        self.assertNotIn("Juan Dela Cruz", response.content.decode())
+
+    def test_staff_feedback_keeps_the_full_name(self):
+        user = User.objects.create_user(username="feedback_staff", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+        response = client.get("/api/feedback/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Juan Dela Cruz", [item["reviewer"] for item in response.json()])
+        self.assertEqual(APIClient().get("/api/feedback/").status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 
