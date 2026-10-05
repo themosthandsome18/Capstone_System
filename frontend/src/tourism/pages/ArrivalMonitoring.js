@@ -8,6 +8,7 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import { buildReportingYearOptions } from "../utils/reportingYears";
 import { tourismApi } from "../services/tourismApi";
 import {
   ARRIVAL_EXPORT_HEADERS,
@@ -24,13 +25,6 @@ import { formatNumber } from "../utils/format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const currentReportingYear = String(new Date().getFullYear());
-
-const reportingYearOptions = [
-  { value: "2026", label: "2026" },
-  { value: "2025", label: "2025" },
-  { value: "2024", label: "2024" },
-  { value: "all", label: "All Years" },
-];
 
 function getTodayDateString() {
   const now = new Date();
@@ -73,6 +67,7 @@ function ArrivalMonitoring() {
     refreshArrivalMonitoring,
     refreshArrivalMonitoringIfStale,
     isComputedDataStale,
+    reportingYears,
   } = useTourismData();
 
   const todayStr = useMemo(() => getTodayDateString(), []);
@@ -87,6 +82,7 @@ function ArrivalMonitoring() {
     arrivalMonitoring.filters?.resort_id || "all"
   );
   const [selectedYear, setSelectedYear] = useState(initialView.year || currentReportingYear);
+  const reportingYearOptions = buildReportingYearOptions(reportingYears, selectedYear);
   const [exporting, setExporting] = useState(false);
   const [arrivalError, setArrivalError] = useState("");
   const [refreshing, setRefreshing] = useState(false);

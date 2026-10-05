@@ -78,13 +78,14 @@ const YEARLY_REPORT = {
   questionAnswers: [],
 };
 
-function setup({ stale = false, refresh, reportData = RESORT_REPORT } = {}) {
+function setup({ stale = false, refresh, reportData = RESORT_REPORT, reportingYears = ["2026", "2025", "2024"] } = {}) {
   const refreshReportData = refresh || jest.fn().mockResolvedValue({});
   useTourismData.mockReturnValue({
     referenceTables: { resorts: [] },
     reportData,
     refreshReportData,
     isComputedDataStale: () => stale,
+    reportingYears,
   });
   render(<AnalyticsAndReport />);
   return { refreshReportData };
@@ -306,6 +307,50 @@ describe("Reports Yearly tab", () => {
     expect(screen.getByRole("note").textContent).toBe(
       "1 row: Male + Female does not equal Total Visitors; check these records."
     );
+  });
+});
+
+describe("Reports year filter", () => {
+  function yearOptions() {
+    return [...screen.getByDisplayValue("2026").options].map((option) => option.value);
+  }
+
+  it("offers the years the backend found in the data, newest first, then All Years", () => {
+    setup({ reportingYears: ["2027", "2026"] });
+
+    expect(yearOptions()).toEqual(["2027", "2026", "all"]);
+  });
+
+  it("does not offer years that have no records", () => {
+    setup({ reportingYears: ["2027", "2026"] });
+
+    expect(yearOptions()).not.toContain("2024");
+    expect(yearOptions()).not.toContain("2025");
+  });
+});
+
+describe("Reports subtitles", () => {
+  it("say the visitor tabs count arrived and pending bookings, not only arrived ones", () => {
+    const expected = {
+      daily: "Daily visitor totals from arrived and pending bookings (no-shows excluded)",
+      monthly: "Monthly visitor totals from arrived and pending bookings (no-shows excluded)",
+      yearly: "Yearly visitor totals from arrived and pending bookings (no-shows excluded)",
+      resort: "Visitor totals by resort from arrived and pending bookings (no-shows excluded)",
+    };
+    Object.entries(expected).forEach(([type, wanted]) => {
+      useTourismData.mockReturnValue({
+        referenceTables: { resorts: [] },
+        reportData: { ...RESORT_REPORT, type, filters: { ...RESORT_REPORT.filters, type } },
+        refreshReportData: jest.fn(),
+        isComputedDataStale: () => false,
+        reportingYears: ["2026"],
+      });
+      const view = render(<AnalyticsAndReport />);
+      const subtitle = view.container.querySelector(".report-card-title p").textContent;
+      expect(subtitle).toBe(wanted);
+      expect(subtitle).not.toMatch(/based on arrived/);
+      view.unmount();
+    });
   });
 });
 

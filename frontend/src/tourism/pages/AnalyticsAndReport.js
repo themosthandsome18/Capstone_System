@@ -13,6 +13,7 @@ import { Bar, Doughnut, Pie } from "react-chartjs-2";
 import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import { buildReportingYearOptions } from "../utils/reportingYears";
 import {
   CHART_PALETTE_DEFAULTS,
   seriesColors,
@@ -71,15 +72,15 @@ function getReportTitle(type) {
 
 function getReportSubtitle(type) {
   if (type === "daily") {
-    return "Daily visitor totals based on arrived tourist records";
+    return "Daily visitor totals from arrived and pending bookings (no-shows excluded)";
   }
 
   if (type === "monthly") {
-    return "Monthly visitor totals based on arrived tourist records";
+    return "Monthly visitor totals from arrived and pending bookings (no-shows excluded)";
   }
 
   if (type === "yearly") {
-    return "Yearly visitor totals based on arrived tourist records";
+    return "Yearly visitor totals from arrived and pending bookings (no-shows excluded)";
   }
 
   if (type === "origin") {
@@ -98,7 +99,7 @@ function getReportSubtitle(type) {
     return "No-show bookings grouped by resort";
   }
 
-  return "Top performing destination based on arrived tourist records";
+  return "Visitor totals by resort from arrived and pending bookings (no-shows excluded)";
 }
 
 function getFirstColumnLabel(type) {
@@ -134,13 +135,6 @@ function getFirstColumnLabel(type) {
 }
 
 const currentReportingYear = String(new Date().getFullYear());
-
-const reportingYearOptions = [
-  { value: "2026", label: "2026" },
-  { value: "2025", label: "2025" },
-  { value: "2024", label: "2024" },
-  { value: "all", label: "All Years" },
-];
 
 const tourismTitleMap = {
   top_resort: "Top Tourist Destination",
@@ -228,7 +222,8 @@ function formatCount(value) {
 }
 
 function AnalyticsAndReport() {
-  const { referenceTables, reportData, refreshReportData, isComputedDataStale } = useTourismData();
+  const { referenceTables, reportData, refreshReportData, isComputedDataStale, reportingYears } =
+    useTourismData();
 
   // Start on what is already loaded (the app-start bootstrap or this page's last
   // view), so opening the page needs no request unless that data is stale.
@@ -249,6 +244,7 @@ function AnalyticsAndReport() {
     to: loadedFilters.to || "",
     resort_id: loadedFilters.resort_id || "",
   };
+  const reportingYearOptions = buildReportingYearOptions(reportingYears, filters.year);
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportError, setReportError] = useState("");
 

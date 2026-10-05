@@ -15,6 +15,7 @@ import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
+import { buildReportingYearOptions } from "../utils/reportingYears";
 import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
 import { countryRequiresLocation } from "../utils/countryLocation";
 import { formatNumber } from "../utils/format";
@@ -96,13 +97,6 @@ const statusClassNames = {
 
 const currentReportingYear = String(new Date().getFullYear());
 
-const reportingYearOptions = [
-  { value: "2026", label: "2026" },
-  { value: "2025", label: "2025" },
-  { value: "2024", label: "2024" },
-  { value: "all", label: "All Years" },
-];
-
 function getFirstName(record) {
   if (!record) return "";
   if (record.first_name) return record.first_name;
@@ -137,6 +131,7 @@ function BookingManagement() {
     previewOnlineBookingImport,
     importOnlineBookingFile,
     refreshBookingManagement,
+    reportingYears,
   } = useTourismData();
 
   const { role } = useAuth();
@@ -175,6 +170,7 @@ function BookingManagement() {
     from: "",
     to: "",
   });
+  const reportingYearOptions = buildReportingYearOptions(reportingYears, filters.year);
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
   const [importError, setImportError] = useState("");

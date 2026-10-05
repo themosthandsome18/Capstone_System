@@ -48,9 +48,8 @@ def entrance_fee(visitors, discounted):
     return (visitors - discounted) * REGULAR_ENTRANCE_FEE + discounted * DISCOUNTED_ENTRANCE_FEE
 
 
-DEFAULT_TOURISM_REPORTING_YEAR = str(timezone.now().year)
-TOURISM_REPORTING_YEAR_CHOICES = ("2024", "2025", "2026")
 ALL_TOURISM_REPORTING_YEARS = "all"
+REPORT_TYPES = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "no_show")
 
 
 from django.core.cache import cache
@@ -205,19 +204,45 @@ def parse_positive_int(value, default):
     return parsed if parsed > 0 else default
 
 
+class ReportParameterError(ValueError):
+    """A report filter that cannot be honoured; the view answers 400 with it."""
+
+
+def current_reporting_year():
+    # The local (Asia/Manila) year, read on every call. A value fixed when the
+    # process started would stay on the old year after New Year.
+    return str(timezone.localdate().year)
+
+
+def get_reporting_years():
+    """Every year with a tourist record, plus the current year, newest first. One query."""
+    years = {str(day.year) for day in TouristRecord.objects.dates("arrival_date", "year")}
+    years.add(current_reporting_year())
+    return sorted(years, reverse=True)
+
+
 def get_reporting_year(params=None):
+    """The year to filter by: a four-digit year, "all", or the current year when none is given.
+
+    Anything else is rejected, never replaced by another year's data. A
+    well-formed year with no records is honoured and simply returns nothing.
+    """
     params = params or {}
-    raw_year = str(
-        params.get("year", DEFAULT_TOURISM_REPORTING_YEAR) or ""
-    ).strip()
+    raw_year = str(params.get("year") or "").strip()
+
+    if not raw_year:
+        return current_reporting_year()
 
     if raw_year.lower() == ALL_TOURISM_REPORTING_YEARS:
         return ALL_TOURISM_REPORTING_YEARS
 
-    if raw_year in TOURISM_REPORTING_YEAR_CHOICES:
+    if len(raw_year) == 4 and raw_year.isascii() and raw_year.isdigit() and raw_year[0] != "0":
         return raw_year
 
-    return DEFAULT_TOURISM_REPORTING_YEAR
+    raise ReportParameterError(
+        f'Unknown year "{raw_year}". Use a four-digit year such as '
+        f'{current_reporting_year()}, or "all".'
+    )
 
 
 def apply_reporting_year(queryset, reporting_year):
@@ -722,7 +747,13 @@ def build_dashboard_payload(params=None):
 def build_reports_payload(params=None):
     params = params or {}
 
-    report_type = params.get("type", "resort")
+    # No type means the Resort report (the bootstrap asks for it that way); an
+    # unknown type is rejected instead of quietly answering with resort rows.
+    report_type = params.get("type") or "resort"
+    if report_type not in REPORT_TYPES:
+        raise ReportParameterError(
+            f'Unknown report type "{report_type}". Use one of: {", ".join(REPORT_TYPES)}.'
+        )
     reporting_year = get_reporting_year(params)
     date_from = params.get("from")
     date_to = params.get("to")
@@ -1002,7 +1033,7 @@ def build_reports_payload(params=None):
                 }
             )
 
-    else:
+    else:  # resort
         resort_queryset = Resort.objects.order_by("resort_name")
         resort_totals = {
             item["resort_id"]: (

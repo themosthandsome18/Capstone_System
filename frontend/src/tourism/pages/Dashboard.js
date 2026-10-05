@@ -25,6 +25,7 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import { buildReportingYearOptions } from "../utils/reportingYears";
 import {
   CHART_PALETTE_DEFAULTS,
   seriesColors,
@@ -52,13 +53,6 @@ function formatCurrency(value) {
 }
 
 const currentReportingYear = String(new Date().getFullYear());
-
-const reportingYearOptions = [
-  { value: "2026", label: "2026" },
-  { value: "2025", label: "2025" },
-  { value: "2024", label: "2024" },
-  { value: "all", label: "All Years" },
-];
 
 // Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
 const buildLineOptions = (palette) => ({
@@ -133,10 +127,12 @@ function Dashboard() {
     refreshDashboardData,
     refreshDashboardIfStale,
     isComputedDataStale,
+    reportingYears,
   } = useTourismData();
   const [selectedYear, setSelectedYear] = useState(
     dashboardData.filters?.year || currentReportingYear
   );
+  const reportingYearOptions = buildReportingYearOptions(reportingYears, selectedYear);
   const [dashboardError, setDashboardError] = useState("");
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
   // A record changed since the dashboard was last loaded: refetch on open, never show stale.

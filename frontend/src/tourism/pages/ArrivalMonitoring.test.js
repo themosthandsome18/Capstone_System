@@ -39,6 +39,7 @@ function contextValue(filters, extra = {}, refreshArrivalMonitoring = jest.fn().
       ...extra,
     },
     referenceTables: { resorts: [] },
+    reportingYears: ["2026", "2025", "2024"],
     loading: false,
     error: "",
     refreshArrivalMonitoring,

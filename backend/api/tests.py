@@ -4143,11 +4143,33 @@ class ReportsMaleFemaleTests(TestCase):
         self.assertEqual(totals["male"] + totals["female"], totals["visitors"])
 
     def test_yearly_tab_respects_the_year_filter(self):
-        # Only the selectable years (2024-2026) filter; 2027 records show under All Years.
-        for year, expected in (("2026", [(2026, 11)]), ("2025", []), ("all", [(2026, 11), (2027, 4)])):
+        for year, expected in (
+            ("2026", [(2026, 11)]), ("2027", [(2027, 4)]), ("2025", []), ("all", [(2026, 11), (2027, 4)]),
+        ):
             with self.subTest(year=year):
                 payload = self._report("yearly", year=year)
                 self.assertEqual([(row["id"], row["visitors"]) for row in payload["rows"]], expected)
+
+    def test_2027_returns_only_the_2027_record_on_every_visitor_tab(self):
+        r0 = self.resorts[0].resort_name
+        expected = {
+            "daily": [("Sep 21, 2027", 2, 2, 4, 304)],
+            "monthly": [("September 2027", 2, 2, 4, 304)],
+            "yearly": [("2027", 2, 2, 4, 304)],
+            "resort": [(r0, 2, 2, 4, 304)],
+            "origin": [("Quezon", 2, 2, 4, 304)],
+            "purpose": [(self.purposes[0].name, 2, 2, 4, 304)],
+            "transport": [(self.modes[0].name, 2, 2, 4, 304)],
+            "no_show": [],
+        }
+        for report_type, rows in expected.items():
+            with self.subTest(report_type=report_type):
+                payload = self._report(report_type, year="2027")
+                self.assertEqual(
+                    [(r["name"], r["male"], r["female"], r["visitors"], r["revenue"]) for r in payload["rows"]],
+                    rows,
+                )
+                self.assertEqual(payload["filters"]["year"], "2027")
 
     def test_query_count_per_tab(self):
         for report_type in self.TABS:
@@ -4155,6 +4177,124 @@ class ReportsMaleFemaleTests(TestCase):
                 with CaptureQueriesContext(connection) as queries:
                     self._report(report_type)
                 self.assertEqual(len(queries), self.QUERIES[report_type])
+
+
+class ReportingYearTests(TestCase):
+    """The year filters come from the data; a bad year or report type is a 400."""
+
+    REPORT_ENDPOINTS = (
+        "/api/reports/",
+        "/api/dashboard/",
+        "/api/arrival-monitoring/",
+        "/api/arrival-monitoring/export/",
+        "/api/booking-management/",
+    )
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        cls.quezon = Province.objects.get(name="Quezon")
+
+    def _record(self, survey_id, day, visitors=2):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Group",
+            contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"),
+            region=self.quezon.region,
+            province=self.quezon,
+            arrival_date=day,
+            resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=visitors,
+            filipino_count=visitors,
+            total_male=visitors,
+            age_8_59=visitors,
+            status="arrived",
+        )
+
+    def _client(self):
+        user = User.objects.create_user(username="years_admin", password="Years@12345")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        return client
+
+    def test_no_records_still_lists_the_current_year(self):
+        from .services.tourism import current_reporting_year, get_reporting_years
+
+        self.assertEqual(get_reporting_years(), [current_reporting_year()])
+
+    def test_years_come_from_the_data_newest_first(self):
+        from .services.tourism import current_reporting_year, get_reporting_years
+
+        self._record("RY-01", "2027-09-21")
+        self._record("RY-02", "2024-03-01")
+        self._record("RY-03", "2024-11-30")
+
+        expected = sorted({"2027", "2024", current_reporting_year()}, reverse=True)
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(get_reporting_years(), expected)
+        self.assertEqual(len(queries), 1)
+
+    def test_bootstrap_sends_the_reporting_years(self):
+        from .services.tourism import get_reporting_years
+
+        self._record("RY-01", "2027-09-21")
+        response = self._client().get("/api/bootstrap/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["reportingYears"], get_reporting_years())
+        self.assertIn("2027", response.json()["reportingYears"])
+
+    def test_a_missing_year_is_the_current_year(self):
+        from .services.tourism import current_reporting_year, get_reporting_year
+
+        for params in ({}, {"year": ""}, {"year": "  "}):
+            with self.subTest(params=params):
+                self.assertEqual(get_reporting_year(params), current_reporting_year())
+
+    def test_a_junk_year_is_rejected_on_every_report_endpoint(self):
+        self._record("RY-01", "2026-09-21")
+        client = self._client()
+        for year in ("2027x", "abcd", "20", "02026", "２０２６", "-2026", "all-years"):
+            for endpoint in self.REPORT_ENDPOINTS:
+                with self.subTest(year=year, endpoint=endpoint):
+                    response = client.get(endpoint, {"year": year, "date": "all"})
+                    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                    self.assertIn("Unknown year", response.json()["detail"])
+                    self.assertNotIn("rows", response.json())
+
+    def test_every_report_tab_rejects_a_junk_year(self):
+        from .services.tourism import REPORT_TYPES, ReportParameterError, build_reports_payload
+
+        for report_type in REPORT_TYPES:
+            with self.subTest(report_type=report_type):
+                with self.assertRaises(ReportParameterError):
+                    build_reports_payload({"type": report_type, "year": "2027x", "include_questions": "false"})
+
+    def test_an_unknown_report_type_is_rejected_not_answered_with_resorts(self):
+        self._record("RY-01", "2026-09-21")
+        client = self._client()
+
+        response = client.get("/api/reports/", {"type": "boat", "year": "2026"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Unknown report type "boat"', response.json()["detail"])
+        self.assertNotIn("rows", response.json())
+
+    def test_no_report_type_is_still_the_resort_report(self):
+        from .services.tourism import build_reports_payload
+
+        self._record("RY-01", "2026-09-21")
+
+        payload = build_reports_payload({"year": "2026", "include_questions": "false"})
+
+        self.assertEqual(payload["type"], "resort")
+        self.assertEqual(len(payload["rows"]), 1)
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):

@@ -249,6 +249,7 @@ function mergeBootstrapData(remote = {}) {
     },
     reportData: normalizeReportData(remote.reportData),
     arrivalMonitoring: normalizeArrivalMonitoring(remote.arrivalMonitoring),
+    reportingYears: remote.reportingYears || [],
     theme: remote.theme || null,
     apiBaseUrl: API_BASE_URL,
   };

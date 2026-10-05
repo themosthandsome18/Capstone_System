@@ -47,6 +47,7 @@ from api.services.tourism import (
     build_tourist_records_payload,
     get_cached_tourism_theme,
     invalidate_tourism_theme_cache,
+    ReportParameterError,
 )
 from api.services.upload import (
     StorageServiceError,
@@ -60,12 +61,20 @@ from api.services.upload import (
 from api.services.no_show import sweep_no_shows as auto_update_no_show_bookings  # noqa: E402
 
 
+def report_response(build, params):
+    """A report payload, or 400 for a filter it cannot honour (never another year's data)."""
+    try:
+        return Response(build(params))
+    except ReportParameterError as error:
+        return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(["GET"])
 @module_required("tourism")
 def arrival_monitoring_data(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
-    return Response(build_arrival_monitoring_payload(request.query_params))
+    return report_response(build_arrival_monitoring_payload, request.query_params)
 
 
 @api_view(["GET"])
@@ -74,7 +83,7 @@ def arrival_monitoring_export(request):
     # Same parameters and records as arrival_monitoring_data, every row, in date order.
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
-    return Response(build_arrival_monitoring_export(request.query_params))
+    return report_response(build_arrival_monitoring_export, request.query_params)
 
 
 @api_view(["GET"])
@@ -82,7 +91,7 @@ def arrival_monitoring_export(request):
 def booking_management_data(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
-    return Response(build_booking_management_payload(request.query_params))
+    return report_response(build_booking_management_payload, request.query_params)
 
 
 @api_view(["POST"])
@@ -206,7 +215,7 @@ def tourist_record_detail(request, survey_id):
 def dashboard_data(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
-    return Response(build_dashboard_payload(request.query_params))
+    return report_response(build_dashboard_payload, request.query_params)
 
 
 @api_view(["GET"])
@@ -214,7 +223,7 @@ def dashboard_data(request):
 def reports_data(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
-    return Response(build_reports_payload(request.query_params))
+    return report_response(build_reports_payload, request.query_params)
 
 
 @api_view(["GET", "POST"])
