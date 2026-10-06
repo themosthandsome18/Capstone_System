@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, memo } from "react";
+import { useEffect, useRef, useState, useMemo, memo } from "react";
 import {
   ArcElement,
   BarElement,
@@ -14,6 +14,7 @@ import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
+import { watchPrint } from "../utils/printCharts";
 import {
   CHART_PALETTE_DEFAULTS,
   seriesColors,
@@ -258,6 +259,11 @@ function AnalyticsAndReport() {
   };
   const reportingYearOptions = buildReportingYearOptions(reportingYears, filters.year);
   const [loadingReport, setLoadingReport] = useState(false);
+  const pageRef = useRef(null);
+
+  // While printing, every chart on this page is redrawn at its printed size
+  // (utils/printCharts.js); on screen nothing changes.
+  useEffect(() => watchPrint(() => pageRef.current, () => Object.values(ChartJS.instances)), []);
   const [reportError, setReportError] = useState("");
 
   const rows = useMemo(() => reportData.rows || [], [reportData.rows]);
@@ -482,7 +488,7 @@ function AnalyticsAndReport() {
   }
 
   return (
-    <div className="reports-page">
+    <div className="reports-page" ref={pageRef}>
       <div className="reports-header">
         <div>
           <h1>Reports</h1>
@@ -812,7 +818,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
+      <div className="insight-chart-box" style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         {!chartPalette ? null : isPie ? (
           <Pie
             data={chartData}
@@ -1002,7 +1008,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
+      <div className="insight-chart-box" style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         {chartPalette ? (
           <Bar
             data={chartData}
@@ -1049,7 +1055,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: "180px", position: "relative", margin: "10px 0" }}>
+      <div className="insight-chart-box" style={{ height: "180px", position: "relative", margin: "10px 0" }}>
         <Doughnut
           data={chartData}
           options={{
@@ -1097,7 +1103,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     };
 
     return (
-      <div style={{ height: `${Math.max(150, (visual.items || []).length * 36)}px`, position: "relative", margin: "10px 0" }}>
+      <div className="insight-chart-box" style={{ height: `${Math.max(150, (visual.items || []).length * 36)}px`, position: "relative", margin: "10px 0" }}>
         {chartPalette ? (
           <Bar
             data={chartData}

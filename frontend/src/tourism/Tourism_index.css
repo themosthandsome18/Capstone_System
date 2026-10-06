@@ -3736,15 +3736,24 @@
     height: auto !important;
   }
 
-  /* Even rows: every Key Insights row as tall as the tallest, and one height
-     for every chart box. The boxes are the card's children with an inline
-     height (180px, or the ranking's 150-216px), so !important wins here. */
+  /* Even rows: every Key Insights row as tall as the tallest. */
   .reports-page .analytics-question-grid {
     grid-auto-rows: 1fr;
   }
 
-  .reports-page .analytics-question-item > div[style*="height"] {
-    height: 180px !important;
+  /* Phase 2: every Key Insights chart box fills its card on paper (at least
+     210px, growing into whatever the title and answer leave), so no white
+     band opens between a chart and its answer: only the card's 14px gap
+     separates them. While printing, each chart is redrawn at its box's size
+     (utils/printCharts.js). At 210px the tallest card is 464px, so two rows
+     (946px) fit a Letter page (979px) as well as A4 (1047px). !important
+     overrides the boxes' inline screen height (180px, or 150-216px for
+     rankings) and bottom margin. */
+  .reports-page .insight-chart-box {
+    flex: 1 1 210px;
+    height: auto !important;
+    min-height: 210px;
+    margin-bottom: 0 !important;
   }
 
   /* ---- Reports print layout, Phase 1b ---- */
