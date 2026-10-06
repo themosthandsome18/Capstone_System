@@ -3746,6 +3746,57 @@
   .reports-page .analytics-question-item > div[style*="height"] {
     height: 180px !important;
   }
+
+  /* ---- Reports print layout, Phase 1b ---- */
+
+  /* The chart area takes the printed chart's height, so no empty band is
+     left under a chart scaled down to the paper. */
+  .reports-page .report-chart-area {
+    height: auto;
+  }
+
+  /* Table on paper: the name column gets the room. Measured at 14px: the
+     longest resort name ("Villa Escaparde Camping and Beach Resort") needs
+     291.7px; Male, Female and "Visitors" (the header wraps at its space)
+     need 33.8 / 48.7 / 52.8px in bold, a nine-digit fee (PHP 123,456,789)
+     93.7px. With 8px of padding a side and no sort arrows (they do nothing
+     on paper), the figures take 58 / 66 / 70 / 112px = 306px and the name
+     at least 308px: 614px, inside A4's 629px and Letter's 650px. */
+  .reports-page .report-table-card th,
+  .reports-page .report-table-card td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .reports-page .report-table-card .sort-indicator {
+    display: none;
+  }
+
+  /* Sortable headers never wrap on screen; on paper "Total Visitors" must
+     break at its space to fit its 70px column. */
+  .reports-page .report-table-card th {
+    white-space: normal;
+  }
+
+  .reports-page .report-table-card th.report-col-male {
+    width: 58px;
+  }
+
+  .reports-page .report-table-card th.report-col-female {
+    width: 66px;
+  }
+
+  .reports-page .report-table-card th.report-col-visitors {
+    width: 70px;
+  }
+
+  .reports-page .report-table-card th.report-col-revenue {
+    width: 112px;
+  }
+
+  .reports-page .report-table-card table {
+    min-width: 614px;
+  }
 }
 
 .compact-actions {
