@@ -4501,6 +4501,89 @@ class PublicMobileTourismPrivacyTests(TestCase):
         self.assertEqual(APIClient().get("/api/feedback/").status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+class PeakSeasonShareTests(TestCase):
+    """Key Insights percentages divide by the total the sentence names."""
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        quezon = Province.objects.get(name="Quezon")
+        cls.resorts = list(Resort.objects.order_by("resort_id")[:2])
+        purposes = list(VisitPurpose.objects.order_by("id")[:2])
+        common = dict(
+            full_name="Group", contact_number="09170000000", itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+        )
+
+        def record(survey_id, day, visitors, resort=0, booking_status="arrived", foreign=False):
+            # The one foreign record also has the second purpose and resort, so
+            # every leader (resort, origin, purpose) is 13 of 20, not all of it.
+            return TouristRecord(
+                survey_id=survey_id, arrival_date=day, resort=cls.resorts[resort], total_visitors=visitors,
+                country=Country.objects.get(name="United States" if foreign else "Philippines"),
+                region=None if foreign else quezon.region, province=None if foreign else quezon,
+                visit_purpose=purposes[1 if foreign else 0],
+                foreigner_count=visitors if foreign else 0, filipino_count=0 if foreign else visitors,
+                total_male=visitors, age_8_59=visitors, status=booking_status, **common,
+            )
+
+        # 2026: July 5, August 12 (7 + 5), September 3 -> 20 visitors; the no-show
+        # in October is not counted anywhere.
+        TouristRecord.objects.bulk_create([
+            record("PK-01", "2026-07-10", 5),
+            record("PK-02", "2026-08-03", 7, resort=1, foreign=True),
+            record("PK-03", "2026-08-20", 5, booking_status="pending"),
+            record("PK-04", "2026-09-15", 3),
+            record("PK-05", "2026-10-02", 40, booking_status="no_show"),
+        ])
+
+    def _answers(self, **params):
+        from .services.tourism import build_tourism_question_answers
+
+        return {a["id"]: a for a in build_tourism_question_answers({"year": "2026", **params})}
+
+    @staticmethod
+    def _stated(answer):
+        import re
+
+        match = re.search(r"leads with (\d+) visitors, equal to ([\d.]+)% of the selected total", answer)
+        return int(match.group(1)), float(match.group(2))
+
+    def test_peak_month_is_its_share_of_the_selected_total(self):
+        peak = self._answers()["peak_month"]
+
+        self.assertEqual(peak["answer"], "August 2026 leads with 12 visitors, equal to 60.0% of the selected total.")
+        self.assertEqual(
+            (peak["visual"]["value"], peak["visual"]["total"], peak["visual"]["percentage"]), (12, 20, 60.0)
+        )
+
+    def test_gauge_and_sentence_show_the_same_percentage(self):
+        for params in ({}, {"year": "all"}, {"from": "2026-08-01", "to": "2026-09-30"}):
+            with self.subTest(params=params):
+                peak = self._answers(**params)["peak_month"]
+                count, stated = self._stated(peak["answer"])
+                self.assertEqual(stated, peak["visual"]["percentage"])
+                self.assertEqual(count, peak["visual"]["value"])
+
+        # August to September: August 12 of 15 visitors.
+        self.assertEqual(self._answers(**{"from": "2026-08-01", "to": "2026-09-30"})["peak_month"]["visual"]["percentage"], 80.0)
+
+    def test_every_share_divides_by_the_selected_total(self):
+        answers = self._answers()
+        total = 20  # all 2026 visitors except the no-show
+        expected = {"top_resort": (13, 65.0), "top_origin": (13, 65.0), "visit_purpose": (13, 65.0), "peak_month": (12, 60.0)}
+        for key, (count, share) in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(self._stated(answers[key]["answer"]), (count, share))
+                self.assertEqual(share, round(count / total * 100, 1))
+
+    def test_no_data_is_zero_percent(self):
+        peak = self._answers(year="2025")["peak_month"]
+
+        self.assertEqual(peak["answer"], "No matching records are available yet.")
+        self.assertEqual(peak["visual"]["percentage"], 0)
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 

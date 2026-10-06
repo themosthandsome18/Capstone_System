@@ -1255,8 +1255,10 @@ def build_tourism_question_answers(params=None):
         {
             "id": "peak_month",
             "question": "Which month or season records the highest number of tourist arrivals in Mauban?",
-            "answer": format_top_answer(peak_month, peak_month.get("total", 0), "visitors"),
-            "visual": build_share_visual(peak_month["name"], peak_month["total"], peak_month.get("total", 0)),
+            # The peak month's share of the selected total, in the sentence and
+            # the gauge alike (dividing by the peak month itself always gave 100%).
+            "answer": format_top_answer(peak_month, total_visitors, "visitors"),
+            "visual": build_share_visual(peak_month["name"], peak_month["total"], total_visitors),
         },
         {
             "id": "classification",

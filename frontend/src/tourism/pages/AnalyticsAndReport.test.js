@@ -408,6 +408,32 @@ describe("Reports year filter", () => {
   });
 });
 
+describe("Reports Peak Season gauge", () => {
+  function setupPeak(visual, answer) {
+    setup({
+      reportData: {
+        ...RESORT_REPORT,
+        questionAnswers: [{ id: "peak_month", question: "Which month?", answer, visual: { type: "share", ...visual } }],
+      },
+    });
+    return document.querySelector(".radial-progress-widget strong").textContent;
+  }
+
+  it("shows the share the sentence states", () => {
+    const ring = setupPeak(
+      { label: "September 2026", value: 19, total: 36, percentage: 52.8 },
+      "September 2026 leads with 19 visitors, equal to 52.8% of the selected total."
+    );
+
+    expect(ring).toBe("52.8%");
+    expect(screen.getByText(/equal to 52.8% of the selected total/)).toBeTruthy();
+  });
+
+  it("shows 0%, not 100%, when there is no data", () => {
+    expect(setupPeak({ label: "No data", value: 0, total: 0, percentage: 0 }, "No matching records are available yet.")).toBe("0%");
+  });
+});
+
 describe("Reports when the server rejects the year", () => {
   const originalFetch = global.fetch;
   afterEach(() => {

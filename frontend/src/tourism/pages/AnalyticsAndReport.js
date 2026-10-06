@@ -862,7 +862,8 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
 
   if (questionId === "peak_month") {
     // Render custom SVG Circular Progress ring
-    const percentage = visual.percentage || 100;
+    // The backend's share of the selected total; no data is 0%, never 100%.
+    const percentage = visual.percentage ?? 0;
     const value = visual.value || 0;
     const label = visual.label || "Peak Season";
 
