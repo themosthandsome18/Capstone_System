@@ -1267,10 +1267,14 @@ def build_tourism_question_answers(params=None):
                 f"Domestic (Filipino): {classification['filipino'] or 0}, "
                 f"Foreign (International): {classification['foreign'] or 0}."
             ),
+            # `items`, the shape the Same Day card uses and the doughnut reads
+            # (it was `left`/`right`, which nothing read, so the chart was blank).
             "visual": {
                 "type": "split",
-                "left": {"label": "Domestic (Filipino)", "value": classification["filipino"] or 0},
-                "right": {"label": "Foreign (International)", "value": classification["foreign"] or 0},
+                "items": [
+                    {"label": "Domestic (Filipino)", "value": classification["filipino"] or 0},
+                    {"label": "Foreign (International)", "value": classification["foreign"] or 0},
+                ],
             },
         },
         {

@@ -30,6 +30,81 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Key Insights: Badges Removed, Demographics Drawn, Clean Page, True Gauge (2026-10-06; `tourism/theme-tokens`)
+- **Chart-type badges removed** from all 11 Key Insights cards, together with `getVisualLabel` and the `.analytics-question-top` CSS that only they used.
+  - **Why.** The badge named something the reader can already see and carried no data. Because `getVisualLabel` keyed on the card's id rather than on what is drawn, it had drifted wrong on 4 of 11 cards on a printed report:
+    - "Pie Chart" on Top Tourist Destination, which draws a horizontal bar chart;
+    - "Pie Chart" on Top Destination for Overnight Stays, which draws a horizontal bar chart;
+    - "Doughnut Chart" on Top Visitor Origins, which draws a horizontal bar chart;
+    - "Polar Area" on Primary Purpose of Travel, which draws a horizontal bar chart.
+  - Two more labels were vague ("Comparison Chart" on vertical bar charts).
+  - The badge row took 42.5px of every card: a 28.5px badge plus the 14px gap.
+- **Visitor Demographics drew nothing.**
+  - **Cause.** The backend sent `{"type": "split", "left": {...}, "right": {...}}` (`services/tourism.py`), while the frontend doughnut reads `visual.items`. It got an empty list.
+  - **Fix, in the backend.** It now sends `items`: Domestic (Filipino), then Foreign (International). That is the shape the Same Day card already uses, so there is still one shape.
+  - Nothing read `left`/`right`: not the web app, not the mobile app, not any test. The other 10 cards already sent the shape the frontend reads.
+  - **Live, read-only:**
+
+    | Year | Answer | Doughnut slices |
+    |---|---|---|
+    | 2026 | Domestic 28, Foreign 8 | 28 / 8 |
+    | 2027 | Domestic 3, Foreign 1 | 3 / 1 |
+    | All Years | Domestic 31, Foreign 9 | 31 / 9 |
+
+  - The other 10 answers and visuals are byte-identical before and after, for all three years.
+- **Key Insights starts on a new page in print** (`break-before: page` on the section heading). Its 36px screen top margin is 0 in print. Kept, that margin pushed the second row off a Letter page: the heading plus two rows came to 992.8px against 980.4px of page.
+  - The chart boxes keep Phase 2's 210px minimum, so the cards shrink by the badge row: 463.9px to 421.4px.
+  - **Why 210px, not 252px.** Giving the badge's 42.5px to the chart boxes (252px) produced no measurable gain. The smallest chart text stayed 11px either way, because Chart.js does not scale text with the box. And it cost a whole page: 6 pages on A4 and Letter, against 5.
+- **Peak Season gauge.**
+  - The arc has flat line ends. Round ends painted half the stroke width past each end of the dash, 6.03 degrees at each end. At 52.8% the ring swept 202.2 degrees instead of 190.1, about 56%.
+  - Measured on the component's own SVG: 190.05 degrees at 52.8%. On the page's All Years figure, 47.5%, it is 171.15 degrees against 171.0. The share fallback gauge uses the same ring and was fixed the same way.
+  - **Print only:** the Peak Season and Average Length of Stay figures are centred between title and answer, instead of the whole space falling between figure and answer.
+- **Print proof** (PDF at scale 1, A4 and Letter, real helper, live markup):
+
+  | Page | A4 | Letter |
+  |---|---|---|
+  | 1 | main chart, table header and 5 rows | main chart, table header and 4 rows |
+  | 2 | header, 2 rows and Total | header, 3 rows and Total |
+  | 3 | Key Insights heading and cards 1-4 | Key Insights heading and cards 1-4 |
+  | 4 | cards 5-8 | cards 5-8 |
+  | 5 | cards 9-11 | cards 9-11 |
+
+  - 5 pages on both papers. With the stress row, page 2 holds 3 (A4) or 4 (Letter) rows.
+  - Space left under the second row on page 3: 90.6px (A4), 24.0px (Letter).
+  - Main chart x-axis text 15.0px and y-axis text 16.2px.
+  - Smallest chart text: 11.0px (A4), 10.8px (Letter).
+  - Chart-to-answer gap, each of the 9 chart cards: 13.8-14.0px (A4), 14.3-14.4px (Letter).
+  - Chart pixels in the column gap, and outside every card: 0.
+  - Cards split across pages: 0 of 11. Card heights 421.4px, 0px spread per page.
+  - Nothing shrunk: scale 0.995 (16.41pt). Screen heading absent.
+  - Table rows 58px (Total 57.5px). 0 glyphs cross a column edge, including the stress row, whose longest name stays on 1 line. The header repeats on page 2.
+  - Main chart dead band: 0.
+  - Centred cards, ink to answer box: Peak Season 105px above, 103px below. Average Length of Stay 114/109px (A4) and 123/121px (Letter). Before, Average Length of Stay was 41px above and 180px below.
+  - **Without the print events:** still 5 pages, 0 cards split, 0 pixels in the gap or outside a card.
+- **Screen.**
+  - The page is 255px shorter (6 rows x 42.5px), with 22 fewer elements (11 badge rows and their badges).
+  - Everything above the first Key Insights card is pixel-identical, and 0 of its 128 elements moved.
+  - Inside Key Insights nothing moved sideways. Each card is 42.5px shorter, and its contents sit 42.5px higher in it. Card tops move up 0 to 212.5px, row by row.
+  - The gauge ends are now flat. The centring is print only.
+  - Measured with the page background gradient flattened in both runs. The gradient spans the page height, so a shorter page shifts the background colour behind every glyph.
+- **Tests.** Each one failed when broken, then passed after a byte-identical restore:
+  - (a) no chart-type badge on any card: re-adding one failed;
+  - (b) Demographics slices equal its answer's numbers: restoring `left`/`right` failed in the backend, and reading another field failed in the frontend;
+  - (c) gauge sweep computed from the arc's attributes is 190.08 degrees at 52.8%: round ends failed (202.14);
+  - (d) the other 10 cards unchanged: a changed Same Day label failed in the backend, and vertical ranking bars failed in the frontend.
+  - Frontend: 460 tests, 30 suites, all passed. Backend: 402 tests, all passed, on a clean checkout (see "Backend suite and stray local scripts" below).
+- **Open items, NOT fixed:**
+  1. **Sanitation's gauge** (`sanitation/components/SanitaryVisualAnswer.js`) has the same round line ends (`strokeLinecap="round"`), so its ring overstates its own percentage, by about 6 degrees at each end on our ring's proportions. Sanitation is out of scope for Tourism; noted so its owner can be told.
+- **Backend suite and stray local scripts.** In the development checkout the full backend run had one failure: `CommunityReportConcurrentSubmitTests.test_concurrent_duplicates_create_exactly_one_row` (Sanitation). It passes alone.
+  - In the failing run its two threads got a 500, `no such table: api_sanitarycomplaint`: they posted through their own database connections and saw an empty in-memory SQLite test database.
+  - It is NOT pre-existing on `main`, and our tests did NOT expose it. A clean worktree of `510273a` (no changed files, no new tests) passes in full: "Ran 400 tests ... OK".
+  - The same clean checkout fails once two untracked, git-ignored scripts from the development checkout are added: `backend/test_func2.py` and `backend/test_reports.py`. Their names match the test runner's `test*.py` discovery. Both call `django.setup()` and query the database when imported, during discovery, before the test database exists. Result: "Ran 400 tests ... FAILED (failures=1)", the same test.
+  - This change in a clean worktree: "Ran 402 tests ... OK".
+  - The two scripts are local, not in git. They were renamed to `backend/scratch_func2.py` and `backend/scratch_reports.py`, so discovery no longer imports them. The development checkout then gives the same result as the clean one: "Ran 402 tests ... OK".
+  - There is no known failing test.
+- **Test gate:** both suites fully green.
+- **Correction to the Phase 2 screen check.** The screen-diff harness built its Chart.js path with "/" from a Windows path, so the charts never loaded and the earlier screen comparisons, Phase 2's included, ran without charts. Re-run with the charts drawn, Phase 2 against production: 0 differing pixels, 0 of 218 element boxes moved, at 1366px and 760px. The Phase 2 result stands.
+
 ## Reports Print Layout: Phase 2, Charts Drawn for Paper (2026-10-06; `tourism/theme-tokens`)
 - **Print events (measured, Chrome 154 and Edge 154).** `beforeprint` fires while the page still has its screen layout (main chart box 991x340). The `matchMedia('print')` change to true fires after it, with the page laid out for paper (A4: main card 630px wide, Key Insights card 327x464). `afterprint` and the change back to false follow. So the redraw runs on the print media change, and `afterprint` (or the change back) restores. `beforeprint` is not used for sizing. Firefox is not installed here: untested.
 - **Fix (`utils/printCharts.js`, wired once in `AnalyticsAndReport.js`).** While printing, every chart on the Reports page is redrawn at its printed box size: the main chart at its card width x 300px, and each Key Insights chart at its box. Pie and doughnut legends (Same Day vs. Overnight: pie; Visitor Demographics and Data Quality: doughnuts) move below the chart. A fixed bar thickness is lifted, so the resort chart's 80px bars fit 7 resorts at 630px. Long labels on the horizontal ranking charts wrap to two lines: at 277px, Chart.js gives the label axis about half the width, which cut "Dona Choleng Camping Resort" to "Choleng Camping Resort". Everything is put back after printing (measured: 991x340 and 456.5x150-216, legends right again). The four Key Insights chart boxes now carry `className="insight-chart-box"`, replacing the `div[style*="height"]` print selector. In print they fill their card (`flex: 1 1 210px`, min 210px, no bottom margin). At 210px the tallest card is 464px, so two rows (946px) fit Letter (979px) and A4 (1047px). The Phase 1 `canvas` scale-down stays as the safety net.

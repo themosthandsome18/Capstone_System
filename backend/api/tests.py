@@ -4584,6 +4584,71 @@ class PeakSeasonShareTests(TestCase):
         self.assertEqual(peak["visual"]["percentage"], 0)
 
 
+class VisitorDemographicsVisualTests(TestCase):
+    """Visitor Demographics draws the two numbers its answer states; the other cards are as before."""
+
+    @classmethod
+    def setUpTestData(cls):
+        PeakSeasonShareTests.setUpTestData.__func__(cls)
+
+    def _answers(self, **params):
+        from .services.tourism import build_tourism_question_answers
+
+        return {a["id"]: a for a in build_tourism_question_answers({"year": "2026", **params})}
+
+    def test_doughnut_items_equal_the_numbers_in_its_answer(self):
+        import re
+
+        for params in ({}, {"year": "all"}, {"year": "2025"}):
+            with self.subTest(params=params):
+                demographics = self._answers(**params)["classification"]
+                stated = re.fullmatch(
+                    r"Domestic \(Filipino\): (\d+), Foreign \(International\): (\d+)\.", demographics["answer"]
+                )
+                self.assertEqual(demographics["visual"]["type"], "split")
+                self.assertEqual(
+                    demographics["visual"]["items"],
+                    [
+                        {"label": "Domestic (Filipino)", "value": int(stated.group(1))},
+                        {"label": "Foreign (International)", "value": int(stated.group(2))},
+                    ],
+                )
+        self.assertEqual([i["value"] for i in self._answers()["classification"]["visual"]["items"]], [13, 7])
+
+    def test_the_other_ten_answers_and_visuals_are_unchanged(self):
+        # The payload these cards had before the Demographics fix, on this fixture.
+        expected = {
+            "top_resort": ("Dona Choleng Camping Resort leads with 13 visitors, equal to 65.0% of the selected total.",
+                           {"type": "ranking", "items": [{"label": "Dona Choleng Camping Resort", "value": 13}, {"label": "Aquazul Hotel and Resort", "value": 7}]}),
+            "month_compare": ("September 2026 has 3 visitors, which is 9 lower than August 2026 (12).",
+                              {"type": "comparison", "items": [{"label": "August 2026", "value": 12}, {"label": "September 2026", "value": 3}]}),
+            "peak_month": ("August 2026 leads with 12 visitors, equal to 60.0% of the selected total.",
+                           {"type": "share", "label": "August 2026", "value": 12, "total": 20, "percentage": 60.0}),
+            "stay_type": ("Same-day visitors: 0; overnight or multi-day visitors: 20.",
+                          {"type": "split", "items": [{"label": "Same Day", "value": 0}, {"label": "Overnight / multi-day", "value": 20}]}),
+            "overnight_resort": ("Dona Choleng Camping Resort has the highest overnight demand with 13 visitors.",
+                                 {"type": "ranking", "items": [{"label": "Dona Choleng Camping Resort", "value": 13}, {"label": "Aquazul Hotel and Resort", "value": 7}]}),
+            "average_stay": ("The estimated average stay is 1.0 night(s) per visitor based on itinerary labels.",
+                             {"type": "metric", "label": "Average stay", "value": 1.0, "unit": "night(s)"}),
+            "top_origin": ("Quezon leads with 13 visitors, equal to 65.0% of the selected total.",
+                           {"type": "ranking", "items": [{"label": "Quezon", "value": 13}, {"label": "United States", "value": 7}]}),
+            "visit_purpose": ("Leisure leads with 13 visitors, equal to 65.0% of the selected total.",
+                              {"type": "ranking", "items": [{"label": "Leisure", "value": 13}, {"label": "Vacation", "value": 7}]}),
+            "high_demand": ("Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
+                            {"type": "comparison", "items": [{"label": "Previous 30 days", "value": 0}, {"label": "Latest 30 days", "value": 8}]}),
+            "validation": ("Needs review: 1 pending, 1 no-show, 0 possible duplicates, and 0 incomplete records.",
+                           {"type": "stack", "items": [{"label": "Pending", "value": 1}, {"label": "No-show", "value": 1}, {"label": "Duplicates", "value": 0}, {"label": "Incomplete", "value": 0}]}),
+        }
+        answers = self._answers()
+        self.assertEqual(list(answers), [
+            "top_resort", "month_compare", "peak_month", "classification", "stay_type", "overnight_resort",
+            "average_stay", "top_origin", "visit_purpose", "high_demand", "validation",
+        ])
+        for key, (answer, visual) in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual((answers[key]["answer"], answers[key]["visual"]), (answer, visual))
+
+
 class MobileFeedbackPhotoUploadTests(TestCase):
     """Feedback with photos, posted the way the mobile app's _multipartPost sends it."""
 

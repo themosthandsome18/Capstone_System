@@ -3,7 +3,18 @@ import AnalyticsAndReport from "./AnalyticsAndReport";
 import { useTourismData } from "../context/TourismDataContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 
-jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
+// Each chart renders a marker carrying what it was asked to draw.
+jest.mock("react-chartjs-2", () => {
+  const React = require("react");
+  const make = (type) => (props) =>
+    React.createElement("div", {
+      "data-chart": type,
+      "data-index-axis": props.options?.indexAxis || "x",
+      "data-values": JSON.stringify(props.data.datasets[0].data),
+      "data-labels": JSON.stringify(props.data.labels),
+    });
+  return { Bar: make("bar"), Doughnut: make("doughnut"), Line: make("line"), Pie: make("pie") };
+});
 jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }), { virtual: true });
 jest.mock("../context/TourismDataContext", () => ({ useTourismData: jest.fn() }));
 jest.mock("../../shared/csvExport", () => ({
@@ -431,6 +442,120 @@ describe("Reports Peak Season gauge", () => {
 
   it("shows 0%, not 100%, when there is no data", () => {
     expect(setupPeak({ label: "No data", value: 0, total: 0, percentage: 0 }, "No matching records are available yet.")).toBe("0%");
+  });
+
+  it("sweeps an arc of exactly the stated share: 52.8% is 190.1 degrees", () => {
+    setupPeak(
+      { label: "September 2026", value: 19, total: 36, percentage: 52.8 },
+      "September 2026 leads with 19 visitors, equal to 52.8% of the selected total."
+    );
+    const arc = document.querySelectorAll(".radial-progress-widget circle")[1];
+    const radius = Number(arc.getAttribute("r"));
+    const circumference = Number(arc.getAttribute("stroke-dasharray"));
+    const drawn = circumference - Number(arc.getAttribute("stroke-dashoffset"));
+    // A round line end paints half the stroke width past each end of the dash.
+    const capDegrees = arc.getAttribute("stroke-linecap") === "round"
+      ? (2 * (Number(arc.getAttribute("stroke-width")) / 2 / radius) * 180) / Math.PI
+      : 0;
+    const sweep = (drawn / circumference) * 360 + capDegrees;
+
+    expect(circumference).toBeCloseTo(2 * Math.PI * radius, 6);
+    expect(sweep).toBeCloseTo(190.08, 2);
+  });
+});
+
+// The 11 Key Insights as the backend sends them (its test fixture: 20 visitors in 2026).
+const KEY_INSIGHTS = [
+  { id: "top_resort", answer: "Dona Choleng Camping Resort leads with 13 visitors, equal to 65.0% of the selected total.",
+    visual: { type: "ranking", items: [{ label: "Dona Choleng Camping Resort", value: 13 }, { label: "Aquazul Hotel and Resort", value: 7 }] } },
+  { id: "month_compare", answer: "September 2026 has 3 visitors, which is 9 lower than August 2026 (12).",
+    visual: { type: "comparison", items: [{ label: "August 2026", value: 12 }, { label: "September 2026", value: 3 }] } },
+  { id: "peak_month", answer: "August 2026 leads with 12 visitors, equal to 60.0% of the selected total.",
+    visual: { type: "share", label: "August 2026", value: 12, total: 20, percentage: 60.0 } },
+  { id: "classification", answer: "Domestic (Filipino): 13, Foreign (International): 7.",
+    visual: { type: "split", items: [{ label: "Domestic (Filipino)", value: 13 }, { label: "Foreign (International)", value: 7 }] } },
+  { id: "stay_type", answer: "Same-day visitors: 0; overnight or multi-day visitors: 20.",
+    visual: { type: "split", items: [{ label: "Same Day", value: 0 }, { label: "Overnight / multi-day", value: 20 }] } },
+  { id: "overnight_resort", answer: "Dona Choleng Camping Resort has the highest overnight demand with 13 visitors.",
+    visual: { type: "ranking", items: [{ label: "Dona Choleng Camping Resort", value: 13 }, { label: "Aquazul Hotel and Resort", value: 7 }] } },
+  { id: "average_stay", answer: "The estimated average stay is 1.0 night(s) per visitor based on itinerary labels.",
+    visual: { type: "metric", label: "Average stay", value: 1.0, unit: "night(s)" } },
+  { id: "top_origin", answer: "Quezon leads with 13 visitors, equal to 65.0% of the selected total.",
+    visual: { type: "ranking", items: [{ label: "Quezon", value: 13 }, { label: "United States", value: 7 }] } },
+  { id: "visit_purpose", answer: "Leisure leads with 13 visitors, equal to 65.0% of the selected total.",
+    visual: { type: "ranking", items: [{ label: "Leisure", value: 13 }, { label: "Vacation", value: 7 }] } },
+  { id: "high_demand", answer: "Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
+    visual: { type: "comparison", items: [{ label: "Previous 30 days", value: 0 }, { label: "Latest 30 days", value: 8 }] } },
+  { id: "validation", answer: "Needs review: 1 pending, 1 no-show, 0 possible duplicates, and 0 incomplete records.",
+    visual: { type: "stack", items: [{ label: "Pending", value: 1 }, { label: "No-show", value: 1 }, { label: "Duplicates", value: 0 }, { label: "Incomplete", value: 0 }] } },
+].map((item) => ({ ...item, question: item.id }));
+
+describe("Reports Key Insights cards", () => {
+  function cards() {
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    return Object.fromEntries(
+      [...document.querySelectorAll(".analytics-question-item")].map((card) => {
+        const chart = card.querySelector("[data-chart]");
+        return [card.querySelector("h4").textContent, {
+          card,
+          answer: card.querySelector("p").textContent,
+          chart: chart && {
+            type: chart.dataset.chart,
+            axis: chart.dataset.indexAxis,
+            values: JSON.parse(chart.dataset.values),
+            labels: JSON.parse(chart.dataset.labels),
+          },
+        }];
+      })
+    );
+  }
+
+  it("shows no chart-type badge on any card: each opens with its title", () => {
+    const all = cards();
+    const badges = ["Pie Chart", "Doughnut Chart", "Polar Area", "Gauge Ring", "Metric Info", "Comparison Chart", "Distribution", "Split Chart", "Metric", "Share"];
+
+    expect(Object.keys(all)).toHaveLength(11);
+    Object.values(all).forEach(({ card }) => {
+      expect(card.firstElementChild.tagName).toBe("H4");
+      badges.forEach((badge) => expect(card.textContent).not.toContain(badge));
+    });
+  });
+
+  it("draws Visitor Demographics as two slices equal to the numbers in its answer", () => {
+    const { answer, chart } = cards()["Visitor Demographics"];
+    const [, domestic, foreign] = answer.match(/Domestic \(Filipino\): (\d+), Foreign \(International\): (\d+)\./);
+
+    expect(chart.type).toBe("doughnut");
+    expect(chart.values).toEqual([Number(domestic), Number(foreign)]);
+    expect(chart.labels).toEqual(["Domestic (Filipino): 13 (65.0%)", "Foreign (International): 7 (35.0%)"]);
+  });
+
+  it("leaves the other 10 cards' answers and visuals as they were", () => {
+    const all = cards();
+    const bar = (values, labels, axis = "x") => ({ type: "bar", axis, values, labels });
+    const expected = {
+      "Top Tourist Destination": bar([13, 7], ["Dona Choleng Camping Resort", "Aquazul Hotel and Resort"], "y"),
+      "Month-over-Month Arrivals": bar([12, 3], ["August 2026", "September 2026"]),
+      "Same Day vs. Overnight Stays": { type: "pie", axis: "x", values: [0, 20], labels: ["Same Day: 0 (0.0%)", "Overnight / multi-day: 20 (100.0%)"] },
+      "Top Destination for Overnight Stays": bar([13, 7], ["Dona Choleng Camping Resort", "Aquazul Hotel and Resort"], "y"),
+      "Top Visitor Origins": bar([13, 7], ["Quezon", "United States"], "y"),
+      "Primary Purpose of Travel": bar([13, 7], ["Leisure", "Vacation"], "y"),
+      "Destinations with Growing Demand": bar([0, 8], ["Previous 30 days", "Latest 30 days"]),
+      "Data Quality & Validation": {
+        type: "doughnut", axis: "x", values: [1, 1, 0, 0],
+        labels: ["Pending: 1 (50.0%)", "No-show: 1 (50.0%)", "Duplicates: 0 (0.0%)", "Incomplete: 0 (0.0%)"],
+      },
+    };
+    Object.entries(expected).forEach(([title, chart]) => {
+      expect([title, all[title].chart]).toEqual([title, chart]);
+    });
+    KEY_INSIGHTS.filter((item) => item.id !== "classification").forEach((item) => {
+      expect(Object.values(all).some(({ answer }) => answer === item.answer)).toBe(true);
+    });
+    const peak = all["Peak Season Analysis"].card.querySelector(".radial-progress-widget");
+    expect(peak.textContent).toBe("60%August 202612 visitors");
+    const stay = all["Average Length of Stay"].card.querySelector(".insight-stay");
+    expect(stay.textContent).toBe("1nights average length of stay");
   });
 });
 

@@ -769,9 +769,6 @@ function AnalyticsAndReport() {
                 border: "1px solid var(--th-border-tinted)",
               }}
             >
-              <div className="analytics-question-top" style={{ justifyContent: "flex-end" }}>
-                <small>{getVisualLabel(item.visual?.type, item.id)}</small>
-              </div>
               <h4>{tourismTitleMap[item.id] || item.question}</h4>
               <VisualAnswer visual={item.visual} questionId={item.id} />
               <p>{item.answer}</p>
@@ -898,7 +895,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             style={{ transition: "stroke-dashoffset 0.5s ease" }}
           />
         </svg>
@@ -919,7 +916,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     const value = visual.value || "0";
     
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: "16px", margin: "20px 0" }}>
+      <div className="insight-stay" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "20px 0" }}>
         <div style={{
           width: "60px",
           height: "60px",
@@ -977,7 +974,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             style={{ transition: "stroke-dashoffset 0.5s ease" }}
           />
         </svg>
@@ -1225,19 +1222,6 @@ function getFallbackLabel(answer) {
   }
 
   return "Result";
-}
-
-function getVisualLabel(type, questionId) {
-  if (questionId === "top_resort" || questionId === "stay_type" || questionId === "overnight_resort") return "Pie Chart";
-  if (questionId === "classification" || questionId === "top_origin" || questionId === "validation") return "Doughnut Chart";
-  if (questionId === "visit_purpose") return "Polar Area";
-  if (questionId === "peak_month") return "Gauge Ring";
-  if (questionId === "average_stay") return "Metric Info";
-  if (type === "comparison") return "Comparison Chart";
-  if (type === "stack") return "Distribution";
-  if (type === "split") return "Split Chart";
-  if (type === "metric") return "Metric";
-  return "Share";
 }
 
 function clampPercent(value) {

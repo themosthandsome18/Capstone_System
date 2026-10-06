@@ -3068,35 +3068,6 @@
   gap: 14px;
 }
 
-.analytics-question-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.analytics-question-top span {
-  display: inline-flex;
-  min-width: 34px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--th-primary);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.analytics-question-top small {
-  border-radius: 999px;
-  background: var(--th-primary-tint);
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--th-primary-ink);
-}
-
 .analytics-question-item h4 {
   margin: 0;
   font-size: 15.5px;
@@ -3745,15 +3716,33 @@
      210px, growing into whatever the title and answer leave), so no white
      band opens between a chart and its answer: only the card's 14px gap
      separates them. While printing, each chart is redrawn at its box's size
-     (utils/printCharts.js). At 210px the tallest card is 464px, so two rows
-     (946px) fit a Letter page (979px) as well as A4 (1047px). !important
-     overrides the boxes' inline screen height (180px, or 150-216px for
-     rankings) and bottom margin. */
+     (utils/printCharts.js). With the chart-type badge gone the tallest card
+     is 421px, so the heading and two rows fit a Letter page as well as A4.
+     !important overrides the boxes' inline screen height (180px, or
+     150-216px for rankings) and bottom margin. */
   .reports-page .insight-chart-box {
     flex: 1 1 210px;
     height: auto !important;
     min-height: 210px;
     margin-bottom: 0 !important;
+  }
+
+  /* Key Insights starts at the top of a page, not under the end of the
+     table, so its cards print two rows to a page. Its 36px screen margin
+     would only push the second row off a Letter page; !important overrides
+     the inline style. */
+  .reports-page .analytics-question-title-row {
+    break-before: page;
+    page-break-before: always;
+    margin-top: 0 !important;
+  }
+
+  /* The cards with no chart (Peak Season's gauge, Average Length of Stay)
+     centre their figure in the space between title and answer, instead of
+     leaving all of it as one band above the answer. */
+  .reports-page .analytics-question-item > .radial-progress-widget,
+  .reports-page .analytics-question-item > .insight-stay {
+    flex: 1 1 auto;
   }
 
   /* ---- Reports print layout, Phase 1b ---- */
