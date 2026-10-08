@@ -129,12 +129,28 @@ class HouseholdMembersPanel extends StatelessWidget {
   }
 }
 
+/// Household-only seam for testing service, permission and acquisition failures.
+class HouseholdLocationAdapter {
+  const HouseholdLocationAdapter();
+
+  Future<bool> isLocationServiceEnabled() => Geolocator.isLocationServiceEnabled();
+  Future<LocationPermission> checkPermission() => Geolocator.checkPermission();
+  Future<LocationPermission> requestPermission() => Geolocator.requestPermission();
+  Future<Position> getCurrentPosition() => Geolocator.getCurrentPosition(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      timeLimit: Duration(seconds: 4),
+    ),
+  );
+}
+
 class HouseholdSurveyPage extends StatefulWidget {
   const HouseholdSurveyPage({
     super.key,
     required this.api,
     required this.barangays,
     this.household,
+    this.locationAdapter = const HouseholdLocationAdapter(),
     this.onLogout,
     this.onSessionExpired,
   });
@@ -142,6 +158,7 @@ class HouseholdSurveyPage extends StatefulWidget {
   final TourismApi api;
   final List<BarangayItem> barangays;
   final HouseholdSanitationItem? household;
+  final HouseholdLocationAdapter locationAdapter;
   final VoidCallback? onLogout;
   final VoidCallback? onSessionExpired;
 
@@ -519,54 +536,62 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _captureLocation() async {
-    setState(() => _locating = true);
+    setState(() {
+      _locating = true;
+      _locationConfirmed = false;
+    });
 
     try {
-      Position? position;
-      try {
-        final enabled = await Geolocator.isLocationServiceEnabled();
-        if (enabled) {
-          var permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) {
-            permission = await Geolocator.requestPermission();
-          }
-          if (permission == LocationPermission.whileInUse ||
-              permission == LocationPermission.always) {
-            position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 4),
-              ),
-            );
-          }
-        }
-      } catch (_) {}
+      final enabled = await widget.locationAdapter.isLocationServiceEnabled();
+      if (!mounted) return;
+      if (!enabled) {
+        _locationFailure('Location services are off. Turn them on, then tap Use GPS again.');
+        return;
+      }
 
-      // Robust fallback to Mauban coordinates for testing/indoor defense
-      position ??= Position(
-        latitude: 14.1904 + (DateTime.now().millisecond % 80) * 0.0001,
-        longitude: 121.7306 + (DateTime.now().second % 80) * 0.0001,
-        timestamp: DateTime.now(),
-        accuracy: 5.0,
-        altitude: 10.0,
-        altitudeAccuracy: 1.0,
-        heading: 0.0,
-        headingAccuracy: 1.0,
-        speed: 0.0,
-        speedAccuracy: 1.0,
-      );
+      var permission = await widget.locationAdapter.checkPermission();
+      if (!mounted) return;
+      if (permission == LocationPermission.denied) {
+        permission = await widget.locationAdapter.requestPermission();
+        if (!mounted) return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _locationFailure('Location permission is blocked. Enable it in app settings, then tap Use GPS again.');
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        _locationFailure('Location permission was denied. Allow location access, then tap Use GPS again.');
+        return;
+      }
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        _locationFailure('Could not get your GPS location. Check location services and try again.');
+        return;
+      }
+
+      final position = await widget.locationAdapter.getCurrentPosition();
+      if (!mounted) return;
 
       setState(() {
-        _latitude.text = position!.latitude.toStringAsFixed(6);
+        _latitude.text = position.latitude.toStringAsFixed(6);
         _longitude.text = position.longitude.toStringAsFixed(6);
         _locationConfirmed = true;
       });
-      if (mounted) {
-        showAppMessage(context, '📍 GPS location acquired for Mauban Barangay.');
-      }
+      showAppMessage(context, 'GPS location acquired.');
+    } on TimeoutException {
+      _locationFailure('GPS timed out. Move to an open area and tap Use GPS again.');
+    } catch (_) {
+      _locationFailure('Could not get your GPS location. Check location services and try again.');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  void _locationFailure(String message) {
+    if (!mounted) return;
+    // Keep any deliberate/stored coordinates, but never confirm a failed capture.
+    setState(() => _locationConfirmed = false);
+    showAppMessage(context, message);
   }
 
   void _setLocation(LatLng point) {

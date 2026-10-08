@@ -31,7 +31,19 @@ Finder dropdown(String label) => find.byWidgetPredicate(
   (widget) => widget is HouseholdChoiceField && widget.label == label,
 );
 
-Future<void> pumpEdit(WidgetTester tester, Map<String, dynamic> stored) async {
+class UnusedHouseholdLocation extends HouseholdLocationAdapter {
+  int calls = 0;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async {
+    calls++;
+    throw StateError('Existing edit must not acquire location');
+  }
+}
+
+Future<void> pumpEdit(WidgetTester tester, Map<String, dynamic> stored, {
+  HouseholdLocationAdapter locationAdapter = const HouseholdLocationAdapter(),
+}) async {
   tester.view.physicalSize = const Size(1200, 5000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -42,10 +54,11 @@ Future<void> pumpEdit(WidgetTester tester, Map<String, dynamic> stored) async {
         api: const TourismApi(),
         barangays: SanitationBootstrap.fallback().barangays,
         household: HouseholdSanitationItem.fromJson(stored),
+        locationAdapter: locationAdapter,
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 Future<void> submitEdit(WidgetTester tester) async {
@@ -64,6 +77,48 @@ void main() {
       staffAuthTokenKey: 'local-test-token',
     }),
   );
+
+  testWidgets('mapped unrelated edit preserves exact coordinates without GPS', (tester) async {
+    final location = UnusedHouseholdLocation();
+    final stored = storedHousehold();
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      return http.Response(jsonEncode({...stored, 'address': 'Changed address'}), 200);
+    });
+    addTearDown(client.close);
+    await http.runWithClient(() async {
+      await pumpEdit(tester, stored, locationAdapter: location);
+      expect(tester.widget<LocationConfirmationPanel>(find.byType(LocationConfirmationPanel)).confirmed, isTrue);
+      expect(tester.widget<AppTextField>(field('Latitude')).controller.text, '${stored['latitude']}');
+      expect(tester.widget<AppTextField>(field('Longitude')).controller.text, '${stored['longitude']}');
+      await tester.enterText(field('Address'), 'Changed address');
+      await submitEdit(tester);
+    }, () => client);
+    expect(location.calls, 0);
+    expect(requests.single.method, 'PATCH');
+    expect(jsonDecode(requests.single.body), {'address': 'Changed address'});
+  });
+
+  testWidgets('NULL coordinate pair keeps safety screen with no GPS or API call', (tester) async {
+    final location = UnusedHouseholdLocation();
+    var requests = 0;
+    final client = MockClient((request) async {
+      requests++;
+      return http.Response('{}', 200);
+    });
+    addTearDown(client.close);
+    await http.runWithClient(() async {
+      await pumpEdit(tester, {...storedHousehold(), 'latitude': null, 'longitude': null}, locationAdapter: location);
+      expect(find.textContaining('Cannot safely edit'), findsOneWidget);
+      expect(find.byType(LocationCapturePanel), findsNothing);
+      expect(find.byType(LocationConfirmationPanel), findsNothing);
+      expect(field('Latitude'), findsNothing);
+      expect(find.text('Submit Household Survey'), findsNothing);
+    }, () => client);
+    expect(location.calls, 0);
+    expect(requests, 0);
+  });
 
   testWidgets('initializes all stored editable fields without normalization', (
     tester,
