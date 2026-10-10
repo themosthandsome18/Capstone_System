@@ -44,6 +44,91 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Reports Print Layout: Phase 4, All Reports in One Document (2026-10-10; `tourism/theme-tokens`)
+- **The requirement:** "pwedeng i export lahat ng sama sama": one document with all nine reports, each from a new page, and one CSV with all the tables.
+- **The controls: four buttons in the action bar.**
+  - Print report (green), **Print all reports**, Export CSV, **Export all CSV**.
+  - **Why four visible buttons, not a menu:** a hidden menu becomes a feature nobody finds; four visible buttons are read once and understood.
+  - Both new buttons are named for what they do. "Print all reports" opens the print dialog, and its tooltip says Save as PDF is there: it is not a generated file.
+  - While either works, its label shows "Preparing N of 9…" and both are disabled.
+  - **No timing display was added** (no "Prepared in X s"): the progress counter is the measurement the user watches.
+- **Data.** The nine reports are fetched one at a time, never in parallel (the live backend is one worker with 4 threads on a free tier).
+  - Order is the tab order: Daily, Monthly, Yearly, Resort, Origin, Purpose, Vehicle, Boat, No-show.
+  - Each request carries the applied filters and `include_questions=false`.
+  - They go straight to `tourismApi.getReportsData`, so the report loaded on screen and the shared data store are never touched.
+  - No new endpoint, no backend change.
+- **If a request fails:**
+  - nothing after it is fetched;
+  - nothing is mounted and `window.print()` is never called (for the CSV, nothing is exported);
+  - an alert names the report, e.g. "Could not load Purpose of Travel Report: Server error. Nothing was printed."
+
+  A half-built document cannot reach the print dialog.
+- **Rendering the nine charts.**
+  - **Where:** a `report-print-all` block inside the Reports page, mounted only after all nine arrive, before Key Insights.
+  - **On screen:** it is laid out off-screen (`left: -10000px`) at the report card's width, so every chart gets a real size. Then the print dialog opens with scope "all".
+  - **In print:** the block takes the loaded report's place, and each report (`PrintedReport`: title, subtitle, chart, table, in the report's default order) starts a new page. The heading line reads "All reports".
+  - **Unmounted on `afterprint`,** which destroys the nine charts.
+  - It uses the same card and table markup as the loaded report, so every print rule applies. The Phase 2 redraw resizes all nine to paper and skips the hidden loaded chart.
+  - **Cost, measured in headless Chrome, 9 bar charts created and destroyed:**
+
+    | | This machine | CPU throttled 4x |
+    |---|---|---|
+    | Create, live-size data | 18-25 ms | 104-150 ms |
+    | Create, worst case (365-day Daily twice) | 31-40 ms | 154-244 ms |
+    | Destroy | under 10 ms | under 10 ms |
+
+    Canvas memory: 11.6 MB at 100% display scaling, 18.1 MB at 125%, 46.3 MB at 200%. It is held only until printing ends.
+- **Key Insights once, at the end.** They depend on year, from and to only (`build_tourism_question_answers`), not on the report type or resort, so the already-loaded set is reused, not fetched nine times.
+- **Export all CSV.** One file, `tourism-all-reports-<date>.csv`: the nine tables stacked in tab order, each in its default order with its own Total row.
+  - The columns are those of the single CSV, with the name column headed "Name", since it holds dates, resorts, origins and so on.
+  - "Report Type" labels every row with the report's title.
+  - The single-report CSV is unchanged and now shares the row builder.
+- **Found and fixed: Chrome dropped the last printed page.**
+  - Chrome settles the page count before the print-time chart redraw. The redraw made each report chart's box grow (screen shape 630x213 to 630x300), and content pushed past the last counted page was dropped.
+  - With nine reports on Letter it removed the last Key Insights page every time: 13 pages, three cards missing (4 of 4 runs). Without the redraw, all 11 cards were present.
+  - The same mechanism applied to the single report (216 to 300px).
+  - **Fix:** in print, every report chart box is 300px, the redraw's height (`PRINT_MAIN_CHART_HEIGHT`; the CSS and the constant must stay equal), and the canvas fills it with `object-fit: contain`. The layout is now identical with and without the redraw: same positions, same page count.
+  - A chart that was not redrawn (no print events) now sits in proportion in its 300px box, with blank bands above and below, instead of the box shrinking to it.
+- **Print proof** (PDF at scale 1, live data All Years, real helper, Public Sans loaded):
+  - **Print all reports:** A4 13 pages, Letter 14.
+    - A4: p1-2 Daily (chart, table continued), p3 Monthly, p4 Yearly, p5 Resort, p6 Origin, p7 Purpose, p8 Vehicle, p9 Boat, p10 No-show, p11-13 Key Insights (4, 4, 3 cards).
+    - Letter: the same, with the Resort table continuing on p6 (header and Total), so No-show is p11 and Key Insights p12-14.
+    - With the stress row: A4 14 pages, Letter 14.
+    - The same page counts with and without the redraw.
+  - **Every report:** title and subtitle printed, chart card 394px and inside its page, canvas 630x300 (A4) / 651x300 (Letter), dead band 0.
+    - Table rows per page add up to the layout's row count for all nine. Rows 58px (Total 57.5px), 0 glyphs crossing a column edge.
+    - Axis text: rotated x labels 15.0px, level labels 15.0 and 16.0px, so the smallest report-chart text is 15.0px.
+  - **Key Insights:** exactly once, 11 cards at 421.4px with 0 spread. Smallest chart text 10.9px (A4; 11.0 in Phase 3, a reference-digit difference) / 10.8px (Letter). Chart-to-answer gap 13.8-14.0 / 14.3-14.4px.
+  - **Whole document:** 0 chart pixels in the column gap and 0 outside every box on all pages; 0 of 11 cards split; scale 0.995. Visual check: no chart clipped, pie and doughnut legends below their charts, none overlapping.
+  - **Phase 1-3 re-run with the fixed boxes:** Print report 2 pages (stress 2), Key Insights 4, no scope 5, on both papers. Main chart y-axis 16.2px; Key Insights 11.0 / 10.8px; table and card checks as before; layout identical with and without the redraw.
+- **Time from the click to the print dialog: an ESTIMATE, not a measurement.**
+  - The real path is behind a login, which is not used.
+  - Server work for the nine reports, computed by the backend code against the live database from this laptop (read-only): 3.07 s. That is about 300 ms per query from here; most reports take one.
+  - An unauthenticated round trip to Render from here: 0.24-0.39 s warm, 1.9 s cold.
+  - Chart build: 0.02-0.25 s.
+  - Rough total: 3-7 s, depending on how far Render is from the database, which is unknown.
+- **Screen** (production 5ed111b against Phase 4, Public Sans loaded, charts drawn, gradient flattened):
+  - **1366px:** all four buttons on one line; page height unchanged (3926px). Differing pixels only in the button bar (x 686-1283, y 30-70). The screen heading's text block narrows from 726.8 to 372px at the same height (no wrap). 0 other elements moved.
+  - **760px:** the bar wraps to two rows, Print report and Print all reports, then Export CSV and Export all CSV. The header grows 52px, and everything below it moves down exactly 52px (no other size change).
+- **Tests.** Frontend `Reports: all nine reports` (7). The print rules are loaded as a plain stylesheet, as in Phase 3.
+  - Covered:
+    - all nine titles in tab order, each from a new page (`break-before: page`), with its own rows, and the loaded report hidden;
+    - nine sequential requests (at most 1 in flight), each `include_questions=false` with the applied year;
+    - Key Insights exactly once, after the last report;
+    - a failure at Purpose: no print, no block, six requests, the alert text, the button usable again;
+    - the block is removed on `afterprint`;
+    - the all-tables CSV: headers, every row the right width, 2-10 rows per report (rows plus Total), the nine Totals;
+    - Print report and Print Key Insights: scopes "report" and "insights", no fetching.
+  - Breaking each one failed its test:
+    - (a) no page break between reports;
+    - (b) Key Insights hidden in the all scope (0 headings);
+    - (c) a failed report skipped instead of stopping (no alert, printed);
+    - (d) every CSV row labelled with the loaded report;
+    - (e) Print report printing everything ("all" for "report").
+
+    Each was restored byte-identical and passed.
+  - Full suites: frontend 472 (30 suites), backend 402. No backend change, no data change, no migration.
+
 ## Reports Print Layout: Phase 3, Print One Report (2026-10-10; `tourism/theme-tokens`)
 - **The requirement.** Each report must be exportable on its own. Before this change:
   - "Print" printed the loaded report plus all 11 Key Insights cards;

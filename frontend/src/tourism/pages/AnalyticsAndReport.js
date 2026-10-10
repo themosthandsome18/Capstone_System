@@ -13,6 +13,7 @@ import { Bar, Doughnut, Pie } from "react-chartjs-2";
 import { FiClock, FiDownload, FiPrinter } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
+import { tourismApi } from "../services/tourismApi";
 import { buildReportingYearOptions } from "../utils/reportingYears";
 import { watchPrint } from "../utils/printCharts";
 import {
@@ -220,6 +221,64 @@ function sortValue(row, key, type) {
   return row[key] ?? 0;
 }
 
+function sortReportRows(rows, type, key, direction) {
+  const list = [...rows];
+  list.sort((a, b) => {
+    const valA = sortValue(a, key, type);
+    const valB = sortValue(b, key, type);
+    if (typeof valA === "string") {
+      const cmp = valA.localeCompare(valB);
+      return direction === "asc" ? cmp : -cmp;
+    }
+    return direction === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+  });
+  return list;
+}
+
+function buildReportChartData(rows, type, palette) {
+  return {
+    labels: rows.map((item) => item.name),
+    datasets: [
+      {
+        data: rows.map((item) => item.visitors),
+        backgroundColor: palette.series[0],
+        borderRadius: 8,
+        barThickness: type === "resort" ? 80 : 55,
+      },
+    ],
+  };
+}
+
+// The nine reports, in tab order, for "Print all reports" and "Export all CSV".
+const ALL_REPORT_TYPES = ["daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show"];
+
+const CSV_HEADERS = ["Report Type", "Reporting Year", "Date From", "Date To", "Resort Filter"];
+const CSV_FIGURE_HEADERS = ["Male", "Female", "Total Visitors", "Total Fee"];
+
+// One report's CSV rows: its rows in the order given, then its Total row.
+function buildReportCsvRows(type, rows, totals, filterCells) {
+  const label = getReportTitle(type);
+  const csvRows = rows.map((row) => [
+    label,
+    ...filterCells,
+    row.name,
+    row.male ?? "",
+    row.female ?? "",
+    row.visitors,
+    row.revenue,
+  ]);
+  csvRows.push([
+    label,
+    ...filterCells,
+    "Total",
+    totals?.male ?? "",
+    totals?.female ?? "",
+    totals?.visitors || 0,
+    totals?.revenue || 0,
+  ]);
+  return csvRows;
+}
+
 // Male + Female should equal Total Visitors. A row that does not is shown as
 // stored, never adjusted, and marked. A row without the two figures (an older
 // backend during a deploy) is not judged.
@@ -265,6 +324,14 @@ function AnalyticsAndReport() {
   // (utils/printCharts.js); on screen nothing changes.
   useEffect(() => watchPrint(() => pageRef.current, () => Object.values(ChartJS.instances)), []);
 
+  // "Print all reports" and "Export all CSV": the nine reports, fetched one at
+  // a time (the live backend is small), each without question answers.
+  // allProgress is null when idle, else { action, done }.
+  const [allProgress, setAllProgress] = useState(null);
+  const [allError, setAllError] = useState("");
+  // Set only when all nine arrived: { reports: [{ type, data }], width }.
+  const [allReports, setAllReports] = useState(null);
+
   // A scoped print (printPart below) is over once the browser has printed:
   // the marker goes, so a later print from the browser's own menu prints the
   // whole page again.
@@ -273,6 +340,8 @@ function AnalyticsAndReport() {
       if (pageRef.current) {
         delete pageRef.current.dataset.printScope;
       }
+      // The all-reports block (and its nine charts) exists only for printing.
+      setAllReports(null);
     }
     window.addEventListener("afterprint", clearPrintScope);
     return () => window.removeEventListener("afterprint", clearPrintScope);
@@ -297,17 +366,7 @@ function AnalyticsAndReport() {
   const palette = chartPalette || CHART_PALETTE_DEFAULTS;
   const mainReportChartOptions = useMemo(() => buildMainReportChartOptions(palette), [palette]);
 
-  const chartData = useMemo(() => ({
-    labels: rows.map((item) => item.name),
-    datasets: [
-      {
-        data: rows.map((item) => item.visitors),
-        backgroundColor: palette.series[0],
-        borderRadius: 8,
-        barThickness: loadedType === "resort" ? 80 : 55,
-      },
-    ],
-  }), [rows, loadedType, palette]);
+  const chartData = useMemo(() => buildReportChartData(rows, loadedType, palette), [rows, loadedType, palette]);
 
   useEffect(() => {
     // The bootstrap (or this page's last visit) already loaded this report and
@@ -365,19 +424,10 @@ function AnalyticsAndReport() {
       : { type: loadedType, ...defaultSortFor(loadedType) };
   const { key: sortKey, direction: sortDirection } = sortConfig;
 
-  const sortedRows = useMemo(() => {
-    const list = [...rows];
-    list.sort((a, b) => {
-      let valA = sortValue(a, sortKey, loadedType);
-      let valB = sortValue(b, sortKey, loadedType);
-      if (typeof valA === "string") {
-        const cmp = valA.localeCompare(valB);
-        return sortDirection === "asc" ? cmp : -cmp;
-      }
-      return sortDirection === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
-    });
-    return list;
-  }, [rows, sortKey, sortDirection, loadedType]);
+  const sortedRows = useMemo(
+    () => sortReportRows(rows, loadedType, sortKey, sortDirection),
+    [rows, sortKey, sortDirection, loadedType]
+  );
 
   function handleSort(key) {
     const next =
@@ -458,49 +508,99 @@ function AnalyticsAndReport() {
   // Exports the report on screen: its loaded type and filters, in the order the
   // table is sorted.
   function handleExportCsv() {
-    const selectedResort =
+    const selectedResort = selectedResortName();
+    const headers = [...CSV_HEADERS, getFirstColumnLabel(loadedType), ...CSV_FIGURE_HEADERS];
+    const csvRows = buildReportCsvRows(loadedType, sortedRows, reportData.totals, csvFilterCells(selectedResort));
+    exportCsv(datedCsvFilename(`tourism-${loadedType}-report`), headers, csvRows);
+  }
+
+  function selectedResortName() {
+    return (
       referenceTables.resorts.find(
         (resort) => String(resort.resort_id) === String(appliedFilters.resort_id)
-      )?.resort_name || "All Resorts";
-    const yearLabel = appliedFilters.year === "all" ? "All Years" : appliedFilters.year;
-    const headers = [
-      "Report Type",
-      "Reporting Year",
-      "Date From",
-      "Date To",
-      "Resort Filter",
-      getFirstColumnLabel(loadedType),
-      "Male",
-      "Female",
-      "Total Visitors",
-      "Total Fee",
-    ];
-    const csvRows = sortedRows.map((row) => [
-      getReportTitle(loadedType),
-      yearLabel,
-      appliedFilters.from || "All",
-      appliedFilters.to || "All",
-      selectedResort,
-      row.name,
-      row.male ?? "",
-      row.female ?? "",
-      row.visitors,
-      row.revenue,
-    ]);
+      )?.resort_name || "All Resorts"
+    );
+  }
 
-    csvRows.push([
-      getReportTitle(loadedType),
-      yearLabel,
+  function csvFilterCells(resortName) {
+    return [
+      appliedFilters.year === "all" ? "All Years" : appliedFilters.year,
       appliedFilters.from || "All",
       appliedFilters.to || "All",
-      selectedResort,
-      "Total",
-      totalMale ?? "",
-      totalFemale ?? "",
-      totalVisitors,
-      totalRevenue,
-    ]);
-    exportCsv(datedCsvFilename(`tourism-${loadedType}-report`), headers, csvRows);
+      resortName,
+    ];
+  }
+
+  // The nine reports with the applied filters, one request at a time, straight
+  // from the API: the report on screen is not touched. Resolves to all nine, or
+  // rejects naming the first report that failed (nothing after it is fetched).
+  async function fetchAllReports(action) {
+    const reports = [];
+    setAllError("");
+    setAllProgress({ action, done: 0 });
+    try {
+      for (const type of ALL_REPORT_TYPES) {
+        let data;
+        try {
+          data = await tourismApi.getReportsData({ ...appliedFilters, type, include_questions: false });
+        } catch (error) {
+          const reason = error?.message ? `: ${error.message}` : "";
+          throw new Error(`Could not load ${getReportTitle(type)}${reason}. Nothing was ${action === "csv" ? "exported" : "printed"}.`);
+        }
+        reports.push({ type, data });
+        setAllProgress({ action, done: reports.length });
+      }
+      return reports;
+    } finally {
+      setAllProgress(null);
+    }
+  }
+
+  async function handlePrintAll() {
+    let reports;
+    try {
+      reports = await fetchAllReports("print");
+    } catch (error) {
+      setAllError(error.message);
+      return;
+    }
+    // The block is laid out off-screen at the report card's width, so every
+    // chart gets a real size; printing starts once it has rendered (below).
+    const width = pageRef.current?.querySelector(".report-print-area")?.clientWidth || undefined;
+    setAllReports({ reports, width });
+  }
+
+  useEffect(() => {
+    if (allReports) {
+      printPart("all");
+    }
+    // printPart only reads the page ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allReports]);
+
+  // One file: the nine tables stacked in tab order, each with its Total row.
+  // "Report Type" labels every row; the name column is headed "Name" because
+  // it holds dates, resorts, origins and so on, one kind per report.
+  async function handleExportAllCsv() {
+    let reports;
+    try {
+      reports = await fetchAllReports("csv");
+    } catch (error) {
+      setAllError(error.message);
+      return;
+    }
+    const filterCells = csvFilterCells(selectedResortName());
+    const csvRows = reports.flatMap(({ type, data }) => {
+      const { key, direction } = defaultSortFor(type);
+      return buildReportCsvRows(type, sortReportRows(data.rows || [], type, key, direction), data.totals, filterCells);
+    });
+    exportCsv(datedCsvFilename("tourism-all-reports"), [...CSV_HEADERS, "Name", ...CSV_FIGURE_HEADERS], csvRows);
+  }
+
+  function allButtonLabel(action, idle) {
+    return allProgress?.action === action
+      ? `Preparing ${allProgress.done} of ${ALL_REPORT_TYPES.length}…`
+      : idle;
   }
 
   return (
@@ -522,19 +622,46 @@ function AnalyticsAndReport() {
             Print report
           </button>
 
+          <button
+            type="button"
+            title="Fetches all nine reports, then opens the print dialog for them, Key Insights once at the end. To keep a PDF, choose Save as PDF there."
+            disabled={Boolean(allProgress)}
+            onClick={handlePrintAll}
+          >
+            <FiPrinter />
+            {allButtonLabel("print", "Print all reports")}
+          </button>
+
           <button type="button" onClick={handleExportCsv}>
             <FiDownload />
             Export CSV
           </button>
+
+          <button
+            type="button"
+            title="One CSV file with all nine report tables, one after another."
+            disabled={Boolean(allProgress)}
+            onClick={handleExportAllCsv}
+          >
+            <FiDownload />
+            {allButtonLabel("csv", "Export all CSV")}
+          </button>
         </div>
       </div>
+
+      {allError ? (
+        <p className="tourist-record-error" role="alert">
+          {allError}
+        </p>
+      ) : null}
 
       <div className="report-print-heading">
         <strong>Municipality of Mauban</strong>
         <h2>Tourism Office Report</h2>
         <p>
           <span className="print-part-report">{getReportTitle(loadedType)}</span>
-          <span className="print-part-insights">Key Insights</span> | {appliedFilters.from || "All dates"} to{" "}
+          <span className="print-part-insights">Key Insights</span>
+          <span className="print-part-all">All reports</span> | {appliedFilters.from || "All dates"} to{" "}
           {appliedFilters.to || "All dates"} | Year:{" "}
           {appliedFilters.year === "all" ? "All Years" : appliedFilters.year}
         </p>
@@ -768,6 +895,20 @@ function AnalyticsAndReport() {
         </div>
       </div>
 
+      {allReports ? (
+        <div className="report-print-all" style={{ width: allReports.width }}>
+          {allReports.reports.map(({ type, data }) => (
+            <PrintedReport
+              key={type}
+              type={type}
+              data={data}
+              palette={palette}
+              chartOptions={mainReportChartOptions}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {/* ── Key Insights & Analysis (Moved below main report) ── */}
       <section className="report-insights">
         <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
@@ -809,6 +950,86 @@ function AnalyticsAndReport() {
         </div>
       </section>
     </div>
+  );
+}
+
+// One report as printed by "Print all reports": the same chart card and table
+// markup as the loaded report, so every print rule applies, in the report's
+// own default order. Read-only: no sort controls.
+function PrintedReport({ type, data, palette, chartOptions }) {
+  const rows = data.rows || [];
+  const { key, direction } = defaultSortFor(type);
+  const sorted = sortReportRows(rows, type, key, direction);
+  const totals = data.totals || {};
+  const unbalancedCount = sorted.filter(isUnbalanced).length;
+  const totalsUnbalanced = isUnbalanced({ male: totals.male, female: totals.female, visitors: totals.visitors || 0 });
+
+  return (
+    <section className="report-print-all-item" data-report-type={type}>
+      <div className="report-chart-card">
+        <div className="report-card-title">
+          <h3>{getReportTitle(type)}</h3>
+          <p>{getReportSubtitle(type)}</p>
+        </div>
+        <div className="report-chart-area">
+          <Bar data={buildReportChartData(rows, type, palette)} options={chartOptions} />
+        </div>
+      </div>
+
+      <div className="report-table-card">
+        <div className="report-table-header">
+          <h4>Table Data Breakdown</h4>
+        </div>
+        <div className="report-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th className="report-col-name">{getFirstColumnLabel(type)}</th>
+                <th className="num report-col-male">Male</th>
+                <th className="num report-col-female">Female</th>
+                <th className="num report-col-visitors">Total Visitors</th>
+                <th className="money report-col-revenue">Total Fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length ? (
+                sorted.map((row) => (
+                  <tr
+                    key={row.id || row.resort_id || row.name}
+                    className={isUnbalanced(row) ? "report-row-unbalanced" : undefined}
+                  >
+                    <td className="report-col-name">{row.name}</td>
+                    <td className="num">{formatCount(row.male)}</td>
+                    <td className="num">{formatCount(row.female)}</td>
+                    <td className="num">{Number(row.visitors || 0).toLocaleString()}</td>
+                    <td className="money">{formatCurrency(row.revenue)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: "center" }}>
+                    No report data found.
+                  </td>
+                </tr>
+              )}
+              <tr className={totalsUnbalanced ? "total-row report-row-unbalanced" : "total-row"}>
+                <td className="report-col-name">Total</td>
+                <td className="num">{formatCount(totals.male)}</td>
+                <td className="num">{formatCount(totals.female)}</td>
+                <td className="num">{Number(totals.visitors || 0).toLocaleString()}</td>
+                <td className="money">{formatCurrency(totals.revenue)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {unbalancedCount ? (
+          <p className="report-table-note" role="note">
+            {unbalancedCount} {unbalancedCount === 1 ? "row" : "rows"}: Male + Female does not
+            equal Total Visitors; check these records.
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

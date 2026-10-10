@@ -2868,6 +2868,25 @@
   @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-5 text-sm font-bold text-black;
 }
 
+/* Four actions: they wrap to a second row where the header is narrow. */
+.reports-actions {
+  flex-wrap: wrap;
+}
+
+.reports-actions button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* "Print all reports": the nine reports exist only while printing. On screen
+   they are laid out off to the side at the report card's width, so their
+   charts get a real size; they never appear on the page. */
+.report-print-all {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+}
+
 /* ================= REPORT TABS ================= */
 
 .report-tabs {
@@ -3761,10 +3780,22 @@
 
   /* ---- Reports print layout, Phase 1b ---- */
 
-  /* The chart area takes the printed chart's height, so no empty band is
-     left under a chart scaled down to the paper. */
+  /* Every report chart box is 300px tall on paper, the height the print-time
+     redraw uses (PRINT_MAIN_CHART_HEIGHT in utils/printCharts.js; keep the
+     two equal). Chrome settles the page count before that redraw, so a box
+     that grew during it pushed content past the last counted page, which was
+     then dropped: with nine reports, the last Key Insights page on Letter.
+     A fixed box keeps the layout the same before and after the redraw. The
+     canvas fills it; object-fit keeps a chart that was not redrawn (no print
+     events) in proportion, with blank bands above and below. */
   .reports-page .report-chart-area {
-    height: auto;
+    height: 300px;
+  }
+
+  .reports-page .report-chart-area canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
   }
 
   /* Table on paper: the name column gets the room. Measured at 14px: the
@@ -3815,7 +3846,9 @@
      just before printing and clear it after. Without a scope (the browser's
      own print menu) the whole page prints, as before. */
   .reports-page .print-part-insights,
-  .reports-page .report-insights-print {
+  .reports-page .print-part-all,
+  .reports-page .report-insights-print,
+  .reports-page .report-print-all {
     display: none;
   }
 
@@ -3830,6 +3863,28 @@
 
   .reports-page[data-print-scope="insights"] .print-part-insights {
     display: inline;
+  }
+
+  /* "Print all reports": the nine reports in place of the loaded one, each
+     from a new page, then Key Insights once (it starts a page already). */
+  .reports-page[data-print-scope="all"] .report-print-area,
+  .reports-page[data-print-scope="all"] .print-part-report {
+    display: none !important;
+  }
+
+  .reports-page[data-print-scope="all"] .print-part-all {
+    display: inline;
+  }
+
+  .reports-page[data-print-scope="all"] .report-print-all {
+    display: block;
+    position: static;
+    width: auto !important;
+  }
+
+  .reports-page .report-print-all-item + .report-print-all-item {
+    break-before: page;
+    page-break-before: always;
   }
 
   /* Printed alone, Key Insights follows the heading on page 1. */

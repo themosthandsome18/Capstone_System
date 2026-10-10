@@ -11,7 +11,9 @@
 // Chrome and Edge print a canvas redrawn this way as vector shapes and text, so
 // no extra pixel ratio is needed: printing at ratio 2 or 1 gave the same output.
 
-// The main report chart's printed height, in CSS pixels.
+// The main report chart's printed height, in CSS pixels. The print stylesheet
+// gives every report chart box this height (Tourism_index.css, Phase 1b), so
+// the redraw never changes the layout; keep the two equal.
 export const PRINT_MAIN_CHART_HEIGHT = 300;
 
 const LEGEND_BELOW = new Set(["pie", "doughnut"]);

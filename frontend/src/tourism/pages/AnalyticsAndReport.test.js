@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import AnalyticsAndReport from "./AnalyticsAndReport";
 import { useTourismData } from "../context/TourismDataContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
+import { tourismApi } from "../services/tourismApi";
 
 // Each chart renders a marker carrying what it was asked to draw.
 jest.mock("react-chartjs-2", () => {
@@ -561,35 +562,35 @@ describe("Reports Key Insights cards", () => {
   });
 });
 
+// jsdom does not apply @media print, so the tourism print rules are loaded
+// here as a plain stylesheet and visibility is read from computed styles.
+function loadPrintRules() {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+  const start = css.lastIndexOf("@media print {", css.indexOf("data-print-scope"));
+  let depth = 0;
+  let end = start;
+  for (let i = css.indexOf("{", start); i < css.length; i += 1) {
+    if (css[i] === "{") depth += 1;
+    if (css[i] === "}") depth -= 1;
+    if (depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  const style = document.createElement("style");
+  style.textContent = css.slice(css.indexOf("{", start) + 1, end);
+  document.head.appendChild(style);
+  return () => style.remove();
+}
+
+function shown(element) {
+  for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
+    if (getComputedStyle(node).display === "none") return false;
+  }
+  return true;
+}
+
 describe("Reports printing one part", () => {
-  // jsdom does not apply @media print, so the tourism print rules are loaded
-  // here as a plain stylesheet and visibility is read from computed styles.
-  function loadPrintRules() {
-    const css = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
-    const start = css.lastIndexOf("@media print {", css.indexOf("data-print-scope"));
-    let depth = 0;
-    let end = start;
-    for (let i = css.indexOf("{", start); i < css.length; i += 1) {
-      if (css[i] === "{") depth += 1;
-      if (css[i] === "}") depth -= 1;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
-    }
-    const style = document.createElement("style");
-    style.textContent = css.slice(css.indexOf("{", start) + 1, end);
-    document.head.appendChild(style);
-    return () => style.remove();
-  }
-
-  function shown(element) {
-    for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
-      if (getComputedStyle(node).display === "none") return false;
-    }
-    return true;
-  }
-
   // What is on paper at the moment window.print() is called.
   function printWith(buttonName) {
     setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
@@ -623,7 +624,7 @@ describe("Reports printing one part", () => {
     setup();
 
     const actions = [...document.querySelectorAll(".reports-actions button")].map((b) => b.textContent);
-    expect(actions).toEqual(["Print report", "Export CSV"]);
+    expect(actions).toEqual(["Print report", "Print all reports", "Export CSV", "Export all CSV"]);
     expect(screen.queryByText("Export PDF")).toBeNull();
     const insightsButton = screen.getByRole("button", { name: "Print Key Insights" });
     expect(insightsButton.closest(".analytics-question-title-row")).not.toBeNull();
@@ -678,6 +679,208 @@ describe("Reports printing one part", () => {
     }
 
     expect(exported()).toEqual(before);
+  });
+});
+
+describe("Reports: all nine reports", () => {
+  const TYPES = ["daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show"];
+  const TITLES = [
+    "Daily Tourist Arrival Report",
+    "Monthly Tourist Arrival Report",
+    "Yearly Tourist Arrival Report",
+    "Visitors by Resorts",
+    "Visitor Origin Report",
+    "Purpose of Travel Report",
+    "Vehicle Classification Report",
+    "Boat Classification Report",
+    "No-show Booking Report",
+  ];
+
+  // Report i has i + 1 rows, so every report's row count is different.
+  function payloadFor(type) {
+    const index = TYPES.indexOf(type);
+    const rows = Array.from({ length: index + 1 }, (_, n) => ({
+      id: `${type}-${n}`,
+      name: `${type} row ${n}`,
+      male: 1,
+      female: 1,
+      visitors: 2,
+      revenue: 160,
+    }));
+    const count = rows.length;
+    return {
+      type,
+      filters: { year: "2026", type },
+      rows,
+      totals: { visitors: 2 * count, male: count, female: count, revenue: 160 * count },
+      questionAnswers: [],
+    };
+  }
+
+  let requests;
+  let inFlight;
+  let maxInFlight;
+  let originalPrint;
+
+  function mockReports(failOn) {
+    requests = [];
+    inFlight = 0;
+    maxInFlight = 0;
+    return jest.spyOn(tourismApi, "getReportsData").mockImplementation(async (filters) => {
+      requests.push(filters);
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      if (filters.type === failOn) {
+        throw new Error("Server error");
+      }
+      return payloadFor(filters.type);
+    });
+  }
+
+  beforeEach(() => {
+    originalPrint = window.print;
+  });
+
+  afterEach(() => {
+    window.print = originalPrint;
+    jest.restoreAllMocks();
+  });
+
+  // Clicks the button and returns what is on paper when window.print() runs.
+  async function printAll() {
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    const button = screen.getByRole("button", { name: "Print all reports" });
+    let printed = null;
+    window.print = jest.fn(() => {
+      const removeRules = loadPrintRules();
+      try {
+        const page = document.querySelector(".reports-page");
+        const visible = (selector) => [...page.querySelectorAll(selector)].filter(shown);
+        const reports = visible(".report-print-all-item");
+        const insightsSection = page.querySelector(".report-insights");
+        printed = {
+          scope: page.dataset.printScope,
+          titles: reports.map((section) => section.querySelector(".report-chart-card h3").textContent),
+          startsPage: reports.map((section, index) =>
+            index === 0 ? "first" : getComputedStyle(section).breakBefore
+          ),
+          rowsPerReport: reports.map((section) => section.querySelectorAll("tbody tr:not(.total-row)").length),
+          loadedReportShown: visible(".report-print-area").length,
+          insightHeadings: visible(".analytics-question-title-row h3").length,
+          insightCards: visible(".analytics-question-item").length,
+          insightsAfterReports:
+            reports.length > 0 &&
+            Boolean(reports[reports.length - 1].compareDocumentPosition(insightsSection) & Node.DOCUMENT_POSITION_FOLLOWING),
+          heading: visible(".report-print-heading p span").map((span) => span.textContent),
+        };
+      } finally {
+        removeRules();
+      }
+    });
+    fireEvent.click(button);
+    await waitFor(() => expect(window.print).toHaveBeenCalled());
+    return printed;
+  }
+
+  it("prints all nine reports in tab order, each from a new page, with its own chart and table", async () => {
+    mockReports();
+
+    const printed = await printAll();
+
+    expect(printed.scope).toBe("all");
+    expect(printed.titles).toEqual(TITLES);
+    expect(printed.startsPage).toEqual(["first", "page", "page", "page", "page", "page", "page", "page", "page"]);
+    expect(printed.rowsPerReport).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(printed.loadedReportShown).toBe(0);
+    expect(printed.heading).toEqual(["All reports"]);
+  });
+
+  it("fetches the nine one at a time, without question answers, with the applied filters", async () => {
+    mockReports();
+
+    await printAll();
+
+    expect(requests.map((r) => r.type)).toEqual(TYPES);
+    expect(maxInFlight).toBe(1);
+    requests.forEach((r) => {
+      expect(r.include_questions).toBe(false);
+      expect(r.year).toBe("2026");
+    });
+  });
+
+  it("includes Key Insights exactly once, after the last report", async () => {
+    mockReports();
+
+    const printed = await printAll();
+
+    expect(printed.insightHeadings).toBe(1);
+    expect(printed.insightCards).toBe(11);
+    expect(printed.insightsAfterReports).toBe(true);
+  });
+
+  it("prints nothing when a request fails mid-way, and names the report that failed", async () => {
+    mockReports("purpose");
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    window.print = jest.fn();
+
+    fireEvent.click(screen.getByRole("button", { name: "Print all reports" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Could not load Purpose of Travel Report: Server error. Nothing was printed.");
+    expect(window.print).not.toHaveBeenCalled();
+    expect(document.querySelector(".report-print-all")).toBeNull();
+    expect(requests.map((r) => r.type)).toEqual(TYPES.slice(0, 6));
+    expect(screen.getByRole("button", { name: "Print all reports" }).disabled).toBe(false);
+  });
+
+  it("removes the nine reports after printing", async () => {
+    mockReports();
+    await printAll();
+    expect(document.querySelector(".report-print-all")).not.toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event("afterprint"));
+    });
+
+    expect(document.querySelector(".report-print-all")).toBeNull();
+    expect(document.querySelector(".reports-page").hasAttribute("data-print-scope")).toBe(false);
+  });
+
+  it("exports one CSV with all nine tables stacked, Report Type on every row", async () => {
+    mockReports();
+    setup();
+    datedCsvFilename.mockImplementation((name) => `${name}.csv`);
+
+    fireEvent.click(screen.getByRole("button", { name: "Export all CSV" }));
+    await waitFor(() => expect(exportCsv).toHaveBeenCalledWith("tourism-all-reports.csv", expect.anything(), expect.anything()));
+
+    const [, headers, rows] = exportCsv.mock.calls.at(-1);
+    expect(headers).toEqual([
+      "Report Type", "Reporting Year", "Date From", "Date To", "Resort Filter", "Name", "Male", "Female", "Total Visitors", "Total Fee",
+    ]);
+    const perType = TITLES.map((title) => rows.filter((row) => row[0] === title).length);
+    expect(perType).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect([...new Set(rows.map((row) => row[0]))]).toEqual(TITLES);
+    expect(rows.every((row) => row.length === headers.length)).toBe(true);
+    const totals = rows.filter((row) => row[5] === "Total");
+    expect(totals.map((row) => row[0])).toEqual(TITLES);
+    expect(totals.map((row) => row[8])).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+  });
+
+  it("leaves Print report and Print Key Insights as they were: no fetching, same scopes", () => {
+    mockReports();
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    const scopes = [];
+    window.print = jest.fn(() => scopes.push(document.querySelector(".reports-page").dataset.printScope));
+
+    fireEvent.click(screen.getByRole("button", { name: "Print report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Print Key Insights" }));
+
+    expect(scopes).toEqual(["report", "insights"]);
+    expect(requests).toEqual([]);
+    expect(document.querySelector(".report-print-all")).toBeNull();
   });
 });
 
