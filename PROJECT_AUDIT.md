@@ -24,6 +24,7 @@
 - Slice 2 remains open: mobile geolocation fallback and mobile editing behavior were not modified. GPS-photo/EXIF work remains separate and unimplemented. Scope is sanitation in `Capstone_System`, based on current code at `f9d2ef67fcd198ea46eb9a0231fc904fb49b47c8`; tourism/shared auth and `tatus` were untouched. Local branch work is unpublished, with no merge or push. Local browser acceptance passed; deployment acceptance remains pending.
 
 ## Standing Notes
+- **Print changes:** page count measured with and without the print-time chart redraw, and the two must match (see "Reports Print Layout: Phase 4" below).
 - **Renaming a value that code matches by name.** Render runs `build.sh`, including `migrate`, while the OLD instance is still serving. So a data migration goes live BEFORE the code that expects it. For any future rename, ship code that accepts both the old and new name first, then migrate in a later deploy. The "Day Tour" -> "Same Day" rename (below) did it in one deploy: the gap was a few minutes and no import ran, so nothing split, but that was luck.
 
 ## Year Filters From the Data; Unknown Report Type Rejected (2026-10-05; `tourism/theme-tokens`)
@@ -45,6 +46,9 @@
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
 ## Reports Print Layout: Phase 4, All Reports in One Document (2026-10-10; `tourism/theme-tokens`)
+- **Standing verification rule for any change that affects print:** measure the page count both with and without the print-time chart redraw (`utils/printCharts.js`), and require the two to match.
+  - **Why:** Chrome fixes the page count before the redraw, so a redrawn chart that is taller than the layout reserved can push content past the counted pages, and it silently disappears.
+  - **History:** this was latent in Phase 2 and Phase 3 (main chart 216 to 300px) and was only caught in Phase 4, when nine charts grew at once and Letter lost its last page. Our checks looked for clipping and split cards, never for a missing page.
 - **The requirement:** "pwedeng i export lahat ng sama sama": one document with all nine reports, each from a new page, and one CSV with all the tables.
 - **The controls: four buttons in the action bar.**
   - Print report (green), **Print all reports**, Export CSV, **Export all CSV**.
