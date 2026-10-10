@@ -302,7 +302,7 @@ describe("Reports Boat tab", () => {
     expect(headerLabels()).toEqual(["Boat Type", "Male", "Female", "Total Visitors", "Total Fee"]);
     expect(screen.getByRole("heading", { level: 3, name: "Boat Classification Report" })).toBeTruthy();
     expect(document.querySelector(".report-card-title p").textContent).toBe(
-      "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)"
+      "Visitor totals by boat type from arrived bookings"
     );
     expect(bodyNames()).toEqual(["Passenger Boat", "Tourist Boat"]);
 
@@ -916,12 +916,13 @@ describe("Reports when the server rejects the year", () => {
 });
 
 describe("Reports subtitles", () => {
-  it("say the visitor tabs count arrived and pending bookings, not only arrived ones", () => {
+  it("say the visitor tabs count arrived bookings only", () => {
     const expected = {
-      daily: "Daily visitor totals from arrived and pending bookings (no-shows excluded)",
-      monthly: "Monthly visitor totals from arrived and pending bookings (no-shows excluded)",
-      yearly: "Yearly visitor totals from arrived and pending bookings (no-shows excluded)",
-      resort: "Visitor totals by resort from arrived and pending bookings (no-shows excluded)",
+      daily: "Daily visitor totals from arrived bookings",
+      monthly: "Monthly visitor totals from arrived bookings",
+      yearly: "Yearly visitor totals from arrived bookings",
+      resort: "Visitor totals by resort from arrived bookings",
+      boat: "Visitor totals by boat type from arrived bookings",
     };
     Object.entries(expected).forEach(([type, wanted]) => {
       useTourismData.mockReturnValue({
@@ -934,7 +935,7 @@ describe("Reports subtitles", () => {
       const view = render(<AnalyticsAndReport />);
       const subtitle = view.container.querySelector(".report-card-title p").textContent;
       expect(subtitle).toBe(wanted);
-      expect(subtitle).not.toMatch(/based on arrived/);
+      expect(subtitle).not.toMatch(/pending/i);
       view.unmount();
     });
   });

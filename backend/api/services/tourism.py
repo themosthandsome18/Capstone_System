@@ -768,8 +768,10 @@ def build_reports_payload(params=None):
             reporting_year,
         ).select_related("province", "resort", "travel_mode", "visit_purpose")
     else:
+        # The visitor tabs count arrived bookings only: a booking that has not
+        # been approved has not happened (Arrival Monitoring counts the same).
         records = apply_reporting_year(
-            TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW),
+            TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
             reporting_year,
         ).select_related("province", "resort", "travel_mode", "visit_purpose")
 
@@ -1149,8 +1151,10 @@ def build_tourism_question_answers(params=None):
     date_from = params.get("from")
     date_to = params.get("to")
 
+    # Arrived bookings only, as on the visitor tabs. all_records (below) keeps
+    # every status for the Data Quality card, which counts what needs review.
     arrived = apply_reporting_year(
-        TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW),
+        TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
         reporting_year,
     ).select_related("itinerary", "province", "region", "country", "resort", "visit_purpose")
     all_records = apply_reporting_year(
@@ -1436,7 +1440,7 @@ def format_top_answer(item, denominator, unit):
 
 def get_month_comparison(arrived_records=None):
     if arrived_records is None:
-        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
+        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return {"label": "Previous month", "total": 0}, {"label": "Current month", "total": 0}
@@ -1474,7 +1478,7 @@ def get_peak_month(arrived_records=None):
     records = (
         arrived_records
         if arrived_records is not None
-        else TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
+        else TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
     )
 
     for val in records.values("arrival_date", "total_visitors"):
@@ -1498,7 +1502,7 @@ def get_recent_demand(arrived_records=None):
     the 30 days before, for the resort with the most recent visitors.
     """
     if arrived_records is None:
-        arrived_records = TouristRecord.objects.exclude(status=BOOKING_STATUS_NO_SHOW)
+        arrived_records = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
     latest_date = arrived_records.aggregate(latest=Max("arrival_date"))["latest"]
     if not latest_date:
         return "No recent arrival trend is available yet.", {"type": "comparison", "items": []}

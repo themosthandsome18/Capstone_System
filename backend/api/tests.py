@@ -3267,8 +3267,8 @@ class EntranceFeeRateTests(TestCase):
     """Every fee and revenue figure is head count x PHP 80 (no fee is stored).
 
     Two arrived records of 3 and 2 visitors on Apr 2, a no-show of 5 on Apr 2
-    (counted nowhere), and a pending record of 4 on Apr 3 (counted only by
-    Reports, which exclude no-shows but not pending bookings).
+    and a pending record of 4 on Apr 3: only arrived records are counted, so the
+    Reports, Arrival Monitoring and the Dashboard all come to 5 visitors, PHP 400.
     """
 
     @classmethod
@@ -3337,9 +3337,9 @@ class EntranceFeeRateTests(TestCase):
 
         self.assertEqual(
             [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
-            [("2026-04-02", 5, 400, 80), ("2026-04-03", 4, 320, 80)],
+            [("2026-04-02", 5, 400, 80)],
         )
-        self.assertEqual(payload["totals"], {"visitors": 9, "male": 9, "female": 0, "revenue": 720, "avg": 80})
+        self.assertEqual(payload["totals"], {"visitors": 5, "male": 5, "female": 0, "revenue": 400, "avg": 80})
 
 
 class DiscountedEntranceFeeTests(TestCase):
@@ -3349,7 +3349,7 @@ class DiscountedEntranceFeeTests(TestCase):
       A arrived Apr 2: 4 visitors, 3 discounted, resort 1, purpose 1 -> 272
       B arrived Apr 2: 5 visitors, 0 discounted, resort 1, purpose 2 -> 400
       C arrived Apr 2: 2 visitors, 2 discounted, resort 2, purpose 1 -> 128
-      D pending Apr 3: 3 visitors, 1 discounted, resort 2, purpose 2 -> 224
+      D pending Apr 3: 3 visitors, 1 discounted, resort 2, purpose 2 (counted nowhere)
       E no-show Apr 2: 6 visitors, 6 discounted (counted nowhere)
     """
 
@@ -3490,37 +3490,37 @@ class DiscountedEntranceFeeTests(TestCase):
 
         self.assertEqual(
             [(row["id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
-            [("2026-04-02", 11, 800, 73), ("2026-04-03", 3, 224, 75)],
+            [("2026-04-02", 11, 800, 73)],
         )
-        self.assertEqual(payload["totals"], {"visitors": 14, "male": 14, "female": 0, "revenue": 1024, "avg": 73})
+        self.assertEqual(payload["totals"], {"visitors": 11, "male": 11, "female": 0, "revenue": 800, "avg": 73})
 
     def test_monthly_report_uses_the_months_discounted_count(self):
         payload = self._report("monthly")
 
-        # April: 14 visitors, 6 discounted -> 8 x 80 + 6 x 64.
+        # April (A + B + C): 11 visitors, 5 discounted -> 6 x 80 + 5 x 64.
         self.assertEqual(
             [(row["id"], row["visitors"], row["revenue"]) for row in payload["rows"]],
-            [("2026-04", 14, 1024)],
+            [("2026-04", 11, 800)],
         )
 
     def test_purpose_report_uses_each_purposes_discounted_count(self):
         payload = self._report("purpose")
 
-        # Purpose 2 (B + D): 8 visitors, 1 discounted. Purpose 1 (A + C): 6 visitors, 5 discounted.
+        # Purpose 1 (A + C): 6 visitors, 5 discounted. Purpose 2 (B): 5 visitors, none.
         self.assertEqual(
             [(row["name"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
-            [(self.purposes[1].name, 8, 624, 78), (self.purposes[0].name, 6, 400, 67)],
+            [(self.purposes[0].name, 6, 400, 67), (self.purposes[1].name, 5, 400, 80)],
         )
 
     def test_resort_report_uses_each_resorts_discounted_count(self):
         payload = self._report("resort")
 
-        # Resort 1 (A + B): 9 visitors, 3 discounted. Resort 2 (C + D): 5 visitors, 3 discounted.
+        # Resort 1 (A + B): 9 visitors, 3 discounted. Resort 2 (C): 2 visitors, 2 discounted.
         self.assertEqual(
             [(row["resort_id"], row["visitors"], row["revenue"], row["avg"]) for row in payload["rows"]],
-            [(self.resorts[0].resort_id, 9, 672, 75), (self.resorts[1].resort_id, 5, 352, 70)],
+            [(self.resorts[0].resort_id, 9, 672, 75), (self.resorts[1].resort_id, 2, 128, 64)],
         )
-        self.assertEqual(payload["totals"]["revenue"], 1024)
+        self.assertEqual(payload["totals"]["revenue"], 800)
 
     # --- other writers ------------------------------------------------------
 
@@ -3947,8 +3947,9 @@ class QuestionAnswersDeduplicationTests(TestCase):
         from .services import tourism as t
 
         reporting_year = t.get_reporting_year(params)
+        # Arrived bookings only (pending is not counted, since 2026-10-11).
         arrived = t.apply_reporting_year(
-            TouristRecord.objects.exclude(status="no_show"), reporting_year
+            TouristRecord.objects.filter(status="arrived"), reporting_year
         )
         records = t.apply_reporting_year(TouristRecord.objects.all(), reporting_year)
         if params.get("from"):
@@ -4105,12 +4106,14 @@ class ReportsMaleFemaleTests(TestCase):
             cls._record("MF-01", "2026-08-10", 3, 2, resort=0, purpose=0, mode=0),
             cls._record("MF-02", "2026-09-05", 1, 3, resort=1, purpose=1, mode=1, foreign=True, boat=1),
             # MF-03 shares MF-01's travel mode but not its boat, so the two groupings differ.
-            cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, booking_status="pending",
-                        boat=1),
+            cls._record("MF-03", "2026-09-05", 2, 0, resort=0, purpose=1, mode=0, boat=1),
             cls._record("MF-04", "2026-09-20", 0, 4, resort=1, purpose=0, mode=1, booking_status="no_show"),
-            # A pending advance booking in a second year, shaped like SURV-2026-011.
+            # A pending advance booking in a second year, shaped like SURV-2026-011:
+            # not approved, so counted on no tab.
             cls._record("MF-05", "2027-09-21", 2, 2, resort=0, purpose=0, mode=0,
                         booking_status="pending", discounted=1),
+            # A pending booking in 2026, large enough to change every tab if counted.
+            cls._record("MF-06", "2026-08-10", 5, 5, resort=1, purpose=0, mode=1, booking_status="pending"),
         ])
 
     @classmethod
@@ -4150,7 +4153,8 @@ class ReportsMaleFemaleTests(TestCase):
         p0, p1 = (purpose.name for purpose in self.purposes)
         m0, m1 = (mode.name for mode in self.modes)
         # (name, male, female, visitors) per row, then the totals. No-show
-        # counts only MF-04; every other tab counts MF-01 to MF-03 (pending included).
+        # counts only MF-04; every other tab counts the arrived MF-01 to MF-03,
+        # never the pending MF-05 and MF-06.
         expected = {
             "daily": ([("Aug 10, 2026", 3, 2, 5), ("Sep 05, 2026", 3, 3, 6)], (6, 5, 11)),
             "monthly": ([("August 2026", 3, 2, 5), ("September 2026", 3, 3, 6)], (6, 5, 11)),
@@ -4190,39 +4194,28 @@ class ReportsMaleFemaleTests(TestCase):
         payload = self._report("yearly", year="all")
 
         # 2026: MF-01 to MF-03, 11 visitors, none discounted -> 11 x 80.
-        # 2027: MF-05 alone, 4 visitors, 1 discounted -> 3 x 80 + 64.
+        # 2027: only the pending MF-05, so no row.
         self.assertEqual(
             [(row["id"], row["name"], row["male"], row["female"], row["visitors"], row["revenue"])
              for row in payload["rows"]],
-            [(2026, "2026", 6, 5, 11, 880), (2027, "2027", 2, 2, 4, 304)],
+            [(2026, "2026", 6, 5, 11, 880)],
         )
         totals = payload["totals"]
         self.assertEqual(
-            (totals["male"], totals["female"], totals["visitors"], totals["revenue"]), (8, 7, 15, 1184)
+            (totals["male"], totals["female"], totals["visitors"], totals["revenue"]), (6, 5, 11, 880)
         )
         self.assertEqual(totals["male"] + totals["female"], totals["visitors"])
 
     def test_yearly_tab_respects_the_year_filter(self):
         for year, expected in (
-            ("2026", [(2026, 11)]), ("2027", [(2027, 4)]), ("2025", []), ("all", [(2026, 11), (2027, 4)]),
+            ("2026", [(2026, 11)]), ("2027", []), ("2025", []), ("all", [(2026, 11)]),
         ):
             with self.subTest(year=year):
                 payload = self._report("yearly", year=year)
                 self.assertEqual([(row["id"], row["visitors"]) for row in payload["rows"]], expected)
 
-    def test_2027_returns_only_the_2027_record_on_every_visitor_tab(self):
-        r0 = self.resorts[0].resort_name
-        expected = {
-            "daily": [("Sep 21, 2027", 2, 2, 4, 304)],
-            "monthly": [("September 2027", 2, 2, 4, 304)],
-            "yearly": [("2027", 2, 2, 4, 304)],
-            "resort": [(r0, 2, 2, 4, 304)],
-            "origin": [("Quezon", 2, 2, 4, 304)],
-            "purpose": [(self.purposes[0].name, 2, 2, 4, 304)],
-            "transport": [(self.modes[0].name, 2, 2, 4, 304)],
-            "boat": [(self.boats[0].name, 2, 2, 4, 304)],
-            "no_show": [],
-        }
+    def test_2027_has_only_a_pending_booking_so_every_tab_is_empty(self):
+        expected = {report_type: [] for report_type in self.TABS}
         for report_type, rows in expected.items():
             with self.subTest(report_type=report_type):
                 payload = self._report(report_type, year="2027")
@@ -4527,14 +4520,16 @@ class PeakSeasonShareTests(TestCase):
                 total_male=visitors, age_8_59=visitors, status=booking_status, **common,
             )
 
-        # 2026: July 5, August 12 (7 + 5), September 3 -> 20 visitors; the no-show
-        # in October is not counted anywhere.
+        # 2026: July 5, August 12 (7 + 5), September 3 -> 20 visitors. The no-show
+        # in October and the pending booking in September are counted nowhere;
+        # counted, the pending 30 would make September the peak.
         TouristRecord.objects.bulk_create([
             record("PK-01", "2026-07-10", 5),
             record("PK-02", "2026-08-03", 7, resort=1, foreign=True),
-            record("PK-03", "2026-08-20", 5, booking_status="pending"),
+            record("PK-03", "2026-08-20", 5),
             record("PK-04", "2026-09-15", 3),
             record("PK-05", "2026-10-02", 40, booking_status="no_show"),
+            record("PK-06", "2026-09-01", 30, booking_status="pending"),
         ])
 
     def _answers(self, **params):
@@ -4647,6 +4642,79 @@ class VisitorDemographicsVisualTests(TestCase):
         for key, (answer, visual) in expected.items():
             with self.subTest(key=key):
                 self.assertEqual((answers[key]["answer"], answers[key]["visual"]), (answer, visual))
+
+
+class ReportsCountArrivedOnlyTests(TestCase):
+    """Reports count arrived bookings only; pending is counted nowhere in Reports.
+
+    One arrived booking, one pending and one no-show, each with a size of its
+    own, so any wrong inclusion shows: arrived 3 (2026-05-04), pending 7
+    (2026-05-04, same resort), no-show 11 (2026-05-04).
+    """
+
+    VISITOR_TABS = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat")
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        quezon = Province.objects.get(name="Quezon")
+        resort = Resort.objects.order_by("resort_id").first()
+        for survey_id, visitors, booking_status in (("AO-01", 3, "arrived"), ("AO-02", 7, "pending"), ("AO-03", 11, "no_show")):
+            TouristRecord.objects.create(
+                survey_id=survey_id, full_name="Arrival Group", contact_number=f"0917111{survey_id[-2:]}00",
+                country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+                arrival_date="2026-05-04", resort=resort, itinerary=Itinerary.objects.first(),
+                travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+                visit_purpose=VisitPurpose.objects.first(), total_visitors=visitors, filipino_count=visitors,
+                total_male=visitors, total_female=0, age_8_59=visitors, status=booking_status,
+            )
+
+    def _report(self, report_type, year="2026"):
+        from .services.tourism import build_reports_payload
+
+        return build_reports_payload({"type": report_type, "year": year, "include_questions": "false"})
+
+    def test_a_pending_booking_appears_in_no_visitor_tab(self):
+        for report_type in self.VISITOR_TABS:
+            with self.subTest(report_type=report_type):
+                payload = self._report(report_type)
+                self.assertEqual([row["visitors"] for row in payload["rows"]], [3])
+                self.assertEqual(payload["totals"]["visitors"], 3)
+
+    def test_an_arrived_booking_appears_on_every_visitor_tab(self):
+        TouristRecord.objects.filter(survey_id="AO-02").update(status="arrived")
+        for report_type in self.VISITOR_TABS:
+            with self.subTest(report_type=report_type):
+                payload = self._report(report_type)
+                self.assertEqual(payload["totals"]["visitors"], 10)
+                self.assertEqual(payload["totals"]["revenue"], 800)
+
+    def test_the_no_show_tab_still_counts_no_shows(self):
+        payload = self._report("no_show")
+
+        self.assertEqual([row["visitors"] for row in payload["rows"]], [11])
+        self.assertEqual(payload["totals"]["visitors"], 11)
+
+    def test_key_insights_count_arrived_only_and_the_review_card_counts_pending(self):
+        from .services.tourism import build_tourism_question_answers
+
+        answers = {item["id"]: item for item in build_tourism_question_answers({"year": "2026"})}
+
+        self.assertEqual(answers["classification"]["answer"], "Domestic (Filipino): 3, Foreign (International): 0.")
+        self.assertEqual(answers["peak_month"]["visual"]["total"], 3)
+        self.assertIn("1 pending, 1 no-show", answers["validation"]["answer"])
+
+    def test_reports_match_arrival_monitoring_for_the_same_year(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        for year in ("2026", "2027", "all"):
+            with self.subTest(year=year):
+                reports = self._report("daily", year=year)["totals"]
+                monitoring = build_arrival_monitoring_payload({"year": year, "date": "all"})["summary"]
+                self.assertEqual(
+                    (reports["visitors"], reports["male"], reports["female"], reports["revenue"]),
+                    (monitoring["totalArrivals"], monitoring["totalMale"], monitoring["totalFemale"], monitoring["feesCollected"]),
+                )
 
 
 class MobileFeedbackPhotoUploadTests(TestCase):

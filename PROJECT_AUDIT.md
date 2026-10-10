@@ -47,6 +47,71 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Reports Count Arrived Bookings Only (2026-10-11; `tourism/theme-tokens`)
+- **The problem, seen on live.** For 2027, Arrival Monitoring showed 0 arrivals and PHP 0 while the Resort Report showed 4 visitors and PHP 304. The difference was SURV-2026-011, still pending. Two screens, same data, different answers.
+- **The decision:** a booking that has not been approved has not happened.
+  - The 8 visitor tabs (Daily, Monthly, Yearly, Resort, Origin, Purpose, Vehicle, Boat) and their totals count **arrived** bookings only.
+  - The No-show tab still counts no-shows. Pending is counted nowhere in Reports.
+- **Changed (`services/tourism.py`):**
+  - the visitor tabs' record set: `exclude(no-show)` became `filter(arrived)`;
+  - the Key Insights base set, and the defaults of `get_month_comparison`, `get_peak_month` and `get_recent_demand`;
+  - kept: the Data Quality card still counts all statuses, since "Needs review: N pending" is the review queue;
+  - Arrival Monitoring already counted arrived only, and is unchanged.
+- **Subtitles** (`AnalyticsAndReport.js`), the only places that made the claim. No heading, tooltip, Key Insights answer, export caption or mobile text claimed it.
+
+  | Tab | Before | After |
+  |---|---|---|
+  | Daily | "Daily visitor totals from arrived and pending bookings (no-shows excluded)" | "Daily visitor totals from arrived bookings" |
+  | Monthly | "Monthly visitor totals from arrived and pending bookings (no-shows excluded)" | "Monthly visitor totals from arrived bookings" |
+  | Yearly | "Yearly visitor totals from arrived and pending bookings (no-shows excluded)" | "Yearly visitor totals from arrived bookings" |
+  | Boat | "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)" | "Visitor totals by boat type from arrived bookings" |
+  | Resort | "Visitor totals by resort from arrived and pending bookings (no-shows excluded)" | "Visitor totals by resort from arrived bookings" |
+
+  Origin, Purpose, Vehicle and No-show make no claim and are unchanged.
+- **Key Insights affected** (live, old against new code, read-only):
+  - **2026:** 8 of 11 change: top resort, month comparison, peak month, demographics, stay type, average stay, top origin, purpose. Top destination for overnight stays and growing demand are unchanged for 2026 only because the pending bookings do not touch them. Examples:
+
+    | Card | Before | After |
+    |---|---|---|
+    | Peak Season | 55.9% | 61.3% |
+    | Top Tourist Destination | 29.4% | 32.3% |
+    | Visitor Demographics | Domestic 28 / Foreign 6 | 25 / 6 |
+    | Same Day | 8 | 5 |
+    | Average Length of Stay | 1.6 nights | 1.8 nights |
+
+  - **2027 and All Years:** every card except Data Quality changes.
+  - **Data Quality** is unchanged in all three years ("1 pending, 6 no-show" for 2026).
+- **New baseline** (live, read-only, 2026-10-11; replaces the 2026-10-10 figures):
+
+  | Year | Visitor tabs (all 8 agree): visitors / male / female / Total Fee | Arrival Monitoring, same year | No-show tab |
+  |---|---|---|---|
+  | 2026 | 31 / 17 / 14 / PHP 2,336 | 31 / 17 / 14 / PHP 2,336 (match) | 14 / 6 / 8 |
+  | 2027 | 0 / 0 / 0 / PHP 0 | 0 (match) | 0 |
+  | All Years | 31 / 17 / 14 / PHP 2,336 | match | 14 / 6 / 8 |
+
+  - Before: 2026 34 / 18 / 16 / PHP 2,576; 2027 4 / 4 / 0 / PHP 304; All Years 38 / 22 / 16 / PHP 2,880.
+  - The differences are the two pending bookings: SURV-2026-012 (2026, 3 visitors, PHP 240) and SURV-2026-011 (2027, 4 visitors, PHP 304).
+  - Records: 16 (8 arrived with 31 visitors, 6 no-show, 2 pending).
+- **Tests.**
+  - New `ReportsCountArrivedOnlyTests` (5), on one arrived (3), one pending (7) and one no-show (11) booking on the same day and resort:
+    - (a) the pending booking appears on no visitor tab;
+    - (b) made arrived, it appears on every tab (10 visitors, PHP 800);
+    - (c) the No-show tab counts the no-show (11);
+    - Key Insights count arrived only, while the Data Quality card still counts the pending one;
+    - Reports totals equal Arrival Monitoring for 2026, 2027 and All Years.
+  - Breaking each one failed its test:
+    - (a) counting pending again gave [10] instead of [3];
+    - (b) dropping arrived gave 0 instead of 10;
+    - (c) a No-show tab of arrived records gave [3] instead of [11].
+
+    Each was restored byte-identical and passed.
+  - **Existing tests that encoded the old rule were updated, keeping their pending records:**
+    - fee and discount tests: the pending booking now counts nowhere, so Reports equal Arrival Monitoring and the Dashboard (PHP 400 / PHP 800);
+    - male/female tests: MF-03 made arrived so Vehicle and Boat still group differently; a pending MF-06 added for 2026; 2027, only the pending MF-05, is empty on every tab;
+    - Peak Season: PK-03 made arrived, a pending PK-06 of 30 added that would make September the peak if counted, so the Demographics golden values are unchanged;
+    - the deduplication oracle's base set: arrived only.
+  - Full suites: backend 407, frontend 475 (30 suites). No data changed, no migration.
+
 ## Print Proof Harness Committed: `tools/print-proof/` (2026-10-11; `tourism/theme-tokens`)
 - **The required proof for any print change**, now in the repository, with a README covering what it proves, how to run it and why headless alone is not enough.
   - It prints the real built app through Edge's own `window.print()` (kiosk printing, throwaway profile, animation on), against a local stand-in server.

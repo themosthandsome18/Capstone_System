@@ -78,15 +78,15 @@ function getReportTitle(type) {
 
 function getReportSubtitle(type) {
   if (type === "daily") {
-    return "Daily visitor totals from arrived and pending bookings (no-shows excluded)";
+    return "Daily visitor totals from arrived bookings";
   }
 
   if (type === "monthly") {
-    return "Monthly visitor totals from arrived and pending bookings (no-shows excluded)";
+    return "Monthly visitor totals from arrived bookings";
   }
 
   if (type === "yearly") {
-    return "Yearly visitor totals from arrived and pending bookings (no-shows excluded)";
+    return "Yearly visitor totals from arrived bookings";
   }
 
   if (type === "origin") {
@@ -102,14 +102,14 @@ function getReportSubtitle(type) {
   }
 
   if (type === "boat") {
-    return "Visitor totals by boat type from arrived and pending bookings (no-shows excluded)";
+    return "Visitor totals by boat type from arrived bookings";
   }
 
   if (type === "no_show") {
     return "No-show bookings grouped by resort";
   }
 
-  return "Visitor totals by resort from arrived and pending bookings (no-shows excluded)";
+  return "Visitor totals by resort from arrived bookings";
 }
 
 function getFirstColumnLabel(type) {
