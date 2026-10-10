@@ -767,6 +767,7 @@ describe("Reports: all nine reports", () => {
             index === 0 ? "first" : getComputedStyle(section).breakBefore
           ),
           rowsPerReport: reports.map((section) => section.querySelectorAll("tbody tr:not(.total-row)").length),
+          labelModes: reports.map((section) => section.querySelector(".report-chart-area").dataset.printLabels),
           loadedReportShown: visible(".report-print-area").length,
           insightHeadings: visible(".analytics-question-title-row h3").length,
           insightCards: visible(".analytics-question-item").length,
@@ -793,6 +794,8 @@ describe("Reports: all nine reports", () => {
     expect(printed.titles).toEqual(TITLES);
     expect(printed.startsPage).toEqual(["first", "page", "page", "page", "page", "page", "page", "page", "page"]);
     expect(printed.rowsPerReport).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    // Dates keep rotating on paper; names wrap level (utils/printCharts.js).
+    expect(printed.labelModes).toEqual(["rotate", "rotate", "rotate", "wrap", "wrap", "wrap", "wrap", "wrap", "wrap"]);
     expect(printed.loadedReportShown).toBe(0);
     expect(printed.heading).toEqual(["All reports"]);
   });

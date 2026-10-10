@@ -24,7 +24,9 @@
 - Slice 2 remains open: mobile geolocation fallback and mobile editing behavior were not modified. GPS-photo/EXIF work remains separate and unimplemented. Scope is sanitation in `Capstone_System`, based on current code at `f9d2ef67fcd198ea46eb9a0231fc904fb49b47c8`; tourism/shared auth and `tatus` were untouched. Local branch work is unpublished, with no merge or push. Local browser acceptance passed; deployment acceptance remains pending.
 
 ## Standing Notes
-- **Print changes:** page count measured with and without the print-time chart redraw, and the two must match (see "Reports Print Layout: Phase 4" below).
+- **Print changes:**
+  - Proven in a real browser print of the real built app, through its own `window.print()`, with animation on (see "Reports Print: Charts Drawn on Paper" below). A headless pass alone is not accepted.
+  - Page count measured with and without the print-time chart redraw, and the two must match (see "Reports Print Layout: Phase 4").
 - **Renaming a value that code matches by name.** Render runs `build.sh`, including `migrate`, while the OLD instance is still serving. So a data migration goes live BEFORE the code that expects it. For any future rename, ship code that accepts both the old and new name first, then migrate in a later deploy. The "Day Tour" -> "Same Day" rename (below) did it in one deploy: the gap was a few minutes and no import ran, so nothing split, but that was luck.
 
 ## Year Filters From the Data; Unknown Report Type Rejected (2026-10-05; `tourism/theme-tokens`)
@@ -44,6 +46,94 @@
 - **Other percentages checked.** Top Tourist Destination, Top Visitor Origins and Primary Purpose already divided by `total_visitors`; no other Key Insights sentence states a percentage; the pie and doughnut legends show each slice's share of their own slices, as labelled.
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
+
+## Reports Print: Charts Drawn on Paper, Name Labels Level (2026-10-11; `tourism/theme-tokens`)
+- **Found in real Edge prints of live 861107b:**
+  - "Print all reports" printed all nine report charts blank: correct boxes and tables, no bars.
+  - "Print report" on the Resort tab printed rotated, crowded resort names.
+- **Cause of the blank charts: Chart.js's opening animation.** No chart config sets `animation`, so every chart animates on creation or update (Chart.js default, about 1 s).
+  - The all-reports block creates its nine charts and calls `window.print()` in the same task.
+  - The print-time redraw (`utils/printCharts.js`) resizes each chart. While an animation is running, Chart.js leaves the redraw to its next animation frame, and no frame runs while the browser prepares the print, so the canvas is printed empty.
+  - Ruled out in the real print pipeline:
+
+    | Variant | Report charts |
+    |---|---|
+    | Mounted on-page instead of off-screen | still blank |
+    | Without the redraw | still blank |
+    | Same 300px rule, animation off | drawn |
+    | Printed 1.5 s later | drawn |
+    | Redraw with `chart.stop()`, then `update("none")` | drawn |
+
+- **This bug predated Phase 4; Phase 4 only exposed it.**
+  - "Print report" pressed within about a second of a tab switch or Apply Filters printed whatever frame the chart's update animation had reached, as a low-resolution image.
+  - Measured on 861107b, real print, Origin tab, Print pressed 358 ms after the tab click: a stale screen image with no axis text and wrong figures (Quezon about 24 instead of 21, Bataan about 20 instead of 6, Japan missing, bars floating above zero).
+  - Phase 4 created nine charts immediately before printing, which made it total.
+- **Why the headless harness could not see it.** It set `Chart.defaults.animation = false` and built every chart when the page loaded, seconds before printing. Both hid an animation still running at print time.
+  - Its layout, pagination and text-size measurements remain valid for charts that had finished drawing before printing (the loaded report, Key Insights). The real-pipeline re-run below matches them.
+  - It never tested a chart created or updated within about a second of printing.
+- **Fix A.**
+  - The redraw stops any running animation and draws the final state at once: `chart.stop()`, `chart.resize(w, h)`, `chart.update("none")`. The same on restore.
+  - The nine all-reports charts are also built with `animation: false` and their own options object, so they do not depend on the redraw.
+- **Fix B, name labels level on paper.**
+  - Report chart boxes carry `data-print-labels`: "wrap" for Resort, Origin, Purpose, Vehicle, Boat and No-show; "rotate" for Daily, Monthly and Yearly.
+  - For "wrap", the print redraw sets the x labels on up to four lines with no rotation and no skipping. A line holds what fits one column at the 15px tick font: (chart width - 60px) / columns / 8px a character.
+  - Columns narrower than 8 characters keep Chart.js's rotation and skipping, as dates always do.
+  - Labels, rotation and skipping are restored after printing.
+  - **Resort, real print:**
+
+    | | Plotting area | Labels |
+    |---|---|---|
+    | Before | 463px (A4) / 485px (Letter) | rotated 21.8 / 20.6 degrees, on 8-9 staggered lines |
+    | After | 598px (A4) / 617-620px (Letter) | level on 4 lines, e.g. "Dona / Choleng / Camping / Resort" |
+
+  - The 7 names need 1,012px laid flat at 15px (the longest 208px).
+  - Chart.js rotates 7 labels once a label passes about 80px (11 characters), and 15-character labels from 6 columns.
+  - The 300px rule did not change this: the redrawn chart was 630x300 with 21.7 degree labels from Phase 2 on.
+  - The 45 degree, overlapping labels reported from the field were not reproduced here (21 degrees in real Edge).
+- **Proof method: the real-browser pipeline. It is REQUIRED for any future print change; a headless pass alone is not accepted.**
+  - **What it runs:**
+    - the real built app, built with `REACT_APP_API_BASE_URL` pointing at a local stand-in server, driven by its own buttons through its own `window.print()`;
+    - Edge (or Chrome) with `--kiosk-printing` and "Save as PDF" preselected, in a throwaway profile, so the real print pipeline writes the PDF;
+    - animation left on.
+  - **Data:** the stand-in replays responses generated read-only from the live database with the backend's own builders. No live login, no live request.
+  - **Scenarios:** print one report; print immediately after a tab switch; print Key Insights; print all reports. Both papers.
+  - **Checks, per chart:**
+    - drawn bars and real axis text; bars without text are flagged as a stale image;
+    - page counts with and without the redraw;
+    - every earlier layout and text measurement, on the real PDFs, with the layout recorded at the print-media change.
+  - **Paper:** kiosk printing ignores the saved paper size (Save as PDF defaults to Letter on this machine). The paper is therefore applied with an injected test-only `@page { size: A4 }` / `letter`. The app's own `@page` margins still apply.
+  - **Where it lives:** the scripts are in the session's scratch folder (`realapp/`: `gen_responses.py`, `stub_server.py`, `drive.py`, `recorder.js`, `check_pdf.py`), not yet in the repository.
+- **Results, real Edge print, fixed build, A4 and Letter:**
+
+  | Print | Pages (A4 / Letter) | Charts drawn | Same page count without the redraw |
+  |---|---|---|---|
+  | Print report (Resort) | 2 / 2 | 1/1 | yes |
+  | Print right after a tab switch (Origin, Print 358 ms after the tab click) | 2 / 2 | 1/1, correct values | yes |
+  | Print Key Insights | 4 / 4 | 11/11 | yes |
+  | Print all reports | 13 / 14 | 9/9 report charts and 11/11 Key Insights | yes |
+
+  - Production 861107b in the same pipeline: all reports 0/9 report charts; the tab-switch print a stale image (0/1).
+  - Phase 1-4 checks on the real PDFs, both papers:
+    - nothing shrunk (scale 0.995); 0 of 11 cards split; screen heading absent;
+    - every report starts its own page;
+    - table rows 58px (Total 57.5px), every row accounted for, 0 glyphs crossing a column edge;
+    - chart cards 394px and inside their page, canvas 629-630x300 (A4) / 651x300 (Letter), dead band 0;
+    - 0 chart pixels in the column gap or outside any box;
+    - report-chart text 15.0px (x) / 16.0px (y): Daily's dates rotated about 19 degrees as designed, every other report's labels level;
+    - Key Insights cards 421.4px, 0 spread; smallest Key Insights chart text 10.8px; chart-to-answer gap 14.3-14.4px (measured after the redraw); Peak Season 29.0px and Average Length of Stay 34.0px;
+    - gauge sweep 180.0 / 180.2 degrees at the page's 50.0% (expected 180.0).
+- **Tests.**
+  - `printCharts.test.js`:
+    - (a) the redraw calls stop, resize, update("none") in that order, and again on restore;
+    - (b) name labels wrap level ("Dona / Choleng / Camping / Resort", "Rio Del / Sol Beach / Resort") while date labels are untouched, and 20 narrow columns keep rotation;
+    - (c) labels, rotation and skipping are restored after printing;
+    - plus the four-line cap.
+  - Page test: the nine printed reports carry rotate x3, then wrap x6.
+  - Breaking each one failed its test, then passed after a byte-identical restore:
+    - (a) no `stop()`: the "stop" call missing. In the real pipeline, a build without `stop()` printed the tab-switch chart as a stale image again;
+    - (b) wrapping applied to every chart;
+    - (c) no restore.
+  - Full suites: frontend 475 (30 suites), backend 402. No backend change, no data change, no migration. CSS unchanged (`main.18ee4372.css`).
 
 ## Reports Print Layout: Phase 4, All Reports in One Document (2026-10-10; `tourism/theme-tokens`)
 - **Standing verification rule for any change that affects print:** measure the page count both with and without the print-time chart redraw (`utils/printCharts.js`), and require the two to match.

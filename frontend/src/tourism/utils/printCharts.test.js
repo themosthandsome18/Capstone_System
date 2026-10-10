@@ -11,15 +11,23 @@ function box(className, width, height) {
 function fakeChart(type, parent, legendPosition, extra = {}) {
   const canvas = document.createElement("canvas");
   parent.appendChild(canvas);
+  const calls = [];
   return {
     canvas,
+    calls,
     config: { type },
-    data: { datasets: [{ data: [1, 2], ...(extra.barThickness ? { barThickness: extra.barThickness } : {}) }] },
+    data: {
+      labels: extra.labels || ["a", "b"],
+      datasets: [{ data: [1, 2], ...(extra.barThickness ? { barThickness: extra.barThickness } : {}) }],
+    },
     options: {
       plugins: { legend: legendPosition ? { display: true, position: legendPosition } : undefined },
       ...(extra.indexAxis ? { indexAxis: extra.indexAxis, scales: { y: { ticks: { font: { size: 11 } } } } } : {}),
+      ...(extra.xTicks ? { scales: { x: { ticks: { font: { size: 15 } } }, y: { ticks: { font: { size: 16 } } } } } : {}),
     },
-    resize: jest.fn(),
+    stop: jest.fn(() => calls.push("stop")),
+    resize: jest.fn((...args) => calls.push(args.length ? "resize" : "resize back")),
+    update: jest.fn((mode) => calls.push(`update ${mode}`)),
   };
 }
 
@@ -101,9 +109,71 @@ describe("watchPrint", () => {
     expect(charts.bar.options.scales.y.ticks.callback).toBeUndefined();
   });
 
+  it("stops a running animation and draws the final state at once, so a just-created chart is not printed blank", () => {
+    const { charts, printMedia } = setup();
+
+    printMedia(true);
+    window.dispatchEvent(new Event("afterprint"));
+
+    expect(charts.main.calls).toEqual(["stop", "resize", "update none", "stop", "resize back", "update none"]);
+    expect(charts.pie.calls).toEqual(["stop", "resize", "update none", "stop", "resize back", "update none"]);
+  });
+
+  it("wraps name labels level on paper and leaves date labels to rotate, then puts both back", () => {
+    const root = document.createElement("div");
+    const nameBox = box("report-chart-area", 630, 300);
+    nameBox.dataset.printLabels = "wrap";
+    const dateBox = box("report-chart-area", 630, 300);
+    dateBox.dataset.printLabels = "rotate";
+    root.append(nameBox, dateBox);
+    document.body.append(root);
+    const resorts = [
+      "Dona Choleng Camping Resort", "Jovencio's Resort", "Rio Del Sol Beach Resort", "Orlan Beach Resort",
+      "Villa Noe Beach", "Villa Pilarosa Beach Resort", "Nenita Del Sol",
+    ];
+    const names = fakeChart("bar", nameBox, undefined, { xTicks: true, labels: resorts });
+    const dates = fakeChart("bar", dateBox, undefined, { xTicks: true, labels: ["Sep 18, 2026", "Sep 22, 2026"] });
+    let listener;
+    window.matchMedia = jest.fn(() => ({ addEventListener: (e, fn) => { listener = fn; }, removeEventListener: jest.fn() }));
+    watchPrint(() => root, () => [names, dates]);
+
+    listener({ matches: true });
+
+    const x = names.options.scales.x.ticks;
+    expect([x.maxRotation, x.minRotation, x.autoSkip]).toEqual([0, 0, false]);
+    // 630px over seven columns: ten characters a line at the print font.
+    const label = (i) => x.callback.call({ getLabelForValue: (v) => resorts[v] }, i);
+    expect(label(0)).toEqual(["Dona", "Choleng", "Camping", "Resort"]);
+    expect(label(2)).toEqual(["Rio Del", "Sol Beach", "Resort"]);
+    expect(label(6)).toEqual(["Nenita Del", "Sol"]);
+    expect(dates.options.scales.x.ticks).toEqual({ font: { size: 15 } });
+
+    window.dispatchEvent(new Event("afterprint"));
+
+    expect(names.options.scales.x.ticks).toEqual({ font: { size: 15 } });
+    expect(dates.options.scales.x.ticks).toEqual({ font: { size: 15 } });
+  });
+
+  it("keeps rotation for name labels when the columns are too narrow to wrap", () => {
+    const root = document.createElement("div");
+    const nameBox = box("report-chart-area", 630, 300);
+    nameBox.dataset.printLabels = "wrap";
+    root.append(nameBox);
+    document.body.append(root);
+    const many = fakeChart("bar", nameBox, undefined, { xTicks: true, labels: Array.from({ length: 20 }, (_, i) => `Province ${i}`) });
+    let listener;
+    window.matchMedia = jest.fn(() => ({ addEventListener: (e, fn) => { listener = fn; }, removeEventListener: jest.fn() }));
+    watchPrint(() => root, () => [many]);
+
+    listener({ matches: true });
+
+    expect(many.options.scales.x.ticks).toEqual({ font: { size: 15 } });
+  });
+
   it("wraps only labels longer than one printed line", () => {
     expect(wrapLabel("Quezon")).toBe("Quezon");
     expect(wrapLabel("Villa Escaparde Camping and Beach Resort")).toEqual(["Villa Escaparde", "Camping and", "Beach Resort"]);
+    expect(wrapLabel("Villa Escaparde Camping and Beach Resort", 8, 4)).toEqual(["Villa", "Escaparde", "Camping", "and Beach Resort"]);
   });
 
   it("does nothing on screen", () => {

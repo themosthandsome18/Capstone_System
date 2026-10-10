@@ -249,6 +249,12 @@ function buildReportChartData(rows, type, palette) {
   };
 }
 
+// On paper, name labels (resorts, origins...) wrap level; date labels keep
+// Chart.js's rotation and skipping (utils/printCharts.js).
+function printLabelsFor(type) {
+  return DATE_ROW_TYPES.includes(type) ? "rotate" : "wrap";
+}
+
 // The nine reports, in tab order, for "Print all reports" and "Export all CSV".
 const ALL_REPORT_TYPES = ["daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show"];
 
@@ -813,7 +819,7 @@ function AnalyticsAndReport() {
             <p>{getReportSubtitle(loadedType)}</p>
           </div>
 
-          <div className="report-chart-area">
+          <div className="report-chart-area" data-print-labels={printLabelsFor(loadedType)}>
             {chartPalette ? (
               <Bar
                 data={chartData}
@@ -898,13 +904,7 @@ function AnalyticsAndReport() {
       {allReports ? (
         <div className="report-print-all" style={{ width: allReports.width }}>
           {allReports.reports.map(({ type, data }) => (
-            <PrintedReport
-              key={type}
-              type={type}
-              data={data}
-              palette={palette}
-              chartOptions={mainReportChartOptions}
-            />
+            <PrintedReport key={type} type={type} data={data} palette={palette} />
           ))}
         </div>
       ) : null}
@@ -955,8 +955,11 @@ function AnalyticsAndReport() {
 
 // One report as printed by "Print all reports": the same chart card and table
 // markup as the loaded report, so every print rule applies, in the report's
-// own default order. Read-only: no sort controls.
-function PrintedReport({ type, data, palette, chartOptions }) {
+// own default order. Read-only: no sort controls. Its chart has its own options
+// (the print redraw changes them per chart) and no animation: it exists only
+// to be printed, moments after it is built.
+function PrintedReport({ type, data, palette }) {
+  const chartOptions = useMemo(() => ({ ...buildMainReportChartOptions(palette), animation: false }), [palette]);
   const rows = data.rows || [];
   const { key, direction } = defaultSortFor(type);
   const sorted = sortReportRows(rows, type, key, direction);
@@ -971,7 +974,7 @@ function PrintedReport({ type, data, palette, chartOptions }) {
           <h3>{getReportTitle(type)}</h3>
           <p>{getReportSubtitle(type)}</p>
         </div>
-        <div className="report-chart-area">
+        <div className="report-chart-area" data-print-labels={printLabelsFor(type)}>
           <Bar data={buildReportChartData(rows, type, palette)} options={chartOptions} />
         </div>
       </div>
