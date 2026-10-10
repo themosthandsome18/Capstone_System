@@ -25,7 +25,7 @@
 
 ## Standing Notes
 - **Print changes:**
-  - Proven in a real browser print of the real built app, through its own `window.print()`, with animation on (see "Reports Print: Charts Drawn on Paper" below). A headless pass alone is not accepted.
+  - Proven with the print-proof harness in `tools/print-proof/` (see its README): a real browser print of the real built app, through its own `window.print()`, with animation on. A headless pass alone is not accepted.
   - Page count measured with and without the print-time chart redraw, and the two must match (see "Reports Print Layout: Phase 4").
 - **Renaming a value that code matches by name.** Render runs `build.sh`, including `migrate`, while the OLD instance is still serving. So a data migration goes live BEFORE the code that expects it. For any future rename, ship code that accepts both the old and new name first, then migrate in a later deploy. The "Day Tour" -> "Same Day" rename (below) did it in one deploy: the gap was a few minutes and no import ran, so nothing split, but that was luck.
 
@@ -46,6 +46,41 @@
 - **Other percentages checked.** Top Tourist Destination, Top Visitor Origins and Primary Purpose already divided by `total_visitors`; no other Key Insights sentence states a percentage; the pie and doughnut legends show each slice's share of their own slices, as labelled.
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
+
+## Print Proof Harness Committed: `tools/print-proof/` (2026-10-11; `tourism/theme-tokens`)
+- **The required proof for any print change**, now in the repository, with a README covering what it proves, how to run it and why headless alone is not enough.
+  - It prints the real built app through Edge's own `window.print()` (kiosk printing, throwaway profile, animation on), against a local stand-in server.
+  - Scenarios: one report, right after a tab switch, Key Insights, all reports, on A4 and Letter. Each chart is checked: drawn means bars and axis text, a stale image is flagged.
+  - Page counts are compared with and without the print-time redraw.
+  - **The one departure from the real pipeline:** kiosk printing ignores the paper setting, so the paper is set with an injected test-only `@page` size.
+- **Visitor data found before committing, and removed.**
+  - The first fixtures copied the bootstrap's `bookingManagement` section, whose rows hold all 10 booking records with full, first and last names, contact numbers, emails and survey IDs. A scan found 10 survey IDs, 10 emails, 7 mobile numbers and 23 name matches.
+  - Every other part was clean: report payloads are aggregates by date, resort, origin, purpose, vehicle or boat; reference tables; the theme.
+  - Nothing was committed or pushed; the file existed only in the session's scratch folder.
+- **The generator now strips and checks.**
+  - `gen_fixtures.py` reads read-only and empties booking rows, tourist records and feedback.
+  - `fixture_guard.py` then checks everything for survey IDs, emails, Philippine mobile numbers, visitor-level field names and every visitor name in the database.
+  - On any match it exits 2, names the pattern and the section, and writes nothing.
+  - Proven with `--keep-booking-rows`: exit 2, all five kinds reported for `bootstrap.bookingManagement`, no fixtures folder created.
+  - The clean run, scanned independently against all 16 live records (32 names, 15 numbers, 9 emails, 16 survey IDs), matched none.
+- **Fixtures are generated locally and never committed.** `tools/print-proof/fixtures/` and `tools/print-proof/out/` are git-ignored, verified with `git check-ignore -v` (`.gitignore` lines 47-48), and `git status --untracked-files=all` lists nothing from either. Anyone cloning the repository generates their own.
+- **Removed from disk:** every earlier copy holding visitor data in the session's scratch folder.
+  - 34 record snapshots (names, contacts, emails, survey IDs).
+  - 4 captures of the public mobile API from before the privacy fix.
+  - The first harness folder, including the first fixtures.
+  - 170 throwaway browser profiles.
+  - Scripts and test copies naming survey IDs.
+
+  A scan of the scratch folder, `tools/print-proof/` (fixtures and outputs) and the local scripts folder against all 16 live records matched none.
+- **Left on disk, not created by this work and not deleted (owner's decision):**
+  - a Flutter dev browser profile, `mobile/.dart_tool/chrome-device`, with one live visitor name;
+  - two Claude Code session logs, with two and one names respectively.
+
+  Other matches were not visitor data:
+  - the placeholder name used throughout the code and tests, which one live record also carries;
+  - seeded demo names from `backend/api/seed_data.py`, which exist in the live database as well;
+  - survey-ID-shaped strings in tests, migrations and these notes;
+  - digit runs inside binary files.
 
 ## Reports Print: Charts Drawn on Paper, Name Labels Level (2026-10-11; `tourism/theme-tokens`)
 - **Found in real Edge prints of live 861107b:**
@@ -102,7 +137,7 @@
     - page counts with and without the redraw;
     - every earlier layout and text measurement, on the real PDFs, with the layout recorded at the print-media change.
   - **Paper:** kiosk printing ignores the saved paper size (Save as PDF defaults to Letter on this machine). The paper is therefore applied with an injected test-only `@page { size: A4 }` / `letter`. The app's own `@page` margins still apply.
-  - **Where it lives:** the scripts are in the session's scratch folder (`realapp/`: `gen_responses.py`, `stub_server.py`, `drive.py`, `recorder.js`, `check_pdf.py`), not yet in the repository.
+  - **Where it lives:** `tools/print-proof/` (committed 2026-10-11; see "Print Proof Harness Committed" above).
 - **Results, real Edge print, fixed build, A4 and Letter:**
 
   | Print | Pages (A4 / Letter) | Charts drawn | Same page count without the redraw |

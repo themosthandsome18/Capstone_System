@@ -41,3 +41,8 @@ backend/media/
 frontend/scale.js
 frontend/scale_index.js
 mobile/my_test_project/
+
+# Print proof (tools/print-proof): fixtures are generated from the live database
+# and run outputs hold printed report data. Generated locally, never committed.
+tools/print-proof/fixtures/
+tools/print-proof/out/
