@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AnalyticsAndReport from "./AnalyticsAndReport";
 import { useTourismData } from "../context/TourismDataContext";
@@ -556,6 +558,126 @@ describe("Reports Key Insights cards", () => {
     expect(peak.textContent).toBe("60%August 202612 visitors");
     const stay = all["Average Length of Stay"].card.querySelector(".insight-stay");
     expect(stay.textContent).toBe("1nights average length of stay");
+  });
+});
+
+describe("Reports printing one part", () => {
+  // jsdom does not apply @media print, so the tourism print rules are loaded
+  // here as a plain stylesheet and visibility is read from computed styles.
+  function loadPrintRules() {
+    const css = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+    const start = css.lastIndexOf("@media print {", css.indexOf("data-print-scope"));
+    let depth = 0;
+    let end = start;
+    for (let i = css.indexOf("{", start); i < css.length; i += 1) {
+      if (css[i] === "{") depth += 1;
+      if (css[i] === "}") depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    const style = document.createElement("style");
+    style.textContent = css.slice(css.indexOf("{", start) + 1, end);
+    document.head.appendChild(style);
+    return () => style.remove();
+  }
+
+  function shown(element) {
+    for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
+      if (getComputedStyle(node).display === "none") return false;
+    }
+    return true;
+  }
+
+  // What is on paper at the moment window.print() is called.
+  function printWith(buttonName) {
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    // Found before the print rules load: on paper the buttons are hidden.
+    const button = screen.getByRole("button", { name: buttonName });
+    const removeRules = loadPrintRules();
+    const original = window.print;
+    let printed = null;
+    window.print = jest.fn(() => {
+      const page = document.querySelector(".reports-page");
+      const visible = (selector) => [...page.querySelectorAll(selector)].filter(shown);
+      printed = {
+        scope: page.dataset.printScope,
+        reportSections: visible(".report-chart-card h3").map((h3) => h3.textContent),
+        reportTables: visible(".report-table-card table").length,
+        insightTitles: visible(".analytics-question-item h4").map((h4) => h4.textContent),
+        insightsHeading: visible(".analytics-question-title-row h3").length,
+        heading: visible(".report-print-heading p span").map((span) => span.textContent),
+      };
+    });
+    try {
+      fireEvent.click(button);
+    } finally {
+      window.print = original;
+      removeRules();
+    }
+    return printed;
+  }
+
+  it("has one Print report button in place of Print and Export PDF, and Key Insights prints from its own heading", () => {
+    setup();
+
+    const actions = [...document.querySelectorAll(".reports-actions button")].map((b) => b.textContent);
+    expect(actions).toEqual(["Print report", "Export CSV"]);
+    expect(screen.queryByText("Export PDF")).toBeNull();
+    const insightsButton = screen.getByRole("button", { name: "Print Key Insights" });
+    expect(insightsButton.closest(".analytics-question-title-row")).not.toBeNull();
+  });
+
+  it("Print report prints the loaded report alone: one report, no Key Insights", () => {
+    const printed = printWith("Print report");
+
+    expect(printed.scope).toBe("report");
+    expect(printed.reportSections).toEqual(["Visitors by Resorts"]);
+    expect(printed.reportTables).toBe(1);
+    expect(printed.insightTitles).toEqual([]);
+    expect(printed.insightsHeading).toBe(0);
+    expect(printed.heading).toEqual(["Visitors by Resorts"]);
+  });
+
+  it("Print Key Insights prints the 11 cards and no report chart or table", () => {
+    const printed = printWith("Print Key Insights");
+
+    expect(printed.scope).toBe("insights");
+    expect(printed.insightTitles).toHaveLength(11);
+    expect(printed.insightsHeading).toBe(1);
+    expect(printed.reportSections).toEqual([]);
+    expect(printed.reportTables).toBe(0);
+    expect(printed.heading).toEqual(["Key Insights"]);
+  });
+
+  it("clears the print scope after printing, so the page is not left scoped", () => {
+    printWith("Print report");
+    const page = document.querySelector(".reports-page");
+    expect(page.dataset.printScope).toBe("report");
+
+    act(() => {
+      window.dispatchEvent(new Event("afterprint"));
+    });
+
+    expect(page.dataset.printScope).toBeUndefined();
+    expect(page.hasAttribute("data-print-scope")).toBe(false);
+  });
+
+  it("leaves the CSV as it was: the same file before and after a scoped print", () => {
+    setup();
+    const before = exported();
+
+    const original = window.print;
+    window.print = jest.fn();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Print report" }));
+      fireEvent.click(screen.getByRole("button", { name: "Print Key Insights" }));
+    } finally {
+      window.print = original;
+    }
+
+    expect(exported()).toEqual(before);
   });
 });
 

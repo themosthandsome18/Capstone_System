@@ -2854,6 +2854,20 @@
   @apply bg-[var(--th-primary)] text-white;
 }
 
+/* Key Insights: its own section (printed alone by its button), spaced like
+   the rest of the page. */
+.report-insights {
+  @apply flex flex-col gap-6;
+}
+
+.analytics-question-title-row {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.report-insights-print {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--th-primary)] bg-white px-5 text-sm font-bold text-black;
+}
+
 /* ================= REPORT TABS ================= */
 
 .report-tabs {
@@ -3794,6 +3808,34 @@
 
   .reports-page .report-table-card table {
     min-width: 614px;
+  }
+
+  /* ---- Reports print layout, Phase 3: print one part ----
+     "Print report" and "Print Key Insights" set data-print-scope on the page
+     just before printing and clear it after. Without a scope (the browser's
+     own print menu) the whole page prints, as before. */
+  .reports-page .print-part-insights,
+  .reports-page .report-insights-print {
+    display: none;
+  }
+
+  .reports-page[data-print-scope="report"] .report-insights {
+    display: none !important;
+  }
+
+  .reports-page[data-print-scope="insights"] .report-print-area,
+  .reports-page[data-print-scope="insights"] .print-part-report {
+    display: none !important;
+  }
+
+  .reports-page[data-print-scope="insights"] .print-part-insights {
+    display: inline;
+  }
+
+  /* Printed alone, Key Insights follows the heading on page 1. */
+  .reports-page[data-print-scope="insights"] .analytics-question-title-row {
+    break-before: auto;
+    page-break-before: auto;
   }
 }
 

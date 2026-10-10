@@ -264,6 +264,19 @@ function AnalyticsAndReport() {
   // While printing, every chart on this page is redrawn at its printed size
   // (utils/printCharts.js); on screen nothing changes.
   useEffect(() => watchPrint(() => pageRef.current, () => Object.values(ChartJS.instances)), []);
+
+  // A scoped print (printPart below) is over once the browser has printed:
+  // the marker goes, so a later print from the browser's own menu prints the
+  // whole page again.
+  useEffect(() => {
+    function clearPrintScope() {
+      if (pageRef.current) {
+        delete pageRef.current.dataset.printScope;
+      }
+    }
+    window.addEventListener("afterprint", clearPrintScope);
+    return () => window.removeEventListener("afterprint", clearPrintScope);
+  }, []);
   const [reportError, setReportError] = useState("");
 
   const rows = useMemo(() => reportData.rows || [], [reportData.rows]);
@@ -431,7 +444,14 @@ function AnalyticsAndReport() {
     }
   }
 
-  function handlePrint() {
+  // Prints one part of the page: "report" (the loaded report: its heading,
+  // chart and table) or "insights" (Key Insights). The print stylesheet hides
+  // the other part while the marker is set; it is cleared after printing.
+  // The marker only acts inside @media print, so the screen never changes.
+  function printPart(part) {
+    if (pageRef.current) {
+      pageRef.current.dataset.printScope = part;
+    }
     window.print();
   }
 
@@ -483,10 +503,6 @@ function AnalyticsAndReport() {
     exportCsv(datedCsvFilename(`tourism-${loadedType}-report`), headers, csvRows);
   }
 
-  function handleExportPDF() {
-    window.print();
-  }
-
   return (
     <div className="reports-page" ref={pageRef}>
       <div className="reports-header">
@@ -496,19 +512,19 @@ function AnalyticsAndReport() {
         </div>
 
         <div className="reports-actions">
-          <button type="button" onClick={handlePrint}>
+          <button
+            type="button"
+            className="green"
+            title="Opens the print dialog for this report. To keep a PDF, choose Save as PDF there."
+            onClick={() => printPart("report")}
+          >
             <FiPrinter />
-            Print
+            Print report
           </button>
 
           <button type="button" onClick={handleExportCsv}>
             <FiDownload />
             Export CSV
-          </button>
-
-          <button type="button" className="green" onClick={handleExportPDF}>
-            <FiDownload />
-            Export PDF
           </button>
         </div>
       </div>
@@ -517,7 +533,8 @@ function AnalyticsAndReport() {
         <strong>Municipality of Mauban</strong>
         <h2>Tourism Office Report</h2>
         <p>
-          {getReportTitle(loadedType)} | {appliedFilters.from || "All dates"} to{" "}
+          <span className="print-part-report">{getReportTitle(loadedType)}</span>
+          <span className="print-part-insights">Key Insights</span> | {appliedFilters.from || "All dates"} to{" "}
           {appliedFilters.to || "All dates"} | Year:{" "}
           {appliedFilters.year === "all" ? "All Years" : appliedFilters.year}
         </p>
@@ -752,32 +769,45 @@ function AnalyticsAndReport() {
       </div>
 
       {/* ── Key Insights & Analysis (Moved below main report) ── */}
-      <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
-        <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--th-text-muted)" }}>Computed from tourist records, selected filters, and arrival status</p>
-      </div>
+      <section className="report-insights">
+        <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
+            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--th-text-muted)" }}>Computed from tourist records, selected filters, and arrival status</p>
+          </div>
+          <button
+            type="button"
+            className="report-insights-print"
+            title="Opens the print dialog for the Key Insights cards only."
+            onClick={() => printPart("insights")}
+          >
+            <FiPrinter />
+            Print Key Insights
+          </button>
+        </div>
 
-      <div className="analytics-question-grid" style={{ marginTop: 0 }}>
-        {questionAnswers.length ? (
-          questionAnswers.map((item, index) => (
-            <article
-              key={item.id || item.question}
-              className="analytics-question-item"
-              style={{
-                boxShadow: "0 10px 25px rgba(var(--th-shadow-rgb), 0.12)",
-                background: "#ffffff",
-                border: "1px solid var(--th-border-tinted)",
-              }}
-            >
-              <h4>{tourismTitleMap[item.id] || item.question}</h4>
-              <VisualAnswer visual={item.visual} questionId={item.id} />
-              <p>{item.answer}</p>
-            </article>
-          ))
-        ) : (
-          <p className="analytics-question-empty">No insights available.</p>
-        )}
-      </div>
+        <div className="analytics-question-grid" style={{ marginTop: 0 }}>
+          {questionAnswers.length ? (
+            questionAnswers.map((item, index) => (
+              <article
+                key={item.id || item.question}
+                className="analytics-question-item"
+                style={{
+                  boxShadow: "0 10px 25px rgba(var(--th-shadow-rgb), 0.12)",
+                  background: "#ffffff",
+                  border: "1px solid var(--th-border-tinted)",
+                }}
+              >
+                <h4>{tourismTitleMap[item.id] || item.question}</h4>
+                <VisualAnswer visual={item.visual} questionId={item.id} />
+                <p>{item.answer}</p>
+              </article>
+            ))
+          ) : (
+            <p className="analytics-question-empty">No insights available.</p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

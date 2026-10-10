@@ -44,6 +44,72 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Reports Print Layout: Phase 3, Print One Report (2026-10-10; `tourism/theme-tokens`)
+- **The requirement.** Each report must be exportable on its own. Before this change:
+  - "Print" printed the loaded report plus all 11 Key Insights cards;
+  - "Export PDF" was the same `window.print()` as "Print": two buttons, one behaviour;
+  - "Export CSV" already exported the loaded tab's table only.
+- **The control now:**
+  - **Print report** is green, in the page's action bar. It replaces Print and Export PDF and prints the loaded report only: the print heading, its chart and its table. Its tooltip says it opens the print dialog and that "Save as PDF" there keeps a PDF.
+  - **Export CSV** is unchanged.
+  - **Print Key Insights** sits in the Key Insights heading row, next to what it prints, and prints the 11 cards only.
+- **Why Export PDF was collapsed.** It never made a file: it opened the same print dialog as Print. A print-to-PDF is the browser's dialog, not a generated document, so one honestly named button replaces the two.
+- **How the scope works.**
+  - `printPart("report" | "insights")` sets `data-print-scope` on `.reports-page` just before `window.print()`. An `afterprint` listener removes it.
+  - The rules that act on it are all inside `@media print`, so the screen never depends on it.
+  - Key Insights is wrapped in `<section class="report-insights">`, which report scope hides. Insights scope hides `.report-print-area` (chart and table) and the report title in the heading line, which then reads "Key Insights | dates | Year". Printed alone, Key Insights starts under the heading, with no page break.
+  - The browser's own print menu, with no scope set, prints the whole page as before: report, then Key Insights from a new page.
+  - **Phase 4** ("all reports") is a third scope value with its own button beside Print report. Nothing here needs redesigning for it.
+- **With the Phase 2 redraw.** Both use print events, and they do not interfere.
+  - The scope is set before `window.print()`, so the print layout is computed with it in place.
+  - Phase 2 redraws on the print media change. The hidden part's chart boxes measure 0 wide, so they are skipped: they are neither resized nor recorded, so there is nothing to restore.
+  - Measured in report scope: the main chart is redrawn at 630x300, and the 10 hidden Key Insights charts stay at their screen size. In insights scope the reverse holds.
+  - Both listeners act on `afterprint` independently.
+- **Baseline from 2026-10-10** (live, read-only; replaces the 2026-10-06 figures). SURV-2026-014, arriving 2026-10-07, became a no-show:
+
+  | Year | Visitor tabs (all 8 agree): visitors / male / female / Total Fee | No-show tab |
+  |---|---|---|
+  | 2026 | 34 / 18 / 16 / PHP 2,576 | 14 / 6 / 8 |
+  | 2027 | 4 / 4 / 0 / PHP 304 | 0 |
+  | All Years | 38 / 22 / 16 / PHP 2,880 | 14 / 6 / 8 |
+
+  Records: 16 (8 arrived, 6 no-show, 2 pending).
+- **Print proof** (PDF at scale 1, A4 and Letter, real helper, live markup; the harness now waits for Public Sans, see below):
+  - **Print report: 2 pages.** Page 1 is the heading, the main chart and the table header with 5 rows (A4) or 4 (Letter). Page 2 is the repeated header with 2 (A4) or 3 (Letter) rows and Total.
+    - With the stress row: 5+3 rows (A4), 4+4 (Letter), still 2 pages.
+    - Key Insights card titles in the PDF: 0. "Key Insights": 0. "Table Data Breakdown": 1.
+    - The report's name, "Visitors by Resorts", appears twice: in the heading line and as the chart card's title. That is one report, named as before.
+  - **Print Key Insights: 4 pages** (2, 4, 4, 1 cards). Page 1 is the heading, the Key Insights heading and one row; a second row would overrun by 45.8px (A4) or 112.3px (Letter), so it is left as is. All 11 card titles print; "Table Data Breakdown" 0; "Visitors by Resorts" 0.
+  - **No scope (browser menu): 5 pages,** as in the previous entry.
+  - **Measurements, both papers:**
+    - main chart x-axis text 15.0px and y-axis text 16.2px, drawn at 630x300 (A4) / 651x300 (Letter), dead band 0;
+    - smallest chart text 11.0px (A4), 10.8px (Letter);
+    - chart-to-answer gap, each of 9 chart cards: 13.8-14.0px (A4), 14.3-14.4px (Letter);
+    - 0 chart pixels in the column gap or outside any card;
+    - cards split across pages: 0 of 11, cards 421.4px with 0px spread;
+    - nothing shrunk: scale 0.995;
+    - table rows 58px (Total 57.5px), 0 glyphs crossing a column edge, stress row included, header repeated on page 2.
+  - **Gauge and centred cards:** the gauge sweeps 180.05 degrees at the page's 50.0% and 190.05 degrees at 52.8%. Centred cards, ink to answer box: Peak Season 106/103px, Average Length of Stay 113/110px (A4) and 124/121px (Letter).
+  - **Without the print events:** report 2 pages, Key Insights 4 pages, 0 split, 0 pixels outside.
+- **Screen.** Production markup and CSS against the new ones, with charts drawn, the page gradient flattened and Public Sans loaded:
+  - **At 1366px:** the page height is unchanged (3926px). All differing pixels are in two places: the action buttons (x 934-1336, y 30-70) and the new button at the right of the Key Insights heading (x 1154-1336). Everything between and below is pixel-identical.
+    - Moved elements: only the screen heading's text block, which is wider because the action bar is narrower (619.7 to 726.8px, same height), and the buttons.
+    - The bar now shows two buttons, a green "Print report" and an outlined "Export CSV" (it showed "Print", "Export CSV" and a green "Export PDF"). "Print Key Insights" is an outlined button at the right end of the Key Insights heading row.
+  - **At 760px:** the action bar still fits on one row. In the Key Insights heading, "Print Key Insights" wraps under the subtitle, so the section and everything after it moves down 52px. Nothing else moved.
+  - With all three buttons in the action bar, as first built, they needed 489px of the 440px header at 760px and wrapped there. Moving Print Key Insights to its section avoids that.
+- **Tests.** Frontend `Reports printing one part` (5). jsdom does not apply `@media print`, so the tests load the real tourism print rules as a plain stylesheet and read visibility from computed styles:
+  - (a) Print report: scope "report", one report section ("Visitors by Resorts"), one table, no Key Insights titles or heading, heading line names the report;
+  - (b) the scope is cleared on `afterprint`;
+  - (c) the CSV is unchanged: the existing columns/order/rows test, plus a check that the file is identical before and after both scoped prints;
+  - (d) Print Key Insights: 11 cards, its heading, no report chart or table, heading line "Key Insights";
+  - plus the buttons: Print report and Export CSV in the bar, no Export PDF, Print Key Insights in the Key Insights heading.
+  - Breaking each one failed its test: (a) report scope no longer hiding Key Insights showed all 11 titles; (b) the listener on another event left "report" set; (c) Male and Female swapped in the CSV header; (d) insights scope no longer hiding the report printed "Visitors by Resorts". Each was restored byte-identical and passed.
+  - Full suites: frontend 465 (30 suites), backend 402. No backend change, no data change, no migration.
+- **Harness notes.** The stylesheet loads Public Sans from Google Fonts. One print run (and one screen run) had used a fallback font before it loaded: Segoe UI Black for the heading, heading CSS width 241.8 instead of 232.8px, table digits 10.18 instead of 10.26px. The print and screen harnesses now refuse to measure until Public Sans has loaded, and every figure above was taken that way.
+- **Open item, NOT fixed (queued):** the no-show sweep (`services/no_show.py`) uses a bulk `UPDATE`, which does not touch `TouristRecord.updated_at` (`auto_now` only fires on `save()`), so nothing records when a booking became a no-show.
+  - SURV-2026-014 flipped between 2026-10-08 00:00 and 2026-10-10 20:01 Manila time, and still shows `updated_at` 2026-10-04 14:23:48.
+  - A bulk update that leaves `updated_at` alone is also how we know the sweep did it and not a staff edit.
+
 ## Key Insights: Badges Removed, Demographics Drawn, Clean Page, True Gauge (2026-10-06; `tourism/theme-tokens`)
 - **Chart-type badges removed** from all 11 Key Insights cards, together with `getVisualLabel` and the `.analytics-question-top` CSS that only they used.
   - **Why.** The badge named something the reader can already see and carried no data. Because `getVisualLabel` keyed on the card's id rather than on what is drawn, it had drifted wrong on 4 of 11 cards on a printed report:
