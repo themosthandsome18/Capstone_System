@@ -70,11 +70,9 @@ class MobileBootstrap {
         RefItem(id: 1, name: 'Leisure'),
         RefItem(id: 3, name: 'Business'),
       ],
-      barangays: const [
-        BarangayItem(id: 1, name: 'Poblacion'),
-        BarangayItem(id: 2, name: 'San Isidro'),
-        BarangayItem(id: 3, name: 'Cagsiay'),
-      ],
+      // No tourism screen reads these. Names that are not the live ones
+      // (there is no "Poblacion"; Cagsiay is I, II and III) are worse than none.
+      barangays: const [],
       notifications: AppNotification.fallback(),
       isOffline: true,
     );
