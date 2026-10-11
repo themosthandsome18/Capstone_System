@@ -2835,7 +2835,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
           ),
           const SizedBox(height: 4),
           const Text(
-            '• Environmental & Tourism Fee: ₱50 per tourist payable at the passenger terminal.',
+            '• Environmental & Tourism Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Payable at the passenger terminal.',
             style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
           ),
         ],
