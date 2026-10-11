@@ -3923,6 +3923,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   late RefItem _region;
   late RefItem _province;
   late RefItem _itinerary;
+
+  /// The server's itineraries, or the three live ones when it sent none.
+  List<RefItem> get _itineraryOptions => widget.bootstrap.itineraries.isNotEmpty
+      ? widget.bootstrap.itineraries
+      : tourismItineraryFallback;
   late RefItem _travelMode;
   late RefItem _boatType;
   late RefItem _purpose;
@@ -3958,9 +3963,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
     );
     _province = _preferredProvinceForRegion(_region, nameContains: 'Quezon');
-    _itinerary =
-        widget.bootstrap.itineraries.firstOrNull ??
-        const RefItem(id: 1, name: 'Day Tour');
+    _itinerary = _itineraryOptions.first;
     _travelMode =
         widget.bootstrap.travelModes.firstOrNull ??
         const RefItem(id: 1, name: 'Private Vehicle');
@@ -4072,7 +4075,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         DropdownTile<RefItem>(
           label: 'Travel Itinerary *',
           value: _itinerary,
-          items: widget.bootstrap.itineraries,
+          items: _itineraryOptions,
           itemLabel: (item) => item.name,
           onChanged: (item) => setState(() => _itinerary = item),
         ),

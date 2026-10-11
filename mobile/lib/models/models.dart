@@ -57,11 +57,7 @@ class MobileBootstrap {
       countries: const [RefItem(id: 1, name: 'Philippines')],
       regions: const [RefItem(id: 4, name: 'CALABARZON Region')],
       provinces: const [RefItem(id: 1, name: 'Quezon')],
-      itineraries: const [
-        RefItem(id: 2, name: 'Same Day'),
-        RefItem(id: 1, name: 'Overnight'),
-        RefItem(id: 3, name: '2 Nights'),
-      ],
+      itineraries: tourismItineraryFallback,
       travelModes: const [
         RefItem(id: 1, name: 'Private Vehicle'),
         RefItem(id: 2, name: 'Public Utility Vehicle'),
@@ -84,6 +80,15 @@ class MobileBootstrap {
     );
   }
 }
+
+/// The itineraries the registration form offers when the server's list is
+/// empty. The ids and names are the live ones (1 Overnight, 2 Same Day,
+/// 3 2 Nights); "Day Tour" was renamed "Same Day" on 2026-10-03.
+const tourismItineraryFallback = [
+  RefItem(id: 2, name: 'Same Day'),
+  RefItem(id: 1, name: 'Overnight'),
+  RefItem(id: 3, name: '2 Nights'),
+];
 
 enum TourismBootstrapStatus { loading, loaded, failed }
 
