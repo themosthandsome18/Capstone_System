@@ -700,6 +700,31 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
 }
 
 /// Screen 3: Tourist History Log
+/// How a booking status is shown in the history list.
+class TouristStatusChip {
+  const TouristStatusChip(this.label, this.background, this.foreground);
+
+  final String label;
+  final Color background;
+  final Color foreground;
+}
+
+/// The chip for a booking status, or null when there is none to show. A record
+/// with no status (or one the app does not know) gets no chip: staff are never
+/// shown "Pending" for a record that is not known to be pending.
+TouristStatusChip? touristStatusChip(String? status) {
+  switch (status) {
+    case 'arrived':
+      return const TouristStatusChip('Arrived', Color(0xFFDCFCE7), Color(0xFF166534));
+    case 'pending':
+      return const TouristStatusChip('Pending', Color(0xFFFEF3C7), Color(0xFF92400E));
+    case 'no_show':
+      return const TouristStatusChip('No-show', Color(0xFFFEE2E2), Color(0xFF991B1B));
+    default:
+      return null;
+  }
+}
+
 class TouristHistoryLogScreen extends StatefulWidget {
   const TouristHistoryLogScreen({
     super.key,
@@ -1000,8 +1025,10 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                           separatorBuilder: (context, index) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final item = filtered[index];
-                            final status = (item['status'] ?? 'pending').toString().toLowerCase();
+                            final status = presentText(item['status'])?.toLowerCase();
                             final isArrived = status == 'arrived';
+                            // A chip only for a status the record actually has.
+                            final chip = touristStatusChip(status);
 
                             return GestureDetector(
                               onTap: () async {
@@ -1051,18 +1078,19 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                                   ),
                                                 ),
                                               ),
+                                              if (chip != null)
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: isArrived ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                                  color: chip.background,
                                                   borderRadius: BorderRadius.circular(999),
                                                 ),
                                                 child: Text(
-                                                  isArrived ? 'Arrived' : 'Pending',
+                                                  chip.label,
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.w900,
-                                                    color: isArrived ? const Color(0xFF166534) : const Color(0xFF92400E),
+                                                    color: chip.foreground,
                                                   ),
                                                 ),
                                               ),
@@ -1070,7 +1098,10 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${item['survey_id']} • ${item['resort_name'] ?? 'Mauban Destination'}',
+                                            [
+                                              presentText(item['survey_id']),
+                                              presentText(item['resort_name']),
+                                            ].whereType<String>().join(' • '),
                                             style: const TextStyle(
                                               fontSize: 12.5,
                                               color: Color(0xFF64748B),
@@ -1078,7 +1109,11 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            '${item['arrival_date']} • ${item['total_visitors'] ?? 1} Pax',
+                                            [
+                                              presentText(item['arrival_date']),
+                                              if (presentCount(item['total_visitors']) != null)
+                                                '${presentCount(item['total_visitors'])} Pax',
+                                            ].whereType<String>().join(' • '),
                                             style: const TextStyle(
                                               fontSize: 12,
                                               color: Color(0xFF94A3B8),
@@ -1140,6 +1175,15 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
   }
 
   Future<void> _saveRecord() async {
+    // A count that is not in the record is never sent as a made-up number.
+    final missing = [
+      for (final (key, label) in touristRecordCounts)
+        if (presentCount(_currentRecord[key]) == null) label,
+    ];
+    if (missing.isNotEmpty) {
+      showAppMessage(context, missingCountsMessage(missing));
+      return;
+    }
     setState(() => _saving = true);
 
     try {
@@ -1253,7 +1297,10 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
     final boatType = presentText(_currentRecord['boat_type_name']);
     final visitPurpose = presentText(_currentRecord['visit_purpose_name']);
     final email = _currentRecord['email'] ?? 'Not provided';
-    final surveyId = _currentRecord['survey_id'] ?? 'SURV-2026-0001';
+    final surveyId = presentText(_currentRecord['survey_id']);
+    final contact = presentText(_currentRecord['contact_number']);
+    final arrival = presentText(_currentRecord['arrival_date']);
+    final totalVisitors = presentCount(_currentRecord['total_visitors']);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -1284,6 +1331,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (surveyId != null)
                         const Text(
                           'RECORD ID',
                           style: TextStyle(
@@ -1293,6 +1341,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                             color: Color(0xFF86EFAC),
                           ),
                         ),
+                        if (surveyId != null)
                         Text(
                           surveyId,
                           style: const TextStyle(
@@ -1379,7 +1428,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 ),
                 const SizedBox(height: 18),
 
-                // Mini QR Preview Box
+                // Mini QR Preview Box (only for a record that has an ID to encode)
+                if (surveyId != null)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1424,6 +1474,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 // Summary Pills (Arrival Date & Total Guests)
                 Row(
                   children: [
+                    if (arrival != null)
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1447,14 +1498,16 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _currentRecord['arrival_date'] ?? '2026-08-20',
+                              arrival,
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
                             ),
                           ],
                         ),
                       ),
                     ),
+                    if (arrival != null && totalVisitors != null)
                     const SizedBox(width: 12),
+                    if (totalVisitors != null)
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1478,7 +1531,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${_currentRecord['total_visitors'] ?? 1} Visitors',
+                              '$totalVisitors Visitors',
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
                             ),
                           ],
@@ -1493,7 +1546,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 const Text('IDENTITY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF0F172A))),
                 const SizedBox(height: 8),
                 _buildInfoLine(Icons.email_outlined, 'Email', email),
-                _buildInfoLine(Icons.phone_outlined, 'Contact', _currentRecord['contact_number'] ?? '+63 999 013 2845'),
+                if (contact != null) _buildInfoLine(Icons.phone_outlined, 'Contact', contact),
                 if (country != null) _buildInfoLine(Icons.public, 'Country', country),
                 const Divider(height: 28),
 
@@ -1542,13 +1595,13 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                   ),
                   child: Column(
                     children: [
-                      _buildBreakdownRow('Filipino', '${_currentRecord['filipino_count'] ?? 1}', 'Foreigner', '${_currentRecord['foreigner_count'] ?? 0}'),
+                      _buildBreakdownRow('Filipino', presentCount(_currentRecord['filipino_count']), 'Foreigner', presentCount(_currentRecord['foreigner_count'])),
                       const SizedBox(height: 6),
-                      _buildBreakdownRow('Male', '${_currentRecord['total_male'] ?? 1}', 'Female', '${_currentRecord['total_female'] ?? 1}'),
+                      _buildBreakdownRow('Male', presentCount(_currentRecord['total_male']), 'Female', presentCount(_currentRecord['total_female'])),
                       const Divider(height: 16),
-                      _buildBreakdownRow('Age 0-7', '${_currentRecord['age_0_7'] ?? 0}', 'Age 8-59', '${_currentRecord['age_8_59'] ?? 1}'),
+                      _buildBreakdownRow('Age 0-7', presentCount(_currentRecord['age_0_7']), 'Age 8-59', presentCount(_currentRecord['age_8_59'])),
                       const SizedBox(height: 6),
-                      _buildBreakdownRow('Age 60+', '${_currentRecord['age_60_above'] ?? 0}', '', ''),
+                      _buildBreakdownRow('Age 60+', presentCount(_currentRecord['age_60_above']), '', null),
                     ],
                   ),
                 ),
@@ -1612,27 +1665,34 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
     );
   }
 
-  Widget _buildBreakdownRow(String l1, String v1, String l2, String v2) {
+  /// One row of two counts. A count that is not in the record is not shown
+  /// (no 1, no 0, no dash); a row with neither takes no room.
+  Widget _buildBreakdownRow(String l1, int? v1, String l2, int? v2) {
+    final hasLeft = v1 != null;
+    final hasRight = l2.isNotEmpty && v2 != null;
+    if (!hasLeft && !hasRight) return const SizedBox.shrink();
     return Row(
       children: [
         Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(l1, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
-              Text(v1, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
-            ],
-          ),
+          child: !hasLeft
+              ? const SizedBox.shrink()
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(l1, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
+                    Text('$v1', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
+                  ],
+                ),
         ),
         const SizedBox(width: 24),
         Expanded(
-          child: l2.isEmpty
+          child: !hasRight
               ? const SizedBox.shrink()
               : Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(l2, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
-                    Text(v2, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
+                    Text('$v2', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
                   ],
                 ),
         ),
@@ -1660,14 +1720,16 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
   late TextEditingController _name;
   late TextEditingController _email;
   late TextEditingController _contact;
-  late int _visitors;
-  late int _filipino;
-  late int _foreigner;
-  late int _male;
-  late int _female;
-  late int _age07;
-  late int _age859;
-  late int _age60;
+  // null = not in the record. Never defaulted: a made-up 1 could be saved
+  // as the real number of visitors.
+  int? _visitors;
+  int? _filipino;
+  int? _foreigner;
+  int? _male;
+  int? _female;
+  int? _age07;
+  int? _age859;
+  int? _age60;
 
   @override
   void initState() {
@@ -1675,14 +1737,14 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
     _name = TextEditingController(text: widget.recordData['full_name'] ?? '');
     _email = TextEditingController(text: widget.recordData['email'] ?? '');
     _contact = TextEditingController(text: widget.recordData['contact_number'] ?? '');
-    _visitors = widget.recordData['total_visitors'] ?? 1;
-    _filipino = widget.recordData['filipino_count'] ?? 1;
-    _foreigner = widget.recordData['foreigner_count'] ?? 0;
-    _male = widget.recordData['total_male'] ?? 1;
-    _female = widget.recordData['total_female'] ?? 0;
-    _age07 = widget.recordData['age_0_7'] ?? 0;
-    _age859 = widget.recordData['age_8_59'] ?? 1;
-    _age60 = widget.recordData['age_60_above'] ?? 0;
+    _visitors = presentCount(widget.recordData['total_visitors']);
+    _filipino = presentCount(widget.recordData['filipino_count']);
+    _foreigner = presentCount(widget.recordData['foreigner_count']);
+    _male = presentCount(widget.recordData['total_male']);
+    _female = presentCount(widget.recordData['total_female']);
+    _age07 = presentCount(widget.recordData['age_0_7']);
+    _age859 = presentCount(widget.recordData['age_8_59']);
+    _age60 = presentCount(widget.recordData['age_60_above']);
   }
 
   @override
@@ -1693,7 +1755,27 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
     super.dispose();
   }
 
+  /// The counts that are still empty, by the name staff see. A required count
+  /// is never saved empty (and never defaulted to 0: 0 is a real value).
+  bool get _totalWasMissing => presentCount(widget.recordData['total_visitors']) == null;
+
+  List<String> get _missingCounts => [
+    if (_visitors == null) 'Total guests',
+    if (_filipino == null) 'Filipino',
+    if (_foreigner == null) 'Foreigner',
+    if (_male == null) 'Male',
+    if (_female == null) 'Female',
+    if (_age07 == null) 'Age 0-7',
+    if (_age859 == null) 'Age 8-59',
+    if (_age60 == null) 'Age 60+',
+  ];
+
   void _saveAndClose() {
+    final missing = _missingCounts;
+    if (missing.isNotEmpty) {
+      showAppMessage(context, missingCountsMessage(missing));
+      return;
+    }
     final updated = Map<String, dynamic>.from(widget.recordData);
     updated['full_name'] = formatProperName(_name.text);
     updated['email'] = _email.text.trim();
@@ -1771,7 +1853,8 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
                 _buildStaticField('TRAVEL MODE', presentText(widget.recordData['travel_mode_name'])!),
               if (presentText(widget.recordData['boat_type_name']) != null)
                 _buildStaticField('BOAT TYPE', presentText(widget.recordData['boat_type_name'])!),
-              _buildStaticField('ARRIVAL DATE', widget.recordData['arrival_date'] ?? '2026-08-20'),
+              if (presentText(widget.recordData['arrival_date']) != null)
+                _buildStaticField('ARRIVAL DATE', presentText(widget.recordData['arrival_date'])!),
             ],
           ),
           const SizedBox(height: 16),
@@ -1807,6 +1890,10 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
                 ],
               ),
               const SizedBox(height: 12),
+              // A total that is not in the record is typed in, not made up.
+              if (_totalWasMissing)
+                _buildCounterTile('TOTAL GUESTS', _visitors, (v) => setState(() => _visitors = v))
+              else
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
@@ -1817,7 +1904,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('TOTAL GUESTS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF14532D))),
-                    Text('$_visitors', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF14532D))),
+                    Text(_visitors == null ? '' : '$_visitors', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF14532D))),
                   ],
                 ),
               ),
@@ -1948,7 +2035,8 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
     );
   }
 
-  Widget _buildCounterTile(String label, int value, ValueChanged<int> onChanged) {
+  Widget _buildCounterTile(String label, int? current, ValueChanged<int> onChanged) {
+    final value = current ?? 0;
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -1963,7 +2051,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              Text(current == null ? '' : '$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

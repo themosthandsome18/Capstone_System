@@ -47,18 +47,32 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
-## OPEN: Made-Up Default Values on the Staff QR Card and Edit Form (2026-10-11; `tourism/theme-tokens`; not fixed)
-- **What it is.** In `mobile/lib/screens/tourist_qr_checkin_screens.dart`, a record field that is missing is replaced with a **made-up value that is shown to staff as the record's data**. The server normally sends every one of these fields, so it is rare, but when it does happen the staff sees (and, on the edit form, can save) something that is not in the LGU's record.
-- **Most dangerous: `:1678-1685`, the edit form.** `_visitors = ... ?? 1`, `_filipino ?? 1`, `_foreigner ?? 0`, `_male ?? 1`, `_female ?? 0`, `_age07 ?? 0`, `_age859 ?? 1`, `_age60 ?? 0`. These pre-fill the counters of `EditTouristRecordSheet`. A made-up `1` can be **saved as the real number of visitors** in the LGU's record. Treat this one first.
-- **Shown on the record card and list** (current lines):
-  - survey ID `'SURV-2026-0001'` (`:1256`);
-  - contact number `'+63 999 013 2845'` (`:1496`);
-  - arrival date `'2026-08-20'` (`:1450` on the card, `:1774` in the edit form's static field);
-  - `'Mauban Destination'` for a missing resort in the history list, and a bare trailing bullet ("SURV-... • ") when the resort is blank (`:1073`);
-  - counts `?? 1` in the list and card header (`:1081`, `:1481`) and the breakdown rows (`:1545-1551`: Filipino 1, Male 1, Female 1, Age 8-59 1; Foreigner 0, Age 0-7 0, Age 60+ 0).
-- **Not part of this item:** `'Not provided'` for a missing e-mail (`:1255`) is an honest label, not a made-up value. The `?? ''` and search lines (`:855-857`) and the login parsing (`:93-96`) are not display of record data.
-- **Why left.** Found while closing the blank-field item below; it was outside that item's decision (places and names), and each field needs a decision about what to show instead (nothing, a dash, or refusing to show the record).
-- **Count.** `??` in this file: 52 occurrences on 48 lines before this change, 34 occurrences on 31 lines after; 18 occurrences removed (the places, itinerary, travel mode, boat type, visit purpose and name lines, on the card and the edit form).
+## CLOSED: Made-Up Default Values on the Staff QR Card and Edit Form (2026-10-11; `tourism/theme-tokens`)
+- **The rule.** Better to show nothing than something made up. This screen is used by LGU staff on the real record, and a made-up value there is worse than a blank. Where the record has no value, the line is **not shown** (no placeholder, no dash, no zero).
+- **What was wrong** (`mobile/lib/screens/tourist_qr_checkin_screens.dart`). A field missing from the record was replaced by an invented value and shown to staff as the record's data:
+  - **The QR code on the record card encoded the made-up survey ID `SURV-2026-0001`.** The header text said "RECORD ID SURV-2026-0001" and the mini QR preview beside it was generated from the same value, so a record with no ID would have produced a scannable code for an ID that belongs to no one (or to someone else). Now the "RECORD ID" line and the QR preview are not shown when there is no ID.
+  - **The edit form pre-filled the counters with made-up numbers** (`?? 1` for total guests, Filipino, male and age 8-59; `?? 0` for the rest). A made-up `1` could be saved as the real number of visitors in the LGU's record. Now a missing count is empty, never defaulted, and **a required count cannot be saved empty**: Done on the edit form, and Save Record on the card (the check-in), are refused with "Enter the missing count(s) before saving: ..." naming the ones that are missing. A real `0` is a value: it is shown as 0 and saved as 0 (0 is never treated as missing).
+  - **A missing total could not be filled in** (the edit form showed it as a fixed display only). When the record has no total, "TOTAL GUESTS" is a counter that can be entered.
+  - **The history list said "Pending" for any record without a status**, and for a no-show. Staff could read a visitor who had arrived, or a no-show, as pending and act on that. Now the chip is shown only for the three real statuses: Arrived, Pending, No-show. A record with no status, a blank one, or one the app does not know has **no chip** (no "Pending", no "Unknown", no colour).
+- **What is shown now when a value is missing or blank.**
+
+| Where | Field | Shown when missing or blank |
+|---|---|---|
+| Card header | Record ID and the QR preview | neither |
+| Card header | Arrival date, Total guests | the box is not shown |
+| Card | Contact | no line |
+| Card | Visitor breakdown (Filipino, Foreigner, Male, Female, Age 0-7, 8-59, 60+) | that count is not shown; a row with neither is empty |
+| Card | Resort, Region / Province, Country, Itinerary, Travel mode, Boat type, Visit purpose | no line (the earlier fix) |
+| Edit form | the counters | empty; Done is refused until entered |
+| Edit form | Arrival date, places, trip details | not shown |
+| History list | ID and resort line | what exists, joined with " • "; no trailing bullet, no "Mauban Destination" |
+| History list | date and head count | what exists; no "null", no "1 Pax"; a real 0 shows as "0 Pax" |
+| History list | status chip | none |
+
+- **Kept on purpose.** `'Not provided'` for a missing e-mail is an honest label, not a made-up value.
+- **Count.** `??` in this file: 52 occurrences before the fix of 2026-10-11, 12 now; none of the 12 supplies a value that is shown as record data (the login parsing, the search text, the text fields' empty start, and the e-mail label above).
+- **Tests.** `test/staff_qr_invented_defaults_test.dart` (38) and `test/staff_qr_record_blank_fields_test.dart` (11): with a value, missing and blank for each field; no `1` in a blank counter; Done refused and the missing counts named; a 0 saved as 0 for all eight counts; the check-in refused with a count missing; the status chip for each status and none for missing, null, blank and unknown. Twenty-seven mutations (each made-up value put back, the guards removed, a 0 treated as missing, the old `?? 'pending'`) each failed at least one test; two weak spots found on the way (a filipino count of 0, and the typed total) got their own tests and were then caught. Full mobile suite 358/358.
+- **Not verified.** On a device: this screen needs a staff login, and the dev proxy does not forward credentials, so it was exercised by tests only. To check on a phone (after `flutter clean` and the `libapp.so` proof): open a record and scan its QR; look at the history list; on a record that is missing a count (the live records may all have them), try Done.
 
 ## Mobile Fix List, Group A Closed (2026-10-11; `tourism/theme-tokens`)
 Checked against the current code, not against the list.

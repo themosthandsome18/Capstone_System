@@ -170,6 +170,32 @@ String? presentText(Object? value) {
   return text.isEmpty ? null : text;
 }
 
+/// A count from a record as an int, or null when it is missing, blank or not
+/// a number. A real 0 stays 0: "none" is a value, "not there" is not.
+int? presentCount(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  final text = presentText(value);
+  return text == null ? null : int.tryParse(text);
+}
+
+/// The visitor counts of a tourist record, as (record key, label staff see).
+const touristRecordCounts = [
+  ('total_visitors', 'Total guests'),
+  ('filipino_count', 'Filipino'),
+  ('foreigner_count', 'Foreigner'),
+  ('total_male', 'Male'),
+  ('total_female', 'Female'),
+  ('age_0_7', 'Age 0-7'),
+  ('age_8_59', 'Age 8-59'),
+  ('age_60_above', 'Age 60+'),
+];
+
+/// What staff are told when a record is saved with counts missing.
+String missingCountsMessage(List<String> missing) =>
+    'Enter the missing count${missing.length == 1 ? '' : 's'} '
+    'before saving: ${missing.join(', ')}.';
+
 String formatProperName(String? text) {
   if (text == null || text.trim().isEmpty) return '';
   return text.trim().split(RegExp(r'\s+')).map((word) {
