@@ -196,6 +196,21 @@ String missingCountsMessage(List<String> missing) =>
     'Enter the missing count${missing.length == 1 ? '' : 's'} '
     'before saving: ${missing.join(', ')}.';
 
+/// The Boat Capacity and Fare field is for the boat types whose row says so
+/// (`requires_capacity_fare`), not for a boat with a particular name. It is
+/// shown only when the boat is known to take one, as on the web
+/// (frontend/src/tourism/utils/boatCapacityFare.js).
+bool boatRequiresCapacityFare(RefItem? boatType) =>
+    boatType?.requiresCapacityFare == true;
+
+/// The fare to keep for a boat type: only a boat known to take one keeps it.
+/// For any other (no fare, or the rule unknown) it is cleared, because the
+/// field is not shown and a fare nobody can see must not be sent. (The web
+/// clears only for a boat known to take none and keeps the fare when the rule
+/// is unknown, because its field stays visible but disabled.)
+String capacityFareForBoatType(RefItem? boatType, String fare) =>
+    boatRequiresCapacityFare(boatType) ? fare : '';
+
 String formatProperName(String? text) {
   if (text == null || text.trim().isEmpty) return '';
   return text.trim().split(RegExp(r'\s+')).map((word) {

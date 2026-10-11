@@ -63,8 +63,8 @@ class MobileBootstrap {
         RefItem(id: 2, name: 'Public Utility Vehicle'),
       ],
       boatTypes: const [
-        RefItem(id: 1, name: 'Tourist Boat'),
-        RefItem(id: 2, name: 'Passenger Boat'),
+        RefItem(id: 1, name: 'Tourist Boat', requiresCapacityFare: true),
+        RefItem(id: 2, name: 'Passenger Boat', requiresCapacityFare: false),
       ],
       visitPurposes: const [
         RefItem(id: 1, name: 'Leisure'),
@@ -955,6 +955,7 @@ class RefItem {
     required this.name,
     this.regionId,
     this.code = '',
+    this.requiresCapacityFare,
   });
 
   final int id;
@@ -962,12 +963,18 @@ class RefItem {
   final int? regionId;
   final String code;
 
+  /// Boat types only: whether a booking on this boat takes a Boat Capacity and
+  /// Fare. null = the server did not say, which is not the same as false.
+  final bool? requiresCapacityFare;
+
   factory RefItem.fromJson(Map<String, dynamic> json) {
+    final requires = json['requires_capacity_fare'];
     return RefItem(
       id: jsonInt(json['id']),
       name: '${json['name'] ?? ''}',
       regionId: jsonNullableInt(json['region_id']),
       code: '${json['code'] ?? ''}',
+      requiresCapacityFare: requires is bool ? requires : null,
     );
   }
 
@@ -976,11 +983,12 @@ class RefItem {
     return other is RefItem &&
         other.id == id &&
         other.regionId == regionId &&
-        other.name == name;
+        other.name == name &&
+        other.requiresCapacityFare == requiresCapacityFare;
   }
 
   @override
-  int get hashCode => Object.hash(id, regionId, name);
+  int get hashCode => Object.hash(id, regionId, name, requiresCapacityFare);
 }
 
 class BarangayItem {
