@@ -202,6 +202,16 @@ const Map<String, List<double>> _chartRules = {
 };
 const double _chartSaturationCap = 0.78;
 
+// [hue offset, saturation, lightness] of the roles the web has no token for,
+// measured from the app's original literals against the web's green. The
+// measured hue offsets of `borderAlt` (+18.8) and `emerald` (+26.2) are above
+// 10 degrees, so, as in the web's rules, they use the base hue.
+const Map<String, List<double>> _extraRules = {
+  'onDark': [7.749, 0.7664, 0.7314],
+  'borderAlt': [0, 0.3143, 0.7941],
+  'emerald': [0, 0.8408, 0.3941],
+};
+
 const List<double> _shadowRule = [0, 0.3585, 0.2078];
 const List<double> _chartWashRule = [0, 0.4057, 0.5843, 0.15];
 const Map<String, double> _alphas = {
@@ -232,6 +242,18 @@ String _darkenToContrast(String hex, String against, [double target = _aa]) {
     if (contrastRatio(candidate, against) >= target) return candidate;
   }
   return '#000000';
+}
+
+// Lighten a colour (same hue and saturation) until it reaches AA against
+// `against`. Never changes a colour that already passes.
+String _lightenToContrast(String hex, String against, [double target = _aa]) {
+  if (contrastRatio(hex, against) >= target) return hex;
+  final hsl = rgbToHsl(hexToRgb(hex));
+  for (var next = hsl[2] + 0.01; next <= 1; next += 0.01) {
+    final candidate = rgbToHex(hslToRgb(hsl[0], hsl[1], next));
+    if (contrastRatio(candidate, against) >= target) return candidate;
+  }
+  return '#FFFFFF';
 }
 
 /// Text colour for content on the primary fill: white, unless white falls
@@ -341,6 +363,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
     required this.light,
     required this.border,
     required this.onPrimary,
+    required this.onDark,
+    required this.borderAlt,
+    required this.emerald,
+    required this.page,
   });
 
   /// The brand colour (AppColors.green).
@@ -370,6 +396,20 @@ class BrandColors extends ThemeExtension<BrandColors> {
   /// Text on a [primary] fill.
   final Color onPrimary;
 
+  /// A light accent for text and icons on a dark brand fill (0xFF86EFAC).
+  final Color onDark;
+
+  /// A second, slightly deeper brand-tinted border (0xFFBADBCC).
+  final Color borderAlt;
+
+  /// The mid-tone accent of progress and highlight tiles (0xFF10B981). Not the
+  /// colour of any status: status uses of the same value stay fixed.
+  final Color emerald;
+
+  /// The page background. Derived from the web's first page-gradient stop
+  /// (`--th-page-grad-1`); the app's own green keeps [AppColors.canvas].
+  final Color page;
+
   /// The palette the app has always had. Exactly its literals.
   static const original = BrandColors(
     primary: Color(0xff28a84a),
@@ -381,6 +421,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
     light: Color(0xffe8f5e9),
     border: Color(0xffbbf7d0),
     onPrimary: Color(0xffffffff),
+    onDark: Color(0xff86efac),
+    borderAlt: Color(0xffbadbcc),
+    emerald: Color(0xff10b981),
+    page: AppColors.canvas,
   );
 
   /// The palette for [hex] (a usable `#RRGGBB`; anything else is the default).
@@ -391,6 +435,17 @@ class BrandColors extends ThemeExtension<BrandColors> {
     if (base == defaultBrandHex) return original;
     final t = deriveTourismTheme(base);
     Color token(String name) => colorFromHex(t[name]!);
+    // The roles the web has no token for: the same kind of rule (absolute
+    // lightness, saturation scaled by the base's, the hue offset dropped when
+    // it is above 10 degrees), measured from the original literals.
+    final baseHsl = rgbToHsl(hexToRgb(base));
+    Color extra(String name) => colorFromHex(
+      _fromRule(
+        baseHsl,
+        _extraRules[name]!,
+        saturationCap: name == 'emerald' ? _chartSaturationCap : 1,
+      ),
+    );
     return BrandColors(
       primary: token('--th-primary'),
       deep: token('--th-primary-deep'),
@@ -401,8 +456,26 @@ class BrandColors extends ThemeExtension<BrandColors> {
       light: token('--th-surface-tinted'),
       border: token('--th-primary-border'),
       onPrimary: token('--th-primary-contrast'),
+      // Light text on the dark fills: kept readable (AA) against them.
+      onDark: colorFromHex(
+        _lightenToContrast(
+          rgbToHex([
+            for (final c in _channels(extra('onDark'))) c.toDouble(),
+          ]),
+          t['--th-primary-deep']!,
+        ),
+      ),
+      borderAlt: extra('borderAlt'),
+      emerald: extra('emerald'),
+      page: token('--th-page-grad-1'),
     );
   }
+
+  static List<int> _channels(Color c) => [
+    (c.r * 255).round(),
+    (c.g * 255).round(),
+    (c.b * 255).round(),
+  ];
 
   @override
   BrandColors copyWith({
@@ -415,6 +488,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
     Color? light,
     Color? border,
     Color? onPrimary,
+    Color? onDark,
+    Color? borderAlt,
+    Color? emerald,
+    Color? page,
   }) {
     return BrandColors(
       primary: primary ?? this.primary,
@@ -426,6 +503,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
       light: light ?? this.light,
       border: border ?? this.border,
       onPrimary: onPrimary ?? this.onPrimary,
+      onDark: onDark ?? this.onDark,
+      borderAlt: borderAlt ?? this.borderAlt,
+      emerald: emerald ?? this.emerald,
+      page: page ?? this.page,
     );
   }
 
@@ -443,6 +524,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
       light: mix(light, other.light),
       border: mix(border, other.border),
       onPrimary: mix(onPrimary, other.onPrimary),
+      onDark: mix(onDark, other.onDark),
+      borderAlt: mix(borderAlt, other.borderAlt),
+      emerald: mix(emerald, other.emerald),
+      page: mix(page, other.page),
     );
   }
 
@@ -457,7 +542,11 @@ class BrandColors extends ThemeExtension<BrandColors> {
       other.tint == tint &&
       other.light == light &&
       other.border == border &&
-      other.onPrimary == onPrimary;
+      other.onPrimary == onPrimary &&
+      other.onDark == onDark &&
+      other.borderAlt == borderAlt &&
+      other.emerald == emerald &&
+      other.page == page;
 
   @override
   int get hashCode => Object.hash(
@@ -470,6 +559,10 @@ class BrandColors extends ThemeExtension<BrandColors> {
     light,
     border,
     onPrimary,
+    onDark,
+    borderAlt,
+    emerald,
+    page,
   );
 }
 
@@ -492,17 +585,18 @@ ThemeData buildAppTheme({
   TextTheme? textTheme,
 }) {
   final hex = effectiveBrandHex(theme);
+  final brand = isSanitation ? null : BrandColors.fromBase(hex);
   return ThemeData(
     colorScheme: ColorScheme.fromSeed(
       seedColor: isSanitation ? AppColors.deepGreen : colorFromHex(hex),
       brightness: Brightness.light,
     ),
-    scaffoldBackgroundColor: AppColors.canvas,
+    // Tourism: the page takes a tint of the theme (the web's page gradient,
+    // as its first stop); sanitation and the app's own green keep the canvas.
+    scaffoldBackgroundColor: brand?.page ?? AppColors.canvas,
     textTheme: textTheme,
     useMaterial3: true,
-    extensions: <ThemeExtension<dynamic>>[
-      if (!isSanitation) BrandColors.fromBase(hex),
-    ],
+    extensions: <ThemeExtension<dynamic>>[?brand],
   );
 }
 
