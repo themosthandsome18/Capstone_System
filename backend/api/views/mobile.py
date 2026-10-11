@@ -96,7 +96,7 @@ from api.services.sanitation import (
     sync_establishment_after_inspection,
     with_establishment_rollups,
 )
-from api.services.tourism import build_reference_tables_payload, get_cached_tourism_theme
+from api.services.tourism import build_reference_tables_payload, read_tourism_theme
 from api.services.upload import (
     StorageServiceError,
     UploadValidationError,
@@ -171,7 +171,7 @@ def mobile_tourism_bootstrap(request):
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_notifications(top_destination=top_destination),
-            "theme": get_cached_tourism_theme(),
+            "theme": read_tourism_theme(),
         }
     )
 

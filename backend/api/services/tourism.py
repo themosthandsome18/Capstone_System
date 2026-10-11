@@ -82,27 +82,15 @@ def with_origin(queryset):
     return queryset.annotate(origin=Coalesce("province__name", "country__name"))
 
 
-# Tourism theme: read on every page load, so it is cached. Unlike the caches
-# above it IS invalidated, on every successful write. The per-process
-# LocMemCache is acceptable only because production runs gunicorn with
-# --workers 1 --threads 4 (the Render start command, which is not in this
-# repo): one process, so one cache. If the worker count ever rises above 1,
-# other workers would serve the old colour for up to the timeout; move this
-# key to a shared cache before doing that.
-TOURISM_THEME_CACHE_KEY = "tourism_theme_v1"
-TOURISM_THEME_CACHE_TIMEOUT = 300  # 5 minutes
+def read_tourism_theme():
+    """The tourism theme as the clients read it, straight from the database.
 
-
-def get_cached_tourism_theme():
-    data = cache.get(TOURISM_THEME_CACHE_KEY)
-    if data is None:
-        data = TourismThemeReadSerializer(TourismThemeSetting.load()).data
-        cache.set(TOURISM_THEME_CACHE_KEY, data, timeout=TOURISM_THEME_CACHE_TIMEOUT)
-    return data
-
-
-def invalidate_tourism_theme_cache():
-    cache.delete(TOURISM_THEME_CACHE_KEY)
+    Deliberately not cached. It is one primary-key row, small next to the
+    queries of the bootstrap it travels in, and a per-process cache (LocMem)
+    would serve the old colour from every worker the save did not reach, for as
+    long as its timeout, whenever gunicorn runs more than one worker.
+    """
+    return TourismThemeReadSerializer(TourismThemeSetting.load()).data
 
 
 TOURIST_RECORD_PAYLOAD_FIELDS = [

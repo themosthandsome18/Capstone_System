@@ -23,8 +23,8 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reference_tables_payload,
     build_reports_payload,
-    get_cached_tourism_theme,
     get_reporting_years,
+    read_tourism_theme,
 )
 
 
@@ -82,7 +82,7 @@ def bootstrap_data(request):
             "reportData": build_reports_payload({"include_questions": True}),
             # The years every year filter offers: years with records, plus this year.
             "reportingYears": get_reporting_years(),
-            "theme": get_cached_tourism_theme(),
+            "theme": read_tourism_theme(),
         }
     )
 

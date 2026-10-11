@@ -45,8 +45,7 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reports_payload,
     build_tourist_records_payload,
-    get_cached_tourism_theme,
-    invalidate_tourism_theme_cache,
+    read_tourism_theme,
     ReportParameterError,
 )
 from api.services.upload import (
@@ -425,7 +424,7 @@ def tourism_theme(request):
     # login page works with no token. The colour is not sensitive; the read
     # shape never includes updated_by or any username.
     if request.method == "GET":
-        return Response(get_cached_tourism_theme())
+        return Response(read_tourism_theme())
 
     return update_tourism_theme(request)
 
@@ -446,7 +445,6 @@ def update_tourism_theme(request):
         setattr(setting, field, value)
     setting.updated_by = request.user
     setting.save()
-    invalidate_tourism_theme_cache()
 
     log_activity(
         request,

@@ -7786,20 +7786,64 @@ class TourismThemeApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("saved_colors", response.json())
 
-    # --- cache ------------------------------------------------------------
+    # --- no cache ---------------------------------------------------------
+    #
+    # The theme is not cached. A per-process cache served the old colour from
+    # every gunicorn worker the save did not reach, for its whole timeout. To
+    # stand in for "another worker", these tests change the row WITHOUT going
+    # through the view, so nothing could have invalidated anything: a cache
+    # would still answer with the old colour.
 
-    def test_a_write_invalidates_the_cache(self):
+    BOOTSTRAPS = (
+        "/api/tourism-theme/",
+        "/api/mobile/tourism/bootstrap/",
+        "/api/bootstrap/",
+    )
+
+    @staticmethod
+    def _theme_of(response, path):
+        body = response.json()
+        return body["theme"] if "theme" in body else body
+
+    def _set_behind_the_back(self, **fields):
+        from .models import TourismThemeSetting
+
+        TourismThemeSetting.load()  # make sure the row exists
+        TourismThemeSetting.objects.filter(pk=1).update(**fields)
+
+    def test_a_write_shows_at_once(self):
         self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#2FA34A")
         _, client = self._admin()
         self.assertEqual(self._put(client, primary_color="#123ABC").status_code, status.HTTP_200_OK)
         self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#123ABC")
 
-    def test_a_cache_hit_runs_no_queries(self):
-        from .services.tourism import get_cached_tourism_theme
+    def test_a_change_made_by_another_process_shows_at_once_on_every_endpoint(self):
+        _, client = self._admin()
+        # Warm anything that might remember the colour.
+        for path in self.BOOTSTRAPS:
+            self.assertEqual(client.get(path).status_code, status.HTTP_200_OK)
 
-        get_cached_tourism_theme()
-        with self.assertNumQueries(0):
-            get_cached_tourism_theme()
+        self._set_behind_the_back(primary_color="#ABCDEF", mobile_follows_web=False, mobile_primary_color="#0155FE")
+
+        for path in self.BOOTSTRAPS:
+            theme = self._theme_of(client.get(path), path)
+            self.assertEqual(theme["primary_color"], "#ABCDEF", path)
+            self.assertEqual(theme["mobile_primary_color"], "#0155FE", path)
+            self.assertIs(theme["mobile_follows_web"], False, path)
+
+        # ...and again, in the other direction, with nothing in between.
+        self._set_behind_the_back(primary_color="#2FA34A", mobile_follows_web=True)
+        for path in self.BOOTSTRAPS:
+            theme = self._theme_of(client.get(path), path)
+            self.assertEqual(theme["primary_color"], "#2FA34A", path)
+            self.assertIs(theme["mobile_follows_web"], True, path)
+
+    def test_the_theme_is_one_query_a_read(self):
+        from .services.tourism import read_tourism_theme
+
+        read_tourism_theme()  # the row exists
+        with self.assertNumQueries(1):
+            read_tourism_theme()
 
     # --- bootstrap wiring -------------------------------------------------
 
