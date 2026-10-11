@@ -43,7 +43,7 @@ class _TourismLoadingScreenState extends State<TourismLoadingScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0FDFA),
+      backgroundColor: context.brand.light,
       body: SafeArea(
         child: Center(
           child: AnimatedBuilder(

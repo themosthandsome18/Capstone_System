@@ -145,7 +145,7 @@ class LocationCapturePanel extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Color(0xffe9f8ef),
+          backgroundColor: context.brand.tint,
           child: Icon(Icons.my_location_outlined, color: context.brand.primary),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
@@ -181,10 +181,10 @@ class VisitReceiptCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFCCFBF1), width: 1.5),
+        border: Border.all(color: context.brand.border, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F766E).withValues(alpha: 0.08),
+            color: context.brand.deep.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -195,21 +195,21 @@ class VisitReceiptCard extends StatelessWidget {
           // Header Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF0FDFA),
+            decoration: BoxDecoration(
+              color: context.brand.light,
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.confirmation_number_outlined, size: 16, color: Color(0xFF0F766E)),
+                Icon(Icons.confirmation_number_outlined, size: 16, color: context.brand.deep),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'MAUBAN TOURIST ENTRY PASS',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F766E),
+                      color: context.brand.deep,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -281,10 +281,10 @@ class VisitReceiptCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF0F766E), width: 1.5),
+                      border: Border.all(color: context.brand.deep, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+                          color: context.brand.deep.withValues(alpha: 0.12),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -308,12 +308,12 @@ class VisitReceiptCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
+                        Text(
                           'TAP TO ZOOM',
                           style: TextStyle(
                             fontSize: 7.5,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F766E),
+                            color: context.brand.deep,
                             letterSpacing: 0.3,
                           ),
                         ),
@@ -441,7 +441,7 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: context.brand.light,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
@@ -513,19 +513,19 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF14532D),
+                              decoration: BoxDecoration(
+                                color: context.brand.dark,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'LGU MAUBAN • TOURIST ENTRY PASS',
                                     style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 1,
-                                      color: Color(0xFF86EFAC),
+                                      color: context.brand.onDark,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -677,7 +677,7 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                         style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
                       ),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF14532D),
+                        backgroundColor: context.brand.dark,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
@@ -741,8 +741,8 @@ class _DashedTicketDivider extends StatelessWidget {
           child: Container(
             width: 20,
             height: 20,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8F5E9),
+            decoration: BoxDecoration(
+              color: context.brand.light,
               shape: BoxShape.circle,
             ),
           ),
@@ -752,8 +752,8 @@ class _DashedTicketDivider extends StatelessWidget {
           child: Container(
             width: 20,
             height: 20,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8F5E9),
+            decoration: BoxDecoration(
+              color: context.brand.light,
               shape: BoxShape.circle,
             ),
           ),
@@ -1677,7 +1677,7 @@ class VisitorPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: dark
             ? Colors.white.withValues(alpha: 0.22)
-            : const Color(0xffecfdf3),
+            : context.brand.tint,
         borderRadius: BorderRadius.circular(999),
         border: dark
             ? Border.all(color: Colors.white.withValues(alpha: 0.15))
@@ -2132,7 +2132,7 @@ class LocationCard extends StatelessWidget {
       color: Colors.white,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Color(0xffdcfce7),
+          backgroundColor: context.brand.tint,
           child: Icon(Icons.navigation_outlined, color: context.brand.primary),
         ),
         title: const Text(
@@ -2243,7 +2243,7 @@ class AmenityChip extends StatelessWidget {
     return Chip(
       avatar: Icon(icon, size: 16),
       label: Text(label),
-      backgroundColor: const Color(0xffe9f8ef),
+      backgroundColor: context.brand.tint,
       side: BorderSide.none,
     );
   }

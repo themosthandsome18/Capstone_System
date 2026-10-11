@@ -138,10 +138,10 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF14532D).withValues(alpha: 0.1),
+              color: context.brand.dark.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.shield_outlined, color: Color(0xFF14532D), size: 24),
+            child: Icon(Icons.shield_outlined, color: context.brand.dark, size: 24),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -224,7 +224,7 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
         FilledButton(
           onPressed: _loading ? null : _verifyLogin,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF14532D),
+            backgroundColor: context.brand.dark,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           child: _loading
@@ -433,7 +433,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFF14532D),
+            backgroundColor: context.brand.dark,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -493,11 +493,11 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
+      backgroundColor: context.brand.light,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: const Color(0xFF14532D),
+        foregroundColor: context.brand.dark,
         title: const Text(
           'Tourist Qr Check-In',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
@@ -521,11 +521,11 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                 width: 110,
                 height: 110,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
+                  color: context.brand.tint,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      color: context.brand.emerald.withValues(alpha: 0.15),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -588,7 +588,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                       child: FilledButton(
                         onPressed: _searching ? null : () => _handleLookup(_searchController.text),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF14532D),
+                          backgroundColor: context.brand.dark,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -619,7 +619,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF14532D),
+                    backgroundColor: context.brand.dark,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 2,
@@ -648,12 +648,12 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD1E7DD),
+                    backgroundColor: context.brand.tintStrong,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0xFFBADBCC)),
+                      side: BorderSide(color: context.brand.borderAlt),
                     ),
                   ),
                 ),
@@ -684,9 +684,9 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD1E7DD).withValues(alpha: 0.6),
+                    backgroundColor: context.brand.tintStrong.withValues(alpha: 0.6),
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    side: const BorderSide(color: Color(0xFFBADBCC)),
+                    side: BorderSide(color: context.brand.borderAlt),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
@@ -846,7 +846,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFF14532D),
+            backgroundColor: context.brand.dark,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -884,7 +884,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
+      backgroundColor: context.brand.light,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -922,7 +922,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF14532D),
+                backgroundColor: context.brand.dark,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -932,7 +932,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _fetchHistory,
-        color: const Color(0xFF14532D),
+        color: context.brand.dark,
         child: Column(
           children: [
             // Search Input Header
@@ -940,7 +940,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1E7DD),
+                  color: context.brand.tintStrong,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
@@ -949,7 +949,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                   decoration: InputDecoration(
                     hintText: 'Search by Survey ID, name, or resort',
                     hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13.5),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF14532D)),
+                    prefixIcon: Icon(Icons.search, color: context.brand.dark),
                     suffixIcon: _search.text.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear, size: 18, color: Color(0xFF64748B)),
@@ -969,8 +969,8 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
             // Records List
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF14532D)),
+                  ? Center(
+                      child: CircularProgressIndicator(color: context.brand.dark),
                     )
                   : filtered.isEmpty
                       ? Center(
@@ -983,13 +983,13 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                   width: 72,
                                   height: 72,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFD1E7DD),
+                                    color: context.brand.tintStrong,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.receipt_long_outlined,
                                     size: 38,
-                                    color: Color(0xFF14532D),
+                                    color: context.brand.dark,
                                   ),
                                 ),
                                 const SizedBox(height: 16),
@@ -1222,7 +1222,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
             ),
             actions: [
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF14532D)),
+                style: FilledButton.styleFrom(backgroundColor: context.brand.dark),
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).pop();
@@ -1303,9 +1303,9 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
     final totalVisitors = presentCount(_currentRecord['total_visitors']);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.brand.page,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF14532D),
+        backgroundColor: context.brand.dark,
         elevation: 0,
         foregroundColor: Colors.white,
         title: const Text(
@@ -1319,8 +1319,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
           // Dark Green Top Card Header
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            decoration: const BoxDecoration(
-              color: Color(0xFF14532D),
+            decoration: BoxDecoration(
+              color: context.brand.dark,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1332,13 +1332,13 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (surveyId != null)
-                        const Text(
+                        Text(
                           'RECORD ID',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1,
-                            color: Color(0xFF86EFAC),
+                            color: context.brand.onDark,
                           ),
                         ),
                         if (surveyId != null)
@@ -1387,7 +1387,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                       width: 58,
                       height: 58,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
+                        color: context.brand.emerald,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       alignment: Alignment.center,
@@ -1416,8 +1416,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                           const SizedBox(height: 2),
                           Text(
                             email,
-                            style: const TextStyle(
-                              color: Color(0xFF86EFAC),
+                            style: TextStyle(
+                              color: context.brand.onDark,
                               fontSize: 12.5,
                             ),
                           ),
@@ -1479,20 +1479,20 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD1E7DD),
+                          color: context.brand.tintStrong,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFBADBCC)),
+                          border: Border.all(color: context.brand.borderAlt),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
-                                Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF14532D)),
+                                Icon(Icons.calendar_today_outlined, size: 14, color: context.brand.dark),
                                 SizedBox(width: 6),
                                 Text(
                                   'ARRIVAL DATE',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF14532D)),
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
                                 ),
                               ],
                             ),
@@ -1512,20 +1512,20 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD1E7DD),
+                          color: context.brand.tintStrong,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFBADBCC)),
+                          border: Border.all(color: context.brand.borderAlt),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
-                                Icon(Icons.people_outline, size: 16, color: Color(0xFF14532D)),
+                                Icon(Icons.people_outline, size: 16, color: context.brand.dark),
                                 SizedBox(width: 6),
                                 Text(
                                   'TOTAL GUESTS',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF14532D)),
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
                                 ),
                               ],
                             ),
@@ -1560,15 +1560,15 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD1E7DD),
+                          color: context.brand.tintStrong,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.edit, size: 12, color: Color(0xFF14532D)),
+                            Icon(Icons.edit, size: 12, color: context.brand.dark),
                             SizedBox(width: 4),
-                            Text('Edit Info', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF14532D))),
+                            Text('Edit Info', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: context.brand.dark)),
                           ],
                         ),
                       ),
@@ -1590,7 +1590,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD1E7DD).withValues(alpha: 0.5),
+                    color: context.brand.tintStrong.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(
@@ -1617,8 +1617,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                         label: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF0F172A),
-                          backgroundColor: const Color(0xFFD1E7DD),
-                          side: const BorderSide(color: Color(0xFFBADBCC)),
+                          backgroundColor: context.brand.tintStrong,
+                          side: BorderSide(color: context.brand.borderAlt),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
@@ -1634,7 +1634,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                             : const Icon(Icons.check_circle_outline, size: 20),
                         label: const Text('Save Record', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF14532D),
+                          backgroundColor: context.brand.dark,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
@@ -1897,14 +1897,14 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1E7DD),
+                  color: context.brand.tintStrong,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('TOTAL GUESTS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF14532D))),
-                    Text(_visitors == null ? '' : '$_visitors', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF14532D))),
+                    Text('TOTAL GUESTS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: context.brand.dark)),
+                    Text(_visitors == null ? '' : '$_visitors', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.brand.dark)),
                   ],
                 ),
               ),
@@ -1919,7 +1919,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
                 child: OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD1E7DD),
+                    backgroundColor: context.brand.tintStrong,
                     foregroundColor: const Color(0xFF0F172A),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1932,7 +1932,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
                 child: FilledButton(
                   onPressed: _saveAndClose,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF14532D),
+                    backgroundColor: context.brand.dark,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -1962,12 +1962,12 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
               Container(
                 width: 24,
                 height: 24,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD1E7DD),
+                decoration: BoxDecoration(
+                  color: context.brand.tintStrong,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Text(step, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF14532D))),
+                child: Text(step, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: context.brand.dark)),
               ),
               const SizedBox(width: 8),
               Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A))),
@@ -1990,7 +1990,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
           const SizedBox(height: 4),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFD1E7DD).withValues(alpha: 0.5),
+              color: context.brand.tintStrong.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(10),
             ),
             child: TextField(
@@ -2019,7 +2019,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFD1E7DD).withValues(alpha: 0.5),
+              color: context.brand.tintStrong.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -2040,7 +2040,7 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFFD1E7DD).withValues(alpha: 0.5),
+        color: context.brand.tintStrong.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

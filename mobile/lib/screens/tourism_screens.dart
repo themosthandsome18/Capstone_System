@@ -261,15 +261,15 @@ class _HomePageState extends State<HomePage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0F766E), Color(0xFF115E59)],
+            gradient: LinearGradient(
+              colors: [context.brand.deep, context.brand.dark],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F766E).withValues(alpha: 0.25),
+                color: context.brand.deep.withValues(alpha: 0.25),
                 blurRadius: 14,
                 offset: const Offset(0, 6),
               ),
@@ -318,10 +318,10 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Welcome to the historic jewel of Lamon Bay — home to the white sandbars of Cagbalete Island, cascading waterfalls, and world-class Buntal weaving craftsmanship.',
                 style: TextStyle(
-                  color: Color(0xFFCCFBF1),
+                  color: context.brand.border,
                   fontSize: 12.5,
                   height: 1.45,
                 ),
@@ -531,11 +531,11 @@ class _HomePageState extends State<HomePage> {
           text: 'Celebrate the feast of San Buenaventura with colorful Buntal weaving and boat regatta.',
           color: Color(0xffd7efff),
         ),
-        const InfoBanner(
+        InfoBanner(
           icon: Icons.eco_outlined,
           title: 'Clean Coast & Eco-Tourism Policy',
           text: 'Please dispose of trash responsibly and support local community bangkeros and weavers.',
-          color: Color(0xffdcfce7),
+          color: context.brand.tint,
         ),
       ],
     );
@@ -821,10 +821,10 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDFA),
+                  color: context.brand.light,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.stars_rounded, color: Color(0xFF0F766E), size: 22),
+                child: Icon(Icons.stars_rounded, color: context.brand.deep, size: 22),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -991,13 +991,13 @@ class _HiddenGemCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F766E),
+                    color: context.brand.deep,
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.diamond, size: 10, color: Color(0xFF5EEAD4)),
+                      Icon(Icons.diamond, size: 10, color: context.brand.border),
                       SizedBox(width: 3),
                       Text(
                         'HIDDEN GEM',
@@ -1347,12 +1347,12 @@ class _TourismMapPageState extends State<TourismMapPage> {
                             ),
                           ],
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF147c79)),
+                            Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: context.brand.deep),
                             SizedBox(width: 6),
-                            Text('Back', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF147c79))),
+                            Text('Back', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.brand.deep)),
                           ],
                         ),
                       ),
@@ -1575,7 +1575,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF147c79),
+                    color: context.brand.deep,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
@@ -1770,7 +1770,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Text(
                   'Lahat ng gamit sa iyong Island Packing Checklist ay kumpleto at naka-impake na! Handa ka na para sa iyong biyahe sa Cagbalete Island at Mauban.',
                   textAlign: TextAlign.center,
@@ -1786,7 +1786,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF15803D),
+                    color: context.brand.ink,
                     fontSize: 14,
                   ),
                 ),
@@ -1853,7 +1853,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
                 ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF14532D),
+                  backgroundColor: context.brand.dark,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
@@ -1900,14 +1900,14 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF064E3B), Color(0xFF0F766E)],
+        gradient: LinearGradient(
+          colors: [context.brand.dark, context.brand.deep],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F766E).withValues(alpha: 0.3),
+            color: context.brand.deep.withValues(alpha: 0.3),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -1936,10 +1936,10 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.confirmation_number_outlined, size: 13, color: Color(0xFF86EFAC)),
+                          Icon(Icons.confirmation_number_outlined, size: 13, color: context.brand.onDark),
                           SizedBox(width: 5),
                           Text(
                             'ACTIVE ENTRY PASS',
@@ -1947,7 +1947,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
-                              color: Color(0xFF86EFAC),
+                              color: context.brand.onDark,
                             ),
                           ),
                         ],
@@ -1956,15 +1956,15 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF86EFAC),
+                        color: context.brand.onDark,
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text(
+                      child: Text(
                         'READY TO SCAN',
                         style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF064E3B),
+                          color: context.brand.dark,
                         ),
                       ),
                     ),
@@ -1996,9 +1996,9 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                             visit.fullName.isNotEmpty ? formatProperName(visit.fullName) : 'Registered Tourist',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color: Color(0xFFCCFBF1),
+                              color: context.brand.border,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -2053,12 +2053,12 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          const Text(
+                          Text(
                             'TAP TO EXPAND',
                             style: TextStyle(
                               fontSize: 6.5,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F766E),
+                              color: context.brand.deep,
                             ),
                           ),
                         ],
@@ -2076,11 +2076,11 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   children: [
                     Text(
                       'PASS ID: ${visit.reference}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFFCCFBF1),
+                        color: context.brand.border,
                       ),
                     ),
                     const Row(
@@ -2114,10 +2114,10 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD1E7DD), width: 1.5),
+        border: Border.all(color: context.brand.tintStrong, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF14532D).withValues(alpha: 0.06),
+            color: context.brand.dark.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -2129,10 +2129,10 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
+              color: context.brand.light,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.confirmation_number_outlined, size: 32, color: Color(0xFF14532D)),
+            child: Icon(Icons.confirmation_number_outlined, size: 32, color: context.brand.dark),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -2220,13 +2220,13 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               ),
               OutlinedButton.icon(
                 onPressed: _showAddPackingItemDialog,
-                icon: const Icon(Icons.add, size: 15, color: Color(0xFF14532D)),
-                label: const Text(
+                icon: Icon(Icons.add, size: 15, color: context.brand.dark),
+                label: Text(
                   'Add',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF14532D),
+                    color: context.brand.dark,
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -2234,7 +2234,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                     horizontal: 10,
                     vertical: 6,
                   ),
-                  side: const BorderSide(color: Color(0xFF14532D)),
+                  side: BorderSide(color: context.brand.dark),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -2251,8 +2251,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               value: progress,
               minHeight: 6,
               backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                Color(0xFF10B981),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                context.brand.emerald,
               ),
             ),
           ),
@@ -2287,7 +2287,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                           : Icons.check_box_outline_blank,
                       color:
                           entry.value
-                              ? const Color(0xFF14532D)
+                              ? context.brand.dark
                               : const Color(0xFF94A3B8),
                       size: 22,
                     ),
@@ -2345,11 +2345,11 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   Icon(
                     Icons.add_circle_outline,
                     size: 17,
-                    color: Color(0xFF166534),
+                    color: context.brand.ink,
                   ),
                   SizedBox(width: 8),
                   Text(
@@ -2357,7 +2357,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF166534),
+                      color: context.brand.ink,
                     ),
                   ),
                 ],
@@ -2593,13 +2593,13 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF0FDF4), Color(0xFFDCFCE7)],
+              gradient: LinearGradient(
+                colors: [context.brand.light, context.brand.tint],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
+              border: Border.all(color: context.brand.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2613,7 +2613,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF166534),
+                        color: context.brand.ink,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -2630,10 +2630,10 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.schedule,
                             size: 15,
-                            color: Color(0xFF15803D),
+                            color: context.brand.ink,
                           ),
                           const SizedBox(width: 5),
                           Flexible(
@@ -2641,10 +2641,10 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                               current['duration'] as String,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF15803D),
+                                color: context.brand.ink,
                               ),
                             ),
                           ),
@@ -2697,17 +2697,17 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF0FDF4),
+                              color: context.brand.light,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: const Color(0xFF16A34A),
+                                color: context.brand.primary,
                                 width: 2,
                               ),
                             ),
                             child: Icon(
                               stop['icon'] as IconData,
                               size: 18,
-                              color: const Color(0xFF166534),
+                              color: context.brand.ink,
                             ),
                           ),
                           if (!isLast)
@@ -2806,37 +2806,37 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: context.brand.light,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: context.brand.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.directions_boat_outlined, color: Color(0xFF14532D), size: 22),
+              Icon(Icons.directions_boat_outlined, color: context.brand.dark, size: 22),
               SizedBox(width: 10),
               Text(
                 'Mauban Port ↔ Cagbalete Boats',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF14532D)),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: context.brand.dark),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             '• Standard boat departures from Mauban Port: 07:00 AM, 10:00 AM, 01:00 PM, and 04:00 PM.',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             '• Island Port Arrival: Sabang Port (during high tide) or Mappit Port (during low tide).',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             '• Environmental & Tourism Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Payable at the passenger terminal.',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF166534), height: 1.4),
+            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
           ),
         ],
       ),
@@ -2905,7 +2905,7 @@ class ProfilePage extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 44,
-                backgroundColor: const Color(0xffd8f5e4),
+                backgroundColor: context.brand.tint,
                 child: Text(
                   profile.initials,
                   style: TextStyle(
@@ -3364,9 +3364,9 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
+                        color: context.brand.light,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                        border: Border.all(color: context.brand.border),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3376,9 +3376,9 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                           Expanded(
                             child: Text(
                               widget.destination.access,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 height: 1.4,
-                                color: Color(0xFF166534),
+                                color: context.brand.ink,
                               ),
                             ),
                           ),
