@@ -70,19 +70,49 @@ bool isSanitationModule() {
   return false;
 }
 
-void main() {
+Future<void> main() async {
   if (isSanitationModule()) {
     setWebBranding(WebBrandingModule.sanitation);
     runApp(const SanitationStandaloneApp());
     return;
   }
 
+  // The saved colour is read before the first frame, so the app is not painted
+  // green and then in another colour.
+  WidgetsFlutterBinding.ensureInitialized();
   setWebBranding(WebBrandingModule.tourism);
-  runApp(const MaubanMobileApp());
+  runApp(await createTourismApp());
 }
 
-class MaubanMobileApp extends StatelessWidget {
-  const MaubanMobileApp({super.key});
+class MaubanMobileApp extends StatefulWidget {
+  const MaubanMobileApp({
+    super.key,
+    this.initialTheme = TourismTheme.none,
+    this.api = const TourismApi(),
+    this.cache = const TourismBootstrapCache(),
+  });
+
+  /// The colour setting saved by the last run, for the first frame.
+  final TourismTheme initialTheme;
+
+  /// Injectable for tests.
+  final TourismApi api;
+  final TourismBootstrapCache cache;
+
+  @override
+  State<MaubanMobileApp> createState() => _MaubanMobileAppState();
+}
+
+class _MaubanMobileAppState extends State<MaubanMobileApp> {
+  late final ValueNotifier<TourismTheme> _theme = ValueNotifier(
+    widget.initialTheme,
+  );
+
+  @override
+  void dispose() {
+    _theme.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,23 +120,26 @@ class MaubanMobileApp extends StatelessWidget {
     if (!isSanitation) {
       setWebBranding(WebBrandingModule.tourism);
     }
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: isSanitation
-          ? 'Mauban Sanitation & Health Portal'
-          : 'Mauban Tourism & Travel Pass',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: isSanitation ? AppColors.deepGreen : AppColors.green,
-          brightness: Brightness.light,
+    final baseText = GoogleFonts.interTextTheme(Theme.of(context).textTheme);
+    return TourismThemeScope(
+      notifier: _theme,
+      child: ValueListenableBuilder<TourismTheme>(
+        valueListenable: _theme,
+        builder: (context, theme, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: isSanitation
+              ? 'Mauban Sanitation & Health Portal'
+              : 'Mauban Tourism & Travel Pass',
+          theme: buildAppTheme(
+            isSanitation: isSanitation,
+            theme: theme,
+            textTheme: baseText,
+          ),
+          home: isSanitation
+              ? const SanitationStandaloneBootstrap()
+              : AppBootstrap(api: widget.api, cache: widget.cache),
         ),
-        scaffoldBackgroundColor: AppColors.canvas,
-        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
-        useMaterial3: true,
       ),
-      home: isSanitation
-          ? const SanitationStandaloneBootstrap()
-          : const AppBootstrap(),
     );
   }
 }
@@ -152,6 +185,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
       if (cached == null || serverAnswered || !mounted) return;
       _cached = cached;
       setState(() => _state = _fromCache(cached));
+      _publishTheme(cached.bootstrap);
     });
     final result = await _fetch();
     serverAnswered = result.bootstrap != null;
@@ -175,6 +209,13 @@ class _AppBootstrapState extends State<AppBootstrap> {
     refreshing: refreshing,
   );
 
+  /// Tells the app above (if there is one) the colour setting of this answer,
+  /// so a colour changed on the web reaches the screens. A setting equal to
+  /// the one in use does nothing.
+  void _publishTheme(MobileBootstrap bootstrap) {
+    TourismThemeScope.maybeOf(context)?.value = bootstrap.theme;
+  }
+
   Future<_BootstrapFetch> _fetch() async {
     try {
       final raw = await widget.api.fetchBootstrapRaw();
@@ -190,6 +231,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
     if (bootstrap != null) {
       _cached = null;
       setState(() => _state = TourismBootstrapState.loaded(bootstrap));
+      _publishTheme(bootstrap);
       unawaited(widget.cache.write(result.raw!));
       return;
     }

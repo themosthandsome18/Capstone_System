@@ -48,6 +48,16 @@ class TourismTheme {
   /// `mobile_primary_color`, if the server sent a string. Blank is "".
   final String? mobilePrimaryColor;
 
+  @override
+  bool operator ==(Object other) =>
+      other is TourismTheme &&
+      other.primaryColor == primaryColor &&
+      other.followsWeb == followsWeb &&
+      other.mobilePrimaryColor == mobilePrimaryColor;
+
+  @override
+  int get hashCode => Object.hash(primaryColor, followsWeb, mobilePrimaryColor);
+
   factory TourismTheme.fromJson(Object? json) {
     if (json is! Map) return none;
     final primary = json['primary_color'];
@@ -299,4 +309,233 @@ Map<String, String> deriveTourismTheme(String? primaryColor) {
     vars['--th-primary-ink-strong']!,
   );
   return vars;
+}
+
+// ---- the colours as the app uses them --------------------------------------
+
+/// `#RRGGBB` as a [Color].
+Color colorFromHex(String hex) {
+  final rgb = hexToRgb(hex);
+  return Color.fromARGB(0xFF, rgb[0], rgb[1], rgb[2]);
+}
+
+/// The brand colours the tourism screens will read from the theme.
+///
+/// [original] is the palette the app has always had, with its literals, so
+/// the app looks the same when nothing is set. [BrandColors.fromBase] derives
+/// the same roles from another colour with the web's own rules. Where a role
+/// has no web token of the same name, the nearest one is used (noted below).
+///
+/// Only the tourism MaterialApp carries it. The sanitation app does not, so
+/// `context.brand` is [original] there and a colour chosen for tourism never
+/// reaches it.
+@immutable
+class BrandColors extends ThemeExtension<BrandColors> {
+  const BrandColors({
+    required this.primary,
+    required this.deep,
+    required this.dark,
+    required this.ink,
+    required this.tintStrong,
+    required this.tint,
+    required this.light,
+    required this.border,
+    required this.onPrimary,
+  });
+
+  /// The brand colour (AppColors.green).
+  final Color primary;
+
+  /// Dark fills that carry white text (AppColors.deepGreen).
+  final Color deep;
+
+  /// The darker header and button fill (0xFF14532D).
+  final Color dark;
+
+  /// Text and icons on a tint (0xFF166534).
+  final Color ink;
+
+  /// Strong tinted surface (0xFFD1E7DD).
+  final Color tintStrong;
+
+  /// Tinted surface (0xFFDCFCE7).
+  final Color tint;
+
+  /// The palest brand surface (0xFFE8F5E9).
+  final Color light;
+
+  /// Brand-tinted border (0xFFBBF7D0).
+  final Color border;
+
+  /// Text on a [primary] fill.
+  final Color onPrimary;
+
+  /// The palette the app has always had. Exactly its literals.
+  static const original = BrandColors(
+    primary: Color(0xff28a84a),
+    deep: Color(0xff0c6b3f),
+    dark: Color(0xff14532d),
+    ink: Color(0xff166534),
+    tintStrong: Color(0xffd1e7dd),
+    tint: Color(0xffdcfce7),
+    light: Color(0xffe8f5e9),
+    border: Color(0xffbbf7d0),
+    onPrimary: Color(0xffffffff),
+  );
+
+  /// The palette for [hex] (a usable `#RRGGBB`; anything else is the default).
+  /// The default colour returns [original] itself, with no derived value, so
+  /// choosing the app's own green changes nothing.
+  factory BrandColors.fromBase(String hex) {
+    final base = isHexColor(hex) ? hex.toUpperCase() : defaultBrandHex;
+    if (base == defaultBrandHex) return original;
+    final t = deriveTourismTheme(base);
+    Color token(String name) => colorFromHex(t[name]!);
+    return BrandColors(
+      primary: token('--th-primary'),
+      deep: token('--th-primary-deep'),
+      dark: token('--th-primary-deep'),
+      ink: token('--th-primary-ink'),
+      tintStrong: token('--th-primary-tint-strong'),
+      tint: token('--th-primary-selected'),
+      light: token('--th-surface-tinted'),
+      border: token('--th-primary-border'),
+      onPrimary: token('--th-primary-contrast'),
+    );
+  }
+
+  @override
+  BrandColors copyWith({
+    Color? primary,
+    Color? deep,
+    Color? dark,
+    Color? ink,
+    Color? tintStrong,
+    Color? tint,
+    Color? light,
+    Color? border,
+    Color? onPrimary,
+  }) {
+    return BrandColors(
+      primary: primary ?? this.primary,
+      deep: deep ?? this.deep,
+      dark: dark ?? this.dark,
+      ink: ink ?? this.ink,
+      tintStrong: tintStrong ?? this.tintStrong,
+      tint: tint ?? this.tint,
+      light: light ?? this.light,
+      border: border ?? this.border,
+      onPrimary: onPrimary ?? this.onPrimary,
+    );
+  }
+
+  @override
+  BrandColors lerp(ThemeExtension<BrandColors>? other, double t) {
+    if (other is! BrandColors) return this;
+    Color mix(Color a, Color b) => Color.lerp(a, b, t)!;
+    return BrandColors(
+      primary: mix(primary, other.primary),
+      deep: mix(deep, other.deep),
+      dark: mix(dark, other.dark),
+      ink: mix(ink, other.ink),
+      tintStrong: mix(tintStrong, other.tintStrong),
+      tint: mix(tint, other.tint),
+      light: mix(light, other.light),
+      border: mix(border, other.border),
+      onPrimary: mix(onPrimary, other.onPrimary),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is BrandColors &&
+      other.primary == primary &&
+      other.deep == deep &&
+      other.dark == dark &&
+      other.ink == ink &&
+      other.tintStrong == tintStrong &&
+      other.tint == tint &&
+      other.light == light &&
+      other.border == border &&
+      other.onPrimary == onPrimary;
+
+  @override
+  int get hashCode => Object.hash(
+    primary,
+    deep,
+    dark,
+    ink,
+    tintStrong,
+    tint,
+    light,
+    border,
+    onPrimary,
+  );
+}
+
+extension BrandColorsContext on BuildContext {
+  /// The brand colours of the app this widget is in: the tourism theme's, or
+  /// [BrandColors.original] where none is set (the sanitation app, a test).
+  BrandColors get brand =>
+      Theme.of(this).extension<BrandColors>() ?? BrandColors.original;
+}
+
+/// The app's ThemeData. The one place that decides what a module's theme is,
+/// so the tests build exactly what the app builds.
+///
+/// Sanitation: its own seed and no [BrandColors]. Tourism: the seed is the
+/// colour in use (the same `ColorScheme.fromSeed` as before, so the tonal look
+/// of the Material widgets is only what the seed implies) and the extension.
+ThemeData buildAppTheme({
+  required bool isSanitation,
+  required TourismTheme theme,
+  TextTheme? textTheme,
+}) {
+  final hex = effectiveBrandHex(theme);
+  return ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: isSanitation ? AppColors.deepGreen : colorFromHex(hex),
+      brightness: Brightness.light,
+    ),
+    scaffoldBackgroundColor: AppColors.canvas,
+    textTheme: textTheme,
+    useMaterial3: true,
+    extensions: <ThemeExtension<dynamic>>[
+      if (!isSanitation) BrandColors.fromBase(hex),
+    ],
+  );
+}
+
+/// Carries the colour setting down from the app to whatever learns it (the
+/// bootstrap), so the MaterialApp can follow it.
+class TourismThemeScope extends InheritedNotifier<ValueNotifier<TourismTheme>> {
+  const TourismThemeScope({
+    super.key,
+    required ValueNotifier<TourismTheme> notifier,
+    required super.child,
+  }) : super(notifier: notifier);
+
+  /// Null where there is no app above (a test that builds a page alone).
+  static ValueNotifier<TourismTheme>? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<TourismThemeScope>()
+      ?.notifier;
+}
+
+/// The theme saved with the last bootstrap, or none. Read before the first
+/// frame, so the app is not painted in one colour and then another.
+Future<TourismTheme> readSavedTourismTheme({
+  TourismBootstrapCache cache = const TourismBootstrapCache(),
+}) async {
+  final saved = await cache.read();
+  return saved?.bootstrap.theme ?? TourismTheme.none;
+}
+
+/// What `main()` runs for tourism.
+Future<Widget> createTourismApp({
+  TourismBootstrapCache cache = const TourismBootstrapCache(),
+}) async {
+  return MaubanMobileApp(
+    initialTheme: await readSavedTourismTheme(cache: cache),
+    cache: cache,
+  );
 }
