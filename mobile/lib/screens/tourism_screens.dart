@@ -2417,7 +2417,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
       },
       {
         'title': '🌿 Eco-Waterfalls & Heritage Trail',
-        'duration': 'Day Tour (Town Proper)',
+        'duration': 'Same Day (Town Proper)',
         'badge': 'Nature & Culture',
         'highlight': 'Dahican Falls, Rizal Hill, Spanish Bath',
         'stops': [
