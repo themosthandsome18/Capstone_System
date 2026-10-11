@@ -14,7 +14,7 @@ import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'tourism_bootstrap_states_test.dart'
-    show bootstrapWith, expectNoEmptyMessage, openHome;
+    show bootstrapWith, expectNoEmptyMessage, openHome, rawOf;
 
 /// Answers each `fetchBootstrap()` call in turn.
 class SequenceApi extends TourismApi {
@@ -24,7 +24,7 @@ class SequenceApi extends TourismApi {
   int calls = 0;
 
   @override
-  Future<MobileBootstrap> fetchBootstrap() => _answers[calls++]();
+  Future<String> fetchBootstrapRaw() async => rawOf(await _answers[calls++]());
 }
 
 Future<MobileBootstrap> Function() fails(Object error) =>

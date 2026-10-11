@@ -2,6 +2,7 @@
 // still on its way. Three different answers, three different renders:
 // waiting (skeleton), loaded but nothing matches, and failed.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,8 +12,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 const noMatchMessage = 'No destinations match your search or filter';
 const nothingPublishedMessage = 'No destinations are available yet.';
 
+/// The JSON text each fake bootstrap came from (the app caches the text).
+final _rawOf = Expando<String>('raw bootstrap');
+String rawOf(MobileBootstrap bootstrap) => _rawOf[bootstrap]!;
+
 /// Synthetic data only: no real resort, person or contact.
 MobileBootstrap bootstrapWith(int count) {
+  final json = bootstrapJson(count);
+  final bootstrap = MobileBootstrap.fromJson(json);
+  _rawOf[bootstrap] = jsonEncode(json);
+  return bootstrap;
+}
+
+Map<String, dynamic> bootstrapJson(int count) {
   Map<String, dynamic> resort(int i) => {
     'resort_id': i,
     'resort_name': 'Sample Beach $i',
@@ -25,13 +37,13 @@ MobileBootstrap bootstrapWith(int count) {
     'longitude': 121.73,
   };
   final list = [for (var i = 1; i <= count; i++) resort(i)];
-  return MobileBootstrap.fromJson({
+  return {
     'destinations': list,
     'featuredDestinations': list.take(2).toList(),
     'referenceTables': <String, dynamic>{},
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
-  });
+  };
 }
 
 class FakeApi extends TourismApi {
@@ -40,7 +52,7 @@ class FakeApi extends TourismApi {
   final Completer<MobileBootstrap> _answer;
 
   @override
-  Future<MobileBootstrap> fetchBootstrap() => _answer.future;
+  Future<String> fetchBootstrapRaw() async => rawOf(await _answer.future);
 }
 
 /// Two errors that come from the test harness, not from what is under test:
@@ -64,6 +76,7 @@ Future<void> openHome(
   WidgetTester tester,
   TourismApi api, {
   double height = 3000,
+  TourismBootstrapCache cache = const TourismBootstrapCache(),
 }) async {
   ignoreOverflowOnly();
   tester.view.physicalSize = Size(411, height);
@@ -71,7 +84,9 @@ Future<void> openHome(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  await tester.pumpWidget(MaterialApp(home: AppBootstrap(api: api)));
+  await tester.pumpWidget(
+    MaterialApp(home: AppBootstrap(api: api, cache: cache)),
+  );
   await tester.pump();
   await tester.tap(find.text('Skip'));
   await tester.pump();

@@ -26,9 +26,17 @@ class _MobileShellState extends State<MobileShell> {
 
   @override
   Widget build(BuildContext context) {
+    final savedNotice = widget.state.showsSavedNotice
+        ? SavedInfoNotice(
+            savedAt: widget.state.savedAt!,
+            refreshing: widget.state.refreshing,
+            onRetry: widget.onRetry,
+          )
+        : null;
     final pages = [
       HomePage(
         state: widget.state,
+        savedNotice: savedNotice,
         onRetry: widget.onRetry,
         profile: _profile,
         onOpenTab: _openTab,
@@ -40,6 +48,7 @@ class _MobileShellState extends State<MobileShell> {
         isLoading: widget.state.isLoading,
         failure: widget.state.failure,
         onRetry: widget.onRetry,
+        savedNotice: savedNotice,
         onOpenDestination: _openDestination,
       ),
       TourismMapPage(
@@ -47,6 +56,7 @@ class _MobileShellState extends State<MobileShell> {
         isLoading: widget.state.isLoading,
         failure: widget.state.failure,
         onRetry: widget.onRetry,
+        savedNotice: savedNotice,
         onOpenDestination: _openDestination,
       ),
       VisitPlannerPage(
@@ -162,6 +172,7 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.state,
     required this.onRetry,
+    this.savedNotice,
     required this.profile,
     required this.onOpenTab,
     required this.onOpenDestination,
@@ -170,6 +181,9 @@ class HomePage extends StatefulWidget {
 
   final TourismBootstrapState state;
   final VoidCallback onRetry;
+
+  /// The one small line over a saved copy, when that is what is shown.
+  final Widget? savedNotice;
   final MobileUserProfile profile;
   final ValueChanged<int> onOpenTab;
   final ValueChanged<Destination> onOpenDestination;
@@ -390,6 +404,7 @@ class _HomePageState extends State<HomePage> {
         if (state.isLoading) const SlowLoadingNotice(),
         if (state.failure != null)
           BootstrapErrorPanel(failure: state.failure!, onRetry: widget.onRetry),
+        if (widget.savedNotice != null) widget.savedNotice!,
 
         // Show Slide Show and Highlights only when not actively searching / when on 'All'
         if (_search.isEmpty && _selectedCategory == 'All') ...[
@@ -1146,12 +1161,14 @@ class DestinationListPage extends StatefulWidget {
     this.isLoading = false,
     this.failure,
     this.onRetry,
+    this.savedNotice,
   });
 
   final List<Destination> destinations;
   final bool isLoading;
   final BootstrapFailureKind? failure;
   final VoidCallback? onRetry;
+  final Widget? savedNotice;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1209,6 +1226,7 @@ class _DestinationListPageState extends State<DestinationListPage> {
           ),
         ),
         const SizedBox(height: 14),
+        if (widget.savedNotice != null) widget.savedNotice!,
         if (widget.isLoading) ...[
           const DestinationListSkeleton(),
           const SlowLoadingNotice(),
@@ -1242,12 +1260,14 @@ class TourismMapPage extends StatefulWidget {
     this.isLoading = false,
     this.failure,
     this.onRetry,
+    this.savedNotice,
   });
 
   final List<Destination> destinations;
   final bool isLoading;
   final BootstrapFailureKind? failure;
   final VoidCallback? onRetry;
+  final Widget? savedNotice;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1489,6 +1509,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
             failure: widget.failure!,
             onRetry: widget.onRetry ?? () {},
           ),
+        if (widget.savedNotice != null) widget.savedNotice!,
         Stack(
           children: [
             SizedBox(

@@ -2961,3 +2961,64 @@ class BootstrapErrorPanel extends StatelessWidget {
     );
   }
 }
+
+String _shortDate(DateTime when, DateTime now) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final day = '${months[when.month - 1]} ${when.day}';
+  return when.year == now.year ? day : '$day, ${when.year}';
+}
+
+/// What the user is told when a saved copy is on screen and the server could
+/// not be asked: small, over the data, never blocking it.
+class SavedInfoNotice extends StatelessWidget {
+  const SavedInfoNotice({
+    super.key,
+    required this.savedAt,
+    required this.refreshing,
+    required this.onRetry,
+    this.now,
+  });
+
+  final DateTime savedAt;
+  final bool refreshing;
+  final VoidCallback onRetry;
+
+  /// For tests; defaults to the current time.
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = _shortDate(savedAt, now ?? DateTime.now());
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              refreshing
+                  ? 'Showing saved info from $date. Refreshing...'
+                  : "Showing saved info from $date. Couldn't refresh.",
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+            ),
+          ),
+          if (!refreshing)
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Try again',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

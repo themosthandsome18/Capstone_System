@@ -111,10 +111,15 @@ class MaubanMobileApp extends StatelessWidget {
 }
 
 class AppBootstrap extends StatefulWidget {
-  const AppBootstrap({super.key, this.api = const TourismApi()});
+  const AppBootstrap({
+    super.key,
+    this.api = const TourismApi(),
+    this.cache = const TourismBootstrapCache(),
+  });
 
   /// Injectable so tests can drive loading, failure and loaded.
   final TourismApi api;
+  final TourismBootstrapCache cache;
 
   @override
   State<AppBootstrap> createState() => _AppBootstrapState();
@@ -134,25 +139,82 @@ class _AppBootstrapState extends State<AppBootstrap> {
     _load();
   }
 
+  /// The saved copy that is on screen, if one is.
+  CachedBootstrap? _cached;
+
+  /// Launch: the saved copy and the server are asked at the same time. A
+  /// usable saved copy is shown at once; the server's answer replaces it.
   Future<void> _load() async {
-    TourismBootstrapState next;
-    try {
-      next = TourismBootstrapState.loaded(await widget.api.fetchBootstrap());
-    } catch (error) {
-      debugPrint('Tourism bootstrap failed: $error');
-      next = TourismBootstrapState.failed(
-        error,
-        classifyBootstrapFailure(error),
-      );
-    }
+    _cached = null;
+    var serverAnswered = false;
+    final cacheRead = widget.cache.read().then((cached) {
+      if (cached == null || serverAnswered || !mounted) return;
+      _cached = cached;
+      setState(() => _state = _fromCache(cached));
+    });
+    final result = await _fetch();
+    serverAnswered = result.bootstrap != null;
+    // A good answer does not wait for the saved copy; a failure needs it, to
+    // know whether there is anything to keep on screen.
+    if (!serverAnswered) await cacheRead;
     if (!mounted) return;
-    setState(() => _state = next);
+    _apply(result);
   }
 
-  void _retry() {
-    if (_state.isLoading) return;
+  TourismBootstrapState _fromCache(
+    CachedBootstrap cached, {
+    BootstrapFailureKind? refreshFailure,
+    bool refreshing = false,
+  }) => TourismBootstrapState.loaded(
+    cached.bootstrap,
+    fromCache: true,
+    age: cached.age,
+    savedAt: cached.savedAt,
+    refreshFailure: refreshFailure,
+    refreshing: refreshing,
+  );
+
+  Future<_BootstrapFetch> _fetch() async {
+    try {
+      final raw = await widget.api.fetchBootstrapRaw();
+      return _BootstrapFetch(bootstrap: parseBootstrapRaw(raw), raw: raw);
+    } catch (error) {
+      debugPrint('Tourism bootstrap failed: $error');
+      return _BootstrapFetch(error: error);
+    }
+  }
+
+  void _apply(_BootstrapFetch result) {
+    final bootstrap = result.bootstrap;
+    if (bootstrap != null) {
+      _cached = null;
+      setState(() => _state = TourismBootstrapState.loaded(bootstrap));
+      unawaited(widget.cache.write(result.raw!));
+      return;
+    }
+    final error = result.error!;
+    final kind = classifyBootstrapFailure(error);
+    final cached = _cached;
+    setState(
+      () => _state = cached != null
+          ? _fromCache(cached, refreshFailure: kind)
+          : TourismBootstrapState.failed(error, kind),
+    );
+  }
+
+  Future<void> _retry() async {
+    if (_state.isLoading || _state.refreshing) return;
+    final cached = _cached;
+    if (cached != null) {
+      // The saved copy stays on screen while the server is asked again.
+      setState(() => _state = _fromCache(cached, refreshing: true));
+      final result = await _fetch();
+      if (!mounted) return;
+      _apply(result);
+      return;
+    }
     setState(() => _state = const TourismBootstrapState.loading());
-    _load();
+    await _load();
   }
 
   @override
@@ -193,4 +255,12 @@ class _AppBootstrapState extends State<AppBootstrap> {
       },
     );
   }
+}
+
+class _BootstrapFetch {
+  const _BootstrapFetch({this.bootstrap, this.raw, this.error});
+
+  final MobileBootstrap? bootstrap;
+  final String? raw;
+  final Object? error;
 }

@@ -89,7 +89,11 @@ enum TourismBootstrapStatus { loading, loaded, failed }
 
 /// Where the tourism bootstrap is. Same shape as [SanitationDashboardState]:
 /// only `loaded` carries data, and an empty list means something only then.
-/// [fromCache] and [age] are reserved for the persistent cache and unused.
+///
+/// `loaded` is either fresh from the server, or [fromCache] (the saved copy,
+/// [savedAt], [age] old at the time). A saved copy is shown at once while the
+/// server is asked again: [refreshing] while it is, [refreshFailure] when the
+/// server could not be reached and the saved copy stays on screen.
 class TourismBootstrapState {
   const TourismBootstrapState.loading()
     : status = TourismBootstrapStatus.loading,
@@ -97,11 +101,17 @@ class TourismBootstrapState {
       error = null,
       failure = null,
       fromCache = false,
-      age = null;
+      age = null,
+      savedAt = null,
+      refreshFailure = null,
+      refreshing = false;
   const TourismBootstrapState.loaded(
     MobileBootstrap this.data, {
     this.fromCache = false,
     this.age,
+    this.savedAt,
+    this.refreshFailure,
+    this.refreshing = false,
   }) : status = TourismBootstrapStatus.loaded,
        error = null,
        failure = null;
@@ -109,7 +119,10 @@ class TourismBootstrapState {
     : status = TourismBootstrapStatus.failed,
       data = null,
       fromCache = false,
-      age = null;
+      age = null,
+      savedAt = null,
+      refreshFailure = null,
+      refreshing = false;
 
   final TourismBootstrapStatus status;
   final MobileBootstrap? data;
@@ -119,10 +132,26 @@ class TourismBootstrapState {
   final BootstrapFailureKind? failure;
   final bool fromCache;
   final Duration? age;
+  final DateTime? savedAt;
+
+  /// Set when a saved copy is on screen and asking the server failed.
+  final BootstrapFailureKind? refreshFailure;
+
+  /// True while a saved copy is on screen and the server is being asked again
+  /// by the user's Try again (the launch refresh stays silent).
+  final bool refreshing;
 
   bool get isLoading => status == TourismBootstrapStatus.loading;
   bool get isLoaded => status == TourismBootstrapStatus.loaded;
   bool get isFailed => status == TourismBootstrapStatus.failed;
+
+  /// The one small line over a saved copy: only when the saved copy is all
+  /// there is (the server failed) or a retry of that is under way.
+  bool get showsSavedNotice =>
+      isLoaded &&
+      fromCache &&
+      savedAt != null &&
+      (refreshing || refreshFailure != null);
 
   /// Empty until loaded, so a screen that has no data reads an empty list.
   List<Destination> get destinations => data?.destinations ?? const [];

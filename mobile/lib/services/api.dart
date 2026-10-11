@@ -15,20 +15,104 @@ BootstrapFailureKind classifyBootstrapFailure(Object error) {
 
 const _unreadableResponse = 'The server sent a response the app could not read.';
 
+/// The bootstrap as the server sent it: the JSON text, and a time in epoch
+/// milliseconds. Public data only (destinations, reference lists, barangays,
+/// public notices, theme colours); there is no visitor record in it.
+const tourismBootstrapCacheKey = 'tourism_bootstrap_v1';
+const tourismBootstrapSavedAtKey = 'tourism_bootstrap_saved_at';
+
+/// A saved copy older than this is not used at all. The app still asks the
+/// server on every launch; this only bounds how stale a copy can be when the
+/// server cannot be reached (notices are time-sensitive).
+const tourismBootstrapCacheMaxAge = Duration(days: 7);
+
+/// Reads bootstrap JSON text into the model. Anything that is not a JSON
+/// object the model can read is an [ApiException], whoever it came from.
+MobileBootstrap parseBootstrapRaw(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) throw const FormatException();
+    return MobileBootstrap.fromJson(decoded);
+  } catch (_) {
+    throw const ApiException(statusCode: 200, message: _unreadableResponse);
+  }
+}
+
+class CachedBootstrap {
+  const CachedBootstrap(this.bootstrap, this.savedAt, this.age);
+
+  final MobileBootstrap bootstrap;
+  final DateTime savedAt;
+  final Duration age;
+}
+
+class TourismBootstrapCache {
+  const TourismBootstrapCache();
+
+  /// The saved copy, or null when there is none, it is older than
+  /// [tourismBootstrapCacheMaxAge], or it cannot be read (a bad copy is
+  /// thrown away). Never throws.
+  Future<CachedBootstrap?> read({DateTime? now}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(tourismBootstrapCacheKey);
+      final savedMs = prefs.getInt(tourismBootstrapSavedAtKey);
+      if (raw == null || savedMs == null) return null;
+      final savedAt = DateTime.fromMillisecondsSinceEpoch(savedMs);
+      final age = (now ?? DateTime.now()).difference(savedAt);
+      if (age.isNegative || age > tourismBootstrapCacheMaxAge) {
+        await _discard(prefs);
+        return null;
+      }
+      try {
+        return CachedBootstrap(parseBootstrapRaw(raw), savedAt, age);
+      } catch (_) {
+        await _discard(prefs);
+        return null;
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Saves [raw] (the response text, already known to parse). Never throws.
+  Future<void> write(String raw, {DateTime? now}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(tourismBootstrapCacheKey, raw);
+      await prefs.setInt(
+        tourismBootstrapSavedAtKey,
+        (now ?? DateTime.now()).millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      // A cache that cannot be written is just no cache.
+    }
+  }
+
+  Future<void> _discard(SharedPreferences prefs) async {
+    await prefs.remove(tourismBootstrapCacheKey);
+    await prefs.remove(tourismBootstrapSavedAtKey);
+  }
+}
+
 class TourismApi {
   const TourismApi();
   static const Duration _requestTimeout = Duration(seconds: 90);
   static const Duration _uploadTimeout = Duration(seconds: 120);
 
-  /// Throws on any failure; the caller turns that into a `failed` state.
-  Future<MobileBootstrap> fetchBootstrap() async {
-    final data = await _get('/mobile/tourism/bootstrap/');
-    try {
-      return MobileBootstrap.fromJson(data);
-    } catch (_) {
-      throw const ApiException(statusCode: 200, message: _unreadableResponse);
-    }
+  /// The response text, for the cache. Throws on any failure (a bad status,
+  /// or a body that is not a JSON object); the caller turns that into a state.
+  Future<String> fetchBootstrapRaw() async {
+    final response = await http
+        .get(Uri.parse('$apiBaseUrl/mobile/tourism/bootstrap/'))
+        .timeout(_requestTimeout);
+    _decode(response);
+    return response.body.isEmpty ? '{}' : response.body;
   }
+
+  /// Throws on any failure; the caller turns that into a `failed` state.
+  Future<MobileBootstrap> fetchBootstrap() async =>
+      parseBootstrapRaw(await fetchBootstrapRaw());
 
   Future<Map<String, dynamic>> fetchDestinationDetail(int resortId) async {
     return _get('/mobile/tourism/destinations/$resortId/');
