@@ -162,6 +162,14 @@ String shortDate(DateTime date) {
   return '${date.month}/${date.day}/${date.year}';
 }
 
+/// A record field as text, or null when it is missing or blank. A bare `??`
+/// lets a blank value ('' or spaces) straight through, and a blank is what the
+/// server sends for a field that was left empty.
+String? presentText(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
+}
+
 String formatProperName(String? text) {
   if (text == null || text.trim().isEmpty) return '';
   return text.trim().split(RegExp(r'\s+')).map((word) {

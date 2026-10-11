@@ -47,6 +47,37 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## OPEN: Made-Up Default Values on the Staff QR Card and Edit Form (2026-10-11; `tourism/theme-tokens`; not fixed)
+- **What it is.** In `mobile/lib/screens/tourist_qr_checkin_screens.dart`, a record field that is missing is replaced with a **made-up value that is shown to staff as the record's data**. The server normally sends every one of these fields, so it is rare, but when it does happen the staff sees (and, on the edit form, can save) something that is not in the LGU's record.
+- **Most dangerous: `:1678-1685`, the edit form.** `_visitors = ... ?? 1`, `_filipino ?? 1`, `_foreigner ?? 0`, `_male ?? 1`, `_female ?? 0`, `_age07 ?? 0`, `_age859 ?? 1`, `_age60 ?? 0`. These pre-fill the counters of `EditTouristRecordSheet`. A made-up `1` can be **saved as the real number of visitors** in the LGU's record. Treat this one first.
+- **Shown on the record card and list** (current lines):
+  - survey ID `'SURV-2026-0001'` (`:1256`);
+  - contact number `'+63 999 013 2845'` (`:1496`);
+  - arrival date `'2026-08-20'` (`:1450` on the card, `:1774` in the edit form's static field);
+  - `'Mauban Destination'` for a missing resort in the history list, and a bare trailing bullet ("SURV-... • ") when the resort is blank (`:1073`);
+  - counts `?? 1` in the list and card header (`:1081`, `:1481`) and the breakdown rows (`:1545-1551`: Filipino 1, Male 1, Female 1, Age 8-59 1; Foreigner 0, Age 0-7 0, Age 60+ 0).
+- **Not part of this item:** `'Not provided'` for a missing e-mail (`:1255`) is an honest label, not a made-up value. The `?? ''` and search lines (`:855-857`) and the login parsing (`:93-96`) are not display of record data.
+- **Why left.** Found while closing the blank-field item below; it was outside that item's decision (places and names), and each field needs a decision about what to show instead (nothing, a dash, or refusing to show the record).
+- **Count.** `??` in this file: 52 occurrences on 48 lines before this change, 34 occurrences on 31 lines after; 18 occurrences removed (the places, itinerary, travel mode, boat type, visit purpose and name lines, on the card and the edit form).
+
+## Mobile Fix List, Group A Closed (2026-10-11; `tourism/theme-tokens`)
+Checked against the current code, not against the list.
+
+| # | Item | State | Where |
+|---|---|---|---|
+| 1 | Fallback itinerary paired id 1 with "Day Tour" | **closed** | `8236c8a`: the form falls back to the three live itineraries (1 Overnight, 2 Same Day, 3 2 Nights) from `tourismItineraryFallback`, shared with `MobileBootstrap.fallback()` |
+| 5 | "Senior / PWD / 7 below" | **closed (earlier)** | `6310670` (2026-10-04): "Special Needs" |
+| 6 | "Sub Maubanin" | **closed (earlier)** | `6310670`: "Maubanin (Local Resident, subset of Filipino)" |
+| 10 | Approval notifications in the public bootstrap | **closed (earlier)** | `272961a` (2026-10-06): advisories and the trending destination only |
+| 11 | Review byline | **closed (earlier)** | `272961a`: initials; checked live on 2026-10-11 (10 destinations, 2 reviews, both initials) |
+| 12 | Bare ", " and a made-up "Region VII, Cebu" on the staff QR card | **closed** | this commit: a missing or blank place is not shown, never replaced (card and edit form); itinerary, travel mode, boat type and visit purpose are not shown when blank; a blank name is an empty line and the check-in message no longer says "Tourist null" |
+| 13 | Promo card "Day Tour (Town Proper)" | **closed** | `77be641`: "Same Day (Town Proper)" |
+| 14 | Three-name barangay fallback | **closed** | `c9949d6`: the fallback list is empty (no tourism screen reads it; the field stays for the Staff QR portal) |
+| 15 | `mobile/pubspec.lock` not committed | **closed** | `1a4446f`: as resolved by Flutter 3.44.0 / Dart 3.12.0 |
+
+- **Still open from the same list:** #2 (capacity-and-fare rule), #3 (the PHP 50 text, waiting for the client), #4 (`discounted_count`), #7 and #8 (foreign visitors: region and province), #9 (theme), #16 (review form notice), #17 (review moderation), #18 (approval history).
+- **Notes.** #12 is covered by `test/staff_qr_record_blank_fields_test.dart` (11) and was not run through a staff login in Chrome (the dev proxy does not forward credentials); the check on a device needs the APK and a staff account. A mutant that put a made-up resort back into the edit sheet behind the existing guard did not fail a test because the guard makes it unreachable (equivalent mutant); the same mutant with the guard removed did.
+
 ## Dev Proxy for Flutter Web: `tools/dev-proxy/` (2026-10-11; dev-only)
 - **Problem.** Chrome on `localhost` cannot read the live backend (no `Access-Control-Allow-Origin` for localhost, see the open CORS item), so local mobile development in Chrome always ended in `failed`.
 - **Not done, on purpose.** Adding localhost to the live backend's `CORS_ALLOWED_ORIGINS`. The LGU's system is not loosened for development convenience.

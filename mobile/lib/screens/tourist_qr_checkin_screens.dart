@@ -1043,7 +1043,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  formatProperName(item['full_name'] ?? 'Tourist'),
+                                                  formatProperName(presentText(item['full_name'])),
                                                   style: const TextStyle(
                                                     fontWeight: FontWeight.w900,
                                                     fontSize: 15,
@@ -1169,7 +1169,11 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
               ],
             ),
             content: Text(
-              'Tourist ${_currentRecord['full_name']} (${_currentRecord['survey_id']}) has been successfully checked in and recorded into the Tourism Admin System.',
+              'Tourist ${[
+                presentText(_currentRecord['full_name']),
+                if (presentText(_currentRecord['survey_id']) != null)
+                  '(${presentText(_currentRecord['survey_id'])})',
+              ].join(' ')} has been successfully checked in and recorded into the Tourism Admin System.',
               style: const TextStyle(height: 1.4),
             ),
             actions: [
@@ -1235,7 +1239,19 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final name = formatProperName(_currentRecord['full_name'] ?? 'Tourist');
+    final name = formatProperName(presentText(_currentRecord['full_name']));
+    // Places and trip details come from the record or are not shown: a made-up
+    // region, resort or itinerary on a check-in card is worse than no line.
+    final country = presentText(_currentRecord['country_name']);
+    final resort = presentText(_currentRecord['resort_name']);
+    final regionProvince = [
+      presentText(_currentRecord['region_name']),
+      presentText(_currentRecord['province_name']),
+    ].whereType<String>().join(', ');
+    final itinerary = presentText(_currentRecord['itinerary_name']);
+    final travelMode = presentText(_currentRecord['travel_mode_name']);
+    final boatType = presentText(_currentRecord['boat_type_name']);
+    final visitPurpose = presentText(_currentRecord['visit_purpose_name']);
     final email = _currentRecord['email'] ?? 'Not provided';
     final surveyId = _currentRecord['survey_id'] ?? 'SURV-2026-0001';
 
@@ -1478,7 +1494,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 const SizedBox(height: 8),
                 _buildInfoLine(Icons.email_outlined, 'Email', email),
                 _buildInfoLine(Icons.phone_outlined, 'Contact', _currentRecord['contact_number'] ?? '+63 999 013 2845'),
-                _buildInfoLine(Icons.public, 'Country', _currentRecord['country_name'] ?? 'Philippines'),
+                if (country != null) _buildInfoLine(Icons.public, 'Country', country),
                 const Divider(height: 28),
 
                 // TRIP DETAILS
@@ -1507,12 +1523,12 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                _buildInfoLine(Icons.place_outlined, 'Resort', _currentRecord['resort_name'] ?? 'Cagbalete Swimmingan'),
-                _buildInfoLine(Icons.explore_outlined, 'Region / Province', '${_currentRecord['region_name'] ?? 'Region VII'}, ${_currentRecord['province_name'] ?? 'Cebu'}'),
-                _buildInfoLine(Icons.navigation_outlined, 'Itinerary', _currentRecord['itinerary_name'] ?? 'Same Day'),
-                _buildInfoLine(Icons.directions_bus_outlined, 'Travel Mode', _currentRecord['travel_mode_name'] ?? 'Public Vehicle'),
-                _buildInfoLine(Icons.directions_boat_outlined, 'Boat Type', _currentRecord['boat_type_name'] ?? 'Tourist Boat'),
-                _buildInfoLine(Icons.flag_outlined, 'Visit Purpose', _currentRecord['visit_purpose_name'] ?? 'Vacation / Leisure'),
+                if (resort != null) _buildInfoLine(Icons.place_outlined, 'Resort', resort),
+                if (regionProvince.isNotEmpty) _buildInfoLine(Icons.explore_outlined, 'Region / Province', regionProvince),
+                if (itinerary != null) _buildInfoLine(Icons.navigation_outlined, 'Itinerary', itinerary),
+                if (travelMode != null) _buildInfoLine(Icons.directions_bus_outlined, 'Travel Mode', travelMode),
+                if (boatType != null) _buildInfoLine(Icons.directions_boat_outlined, 'Boat Type', boatType),
+                if (visitPurpose != null) _buildInfoLine(Icons.flag_outlined, 'Visit Purpose', visitPurpose),
                 const Divider(height: 28),
 
                 // VISITOR BREAKDOWN
@@ -1730,10 +1746,14 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
             step: '2',
             title: 'Destination',
             children: [
-              _buildStaticField('COUNTRY', widget.recordData['country_name'] ?? 'Philippines'),
-              _buildStaticField('REGION', widget.recordData['region_name'] ?? 'Region IV-A'),
-              _buildStaticField('PROVINCE', widget.recordData['province_name'] ?? 'Quezon'),
-              _buildStaticField('RESORT', widget.recordData['resort_name'] ?? 'Cagbalete Island Resort'),
+              if (presentText(widget.recordData['country_name']) != null)
+                _buildStaticField('COUNTRY', presentText(widget.recordData['country_name'])!),
+              if (presentText(widget.recordData['region_name']) != null)
+                _buildStaticField('REGION', presentText(widget.recordData['region_name'])!),
+              if (presentText(widget.recordData['province_name']) != null)
+                _buildStaticField('PROVINCE', presentText(widget.recordData['province_name'])!),
+              if (presentText(widget.recordData['resort_name']) != null)
+                _buildStaticField('RESORT', presentText(widget.recordData['resort_name'])!),
             ],
           ),
           const SizedBox(height: 16),
@@ -1743,10 +1763,14 @@ class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
             step: '3',
             title: 'Trip details',
             children: [
-              _buildStaticField('ITINERARY', widget.recordData['itinerary_name'] ?? 'Same Day'),
-              _buildStaticField('VISIT PURPOSE', widget.recordData['visit_purpose_name'] ?? 'Leisure'),
-              _buildStaticField('TRAVEL MODE', widget.recordData['travel_mode_name'] ?? 'Public Vehicle'),
-              _buildStaticField('BOAT TYPE', widget.recordData['boat_type_name'] ?? 'Tourist Boat'),
+              if (presentText(widget.recordData['itinerary_name']) != null)
+                _buildStaticField('ITINERARY', presentText(widget.recordData['itinerary_name'])!),
+              if (presentText(widget.recordData['visit_purpose_name']) != null)
+                _buildStaticField('VISIT PURPOSE', presentText(widget.recordData['visit_purpose_name'])!),
+              if (presentText(widget.recordData['travel_mode_name']) != null)
+                _buildStaticField('TRAVEL MODE', presentText(widget.recordData['travel_mode_name'])!),
+              if (presentText(widget.recordData['boat_type_name']) != null)
+                _buildStaticField('BOAT TYPE', presentText(widget.recordData['boat_type_name'])!),
               _buildStaticField('ARRIVAL DATE', widget.recordData['arrival_date'] ?? '2026-08-20'),
             ],
           ),
