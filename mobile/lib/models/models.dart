@@ -54,7 +54,7 @@ class MobileBootstrap {
     return MobileBootstrap(
       destinations: const [],
       featuredDestinations: const [],
-      countries: const [RefItem(id: 1, name: 'Philippines')],
+      countries: const [RefItem(id: 1, name: 'Philippines', type: 'local')],
       regions: const [RefItem(id: 4, name: 'CALABARZON Region')],
       provinces: const [RefItem(id: 1, name: 'Quezon')],
       itineraries: tourismItineraryFallback,
@@ -956,12 +956,16 @@ class RefItem {
     this.regionId,
     this.code = '',
     this.requiresCapacityFare,
+    this.type = '',
   });
 
   final int id;
   final String name;
   final int? regionId;
   final String code;
+
+  /// Countries only: "local" or "foreign", as the server types them.
+  final String type;
 
   /// Boat types only: whether a booking on this boat takes a Boat Capacity and
   /// Fare. null = the server did not say, which is not the same as false.
@@ -975,6 +979,7 @@ class RefItem {
       regionId: jsonNullableInt(json['region_id']),
       code: '${json['code'] ?? ''}',
       requiresCapacityFare: requires is bool ? requires : null,
+      type: '${json['type'] ?? ''}',
     );
   }
 
@@ -984,11 +989,13 @@ class RefItem {
         other.id == id &&
         other.regionId == regionId &&
         other.name == name &&
-        other.requiresCapacityFare == requiresCapacityFare;
+        other.requiresCapacityFare == requiresCapacityFare &&
+        other.type == type;
   }
 
   @override
-  int get hashCode => Object.hash(id, regionId, name, requiresCapacityFare);
+  int get hashCode =>
+      Object.hash(id, regionId, name, requiresCapacityFare, type);
 }
 
 class BarangayItem {

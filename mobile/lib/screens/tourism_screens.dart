@@ -3920,8 +3920,46 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   late DateTime _arrivalDate;
   late Destination _destination;
   late RefItem _country;
-  late RefItem _region;
-  late RefItem _province;
+
+  // null for a foreign visitor: no region or province is asked for or sent.
+  RefItem? _region;
+  RefItem? _province;
+
+  // What was chosen before a foreign country hid them, to come back to.
+  RefItem? _savedRegion;
+  RefItem? _savedProvince;
+
+  bool get _requiresLocation => countryRequiresLocation(_country);
+
+  RefItem _defaultRegion() => _preferredRefItem(
+    widget.bootstrap.regions,
+    nameContains: 'CALABARZON',
+    fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
+  );
+
+  void _chooseCountry(RefItem country) {
+    _country = country;
+    if (_requiresLocation) {
+      final region = _region ?? _savedRegion ?? _defaultRegion();
+      _region = region;
+      _province =
+          _province ??
+          _savedProvince ??
+          _preferredProvinceForRegion(region, nameContains: 'Quezon');
+      if (country.name.toLowerCase().contains('philippines')) {
+        _countryOfOrigin.text = 'Philippines';
+      }
+    } else {
+      _savedRegion = _region ?? _savedRegion;
+      _savedProvince = _province ?? _savedProvince;
+      _region = null;
+      _province = null;
+      // The autofilled "Philippines" is not a foreign visitor's origin.
+      if (_countryOfOrigin.text.trim() == 'Philippines') {
+        _countryOfOrigin.text = '';
+      }
+    }
+  }
   late RefItem _itinerary;
 
   /// The server's itineraries, or the three live ones when it sent none.
@@ -3956,13 +3994,14 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         Destination.placeholder();
     _country =
         widget.bootstrap.countries.firstOrNull ??
-        const RefItem(id: 1, name: 'Philippines');
-    _region = _preferredRefItem(
-      widget.bootstrap.regions,
-      nameContains: 'CALABARZON',
-      fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
-    );
-    _province = _preferredProvinceForRegion(_region, nameContains: 'Quezon');
+        const RefItem(id: 1, name: 'Philippines', type: 'local');
+    if (_requiresLocation) {
+      _region = _defaultRegion();
+      _province = _preferredProvinceForRegion(
+        _region!,
+        nameContains: 'Quezon',
+      );
+    }
     _itinerary = _itineraryOptions.first;
     _travelMode =
         widget.bootstrap.travelModes.firstOrNull ??
@@ -4037,34 +4076,31 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           value: _country,
           items: widget.bootstrap.countries,
           itemLabel: (item) => item.name,
-          onChanged: (item) {
-            setState(() {
-              _country = item;
-              if (item.name.toLowerCase().contains('philippines')) {
-                _countryOfOrigin.text = 'Philippines';
-              }
-            });
-          },
+          onChanged: (item) => setState(() => _chooseCountry(item)),
         ),
-        DropdownTile<RefItem>(
-          label: 'Region *',
-          value: _region,
-          items: widget.bootstrap.regions,
-          itemLabel: (item) => item.name,
-          onChanged: (item) {
-            setState(() {
-              _region = item;
-              _province = _preferredProvinceForRegion(item);
-            });
-          },
-        ),
-        DropdownTile<RefItem>(
-          label: 'Province *',
-          value: _province,
-          items: _provincesForRegion(_region),
-          itemLabel: (item) => item.name,
-          onChanged: (item) => setState(() => _province = item),
-        ),
+        // Only for a visitor from the Philippines; a foreign visitor is not
+        // asked for them (and none is sent).
+        if (_requiresLocation && _region != null && _province != null) ...[
+          DropdownTile<RefItem>(
+            label: 'Region *',
+            value: _region!,
+            items: widget.bootstrap.regions,
+            itemLabel: (item) => item.name,
+            onChanged: (item) {
+              setState(() {
+                _region = item;
+                _province = _preferredProvinceForRegion(item);
+              });
+            },
+          ),
+          DropdownTile<RefItem>(
+            label: 'Province *',
+            value: _province!,
+            items: _provincesForRegion(_region!),
+            itemLabel: (item) => item.name,
+            onChanged: (item) => setState(() => _province = item),
+          ),
+        ],
         AppTextField(controller: _countryOfOrigin, label: 'Country of origin *'),
         DropdownTile<Destination>(
           label: 'Destination / Resort *',
@@ -4286,8 +4322,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         consentConfirmed: _consentConfirmed,
         arrivalDate: isoDate(_arrivalDate),
         countryId: _country.id,
-        regionId: _region.id,
-        provinceId: _province.id,
+        regionId: _requiresLocation ? _region?.id : null,
+        provinceId: _requiresLocation ? _province?.id : null,
         countryOfOrigin: _countryOfOrigin.text.trim(),
         resortId: _destination.id,
         itineraryId: _itinerary.id,
@@ -4354,6 +4390,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     }
     if (_destination.id == 0 || widget.bootstrap.destinations.isEmpty) {
       return 'No destination is loaded from the Tourism Web System yet.';
+    }
+    if (_requiresLocation && (_region == null || _province == null)) {
+      return 'Region and province are required.';
     }
     if (countryOfOrigin.isEmpty) return 'Country of origin is required.';
     if (_visitors < 1) return 'At least one visitor is required.';

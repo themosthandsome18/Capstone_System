@@ -196,6 +196,12 @@ String missingCountsMessage(List<String> missing) =>
     'Enter the missing count${missing.length == 1 ? '' : 's'} '
     'before saving: ${missing.join(', ')}.';
 
+/// Whether a record from this country must name a region and province. Only a
+/// country typed "foreign" may leave them empty; anything else (local, no type,
+/// an unknown type) keeps them required. This is the backend's rule
+/// (`country_requires_location` in backend/api/models.py).
+bool countryRequiresLocation(RefItem? country) => country?.type != 'foreign';
+
 /// The Boat Capacity and Fare field is for the boat types whose row says so
 /// (`requires_capacity_fare`), not for a boat with a particular name. It is
 /// shown only when the boat is known to take one, as on the web

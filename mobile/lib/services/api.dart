@@ -314,8 +314,9 @@ class TourismApi {
     required bool consentConfirmed,
     required String arrivalDate,
     required int countryId,
-    required int regionId,
-    required int provinceId,
+    // Null for a foreign visitor: the server accepts a record without them.
+    int? regionId,
+    int? provinceId,
     required String countryOfOrigin,
     required int resortId,
     required int itineraryId,
@@ -348,8 +349,9 @@ class TourismApi {
       'consent_confirmed': consentConfirmed,
       'arrival_date': arrivalDate,
       'country_id': countryId,
-      'region_id': regionId,
-      'province_id': provinceId,
+      // Left out, not sent as null, when there is none (a foreign visitor).
+      'region_id': ?regionId,
+      'province_id': ?provinceId,
       'country_of_origin': countryOfOrigin,
       'resort_id': resortId,
       'itinerary_id': itineraryId,
