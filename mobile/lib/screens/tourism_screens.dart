@@ -4,12 +4,12 @@ class MobileShell extends StatefulWidget {
   const MobileShell({
     super.key,
     required this.api,
-    required this.bootstrap,
+    required this.state,
     this.onSignOut,
   });
 
   final TourismApi api;
-  final MobileBootstrap bootstrap;
+  final TourismBootstrapState state;
   final VoidCallback? onSignOut;
 
   @override
@@ -26,22 +26,24 @@ class _MobileShellState extends State<MobileShell> {
   Widget build(BuildContext context) {
     final pages = [
       HomePage(
-        bootstrap: widget.bootstrap,
+        state: widget.state,
         profile: _profile,
         onOpenTab: _openTab,
         onOpenDestination: _openDestination,
         onOpenNotifications: _openNotifications,
       ),
       DestinationListPage(
-        destinations: widget.bootstrap.destinations,
+        destinations: widget.state.destinations,
+        isLoading: widget.state.isLoading,
         onOpenDestination: _openDestination,
       ),
       TourismMapPage(
-        destinations: widget.bootstrap.destinations,
+        destinations: widget.state.destinations,
+        isLoading: widget.state.isLoading,
         onOpenDestination: _openDestination,
       ),
       VisitPlannerPage(
-        bootstrap: widget.bootstrap,
+        registerEnabled: widget.state.isLoaded,
         visits: _visitHistory,
         onRegisterVisit: () => _openRegistration(),
       ),
@@ -84,12 +86,14 @@ class _MobileShellState extends State<MobileShell> {
   }
 
   void _openDestination(Destination destination) {
+    final bootstrap = widget.state.data;
+    if (bootstrap == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => DestinationDetailPage(
           destination: destination,
           api: widget.api,
-          bootstrap: widget.bootstrap,
+          bootstrap: bootstrap,
           onVisitSubmitted: _addVisit,
           onFeedbackSubmitted: _addFeedback,
         ),
@@ -98,11 +102,13 @@ class _MobileShellState extends State<MobileShell> {
   }
 
   Future<void> _openRegistration({Destination? destination}) async {
+    final bootstrap = widget.state.data;
+    if (bootstrap == null) return;
     final receipt = await Navigator.of(context).push<MobileVisitReceipt>(
       MaterialPageRoute(
         builder: (context) => TouristRegistrationPage(
           api: widget.api,
-          bootstrap: widget.bootstrap,
+          bootstrap: bootstrap,
           initialDestination: destination,
         ),
       ),
@@ -118,7 +124,7 @@ class _MobileShellState extends State<MobileShell> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) =>
-            NotificationPage(notifications: widget.bootstrap.notifications),
+            NotificationPage(notifications: widget.state.notifications),
       ),
     );
   }
@@ -145,14 +151,14 @@ class _MobileShellState extends State<MobileShell> {
 class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
-    required this.bootstrap,
+    required this.state,
     required this.profile,
     required this.onOpenTab,
     required this.onOpenDestination,
     required this.onOpenNotifications,
   });
 
-  final MobileBootstrap bootstrap;
+  final TourismBootstrapState state;
   final MobileUserProfile profile;
   final ValueChanged<int> onOpenTab;
   final ValueChanged<Destination> onOpenDestination;
@@ -178,12 +184,14 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     // 1. Popular Resorts for the Slide Show (Top visited / featured)
-    final popularResorts = widget.bootstrap.featuredDestinations.isNotEmpty
-        ? widget.bootstrap.featuredDestinations
-        : widget.bootstrap.destinations.take(5).toList();
+    final state = widget.state;
+    final destinations = state.destinations;
+    final popularResorts = state.featuredDestinations.isNotEmpty
+        ? state.featuredDestinations
+        : destinations.take(5).toList();
 
     // 2. Hidden Gems & Lesser-Known / Emerging Spots (to promote quiet and emerging spots)
-    final hiddenGems = widget.bootstrap.destinations.where((d) {
+    final hiddenGems = destinations.where((d) {
       final name = d.name.toLowerCase();
       final type = d.type.toLowerCase();
       return name.contains('tent') ||
@@ -199,7 +207,7 @@ class _HomePageState extends State<HomePage> {
     }).take(6).toList();
 
     // 3. Filter destinations by category & search query
-    final filteredDestinations = widget.bootstrap.destinations.where((d) {
+    final filteredDestinations = destinations.where((d) {
       final matchesSearch = _search.isEmpty ||
           d.name.toLowerCase().contains(_search.toLowerCase()) ||
           d.location.toLowerCase().contains(_search.toLowerCase()) ||
@@ -220,7 +228,7 @@ class _HomePageState extends State<HomePage> {
         // Top Header
         AppHeader(
           onOpenNotifications: widget.onOpenNotifications,
-          hasUnread: widget.bootstrap.notifications.isNotEmpty,
+          hasUnread: state.notifications.isNotEmpty,
         ),
         const SizedBox(height: 16),
 
@@ -367,6 +375,9 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 20),
 
+        // Up here, not beside the skeleton list: that sits below the fold.
+        if (state.isLoading) const SlowLoadingNotice(),
+
         // Show Slide Show and Highlights only when not actively searching / when on 'All'
         if (_search.isEmpty && _selectedCategory == 'All') ...[
           // Section Title: Most Popular Resorts Slideshow
@@ -386,10 +397,13 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 6),
 
           // Auto-Sliding Featured Resorts Slideshow
-          FeaturedResortsSlideshow(
-            destinations: popularResorts,
-            onTapDestination: widget.onOpenDestination,
-          ),
+          if (state.isLoading)
+            const FeaturedCarouselSkeleton()
+          else
+            FeaturedResortsSlideshow(
+              destinations: popularResorts,
+              onTapDestination: widget.onOpenDestination,
+            ),
           const SizedBox(height: 24),
 
           // Section: Discover the Beauty & Heritage of Mauban
@@ -421,18 +435,21 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 195,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: hiddenGems.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 12),
-              itemBuilder: (context, index) => _HiddenGemCard(
-                destination: hiddenGems[index],
-                onTap: () => widget.onOpenDestination(hiddenGems[index]),
+          if (state.isLoading)
+            const HiddenGemsRowSkeleton()
+          else
+            SizedBox(
+              height: 195,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: hiddenGems.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) => _HiddenGemCard(
+                  destination: hiddenGems[index],
+                  onTap: () => widget.onOpenDestination(hiddenGems[index]),
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 24),
 
           // Section: Town Information & Travel Essentials
@@ -448,7 +465,17 @@ class _HomePageState extends State<HomePage> {
           action: 'View Map',
           onTap: () => widget.onOpenTab(2),
         ),
-        if (filteredDestinations.isEmpty)
+        // Three different answers, never mixed: still waiting (skeleton),
+        // loaded and nothing published, loaded and nothing matches. A failed
+        // load keeps the old message until the error panel exists.
+        if (state.isLoading)
+          const DestinationListSkeleton()
+        else if (state.isLoaded && destinations.isEmpty)
+          const EmptyState(
+            icon: Icons.travel_explore_outlined,
+            title: 'No destinations are available yet.',
+          )
+        else if (filteredDestinations.isEmpty)
           const EmptyState(
             icon: Icons.travel_explore_outlined,
             title: 'No destinations match your search or filter',
@@ -1095,9 +1122,11 @@ class DestinationListPage extends StatefulWidget {
     super.key,
     required this.destinations,
     required this.onOpenDestination,
+    this.isLoading = false,
   });
 
   final List<Destination> destinations;
+  final bool isLoading;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1155,7 +1184,10 @@ class _DestinationListPageState extends State<DestinationListPage> {
           ),
         ),
         const SizedBox(height: 14),
-        if (filtered.isEmpty)
+        if (widget.isLoading) ...[
+          const DestinationListSkeleton(),
+          const SlowLoadingNotice(),
+        ] else if (filtered.isEmpty)
           const EmptyState(
             icon: Icons.search_off_outlined,
             title: 'No destinations found',
@@ -1177,9 +1209,11 @@ class TourismMapPage extends StatefulWidget {
     super.key,
     required this.destinations,
     required this.onOpenDestination,
+    this.isLoading = false,
   });
 
   final List<Destination> destinations;
+  final bool isLoading;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1415,6 +1449,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
           subtitle: 'Interactive tourism map of Mauban',
         ),
         const SizedBox(height: 12),
+        if (widget.isLoading) const SlowLoadingNotice(),
         Stack(
           children: [
             SizedBox(
@@ -1510,12 +1545,15 @@ class _TourismMapPageState extends State<TourismMapPage> {
           ],
         ),
         SectionHeader(title: 'Nearby Places'),
-        ...widget.destinations.map(
-          (destination) => DestinationListCard(
-            destination: destination,
-            onTap: () => widget.onOpenDestination(destination),
+        if (widget.isLoading)
+          const DestinationListSkeleton()
+        else
+          ...widget.destinations.map(
+            (destination) => DestinationListCard(
+              destination: destination,
+              onTap: () => widget.onOpenDestination(destination),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1524,12 +1562,13 @@ class _TourismMapPageState extends State<TourismMapPage> {
 class VisitPlannerPage extends StatefulWidget {
   const VisitPlannerPage({
     super.key,
-    required this.bootstrap,
+    required this.registerEnabled,
     required this.visits,
     required this.onRegisterVisit,
   });
 
-  final MobileBootstrap bootstrap;
+  /// False until the bootstrap has loaded: the form needs its reference data.
+  final bool registerEnabled;
   final List<MobileVisitReceipt> visits;
   final VoidCallback onRegisterVisit;
 
@@ -1740,7 +1779,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
           children: [
             Expanded(
               child: FilledButton.icon(
-                onPressed: widget.onRegisterVisit,
+                onPressed: widget.registerEnabled ? widget.onRegisterVisit : null,
                 icon: const Icon(Icons.add_circle_outline, size: 18),
                 label: const Text(
                   'Register / Get Pass',

@@ -2708,3 +2708,193 @@ class _AnimatedScaleButtonState extends State<AnimatedScaleButton>
     );
   }
 }
+
+/// Shown once loading has gone on long enough that the user may wonder.
+const tourismSlowLoadingMessage =
+    'Still loading. This can take a moment the first time you open the app.';
+const tourismSlowLoadingDelay = Duration(seconds: 8);
+
+/// Wraps skeleton blocks and pulses them together (one timer for the group).
+class SkeletonPulse extends StatefulWidget {
+  const SkeletonPulse({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<SkeletonPulse> createState() => _SkeletonPulseState();
+}
+
+class _SkeletonPulseState extends State<SkeletonPulse> {
+  Timer? _timer;
+  bool _dim = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 800), (_) {
+      if (mounted) setState(() => _dim = !_dim);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _dim ? 0.55 : 1,
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeInOut,
+      child: widget.child,
+    );
+  }
+}
+
+class SkeletonBlock extends StatelessWidget {
+  const SkeletonBlock({
+    super.key,
+    this.width,
+    this.height = 14,
+    this.radius = 8,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.border,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+/// Same footprint as the featured carousel (225 high, 20 radius).
+class FeaturedCarouselSkeleton extends StatelessWidget {
+  const FeaturedCarouselSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SkeletonPulse(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4),
+        child: SkeletonBlock(height: 225, radius: 20),
+      ),
+    );
+  }
+}
+
+/// Same footprint as the Hidden Gems row (195 high, 165-wide cards).
+class HiddenGemsRowSkeleton extends StatelessWidget {
+  const HiddenGemsRowSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonPulse(
+      child: SizedBox(
+        height: 195,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: 3,
+          separatorBuilder: (context, index) => const SizedBox(width: 12),
+          itemBuilder: (context, index) =>
+              const SkeletonBlock(width: 165, height: 195, radius: 16),
+        ),
+      ),
+    );
+  }
+}
+
+/// Same footprint as [DestinationListCard].
+class DestinationListSkeleton extends StatelessWidget {
+  const DestinationListSkeleton({super.key, this.count = 3});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonPulse(
+      child: Column(
+        children: [
+          for (var i = 0; i < count; i++)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Row(
+                children: [
+                  SkeletonBlock(width: 86, height: 72, radius: 12),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkeletonBlock(height: 16),
+                        SizedBox(height: 8),
+                        SkeletonBlock(width: 120, height: 12),
+                        SizedBox(height: 8),
+                        SkeletonBlock(width: 80, height: 12),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Nothing for the first [tourismSlowLoadingDelay], then the plain message.
+class SlowLoadingNotice extends StatefulWidget {
+  const SlowLoadingNotice({super.key});
+
+  @override
+  State<SlowLoadingNotice> createState() => _SlowLoadingNoticeState();
+}
+
+class _SlowLoadingNoticeState extends State<SlowLoadingNotice> {
+  Timer? _timer;
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(tourismSlowLoadingDelay, () {
+      if (mounted) setState(() => _show = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_show) return const SizedBox.shrink();
+    return const Padding(
+      padding: EdgeInsets.only(top: 4, bottom: 12),
+      child: Text(
+        tourismSlowLoadingMessage,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+      ),
+    );
+  }
+}

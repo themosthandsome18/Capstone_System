@@ -111,15 +111,17 @@ class MaubanMobileApp extends StatelessWidget {
 }
 
 class AppBootstrap extends StatefulWidget {
-  const AppBootstrap({super.key});
+  const AppBootstrap({super.key, this.api = const TourismApi()});
+
+  /// Injectable so tests can drive loading, failure and loaded.
+  final TourismApi api;
 
   @override
   State<AppBootstrap> createState() => _AppBootstrapState();
 }
 
 class _AppBootstrapState extends State<AppBootstrap> {
-  final TourismApi _api = TourismApi();
-  late Future<MobileBootstrap> _bootstrapFuture;
+  TourismBootstrapState _state = const TourismBootstrapState.loading();
   bool _showIntro = true;
   bool _showLogin = false;
 
@@ -129,7 +131,19 @@ class _AppBootstrapState extends State<AppBootstrap> {
     if (!isSanitationModule()) {
       setWebBranding(WebBrandingModule.tourism);
     }
-    _bootstrapFuture = _api.fetchBootstrap();
+    _load();
+  }
+
+  Future<void> _load() async {
+    TourismBootstrapState next;
+    try {
+      next = TourismBootstrapState.loaded(await widget.api.fetchBootstrap());
+    } catch (error) {
+      debugPrint('Tourism bootstrap failed: $error');
+      next = TourismBootstrapState.failed(error);
+    }
+    if (!mounted) return;
+    setState(() => _state = next);
   }
 
   @override
@@ -137,41 +151,35 @@ class _AppBootstrapState extends State<AppBootstrap> {
     if (!isSanitationModule()) {
       setWebBranding(WebBrandingModule.tourism);
     }
-    return FutureBuilder<MobileBootstrap>(
-      future: _bootstrapFuture,
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? MobileBootstrap.fallback();
 
-        if (_showIntro) {
-          return IntroFlow(
-            onDone: () {
-              setState(() {
-                _showIntro = false;
-                _showLogin = true;
-              });
-            },
-          );
-        }
+    if (_showIntro) {
+      return IntroFlow(
+        onDone: () {
+          setState(() {
+            _showIntro = false;
+            _showLogin = true;
+          });
+        },
+      );
+    }
 
-        if (_showLogin) {
-          return LoginPage(
-            onContinue: () {
-              setState(() {
-                _showLogin = false;
-              });
-            },
-          );
-        }
+    if (_showLogin) {
+      return LoginPage(
+        onContinue: () {
+          setState(() {
+            _showLogin = false;
+          });
+        },
+      );
+    }
 
-        return MobileShell(
-          api: _api,
-          bootstrap: data,
-          onSignOut: () {
-            setState(() {
-              _showLogin = true;
-            });
-          },
-        );
+    return MobileShell(
+      api: widget.api,
+      state: _state,
+      onSignOut: () {
+        setState(() {
+          _showLogin = true;
+        });
       },
     );
   }

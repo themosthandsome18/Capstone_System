@@ -85,6 +85,47 @@ class MobileBootstrap {
   }
 }
 
+enum TourismBootstrapStatus { loading, loaded, failed }
+
+/// Where the tourism bootstrap is. Same shape as [SanitationDashboardState]:
+/// only `loaded` carries data, and an empty list means something only then.
+/// [fromCache] and [age] are reserved for the persistent cache and unused.
+class TourismBootstrapState {
+  const TourismBootstrapState.loading()
+    : status = TourismBootstrapStatus.loading,
+      data = null,
+      error = null,
+      fromCache = false,
+      age = null;
+  const TourismBootstrapState.loaded(
+    MobileBootstrap this.data, {
+    this.fromCache = false,
+    this.age,
+  }) : status = TourismBootstrapStatus.loaded,
+       error = null;
+  const TourismBootstrapState.failed(this.error)
+    : status = TourismBootstrapStatus.failed,
+      data = null,
+      fromCache = false,
+      age = null;
+
+  final TourismBootstrapStatus status;
+  final MobileBootstrap? data;
+  final Object? error;
+  final bool fromCache;
+  final Duration? age;
+
+  bool get isLoading => status == TourismBootstrapStatus.loading;
+  bool get isLoaded => status == TourismBootstrapStatus.loaded;
+  bool get isFailed => status == TourismBootstrapStatus.failed;
+
+  /// Empty until loaded, so a screen that has no data reads an empty list.
+  List<Destination> get destinations => data?.destinations ?? const [];
+  List<Destination> get featuredDestinations =>
+      data?.featuredDestinations ?? const [];
+  List<AppNotification> get notifications => data?.notifications ?? const [];
+}
+
 /// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the
 /// public bootstrap, which keeps supplying business types and barangays.
 SanitationBootstrap mergeSanitationStaffRecords(

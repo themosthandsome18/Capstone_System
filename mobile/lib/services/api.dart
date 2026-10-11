@@ -5,13 +5,10 @@ class TourismApi {
   static const Duration _requestTimeout = Duration(seconds: 90);
   static const Duration _uploadTimeout = Duration(seconds: 120);
 
+  /// Throws on any failure; the caller turns that into a `failed` state.
   Future<MobileBootstrap> fetchBootstrap() async {
-    try {
-      final data = await _get('/mobile/tourism/bootstrap/');
-      return MobileBootstrap.fromJson(data);
-    } catch (_) {
-      return MobileBootstrap.fallback();
-    }
+    final data = await _get('/mobile/tourism/bootstrap/');
+    return MobileBootstrap.fromJson(data);
   }
 
   Future<Map<String, dynamic>> fetchDestinationDetail(int resortId) async {
