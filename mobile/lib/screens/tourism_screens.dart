@@ -5,11 +5,13 @@ class MobileShell extends StatefulWidget {
     super.key,
     required this.api,
     required this.state,
+    required this.onRetry,
     this.onSignOut,
   });
 
   final TourismApi api;
   final TourismBootstrapState state;
+  final VoidCallback onRetry;
   final VoidCallback? onSignOut;
 
   @override
@@ -27,6 +29,7 @@ class _MobileShellState extends State<MobileShell> {
     final pages = [
       HomePage(
         state: widget.state,
+        onRetry: widget.onRetry,
         profile: _profile,
         onOpenTab: _openTab,
         onOpenDestination: _openDestination,
@@ -35,15 +38,21 @@ class _MobileShellState extends State<MobileShell> {
       DestinationListPage(
         destinations: widget.state.destinations,
         isLoading: widget.state.isLoading,
+        failure: widget.state.failure,
+        onRetry: widget.onRetry,
         onOpenDestination: _openDestination,
       ),
       TourismMapPage(
         destinations: widget.state.destinations,
         isLoading: widget.state.isLoading,
+        failure: widget.state.failure,
+        onRetry: widget.onRetry,
         onOpenDestination: _openDestination,
       ),
       VisitPlannerPage(
         registerEnabled: widget.state.isLoaded,
+        failure: widget.state.failure,
+        onRetry: widget.onRetry,
         visits: _visitHistory,
         onRegisterVisit: () => _openRegistration(),
       ),
@@ -152,6 +161,7 @@ class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.state,
+    required this.onRetry,
     required this.profile,
     required this.onOpenTab,
     required this.onOpenDestination,
@@ -159,6 +169,7 @@ class HomePage extends StatefulWidget {
   });
 
   final TourismBootstrapState state;
+  final VoidCallback onRetry;
   final MobileUserProfile profile;
   final ValueChanged<int> onOpenTab;
   final ValueChanged<Destination> onOpenDestination;
@@ -377,6 +388,8 @@ class _HomePageState extends State<HomePage> {
 
         // Up here, not beside the skeleton list: that sits below the fold.
         if (state.isLoading) const SlowLoadingNotice(),
+        if (state.failure != null)
+          BootstrapErrorPanel(failure: state.failure!, onRetry: widget.onRetry),
 
         // Show Slide Show and Highlights only when not actively searching / when on 'All'
         if (_search.isEmpty && _selectedCategory == 'All') ...[
@@ -465,11 +478,13 @@ class _HomePageState extends State<HomePage> {
           action: 'View Map',
           onTap: () => widget.onOpenTab(2),
         ),
-        // Three different answers, never mixed: still waiting (skeleton),
-        // loaded and nothing published, loaded and nothing matches. A failed
-        // load keeps the old message until the error panel exists.
+        // Four different answers, never mixed: still waiting (skeleton),
+        // failed (the panel is at the top, nothing here), loaded and nothing
+        // published, loaded and nothing matches.
         if (state.isLoading)
           const DestinationListSkeleton()
+        else if (state.isFailed)
+          const SizedBox.shrink()
         else if (state.isLoaded && destinations.isEmpty)
           const EmptyState(
             icon: Icons.travel_explore_outlined,
@@ -1123,10 +1138,14 @@ class DestinationListPage extends StatefulWidget {
     required this.destinations,
     required this.onOpenDestination,
     this.isLoading = false,
+    this.failure,
+    this.onRetry,
   });
 
   final List<Destination> destinations;
   final bool isLoading;
+  final BootstrapFailureKind? failure;
+  final VoidCallback? onRetry;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1187,7 +1206,12 @@ class _DestinationListPageState extends State<DestinationListPage> {
         if (widget.isLoading) ...[
           const DestinationListSkeleton(),
           const SlowLoadingNotice(),
-        ] else if (filtered.isEmpty)
+        ] else if (widget.failure != null)
+          BootstrapErrorPanel(
+            failure: widget.failure!,
+            onRetry: widget.onRetry ?? () {},
+          )
+        else if (filtered.isEmpty)
           const EmptyState(
             icon: Icons.search_off_outlined,
             title: 'No destinations found',
@@ -1210,10 +1234,14 @@ class TourismMapPage extends StatefulWidget {
     required this.destinations,
     required this.onOpenDestination,
     this.isLoading = false,
+    this.failure,
+    this.onRetry,
   });
 
   final List<Destination> destinations;
   final bool isLoading;
+  final BootstrapFailureKind? failure;
+  final VoidCallback? onRetry;
   final ValueChanged<Destination> onOpenDestination;
 
   @override
@@ -1450,6 +1478,11 @@ class _TourismMapPageState extends State<TourismMapPage> {
         ),
         const SizedBox(height: 12),
         if (widget.isLoading) const SlowLoadingNotice(),
+        if (widget.failure != null)
+          BootstrapErrorPanel(
+            failure: widget.failure!,
+            onRetry: widget.onRetry ?? () {},
+          ),
         Stack(
           children: [
             SizedBox(
@@ -1565,10 +1598,16 @@ class VisitPlannerPage extends StatefulWidget {
     required this.registerEnabled,
     required this.visits,
     required this.onRegisterVisit,
+    this.failure,
+    this.onRetry,
   });
 
   /// False until the bootstrap has loaded: the form needs its reference data.
   final bool registerEnabled;
+
+  /// Why it is not loaded, when it failed; shown under the button.
+  final BootstrapFailureKind? failure;
+  final VoidCallback? onRetry;
   final List<MobileVisitReceipt> visits;
   final VoidCallback onRegisterVisit;
 
@@ -1794,6 +1833,15 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
             ),
           ],
         ),
+        // The button is disabled with no data; say why, and offer the retry.
+        if (widget.failure != null) ...[
+          const SizedBox(height: 12),
+          BootstrapErrorPanel(
+            failure: widget.failure!,
+            onRetry: widget.onRetry ?? () {},
+            note: 'You can register a visit once the destinations have loaded.',
+          ),
+        ],
 
         const SizedBox(height: 24),
 

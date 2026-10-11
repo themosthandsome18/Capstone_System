@@ -62,7 +62,7 @@ void ignoreOverflowOnly() {
 
 Future<void> openHome(
   WidgetTester tester,
-  FakeApi api, {
+  TourismApi api, {
   double height = 3000,
 }) async {
   ignoreOverflowOnly();
@@ -166,9 +166,8 @@ void main() {
     expect(find.byType(DestinationListSkeleton), findsNothing);
   });
 
-  testWidgets('failed keeps today\'s message and is not an endless skeleton', (
-    tester,
-  ) async {
+  testWidgets('failed is the error panel, not an empty-state message and not '
+      'an endless skeleton', (tester) async {
     final answer = Completer<MobileBootstrap>();
     await openHome(tester, FakeApi(answer));
     expect(find.byType(DestinationListSkeleton), findsOneWidget);
@@ -179,8 +178,9 @@ void main() {
 
     expect(find.byType(DestinationListSkeleton), findsNothing);
     expect(find.byType(FeaturedCarouselSkeleton), findsNothing);
-    expect(find.text(noMatchMessage), findsOneWidget);
-    expect(find.text(nothingPublishedMessage), findsNothing);
+    expect(find.text("Can't reach the server."), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expectNoEmptyMessage();
   });
 
   testWidgets('Explore shows a skeleton, not "No destinations found", '

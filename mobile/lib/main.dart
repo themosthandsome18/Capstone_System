@@ -140,10 +140,19 @@ class _AppBootstrapState extends State<AppBootstrap> {
       next = TourismBootstrapState.loaded(await widget.api.fetchBootstrap());
     } catch (error) {
       debugPrint('Tourism bootstrap failed: $error');
-      next = TourismBootstrapState.failed(error);
+      next = TourismBootstrapState.failed(
+        error,
+        classifyBootstrapFailure(error),
+      );
     }
     if (!mounted) return;
     setState(() => _state = next);
+  }
+
+  void _retry() {
+    if (_state.isLoading) return;
+    setState(() => _state = const TourismBootstrapState.loading());
+    _load();
   }
 
   @override
@@ -176,6 +185,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
     return MobileShell(
       api: widget.api,
       state: _state,
+      onRetry: _retry,
       onSignOut: () {
         setState(() {
           _showLogin = true;

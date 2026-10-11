@@ -2898,3 +2898,66 @@ class _SlowLoadingNoticeState extends State<SlowLoadingNotice> {
     );
   }
 }
+
+/// What the user sees when the tourism bootstrap failed. [note] says why a
+/// particular screen is affected, for screens that are not just a list.
+class BootstrapErrorPanel extends StatelessWidget {
+  const BootstrapErrorPanel({
+    super.key,
+    required this.failure,
+    required this.onRetry,
+    this.note,
+  });
+
+  final BootstrapFailureKind failure;
+  final VoidCallback onRetry;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final isServer = failure == BootstrapFailureKind.server;
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 14),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Icon(
+              isServer ? Icons.cloud_off_outlined : Icons.wifi_off_outlined,
+              size: 34,
+              color: AppColors.muted,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isServer
+                  ? 'The server is having a problem.'
+                  : "Can't reach the server.",
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isServer
+                  ? 'Please try again in a moment.'
+                  : 'Check your internet connection, then try again.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+            ),
+            if (note != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                note!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+              ),
+            ],
+            const SizedBox(height: 14),
+            FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ),
+      ),
+    );
+  }
+}

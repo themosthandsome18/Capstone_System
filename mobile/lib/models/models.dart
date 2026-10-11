@@ -95,6 +95,7 @@ class TourismBootstrapState {
     : status = TourismBootstrapStatus.loading,
       data = null,
       error = null,
+      failure = null,
       fromCache = false,
       age = null;
   const TourismBootstrapState.loaded(
@@ -102,8 +103,9 @@ class TourismBootstrapState {
     this.fromCache = false,
     this.age,
   }) : status = TourismBootstrapStatus.loaded,
-       error = null;
-  const TourismBootstrapState.failed(this.error)
+       error = null,
+       failure = null;
+  const TourismBootstrapState.failed(this.error, this.failure)
     : status = TourismBootstrapStatus.failed,
       data = null,
       fromCache = false,
@@ -112,6 +114,9 @@ class TourismBootstrapState {
   final TourismBootstrapStatus status;
   final MobileBootstrap? data;
   final Object? error;
+
+  /// What went wrong, in the two ways the user is told about. Set when failed.
+  final BootstrapFailureKind? failure;
   final bool fromCache;
   final Duration? age;
 

@@ -1,5 +1,20 @@
 part of '../main.dart';
 
+/// What the user is told when the bootstrap fails. They see two answers only:
+/// the connection (timeout, network) or the server (a bad status, or an
+/// answer the app cannot read).
+enum BootstrapFailureKind { timeout, network, server }
+
+BootstrapFailureKind classifyBootstrapFailure(Object error) {
+  if (error is TimeoutException) return BootstrapFailureKind.timeout;
+  if (error is ApiException || error is FormatException) {
+    return BootstrapFailureKind.server;
+  }
+  return BootstrapFailureKind.network;
+}
+
+const _unreadableResponse = 'The server sent a response the app could not read.';
+
 class TourismApi {
   const TourismApi();
   static const Duration _requestTimeout = Duration(seconds: 90);
@@ -8,7 +23,11 @@ class TourismApi {
   /// Throws on any failure; the caller turns that into a `failed` state.
   Future<MobileBootstrap> fetchBootstrap() async {
     final data = await _get('/mobile/tourism/bootstrap/');
-    return MobileBootstrap.fromJson(data);
+    try {
+      return MobileBootstrap.fromJson(data);
+    } catch (_) {
+      throw const ApiException(statusCode: 200, message: _unreadableResponse);
+    }
   }
 
   Future<Map<String, dynamic>> fetchDestinationDetail(int resortId) async {
@@ -555,7 +574,12 @@ class TourismApi {
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
+      if (decoded is Map<String, dynamic>) return decoded;
+      // Not an object (or not JSON): never pass that off as an empty answer.
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: _unreadableResponse,
+      );
     }
 
     String? errorMessage;
