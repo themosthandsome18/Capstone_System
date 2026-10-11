@@ -950,7 +950,7 @@ class ReceiptCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: const Color(0xffdcfce7),
+          backgroundColor: context.brand.tint,
           child: Icon(icon, color: context.brand.primary),
         ),
         title: Text(
@@ -1860,10 +1860,10 @@ class DataSourceBanner extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: warning ? const Color(0xfffff3bd).withValues(alpha: 0.6) : const Color(0xffecfdf3).withValues(alpha: 0.6),
+            color: warning ? const Color(0xfffff3bd).withValues(alpha: 0.6) : context.brand.tint.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: warning ? const Color(0xffffd267).withValues(alpha: 0.5) : const Color(0xffb7e8c6).withValues(alpha: 0.5),
+              color: warning ? const Color(0xffffd267).withValues(alpha: 0.5) : context.brand.border.withValues(alpha: 0.5),
             ),
           ),
       child: Row(

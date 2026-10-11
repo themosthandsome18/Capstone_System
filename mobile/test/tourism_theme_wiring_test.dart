@@ -481,18 +481,23 @@ void main() {
           // Not moved: they still state AppColors, the same in both.
           expect(stated(orangeRender.$1), stated(green.$1));
         } else {
-          // Moved to context.brand: exactly the primary and the deep green
-          // become the orange's primary and deep, and nothing else differs.
+          // Moved to context.brand: exactly the primary, the deep, the tint
+          // and the border green become the orange's primary, deep, tint and
+          // border (with the alpha each use has), and nothing else differs.
           final orangeBrand = BrandColors.fromBase('#EF7C1F');
-          String hex(Color c) => c.toARGB32().toRadixString(16).padLeft(8, '0');
+          String rgb(Color c) =>
+              (c.toARGB32() & 0xffffff).toRadixString(16).padLeft(6, '0');
           final becomes = {
-            hex(BrandColors.original.primary): hex(orangeBrand.primary),
-            hex(AppColors.deepGreen): hex(orangeBrand.deep),
+            rgb(BrandColors.original.primary): rgb(orangeBrand.primary),
+            rgb(AppColors.deepGreen): rgb(orangeBrand.deep),
+            rgb(BrandColors.original.tint): rgb(orangeBrand.tint),
+            rgb(BrandColors.original.border): rgb(orangeBrand.border),
           };
           final expected = stated(green.$1).map((c) {
-            final i = c.indexOf(':');
-            final to = becomes[c.substring(i + 1)];
-            return to == null ? c : '${c.substring(0, i + 1)}$to';
+            // 'kind:aarrggbb' -> keep 'kind:aa', map the 6 colour digits.
+            final cut = c.length - 6;
+            final to = becomes[c.substring(cut)];
+            return to == null ? c : '${c.substring(0, cut)}$to';
           }).toList();
           expect(stated(orangeRender.$1), expected);
           expect(

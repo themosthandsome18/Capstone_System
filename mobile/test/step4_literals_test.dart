@@ -104,6 +104,10 @@ List<(Color?, Color?)> qrColours(WidgetTester tester) => [
     ),
 ];
 
+/// The avatar background of the first CircleAvatar in the tree.
+Color? avatarColour(WidgetTester tester) =>
+    tester.widget<CircleAvatar>(find.byType(CircleAvatar).first).backgroundColor;
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -299,6 +303,50 @@ void main() {
       expect(arrived.background, const Color(0xFFDCFCE7));
       expect(touristStatusChip('pending')!.foreground, const Color(0xFF92400E));
       expect(touristStatusChip('no_show')!.foreground, const Color(0xFF991B1B));
+    });
+  });
+
+  group('the last three: ReceiptCard avatar and the DataSourceBanner ok variant', () {
+    testWidgets("ReceiptCard: the avatar is the theme's tint", (tester) async {
+      const card = ReceiptCard(
+        icon: Icons.receipt_long_outlined,
+        title: 'R',
+        reference: 'REF',
+        lines: ['one'],
+      );
+      await show(tester, orangeTheme, card);
+      expect(avatarColour(tester), orangeBrand.tint);
+
+      await show(tester, greenTheme, card);
+      expect(avatarColour(tester), BrandColors.original.tint);
+    });
+
+    testWidgets('DataSourceBanner ok: background and border follow, warning does not', (
+      tester,
+    ) async {
+      const ok = DataSourceBanner(
+        icon: Icons.cloud_done_outlined,
+        title: 'S',
+        text: 'Live',
+      );
+      await show(tester, orangeTheme, ok);
+      final c = colours(tester);
+      expect(c.contains(hex(orangeBrand.tint.withValues(alpha: 0.6))), isTrue);
+      expect(c.contains(hex(orangeBrand.border.withValues(alpha: 0.5))), isTrue);
+      expect(c.contains(hex(BrandColors.original.tint.withValues(alpha: 0.6))), isFalse);
+
+      // The warning variant is amber, fixed.
+      const warning = DataSourceBanner(
+        icon: Icons.warning_amber_outlined,
+        title: 'S',
+        text: 'Offline',
+        warning: true,
+      );
+      await show(tester, orangeTheme, warning);
+      final w = colours(tester);
+      expect(w.contains(hex(const Color(0xfffff3bd).withValues(alpha: 0.6))), isTrue);
+      expect(w.contains(hex(const Color(0xffffd267).withValues(alpha: 0.5))), isTrue);
+      expect(w.contains(hex(orangeBrand.tint.withValues(alpha: 0.6))), isFalse);
     });
   });
 
