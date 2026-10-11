@@ -1035,10 +1035,12 @@ class AppNotification {
     return Icons.info_outline;
   }
 
-  Color get color {
+  /// Only a tourism notification takes the app's brand colour; the others are
+  /// status colours and stay fixed.
+  Color colorFor(BuildContext context) {
     if (type == 'approval') return const Color(0xFF10B981);
     if (type == 'sanitation') return Colors.orange;
-    if (type == 'tourism') return AppColors.green;
+    if (type == 'tourism') return context.brand.primary;
     return Colors.blue;
   }
 
@@ -1478,13 +1480,18 @@ class IntroItem {
     required this.icon,
     required this.title,
     required this.text,
-    required this.color,
+    this.color,
   });
 
   final IconData icon;
   final String title;
   final String text;
-  final Color color;
+
+  /// A fixed colour, or null to take the app's brand colour (the slide is
+  /// declared `const`, before there is a theme to ask).
+  final Color? color;
+
+  Color colorOf(BuildContext context) => color ?? context.brand.primary;
 }
 
 /// One line of the Establishment Portal checklist. [submitted] is null when

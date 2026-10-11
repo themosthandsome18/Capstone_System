@@ -144,9 +144,9 @@ class LocationCapturePanel extends StatelessWidget {
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: const CircleAvatar(
+        leading: CircleAvatar(
           backgroundColor: Color(0xffe9f8ef),
-          child: Icon(Icons.my_location_outlined, color: AppColors.green),
+          child: Icon(Icons.my_location_outlined, color: context.brand.primary),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: Text(
@@ -951,7 +951,7 @@ class ReceiptCard extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: const Color(0xffdcfce7),
-          child: Icon(icon, color: AppColors.green),
+          child: Icon(icon, color: context.brand.primary),
         ),
         title: Text(
           title,
@@ -992,7 +992,7 @@ class StatCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: AppColors.green),
+              Icon(icon, color: context.brand.primary),
               if (onTap != null)
                 const Icon(
                   Icons.arrow_forward_ios_rounded,
@@ -1080,14 +1080,14 @@ class AppHeader extends StatelessWidget {
           padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.green.withValues(alpha: 0.35), width: 1.5),
+            border: Border.all(color: context.brand.primary.withValues(alpha: 0.35), width: 1.5),
           ),
           child: ClipOval(
             child: Image.asset('assets/tourism_logo.jpg', width: 34, height: 34, fit: BoxFit.cover),
           ),
         ),
         const SizedBox(width: 10),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1096,7 +1096,7 @@ class AppHeader extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.deepGreen,
+                  color: context.brand.deep,
                   letterSpacing: 0.6,
                 ),
               ),
@@ -1365,10 +1365,10 @@ class QuickAction extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.green.withValues(alpha: 0.12),
+                  color: context.brand.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: AppColors.green),
+                child: Icon(icon, color: context.brand.primary),
               ),
               const SizedBox(height: 7),
               Text(
@@ -1601,8 +1601,8 @@ class DestinationListCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       destination.visitorsLabel,
-                      style: const TextStyle(
-                        color: AppColors.deepGreen,
+                      style: TextStyle(
+                        color: context.brand.deep,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1689,7 +1689,7 @@ class VisitorPill extends StatelessWidget {
           Icon(
             icon,
             size: 13,
-            color: dark ? Colors.white : AppColors.green,
+            color: dark ? Colors.white : context.brand.primary,
           ),
           const SizedBox(width: 4),
           Text(
@@ -1697,7 +1697,7 @@ class VisitorPill extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10.5,
-              color: dark ? Colors.white : AppColors.deepGreen,
+              color: dark ? Colors.white : context.brand.deep,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1759,9 +1759,9 @@ class StatusPill extends StatelessWidget {
       child: Text(
         text,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
-          color: AppColors.green,
+          color: context.brand.primary,
           fontWeight: FontWeight.w900,
         ),
       ),
@@ -1800,7 +1800,7 @@ class InfoBanner extends StatelessWidget {
             ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.green),
+          Icon(icon, color: context.brand.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1858,7 +1858,7 @@ class DataSourceBanner extends StatelessWidget {
           ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.green),
+          Icon(icon, color: context.brand.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1893,7 +1893,7 @@ class MapPin extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: color ?? AppColors.green,
+        color: color ?? context.brand.primary,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: const [
@@ -1982,7 +1982,7 @@ class MiniTripStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, color: AppColors.green),
+        Icon(icon, color: context.brand.primary),
         const SizedBox(height: 5),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
         Text(
@@ -2121,9 +2121,9 @@ class LocationCard extends StatelessWidget {
       elevation: 0,
       color: Colors.white,
       child: ListTile(
-        leading: const CircleAvatar(
+        leading: CircleAvatar(
           backgroundColor: Color(0xffdcfce7),
-          child: Icon(Icons.navigation_outlined, color: AppColors.green),
+          child: Icon(Icons.navigation_outlined, color: context.brand.primary),
         ),
         title: const Text(
           'View on map',
@@ -2197,7 +2197,7 @@ class FactRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.green, size: 20),
+          Icon(icon, color: context.brand.primary, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -2420,7 +2420,7 @@ class PickerTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: AppColors.green),
+              Icon(icon, color: context.brand.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

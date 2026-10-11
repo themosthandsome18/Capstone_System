@@ -359,15 +359,15 @@ class _HomePageState extends State<HomePage> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.green : Colors.white,
+                    color: isSelected ? context.brand.primary : Colors.white,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: isSelected ? AppColors.green : const Color(0xFFE2E8F0),
+                      color: isSelected ? context.brand.primary : const Color(0xFFE2E8F0),
                     ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppColors.green.withValues(alpha: 0.28),
+                              color: context.brand.primary.withValues(alpha: 0.28),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -460,7 +460,7 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.arrow_forward, color: AppColors.green),
+                  icon: Icon(Icons.arrow_forward, color: context.brand.primary),
                   onPressed: () => widget.onOpenTab(1),
                 ),
               ],
@@ -783,7 +783,7 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
               height: 6,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(999),
-                color: _currentPage == index ? AppColors.green : const Color(0xFFCBD5E1),
+                color: _currentPage == index ? context.brand.primary : const Color(0xFFCBD5E1),
               ),
             ),
           ),
@@ -1454,7 +1454,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
                         destination.type,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, color: AppColors.deepGreen, fontWeight: FontWeight.w700),
+                        style: TextStyle(fontSize: 11, color: context.brand.deep, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
@@ -1665,8 +1665,8 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               borderRadius: BorderRadius.circular(20),
             ),
             title: Row(
-              children: const [
-                Icon(Icons.add_task, color: AppColors.deepGreen),
+              children: [
+                Icon(Icons.add_task, color: context.brand.deep),
                 SizedBox(width: 10),
                 Text(
                   'Add Packing Item',
@@ -1721,7 +1721,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                   Navigator.of(ctx).pop();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepGreen,
+                  backgroundColor: context.brand.deep,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -1799,7 +1799,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.deepGreen,
+                    backgroundColor: context.brand.deep,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -2568,7 +2568,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
                         ),
                       ),
                       selected: isSelected,
-                      selectedColor: AppColors.deepGreen,
+                      selectedColor: context.brand.deep,
                       backgroundColor: const Color(0xFFF1F5F9),
                       checkmarkColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
@@ -2908,8 +2908,8 @@ class ProfilePage extends StatelessWidget {
                 backgroundColor: const Color(0xffd8f5e4),
                 child: Text(
                   profile.initials,
-                  style: const TextStyle(
-                    color: AppColors.green,
+                  style: TextStyle(
+                    color: context.brand.primary,
                     fontWeight: FontWeight.w900,
                     fontSize: 26,
                   ),
@@ -2920,8 +2920,8 @@ class ProfilePage extends StatelessWidget {
                 right: 0,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: AppColors.deepGreen,
+                  decoration: BoxDecoration(
+                    color: context.brand.deep,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.verified_user, color: Colors.white, size: 14),
@@ -3004,7 +3004,7 @@ class ProfilePage extends StatelessWidget {
           icon: Icons.support_agent_outlined,
           title: 'Mauban Tourism Information Desk',
           number: '(042) 784-0555 • tourism@mauban.gov.ph',
-          color: AppColors.deepGreen,
+          color: context.brand.deep,
         ),
         const SizedBox(height: 20),
 
@@ -3287,7 +3287,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
-            backgroundColor: AppColors.green,
+            backgroundColor: context.brand.primary,
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -3371,7 +3371,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.directions_bus_outlined, color: AppColors.green, size: 20),
+                          Icon(Icons.directions_bus_outlined, color: context.brand.primary, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -3506,14 +3506,14 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade50,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border(left: BorderSide(color: AppColors.green, width: 3)),
+                                  border: Border(left: BorderSide(color: context.brand.primary, width: 3)),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'Tourism Admin Response',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.green),
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: context.brand.primary),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(feedback.reply, style: const TextStyle(fontSize: 13, height: 1.4)),
@@ -3591,7 +3591,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   icon: const Icon(Icons.confirmation_number_outlined),
                   label: const Text('Plan Visit / Get Pass', style: TextStyle(fontWeight: FontWeight.w900)),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.green,
+                    backgroundColor: context.brand.primary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),

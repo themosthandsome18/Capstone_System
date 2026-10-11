@@ -448,6 +448,9 @@ void main() {
       expect(AppColors.amber, const Color(0xffd59b00));
     });
 
+    // The shared widgets that state a brand colour (moved in Step 3).
+    const movedToBrand = {'DataSourceBanner', 'DataSourceBanner warning', 'PickerTile', 'ReceiptCard'};
+
     for (final entry in sharedWidgets().entries) {
       testWidgets('${entry.key}: the same in sanitation as it always was', (
         tester,
@@ -469,13 +472,35 @@ void main() {
         final green = await renderUnder(tester, oldTourismTheme(), entry.value());
         final orangeRender = await renderUnder(tester, orangeTourism, entry.value());
 
-        // The widgets still state AppColors (they are moved in a later step),
-        // so what they state themselves is the same; what the Material scheme
-        // gives them (a Material's colour, a hint's text colour) is what moves.
+        // What the Material scheme gives them (a Material's colour, a hint's
+        // text colour) moves; what the widgets state themselves is compared.
         List<String> stated(List<String> colors) => colors
             .where((c) => !c.startsWith('material:') && !c.startsWith('text:'))
             .toList();
-        expect(stated(orangeRender.$1), stated(green.$1));
+        if (!movedToBrand.contains(entry.key)) {
+          // Not moved: they still state AppColors, the same in both.
+          expect(stated(orangeRender.$1), stated(green.$1));
+        } else {
+          // Moved to context.brand: exactly the primary and the deep green
+          // become the orange's primary and deep, and nothing else differs.
+          final orangeBrand = BrandColors.fromBase('#EF7C1F');
+          String hex(Color c) => c.toARGB32().toRadixString(16).padLeft(8, '0');
+          final becomes = {
+            hex(BrandColors.original.primary): hex(orangeBrand.primary),
+            hex(AppColors.deepGreen): hex(orangeBrand.deep),
+          };
+          final expected = stated(green.$1).map((c) {
+            final i = c.indexOf(':');
+            final to = becomes[c.substring(i + 1)];
+            return to == null ? c : '${c.substring(0, i + 1)}$to';
+          }).toList();
+          expect(stated(orangeRender.$1), expected);
+          expect(
+            expected,
+            isNot(stated(green.$1)),
+            reason: 'a moved widget must actually take the brand colour',
+          );
+        }
         expect(orangeRender.$2, isNot(green.$2));
         expect(
           tester.element(find.byType(Scaffold).first).brand,

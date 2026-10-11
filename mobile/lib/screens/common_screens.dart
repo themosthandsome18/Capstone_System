@@ -31,7 +31,6 @@ class _IntroFlowState extends State<IntroFlow> {
       icon: Icons.calendar_month_outlined,
       title: 'Plan Your Visit',
       text: 'Build your itinerary and register your travel group in advance.',
-      color: AppColors.green,
     ),
     IntroItem(
       icon: Icons.hotel_outlined,
@@ -97,7 +96,7 @@ class _IntroFlowState extends State<IntroFlow> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(999),
                             color: _page == index
-                                ? AppColors.green
+                                ? context.brand.primary
                                 : AppColors.border,
                           ),
                         ),
@@ -148,7 +147,7 @@ class IntroSlide extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: item.color,
+              color: item.colorOf(context),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(item.icon, color: Colors.white, size: 34),
@@ -282,8 +281,8 @@ class _LoginPageState extends State<LoginPage> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        splashColor: AppColors.green.withValues(alpha: 0.12),
-        highlightColor: AppColors.green.withValues(alpha: 0.06),
+        splashColor: context.brand.primary.withValues(alpha: 0.12),
+        highlightColor: context.brand.primary.withValues(alpha: 0.06),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
@@ -292,10 +291,10 @@ class _LoginPageState extends State<LoginPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.green.withValues(alpha: 0.12),
+                  color: context.brand.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: AppColors.deepGreen, size: 26),
+                child: Icon(icon, color: context.brand.deep, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -400,8 +399,8 @@ class NotificationPage extends StatelessWidget {
                   color: Colors.white,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: item.color.withValues(alpha: 0.14),
-                      child: Icon(item.icon, color: item.color),
+                      backgroundColor: item.colorFor(context).withValues(alpha: 0.14),
+                      child: Icon(item.icon, color: item.colorFor(context)),
                     ),
                     title: Text(
                       item.title,
