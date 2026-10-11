@@ -367,4 +367,162 @@ void main() {
       expect(tester.widget<FilledButton>(register).onPressed, isNotNull);
     });
   });
+
+  group('no orphan headings', () {
+    const popular = '🔥 Most Popular Resorts';
+    const gems = '💎 Hidden Gems of Mauban';
+    const gemsSubtitle = 'Peaceful glamping, quiet beaches & eco-spots';
+
+    testWidgets('failed: neither Home section, nor its heading, is shown', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([fails(const SocketException('no route'))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text(connectionTitle), findsOneWidget);
+      expect(find.text(popular), findsNothing);
+      expect(find.text(gems), findsNothing);
+      expect(find.text(gemsSubtitle), findsNothing);
+      expect(find.text('View all'), findsNothing);
+    });
+
+    testWidgets('loading: both headings are there, over skeletons', (
+      tester,
+    ) async {
+      final never = Completer<MobileBootstrap>();
+      await openHome(tester, SequenceApi([() => never.future]));
+
+      expect(find.text(popular), findsOneWidget);
+      expect(find.text(gems), findsOneWidget);
+      expect(find.byType(FeaturedCarouselSkeleton), findsOneWidget);
+      expect(find.byType(HiddenGemsRowSkeleton), findsOneWidget);
+    });
+
+    testWidgets('loaded: both headings are there', (tester) async {
+      await openHome(
+        tester,
+        SequenceApi([() => Future.value(bootstrapWith(3))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text(popular), findsOneWidget);
+      expect(find.text(gems), findsOneWidget);
+      expect(find.text(gemsSubtitle), findsOneWidget);
+    });
+
+    testWidgets('a retry that succeeds brings the headings back', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([
+          fails(const SocketException('no route')),
+          () => Future.value(bootstrapWith(3)),
+        ]),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(popular), findsNothing);
+
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text(popular), findsOneWidget);
+      expect(find.text(gems), findsOneWidget);
+    });
+
+    testWidgets('failed: the destinations list heading and View Map go too', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([fails(const SocketException('no route'))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text(connectionTitle), findsOneWidget);
+      expect(find.text('All Destinations & Resorts'), findsNothing);
+      expect(find.text('View Map'), findsNothing);
+    });
+
+    testWidgets('failed, with a category chosen: no "<category> Spots" either', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([fails(const SocketException('no route'))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Beaches'));
+      await tester.pump();
+
+      expect(find.text('Beach Resort Spots'), findsNothing);
+      expect(find.text('View Map'), findsNothing);
+    });
+
+    testWidgets('loading: the list heading is there, over the skeleton', (
+      tester,
+    ) async {
+      final never = Completer<MobileBootstrap>();
+      await openHome(tester, SequenceApi([() => never.future]));
+
+      expect(find.text('All Destinations & Resorts'), findsOneWidget);
+      expect(find.text('View Map'), findsOneWidget);
+      expect(find.byType(DestinationListSkeleton), findsOneWidget);
+    });
+
+    testWidgets('loaded: the list heading and View Map are there', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([() => Future.value(bootstrapWith(3))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('All Destinations & Resorts'), findsOneWidget);
+      expect(find.text('View Map'), findsOneWidget);
+    });
+
+    testWidgets('Map: "Nearby Places" is not shown while failed', (
+      tester,
+    ) async {
+      await openHome(
+        tester,
+        SequenceApi([fails(const SocketException('no route'))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Map'));
+      await tester.pump();
+
+      expect(find.text(connectionTitle), findsOneWidget);
+      expect(find.text('Nearby Places'), findsNothing);
+    });
+
+    testWidgets('Map: "Nearby Places" is shown when loaded', (tester) async {
+      await openHome(
+        tester,
+        SequenceApi([() => Future.value(bootstrapWith(3))]),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Map'));
+      await tester.pump();
+
+      expect(find.text('Nearby Places'), findsOneWidget);
+    });
+  });
 }

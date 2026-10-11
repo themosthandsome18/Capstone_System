@@ -393,91 +393,97 @@ class _HomePageState extends State<HomePage> {
 
         // Show Slide Show and Highlights only when not actively searching / when on 'All'
         if (_search.isEmpty && _selectedCategory == 'All') ...[
-          // Section Title: Most Popular Resorts Slideshow
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '🔥 Most Popular Resorts',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-              ),
-              TextButton(
-                onPressed: () => widget.onOpenTab(1),
-                child: const Text('View all', style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Auto-Sliding Featured Resorts Slideshow
-          if (state.isLoading)
-            const FeaturedCarouselSkeleton()
-          else
-            FeaturedResortsSlideshow(
-              destinations: popularResorts,
-              onTapDestination: widget.onOpenDestination,
+          if (!state.isFailed) ...[
+            // Section Title: Most Popular Resorts Slideshow
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '🔥 Most Popular Resorts',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                ),
+                TextButton(
+                  onPressed: () => widget.onOpenTab(1),
+                  child: const Text('View all', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ],
             ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 6),
+
+            // Auto-Sliding Featured Resorts Slideshow
+            if (state.isLoading)
+              const FeaturedCarouselSkeleton()
+            else
+              FeaturedResortsSlideshow(
+                destinations: popularResorts,
+                onTapDestination: widget.onOpenDestination,
+              ),
+            const SizedBox(height: 24),
+          ],
 
           // Section: Discover the Beauty & Heritage of Mauban
           const _MaubanTownHighlightsCard(),
           const SizedBox(height: 24),
 
           // Section: Hidden Gems & Peaceful Stays (Promoting lesser-known resorts)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '💎 Hidden Gems of Mauban',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+          if (!state.isFailed) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💎 Hidden Gems of Mauban',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Peaceful glamping, quiet beaches & eco-spots',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_forward, color: AppColors.green),
+                  onPressed: () => widget.onOpenTab(1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (state.isLoading)
+              const HiddenGemsRowSkeleton()
+            else
+              SizedBox(
+                height: 195,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: hiddenGems.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) => _HiddenGemCard(
+                    destination: hiddenGems[index],
+                    onTap: () => widget.onOpenDestination(hiddenGems[index]),
                   ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Peaceful glamping, quiet beaches & eco-spots',
-                    style: TextStyle(color: AppColors.muted, fontSize: 12),
-                  ),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_forward, color: AppColors.green),
-                onPressed: () => widget.onOpenTab(1),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (state.isLoading)
-            const HiddenGemsRowSkeleton()
-          else
-            SizedBox(
-              height: 195,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: hiddenGems.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 12),
-                itemBuilder: (context, index) => _HiddenGemCard(
-                  destination: hiddenGems[index],
-                  onTap: () => widget.onOpenDestination(hiddenGems[index]),
                 ),
               ),
-            ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
+          ],
 
           // Section: Town Information & Travel Essentials
           const _MaubanTownGuideSection(),
           const SizedBox(height: 14),
         ],
 
-        // Filtered / All Destinations List Section
-        SectionHeader(
-          title: _selectedCategory == 'All'
-              ? (_search.isNotEmpty ? 'Search Results' : 'All Destinations & Resorts')
-              : '$_selectedCategory Spots',
-          action: 'View Map',
-          onTap: () => widget.onOpenTab(2),
-        ),
+        // Filtered / All Destinations List Section. Not while failed: there
+        // is no list to head, and the panel at the top is the one thing shown.
+        if (!state.isFailed)
+          SectionHeader(
+            title: _selectedCategory == 'All'
+                ? (_search.isNotEmpty ? 'Search Results' : 'All Destinations & Resorts')
+                : '$_selectedCategory Spots',
+            action: 'View Map',
+            onTap: () => widget.onOpenTab(2),
+          ),
         // Four different answers, never mixed: still waiting (skeleton),
         // failed (the panel is at the top, nothing here), loaded and nothing
         // published, loaded and nothing matches.
@@ -1577,7 +1583,8 @@ class _TourismMapPageState extends State<TourismMapPage> {
             ),
           ],
         ),
-        SectionHeader(title: 'Nearby Places'),
+        // No list to head while failed; the panel at the top says why.
+        if (widget.failure == null) SectionHeader(title: 'Nearby Places'),
         if (widget.isLoading)
           const DestinationListSkeleton()
         else
