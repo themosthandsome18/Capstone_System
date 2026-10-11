@@ -14,6 +14,7 @@ class MobileBootstrap {
     required this.barangays,
     required this.notifications,
     this.isOffline = false,
+    this.theme = TourismTheme.none,
   });
 
   final List<Destination> destinations;
@@ -28,6 +29,10 @@ class MobileBootstrap {
   final List<BarangayItem> barangays;
   final List<AppNotification> notifications;
   final bool isOffline;
+
+  /// The colour setting from the web admin. Read here, not applied anywhere
+  /// yet: see theme/brand_theme.dart.
+  final TourismTheme theme;
 
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
@@ -47,6 +52,7 @@ class MobileBootstrap {
       barangays: parseList(json['barangays'], BarangayItem.fromJson),
       notifications: parseList(json['notifications'], AppNotification.fromJson),
       isOffline: false,
+      theme: TourismTheme.fromJson(json['theme']),
     );
   }
 

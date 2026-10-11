@@ -26,6 +26,7 @@ import 'utils/web_branding.dart';
 import 'utils/web_download.dart';
 
 part 'constants/colors.dart';
+part 'theme/brand_theme.dart';
 part 'utils/helpers.dart';
 part 'utils/export_helpers.dart';
 part 'models/models.dart';
