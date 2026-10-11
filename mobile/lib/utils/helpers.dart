@@ -196,6 +196,36 @@ String missingCountsMessage(List<String> missing) =>
     'Enter the missing count${missing.length == 1 ? '' : 's'} '
     'before saving: ${missing.join(', ')}.';
 
+/// A count that is never below 0 (the web's `toCount`, which also turns a
+/// value that is not a number into 0: here the counts are already ints).
+int _toCount(int value) => value < 0 ? 0 : value;
+
+/// How many of the visitors pay the discounted entrance fee. This is the web's
+/// `suggestedDiscountedCount` in frontend/src/tourism/utils/entranceFee.js, as
+/// written there:
+///
+///   visitors   = filipino_count + foreigner_count
+///   suggestion = age_0_7 + age_60_above + special_group_count
+///   result     = min(suggestion, visitors)
+///
+/// Children aged 0-7, seniors aged 60+ and special needs; capped at the
+/// visitors because one person can be both a senior and special needs and
+/// would otherwise be counted twice. The web follows this number until staff
+/// type their own; the app has no field for it, so it always sends this one,
+/// and a mobile registration is charged the same as the same group on the web.
+int suggestedDiscountedCount({
+  required int filipino,
+  required int foreigner,
+  required int age0To7,
+  required int age60Above,
+  required int specialGroup,
+}) {
+  final visitors = _toCount(filipino) + _toCount(foreigner);
+  final suggestion =
+      _toCount(age0To7) + _toCount(age60Above) + _toCount(specialGroup);
+  return suggestion < visitors ? suggestion : visitors;
+}
+
 /// Whether a record from this country must name a region and province. Only a
 /// country typed "foreign" may leave them empty; anything else (local, no type,
 /// an unknown type) keeps them required. This is the backend's rule

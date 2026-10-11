@@ -4342,6 +4342,13 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         maubaninCount: _maubanin,
         foreignerCount: _foreign,
         specialGroupCount: _specialGroup,
+        discountedCount: suggestedDiscountedCount(
+          filipino: _filipino,
+          foreigner: _foreign,
+          age0To7: _age0To7,
+          age60Above: _age60Above,
+          specialGroup: _specialGroup,
+        ),
         age0To7: _age0To7,
         age8To59: _age8To59,
         age60Above: _age60Above,

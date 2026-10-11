@@ -332,6 +332,10 @@ class TourismApi {
     required int maubaninCount,
     required int foreignerCount,
     required int specialGroupCount,
+    // The people who pay the discounted entrance fee (see
+    // suggestedDiscountedCount). Without it the server saves 0 and charges
+    // every visitor the regular fee.
+    required int discountedCount,
     required int age0To7,
     required int age8To59,
     required int age60Above,
@@ -367,6 +371,7 @@ class TourismApi {
       'maubanin_count': maubaninCount,
       'foreigner_count': foreignerCount,
       'special_group_count': specialGroupCount,
+      'discounted_count': discountedCount,
       'age_0_7': age0To7,
       'age_8_59': age8To59,
       'age_60_above': age60Above,
