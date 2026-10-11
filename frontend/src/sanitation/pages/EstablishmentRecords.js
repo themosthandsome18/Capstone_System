@@ -1933,6 +1933,10 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
 
   const verifyPath = permitVerifyPath(establishment);
   const verifyUrl = verifyPath ? `${window.location.origin}${verifyPath}` : "";
+  const storedPermitNumber = String(establishment.permit_number ?? "");
+  const printedPermitNumber = storedPermitNumber.trim()
+    ? storedPermitNumber
+    : "No permit number recorded";
 
   const timelineRows = timeline.length
     ? timeline
@@ -2058,10 +2062,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             <div class="print-qr-tag">Official Sanitary Verification QR Code</div>
             <div class="print-qr-title">${escapeHtml(establishment.business_name)}</div>
             <div class="print-qr-permit">
-              Permit Number: <strong>${escapeHtml(
-                establishment.permit_number ||
-                  (establishment.has_permit ? "Active" : "No Permit on File")
-              )}</strong>
+              Permit Number: <strong>${escapeHtml(printedPermitNumber)}</strong>
             </div>
             <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
             <div class="print-qr-url">${escapeHtml(
@@ -2084,7 +2085,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             establishment.barangay
           )}</strong></div>
           <div class="box"><span>Permit Number</span><strong>${escapeHtml(
-            establishment.permit_number || "No permit number"
+            printedPermitNumber
           )}</strong></div>
           <div class="box"><span>Permit Status</span><strong>${escapeHtml(
             establishment.permit_status_label || establishment.permit_status
