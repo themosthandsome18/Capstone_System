@@ -3344,7 +3344,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       RatingPill(rating: widget.destination.rating),
-                      StatusPill(text: widget.destination.type),
+                      StatusPill.label(text: widget.destination.type),
                       PermitPill(verified: widget.destination.hasMayorPermit),
                     ],
                   ),

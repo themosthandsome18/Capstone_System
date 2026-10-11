@@ -95,7 +95,7 @@ Map<String, Widget Function()> movedWidgets() => {
   'DestinationListCard': () =>
       DestinationListCard(destination: destination(), onTap: () {}),
   'VisitorPill': () => VisitorPill(destination: destination()),
-  'StatusPill': () => const StatusPill(text: 'Good standing'),
+  'StatusPill.label': () => const StatusPill.label(text: 'Beach Resort'),
   'InfoBanner': () => const InfoBanner(
     icon: Icons.info_outline,
     title: 'T',
@@ -130,6 +130,33 @@ Map<String, Widget Function()> movedWidgets() => {
     lines: ['one'],
   ),
 };
+
+
+/// The colours a StatusPill states (its background and its text), by pill.
+List<Set<String>> pillColours(WidgetTester tester) {
+  final pills = <Set<String>>[];
+  for (final element in find.byType(StatusPill).evaluate()) {
+    final set = <String>{};
+    void visit(Element e) {
+      final w = e.widget;
+      if (w is DecoratedBox && w.decoration is BoxDecoration) {
+        final c = (w.decoration as BoxDecoration).color;
+        if (c != null) set.add(hex(c));
+      }
+      if (w is Text && w.style?.color != null) set.add(hex(w.style!.color!));
+      e.visitChildren(visit);
+    }
+
+    visit(element);
+    pills.add(set);
+  }
+  return pills;
+}
+
+class _NoDetailApi extends TourismApi {
+  @override
+  Future<Map<String, dynamic>> fetchDestinationDetail(int resortId) async => {};
+}
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -168,6 +195,110 @@ void main() {
         expect(inSanitation, inGreen);
       });
     }
+  });
+
+  group('StatusPill: a status is fixed, a type label follows the brand', () {
+    final fixed = {greenPrimary, hex(BrandColors.original.tint)};
+
+    testWidgets('a status under orange keeps its colours', (tester) async {
+      await render(tester, orangeTheme, const StatusPill(text: 'Confirmed'));
+
+      expect(pillColours(tester), [fixed]);
+    });
+
+    testWidgets('a type label under orange takes the brand', (tester) async {
+      await render(tester, orangeTheme, const StatusPill.label(text: 'Beach Resort'));
+
+      expect(pillColours(tester), [
+        {hex(orangeBrand.primary), hex(orangeBrand.tint)},
+      ]);
+    });
+
+    testWidgets('on the app green both look as they always did', (tester) async {
+      await render(tester, greenTheme, const StatusPill(text: 'Confirmed'));
+      expect(pillColours(tester), [fixed]);
+
+      await render(tester, greenTheme, const StatusPill.label(text: 'Beach Resort'));
+      expect(pillColours(tester), [fixed]);
+    });
+
+    testWidgets('under the sanitation theme both are as they were', (tester) async {
+      await render(tester, sanitationTheme, const StatusPill(text: 'Good standing'));
+      expect(pillColours(tester), [fixed]);
+
+      await render(tester, sanitationTheme, const StatusPill.label(text: 'x'));
+      expect(pillColours(tester), [fixed]);
+    });
+
+    testWidgets('the receipt status is fixed under orange', (tester) async {
+      final receipt = MobileVisitReceipt(
+        reference: 'REF-1',
+        destination: destination(),
+        arrivalDate: DateTime(2026, 10, 11),
+        totalVisitors: 2,
+        status: 'pending',
+        fullName: 'A B',
+        contactNumber: '',
+        email: '',
+      );
+      await render(tester, orangeTheme, VisitReceiptCard(receipt: receipt));
+
+      expect(pillColours(tester), [fixed]);
+    });
+
+    testWidgets("the destination's type label follows the brand under orange", (
+      tester,
+    ) async {
+      await render(
+        tester,
+        orangeTheme,
+        DestinationListCard(destination: destination(), onTap: () {}),
+      );
+
+      expect(pillColours(tester), [
+        {hex(orangeBrand.primary), hex(orangeBrand.tint)},
+      ]);
+    });
+
+    testWidgets("the detail page's type label follows the brand under orange", (
+      tester,
+    ) async {
+      await render(
+        tester,
+        orangeTheme,
+        SizedBox(
+          height: 800,
+          child: DestinationDetailPage(
+            destination: destination(),
+            api: _NoDetailApi(),
+            bootstrap: MobileBootstrap.fallback(),
+            onVisitSubmitted: (_) {},
+            onFeedbackSubmitted: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(pillColours(tester), [
+        {hex(orangeBrand.primary), hex(orangeBrand.tint)},
+      ]);
+    });
+
+    testWidgets('the GIS confirmation status is fixed under orange', (tester) async {
+      await render(
+        tester,
+        orangeTheme,
+        LocationConfirmationPanel(
+          latitude: '14.19',
+          longitude: '121.73',
+          confirmed: false,
+          onChanged: (_) {},
+          onConfirm: () {},
+        ),
+      );
+
+      expect(pillColours(tester), [fixed]);
+    });
   });
 
   group('status and semantic colours do not follow the theme', () {

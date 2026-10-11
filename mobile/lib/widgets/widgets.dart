@@ -1612,7 +1612,7 @@ class DestinationListCard extends StatelessWidget {
                       children: [
                         RatingPill(rating: destination.rating),
                         const SizedBox(width: 8),
-                        Expanded(child: StatusPill(text: destination.type)),
+                        Expanded(child: StatusPill.label(text: destination.type)),
                       ],
                     ),
                   ],
@@ -1743,17 +1743,27 @@ class PermitPill extends StatelessWidget {
   }
 }
 
+/// A small green pill. `StatusPill(text:)` states a status ("Confirmed",
+/// "Needs Review", a booking or sanitation status): its colour is fixed and
+/// never follows the theme. `StatusPill.label(text:)` is a type label (a
+/// destination's type): it takes the app's brand colour. The fixed one is the
+/// default so that a pill that is forgotten stays what it was.
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.text});
+  const StatusPill({super.key, required this.text}) : followsBrand = false;
+
+  const StatusPill.label({super.key, required this.text}) : followsBrand = true;
 
   final String text;
+
+  /// True for a type label, false for a status.
+  final bool followsBrand;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xffdcfce7),
+        color: followsBrand ? context.brand.tint : const Color(0xffdcfce7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1761,7 +1771,7 @@ class StatusPill extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 11,
-          color: context.brand.primary,
+          color: followsBrand ? context.brand.primary : AppColors.green,
           fontWeight: FontWeight.w900,
         ),
       ),
