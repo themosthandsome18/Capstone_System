@@ -1933,6 +1933,10 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
 
   const verifyPath = permitVerifyPath(establishment);
   const verifyUrl = verifyPath ? `${window.location.origin}${verifyPath}` : "";
+  const storedPermitNumber = String(establishment.permit_number ?? "");
+  const printedPermitNumber = storedPermitNumber.trim()
+    ? storedPermitNumber
+    : "No permit number recorded";
 
   const timelineRows = timeline.length
     ? timeline
@@ -2032,7 +2036,10 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
           .box strong { display: block; margin-top: 5px; font-size: 13px; }
           .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 58px; }
           .line { border-top: 1px solid #111827; text-align: center; padding-top: 7px; font-size: 12px; }
-          @media print { body { margin: 24px; } }
+          @media print {
+            body { margin: 24px; }
+            .signatures { margin-top: 24px; break-inside: avoid; page-break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
@@ -2058,10 +2065,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             <div class="print-qr-tag">Official Sanitary Verification QR Code</div>
             <div class="print-qr-title">${escapeHtml(establishment.business_name)}</div>
             <div class="print-qr-permit">
-              Permit Number: <strong>${escapeHtml(
-                establishment.permit_number ||
-                  (establishment.has_permit ? "Active" : "No Permit on File")
-              )}</strong>
+              Permit Number: <strong>${escapeHtml(printedPermitNumber)}</strong>
             </div>
             <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
             <div class="print-qr-url">${escapeHtml(
@@ -2084,7 +2088,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             establishment.barangay
           )}</strong></div>
           <div class="box"><span>Permit Number</span><strong>${escapeHtml(
-            establishment.permit_number || "No permit number"
+            printedPermitNumber
           )}</strong></div>
           <div class="box"><span>Permit Status</span><strong>${escapeHtml(
             establishment.permit_status_label || establishment.permit_status
