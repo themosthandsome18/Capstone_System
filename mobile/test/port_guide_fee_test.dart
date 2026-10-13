@@ -48,10 +48,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    final fee = find.textContaining('Environmental & Tourism Fee', skipOffstage: false);
+    final fee = find.textContaining('Environmental Fee:', skipOffstage: false);
     await tester.scrollUntilVisible(fee, 400, scrollable: find.byType(Scrollable).first);
     final text = tester.widget<Text>(fee).data!;
 
+    // The amounts (one fee: PHP 80, PHP 64 discounted).
     expect(text, contains('₱80 per visitor'));
     expect(text, contains('7 and below'));
     expect(text, contains('60 and above'));
@@ -60,5 +61,19 @@ void main() {
     expect(text, isNot(contains('₱50')));
     // No other peso amount on the card.
     expect(RegExp(r'₱\d+').allMatches(text).map((m) => m.group(0)).toSet(), {'₱80', '₱64'});
+
+    // The one name, and the one place (the LGU's answer of 2026-10-13).
+    expect(text, startsWith('• Environmental Fee:'));
+    expect(text, contains('Tourism Office, 2nd Floor, Mauban Municipal Hall'));
+    expect(text, isNot(contains('passenger terminal')));
+    expect(text, isNot(contains('Environmental & Tourism Fee')));
+
+    // The boat fare is separate and is paid to the boat operator.
+    final boat = find.textContaining('Boat fare is separate', skipOffstage: false);
+    expect(boat, findsOneWidget);
+    final boatText = tester.widget<Text>(boat).data!;
+    expect(boatText, contains('directly with the boat operator'));
+    expect(boatText, contains('the Tourism Office does not collect it'));
+    expect(RegExp(r'₱\d+').hasMatch(boatText), isFalse);
   });
 }

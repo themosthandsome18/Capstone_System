@@ -244,7 +244,7 @@ class _LoginPageState extends State<LoginPage> {
                 icon: Icons.badge_outlined,
                 title: "I'm Resort Staff",
                 subtitle:
-                    'Scan tourist QR passes, collect fees, and record arrivals',
+                    "Scan tourist QR passes, check the visitor's details, and record arrivals",
                 onTap: () {
                   openStaffQrPortalWithAuth(
                     context,

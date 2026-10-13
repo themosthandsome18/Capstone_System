@@ -1080,7 +1080,7 @@ class _MaubanTownGuideSection extends StatelessWidget {
         _buildGuideTile(
           icon: Icons.directions_boat_outlined,
           title: 'Cagbalete Island Boat Guide',
-          desc: 'Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. Environmental fee is paid at the tourism desk before boarding.',
+          desc: 'Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. The Environmental Fee is paid at the Tourism Office, 2nd Floor, Mauban Municipal Hall. The boat fare is separate and is paid to the boat operator.',
           color: const Color(0xFF0284C7),
         ),
         _buildGuideTile(
@@ -1091,8 +1091,8 @@ class _MaubanTownGuideSection extends StatelessWidget {
         ),
         _buildGuideTile(
           icon: Icons.receipt_long_outlined,
-          title: 'Tourism Port & Environmental Fee',
-          desc: 'All tourists register at the Tourism Information Center. Receipts serve as your official entry pass to the island sanctuaries.',
+          title: 'Environmental Fee',
+          desc: 'All tourists register at the Tourism Office, 2nd Floor, Mauban Municipal Hall. Receipts serve as your official entry pass to the island sanctuaries.',
           color: const Color(0xFF059669),
         ),
         _buildGuideTile(
@@ -2835,7 +2835,12 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            '• Environmental & Tourism Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Payable at the passenger terminal.',
+            '• Environmental Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Pay at the Tourism Office, 2nd Floor, Mauban Municipal Hall.',
+            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '• Boat fare is separate. You arrange and pay it directly with the boat operator; the Tourism Office does not collect it.',
             style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
           ),
         ],
