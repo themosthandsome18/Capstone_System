@@ -27,11 +27,11 @@ export function entranceFeeBreakdown(visitors, discounted) {
 }
 
 // The one-line fee shown under the Discounted field, e.g.
-// "Entrance fee: PHP 256 (0 x PHP 80 + 4 x PHP 64)".
+// "Environmental Fee: PHP 256 (0 x PHP 80 + 4 x PHP 64)".
 export function entranceFeeSummary(visitors, discounted) {
   const fee = entranceFeeBreakdown(visitors, discounted);
   return (
-    `Entrance fee: PHP ${formatNumber(fee.total)} ` +
+    `Environmental Fee: PHP ${formatNumber(fee.total)} ` +
     `(${fee.regularCount} x PHP ${REGULAR_ENTRANCE_FEE} + ` +
     `${fee.discountedCount} x PHP ${DISCOUNTED_ENTRANCE_FEE})`
   );

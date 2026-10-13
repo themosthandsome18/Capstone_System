@@ -1574,7 +1574,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Age 60+" value={form.age_60_above} />
                       <WizardReviewItem
                         label="Discounted"
-                        value={`${formTotals.discounted} (entrance fee PHP ${formatNumber(formTotals.fee.total)})`}
+                        value={`${formTotals.discounted} (Environmental Fee PHP ${formatNumber(formTotals.fee.total)})`}
                       />
                       <WizardReviewItem label="Maubanin Count" value={form.maubanin_count} />
                     </WizardReviewSection>
