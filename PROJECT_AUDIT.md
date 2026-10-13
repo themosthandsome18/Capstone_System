@@ -47,6 +47,40 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Pre-Merge Gate for `tourism/theme-tokens`: `_decode` Is Not a Regression; Two Duplicate-Submission Gaps Found (2026-10-13; `tourism/theme-tokens`, HEAD `969c2c6`, `main` `f9564eb`)
+Static audit plus a build; **nothing was merged, and nothing was posted to the live backend**.
+
+### (a) Result: the stricter `_decode` is not a regression in either app
+- **What changed.** On a 2xx answer that is not a JSON object, `_decode` used to return `{}`; it now throws `ApiException("The server sent a response the app could not read.")` (`mobile/lib/services/api.dart`). The sanitation app uses the same `TourismApi` (`sanitation_screens.dart:4847`), so the change reaches both apps.
+- **Why it is not a regression.** The old `{}` produced a **false success**. Five create screens read their reference from the answer with a default and showed a receipt as if the record had been saved:
+
+  | Screen | Reference in the answer, with its default | What the user saw with `{}` |
+  |---|---|---|
+  | Tourism registration | `survey_id ?? 'Pending sync'` | the pass, with the reference "Pending sync" |
+  | Tourism feedback | `id ?? 'Pending sync'` | "Feedback sent", ID "Pending sync" |
+  | Sanitation community report | `complaint_id ?? 'Pending sync'` | "Report submitted", ID "Pending sync" |
+  | Sanitation household survey | `household_code ?? 'Saved'` | "Survey submitted", code "Saved" |
+  | Sanitation inspection | `id ?? 'Saved'` | "Inspection submitted", ID "Saved" |
+
+  Now the same case is an honest error. (The staff-draft sync, the household edit, the staff QR check-in and the owner portal status read the answer in the same way and change in the same direction; the staff QR check-in ignores the answer.)
+- **No realistic trigger in production.** Every success answer of these endpoints is an object (`Response(serializer.data, 201)`, the check-in's `{"message", "record"}`, the existing community report's `200` object); an empty body is read as `{}`. The base URL is https, so an intercepting portal fails the TLS handshake before there is a 2xx; a truncated transfer raises a `ClientException`/`SocketException` before `_decode`; Cloudflare and Render error pages are 4xx/5xx. (Render's spin-up page status was not verified.) A malformed body on a 2xx is turned into the `ApiException`, never a `FormatException`.
+- **Sanitation APK verification** (`app-sanitation-release.apk`, built from `969c2c6` after `flutter clean`): the `libapp.so` inside the APK equals the fresh, stripped `libapp.so` on **all three ABIs** (arm64-v8a, armeabi-v7a, x86_64); the string "The server sent a response the app could not read." is present in **all three**, and appears **0 times** in `main`'s `api.dart`. (The tourism-only strings are absent from the sanitation `libapp.so`: tree-shaking, not a stale build.) Full suite 544 passed, 0 failed.
+
+### (b) OPEN BUG, OURS: tourism registration can be submitted twice
+- **Where.** `mobile/lib/screens/tourism_screens.dart:4316` (`registerVisit`) -> `POST /mobile/tourism/register-visit/` (`mobile_tourist_registration`).
+- **The gap.** No protection against sending twice, **on the client or on the server**. The button is disabled only while the request is in flight; after an error it is enabled again and the form is still filled. The view validates and saves every payload, and `survey_id` (the primary key) is made by the server, so every retry is a **new record**.
+- **The realistic trigger is the timeout, not `_decode`.** The request timeout is 90 s (`TourismApi._requestTimeout`) and Render's own text for the free instance is that it "will spin down with inactivity, which can delay requests by 50 seconds or more" (quoted in this file, under the loading and error work). The server can therefore save the record while the phone has already given up at 90 s. The tourist sees an error, the form is still full, and they send it again: **two records, two visitors counted, two fees charged to one person.**
+- **Not caused by this branch.** It exists on `main` today and was found, not introduced, by this session's work.
+- **The pattern for the fix is already in the repository:** the sanitation community report sends a `client_submission_id` (made once per form), the server looks the id up first (`find_existing_community_report`) and answers the existing record, and an `IntegrityError` from a race is answered the same way (`backend/api/views/mobile.py`). Doing the same for the registration needs a **new column and a migration**, so it is a **separate branch**, not part of this one.
+- The same applies, with the same absence of protection, to **tourism feedback** (`mobile_feedback_submit`) and to the sanitation **household survey create** and **inspection** posts; they were not examined further.
+
+### (c) OPEN BUG, NOT OURS: tell the owner of the sanitation side
+- **Where.** `submitSanitationReportDraft` (`mobile/lib/services/api.dart`, called at `sanitation_screens.dart:2297`) does **not** send `client_submission_id`, so the server's duplicate check cannot recognise it. Together with `saveDraftOnFailure` (the staff app saves a draft after *any* failure of the community-report submit), a report that the server did save but the phone saw fail is kept as a draft, and syncing the draft creates **a second complaint**.
+- It exists on `main` and was not caused by this branch. **We are not fixing it**; it belongs to whoever owns the sanitation app, and is recorded here so they are told.
+
+### (d) Missing test
+- None of the 544 tests gives a 2xx answer that is not a JSON object to a **POST** (registration, feedback, report, household, inspection, check-in). The existing coverage of the strict decoder is the bootstrap only (`mobile/test/tourism_bootstrap_errors_test.dart:108-141`: `[]`, `"hello"`, `null`, `not json at all`, `12`, `{"referenceTables":"oops"}`, `''`). The household tests answer `{}` with 200, which is an object and still passes.
+
 ## The Tourism Theme Is No Longer Cached; the Worker Question Is Answered: One Worker; the Cause of the 5 Minutes Is NOT Known (2026-10-12; `tourism/theme-tokens`)
 - **Not live yet.** This is a backend change on the branch `tourism/theme-tokens`. **It does not take effect on the live system until the branch is merged into `main` and deployed.** It was not merged.
 - **The problem.** A colour change took up to 5 minutes (`TOURISM_THEME_CACHE_TIMEOUT`, 300 s) to reach the mobile app although the save invalidates the cache. The cache was `LocMemCache`, per process: a save clears the cache of the worker that answered it only.
