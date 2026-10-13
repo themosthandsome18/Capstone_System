@@ -2036,7 +2036,10 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
           .box strong { display: block; margin-top: 5px; font-size: 13px; }
           .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 58px; }
           .line { border-top: 1px solid #111827; text-align: center; padding-top: 7px; font-size: 12px; }
-          @media print { body { margin: 24px; } }
+          @media print {
+            body { margin: 24px; }
+            .signatures { margin-top: 24px; break-inside: avoid; page-break-inside: avoid; }
+          }
         </style>
       </head>
       <body>

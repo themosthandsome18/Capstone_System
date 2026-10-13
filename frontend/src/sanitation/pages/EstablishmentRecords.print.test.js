@@ -119,6 +119,33 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+test.each([
+  ["margin-top", "24px"],
+  ["break-inside", "avoid"],
+  ["page-break-inside", "avoid"],
+])("printed signatures use %s: %s in print media", (property, expected) => {
+  const documentNode = printRecord();
+  const style = document.createElement("style");
+  style.textContent = documentNode.querySelector("style").textContent;
+  document.head.appendChild(style);
+
+  try {
+    const printRules = [...style.sheet.cssRules].filter(
+      (rule) => rule.media?.mediaText === "print"
+    );
+    const signatureRule = printRules
+      .flatMap((rule) => [...rule.cssRules])
+      .find((rule) => rule.selectorText === ".signatures");
+
+    expect(signatureRule?.style.getPropertyValue(property)).toBe(expected);
+    expect([...documentNode.querySelectorAll(".signatures .line")].map(
+      (line) => line.textContent
+    )).toEqual(["Prepared by", "Municipal Health Officer / Sanitary Inspector"]);
+  } finally {
+    style.remove();
+  }
+});
+
 test("prints the exact stored permit number in both locations and keeps its QR", () => {
   const documentNode = printRecord({ permit_number: "SP-2026-0901" });
 
