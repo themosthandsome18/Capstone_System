@@ -94,6 +94,33 @@ Commits: `8584c9f` (#16, mobile), `edeaeb1` (#3, web), `199a501` (#3, mobile). W
 ### (e) HOLE, small: `fee_name_test.dart` is mobile only
 - There is no equivalent in `frontend/`. The old name ("Entrance fee") could be put back on the web without a test failing: `entranceFee.test.js` covers `entranceFeeSummary` only, and the review-step string in `BookingManagement.js` is covered by nothing.
 
+### (f) The green icon of the "Environmental Fee" Home guide tile is correct and intended (2026-10-13)
+- **Confirmation.** On the phone, with the app orange (`primary_color #EF7C1F`, `mobile_follows_web` true), the icon and the small box behind it on the Home guide tile "Environmental Fee" are **green**. This is **not** a leak and nothing is to be fixed. It is `Color(0xFF059669)`, a hard-coded **categorical accent**, classified NEUTRAL in Step 4 ("the categorical accents" among the NEUTRAL rows that were accepted as classified).
+- **The four colours, so that nobody takes it for a leak again.** `_buildGuideTile` (`mobile/lib/screens/tourism_screens.dart`) paints the icon with the `color` it is given and the box with the same colour at 10%. Each tile is given its own, none of them from the brand:
+
+  | Tile (Home, "Mauban Travel Guide & Local Tips") | Colour | Line |
+  |---|---|---|
+  | Cagbalete Island Boat Guide | `#0284C7` blue | 1084 |
+  | Maubanin Buntal Festival (May) | `#D97706` amber | 1090 |
+  | **Environmental Fee** | **`#059669` emerald** | **1096** |
+  | Solid Waste & Leave No Trace Policy | `#7C3AED` purple | 1102 |
+
+  The same idea is used by the four pillars of the Home highlights card (blue, amber, emerald `#059669` on "Forest Cascades", red) and by the emergency contacts on Profile (red, blue, teal `#0D9488`, and the fourth, the Tourism Information Desk, which **is** the brand: `context.brand.deep`).
+- **Where the suspicion came from.** From the planner's side, looking at a screenshot; it was **not** found in the code. It was checked in the code and it **did not hold**.
+
+### (g) NEW HOLE IN THE METHOD: the Step 4 scan looked only for `0x...` hex literals
+- The classification of the 175 colour literals searched for `Color(0x...)` hex values. **Named Flutter colours were never examined:** `Colors.green`, `Colors.teal`, `Colors.lightGreen`, `Colors.lime`, `Colors.cyan` and the like.
+- **One was found when this was checked (2026-10-13):** `Colors.green` in `mobile/lib/screens/qr_scanner_screen.dart:113`, the 4 px border of the QR scanner's frame. It is **staff-only** (the staff QR portal and the sanitation permit check), not seen by a tourist, and it was **not touched**. Whether it should follow the brand (a decorative frame, low risk) or stay is not decided.
+- **For the real colour guard, when it is built:** the source scan **must cover named colours as well as hex**, otherwise the same blind part repeats. The pattern to follow is `mobile/test/fee_name_test.dart` (string literals, an explicit allow-list with a reason, a new file is caught, a stale entry fails). For colours it must look at `Color(0x...)`, `Colors.<name>` (the green-family names at least), `AppColors.green` / `deepGreen`, and `Color.fromARGB` / `fromRGBO`.
+
+### (h) DECISION: the categorical accents are NOT made brand
+Two reasons, both about what would break:
+1. **The difference between the tiles would be lost, which is the whole point of different colours.** If the theme is blue (the live mobile colour at the time of writing is `#0155FE`), an "Environmental Fee" tile on `brand.primary` is nearly the same as "Cagbalete Island Boat Guide" (`#0284C7`); with an amber theme it is the same as the festival tile. The accents tell the topics apart; a brand colour tells nothing about the topic.
+2. **`primary` has no guaranteed contrast on a white background.** The web's floor of 2.5:1 (`CONTRAST_WHITE_FLOOR`) is for **white text ON the primary**, not for the primary **on white**. A pale theme (a yellow, for example) would make the icon almost invisible. If it is ever done, the icon takes `ink` or `deep` (which the derivation keeps dark enough), **not** `primary`.
+
+### (i) The STATUS colours stay fixed
+`PermitPill` (verified / not verified), the tick of "Verified & Recorded" and the VERIFIED badge, the status circle and the `displayStatus` pill of the pass modal, the level overlay of the map (`22C55E` in red / yellow / green) and the success dialog (`helpers.dart`) are **fixed**. If they were made brand, "verified" and "low level" would take the colour of the theme and **would no longer say a state**; on the map, red / yellow / green would become **two identical colours** on an orange theme. Not to be done.
+
 ### Device confirmation (2026-10-13): five texts were seen, one by one, on a real Android phone
 - **The APK.** `app-tourism-release.apk` built from `8119f74` after `flutter clean`, SHA-256 `32585287f822d88b1e4c20fe82c923ae5c42f1b9d41aa0d9231e0749ab9c508b`, built **2026-10-13 21:25**. It was installed on the user's phone (the same `applicationId`, `com.mauban.tourism`, as the tourism app already there; whether it went in as an upgrade or as a reinstall was not recorded).
 - **This is the user's observation, not an automated test.** The user installed it and read each text on the phone. Each was seen separately, not as a group:
