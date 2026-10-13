@@ -1894,6 +1894,64 @@ class DataSourceBanner extends StatelessWidget {
   }
 }
 
+/// What the person who fills in the review form is told: who will see what
+/// they send. The text is one paragraph; every statement in it was checked
+/// against the code and the live data (see PROJECT_AUDIT.md, item #16).
+const publicReviewNoticeText =
+    'Reviews are public. Anyone who opens this destination in the app can see '
+    'the initials of your name (for example, J.D.C.), your rating, your '
+    'comment, any photos you attach, and the date. Your cleanliness rating is '
+    'added to the end of your comment. Each photo also gets its own web '
+    'address, so anyone with the link can open it outside the app. Once sent, '
+    'a review cannot be changed or removed from the app. The tourism office '
+    'sees your full name; the public does not. Leave the name blank to appear '
+    'as "Mobile Tourist".';
+
+/// A notice, on a form, that what is about to be sent will be public.
+///
+/// It is its own widget and not a [DataSourceBanner] on purpose: that one says
+/// where the data you are looking at comes from (live, or the saved copy), and
+/// this one says who will see what you are about to send. Two meanings, two
+/// widgets, as with [StatusPill] (a status) and [StatusPill.label] (a type).
+/// Neutral colours: it is not a status and not the brand.
+class PublicVisibilityNotice extends StatelessWidget {
+  const PublicVisibilityNotice({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.public, size: 20, color: AppColors.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MapPin extends StatelessWidget {
   const MapPin({super.key, this.color});
 

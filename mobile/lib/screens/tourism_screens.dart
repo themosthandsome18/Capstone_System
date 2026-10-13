@@ -3812,6 +3812,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
             ),
           ),
+        const PublicVisibilityNotice(text: publicReviewNoticeText),
         SubmitButton(
           label: 'Submit Feedback',
           loading: _submitting,
