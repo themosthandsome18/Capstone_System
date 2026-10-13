@@ -94,18 +94,19 @@ Commits: `8584c9f` (#16, mobile), `edeaeb1` (#3, web), `199a501` (#3, mobile). W
 ### (e) HOLE, small: `fee_name_test.dart` is mobile only
 - There is no equivalent in `frontend/`. The old name ("Entrance fee") could be put back on the web without a test failing: `entranceFee.test.js` covers `entranceFeeSummary` only, and the review-step string in `BookingManagement.js` is covered by nothing.
 
-### Device confirmation (2026-10-13): the four texts were seen, one by one, on a real Android phone
+### Device confirmation (2026-10-13): five texts were seen, one by one, on a real Android phone
 - **The APK.** `app-tourism-release.apk` built from `8119f74` after `flutter clean`, SHA-256 `32585287f822d88b1e4c20fe82c923ae5c42f1b9d41aa0d9231e0749ab9c508b`, built **2026-10-13 21:25**. It was installed on the user's phone (the same `applicationId`, `com.mauban.tourism`, as the tourism app already there; whether it went in as an upgrade or as a reinstall was not recorded).
 - **This is the user's observation, not an automated test.** The user installed it and read each text on the phone. Each was seen separately, not as a group:
   1. **The Environmental Fee bullet on the Port Guide card** (My Visit, the card titled "Mauban Port <-> Cagbalete Boats"), with "Pay at the Tourism Office, 2nd Floor, Mauban Municipal Hall.", and **no** "passenger terminal".
   2. **The bullet "Boat fare is separate..."** on the same card.
   3. **The public-visibility notice** on the review form, above Submit Feedback, beginning "Reviews are public."
   4. **The staff card** reading "check the visitor's details", and **no** "collect fees".
+  5. **The Home guide tile titled "Environmental Fee"** (Home, in "Mauban Travel Guide & Local Tips") with the text "All tourists register at the Tourism Office, 2nd Floor, Mauban Municipal Hall. Receipts serve as your official entry pass to the island sanctuaries." (Confirmed afterwards, in a second look by the user, on the same phone and APK.)
 - **Submit Feedback was not pressed**, so no review was created on the live system.
-- **Not seen on the device in this check** (covered by the source scan and the string check of the APK, not looked at): the Home guide tiles ("Cagbalete Island Boat Guide" and the tile titled "Environmental Fee").
+- **Not confirmed on the device** (covered by the source scan and the string check of the APK, **not** looked at): the Home guide tile "Cagbalete Island Boat Guide" and its text ("The Environmental Fee is paid at the Tourism Office, 2nd Floor, Mauban Municipal Hall. The boat fare is separate and is paid to the boat operator.").
 
 ### Not verified
-- The Home guide tiles are not rendered by any test (they are covered by the source scan and its positive checks only), and were not part of the device check above.
+- The Home guide tiles are not rendered by any test (they are covered by the source scan and its positive checks only). Of the two tiles that changed, only "Environmental Fee" was confirmed on the device; "Cagbalete Island Boat Guide" was not.
 - Whether the LGU holds any printed or off-system document that says "Entrance fee" (looked for in the code only).
 
 ## Merge and Deploy Verified; the Theme-Cache Question Is Closed in Practice (2026-10-13; `main` = `fb65b51`)
