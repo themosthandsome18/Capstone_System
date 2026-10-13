@@ -63,7 +63,7 @@
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
 ## Items #16 and #3 Closed; a Source-Scan Pattern Now Exists; Test Holes Found (2026-10-13; `tourism/theme-tokens`)
-Commits: `8584c9f` (#16, mobile), `edeaeb1` (#3, web), `199a501` (#3, mobile). Web suite 485, mobile suite 558, all passing. **Not yet in `main`, and no APK built, when this was written.**
+Commits: `8584c9f` (#16, mobile), `edeaeb1` (#3, web), `199a501` (#3, mobile). Web suite 485, mobile suite 558, all passing. All three are in `main` (`8119f74`, pushed 2026-10-13 21:05 +08:00); the web part is deployed (bundle `main.c2d564f5.js`, "Environmental Fee" in it, 0 "Entrance fee"); the mobile part is in the APK described under **Device confirmation** below.
 
 ### (a) #16 DONE: the review form tells the sender what the public will see (`8584c9f`)
 - **What.** `FeedbackPage` (`mobile/lib/screens/tourism_screens.dart`) ends, above the Submit button, with one notice (`publicReviewNoticeText`). It says: the public sees the initials of the name (for example J.D.C.), the rating, the comment, the photos and the date; the cleanliness rating is added to the end of the comment; each photo has its own web address that anyone with the link can open outside the app; a sent review cannot be changed or removed from the app; the tourism office sees the full name and the public does not; a blank name appears as "Mobile Tourist".
@@ -94,8 +94,18 @@ Commits: `8584c9f` (#16, mobile), `edeaeb1` (#3, web), `199a501` (#3, mobile). W
 ### (e) HOLE, small: `fee_name_test.dart` is mobile only
 - There is no equivalent in `frontend/`. The old name ("Entrance fee") could be put back on the web without a test failing: `entranceFee.test.js` covers `entranceFeeSummary` only, and the review-step string in `BookingManagement.js` is covered by nothing.
 
+### Device confirmation (2026-10-13): the four texts were seen, one by one, on a real Android phone
+- **The APK.** `app-tourism-release.apk` built from `8119f74` after `flutter clean`, SHA-256 `32585287f822d88b1e4c20fe82c923ae5c42f1b9d41aa0d9231e0749ab9c508b`, built **2026-10-13 21:25**. It was installed on the user's phone (the same `applicationId`, `com.mauban.tourism`, as the tourism app already there; whether it went in as an upgrade or as a reinstall was not recorded).
+- **This is the user's observation, not an automated test.** The user installed it and read each text on the phone. Each was seen separately, not as a group:
+  1. **The Environmental Fee bullet on the Port Guide card** (My Visit, the card titled "Mauban Port <-> Cagbalete Boats"), with "Pay at the Tourism Office, 2nd Floor, Mauban Municipal Hall.", and **no** "passenger terminal".
+  2. **The bullet "Boat fare is separate..."** on the same card.
+  3. **The public-visibility notice** on the review form, above Submit Feedback, beginning "Reviews are public."
+  4. **The staff card** reading "check the visitor's details", and **no** "collect fees".
+- **Submit Feedback was not pressed**, so no review was created on the live system.
+- **Not seen on the device in this check** (covered by the source scan and the string check of the APK, not looked at): the Home guide tiles ("Cagbalete Island Boat Guide" and the tile titled "Environmental Fee").
+
 ### Not verified
-- The Home guide tiles are not rendered by any test (they are covered by the source scan and its positive checks only). No APK has been built with these texts, and the text was not looked at on a device.
+- The Home guide tiles are not rendered by any test (they are covered by the source scan and its positive checks only), and were not part of the device check above.
 - Whether the LGU holds any printed or off-system document that says "Entrance fee" (looked for in the code only).
 
 ## Merge and Deploy Verified; the Theme-Cache Question Is Closed in Practice (2026-10-13; `main` = `fb65b51`)
@@ -372,6 +382,11 @@ Checked against the current code, not against the list.
 - **Remedy.** Run `flutter clean` before any build that goes to a real phone or a demo, then do the proof above. (`flutter clean` also removes the older APKs in `build/`. It may report that `.dart_tool` is in use when a `flutter run` session is open; `build/` is still removed, which is what matters.) A targeted alternative, not used here, is deleting only the `<flavor>Release` folders under `merged_jni_libs`, `merged_native_libs` and `stripped_native_libs`.
 - **Scope.** Nothing in the repo changed: `mobile/build/` is ignored (`mobile/.gitignore`, `/build/`). Not known: why Gradle skipped the refresh (the old `tourismRelease` outputs dated 2026-09-22 were considered current); the sanitation flavor was not examined.
 
+- **Addendum (2026-10-13): what was learned on the builds of that day, to be followed on the next build.**
+  - **Hash, against the stripped copy.** For each ABI the SHA-256 of the `libapp.so` inside the APK must equal that of the **fresh** `build\app\intermediates\flutter\<flavor>Release\jniLibs\<abi>\libapp.so` after `llvm-strip --strip-unneeded` (the NDK's, on a copy). **Not** against the unstripped file: it never matches, even for a correct build.
+  - **Strings, positive and negative.** Check text that only the new code has (**must be there**) and text that only the old code had (**must be absent**). The negative check is the stronger one: tree-shaking can remove a new string from a flavour (it did: the sanitation APK lacks tourism-only strings), but it cannot explain an old string that is still there.
+  - **Search both encodings, and prove the search works before trusting it.** A string that contains a non-ASCII character (the peso sign is one) is stored as **UTF-16** in the snapshot, so a one-byte search **does not find it**. Example from 2026-10-13, `lib/arm64-v8a/libapp.so`: "Children aged 7 and below" (the Port Guide bullet, which has a peso sign) was **0 in one-byte and 1 in UTF-16**; "Mauban Municipal Hall" was 2 in one-byte (the two tiles) and 1 in UTF-16 (the same bullet). A negative check done in one byte only would say "the old text is not there" **while it is there**, which is exactly how an APK of old code can seem to pass.
+  - **The `versionCode` is the same in every build of 1.0.4.** `aapt2 dump badging` shows `versionCode='5' versionName='1.0.4'`, so the version in Android's Settings **cannot tell** whether the app was replaced; the **text on the screen** is the proof, and the SHA-256 of the file installed.
 ## Mobile Tourism: Saved Copy of the Bootstrap (2026-10-11; `tourism/theme-tokens`; Commit C of three)
 - **What is saved.** The text of the last good `GET /api/mobile/tourism/bootstrap/` response, and the time it was saved. Nothing else: not the destination detail, not any visitor or staff data.
 - **Where.** `shared_preferences` (on the web this is the browser's localStorage; the app already used it for the staff token). Two keys: `tourism_bootstrap_v1` (the response text) and `tourism_bootstrap_saved_at` (epoch milliseconds). A file was not used because `path_provider` has no web support.
