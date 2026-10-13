@@ -62,6 +62,35 @@
 - **Live (read-only).** 2026: September 19 + October 17 = 36; "September 2026 leads with 19 visitors, equal to 52.8% of the selected total", gauge 19/36 = 52.8% (was 100.0%). 2027: only September (4), so 4/4 = 100.0%, which is correct. All Years: 19/40 = 47.5% (was 100.0%). Top resort / origin / purpose unchanged and confirmed: 2026 10/36 = 27.8%, 17/36 = 47.2%, 19/36 = 52.8%; All Years 10/40 = 25.0%, 21/40 = 52.5%, 23/40 = 57.5%. The other 10 answers are byte-identical to before for 2026, 2027 and All Years.
 - **Tests.** Backend `PeakSeasonShareTests` (4): the peak month's share on three months of different sizes (August 12 of 20 = 60.0%, with a no-show excluded); the gauge equals the sentence for 2026, All Years and an August-September range (80.0%); top resort, origin and purpose are each 13 of 20 = 65.0% (the fixture gives each a second group, so dividing by the leader itself would show); no data is 0%. Frontend (2): the ring shows the stated 52.8%, and 0% (not 100%) with no data. Breaking each (the peak dividing by itself, the gauge out of step, origin or purpose dividing by itself, the ring's 100% default) failed its test; restored byte-identical, all passed. Full suites: backend 400, frontend 450 (29 suites).
 
+## Merge and Deploy Verified; the Theme-Cache Question Is Closed in Practice (2026-10-13; `main` = `fb65b51`)
+- **What went live.** `main` is `fb65b51`, the merge commit that brought `origin/main` (`1a82b28`, the sanitation print fixes) into `tourism/theme-tokens`; a fast-forward of 33 commits, pushed on 2026-10-13 at **19:43:36 +08:00**. Before the push the merged tree passed all three suites: mobile **544**, backend **408**, frontend **485** (31 suites, including the sanitation owner's `EstablishmentRecords.print.test.js`). The merge itself had no conflicts (`PROJECT_AUDIT.md` merged automatically and kept both sides' notes), and nothing of the sanitation owner's text was changed.
+- **The deploy (fact).** Render dashboard, `capstone-backend`, branch `main`, commit `fb65b51`: status **"Live"**, deploy time **1 m 16 s**. So it became live at about **19:44:52 +08:00**.
+- **Deploy verification from outside** (30 plain GETs, no auth, every 30 s, 19:43:53 to 19:59:10; the poll script is not in the repository): every answer was **200**, none was a 5xx. The frontend bundle (`main.2330d750.js` / `main.18ee4372.css`) and the theme's `updated_at` (`2026-10-12T01:00:00.261644+08:00`) did not change once. That is **expected** and is **not** evidence of the merge: nothing under `frontend/` was touched by this branch, and no data was written. The bundle comes from `1a82b28` (the sanitation commit), not from this branch.
+- **Evidence that the theme is no longer served from the cache** (the clearest we have). The time of `GET /api/tourism-theme/` over the 30 polls (the `GET /api/health/` was 0.1 s throughout):
+
+  | Poll | Time (+08) | `tourism-theme` |
+  |---|---|---|
+  | #1 | 19:43:53 | 1.4 s |
+  | #2 | 19:44:27 | **0.1 s** |
+  | #3 | 19:44:57 | 1.4 s |
+  | #4 to #23 | 19:45:31 to 19:55:30 | **0.3 s** (one 0.4 s) |
+  | #24 | 19:56:01 | 1.5 s |
+  | #25 to #30 | 19:56:33 to 19:59:10 | **0.3 s** |
+
+  - **The old code would draw a sawtooth.** With a 300 s cache, one slow read at each expiry, then fast reads (about 0.1 s, a cache hit) until the next: in 15 minutes, a slow read roughly every 10 polls and 0.1 s in between. What was measured is the opposite: a **flat 0.3 s**, which is what one database read per request costs (the fast 0.1 s of a cache hit is seen once only, at #2).
+  - **The time fits.** #1 (1.4 s) is the old cache's refill and #2 (0.1 s) its hit, both before the deploy. #3 at 19:44:57 is slow again only 64 s later, which the 300 s cache cannot explain, and it falls 5 s after the deploy went live (about 19:44:52): it is the new instance's first read. From #4 the shape is flat.
+  - **The extra 0.2 s fits the cost of a read** (0.3 s per query to the database, as measured earlier by the user, and not measured again here).
+  - **Two limits, stated.** (1) A time cannot by itself name a version of the code; the dashboard's "Live" is what confirms that `fb65b51` is running, and the timing shape supports that the new read path is the one answering. (2) One isolated 1.5 s read at #24 (19:56:01) is **not explained**; it is not periodic (11 minutes after #3, not 5), so it is most likely a transient and not the cache.
+- **Device observation (the user, on a real phone, after the deploy).** Changing the colour is now fast: in the user's words, "para ngang agad-agad". **This is the user's observation, not a measurement**: the seconds were **not timed**. The 5-minute delay that was reported before the fix has **no matching report after it**.
+- **The question "why did a colour change take 5 minutes" is closed in practice, but its original cause was never established.** What is known: (a) the server has **one worker** (Start Command read from the Render dashboard: `--workers 1 --threads 4`), so the per-process cache of several workers is **not** the explanation; (b) with one process the save invalidated the cache in the same process, so the cache by itself should not have caused it; (c) it was **never established whether the change had already been saved** when the delay was measured, which remains the most likely explanation and was not proved. What was done is the robust thing: the theme is read from the database on every request (`859f6ed`), which cannot go stale whatever the number of workers. If a late colour is ever reported again, take the three reads listed in the earlier section (the `updated_at` of `GET /api/tourism-theme/` once a second from another machine, what the admin page showed as saved, and what the phone showed) before looking at the cache.
+- **Notice from Render (reported by the user; not from our changes).** "Upgrading critical infrastructure on October 14th, 9:00 am GMT+8". The system may be unavailable at that time; if it is, it is not caused by this deploy.
+- **Still open** (no visitor data here):
+  - **#16**: the review-form notice.
+  - **#17**: review moderation.
+  - **#18**: the authenticated approval history, **blocked** because there is no tourist login to test it with.
+  - **Tourism registration double-submission** (see the pre-merge gate section): needs a client submission id and a migration, so it is a **separate branch**.
+  - The two questions for the client on the fee (where it is paid, what it is called).
+
 ## Pre-Merge Gate for `tourism/theme-tokens`: `_decode` Is Not a Regression; Two Duplicate-Submission Gaps Found (2026-10-13; `tourism/theme-tokens`, HEAD `969c2c6`, `main` `f9564eb`)
 Static audit plus a build; **nothing was merged, and nothing was posted to the live backend**.
 
