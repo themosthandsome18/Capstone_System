@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Count, Max, Q
@@ -4942,6 +4943,152 @@ class FeedbackModerationTests(TestCase):
         self.assertIsNone(entry.hidden_at)
         self.assertIsNone(entry.hidden_by)
         self.assertIn(entry.pk, [item["id"] for item in self._public()])
+
+
+class ReferenceOptionSchemaTests(TestCase):
+    """The columns behind "registration options" (commit 1: schema only).
+
+    Four choices can be retired (is_active) and an itinerary can say how long
+    the stay is (stay_nights). Nothing reads either yet, so nothing that
+    exists may change: not the payloads, not the reports.
+    """
+
+    ACTIVE_MODELS = (Itinerary, TravelMode, BoatType, VisitPurpose)
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+
+    # -- is_active ---------------------------------------------------------
+
+    def test_the_four_have_is_active_and_it_defaults_to_true(self):
+        for model in self.ACTIVE_MODELS:
+            with self.subTest(model=model.__name__):
+                field = model._meta.get_field("is_active")
+                self.assertIs(field.default, True)
+                row = model.objects.create(id=9000, name="Default check")
+                row.refresh_from_db()
+                self.assertIs(row.is_active, True)
+
+    def test_a_row_inserted_without_the_column_is_active(self):
+        # The old instance, during a deploy, inserts rows without knowing the
+        # column. The database default must make them active.
+        for model in self.ACTIVE_MODELS:
+            with self.subTest(model=model.__name__):
+                field = model._meta.get_field("is_active")
+                self.assertIs(field.db_default, True)
+                table = model._meta.db_table
+                columns = "id, name, requires_capacity_fare" if model is BoatType else "id, name"
+                values = "9100, 'Old code row', false" if model is BoatType else "9100, 'Old code row'"
+                with connection.cursor() as cursor:
+                    cursor.execute(f"INSERT INTO {table} ({columns}) VALUES ({values})")
+                self.assertIs(model.objects.get(pk=9100).is_active, True)
+
+    def test_the_other_reference_tables_have_no_is_active(self):
+        for model in (Country, Region, Province):
+            with self.subTest(model=model.__name__):
+                names = [f.name for f in model._meta.get_fields()]
+                self.assertNotIn("is_active", names)
+
+    def test_only_itinerary_has_stay_nights(self):
+        self.assertIn("stay_nights", [f.name for f in Itinerary._meta.get_fields()])
+        for model in (TravelMode, BoatType, VisitPurpose, Country, Region, Province):
+            with self.subTest(model=model.__name__):
+                self.assertNotIn("stay_nights", [f.name for f in model._meta.get_fields()])
+
+    # -- stay_nights -------------------------------------------------------
+
+    def test_stay_nights_is_nullable_and_none_by_default(self):
+        field = Itinerary._meta.get_field("stay_nights")
+        self.assertTrue(field.null)
+        self.assertTrue(field.blank)
+        self.assertIsNone(Itinerary(id=9199, name="Unsaved").stay_nights)
+        row = Itinerary.objects.create(id=9200, name="Not set yet")
+        row.refresh_from_db()
+        self.assertIsNone(row.stay_nights)
+
+    def test_stay_nights_keeps_zero_apart_from_not_set(self):
+        # 0 means same day; None means "read the name". They are not the same.
+        same_day = Itinerary.objects.create(id=9201, name="X", stay_nights=0)
+        unset = Itinerary.objects.create(id=9202, name="Y")
+        same_day.refresh_from_db()
+        unset.refresh_from_db()
+        self.assertEqual(same_day.stay_nights, 0)
+        self.assertIsNotNone(same_day.stay_nights)
+        self.assertIsNone(unset.stay_nights)
+
+    def test_stay_nights_cannot_be_negative(self):
+        row = Itinerary(id=9203, name="Negative", stay_nights=-1)
+        with self.assertRaises(ValidationError):
+            row.full_clean()
+
+    # -- nothing that exists changes ---------------------------------------
+
+    def test_the_payload_has_the_same_keys_as_before(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload()
+        for key in ("itineraries", "travelModes", "visitPurposes"):
+            with self.subTest(key=key):
+                self.assertTrue(payload[key])
+                for item in payload[key]:
+                    self.assertEqual(set(item), {"id", "name"})
+        for item in payload["boatTypes"]:
+            self.assertEqual(set(item), {"id", "name", "requires_capacity_fare"})
+
+    def test_an_inactive_row_is_still_in_the_payload(self):
+        # Nothing filters on is_active yet (that is the next commit); this
+        # commit must not change what is offered.
+        from .services.tourism import build_reference_tables_payload
+
+        row = Itinerary.objects.create(id=9300, name="Retired later", is_active=False)
+
+        ids = [item["id"] for item in build_reference_tables_payload()["itineraries"]]
+
+        self.assertIn(row.id, ids)
+
+    def test_the_reports_still_read_the_name_not_stay_nights(self):
+        from .services.tourism import (
+            build_arrival_monitoring_payload,
+            build_tourism_question_answers,
+        )
+
+        # Opposite on purpose: the name says same day, stay_nights says 5; the
+        # name says nights, stay_nights says 0. Today only the name counts.
+        day_name = Itinerary.objects.create(id=9400, name="Weekend 2 Days", stay_nights=5)
+        night_name = Itinerary.objects.create(id=9401, name="Camp Out", stay_nights=0)
+        quezon = Province.objects.get(name="Quezon")
+        common = dict(
+            full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(), total_visitors=4, filipino_count=4,
+            total_male=4, age_8_59=4, status="arrived",
+        )
+        TouristRecord.objects.create(survey_id="SCH-0001", itinerary=day_name, **common)
+        # A different head count, so that a swap of the two would show in the
+        # totals (4 and 4 would look the same swapped).
+        TouristRecord.objects.create(
+            survey_id="SCH-0002", itinerary=night_name,
+            **{**common, "total_visitors": 6, "filipino_count": 6, "total_male": 6, "age_8_59": 6},
+        )
+
+        rows = {
+            row["survey_id"]: row
+            for row in build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]
+        }
+        self.assertEqual((rows["SCH-0001"]["sameDay"], rows["SCH-0001"]["overnight"]), (4, 0))
+        self.assertEqual((rows["SCH-0002"]["sameDay"], rows["SCH-0002"]["overnight"]), (0, 6))
+
+        answers = {a["id"]: a for a in build_tourism_question_answers({"year": "2026"})}
+        self.assertEqual(
+            answers["stay_type"]["answer"],
+            "Same-day visitors: 4; overnight or multi-day visitors: 6.",
+        )
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
 
 
 class PeakSeasonShareTests(TestCase):
