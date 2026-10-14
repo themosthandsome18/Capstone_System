@@ -2677,8 +2677,8 @@ class BoatCapacityFareFlagTests(_ProductionBoatRows, TestCase):
         self.assertEqual(
             [dict(row) for row in data],
             [
-                {"id": 1, "name": "Public Boat", "requires_capacity_fare": True},
-                {"id": 2, "name": self.PRIVATE_OLD, "requires_capacity_fare": False},
+                {"id": 1, "name": "Public Boat", "requires_capacity_fare": True, "is_active": True},
+                {"id": 2, "name": self.PRIVATE_OLD, "requires_capacity_fare": False, "is_active": True},
             ],
         )
 
@@ -5024,10 +5024,12 @@ class ReferenceOptionSchemaTests(TestCase):
 
     # -- nothing that exists changes ---------------------------------------
 
-    def test_the_payload_has_the_same_keys_as_before(self):
+    def test_the_mobile_payload_has_the_same_keys_as_before(self):
+        # Since commit 2 the WEB payload carries is_active (and stay_nights);
+        # the mobile payload must keep exactly the keys it always had.
         from .services.tourism import build_reference_tables_payload
 
-        payload = build_reference_tables_payload()
+        payload = build_reference_tables_payload(active_only=True)
         for key in ("itineraries", "travelModes", "visitPurposes"):
             with self.subTest(key=key):
                 self.assertTrue(payload[key])
@@ -5036,9 +5038,9 @@ class ReferenceOptionSchemaTests(TestCase):
         for item in payload["boatTypes"]:
             self.assertEqual(set(item), {"id", "name", "requires_capacity_fare"})
 
-    def test_an_inactive_row_is_still_in_the_payload(self):
-        # Nothing filters on is_active yet (that is the next commit); this
-        # commit must not change what is offered.
+    def test_an_inactive_row_is_still_in_the_web_payload(self):
+        # The web is given every option, retired or not (commit 2 filters the
+        # mobile payload only).
         from .services.tourism import build_reference_tables_payload
 
         row = Itinerary.objects.create(id=9300, name="Retired later", is_active=False)
@@ -5086,6 +5088,316 @@ class ReferenceOptionSchemaTests(TestCase):
             answers["stay_type"]["answer"],
             "Same-day visitors: 4; overnight or multi-day visitors: 6.",
         )
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class ReferenceOptionPayloadTests(TestCase):
+    """What each client is offered (registration options, commit 2).
+
+    The mobile app gets only the ACTIVE options, in the keys it always read.
+    The web gets every option with is_active, so it can show a retired one and
+    name it on old records. The cache holds the full lists and the filtering is
+    done after it.
+    """
+
+    MOBILE_KEYS = {
+        "itineraries": {"id", "name"},
+        "travelModes": {"id", "name"},
+        "boatTypes": {"id", "name", "requires_capacity_fare"},
+        "visitPurposes": {"id", "name"},
+    }
+    CACHE_KEY = "mobile_reference_tables_v2"
+
+    # Different numbers on purpose (1 active + 2 retired, 1 retired, 1 retired,
+    # 3 retired): a mutant that swaps "active" and "retired" cannot give the
+    # same answer.
+    ITINERARY_ACTIVE, ITINERARY_RETIRED = [9501], [9502, 9503]
+    MODE_RETIRED = [9511]
+    BOAT_RETIRED = [9521]
+    PURPOSE_RETIRED = [9531, 9532, 9533]
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        Itinerary.objects.create(id=9501, name="Added and active", stay_nights=2)
+        for i in self.ITINERARY_RETIRED:
+            Itinerary.objects.create(id=i, name=f"Retired itinerary {i}", is_active=False)
+        for i in self.MODE_RETIRED:
+            TravelMode.objects.create(id=i, name=f"Retired mode {i}", is_active=False)
+        for i in self.BOAT_RETIRED:
+            BoatType.objects.create(
+                id=i, name=f"Retired boat {i}", requires_capacity_fare=True, is_active=False
+            )
+        for i in self.PURPOSE_RETIRED:
+            VisitPurpose.objects.create(id=i, name=f"Retired purpose {i}", is_active=False)
+
+    def _retired(self):
+        return {
+            "itineraries": set(self.ITINERARY_RETIRED),
+            "travelModes": set(self.MODE_RETIRED),
+            "boatTypes": set(self.BOAT_RETIRED),
+            "visitPurposes": set(self.PURPOSE_RETIRED),
+        }
+
+    @staticmethod
+    def _ids(payload, key):
+        return {item["id"] for item in payload[key]}
+
+    def _record(self, survey_id, itinerary):
+        quezon = Province.objects.get(name="Quezon")
+        return TouristRecord.objects.create(
+            survey_id=survey_id, full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=itinerary, travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=4, filipino_count=4, total_male=4, age_8_59=4, status="arrived",
+        )
+
+    def _admin_client(self):
+        user = User.objects.create_user(username="options_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        return client
+
+    # -- who gets what -----------------------------------------------------
+
+    def test_a_retired_option_is_not_in_the_mobile_payload(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload(active_only=True)
+
+        for key, retired in self._retired().items():
+            with self.subTest(key=key):
+                self.assertFalse(self._ids(payload, key) & retired)
+        self.assertIn(9501, self._ids(payload, "itineraries"))  # an active one stays
+
+    def test_a_retired_option_is_in_the_web_payload_marked_inactive(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload()
+
+        for key, retired in self._retired().items():
+            with self.subTest(key=key):
+                rows = {item["id"]: item for item in payload[key]}
+                for i in retired:
+                    self.assertIn(i, rows)
+                    self.assertIs(rows[i]["is_active"], False)
+        self.assertIs(
+            {i["id"]: i for i in payload["itineraries"]}[9501]["is_active"], True
+        )
+
+    def test_the_web_endpoint_carries_is_active_and_stay_nights(self):
+        response = self._admin_client().get("/api/reference-tables/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        itineraries = {item["id"]: item for item in response.json()["itineraries"]}
+        self.assertEqual(itineraries[9501]["stay_nights"], 2)
+        self.assertIsNone(itineraries[9502]["stay_nights"])
+        self.assertIs(itineraries[9502]["is_active"], False)
+        boats = {item["id"]: item for item in response.json()["boatTypes"]}
+        self.assertEqual(
+            set(boats[9521]), {"id", "name", "requires_capacity_fare", "is_active"}
+        )
+
+    def test_the_mobile_payload_keeps_the_old_keys_only(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload(active_only=True)
+
+        for key, keys in self.MOBILE_KEYS.items():
+            with self.subTest(key=key):
+                self.assertTrue(payload[key])
+                for item in payload[key]:
+                    self.assertEqual(set(item), keys)
+
+    def test_the_mobile_bootstrap_endpoint_has_the_old_shape_and_no_retired(self):
+        response = APIClient().get("/api/mobile/tourism/bootstrap/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tables = response.json()["referenceTables"]
+        for key, keys in self.MOBILE_KEYS.items():
+            with self.subTest(key=key):
+                for item in tables[key]:
+                    self.assertEqual(set(item), keys)
+                self.assertFalse(self._ids(tables, key) & self._retired()[key])
+        self.assertEqual(
+            set(tables),
+            {"countries", "regions", "provinces", "itineraries", "travelModes",
+             "boatTypes", "visitPurposes", "resorts"},
+        )
+
+    def test_other_lists_are_untouched(self):
+        from .services.tourism import build_reference_tables_payload
+
+        mobile = build_reference_tables_payload(active_only=True)
+        web = build_reference_tables_payload()
+
+        for key in ("countries", "regions", "provinces"):
+            with self.subTest(key=key):
+                self.assertEqual(mobile[key], web[key])
+                self.assertNotIn("is_active", mobile[key][0])
+
+    # -- history -----------------------------------------------------------
+
+    def test_an_old_record_keeps_its_option_name_after_it_is_retired(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        itinerary = Itinerary.objects.create(id=9600, name="Retired Trail")
+        self._record("OPT-0001", itinerary)
+        Itinerary.objects.filter(pk=9600).update(is_active=False)
+
+        row = build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"][0]
+
+        self.assertEqual(row["itinerary"], "Retired Trail")
+        self.assertEqual(TouristRecord.objects.get(pk="OPT-0001").itinerary.name, "Retired Trail")
+
+    def test_a_retired_option_is_still_accepted_on_a_record(self):
+        # A visitor who opened the form before it was retired must not lose
+        # their registration to an error: the dropdown is the control.
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "Stale Form", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1, "itinerary_id": 9502,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TouristRecord.objects.get(full_name="Stale Form").itinerary_id, 9502)
+
+    # -- defaults ----------------------------------------------------------
+
+    def test_a_default_is_never_a_retired_option(self):
+        from .views.mobile import default_reference_id
+
+        lowest = Itinerary.objects.order_by("id").first()
+        second = Itinerary.objects.order_by("id")[1]
+        Itinerary.objects.filter(pk=lowest.pk).update(is_active=False)
+
+        self.assertEqual(default_reference_id(Itinerary), second.pk)
+
+    def test_the_default_is_the_lowest_active_id(self):
+        from .views.mobile import default_reference_id
+
+        # Retire everything but two, 9501 and a seeded one: the lower id wins.
+        keep = Itinerary.objects.exclude(pk=9501).order_by("id").first().pk
+        Itinerary.objects.exclude(pk__in=[keep, 9501]).update(is_active=False)
+
+        self.assertEqual(default_reference_id(Itinerary), min(keep, 9501))
+
+    def test_every_retirable_list_skips_a_retired_first_row(self):
+        from .views.mobile import default_reference_id
+
+        for model in (TravelMode, BoatType, VisitPurpose):
+            with self.subTest(model=model.__name__):
+                first = model.objects.order_by("id").first()
+                model.objects.filter(pk=first.pk).update(is_active=False)
+                expected = model.objects.filter(is_active=True).order_by("id").first().pk
+                self.assertNotEqual(expected, first.pk)
+                self.assertEqual(default_reference_id(model), expected)
+
+    def test_with_none_active_there_is_no_guess_and_a_400(self):
+        from .views.mobile import default_reference_id
+
+        Itinerary.objects.update(is_active=False)
+        before = TouristRecord.objects.count()
+
+        self.assertIsNone(default_reference_id(Itinerary))
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "No Default", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("itinerary_id", response.json())
+        self.assertEqual(TouristRecord.objects.count(), before)
+
+    def test_a_registration_without_ids_gets_an_active_option(self):
+        Itinerary.objects.filter(pk=Itinerary.objects.order_by("id").first().pk).update(is_active=False)
+        expected = Itinerary.objects.filter(is_active=True).order_by("id").first().pk
+
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "Defaulted", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TouristRecord.objects.get(full_name="Defaulted").itinerary_id, expected)
+
+    def test_the_default_of_the_other_models_is_unchanged(self):
+        # Resort and the places have no is_active; their default is not part of
+        # this change (the Resort default is its own item).
+        from .views.mobile import default_reference_id
+
+        self.assertEqual(default_reference_id(Resort), Resort.objects.first().pk)
+        self.assertEqual(default_reference_id(Country), Country.objects.first().pk)
+
+    # -- the cache ---------------------------------------------------------
+
+    def test_the_cache_does_not_mix_mobile_and_web(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        # mobile first, then web: the web must still see the retired ones
+        cache.clear()
+        build_reference_tables_payload(active_only=True)
+        web = build_reference_tables_payload(active_only=False)
+        self.assertTrue(self._ids(web, "itineraries") >= set(self.ITINERARY_RETIRED))
+
+        # web first, then mobile: the mobile must still not
+        cache.clear()
+        build_reference_tables_payload(active_only=False)
+        mobile = build_reference_tables_payload(active_only=True)
+        self.assertFalse(self._ids(mobile, "itineraries") & set(self.ITINERARY_RETIRED))
+        self.assertFalse(self._ids(mobile, "visitPurposes") & set(self.PURPOSE_RETIRED))
+
+    def test_the_cache_holds_the_full_lists_under_v2(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        build_reference_tables_payload(active_only=True)
+
+        cached = cache.get(self.CACHE_KEY)
+        self.assertIsNotNone(cached)
+        self.assertTrue(
+            {i["id"] for i in cached["itineraries"]} >= set(self.ITINERARY_RETIRED)
+        )
+        self.assertIsNone(cache.get("mobile_reference_tables_v1"))
+
+    def test_an_entry_of_the_old_shape_under_v1_is_ignored(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        cache.set(
+            "mobile_reference_tables_v1",
+            {key: [{"id": 1, "name": "Stale"}] for key in
+             ("countries", "regions", "provinces", "itineraries", "travelModes",
+              "boatTypes", "visitPurposes")},
+            timeout=900,
+        )
+
+        web = build_reference_tables_payload()
+
+        self.assertNotIn("Stale", [i["name"] for i in web["itineraries"]])
+        self.assertIn("is_active", web["itineraries"][0])
 
     def test_the_model_has_no_change_without_a_migration(self):
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)

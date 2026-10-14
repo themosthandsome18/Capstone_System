@@ -69,8 +69,19 @@ REFERENCE_TABLE_SERIALIZERS = {
     "resorts": (Resort, ResortSerializer),
 }
 
-MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v1"
+# v2: the cached lists carry is_active / stay_nights. A v1 entry has the old
+# shape and must not be read back as if it were this one.
+MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v2"
 MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
+
+# What the mobile app reads of each list an admin can retire. The app gets
+# only the ACTIVE rows and only these keys, exactly the shape it always had.
+MOBILE_OPTION_KEYS = {
+    "itineraries": ("id", "name"),
+    "travelModes": ("id", "name"),
+    "boatTypes": ("id", "name", "requires_capacity_fare"),
+    "visitPurposes": ("id", "name"),
+}
 
 
 def with_origin(queryset):
@@ -129,11 +140,25 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
 ]
 
 
-def build_reference_tables_payload(resorts=None):
+def build_reference_tables_payload(resorts=None, active_only=False):
+    """The reference lists.
+
+    active_only=False (the web): every row, with is_active, so the web can
+    show a retired option and name it on old records.
+    active_only=True (the mobile app): only the active rows, cut back to the
+    keys the app reads.
+
+    The cache always holds the FULL lists; active_only is applied afterwards,
+    in memory. Caching the filtered result under the same key would serve the
+    web a mobile list (or the other way round) for up to 15 minutes.
+    """
     static_payload = cache.get(MOBILE_REFERENCE_TABLES_CACHE_KEY)
     if static_payload is None:
         static_payload = {
-            payload_key: serializer_class(model.objects.all(), many=True).data
+            payload_key: [
+                dict(item)
+                for item in serializer_class(model.objects.all(), many=True).data
+            ]
             for payload_key, (model, serializer_class) in STATIC_REFERENCE_TABLE_SERIALIZERS.items()
         }
         cache.set(
@@ -143,6 +168,14 @@ def build_reference_tables_payload(resorts=None):
         )
 
     payload = dict(static_payload)
+
+    if active_only:
+        for payload_key, keys in MOBILE_OPTION_KEYS.items():
+            payload[payload_key] = [
+                {key: item[key] for key in keys}
+                for item in static_payload[payload_key]
+                if item.get("is_active", True)
+            ]
 
     if resorts is not None:
         payload["resorts"] = ResortSerializer(resorts, many=True).data
