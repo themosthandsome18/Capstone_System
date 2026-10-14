@@ -2798,8 +2798,16 @@
 /* ================= FEEDBACK RIGHT ACTIONS ================= */
 /* Status badge + Reply button */
 
+/* One row, one height: the pill and the buttons stretch to the tallest (the
+   buttons, which have a border and an icon) and centre what is inside. With
+   items-start the pill kept its own, shorter height and sat at the top.
+   self-start keeps the ROW itself from stretching to the height of the card. */
 .feedback-right {
-  @apply flex items-start gap-3;
+  @apply flex items-stretch gap-3 self-start;
+}
+
+.feedback-right .status {
+  @apply flex items-center;
 }
 
 .status {
@@ -2843,10 +2851,6 @@
 
 .feedback-hide-note {
   @apply m-0 text-xs font-medium text-slate-500;
-}
-
-.feedback-right .reply-btn + .reply-btn {
-  @apply mt-2;
 }
 
 /* ============================================================================== REPORTS PAGE ================================================ */
