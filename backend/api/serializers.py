@@ -246,6 +246,13 @@ class FeedbackEntrySerializer(serializers.ModelSerializer):
         source="destination",
         queryset=Resort.objects.all(),
     )
+    # Moderation state, for staff. READ-ONLY on purpose: this serializer also
+    # takes the public POST of a review (AllowAny), and a client must never be
+    # able to set these; only the hide / unhide actions do, from request.user.
+    # The user is shown by name; the id of the user is not given.
+    is_hidden = serializers.BooleanField(read_only=True)
+    hidden_at = serializers.DateTimeField(read_only=True)
+    hidden_by_display = serializers.SerializerMethodField()
 
     class Meta:
         model = FeedbackEntry
@@ -260,7 +267,17 @@ class FeedbackEntrySerializer(serializers.ModelSerializer):
             "message",
             "reply",
             "photos",
+            "is_hidden",
+            "hidden_at",
+            "hidden_by_display",
         ]
+
+    def get_hidden_by_display(self, obj):
+        if not obj.is_hidden:
+            return None
+        if not obj.hidden_by_id:
+            return "Deleted user"
+        return obj.hidden_by.get_full_name() or obj.hidden_by.username
 
 
 class TouristRecordSerializer(serializers.ModelSerializer):

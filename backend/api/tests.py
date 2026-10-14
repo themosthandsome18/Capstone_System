@@ -4504,6 +4504,7 @@ class PublicFeedbackWhitelistTests(TestCase):
     STAFF_KEYS = {
         "id", "destinationId", "reviewer", "rating", "status", "date",
         "title", "message", "reply", "photos",
+        "is_hidden", "hidden_at", "hidden_by_display",
     }
     TYPED_NAME = "Juan Dela Cruz"
 
@@ -4586,6 +4587,361 @@ class PublicFeedbackWhitelistTests(TestCase):
         self.assertEqual(
             set(PublicFeedbackSerializer.Meta.read_only_fields), self.PUBLIC_KEYS
         )
+
+
+class FeedbackModerationTests(TestCase):
+    """Hide / unhide a review (item #17).
+
+    A hidden review is not shown to the public and does not count in the
+    destination's rating; staff still see it, marked, and can show it again.
+    """
+
+    PUBLIC_KEYS = {"id", "reviewer", "rating", "date", "message", "photos", "reply"}
+    MODERATION_KEYS = {"is_hidden", "hidden_at", "hidden_by_display", "hidden_by"}
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        from api.views.mobile import get_mobile_destination_queryset
+
+        cls.resort = get_mobile_destination_queryset().order_by("resort_id").first()
+
+    # -- helpers -----------------------------------------------------------
+
+    def _user(self, username, role):
+        user = User.objects.create_user(username=username, password="Staff@12345")
+        UserProfile.objects.create(user=user, role=role)
+        return user
+
+    def _client(self, user=None):
+        client = APIClient()
+        if user is not None:
+            client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.get_or_create(user=user)[0].key}")
+        return client
+
+    def _review(self, rating=5, **extra):
+        values = dict(
+            destination=self.resort,
+            reviewer="Juan Dela Cruz",
+            rating=rating,
+            status=FeedbackEntry.STATUS_POSITIVE,
+            date="2026-09-22",
+            title="Mobile tourism feedback",
+            message="Clean beach.",
+            reply="Thank you.",
+        )
+        values.update(extra)
+        return FeedbackEntry.objects.create(**values)
+
+    def _rating(self):
+        self.resort.refresh_from_db()
+        return self.resort.tourism_rating
+
+    def _public(self):
+        response = APIClient().get(
+            f"/api/mobile/tourism/destinations/{self.resort.resort_id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.json()["recentFeedback"]
+
+    def _hide(self, client, entry):
+        return client.post(f"/api/feedback/{entry.pk}/hide/")
+
+    def _unhide(self, client, entry):
+        return client.post(f"/api/feedback/{entry.pk}/unhide/")
+
+    # -- the public side ---------------------------------------------------
+
+    def test_a_hidden_review_is_not_in_the_public_answer(self):
+        keep = self._review(rating=5)
+        gone = self._review(rating=3)
+        staff = self._client(self._user("mod_a", ROLE_TOURISM))
+        self.assertEqual(self._hide(staff, gone).status_code, status.HTTP_200_OK)
+
+        ids = [item["id"] for item in self._public()]
+
+        self.assertEqual(ids, [keep.pk])
+
+    def test_six_reviews_one_hidden_still_gives_five(self):
+        # The filter must come BEFORE the slice of five: after it, the hidden
+        # review would still take one of the five places and four would show.
+        entries = [self._review(rating=4, date=f"2026-09-{day:02d}") for day in range(10, 16)]
+        staff = self._client(self._user("mod_b", ROLE_TOURISM))
+        newest = entries[-1]  # the newest is the one that would be in the five
+        self.assertEqual(self._hide(staff, newest).status_code, status.HTTP_200_OK)
+
+        items = self._public()
+
+        self.assertEqual(len(items), 5)
+        self.assertNotIn(newest.pk, [item["id"] for item in items])
+        self.assertEqual(
+            sorted(item["id"] for item in items),
+            sorted(entry.pk for entry in entries[:-1]),
+        )
+
+    def test_the_public_keys_are_still_the_seven_and_no_moderation_field_shows(self):
+        hidden = self._review()
+        self._review(rating=4)
+        staff = self._client(self._user("mod_c", ROLE_TOURISM))
+        self._hide(staff, hidden)
+
+        for item in self._public():
+            self.assertEqual(set(item), self.PUBLIC_KEYS)
+            self.assertFalse(set(item) & self.MODERATION_KEYS)
+
+    def test_a_public_post_cannot_set_the_moderation_fields(self):
+        client = APIClient()
+        mod = self._user("mod_d", ROLE_TOURISM)
+
+        response = client.post(
+            "/api/mobile/tourism/feedback/",
+            {
+                "destination_id": self.resort.resort_id,
+                "reviewer": "Visitor",
+                "rating": 4,
+                "message": "Nice.",
+                "is_hidden": True,
+                "hidden_by": mod.pk,
+                "hidden_at": "2026-01-01T00:00:00Z",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        entry = FeedbackEntry.objects.get(pk=response.json()["id"])
+        self.assertFalse(entry.is_hidden)
+        self.assertIsNone(entry.hidden_at)
+        self.assertIsNone(entry.hidden_by)
+        # ...and the answer to the sender carries no moderation field.
+        self.assertFalse(set(response.json()) & self.MODERATION_KEYS)
+        # ...and the review is in the public answer.
+        self.assertIn(entry.pk, [item["id"] for item in self._public()])
+
+    # -- the rating --------------------------------------------------------
+
+    def test_the_rating_leaves_out_the_hidden_and_comes_back(self):
+        five = self._review(rating=5)
+        three = self._review(rating=3)
+        staff = self._client(self._user("mod_e", ROLE_TOURISM))
+        self.assertEqual(self._rating(), 4.0)
+
+        self._hide(staff, three)
+        self.assertEqual(self._rating(), 5.0)
+
+        self._unhide(staff, three)
+        self.assertEqual(self._rating(), 4.0)
+
+        self._hide(staff, three)
+        self._hide(staff, five)
+        self.assertEqual(self._rating(), 0.0)
+
+    def test_hiding_runs_the_save_signal_so_the_stars_change_at_once(self):
+        # QuerySet.update() sends no post_save: the rating would stay as it was.
+        self._review(rating=5)
+        three = self._review(rating=3)
+        staff = self._client(self._user("mod_f", ROLE_TOURISM))
+        self.assertEqual(self._rating(), 4.0)
+
+        response = self._hide(staff, three)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rating(), 5.0)  # in the same request, no wait
+
+    # -- the actions -------------------------------------------------------
+
+    def test_hide_sets_the_three_fields_from_the_user_and_unhide_clears_them(self):
+        entry = self._review()
+        user = self._user("mod_g", ROLE_TOURISM)
+        staff = self._client(user)
+        before = timezone.now()
+
+        response = self._hide(staff, entry)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertTrue(entry.is_hidden)
+        self.assertEqual(entry.hidden_by_id, user.pk)
+        self.assertGreaterEqual(entry.hidden_at, before)
+        body = response.json()
+        self.assertTrue(body["is_hidden"])
+        self.assertEqual(body["hidden_by_display"], "mod_g")
+        self.assertNotIn("hidden_by", body)  # the id of the user is not given
+
+        response = self._unhide(staff, entry)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_hidden)
+        self.assertIsNone(entry.hidden_at)
+        self.assertIsNone(entry.hidden_by)
+
+    def test_the_who_and_when_come_from_the_server_not_the_request(self):
+        entry = self._review()
+        user = self._user("mod_h", ROLE_TOURISM)
+        other = self._user("someone_else", ROLE_TOURISM)
+
+        response = self._client(user).post(
+            f"/api/feedback/{entry.pk}/hide/",
+            {"hidden_by": other.pk, "hidden_at": "2001-01-01T00:00:00Z", "is_hidden": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertTrue(entry.is_hidden)
+        self.assertEqual(entry.hidden_by_id, user.pk)
+        self.assertGreater(entry.hidden_at.year, 2001)
+
+    def test_hide_is_idempotent_the_first_who_and_when_stay(self):
+        entry = self._review()
+        first = self._user("mod_first", ROLE_TOURISM)
+        second = self._user("mod_second", ROLE_ADMIN)
+        self._hide(self._client(first), entry)
+        entry.refresh_from_db()
+        when = entry.hidden_at
+
+        response = self._hide(self._client(second), entry)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertEqual(entry.hidden_by_id, first.pk)
+        self.assertEqual(entry.hidden_at, when)
+        self.assertEqual(response.json()["hidden_by_display"], "mod_first")
+
+    def test_permissions(self):
+        entry = self._review()
+        paths = [f"/api/feedback/{entry.pk}/hide/", f"/api/feedback/{entry.pk}/unhide/"]
+
+        for path in paths:
+            with self.subTest(path=path, who="nobody"):
+                self.assertEqual(self._client().post(path).status_code, status.HTTP_401_UNAUTHORIZED)
+            for role in (ROLE_TOURIST, ROLE_SANITATION):
+                with self.subTest(path=path, who=role):
+                    user = self._user(f"mod_{role}_{path[-6:-1]}", role)
+                    self.assertEqual(self._client(user).post(path).status_code, status.HTTP_403_FORBIDDEN)
+
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_hidden)  # none of those changed it
+
+        for role in (ROLE_TOURISM, ROLE_ADMIN):
+            with self.subTest(who=role):
+                user = self._user(f"mod_ok_{role}", role)
+                self.assertEqual(self._hide(self._client(user), entry).status_code, status.HTTP_200_OK)
+                self.assertEqual(self._unhide(self._client(user), entry).status_code, status.HTTP_200_OK)
+
+    def test_an_unknown_review_is_404(self):
+        staff = self._client(self._user("mod_i", ROLE_TOURISM))
+
+        self.assertEqual(staff.post("/api/feedback/999999/hide/").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(staff.post("/api/feedback/999999/unhide/").status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_hiding_changes_nothing_else_of_the_review(self):
+        entry = self._review(rating=4, reply="Thank you.", message="Clean beach.")
+        staff = self._client(self._user("mod_j", ROLE_TOURISM))
+
+        body = self._hide(staff, entry).json()
+
+        # the answer shows the review as it is, not only the database
+        self.assertEqual(body["reply"], "Thank you.")
+        self.assertEqual(body["message"], "Clean beach.")
+        self.assertEqual(body["rating"], 4)
+        entry.refresh_from_db()
+        self.assertEqual(entry.reply, "Thank you.")
+        self.assertEqual(entry.message, "Clean beach.")
+        self.assertEqual(entry.rating, 4)
+        self.assertEqual(entry.reviewer, "Juan Dela Cruz")
+
+    def test_patch_cannot_hide_or_unhide(self):
+        entry = self._review()
+        staff = self._client(self._user("mod_k", ROLE_TOURISM))
+
+        response = staff.patch(
+            f"/api/feedback/{entry.pk}/", {"is_hidden": True, "reply": "Edited"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_hidden)
+        self.assertEqual(entry.reply, "Edited")  # a reply edit still works
+
+    # -- the staff side: the trap ------------------------------------------
+
+    def test_the_staff_list_still_has_the_hidden_one_marked_with_the_name(self):
+        # If the staff list left the hidden review out, the admin could not see
+        # what they hid, and so could not show it again.
+        entry = self._review()
+        user = self._user("mod_l", ROLE_TOURISM)
+        staff = self._client(user)
+        self._hide(staff, entry)
+
+        listing = staff.get("/api/feedback/")
+
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        row = next(item for item in listing.json() if item["id"] == entry.pk)
+        self.assertTrue(row["is_hidden"])
+        self.assertEqual(row["hidden_by_display"], "mod_l")
+        self.assertIsNotNone(row["hidden_at"])
+        self.assertEqual(row["reviewer"], "Juan Dela Cruz")  # the full name, as before
+        self.assertNotIn("hidden_by", row)
+
+    def test_the_web_bootstrap_still_has_the_hidden_one(self):
+        entry = self._review()
+        staff = self._client(self._user("mod_m", ROLE_TOURISM))
+        self._hide(staff, entry)
+
+        boot = staff.get("/api/bootstrap/")
+
+        self.assertEqual(boot.status_code, status.HTTP_200_OK)
+        row = next(item for item in boot.json()["feedbackEntries"] if item["id"] == entry.pk)
+        self.assertTrue(row["is_hidden"])
+
+    # -- accountability ----------------------------------------------------
+
+    def test_the_activity_log_says_which_review_and_who(self):
+        entry = self._review(title="Mobile tourism feedback")
+        user = self._user("mod_n", ROLE_TOURISM)
+        staff = self._client(user)
+        before = ActivityLog.objects.count()
+
+        self._hide(staff, entry)
+        self._hide(staff, entry)  # a repeat changes nothing and is not logged
+        self._unhide(staff, entry)
+
+        logs = list(ActivityLog.objects.order_by("id")[before:])
+        self.assertEqual(len(logs), 2)
+        for log in logs:
+            self.assertEqual(log.action, "update")  # no new action
+            self.assertEqual(log.user_id, user.pk)
+            self.assertEqual(log.record_type, "FeedbackEntry")
+            self.assertEqual(log.record_id, str(entry.pk))
+            self.assertNotEqual(log.record_label, "Mobile tourism feedback")
+            self.assertIn(self.resort.resort_name, log.record_label)
+            self.assertIn("2026-09-22", log.record_label)
+        self.assertTrue(logs[0].record_label.startswith("Review hidden:"))
+        self.assertTrue(logs[1].record_label.startswith("Review shown again:"))
+
+    def test_no_new_activity_action_was_added(self):
+        from api.models import ACTIVITY_ACTION_CHOICES
+
+        self.assertEqual([value for value, _ in ACTIVITY_ACTION_CHOICES], ["create", "update", "delete"])
+
+    # -- the migration -----------------------------------------------------
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        # makemigrations --check exits non-zero (SystemExit) when a model
+        # changed and no migration says so.
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+    def test_a_review_that_already_existed_is_visible(self):
+        # The two live reviews were made before the columns: they take the
+        # default and stay visible.
+        entry = self._review()
+
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_hidden)
+        self.assertIsNone(entry.hidden_at)
+        self.assertIsNone(entry.hidden_by)
+        self.assertIn(entry.pk, [item["id"] for item in self._public()])
 
 
 class PeakSeasonShareTests(TestCase):

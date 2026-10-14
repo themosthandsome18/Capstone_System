@@ -210,7 +210,12 @@ def mobile_destination_detail(request, resort_id):
         get_mobile_destination_queryset(),
         resort_id=resort_id,
     )
-    feedback = FeedbackEntry.objects.filter(destination=resort).order_by("-date", "-id")[:5]
+    # The hidden ones are filtered out BEFORE the slice of five. Filtering after
+    # it would let a hidden review take one of the five places and the app
+    # would show fewer than it has.
+    feedback = FeedbackEntry.objects.filter(
+        destination=resort, is_hidden=False
+    ).order_by("-date", "-id")[:5]
 
     # Public: only what PublicFeedbackSerializer lists, and the byline is the
     # reviewer's initials. Staff see the typed name through /api/feedback/,
@@ -647,7 +652,14 @@ def mobile_feedback_submit(request):
         record_id=entry.pk,
     )
 
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+    # The answer to the sender is what they sent, as it always was. The
+    # moderation fields are for staff and are not part of it.
+    answer = {
+        key: value
+        for key, value in serializer.data.items()
+        if key not in ("is_hidden", "hidden_at", "hidden_by_display")
+    }
+    return Response(answer, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])

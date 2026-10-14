@@ -405,6 +405,18 @@ class FeedbackEntry(models.Model):
     message = models.TextField()
     reply = models.TextField(blank=True)
     photos = models.JSONField(default=list, blank=True)
+    # Moderation: a hidden review is not shown to the public and does not count
+    # in the destination's rating. Set only by the hide / unhide actions, from
+    # the logged-in user (never from what a client sends).
+    is_hidden = models.BooleanField(default=False)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+    hidden_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hidden_feedback_entries",
+    )
 
     class Meta:
         ordering = ["-id"]
@@ -415,7 +427,13 @@ class FeedbackEntry(models.Model):
     @staticmethod
     def _recalculate_rating(destination):
         from django.db.models import Avg
-        avg_rating = destination.feedback_entries.aggregate(Avg("rating"))["rating__avg"]
+        # A hidden review does not count. With all of them hidden (or none) the
+        # average is None and the rating is 0.0, as for a destination without
+        # reviews.
+        avg_rating = (
+            destination.feedback_entries.filter(is_hidden=False)
+            .aggregate(Avg("rating"))["rating__avg"]
+        )
         if avg_rating is not None:
             destination.tourism_rating = round(float(avg_rating), 1)
         else:

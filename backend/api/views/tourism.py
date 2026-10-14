@@ -2,6 +2,7 @@ import time
 from django.core.files.storage import default_storage
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
@@ -415,6 +416,72 @@ def feedback_detail(request, feedback_id):
         record_id=entry.pk,
     )
     return Response(serializer.data)
+
+
+def _feedback_moderation_label(entry, what):
+    """A label for the activity log that says WHICH review it was: every
+    review sent from the app has the same title, so the title says nothing."""
+    return f"Review {what}: {entry.destination.resort_name}, {entry.date}"
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def feedback_hide(request, feedback_id):
+    """Hide a review from the public and from the destination's rating.
+
+    Who and when are set HERE, from request.user and the server's clock, never
+    from the request body. Hiding a hidden review changes nothing (the first
+    who / when stay).
+
+    It must be entry.save(), NOT QuerySet.update(): the save sends post_save,
+    which recalculates the destination's rating. update() sends no signal and
+    the old stars would stay.
+    """
+    entry = get_object_or_404(
+        FeedbackEntry.objects.select_related("destination"), pk=feedback_id
+    )
+
+    if not entry.is_hidden:
+        entry.is_hidden = True
+        entry.hidden_at = timezone.now()
+        entry.hidden_by = request.user
+        entry.save(update_fields=["is_hidden", "hidden_at", "hidden_by"])
+        log_activity(
+            request,
+            MODULE_TOURISM,
+            ACTION_UPDATE,
+            entry,
+            label=_feedback_moderation_label(entry, "hidden"),
+            record_id=entry.pk,
+        )
+
+    return Response(FeedbackEntrySerializer(entry).data)
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def feedback_unhide(request, feedback_id):
+    """Show a hidden review again. As with hide: entry.save(), not update(),
+    so that the rating is recalculated."""
+    entry = get_object_or_404(
+        FeedbackEntry.objects.select_related("destination"), pk=feedback_id
+    )
+
+    if entry.is_hidden:
+        entry.is_hidden = False
+        entry.hidden_at = None
+        entry.hidden_by = None
+        entry.save(update_fields=["is_hidden", "hidden_at", "hidden_by"])
+        log_activity(
+            request,
+            MODULE_TOURISM,
+            ACTION_UPDATE,
+            entry,
+            label=_feedback_moderation_label(entry, "shown again"),
+            record_id=entry.pk,
+        )
+
+    return Response(FeedbackEntrySerializer(entry).data)
 
 
 @api_view(["GET", "PUT"])
