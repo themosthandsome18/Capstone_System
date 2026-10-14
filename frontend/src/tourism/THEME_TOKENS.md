@@ -428,10 +428,12 @@ so nothing was lost there.
   `--th-info-border`. (`--th-success-text`, `--th-warning-bg` and
   `--th-warning-text` are now used by the Settings page.)
   Each has a planned consumer; do not prune them without deciding that.
-- **Dead code to delete.** None of it has been deleted yet.
-  - **JS files nothing imports:** `components/layout/Topbar.js`,
-    `pages/FeedbackMonitoring.js`, and all of `components/ui/`
-    (`Badge`, `ChartCard`, `DataTable`, `Modal`, `PageHeader`, `Panel`, `StatCard`).
+- **Dead code to delete.** Only `pages/FeedbackMonitoring.js` has been deleted
+  so far (it had no route and no importer; the Feedback tab of
+  `DestinationManagement.js` is the real page). The rest is still there.
+  - **JS files nothing imports:** `components/layout/Topbar.js`, and all of
+    `components/ui/` (`Badge`, `ChartCard`, `DataTable`, `Modal`, `PageHeader`,
+    `Panel`, `StatCard`).
   - **Unreachable branch:** the stack/split doughnut in `VisualAnswer`
     (`AnalyticsAndReport.js:936`). Every question that produces those types is
     caught earlier by its question id, so it never renders; its colours were
