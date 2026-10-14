@@ -394,6 +394,20 @@ export const tourismApi = {
     });
   },
 
+  // Hide / show a review (item #17). No body: who and when are set by the
+  // server from the logged-in user.
+  async hideFeedbackEntry(id) {
+    return apiRequest(`/feedback/${encodeURIComponent(id)}/hide/`, {
+      method: "POST",
+    });
+  },
+
+  async unhideFeedbackEntry(id) {
+    return apiRequest(`/feedback/${encodeURIComponent(id)}/unhide/`, {
+      method: "POST",
+    });
+  },
+
   async createResort(payload) {
     const created = await apiRequest("/resorts/", {
       method: "POST",

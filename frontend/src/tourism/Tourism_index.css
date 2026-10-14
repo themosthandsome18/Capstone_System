@@ -2605,7 +2605,7 @@
 /* Total Feedback, Positive, Neutral, Negative */
 
 .feedback-stats {
-  @apply grid grid-cols-4 gap-4;
+  @apply grid grid-cols-5 gap-4;
 }
 
 .feedback-stat-card {
@@ -2820,6 +2820,33 @@
 
 .reply-btn {
   @apply flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-semibold text-black;
+}
+
+/* A hidden review (item #17): staff still read all of it, so it is muted,
+   not collapsed. */
+.feedback-card-hidden {
+  @apply bg-slate-100;
+  opacity: 0.85;
+}
+
+.feedback-hidden-badge {
+  @apply ml-2 rounded-full bg-slate-300 px-2 py-0.5 align-middle text-[10px] font-bold uppercase text-slate-700;
+}
+
+.feedback-hidden-by {
+  @apply mt-1 text-xs font-medium text-slate-500;
+}
+
+.feedback-hidden-photo-warning {
+  @apply mt-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700;
+}
+
+.feedback-hide-note {
+  @apply m-0 text-xs font-medium text-slate-500;
+}
+
+.feedback-right .reply-btn + .reply-btn {
+  @apply mt-2;
 }
 
 /* ============================================================================== REPORTS PAGE ================================================ */

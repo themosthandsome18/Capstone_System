@@ -6,6 +6,8 @@ import {
   FiDownload,
   FiEdit2,
   FiExternalLink,
+  FiEye,
+  FiEyeOff,
   FiImage,
   FiMapPin,
   FiMessageSquare,
@@ -203,6 +205,8 @@ function DestinationManagement({ initialTab }) {
     uploadResortImage,
     feedbackEntries = [],
     updateFeedbackEntry,
+    hideFeedbackEntry,
+    unhideFeedbackEntry,
   } = useTourismData();
 
   const destinations = referenceTables.resorts || emptyDestinations;
@@ -232,6 +236,9 @@ function DestinationManagement({ initialTab }) {
   const [feedbackSearch, setFeedbackSearch] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState("all");
+  const [moderatingId, setModeratingId] = useState(null);
+  const [moderationError, setModerationError] = useState("");
   const [replyingId, setReplyingId] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [savingReply, setSavingReply] = useState(false);
@@ -273,13 +280,24 @@ function DestinationManagement({ initialTab }) {
     ) / Math.max(filteredDestinations.length, 1)
   ).toFixed(1);
 
-  // Feedback calculation & filtering
+  // Feedback calculation & filtering.
+  //
+  // COUNTING RULE (item #17): a count must match what is shown beside it.
+  //  - Total / Positive / Neutral / Negative sit next to the destination's
+  //    stars, and the stars no longer include a hidden review, so these
+  //    count the VISIBLE reviews only. The hidden ones have their own "Hidden"
+  //    count.
+  //  - The tab count "Feedback Monitoring (N)" counts ALL of them, because the
+  //    list under that tab shows the hidden ones too (marked); a count that
+  //    differed from the list would look broken.
   const feedbackStats = useMemo(() => {
+    const visible = feedbackEntries.filter((entry) => !entry.is_hidden);
     return {
-      total: feedbackEntries.length,
-      positive: feedbackEntries.filter((entry) => entry.status === "positive").length,
-      neutral: feedbackEntries.filter((entry) => entry.status === "neutral").length,
-      negative: feedbackEntries.filter((entry) => entry.status === "negative").length,
+      total: visible.length,
+      positive: visible.filter((entry) => entry.status === "positive").length,
+      neutral: visible.filter((entry) => entry.status === "neutral").length,
+      negative: visible.filter((entry) => entry.status === "negative").length,
+      hidden: feedbackEntries.length - visible.length,
     };
   }, [feedbackEntries]);
 
@@ -300,6 +318,9 @@ function DestinationManagement({ initialTab }) {
       const destinationMatch =
         !destinationFilter || String(entry.destinationId) === String(destinationFilter);
       const statusMatch = !statusFilter || entry.status === statusFilter;
+      const visibilityMatch =
+        visibilityFilter === "all" ||
+        (visibilityFilter === "hidden" ? Boolean(entry.is_hidden) : !entry.is_hidden);
       const searchText = [
         entry.reviewer,
         entry.title,
@@ -312,17 +333,40 @@ function DestinationManagement({ initialTab }) {
         .join(" ")
         .toLowerCase();
 
-      return destinationMatch && statusMatch && searchText.includes(keyword);
+      return (
+        destinationMatch &&
+        statusMatch &&
+        visibilityMatch &&
+        searchText.includes(keyword)
+      );
     });
-  }, [destinationFilter, feedbackEntries, feedbackSearch, getDestinationName, statusFilter]);
+  }, [
+    destinationFilter,
+    feedbackEntries,
+    feedbackSearch,
+    getDestinationName,
+    statusFilter,
+    visibilityFilter,
+  ]);
 
-  // Feedback for the clicked resort detail
-  const selectedResortFeedback = useMemo(() => {
+  // Feedback for the clicked resort detail. Same counting rule as the stat
+  // cards above: this modal sits next to the destination's stars, so a hidden
+  // review is NOT in its list or its count; the hidden ones are counted
+  // apart (selectedResortHiddenCount).
+  const selectedResortAllFeedback = useMemo(() => {
     if (!selectedResortDetail) return [];
     return feedbackEntries.filter(
       (entry) => String(entry.destinationId) === String(selectedResortDetail.resort_id)
     );
   }, [feedbackEntries, selectedResortDetail]);
+
+  const selectedResortFeedback = useMemo(
+    () => selectedResortAllFeedback.filter((entry) => !entry.is_hidden),
+    [selectedResortAllFeedback]
+  );
+
+  const selectedResortHiddenCount =
+    selectedResortAllFeedback.length - selectedResortFeedback.length;
 
   const selectedResortCoordinates = useMemo(() => {
     return getResortCoordinates(selectedResortDetail);
@@ -547,6 +591,27 @@ function DestinationManagement({ initialTab }) {
     }
   }
 
+  async function toggleHidden(entry) {
+    setModeratingId(entry.id);
+    setModerationError("");
+
+    try {
+      if (entry.is_hidden) {
+        await unhideFeedbackEntry(entry.id);
+      } else {
+        await hideFeedbackEntry(entry.id);
+      }
+    } catch (error) {
+      setModerationError(
+        error?.details?.detail ||
+          error?.message ||
+          "Unable to change the review. Please try again."
+      );
+    } finally {
+      setModeratingId(null);
+    }
+  }
+
   function downloadPhoto(url, filename) {
     const link = document.createElement("a");
     link.href = url;
@@ -644,6 +709,7 @@ function DestinationManagement({ initialTab }) {
           onClick={() => setActiveTab("feedback")}
         >
           <FiMessageSquare size={16} />
+          {/* ALL reviews, hidden included: the list under this tab shows them. */}
           <span>Feedback Monitoring ({feedbackEntries.length})</span>
         </button>
       </div>
@@ -783,7 +849,12 @@ function DestinationManagement({ initialTab }) {
             <FeedbackStatCard title="Positive" value={feedbackStats.positive} icon={<FiThumbsUp />} />
             <FeedbackStatCard title="Neutral" value={feedbackStats.neutral} />
             <FeedbackStatCard title="Negative" value={feedbackStats.negative} icon={<FiThumbsDown />} />
+            <FeedbackStatCard title="Hidden" value={feedbackStats.hidden} icon={<FiEyeOff />} />
           </div>
+
+          <p className="feedback-hide-note">
+            Hidden reviews don't show in the app and don't count in the destination's rating.
+          </p>
 
           <div className="feedback-filters">
             <div className="feedback-search">
@@ -819,16 +890,54 @@ function DestinationManagement({ initialTab }) {
               <option value="neutral">Neutral</option>
               <option value="negative">Negative</option>
             </select>
+
+            <select
+              value={visibilityFilter}
+              onChange={(event) => setVisibilityFilter(event.target.value)}
+              aria-label="Filter by visibility"
+            >
+              <option value="all">All visibility</option>
+              <option value="visible">Visible</option>
+              <option value="hidden">Hidden</option>
+            </select>
           </div>
 
           {replyError ? <p className="tourist-record-error">{replyError}</p> : null}
+          {moderationError ? (
+            <p className="tourist-record-error">{moderationError}</p>
+          ) : null}
 
           <div className="feedback-list">
             {filteredFeedback.length ? (
               filteredFeedback.map((entry) => (
-                <div key={entry.id} className="feedback-card">
+                <div
+                  key={entry.id}
+                  className={`feedback-card${entry.is_hidden ? " feedback-card-hidden" : ""}`}
+                >
                   <div className="feedback-left">
-                    <h3>{entry.reviewer}</h3>
+                    <h3>
+                      {entry.reviewer}
+                      {entry.is_hidden ? (
+                        <span className="feedback-hidden-badge">Hidden</span>
+                      ) : null}
+                    </h3>
+
+                    {entry.is_hidden ? (
+                      <p className="feedback-hidden-by">
+                        Hidden by {entry.hidden_by_display || "Deleted user"} on{" "}
+                        {entry.hidden_at
+                          ? new Date(entry.hidden_at).toLocaleString()
+                          : "--"}
+                      </p>
+                    ) : null}
+
+                    {entry.is_hidden && entry.photos && entry.photos.length > 0 ? (
+                      <p className="feedback-hidden-photo-warning" role="note">
+                        The photo link stays reachable to anyone who already has it.
+                        Hiding removes the review from the app, not the photo from
+                        storage.
+                      </p>
+                    ) : null}
 
                     <p className="meta">
                       {getDestinationName(entry.destinationId)} | {entry.date}
@@ -938,6 +1047,16 @@ function DestinationManagement({ initialTab }) {
                     >
                       <FiMessageSquare size={12} />
                       {entry.reply ? "Edit Reply" : "Reply"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="reply-btn"
+                      onClick={() => toggleHidden(entry)}
+                      disabled={moderatingId === entry.id}
+                    >
+                      {entry.is_hidden ? <FiEye size={12} /> : <FiEyeOff size={12} />}
+                      {entry.is_hidden ? "Show again" : "Hide"}
                     </button>
                   </div>
                 </div>
@@ -1143,7 +1262,15 @@ function DestinationManagement({ initialTab }) {
               {/* Ratings & Reviews for this resort */}
               <div className="gmaps-section" id="gmaps-resort-reviews">
                 <div className="gmaps-reviews-header">
-                  <h3>Visitor Reviews ({selectedResortFeedback.length})</h3>
+                  <h3>
+                    Visitor Reviews ({selectedResortFeedback.length})
+                    {selectedResortHiddenCount ? (
+                      <span className="gmaps-review-hidden-count">
+                        {" "}
+                        · {selectedResortHiddenCount} hidden
+                      </span>
+                    ) : null}
+                  </h3>
                   <button
                     type="button"
                     className="gmaps-view-all-reviews-btn"

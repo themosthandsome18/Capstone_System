@@ -584,6 +584,32 @@ export function TourismDataProvider({ children }) {
     }
   }
 
+  // Hide / show a review. The server answers with the whole review; it goes
+  // into the state, and the destinations are reloaded because hiding changes
+  // the destination's rating (a hidden review does not count).
+  async function setFeedbackHidden(feedbackId, hidden) {
+    setActionLoading(true);
+    try {
+      const updatedFeedback = hidden
+        ? await tourismApi.hideFeedbackEntry(feedbackId)
+        : await tourismApi.unhideFeedbackEntry(feedbackId);
+      setBootstrap((current) => ({
+        ...current,
+        feedbackEntries: current.feedbackEntries.map((entry) =>
+          entry.id === feedbackId ? { ...entry, ...updatedFeedback } : entry
+        ),
+      }));
+      await refreshReferenceTables();
+      return updatedFeedback;
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  const hideFeedbackEntry = (feedbackId) => setFeedbackHidden(feedbackId, true);
+  const unhideFeedbackEntry = (feedbackId) =>
+    setFeedbackHidden(feedbackId, false);
+
   // Saves the theme and puts the server's answer straight into the app: the
   // shell and the charts follow it with no reload.
   const saveTheme = useCallback(async (payload) => {
@@ -618,6 +644,8 @@ export function TourismDataProvider({ children }) {
         deleteResort,
         uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
+        hideFeedbackEntry,
+        unhideFeedbackEntry,
         saveTheme,
       }}
     >
