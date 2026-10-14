@@ -12,7 +12,7 @@ from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import (
     api_view,
     authentication_classes,
@@ -212,12 +212,10 @@ def mobile_destination_detail(request, resort_id):
     )
     feedback = FeedbackEntry.objects.filter(destination=resort).order_by("-date", "-id")[:5]
 
-    # Public: the byline is the reviewer's initials. Staff see the typed name
-    # through /api/feedback/, which needs a login.
-    recent_feedback = [
-        {**item, "reviewer": public_reviewer_initials(item.get("reviewer"))}
-        for item in FeedbackEntrySerializer(feedback, many=True).data
-    ]
+    # Public: only what PublicFeedbackSerializer lists, and the byline is the
+    # reviewer's initials. Staff see the typed name through /api/feedback/,
+    # which needs a login.
+    recent_feedback = PublicFeedbackSerializer(feedback, many=True).data
 
     return Response(
         {
@@ -245,6 +243,39 @@ def public_reviewer_initials(name):
     ]
     initials = [initial for initial in initials if initial]
     return "".join(f"{initial}." for initial in initials) or ANONYMOUS_REVIEWER
+
+
+class PublicFeedbackSerializer(serializers.ModelSerializer):
+    """A review as the PUBLIC may see it (the public destination detail).
+
+    An explicit list, on purpose, and not "everything the staff serializer
+    has": a field added to the model or to FeedbackEntrySerializer later does
+    NOT reach the public unless somebody adds it here, and then the test of
+    the exact set of keys fails until they say so. Each field is here because
+    the app shows it:
+
+      id        the app's reference for the review
+      reviewer  the INITIALS (public_reviewer_initials), never the typed name
+      rating    the stars
+      date      the date shown under the byline
+      message   the comment (it has the cleanliness rating added to its end)
+      photos    the photo addresses
+      reply     the tourism office's reply
+
+    Not public: destinationId (the request is for one destination), status
+    (a sentiment, which the app does not show) and title (the same text for
+    every review sent from the app).
+    """
+
+    reviewer = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeedbackEntry
+        fields = ["id", "reviewer", "rating", "date", "message", "photos", "reply"]
+        read_only_fields = fields
+
+    def get_reviewer(self, obj):
+        return public_reviewer_initials(obj.reviewer)
 
 
 MOBILE_EXCLUDED_DESTINATION_NAMES = {

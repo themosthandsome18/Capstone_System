@@ -4494,6 +4494,100 @@ class PublicMobileTourismPrivacyTests(TestCase):
         self.assertEqual(APIClient().get("/api/feedback/").status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+class PublicFeedbackWhitelistTests(TestCase):
+    """The public destination detail shows a review through an explicit list
+    of fields (PublicFeedbackSerializer), not everything the staff serializer
+    has. A field added later must not reach the public without a test saying so.
+    """
+
+    PUBLIC_KEYS = {"id", "reviewer", "rating", "date", "message", "photos", "reply"}
+    STAFF_KEYS = {
+        "id", "destinationId", "reviewer", "rating", "status", "date",
+        "title", "message", "reply", "photos",
+    }
+    TYPED_NAME = "Juan Dela Cruz"
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+        from api.views.mobile import get_mobile_destination_queryset
+
+        cls.resort = get_mobile_destination_queryset().order_by("resort_id").first()
+        cls.entry = FeedbackEntry.objects.create(
+            destination=cls.resort,
+            reviewer=cls.TYPED_NAME,
+            rating=4,
+            status=FeedbackEntry.STATUS_POSITIVE,
+            date="2026-09-22",
+            title="Mobile tourism feedback",
+            message="Clean beach." + chr(10) * 2 + "Cleanliness feedback: cleanliness rating 5/5",
+            reply="Thank you for visiting.",
+            photos=["https://example.test/storage/media/feedback/abc.jpg"],
+        )
+
+    def _public(self):
+        response = APIClient().get(
+            f"/api/mobile/tourism/destinations/{self.resort.resort_id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response
+
+    def test_the_public_keys_are_exactly_the_whitelist(self):
+        items = self._public().json()["recentFeedback"]
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(set(items[0]), self.PUBLIC_KEYS)
+
+    def test_destination_id_status_and_title_are_not_public(self):
+        item = self._public().json()["recentFeedback"][0]
+
+        for key in ("destinationId", "status", "title"):
+            with self.subTest(key=key):
+                self.assertNotIn(key, item)
+
+    def test_the_values_the_app_shows_are_unchanged(self):
+        item = self._public().json()["recentFeedback"][0]
+
+        self.assertEqual(item["id"], self.entry.pk)
+        self.assertEqual(item["rating"], 4)
+        self.assertEqual(item["date"], "2026-09-22")
+        self.assertEqual(item["reply"], "Thank you for visiting.")
+        self.assertEqual(
+            item["photos"], ["https://example.test/storage/media/feedback/abc.jpg"]
+        )
+        self.assertIn("Clean beach.", item["message"])
+        self.assertIn("cleanliness rating 5/5", item["message"])
+
+    def test_the_byline_is_the_initials_and_the_name_is_not_public(self):
+        response = self._public()
+
+        self.assertEqual(response.json()["recentFeedback"][0]["reviewer"], "J.D.C.")
+        self.assertNotIn(self.TYPED_NAME, response.content.decode())
+
+    def test_the_staff_list_still_has_every_field_and_the_full_name(self):
+        user = User.objects.create_user(username="whitelist_staff", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+        response = client.get("/api/feedback/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = next(row for row in response.json() if row["id"] == self.entry.pk)
+        self.assertEqual(set(item), self.STAFF_KEYS)
+        self.assertEqual(item["reviewer"], self.TYPED_NAME)
+
+    def test_the_whitelist_is_an_explicit_list_and_read_only(self):
+        from api.views.mobile import PublicFeedbackSerializer
+
+        fields = PublicFeedbackSerializer.Meta.fields
+        self.assertIsInstance(fields, list)
+        self.assertEqual(set(fields), self.PUBLIC_KEYS)
+        self.assertEqual(
+            set(PublicFeedbackSerializer.Meta.read_only_fields), self.PUBLIC_KEYS
+        )
+
+
 class PeakSeasonShareTests(TestCase):
     """Key Insights percentages divide by the total the sentence names."""
 
