@@ -2420,7 +2420,9 @@ class DropdownTile<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final choices = items.isEmpty ? [value] : items;
+    // With no items the field still shows the current value; a null value
+    // (nothing chosen yet, see [hint]) has nothing to show.
+    final choices = items.isEmpty ? [if (value != null) value] : items;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),

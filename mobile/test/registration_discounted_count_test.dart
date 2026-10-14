@@ -60,6 +60,9 @@ Future<void> pumpForm(WidgetTester tester) async {
       home: TouristRegistrationPage(
         api: const TourismApi(),
         bootstrap: bootstrap,
+        // The Destination field starts blank unless a resort was tapped; these
+        // tests are about other fields, so they open the form as if one was.
+        initialDestination: bootstrap.destinations.first,
       ),
     ),
   );

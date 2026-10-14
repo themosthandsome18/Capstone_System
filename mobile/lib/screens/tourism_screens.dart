@@ -3924,7 +3924,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   );
   final TextEditingController _parkingSpace = TextEditingController();
   late DateTime _arrivalDate;
-  late Destination _destination;
+  // null until a resort is chosen. It is NOT defaulted to the first resort of
+  // the list: the resort decides the fee and the report, so it must be the
+  // visitor's own choice (tapped on a resort, or picked here).
+  Destination? _destination;
   late RefItem _country;
 
   // null for a foreign visitor: no region or province is asked for or sent.
@@ -3994,10 +3997,16 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     super.initState();
     final now = DateTime.now();
     _arrivalDate = DateTime(now.year, now.month, now.day);
-    _destination =
-        widget.initialDestination ??
-        widget.bootstrap.destinations.firstOrNull ??
-        Destination.placeholder();
+    // Found by id, not by identity: the resort that was tapped can be a
+    // separate copy of one in this list (the server sends featuredDestinations
+    // as its own list), and the dropdown only finds a value that is one of its
+    // items. Not in the list at all: blank.
+    final tapped = widget.initialDestination;
+    _destination = tapped == null
+        ? null
+        : widget.bootstrap.destinations
+              .where((item) => item.id == tapped.id)
+              .firstOrNull;
     _country =
         widget.bootstrap.countries.firstOrNull ??
         const RefItem(id: 1, name: 'Philippines', type: 'local');
@@ -4108,11 +4117,12 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           ),
         ],
         AppTextField(controller: _countryOfOrigin, label: 'Country of origin *'),
-        DropdownTile<Destination>(
+        DropdownTile<Destination?>(
           label: 'Destination / Resort *',
           value: _destination,
+          hint: 'Choose a destination',
           items: widget.bootstrap.destinations,
-          itemLabel: (item) => item.name,
+          itemLabel: (item) => item?.name ?? '',
           onChanged: (item) => setState(() => _destination = item),
         ),
 
@@ -4312,6 +4322,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       return;
     }
 
+    // Validation has refused a null destination.
+    final destination = _destination!;
+
     setState(() => _submitting = true);
 
     final firstName = formatProperName(_firstName.text);
@@ -4331,7 +4344,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         regionId: _requiresLocation ? _region?.id : null,
         provinceId: _requiresLocation ? _province?.id : null,
         countryOfOrigin: _countryOfOrigin.text.trim(),
-        resortId: _destination.id,
+        resortId: destination.id,
         itineraryId: _itinerary.id,
         travelModeId: _travelMode.id,
         boatTypeId: _boatType.id,
@@ -4363,7 +4376,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       if (mounted) {
         final receipt = MobileVisitReceipt.fromResponse(
           response,
-          destination: _destination,
+          destination: destination,
           arrivalDate: _arrivalDate,
           totalVisitors: _visitors,
         );
@@ -4401,8 +4414,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     if (_arrivalDate.isBefore(today)) {
       return 'Arrival date cannot be in the past. Please select today or a future date.';
     }
-    if (_destination.id == 0 || widget.bootstrap.destinations.isEmpty) {
+    if (widget.bootstrap.destinations.isEmpty) {
       return 'No destination is loaded from the Tourism Web System yet.';
+    }
+    if (_destination == null) {
+      return 'Choose a destination.';
     }
     if (_requiresLocation && (_region == null || _province == null)) {
       return 'Region and province are required.';

@@ -57,7 +57,13 @@ Future<void> pumpForm(WidgetTester tester, MobileBootstrap b) async {
 
   await tester.pumpWidget(
     MaterialApp(
-      home: TouristRegistrationPage(api: const TourismApi(), bootstrap: b),
+      home: TouristRegistrationPage(
+        api: const TourismApi(),
+        bootstrap: b,
+        // The Destination field starts blank unless a resort was tapped; these
+        // tests are about other fields, so they open the form as if one was.
+        initialDestination: b.destinations.first,
+      ),
     ),
   );
   await tester.pump();
