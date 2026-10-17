@@ -63,7 +63,9 @@ class FakeStaffApi extends TourismApi {
   int calls = 0;
 
   @override
-  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async => {};
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity({
+    String? expectedSessionToken,
+  }) async => {};
 
   @override
   Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async => {

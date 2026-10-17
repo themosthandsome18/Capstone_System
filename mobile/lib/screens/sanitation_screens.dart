@@ -4407,6 +4407,129 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   String? _status;
   List<InspectionChecklistDraft> _checks = [];
   bool _submitting = false;
+  SharedPreferences? _identityPrefs;
+  String? _identityToken;
+  String? _identityError;
+  bool _identityLoading = true;
+  bool _identityInvalid = false;
+  int _identityRequest = 0;
+  Timer? _sessionWatch;
+
+  bool get _identityReady =>
+      !_identityLoading &&
+      !_identityInvalid &&
+      _identityError == null &&
+      _inspector.text.isNotEmpty;
+
+  bool _checkIdentitySession() {
+    if (_identityInvalid) return false;
+    if (_identityToken != null &&
+        _identityToken!.isNotEmpty &&
+        _identityPrefs?.getString(staffAuthTokenKey) == _identityToken) {
+      return true;
+    }
+    if (mounted) {
+      setState(() {
+        _identityInvalid = true;
+        _identityLoading = false;
+        _inspector.clear();
+        _findings.clear();
+        _remarks.clear();
+        _status = null;
+        _checks = _defaultChecksFor(_establishment);
+        _identityError = 'Staff session changed. Reopen the inspection form.';
+      });
+    }
+    return false;
+  }
+
+  Future<void> _expireIdentitySession() async {
+    if (!mounted ||
+        _identityInvalid ||
+        _identityPrefs?.getString(staffAuthTokenKey) != _identityToken) {
+      return;
+    }
+    setState(() {
+      _identityInvalid = true;
+      _identityLoading = false;
+      _inspector.clear();
+      _identityError = 'Your session expired, please sign in again.';
+    });
+    final prefs = _identityPrefs!;
+    // Clear this session synchronously in the preference cache before yielding.
+    await Future.wait([
+      prefs.remove(staffAuthTokenKey),
+      prefs.remove(staffAuthRoleKey),
+      prefs.remove(staffAuthUsernameKey),
+    ]);
+    if (!mounted || prefs.getString(staffAuthTokenKey) != null) return;
+    Navigator.of(context).pop();
+    if (widget.onSessionExpired != null) {
+      widget.onSessionExpired!();
+    } else {
+      showAppMessage(context, 'Your session expired, please sign in again.');
+      widget.onLogout?.call();
+    }
+  }
+
+  Future<void> _loadInspectorIdentity() async {
+    final request = ++_identityRequest;
+    setState(() {
+      _identityLoading = true;
+      _identityError = null;
+      _inspector.clear();
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || request != _identityRequest) return;
+      _identityPrefs = prefs;
+      _identityToken ??= prefs.getString(staffAuthTokenKey);
+      if (_identityToken == null || _identityToken!.isEmpty) {
+        await _expireIdentitySession();
+        return;
+      }
+      if (!_checkIdentitySession()) return;
+      _sessionWatch ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) _checkIdentitySession();
+      });
+      final data = await widget.api.fetchSanitationStaffIdentity(
+        expectedSessionToken: _identityToken!,
+      );
+      if (!mounted || request != _identityRequest || !_checkIdentitySession()) {
+        return;
+      }
+      final user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+      final display = '${user['display_name'] ?? ''}'.trim();
+      final full = [user['first_name'], user['last_name']]
+          .map((part) => '${part ?? ''}'.trim())
+          .where((part) => part.isNotEmpty)
+          .join(' ');
+      final name = display.isNotEmpty
+          ? display
+          : full.isNotEmpty
+          ? full
+          : '${user['username'] ?? ''}'.trim();
+      setState(() {
+        _identityLoading = false;
+        _inspector.text = name;
+        if (name.isEmpty) {
+          _identityError = 'No inspector identity was returned.';
+        }
+      });
+    } catch (error) {
+      if (!mounted || request != _identityRequest || !_checkIdentitySession()) {
+        return;
+      }
+      if (error is ApiException && error.isUnauthorized) {
+        await _expireIdentitySession();
+        return;
+      }
+      setState(() {
+        _identityLoading = false;
+        _identityError = 'Could not load inspector identity.';
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -4421,18 +4544,13 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     _status = null;
     _findings.clear();
     _remarks.clear();
-    SharedPreferences.getInstance().then((prefs) {
-      final savedUser = prefs.getString(staffAuthUsernameKey);
-      if (savedUser != null && savedUser.isNotEmpty && _inspector.text.isEmpty && mounted) {
-        setState(() {
-          _inspector.text = formatProperName(savedUser);
-        });
-      }
-    });
+    _loadInspectorIdentity();
   }
 
   @override
   void dispose() {
+    _sessionWatch?.cancel();
+    ++_identityRequest;
     _inspector.dispose();
     _findings.dispose();
     _remarks.dispose();
@@ -4466,11 +4584,18 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             });
           },
         ),
-        AppTextField(
+        TextField(
           controller: _inspector,
-          label: 'Inspector name',
-          textCapitalization: TextCapitalization.words,
+          readOnly: true,
+          decoration: const InputDecoration(labelText: 'Inspector name'),
         ),
+        if (_identityLoading) const Text('Loading inspector identity...'),
+        if (_identityError != null) Text(_identityError!),
+        if (_identityError != null && !_identityInvalid)
+          TextButton(
+            onPressed: _loadInspectorIdentity,
+            child: const Text('Retry identity'),
+          ),
         PickerTile(
           icon: Icons.calendar_month_outlined,
           label: 'Inspection date',
@@ -4566,6 +4691,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   }
 
   Future<void> _submit() async {
+    if (_submitting || !_identityReady || !_checkIdentitySession()) return;
     if (_establishment.id == 0 || widget.bootstrap.establishments.isEmpty) {
       showAppMessage(context, 'No establishment records loaded.');
       return;
@@ -4589,9 +4715,10 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
 
     setState(() => _submitting = true);
 
-    final inspectorName = formatProperName(_inspector.text);
+    final inspectorName = _inspector.text.trim();
     try {
       final response = await widget.api.submitSanitationInspection(
+        expectedSessionToken: _identityToken!,
         establishmentId: _establishment.id,
         inspectorName: inspectorName,
         inspectionDate: isoDate(_inspectionDate),
@@ -4602,7 +4729,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         checklistItems: _checks,
       );
 
-      if (mounted) {
+      if (mounted && _checkIdentitySession()) {
         final receipt = MobileSanitationInspectionReceipt.fromResponse(
           response,
           establishment: _establishment,
@@ -4623,23 +4750,15 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             'Separate from household survey records.',
           ],
         );
-        if (mounted) Navigator.of(context).pop(receipt);
+        if (mounted && _checkIdentitySession()) {
+          Navigator.of(context).pop(receipt);
+        }
       }
     } catch (error) {
       if (!mounted) return;
+      if (!_checkIdentitySession()) return;
       if (error is ApiException && error.isUnauthorized) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
-        await prefs.remove(staffAuthRoleKey);
-        await prefs.remove(staffAuthUsernameKey);
-        if (!mounted) return;
-        Navigator.of(context).pop();
-        if (widget.onSessionExpired != null) {
-          widget.onSessionExpired!();
-        } else {
-          showAppMessage(context, 'Your session expired, please sign in again.');
-          widget.onLogout?.call();
-        }
+        await _expireIdentitySession();
         return;
       }
 
