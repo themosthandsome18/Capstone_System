@@ -524,3 +524,32 @@ c09f498 refactor(tourism): tokenise brand colours in tailwind classes
 7f3815c docs(tourism): record the theme token contract
 3d1e2fd refactor(tourism): tokenise brand palette classes
 ```
+
+## 9. Emergency contact icon colours (11 tokens, fixed)
+
+The Emergency Hotlines page (`pages/EmergencyHotlines.js`) draws each contact's
+icon in a pale box in its own colour, as the mobile app does
+(`_EmergencyContactCard`: the colour on a 10% tint of itself). The twelve icons
+and their colours live in ONE module, `utils/contactIcons.js`; a component never
+writes a colour. The colours are tokens in `:root`:
+
+| Icon name | Token | Default | Note |
+|---|---|---|---|
+| `rescue` | `--th-contact-rescue` | `#ef4444` | the app's red (`0xFFEF4444`) |
+| `police` | `--th-contact-police` | `#2563eb` | the app's blue (`0xFF2563EB`) |
+| `coast_guard` | `--th-contact-coast-guard` | `#0d9488` | the app's teal (`0xFF0D9488`) |
+| `fire` | `--th-contact-fire` | `#f97316` | |
+| `hospital` | `--th-contact-hospital` | `#db2777` | |
+| `ambulance` | `--th-contact-ambulance` | `#7c3aed` | |
+| `help_desk` | `--th-primary-deep` | follows the theme | the app's `brand.deep`; no token of its own |
+| `lgu_office` | `--th-contact-lgu-office` | `#4f46e5` | |
+| `power` | `--th-contact-power` | `#ca8a04` | |
+| `water` | `--th-contact-water` | `#0891b2` | |
+| `port` | `--th-contact-port` | `#65a30d` | |
+| `other` | `--th-contact-other` | `#64748b` | what an unknown name is shown as |
+
+They are **fixed**: an admin's system colour does not change them (only help
+desk follows it, through `--th-primary-deep`). Classified FIXED in
+`deriveTourismTheme.test.js`. The mobile app must use the same colours: see
+`docs/MOBILE_CONTACT_ICONS.md`. The tint is `color-mix(in srgb, <colour> 10%,
+white)`. Total `:root` tokens: 53 + 11 = 64.

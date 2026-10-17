@@ -1390,24 +1390,37 @@ class EmergencyContact(models.Model):
     stays there for good as the fallback (the numbers of an emergency must not
     depend on the internet). This table is what an admin will edit.
 
-    `category` is a short code, NOT an icon or a colour: the app decides the
-    icon and the colour of each category in its own code. Storing an icon or a
-    colour here would put the look of the app in the database, where a typo
-    cannot be told from a choice and where an icon the app does not know would
-    show nothing.
+    `icon` is the NAME of one of twelve icons, NOT a drawing or a colour: the
+    app (and the web page) own the picture and the colour of each name. The
+    twelve are listed in docs/MOBILE_CONTACT_ICONS.md. A name the app does not
+    know is shown as "other", so a contact never loses its place.
     """
 
-    CATEGORY_RESCUE = "rescue"
-    CATEGORY_POLICE = "police"
-    CATEGORY_COAST_GUARD = "coast_guard"
-    CATEGORY_DESK = "desk"
-    CATEGORY_OTHER = "other"
-    CATEGORY_CHOICES = [
-        (CATEGORY_RESCUE, "Rescue"),
-        (CATEGORY_POLICE, "Police"),
-        (CATEGORY_COAST_GUARD, "Coast Guard"),
-        (CATEGORY_DESK, "Help desk"),
-        (CATEGORY_OTHER, "Other"),
+    ICON_RESCUE = "rescue"
+    ICON_POLICE = "police"
+    ICON_COAST_GUARD = "coast_guard"
+    ICON_FIRE = "fire"
+    ICON_HOSPITAL = "hospital"
+    ICON_AMBULANCE = "ambulance"
+    ICON_HELP_DESK = "help_desk"
+    ICON_LGU_OFFICE = "lgu_office"
+    ICON_POWER = "power"
+    ICON_WATER = "water"
+    ICON_PORT = "port"
+    ICON_OTHER = "other"
+    ICON_CHOICES = [
+        (ICON_RESCUE, "Rescue"),
+        (ICON_POLICE, "Police"),
+        (ICON_COAST_GUARD, "Coast Guard"),
+        (ICON_FIRE, "Fire"),
+        (ICON_HOSPITAL, "Hospital"),
+        (ICON_AMBULANCE, "Ambulance"),
+        (ICON_HELP_DESK, "Help desk"),
+        (ICON_LGU_OFFICE, "LGU office"),
+        (ICON_POWER, "Power"),
+        (ICON_WATER, "Water"),
+        (ICON_PORT, "Port"),
+        (ICON_OTHER, "Other"),
     ]
 
     name = models.CharField(max_length=160)
@@ -1416,10 +1429,7 @@ class EmergencyContact(models.Model):
     contact_numbers = models.CharField(max_length=300)
     email = models.EmailField(blank=True)
     description = models.TextField(blank=True)
-    hours = models.CharField(max_length=80, blank=True)
-    category = models.CharField(
-        max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER
-    )
+    icon = models.CharField(max_length=20, choices=ICON_CHOICES, default=ICON_OTHER)
     display_order = models.PositiveIntegerField(default=0)
     # db_default: a row put in by code that does not know this column is active.
     is_active = models.BooleanField(default=True, db_default=True)

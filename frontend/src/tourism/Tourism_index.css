@@ -75,6 +75,22 @@
     --th-chart-4: #90daa9;
     --th-chart-5: #b9e4c4;
     --th-chart-wash: rgba(106, 192, 126, 0.15);
+
+    /* Emergency contact icons: fixed, never follow the theme. The first three
+       are the mobile app's own colours (_EmergencyContactCard). Help desk has
+       no token of its own: it uses --th-primary-deep, as the app uses
+       brand.deep. */
+    --th-contact-rescue: #ef4444;
+    --th-contact-police: #2563eb;
+    --th-contact-coast-guard: #0d9488;
+    --th-contact-fire: #f97316;
+    --th-contact-hospital: #db2777;
+    --th-contact-ambulance: #7c3aed;
+    --th-contact-lgu-office: #4f46e5;
+    --th-contact-power: #ca8a04;
+    --th-contact-water: #0891b2;
+    --th-contact-port: #65a30d;
+    --th-contact-other: #64748b;
   }
 
   * {
@@ -4680,21 +4696,190 @@
 }
 
 /* ================= EMERGENCY HOTLINES (admin only) =================
-   Shares the options-* look; only the two always-visible notices are new.
-   Shell --th-* tokens only. */
+   Shares the options-* look. Colours: shell --th-* tokens only; the twelve icon
+   colours are the --th-contact-* tokens (THEME_TOKENS.md). */
+
+/* An icon in its pale box, as the mobile app draws it: the colour on a 10%
+   tint of itself. --contact-color is set on the element by contactIcons.js. */
+.contact-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 22px;
+  color: var(--contact-color, var(--th-contact-other));
+  background: color-mix(in srgb, var(--contact-color, var(--th-contact-other)) 10%, white);
+}
+
 .hotlines-notices {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   background: var(--th-primary-tint);
   color: var(--th-primary-ink);
 }
 
 .hotlines-notices p {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.45;
+}
+
+.hotline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hotline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--th-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: white;
+}
+
+.hotline-row.is-inactive {
+  background: var(--th-surface-alt);
+}
+
+.hotline-row.is-inactive .hotline-name,
+.hotline-row.is-inactive .hotline-number {
+  color: var(--th-text-muted);
+}
+
+.hotline-main {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.hotline-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.hotline-number {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--contact-color, var(--th-text-muted));
+}
+
+.hotline-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hotline-chip {
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.hotline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.hotline-move,
+.hotline-manage {
+  display: flex;
+  gap: 6px;
+}
+
+/* The arrows sit apart from Edit and Deactivate, so a click on the order
+   cannot land on a button that changes the contact. */
+.hotline-move {
+  border-right: 1px solid var(--th-border);
+  padding-right: 16px;
+}
+
+.hotline-move button:disabled,
+.hotline-manage button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.hotline-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--th-text-muted);
+}
+
+.hotline-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--th-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: white;
+}
+
+.hotline-preview-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--th-text-muted);
+}
+
+.hotline-preview .is-empty {
+  color: var(--th-text-muted);
+  font-weight: 500;
+}
+
+.hotline-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.hotline-icon-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--th-border);
+  border-radius: 10px;
+  padding: 8px 4px;
+  font-size: 12px;
+  color: var(--th-text-main);
+  background: white;
+  cursor: pointer;
+}
+
+.hotline-icon-choice[aria-pressed="true"] {
+  border-color: var(--contact-color, var(--th-primary));
+  box-shadow: 0 0 0 2px var(--contact-color, var(--th-primary));
+  font-weight: 700;
+}
+
+.hotline-save-note {
+  margin: 0;
+  align-self: center;
+  font-size: 12px;
+  color: var(--th-text-muted);
 }

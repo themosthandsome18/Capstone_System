@@ -35,9 +35,9 @@ from api.views.reference_options import clean_name, name_key
 
 LOCK_ID = 7100005
 ORDER_STEP = 10
-CATEGORIES = {code for code, _label in EmergencyContact.CATEGORY_CHOICES}
-LIMITS = {"name": 160, "contact_numbers": 300, "email": 254, "hours": 80}
-EDITABLE = ("name", "contact_numbers", "email", "description", "hours", "category")
+ICONS = {code for code, _label in EmergencyContact.ICON_CHOICES}
+LIMITS = {"name": 160, "contact_numbers": 300, "email": 254}
+EDITABLE = ("name", "contact_numbers", "email", "description", "icon")
 
 
 def admin_required(view):
@@ -66,8 +66,7 @@ def _item(contact):
         "contact_numbers": contact.contact_numbers,
         "email": contact.email,
         "description": contact.description,
-        "hours": contact.hours,
-        "category": contact.category,
+        "icon": contact.icon,
         "display_order": contact.display_order,
         "is_active": contact.is_active,
     }
@@ -124,14 +123,14 @@ def _validate(data, fields, creating):
     """-> (error response or None, cleaned values) for the named fields."""
     cleaned = {}
     for field in fields:
-        if field == "category":
-            value = data.get("category", EmergencyContact.CATEGORY_OTHER if creating else None)
-            if not isinstance(value, str) or value not in CATEGORIES:
+        if field == "icon":
+            value = data.get("icon", EmergencyContact.ICON_OTHER if creating else None)
+            if not isinstance(value, str) or value not in ICONS:
                 return _error(
-                    "category must be one of: " + ", ".join(sorted(CATEGORIES)) + ".",
-                    category=["Not a valid category."],
+                    "icon must be one of: " + ", ".join(sorted(ICONS)) + ".",
+                    icon=["Not a valid icon."],
                 ), None
-            cleaned["category"] = value
+            cleaned["icon"] = value
             continue
         error, value = _text(data, field, required=field in ("name", "contact_numbers"))
         if error:

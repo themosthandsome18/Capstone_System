@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { FiArrowDown, FiArrowUp, FiPlus } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiMail, FiPlus } from "react-icons/fi";
 import { useAuth } from "../../auth/AuthContext";
 import { canManageHotlines } from "../hotlinesAccess";
 import { tourismApi } from "../services/tourismApi";
-
-// The five categories the server accepts (EmergencyContact.CATEGORY_CHOICES).
-// The app decides the icon and colour of each; only the code is stored.
-export const CATEGORIES = [
-  { value: "rescue", label: "Rescue" },
-  { value: "police", label: "Police" },
-  { value: "coast_guard", label: "Coast Guard" },
-  { value: "desk", label: "Help desk" },
-  { value: "other", label: "Other" },
-];
+import { CONTACT_ICONS, ContactIcon, contactIcon, contactStyle } from "../utils/contactIcons";
 
 export const FILTERS = [
   { value: "all", label: "All" },
@@ -28,10 +19,14 @@ export const NEXT_VERSION_NOTICE =
 export const EMPTY_LIST_NOTICE =
   "If no contact is active, the app falls back to its own built-in list, so the emergency numbers are never missing — even with no internet.";
 
-const BLANK = { name: "", category: "other", contact_numbers: "", email: "", hours: "", description: "" };
-const FIELDS = ["name", "category", "contact_numbers", "email", "hours", "description"];
+export const ICON_NOTE = "Only these twelve exist in the app — a new one needs a new release.";
+export const SAVE_NOTE = "Saved changes reach the app with its next release.";
+export const NUMBERS_HINT =
+  "To give more than one number, separate them with a slash ( / ). The app shows the line exactly as it is written here.";
+export const OPTIONAL_HINT = "Leave it empty and it will not appear in the app.";
 
-const categoryLabel = (code) => (CATEGORIES.find((item) => item.value === code) || { label: code }).label;
+const BLANK = { name: "", icon: "other", contact_numbers: "", email: "", description: "" };
+const FIELDS = ["name", "icon", "contact_numbers", "email", "description"];
 
 // Where a contact the server just made belongs: by its display_order, then id.
 function inOrder(list) {
@@ -108,7 +103,9 @@ function EmergencyHotlinesPage() {
   }, [rows, filter]);
 
   const editing = typeof formFor === "number" ? (rows || []).find((row) => row.id === formFor) : null;
-  const changedFields = editing ? FIELDS.filter((field) => form[field] !== editing[field]) : [];
+  // An icon name the page does not know is shown (and compared) as "other".
+  const savedValue = (field) => (field === "icon" ? contactIcon(editing.icon).name : editing[field]);
+  const changedFields = editing ? FIELDS.filter((field) => form[field] !== savedValue(field)) : [];
   const canSave =
     form.name.trim() !== "" &&
     form.contact_numbers.trim() !== "" &&
@@ -123,12 +120,18 @@ function EmergencyHotlinesPage() {
 
   function openEdit(row) {
     setFormFor(row.id);
-    setForm(FIELDS.reduce((acc, field) => ({ ...acc, [field]: row[field] ?? "" }), {}));
+    setForm(
+      FIELDS.reduce(
+        (acc, field) => ({ ...acc, [field]: field === "icon" ? contactIcon(row.icon).name : row[field] ?? "" }),
+        {}
+      )
+    );
     setActionError("");
     setNotice("");
   }
 
   const setField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+  const chooseIcon = (name) => setForm((current) => ({ ...current, icon: name }));
 
   async function submitForm(event) {
     event.preventDefault();
@@ -183,10 +186,6 @@ function EmergencyHotlinesPage() {
         <p>{EMPTY_LIST_NOTICE}</p>
       </div>
 
-      <p className="options-intro">
-        A contact that is deactivated is no longer sent to the app. Contacts are never deleted.
-      </p>
-
       <div className="options-message-area">
         {notice ? (
           <p className="settings-status success" role="status">
@@ -209,19 +208,47 @@ function EmergencyHotlinesPage() {
           <div className="report-card-title">
             <h3>{formFor === "new" ? "New contact" : `Edit ${editing ? editing.name : ""}`}</h3>
           </div>
+
+          <p className="hotline-preview-label">How it will look in the app</p>
+          <div className="hotline-preview" role="group" aria-label="Preview" style={contactStyle(form.icon)}>
+            <ContactIcon name={form.icon} />
+            <div className="hotline-main">
+              <div className={`hotline-name ${form.name.trim() ? "" : "is-empty"}`} data-testid="preview-name">
+                {form.name.trim() || "Contact name"}
+              </div>
+              <div
+                className={`hotline-number ${form.contact_numbers.trim() ? "" : "is-empty"}`}
+                data-testid="preview-number"
+              >
+                {form.contact_numbers.trim() || "Numbers"}
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-field" role="group" aria-label="Icon">
+            <span>Icon</span>
+            <div className="hotline-icon-grid">
+              {CONTACT_ICONS.map((item) => (
+                <button
+                  key={item.name}
+                  type="button"
+                  className="hotline-icon-choice"
+                  aria-label={item.label}
+                  aria-pressed={form.icon === item.name}
+                  style={contactStyle(item.name)}
+                  onClick={() => chooseIcon(item.name)}
+                >
+                  <ContactIcon name={item.name} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            <small className="options-hint">{ICON_NOTE}</small>
+          </div>
+
           <label className="settings-field">
             <span>Name</span>
             <input type="text" aria-label="Contact name" value={form.name} maxLength={160} onChange={setField("name")} />
-          </label>
-          <label className="settings-field">
-            <span>Category</span>
-            <select aria-label="Contact category" value={form.category} onChange={setField("category")}>
-              {CATEGORIES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
           </label>
           <label className="settings-field">
             <span>Numbers</span>
@@ -232,24 +259,22 @@ function EmergencyHotlinesPage() {
               maxLength={300}
               onChange={setField("contact_numbers")}
             />
-            <small className="options-hint">More than one number can be written, e.g. 0998-000-0000 / (042) 000-0000.</small>
+            <small className="options-hint">{NUMBERS_HINT}</small>
           </label>
           <label className="settings-field">
-            <span>Email (optional)</span>
+            <span>Email — optional</span>
             <input type="text" aria-label="Contact email" value={form.email} maxLength={254} onChange={setField("email")} />
+            <small className="options-hint">{OPTIONAL_HINT}</small>
           </label>
           <label className="settings-field">
-            <span>Hours (optional)</span>
-            <input type="text" aria-label="Contact hours" value={form.hours} maxLength={80} onChange={setField("hours")} />
-          </label>
-          <label className="settings-field">
-            <span>Description (optional)</span>
+            <span>Description — optional</span>
             <textarea
               aria-label="Contact description"
               rows={3}
               value={form.description}
               onChange={setField("description")}
             />
+            <small className="options-hint">{OPTIONAL_HINT}</small>
           </label>
           <div className="options-form-actions">
             <button type="button" className="tourist-record-cancel" onClick={() => setFormFor(null)} disabled={working}>
@@ -258,6 +283,7 @@ function EmergencyHotlinesPage() {
             <button type="submit" className="tourist-record-save" disabled={working || !canSave}>
               {working ? "Saving..." : formFor === "new" ? "Save new contact" : "Save changes"}
             </button>
+            <p className="hotline-save-note">{SAVE_NOTE}</p>
           </div>
         </form>
       ) : null}
@@ -293,64 +319,62 @@ function EmergencyHotlinesPage() {
         ) : null}
 
         {!loading && !loadError ? (
-          <table className="options-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Numbers</th>
-                <th>Email</th>
-                <th>Hours</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.length ? (
-                visibleRows.map((row) => {
+          <>
+            {visibleRows.length ? (
+              <ul className="hotline-list">
+                {visibleRows.map((row) => {
                   const index = rows.findIndex((item) => item.id === row.id);
                   return (
-                    <tr
+                    <li
                       key={row.id}
-                      className={row.is_active ? "" : "options-row-inactive"}
+                      className={`hotline-row ${row.is_active ? "" : "is-inactive"}`}
+                      style={contactStyle(row.icon)}
                       data-testid={`hotline-row-${row.id}`}
                     >
-                      <td>{row.name}</td>
-                      <td>{categoryLabel(row.category)}</td>
-                      <td>{row.contact_numbers}</td>
-                      <td>{row.email}</td>
-                      <td>{row.hours}</td>
-                      <td>{row.description}</td>
-                      <td>
-                        <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>
-                          {row.is_active ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="options-actions">
-                          {canReorder && index > 0 ? (
-                            <button
-                              type="button"
-                              className="reply-btn"
-                              aria-label={`Move ${row.name} up`}
-                              disabled={working}
-                              onClick={() => move(index, -1)}
-                            >
-                              <FiArrowUp />
-                            </button>
-                          ) : null}
-                          {canReorder && index < rows.length - 1 ? (
-                            <button
-                              type="button"
-                              className="reply-btn"
-                              aria-label={`Move ${row.name} down`}
-                              disabled={working}
-                              onClick={() => move(index, 1)}
-                            >
-                              <FiArrowDown />
-                            </button>
-                          ) : null}
+                      <ContactIcon name={row.icon} />
+                      <div className="hotline-main">
+                        <div className="hotline-name">{row.name}</div>
+                        <div className="hotline-number">{row.contact_numbers}</div>
+                        {row.email || row.description ? (
+                          <div className="hotline-chips">
+                            {row.email ? (
+                              <span className="hotline-chip" title={row.email}>
+                                <FiMail aria-hidden="true" /> {row.email}
+                              </span>
+                            ) : null}
+                            {row.description ? (
+                              <span className="hotline-chip" title={row.description}>
+                                {row.description}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>
+                        {row.is_active ? "Active" : "Inactive"}
+                      </span>
+                      <div className="hotline-actions">
+                        <div className="hotline-move" role="group" aria-label={`Order of ${row.name}`}>
+                          <button
+                            type="button"
+                            className="reply-btn"
+                            aria-label={`Move ${row.name} up`}
+                            disabled={working || !canReorder || index === 0}
+                            onClick={() => move(index, -1)}
+                          >
+                            <FiArrowUp />
+                          </button>
+                          <button
+                            type="button"
+                            className="reply-btn"
+                            aria-label={`Move ${row.name} down`}
+                            disabled={working || !canReorder || index === rows.length - 1}
+                            onClick={() => move(index, 1)}
+                          >
+                            <FiArrowDown />
+                          </button>
+                        </div>
+                        <div className="hotline-manage">
                           <button
                             type="button"
                             className="reply-btn"
@@ -394,19 +418,18 @@ function EmergencyHotlinesPage() {
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </li>
                   );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={8} className="options-empty">
-                    No contacts to show for this filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                })}
+              </ul>
+            ) : (
+              <p className="options-empty">No contacts to show for this filter.</p>
+            )}
+            <p className="hotline-footnote">
+              A contact that is deactivated is no longer sent to the app. Contacts are never deleted.
+            </p>
+          </>
         ) : null}
       </section>
     </div>

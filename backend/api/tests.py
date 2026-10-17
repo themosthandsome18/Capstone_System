@@ -6784,11 +6784,11 @@ class ItineraryStayFillMigrationTests(TransactionTestCase):
 # (mobile/lib/screens/tourism_screens.dart, ProfilePage). The app shows each as
 # a title and one line of "number"; the desk's line is "number • email".
 EMERGENCY_FOUR = [
-    # (title, the line the app shows under it, category)
+    # (title, the line the app shows under it, icon)
     ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "rescue"),
     ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "police"),
     ("Coast Guard Sub-Station Mauban", "0917-842-7643", "coast_guard"),
-    ("Mauban Tourism Information Desk", "(042) 784-0555 \u2022 tourism@mauban.gov.ph", "desk"),
+    ("Mauban Tourism Information Desk", "(042) 784-0555 \u2022 tourism@mauban.gov.ph", "help_desk"),
 ]
 
 
@@ -6801,7 +6801,7 @@ class EmergencyContactTests(TestCase):
     """The table of emergency contacts and what the mobile bootstrap sends of it."""
 
     BOOTSTRAP = "/api/mobile/tourism/bootstrap/"
-    PUBLIC_KEYS = {"id", "name", "contact_numbers", "email", "description", "hours", "category"}
+    PUBLIC_KEYS = {"id", "name", "contact_numbers", "email", "description", "icon"}
     OLD_BOOTSTRAP_KEYS = {
         "referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme",
     }
@@ -6827,27 +6827,28 @@ class EmergencyContactTests(TestCase):
 
     # -- the table ---------------------------------------------------------
 
-    def test_the_fields_are_exactly_these_and_there_is_no_icon_or_colour(self):
+    def test_the_fields_are_exactly_these_and_there_is_no_colour_or_hours(self):
         names = {f.name for f in EmergencyContact._meta.get_fields()}
         self.assertEqual(
             names,
-            {"id", "name", "contact_numbers", "email", "description", "hours",
-             "category", "display_order", "is_active"},
+            {"id", "name", "contact_numbers", "email", "description",
+             "icon", "display_order", "is_active"},
         )
-        self.assertFalse({"icon", "color", "colour"} & names)
+        self.assertFalse({"hours", "category", "color", "colour"} & names)
 
-    def test_the_categories_are_these_five(self):
+    def test_the_icons_are_these_twelve(self):
         self.assertEqual(
-            [value for value, _ in EmergencyContact.CATEGORY_CHOICES],
-            ["rescue", "police", "coast_guard", "desk", "other"],
+            [value for value, _ in EmergencyContact.ICON_CHOICES],
+            ["rescue", "police", "coast_guard", "fire", "hospital", "ambulance",
+             "help_desk", "lgu_office", "power", "water", "port", "other"],
         )
 
-    def test_a_new_contact_is_active_and_of_category_other_with_the_optional_fields_empty(self):
+    def test_a_new_contact_is_active_and_of_icon_other_with_the_optional_fields_empty(self):
         contact = EmergencyContact.objects.create(name="Barangay Desk", contact_numbers="0917-000-0000")
         contact.refresh_from_db()
         self.assertIs(contact.is_active, True)
-        self.assertEqual(contact.category, "other")
-        self.assertEqual((contact.email, contact.description, contact.hours), ("", "", ""))
+        self.assertEqual(contact.icon, "other")
+        self.assertEqual((contact.email, contact.description), ("", ""))
         self.assertEqual(contact.display_order, 0)
 
     def test_a_row_put_in_without_the_column_is_active(self):
@@ -6856,8 +6857,8 @@ class EmergencyContactTests(TestCase):
         table = EmergencyContact._meta.db_table
         with connection.cursor() as cursor:
             cursor.execute(
-                f"INSERT INTO {table} (name, contact_numbers, email, description, hours, category, display_order) "
-                "VALUES ('Raw row', '0917-111-1111', '', '', '', 'other', 0)"
+                f"INSERT INTO {table} (name, contact_numbers, email, description, icon, display_order) "
+                "VALUES ('Raw row', '0917-111-1111', '', '', 'other', 0)"
             )
         self.assertIs(EmergencyContact.objects.get(name="Raw row").is_active, True)
 
@@ -6881,10 +6882,10 @@ class EmergencyContactTests(TestCase):
         rows = list(EmergencyContact.objects.all())
 
         self.assertEqual(
-            [(c.name, _shown_line(c), c.category) for c in rows],
+            [(c.name, _shown_line(c), c.icon) for c in rows],
             EMERGENCY_FOUR,
         )
-        self.assertEqual([c.category for c in rows], ["rescue", "police", "coast_guard", "desk"])
+        self.assertEqual([c.icon for c in rows], ["rescue", "police", "coast_guard", "help_desk"])
         self.assertTrue(all(c.is_active for c in rows))
         orders = [c.display_order for c in rows]
         self.assertEqual(orders, sorted(orders))
@@ -6892,7 +6893,7 @@ class EmergencyContactTests(TestCase):
 
     def test_the_desk_keeps_its_number_and_its_email_apart(self):
         self._seed_the_four()
-        desk = EmergencyContact.objects.get(category="desk")
+        desk = EmergencyContact.objects.get(icon="help_desk")
         self.assertEqual(desk.contact_numbers, "(042) 784-0555")
         self.assertEqual(desk.email, "tourism@mauban.gov.ph")
 
@@ -6919,7 +6920,7 @@ class EmergencyContactTests(TestCase):
 
     def test_the_seed_never_overwrites_what_an_admin_changed(self):
         self._seed_the_four()
-        police = EmergencyContact.objects.get(category="police")
+        police = EmergencyContact.objects.get(icon="police")
         police.contact_numbers = "0999-000-0000"
         police.save()
 
@@ -6932,15 +6933,15 @@ class EmergencyContactTests(TestCase):
     def test_the_reverse_deletes_those_four_and_nothing_else(self):
         self._seed_the_four()
         mine = EmergencyContact.objects.create(name="Barangay Lupon", contact_numbers="0917-222-2222")
-        same_name_other_category = EmergencyContact.objects.create(
-            name="Mauban Municipal Police (PNP)", contact_numbers="x", category="other"
+        same_name_other_icon = EmergencyContact.objects.create(
+            name="Mauban Municipal Police (PNP)", contact_numbers="x", icon="other"
         )
 
         self.module.remove_contacts(self.apps, None)
 
         remaining = set(EmergencyContact.objects.values_list("pk", flat=True))
-        self.assertEqual(remaining, {mine.pk, same_name_other_category.pk})
-        self.assertFalse(EmergencyContact.objects.filter(category__in=["rescue", "coast_guard", "desk"]).exists())
+        self.assertEqual(remaining, {mine.pk, same_name_other_icon.pk})
+        self.assertFalse(EmergencyContact.objects.filter(icon__in=["rescue", "coast_guard", "help_desk"]).exists())
 
     # -- the payload -------------------------------------------------------
 
@@ -6950,12 +6951,12 @@ class EmergencyContactTests(TestCase):
         sent = self._payload()["emergencyContacts"]
 
         self.assertEqual(
-            [(c["name"], c["contact_numbers"], c["email"], c["category"]) for c in sent],
+            [(c["name"], c["contact_numbers"], c["email"], c["icon"]) for c in sent],
             [
                 ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "", "rescue"),
                 ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "", "police"),
                 ("Coast Guard Sub-Station Mauban", "0917-842-7643", "", "coast_guard"),
-                ("Mauban Tourism Information Desk", "(042) 784-0555", "tourism@mauban.gov.ph", "desk"),
+                ("Mauban Tourism Information Desk", "(042) 784-0555", "tourism@mauban.gov.ph", "help_desk"),
             ],
         )
 
@@ -6966,7 +6967,7 @@ class EmergencyContactTests(TestCase):
 
     def test_an_inactive_contact_is_not_sent_but_is_still_in_the_database(self):
         self._seed_the_four()
-        EmergencyContact.objects.filter(category="coast_guard").update(is_active=False)
+        EmergencyContact.objects.filter(icon="coast_guard").update(is_active=False)
 
         names = [c["name"] for c in self._payload()["emergencyContacts"]]
 
@@ -6978,12 +6979,12 @@ class EmergencyContactTests(TestCase):
     def test_the_payload_follows_display_order(self):
         self._seed_the_four()
         # the desk first, the police last
-        EmergencyContact.objects.filter(category="desk").update(display_order=1)
-        EmergencyContact.objects.filter(category="police").update(display_order=99)
+        EmergencyContact.objects.filter(icon="help_desk").update(display_order=1)
+        EmergencyContact.objects.filter(icon="police").update(display_order=99)
 
-        categories = [c["category"] for c in self._payload()["emergencyContacts"]]
+        icons = [c["icon"] for c in self._payload()["emergencyContacts"]]
 
-        self.assertEqual(categories, ["desk", "rescue", "coast_guard", "police"])
+        self.assertEqual(icons, ["help_desk", "rescue", "coast_guard", "police"])
 
     def test_no_contacts_is_an_empty_list_not_a_missing_key(self):
         self.assertEqual(self._payload()["emergencyContacts"], [])
@@ -7031,8 +7032,8 @@ class EmergencyContactMigrationTests(TransactionTestCase):
         MigrationExecutor(connection).migrate(self.AFTER)
         model = self._model(self.AFTER)
         self.assertEqual(
-            [(c.name, c.category) for c in model.objects.order_by("display_order", "id") if c.pk != mine.pk],
-            [(name, category) for name, _line, category in EMERGENCY_FOUR],
+            [(c.name, c.icon) for c in model.objects.order_by("display_order", "id") if c.pk != mine.pk],
+            [(name, icon) for name, _line, icon in EMERGENCY_FOUR],
         )
         self.assertEqual(model.objects.count(), 5)
 
@@ -7059,11 +7060,11 @@ class EmergencyContactApiTests(TestCase):
         EmergencyContact.objects.all().delete()
         self.admin = self._client(ROLE_ADMIN, "ec_admin")
         self.a = EmergencyContact.objects.create(
-            name="Alpha Rescue", contact_numbers="111-1111", category="rescue", display_order=10)
+            name="Alpha Rescue", contact_numbers="111-1111", icon="rescue", display_order=10)
         self.b = EmergencyContact.objects.create(
-            name="Bravo Police", contact_numbers="222-2222 / 333-3333", category="police", display_order=20)
+            name="Bravo Police", contact_numbers="222-2222 / 333-3333", icon="police", display_order=20)
         self.c = EmergencyContact.objects.create(
-            name="Charlie Desk", contact_numbers="444-4444", category="desk", display_order=30)
+            name="Charlie Desk", contact_numbers="444-4444", icon="help_desk", display_order=30)
 
     def _client(self, role=None, username=None):
         client = APIClient()
@@ -7135,8 +7136,8 @@ class EmergencyContactApiTests(TestCase):
         self.assertEqual([r["is_active"] for r in rows], [True, False, True])
         self.assertEqual(
             set(rows[0]),
-            {"id", "name", "contact_numbers", "email", "description", "hours",
-             "category", "display_order", "is_active"},
+            {"id", "name", "contact_numbers", "email", "description",
+             "icon", "display_order", "is_active"},
         )
 
     # -- create ------------------------------------------------------------
@@ -7144,7 +7145,7 @@ class EmergencyContactApiTests(TestCase):
     def test_create_answers_and_saves_and_goes_last_and_active(self):
         response = self.admin.post(self.LIST, {
             "name": "  Delta   Coast  Guard ", "contact_numbers": "555-5555", "email": "d@example.com",
-            "description": "Boats", "hours": "24/7", "category": "coast_guard",
+            "description": "Boats", "icon": "coast_guard",
             "is_active": False, "display_order": 1, "id": 9999,
         }, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -7156,16 +7157,15 @@ class EmergencyContactApiTests(TestCase):
             self.assertEqual(source["contact_numbers"], "555-5555")
             self.assertEqual(source["email"], "d@example.com")
             self.assertEqual(source["description"], "Boats")
-            self.assertEqual(source["hours"], "24/7")
-            self.assertEqual(source["category"], "coast_guard")
+            self.assertEqual(source["icon"], "coast_guard")
             self.assertEqual(source["display_order"], 40)
             self.assertIs(source["is_active"], True)
         self.assertEqual(self._payload_names()[-1], "Delta Coast Guard")
 
-    def test_create_without_a_category_is_other(self):
+    def test_create_without_a_icon_is_other(self):
         response = self.admin.post(self.LIST, {"name": "Echo", "contact_numbers": "6"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(EmergencyContact.objects.get(name="Echo").category, "other")
+        self.assertEqual(EmergencyContact.objects.get(name="Echo").icon, "other")
 
     def test_create_refuses_a_missing_name_or_number_and_saves_nothing(self):
         for body in ({"contact_numbers": "1"}, {"name": "  ", "contact_numbers": "1"}, {"name": "Foxtrot"},
@@ -7189,11 +7189,11 @@ class EmergencyContactApiTests(TestCase):
         self.assertEqual(self._logs().count(), 0)
 
     def test_rename_to_the_name_of_another_is_refused_and_nothing_changes(self):
-        response = self.admin.patch(self._url(self.b), {"name": "  alpha   RESCUE", "hours": "9-5"}, format="json")
+        response = self.admin.patch(self._url(self.b), {"name": "  alpha   RESCUE", "description": "new text"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.b.refresh_from_db()
         self.assertEqual(self.b.name, "Bravo Police")
-        self.assertEqual(self.b.hours, "")
+        self.assertEqual(self.b.description, "")
         self.assertEqual(self._logs().count(), 0)
 
     def test_a_contact_may_be_renamed_to_its_own_name_in_other_capitals(self):
@@ -7203,25 +7203,26 @@ class EmergencyContactApiTests(TestCase):
         self.a.refresh_from_db()
         self.assertEqual(self.a.name, "ALPHA rescue")
 
-    # -- guard 3: the category --------------------------------------------
+    # -- guard 3: the icon --------------------------------------------
 
-    def test_an_unknown_category_is_a_400_on_create_and_on_edit(self):
-        for bad in ("hospital", "", None, 5, "RESCUE"):
+    def test_an_unknown_icon_is_a_400_on_create_and_on_edit(self):
+        for bad in ("siren", "", None, 5, "RESCUE", "desk", "Hospital"):
             response = self.admin.post(
-                self.LIST, {"name": "Golf", "contact_numbers": "7", "category": bad}, format="json")
+                self.LIST, {"name": "Golf", "contact_numbers": "7", "icon": bad}, format="json")
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
-            response = self.admin.patch(self._url(self.a), {"category": bad}, format="json")
+            response = self.admin.patch(self._url(self.a), {"icon": bad}, format="json")
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
         self.a.refresh_from_db()
-        self.assertEqual(self.a.category, "rescue")
+        self.assertEqual(self.a.icon, "rescue")
         self.assertFalse(EmergencyContact.objects.filter(name="Golf").exists())
 
-    def test_each_of_the_five_categories_is_accepted(self):
-        for index, code in enumerate(("rescue", "police", "coast_guard", "desk", "other")):
+    def test_each_of_the_twelve_icons_is_accepted(self):
+        for index, code in enumerate(("rescue", "police", "coast_guard", "fire", "hospital", "ambulance",
+                                      "help_desk", "lgu_office", "power", "water", "port", "other")):
             response = self.admin.post(
-                self.LIST, {"name": f"Cat {index}", "contact_numbers": "1", "category": code}, format="json")
+                self.LIST, {"name": f"Cat {index}", "contact_numbers": "1", "icon": code}, format="json")
             self.assertEqual(response.status_code, status.HTTP_201_CREATED, code)
-            self.assertEqual(EmergencyContact.objects.get(name=f"Cat {index}").category, code)
+            self.assertEqual(EmergencyContact.objects.get(name=f"Cat {index}").icon, code)
 
     # -- edit --------------------------------------------------------------
 
@@ -7239,15 +7240,15 @@ class EmergencyContactApiTests(TestCase):
 
     def test_edit_ignores_is_active_and_display_order(self):
         response = self.admin.patch(
-            self._url(self.a), {"hours": "8-5", "is_active": False, "display_order": 99}, format="json")
+            self._url(self.a), {"description": "8-5", "is_active": False, "display_order": 99}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.a.refresh_from_db()
-        self.assertEqual((self.a.hours, self.a.is_active, self.a.display_order), ("8-5", True, 10))
+        self.assertEqual((self.a.description, self.a.is_active, self.a.display_order), ("8-5", True, 10))
         self.assertIs(response.json()["is_active"], True)
         self.assertEqual(response.json()["display_order"], 10)
 
     def test_edit_of_an_unknown_contact_is_404(self):
-        self.assertEqual(self.admin.patch(self.LIST + "99999/", {"hours": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.admin.patch(self.LIST + "99999/", {"description": "x"}, format="json").status_code, 404)
         self.assertEqual(self.admin.post(self.LIST + "99999/deactivate/").status_code, 404)
 
     # -- deactivate / reactivate ------------------------------------------

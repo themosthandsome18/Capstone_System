@@ -64,6 +64,10 @@ const FIXED = [
   "--th-warning", "--th-warning-bg", "--th-warning-text",
   "--th-danger", "--th-danger-bg", "--th-danger-text",
   "--th-info", "--th-info-bg", "--th-info-border",
+  // Emergency contact icon colours: fixed, THEME_TOKENS.md section 9
+  "--th-contact-rescue", "--th-contact-police", "--th-contact-coast-guard", "--th-contact-fire",
+  "--th-contact-hospital", "--th-contact-ambulance", "--th-contact-lgu-office", "--th-contact-power",
+  "--th-contact-water", "--th-contact-port", "--th-contact-other",
 ];
 
 // ---- tests ----------------------------------------------------------------

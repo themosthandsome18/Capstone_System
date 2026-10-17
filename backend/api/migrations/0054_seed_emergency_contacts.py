@@ -9,17 +9,17 @@ them together again as before.
 A row that already has the same name is left alone: running this again, or
 after an admin has edited the contacts, adds nothing and changes nothing.
 
-Reverse: deletes those four rows (matched by name and category) and nothing
+Reverse: deletes those four rows (matched by name and icon) and nothing
 else.
 """
 from django.db import migrations
 
-# (name, contact_numbers, email, category) in the order the app shows them
+# (name, contact_numbers, email, icon) in the order the app shows them
 CONTACTS = [
     ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "", "rescue"),
     ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "", "police"),
     ("Coast Guard Sub-Station Mauban", "0917-842-7643", "", "coast_guard"),
-    ("Mauban Tourism Information Desk", "(042) 784-0555", "tourism@mauban.gov.ph", "desk"),
+    ("Mauban Tourism Information Desk", "(042) 784-0555", "tourism@mauban.gov.ph", "help_desk"),
 ]
 # gaps between the orders, so a contact can be put between two later
 FIRST_ORDER = 10
@@ -31,14 +31,14 @@ def add_contacts(apps, schema_editor):
     alias = schema_editor.connection.alias if schema_editor else "default"
     rows = EmergencyContact.objects.using(alias)
 
-    for index, (name, numbers, email, category) in enumerate(CONTACTS):
+    for index, (name, numbers, email, icon) in enumerate(CONTACTS):
         if rows.filter(name=name).exists():
             continue
         rows.create(
             name=name,
             contact_numbers=numbers,
             email=email,
-            category=category,
+            icon=icon,
             display_order=FIRST_ORDER + index * STEP,
         )
 
@@ -48,8 +48,8 @@ def remove_contacts(apps, schema_editor):
     alias = schema_editor.connection.alias if schema_editor else "default"
     rows = EmergencyContact.objects.using(alias)
 
-    for name, _numbers, _email, category in CONTACTS:
-        rows.filter(name=name, category=category).delete()
+    for name, _numbers, _email, icon in CONTACTS:
+        rows.filter(name=name, icon=icon).delete()
 
 
 class Migration(migrations.Migration):

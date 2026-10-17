@@ -1143,5 +1143,5 @@ class PublicEmergencyContactSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmergencyContact
-        fields = ["id", "name", "contact_numbers", "email", "description", "hours", "category"]
+        fields = ["id", "name", "contact_numbers", "email", "description", "icon"]
         read_only_fields = fields
