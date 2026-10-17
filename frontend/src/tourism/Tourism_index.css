@@ -4740,6 +4740,10 @@
   list-style: none;
 }
 
+/* The row has two parts: the body (icon + text) and the right group (status,
+   arrows, buttons). The right group stays in the MIDDLE of the row; the body
+   sits at the top, and inside it the icon lines up with the FIRST line, so it
+   looks the same with or without chips. */
 .hotline-row {
   display: flex;
   flex-wrap: wrap;
@@ -4760,19 +4764,33 @@
   color: var(--th-text-muted);
 }
 
-.hotline-main {
+.hotline-body {
+  display: flex;
   flex: 1 1 260px;
+  align-items: flex-start;
+  gap: 12px;
   min-width: 0;
 }
 
+.hotline-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The first line is as tall as the icon box (40px) and its text is centred in
+   it, so the middle of the name is the middle of the icon, and the text starts
+   at the height of the icon's top. */
 .hotline-name {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
   font-size: 15px;
   font-weight: 800;
   color: var(--th-text-main);
 }
 
 .hotline-number {
-  margin-top: 2px;
+  margin-top: -6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--contact-color, var(--th-text-muted));
@@ -4830,8 +4848,8 @@
 }
 
 .hotline-preview {
-  display: flex;
-  align-items: center;
+  flex: none;
+  align-items: flex-start;
   gap: 12px;
   border: 1px solid var(--th-border);
   border-radius: 12px;

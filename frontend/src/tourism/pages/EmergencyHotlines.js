@@ -210,7 +210,7 @@ function EmergencyHotlinesPage() {
           </div>
 
           <p className="hotline-preview-label">How it will look in the app</p>
-          <div className="hotline-preview" role="group" aria-label="Preview" style={contactStyle(form.icon)}>
+          <div className="hotline-preview hotline-body" role="group" aria-label="Preview" style={contactStyle(form.icon)}>
             <ContactIcon name={form.icon} />
             <div className="hotline-main">
               <div className={`hotline-name ${form.name.trim() ? "" : "is-empty"}`} data-testid="preview-name">
@@ -331,24 +331,26 @@ function EmergencyHotlinesPage() {
                       style={contactStyle(row.icon)}
                       data-testid={`hotline-row-${row.id}`}
                     >
-                      <ContactIcon name={row.icon} />
-                      <div className="hotline-main">
-                        <div className="hotline-name">{row.name}</div>
-                        <div className="hotline-number">{row.contact_numbers}</div>
-                        {row.email || row.description ? (
-                          <div className="hotline-chips">
-                            {row.email ? (
-                              <span className="hotline-chip" title={row.email}>
-                                <FiMail aria-hidden="true" /> {row.email}
-                              </span>
-                            ) : null}
-                            {row.description ? (
-                              <span className="hotline-chip" title={row.description}>
-                                {row.description}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
+                      <div className="hotline-body">
+                        <ContactIcon name={row.icon} />
+                        <div className="hotline-main">
+                          <div className="hotline-name">{row.name}</div>
+                          <div className="hotline-number">{row.contact_numbers}</div>
+                          {row.email || row.description ? (
+                            <div className="hotline-chips">
+                              {row.email ? (
+                                <span className="hotline-chip" title={row.email}>
+                                  <FiMail aria-hidden="true" /> {row.email}
+                                </span>
+                              ) : null}
+                              {row.description ? (
+                                <span className="hotline-chip" title={row.description}>
+                                  {row.description}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                       <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>
                         {row.is_active ? "Active" : "Inactive"}
