@@ -5610,6 +5610,562 @@ class ItineraryStayTests(TestCase):
         self.assertEqual((rows["STY-02"]["sameDay"], rows["STY-02"]["overnight"]), (0, 2))
 
 
+class ReferenceOptionApiTests(TestCase):
+    """Add, rename, retire and bring back the four registration options."""
+
+    KINDS = {
+        "itinerary": (Itinerary, "itinerary"),
+        "travel-mode": (TravelMode, "travel_mode"),
+        "boat-type": (BoatType, "boat_type"),
+        "visit-purpose": (VisitPurpose, "visit_purpose"),
+    }
+    PAYLOAD_KEYS = {
+        "itinerary": "itineraries", "travel-mode": "travelModes",
+        "boat-type": "boatTypes", "visit-purpose": "visitPurposes",
+    }
+    CACHE_KEY = "mobile_reference_tables_v2"
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        self.admin = self._client(ROLE_ADMIN, "opt_admin")
+
+    # -- helpers -----------------------------------------------------------
+
+    def _client(self, role=None, username=None):
+        client = APIClient()
+        if role is not None:
+            user = User.objects.create_user(username=username or f"opt_{role}", password="Staff@12345")
+            UserProfile.objects.create(user=user, role=role)
+            client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+            client.user = user
+        return client
+
+    def _url(self, kind, option_id=None, action=None):
+        url = f"/api/reference-options/{kind}/"
+        if option_id is not None:
+            url += f"{option_id}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _record(self, survey_id, **fks):
+        quezon = Province.objects.get(name="Quezon")
+        values = dict(
+            survey_id=survey_id, full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=Itinerary.objects.order_by("id").first(),
+            travel_mode=TravelMode.objects.order_by("id").first(),
+            boat_type=BoatType.objects.order_by("id").first(),
+            visit_purpose=VisitPurpose.objects.order_by("id").first(),
+            total_visitors=4, filipino_count=4, total_male=4, age_8_59=4, status="arrived",
+        )
+        values.update(fks)
+        return TouristRecord.objects.create(**values)
+
+    def _make(self, kind, option_id, name, uses=0, **extra):
+        """An option with exactly `uses` records pointing at it."""
+        model, fk = self.KINDS[kind]
+        option = model.objects.create(id=option_id, name=name, **extra)
+        for i in range(uses):
+            self._record(f"OPT-{kind[:3]}-{option_id}-{i}", **{fk: option})
+        return option
+
+    def _payload(self, active_only=False):
+        from .services.tourism import build_reference_tables_payload
+
+        return build_reference_tables_payload(active_only=active_only)
+
+    def _ids(self, kind, active_only=False):
+        return {item["id"] for item in self._payload(active_only)[self.PAYLOAD_KEYS[kind]]}
+
+    # -- who may ----------------------------------------------------------
+
+    def test_only_the_admin_may_use_any_of_the_five_endpoints(self):
+        option = self._make("itinerary", 9801, "Guarded", uses=1)
+        calls = [
+            ("get", self._url("itinerary")),
+            ("post", self._url("itinerary")),
+            ("patch", self._url("itinerary", option.id)),
+            ("post", self._url("itinerary", option.id, "deactivate")),
+            ("post", self._url("itinerary", option.id, "reactivate")),
+        ]
+        for method, url in calls:
+            with self.subTest(who="nobody", method=method, url=url):
+                self.assertEqual(getattr(self._client(), method)(url, {}, format="json").status_code, 401)
+            for role in (ROLE_TOURISM, ROLE_SANITATION, ROLE_TOURIST):
+                with self.subTest(who=role, method=method, url=url):
+                    client = self._client(role, f"u_{role}_{method}_{url[-12:-1].replace('/', '')}")
+                    self.assertEqual(getattr(client, method)(url, {}, format="json").status_code, 403)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.is_active), ("Guarded", True))  # none of those changed it
+
+    def test_the_admin_is_let_in(self):
+        self.assertEqual(self.admin.get(self._url("itinerary")).status_code, 200)
+
+    def test_an_unknown_kind_is_404_not_500(self):
+        option = self._make("itinerary", 9802, "Known")
+        for method, url in [
+            ("get", "/api/reference-options/boats/"),
+            ("post", "/api/reference-options/boats/"),
+            ("patch", "/api/reference-options/boats/1/"),
+            ("post", "/api/reference-options/boats/1/deactivate/"),
+            ("post", "/api/reference-options/boats/1/reactivate/"),
+            ("get", "/api/reference-options/Itinerary/"),
+        ]:
+            with self.subTest(method=method, url=url):
+                self.assertEqual(getattr(self.admin, method)(url, {}, format="json").status_code, 404)
+        self.assertEqual(self.admin.patch(self._url("itinerary", 99999), {}, format="json").status_code, 404)
+        self.assertEqual(self.admin.post(self._url("itinerary", 99999, "deactivate")).status_code, 404)
+        self.assertTrue(Itinerary.objects.filter(pk=option.pk).exists())
+
+    def test_there_is_no_delete_and_no_put(self):
+        option = self._make("travel-mode", 9803, "Keep Me", uses=1)
+        for method, url in [
+            ("delete", self._url("travel-mode", option.id)),
+            ("delete", self._url("travel-mode")),
+            ("put", self._url("travel-mode", option.id)),
+            ("delete", self._url("travel-mode", option.id, "deactivate")),
+        ]:
+            with self.subTest(method=method, url=url):
+                self.assertEqual(getattr(self.admin, method)(url).status_code, 405)
+        self.assertTrue(TravelMode.objects.filter(pk=option.pk).exists())
+
+    # -- the list ----------------------------------------------------------
+
+    def test_the_list_has_retired_options_and_the_real_record_counts(self):
+        # 3, 1, 0 and 2 records: every count different, so options cannot be swapped unseen.
+        self._make("visit-purpose", 9810, "Three uses", uses=3)
+        self._make("visit-purpose", 9811, "One use", uses=1)
+        self._make("visit-purpose", 9812, "No use", uses=0)
+        self._make("visit-purpose", 9813, "Retired two", uses=2, is_active=False)
+
+        rows = {r["id"]: r for r in self.admin.get(self._url("visit-purpose")).json()}
+
+        self.assertEqual(
+            (rows[9810]["record_count"], rows[9811]["record_count"], rows[9812]["record_count"], rows[9813]["record_count"]),
+            (3, 1, 0, 2),
+        )
+        self.assertIs(rows[9813]["is_active"], False)
+        self.assertEqual(set(rows), set(VisitPurpose.objects.values_list("id", flat=True)))
+
+    def test_the_list_carries_the_fields_of_its_kind(self):
+        self._make("itinerary", 9814, "Two nights", stay_nights=2)
+        self._make("boat-type", 9815, "Ferry", requires_capacity_fare=True)
+
+        itineraries = {r["id"]: r for r in self.admin.get(self._url("itinerary")).json()}
+        boats = {r["id"]: r for r in self.admin.get(self._url("boat-type")).json()}
+        modes = self.admin.get(self._url("travel-mode")).json()
+
+        self.assertEqual(itineraries[9814]["stay_nights"], 2)
+        self.assertIsNone(itineraries[min(itineraries)]["stay_nights"])
+        self.assertIs(boats[9815]["requires_capacity_fare"], True)
+        self.assertNotIn("stay_nights", modes[0])
+        self.assertNotIn("requires_capacity_fare", modes[0])
+
+    # -- adding ------------------------------------------------------------
+
+    def test_add_in_every_kind_and_the_server_gives_the_id(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                top = model.objects.order_by("-id").first().id
+                response = self.admin.post(self._url(kind), {"name": "  Brand   New  "}, format="json")
+
+                self.assertEqual(response.status_code, 201)
+                body = response.json()
+                self.assertEqual(body["id"], top + 1)
+                self.assertEqual(body["name"], "Brand New")  # trimmed, one space
+                self.assertIs(body["is_active"], True)
+                self.assertEqual(body["record_count"], 0)
+                self.assertTrue(model.objects.filter(pk=top + 1, name="Brand New").exists())
+
+    def test_an_id_sent_by_the_client_is_ignored(self):
+        existing = Itinerary.objects.order_by("id").first()
+        before = existing.name
+        top = Itinerary.objects.order_by("-id").first().id
+
+        taken = self.admin.post(self._url("itinerary"), {"id": existing.id, "name": "Wants an old id"}, format="json")
+        far = self.admin.post(self._url("itinerary"), {"id": 99999, "name": "Wants a far id"}, format="json")
+
+        self.assertEqual(taken.status_code, 201)
+        self.assertEqual(far.status_code, 201)
+        self.assertEqual(taken.json()["id"], top + 1)
+        self.assertEqual(far.json()["id"], top + 2)
+        self.assertEqual(Itinerary.objects.get(pk=existing.id).name, before)  # the old row was not replaced
+        self.assertFalse(Itinerary.objects.filter(pk=99999).exists())
+
+    def test_a_patch_cannot_change_the_id_or_retire_by_the_back_door(self):
+        option = self._make("travel-mode", 9820, "Fixed", uses=2)
+        url = self._url("travel-mode", option.id)
+
+        # a PATCH that really changes something (a rename), with extras the
+        # server must not obey; and one that changes nothing
+        renamed = self.admin.patch(
+            url,
+            {"id": 1, "is_active": False, "record_count": 99, "name": "Fixed Again", "confirm_affected_records": 2},
+            format="json",
+        )
+        nothing = self.admin.patch(url, {"id": 1, "is_active": False, "name": "Fixed Again"}, format="json")
+
+        for response in (renamed, nothing):
+            self.assertEqual(response.status_code, 200)
+            # what is ANSWERED must be what is saved: still active, same id
+            self.assertEqual((response.json()["id"], response.json()["is_active"]), (9820, True))
+            self.assertEqual(response.json()["record_count"], 2)  # the server's count
+        option.refresh_from_db()
+        self.assertEqual((option.id, option.name, option.is_active), (9820, "Fixed Again", True))
+        self.assertTrue(TravelMode.objects.filter(pk=1).exists())  # row 1 was not touched
+
+    def test_the_same_name_in_any_dress_is_refused(self):
+        for kind, (model, _) in self.KINDS.items():
+            self._make(kind, 9830, "Same Day Out")
+            for attempt in ["same day out", "Same Day Out ", " Same Day Out", "Same  Day  Out", "SAME   DAY OUT  "]:
+                with self.subTest(kind=kind, attempt=attempt):
+                    before = model.objects.count()
+                    response = self.admin.post(self._url(kind), {"name": attempt}, format="json")
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("name", response.json())
+                    self.assertEqual(model.objects.count(), before)
+
+    def test_the_same_name_is_refused_even_against_a_retired_option(self):
+        self._make("visit-purpose", 9831, "Old Purpose", is_active=False)
+
+        response = self.admin.post(self._url("visit-purpose"), {"name": "old   purpose"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_rename_onto_another_options_name_is_refused(self):
+        self._make("boat-type", 9832, "Alpha Boat")
+        other = self._make("boat-type", 9833, "Beta Boat")
+
+        for attempt in ["alpha boat", "Alpha  Boat ", "ALPHA BOAT"]:
+            with self.subTest(attempt=attempt):
+                response = self.admin.patch(
+                    self._url("boat-type", other.id),
+                    {"name": attempt, "confirm_affected_records": 0}, format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+        other.refresh_from_db()
+        self.assertEqual(other.name, "Beta Boat")
+
+    def test_an_empty_or_huge_name_is_refused(self):
+        for value in ["", "   ", None, 5, "x" * 121]:
+            with self.subTest(name=value):
+                before = Itinerary.objects.count()
+                response = self.admin.post(self._url("itinerary"), {"name": value}, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(Itinerary.objects.count(), before)
+
+    def test_itinerary_stay_nights_and_boat_flag_on_create(self):
+        stay = self.admin.post(self._url("itinerary"), {"name": "Three Days", "stay_nights": 3}, format="json")
+        boat = self.admin.post(self._url("boat-type"), {"name": "Barge", "requires_capacity_fare": True}, format="json")
+        plain = self.admin.post(self._url("boat-type"), {"name": "Raft"}, format="json")
+
+        self.assertEqual(stay.json()["stay_nights"], 3)
+        self.assertIs(boat.json()["requires_capacity_fare"], True)
+        self.assertIs(plain.json()["requires_capacity_fare"], False)
+        for bad in [-1, 61, "3", True, 2.5]:
+            with self.subTest(stay_nights=bad):
+                self.assertEqual(
+                    self.admin.post(self._url("itinerary"), {"name": f"Bad {bad}", "stay_nights": bad}, format="json").status_code,
+                    400,
+                )
+        self.assertEqual(
+            self.admin.post(self._url("boat-type"), {"name": "Bad flag", "requires_capacity_fare": "yes"}, format="json").status_code,
+            400,
+        )
+
+    # -- retiring ----------------------------------------------------------
+
+    def test_the_last_active_option_cannot_be_retired(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                keep = model.objects.order_by("id").first()
+                model.objects.exclude(pk=keep.pk).update(is_active=False)
+
+                refused = self.admin.post(self._url(kind, keep.id, "deactivate"))
+
+                self.assertEqual(refused.status_code, 409)
+                self.assertEqual(refused.json()["code"], "last_active")
+                self.assertTrue(model.objects.get(pk=keep.pk).is_active)
+                # ...but with a second active one, it is allowed
+                other = model.objects.exclude(pk=keep.pk).order_by("id").first()
+                self.assertEqual(self.admin.post(self._url(kind, other.id, "reactivate")).status_code, 200)
+                self.assertEqual(self.admin.post(self._url(kind, keep.id, "deactivate")).status_code, 200)
+
+    def test_retire_and_bring_back_in_every_kind_and_both_are_idempotent(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                option = self._make(kind, 9840, "Seasonal", uses=2)
+                logs = ActivityLog.objects.count()
+
+                first = self.admin.post(self._url(kind, option.id, "deactivate"))
+                again = self.admin.post(self._url(kind, option.id, "deactivate"))
+                self.assertEqual((first.status_code, again.status_code), (200, 200))
+                self.assertIs(first.json()["is_active"], False)
+                self.assertEqual(ActivityLog.objects.count(), logs + 1)  # the repeat changed nothing: not logged
+
+                back = self.admin.post(self._url(kind, option.id, "reactivate"))
+                back_again = self.admin.post(self._url(kind, option.id, "reactivate"))
+                self.assertEqual((back.status_code, back_again.status_code), (200, 200))
+                self.assertIs(back.json()["is_active"], True)
+                self.assertEqual(ActivityLog.objects.count(), logs + 2)
+
+    def test_retiring_does_not_hurt_an_existing_record(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        itinerary = self._make("itinerary", 9850, "Retiring Trail", uses=0)
+        record = self._record("OPT-KEEP-1", itinerary=itinerary)
+        self._make("itinerary", 9851, "Other Trail", uses=1)
+
+        response = self.admin.post(self._url("itinerary", itinerary.id, "deactivate"))
+
+        self.assertEqual(response.status_code, 200)
+        # (a) the record is whole
+        record.refresh_from_db()
+        self.assertEqual(record.itinerary_id, 9850)
+        self.assertEqual(record.total_visitors, 4)
+        # (b) the report still names it
+        rows = build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]
+        self.assertEqual({r["survey_id"]: r["itinerary"] for r in rows}["OPT-KEEP-1"], "Retiring Trail")
+        # (c) gone from what the mobile app is offered
+        self.assertNotIn(9850, self._ids("itinerary", active_only=True))
+        self.assertIn(9851, self._ids("itinerary", active_only=True))
+        # (d) still in what the web is given, marked
+        web = {i["id"]: i for i in self._payload()["itineraries"]}
+        self.assertIs(web[9850]["is_active"], False)
+
+    # -- renaming ----------------------------------------------------------
+
+    def test_a_rename_needs_the_exact_count_the_server_counted(self):
+        # Three records on this option, one on the other: the right answer is 3.
+        mine = self._make("travel-mode", 9860, "Old Ride", uses=3)
+        self._make("travel-mode", 9861, "Other Ride", uses=1)
+        url = self._url("travel-mode", mine.id)
+
+        missing = self.admin.patch(url, {"name": "New Ride"}, format="json")
+        wrong_low = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 1}, format="json")
+        wrong_high = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 4}, format="json")
+        as_flag = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": True}, format="json")
+        junk = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": "three"}, format="json")
+
+        for response in (missing, wrong_low, wrong_high, as_flag, junk):
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["record_count"], 3)  # the real count is given back
+            self.assertEqual(response.json()["code"], "confirmation_required")
+        mine.refresh_from_db()
+        self.assertEqual(mine.name, "Old Ride")  # none of them renamed it
+
+        right = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 3}, format="json")
+        self.assertEqual(right.status_code, 200)
+        self.assertEqual(right.json()["name"], "New Ride")
+        mine.refresh_from_db()
+        self.assertEqual(mine.name, "New Ride")
+
+    def test_true_is_not_a_count_of_one(self):
+        # True == 1 in Python: an option with ONE record must still refuse it.
+        option = self._make("visit-purpose", 9864, "One Record", uses=1)
+
+        response = self.admin.patch(
+            self._url("visit-purpose", option.id), {"name": "One Record 2", "confirm_affected_records": True}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        option.refresh_from_db()
+        self.assertEqual(option.name, "One Record")
+
+    def test_the_count_is_accepted_as_text_digits_too(self):
+        mine = self._make("visit-purpose", 9862, "Text Count", uses=2)
+
+        response = self.admin.patch(
+            self._url("visit-purpose", mine.id), {"name": "Text Count 2", "confirm_affected_records": "2"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_renaming_an_option_nobody_uses_still_needs_a_zero(self):
+        option = self._make("boat-type", 9863, "Unused Boat", uses=0)
+        url = self._url("boat-type", option.id)
+
+        self.assertEqual(self.admin.patch(url, {"name": "Unused 2"}, format="json").status_code, 409)
+        self.assertEqual(
+            self.admin.patch(url, {"name": "Unused 2", "confirm_affected_records": 0}, format="json").status_code, 200
+        )
+
+    def test_an_itinerary_with_no_stay_length_cannot_be_renamed(self):
+        option = self._make("itinerary", 9870, "Reads Its Name", uses=2)  # stay_nights is None
+        url = self._url("itinerary", option.id)
+
+        refused = self.admin.patch(url, {"name": "Reads Another", "confirm_affected_records": 2}, format="json")
+
+        self.assertEqual(refused.status_code, 409)
+        self.assertEqual(refused.json()["code"], "stay_not_set")
+        self.assertIn("NAME", refused.json()["detail"])
+        option.refresh_from_db()
+        self.assertEqual(option.name, "Reads Its Name")
+
+    def test_an_itinerary_with_a_stay_length_can_be_renamed(self):
+        option = self._make("itinerary", 9871, "Weekend 2 Days", uses=2, stay_nights=2)
+
+        response = self.admin.patch(
+            self._url("itinerary", option.id), {"name": "Two Day Weekend", "confirm_affected_records": 2}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.stay_nights), ("Two Day Weekend", 2))
+
+    def test_a_rename_that_also_sets_the_stay_length_is_allowed(self):
+        option = self._make("itinerary", 9872, "Weekend 2 Days", uses=1)
+
+        response = self.admin.patch(
+            self._url("itinerary", option.id),
+            {"name": "Two Day Weekend", "stay_nights": 2, "confirm_affected_records": 1}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.stay_nights), ("Two Day Weekend", 2))
+
+    def test_the_other_three_kinds_rename_without_a_stay_length(self):
+        for kind in ("travel-mode", "boat-type", "visit-purpose"):
+            with self.subTest(kind=kind):
+                option = self._make(kind, 9873, "Plain Old", uses=1)
+                response = self.admin.patch(
+                    self._url(kind, option.id), {"name": "Plain New", "confirm_affected_records": 1}, format="json"
+                )
+                self.assertEqual(response.status_code, 200)
+
+    def test_changing_the_stay_length_also_needs_the_count(self):
+        option = self._make("itinerary", 9874, "Counted Stay", uses=2, stay_nights=1)
+        url = self._url("itinerary", option.id)
+
+        self.assertEqual(self.admin.patch(url, {"stay_nights": 3}, format="json").status_code, 409)
+        self.assertEqual(
+            self.admin.patch(url, {"stay_nights": 3, "confirm_affected_records": 9}, format="json").status_code, 409
+        )
+        right = self.admin.patch(url, {"stay_nights": 3, "confirm_affected_records": 2}, format="json")
+        self.assertEqual(right.status_code, 200)
+        self.assertEqual(right.json()["stay_nights"], 3)
+        for bad in [-1, 61, "x", True, 1.5]:
+            with self.subTest(stay_nights=bad):
+                self.assertEqual(
+                    self.admin.patch(url, {"stay_nights": bad, "confirm_affected_records": 2}, format="json").status_code,
+                    400,
+                )
+
+    def test_a_patch_that_changes_nothing_writes_and_logs_nothing(self):
+        option = self._make("travel-mode", 9875, "Still", uses=1)
+        logs = ActivityLog.objects.count()
+
+        response = self.admin.patch(self._url("travel-mode", option.id), {"name": "Still"}, format="json")
+        spaced = self.admin.patch(self._url("travel-mode", option.id), {"name": "  Still "}, format="json")
+
+        self.assertEqual((response.status_code, spaced.status_code), (200, 200))
+        self.assertEqual(ActivityLog.objects.count(), logs)
+
+    # -- the cache ---------------------------------------------------------
+
+    def test_every_write_shows_in_the_next_payload(self):
+        from django.core.cache import cache
+
+        # POST
+        self._payload()  # warms the cache
+        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+        created = self.admin.post(self._url("visit-purpose"), {"name": "Cache Purpose"}, format="json").json()
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertIn(created["id"], self._ids("visit-purpose"))
+        self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
+
+        # PATCH
+        self._payload()
+        self.admin.patch(
+            self._url("visit-purpose", created["id"]),
+            {"name": "Cache Purpose Renamed", "confirm_affected_records": 0}, format="json",
+        )
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        names = {i["id"]: i["name"] for i in self._payload()["visitPurposes"]}
+        self.assertEqual(names[created["id"]], "Cache Purpose Renamed")
+
+        # deactivate
+        self._payload(active_only=True)
+        self.admin.post(self._url("visit-purpose", created["id"], "deactivate"))
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertNotIn(created["id"], self._ids("visit-purpose", active_only=True))
+        self.assertIn(created["id"], self._ids("visit-purpose"))
+
+        # reactivate
+        self._payload(active_only=True)
+        self.admin.post(self._url("visit-purpose", created["id"], "reactivate"))
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
+
+    def test_a_refused_write_leaves_the_cache_alone(self):
+        from django.core.cache import cache
+
+        option = self._make("travel-mode", 9880, "Held", uses=1)
+        self._payload()
+
+        self.admin.patch(self._url("travel-mode", option.id), {"name": "Held 2"}, format="json")  # 409
+        self.admin.post(self._url("travel-mode"), {"name": ""}, format="json")  # 400
+
+        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+
+    # -- the trace ---------------------------------------------------------
+
+    def test_every_kind_of_write_is_in_the_activity_log(self):
+        option = self._make("itinerary", 9890, "Trace Trail", uses=2, stay_nights=1)
+        admin_user = self.admin.user
+
+        def newest():
+            return ActivityLog.objects.order_by("-id").first()
+
+        before = ActivityLog.objects.count()
+        created = self.admin.post(self._url("itinerary"), {"name": "Logged New"}, format="json").json()
+        log = newest()
+        self.assertEqual((log.user_id, log.module, log.action), (admin_user.pk, "tourism", "create"))
+        self.assertEqual((log.record_type, log.record_id), ("Itinerary", str(created["id"])))
+        self.assertIn("Logged New", log.record_label)
+        self.assertIn("Travel itinerary", log.record_label)
+
+        self.admin.patch(
+            self._url("itinerary", option.id), {"name": "Trace Trail 2", "confirm_affected_records": 2}, format="json"
+        )
+        log = newest()
+        self.assertEqual((log.user_id, log.action, log.record_id), (admin_user.pk, "update", str(option.id)))
+        self.assertIn("Trace Trail", log.record_label)
+        self.assertIn("Trace Trail 2", log.record_label)
+        self.assertIn("2 record(s)", log.record_label)
+
+        self.admin.post(self._url("itinerary", option.id, "deactivate"))
+        log = newest()
+        self.assertEqual((log.user_id, log.action, log.record_id), (admin_user.pk, "update", str(option.id)))
+        self.assertIn("deactivated", log.record_label)
+
+        self.admin.post(self._url("itinerary", option.id, "reactivate"))
+        log = newest()
+        self.assertEqual((log.user_id, log.action), (admin_user.pk, "update"))
+        self.assertIn("reactivated", log.record_label)
+
+        self.assertEqual(ActivityLog.objects.count(), before + 4)
+
+    def test_a_refused_write_is_not_logged(self):
+        option = self._make("travel-mode", 9891, "Refused", uses=1)
+        before = ActivityLog.objects.count()
+
+        self.admin.patch(self._url("travel-mode", option.id), {"name": "Refused 2"}, format="json")  # no count
+        self.admin.post(self._url("travel-mode"), {"name": "refused"}, format="json")  # same name
+        self._client(ROLE_TOURISM, "tourism_try").post(self._url("travel-mode"), {"name": "Nope"}, format="json")
+
+        self.assertEqual(ActivityLog.objects.count(), before)
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
 class PeakSeasonShareTests(TestCase):
     """Key Insights percentages divide by the total the sentence names."""
 
