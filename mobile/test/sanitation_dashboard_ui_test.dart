@@ -13,7 +13,9 @@ class DashboardUiApi extends TourismApi {
   int staffCalls = 0;
   int complaintCalls = 0;
   @override
-  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async {
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity({
+    String? expectedSessionToken,
+  }) async {
     identityCalls++;
     return {
       'user': {'display_name': 'Local Inspector'},
@@ -111,7 +113,9 @@ void count(String label, String value) => expect(
 );
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() => SharedPreferences.setMockInitialValues({
+    staffAuthTokenKey: 'test-session',
+  }));
   testWidgets(
     'approved four tiles and identity replace obsolete Home content',
     (tester) async {
