@@ -166,7 +166,9 @@ def mobile_tourism_bootstrap(request):
 
     return Response(
         {
-            "referenceTables": build_reference_tables_payload(resorts=all_resorts),
+            "referenceTables": build_reference_tables_payload(
+                resorts=all_resorts, active_only=True
+            ),
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
             "barangays": get_cached_active_barangays(),
@@ -1731,7 +1733,20 @@ def normalize_mobile_counts(data):
     data["age_60_above"] = age_60_above
 
 
+# The four lists an admin can retire. A default must never be a retired option.
+RETIRABLE_OPTION_MODELS = (Itinerary, TravelMode, BoatType, VisitPurpose)
+
+
 def default_reference_id(model, **filters):
+    if model in RETIRABLE_OPTION_MODELS:
+        # The first ACTIVE option, or nothing: with none active the caller gets
+        # None and the serializer answers 400 "required", rather than a silent
+        # guess that lands on a retired option.
+        item = (
+            model.objects.filter(is_active=True, **filters).order_by("id").first()
+        )
+        return item.pk if item else None
+
     item = model.objects.filter(**filters).first() if filters else None
     item = item or model.objects.first()
     return item.pk if item else None

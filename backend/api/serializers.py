@@ -160,25 +160,31 @@ class ProvinceSerializer(NamedReferenceSerializer):
         fields = ["id", "name", "region_id", "code"]
 
 
+# The retirable lists carry is_active (and an itinerary its stay_nights) for
+# the WEB. The mobile payload is cut back to the old keys where it is built
+# (services/tourism.py), so the app still gets exactly what it always read.
 class ItinerarySerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = Itinerary
+        fields = ["id", "name", "is_active", "stay_nights"]
 
 
 class TravelModeSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = TravelMode
+        fields = ["id", "name", "is_active"]
 
 
 class BoatTypeSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = BoatType
-        fields = ["id", "name", "requires_capacity_fare"]
+        fields = ["id", "name", "requires_capacity_fare", "is_active"]
 
 
 class VisitPurposeSerializer(NamedReferenceSerializer):
     class Meta(NamedReferenceSerializer.Meta):
         model = VisitPurpose
+        fields = ["id", "name", "is_active"]
 
 
 class ResortSerializer(serializers.ModelSerializer):

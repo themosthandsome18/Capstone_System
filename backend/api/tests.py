@@ -4,9 +4,10 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Q, Sum
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -2676,8 +2677,8 @@ class BoatCapacityFareFlagTests(_ProductionBoatRows, TestCase):
         self.assertEqual(
             [dict(row) for row in data],
             [
-                {"id": 1, "name": "Public Boat", "requires_capacity_fare": True},
-                {"id": 2, "name": self.PRIVATE_OLD, "requires_capacity_fare": False},
+                {"id": 1, "name": "Public Boat", "requires_capacity_fare": True, "is_active": True},
+                {"id": 2, "name": self.PRIVATE_OLD, "requires_capacity_fare": False, "is_active": True},
             ],
         )
 
@@ -4942,6 +4943,1839 @@ class FeedbackModerationTests(TestCase):
         self.assertIsNone(entry.hidden_at)
         self.assertIsNone(entry.hidden_by)
         self.assertIn(entry.pk, [item["id"] for item in self._public()])
+
+
+class ReferenceOptionSchemaTests(TestCase):
+    """The columns behind "registration options" (commit 1: schema only).
+
+    Four choices can be retired (is_active) and an itinerary can say how long
+    the stay is (stay_nights). Nothing reads either yet, so nothing that
+    exists may change: not the payloads, not the reports.
+    """
+
+    ACTIVE_MODELS = (Itinerary, TravelMode, BoatType, VisitPurpose)
+
+    @classmethod
+    def setUpTestData(cls):
+        ensure_test_reference_tables()
+
+    # -- is_active ---------------------------------------------------------
+
+    def test_the_four_have_is_active_and_it_defaults_to_true(self):
+        for model in self.ACTIVE_MODELS:
+            with self.subTest(model=model.__name__):
+                field = model._meta.get_field("is_active")
+                self.assertIs(field.default, True)
+                row = model.objects.create(id=9000, name="Default check")
+                row.refresh_from_db()
+                self.assertIs(row.is_active, True)
+
+    def test_a_row_inserted_without_the_column_is_active(self):
+        # The old instance, during a deploy, inserts rows without knowing the
+        # column. The database default must make them active.
+        for model in self.ACTIVE_MODELS:
+            with self.subTest(model=model.__name__):
+                field = model._meta.get_field("is_active")
+                self.assertIs(field.db_default, True)
+                table = model._meta.db_table
+                columns = "id, name, requires_capacity_fare" if model is BoatType else "id, name"
+                values = "9100, 'Old code row', false" if model is BoatType else "9100, 'Old code row'"
+                with connection.cursor() as cursor:
+                    cursor.execute(f"INSERT INTO {table} ({columns}) VALUES ({values})")
+                self.assertIs(model.objects.get(pk=9100).is_active, True)
+
+    def test_the_other_reference_tables_have_no_is_active(self):
+        for model in (Country, Region, Province):
+            with self.subTest(model=model.__name__):
+                names = [f.name for f in model._meta.get_fields()]
+                self.assertNotIn("is_active", names)
+
+    def test_only_itinerary_has_stay_nights(self):
+        self.assertIn("stay_nights", [f.name for f in Itinerary._meta.get_fields()])
+        for model in (TravelMode, BoatType, VisitPurpose, Country, Region, Province):
+            with self.subTest(model=model.__name__):
+                self.assertNotIn("stay_nights", [f.name for f in model._meta.get_fields()])
+
+    # -- stay_nights -------------------------------------------------------
+
+    def test_stay_nights_is_nullable_and_none_by_default(self):
+        field = Itinerary._meta.get_field("stay_nights")
+        self.assertTrue(field.null)
+        self.assertTrue(field.blank)
+        self.assertIsNone(Itinerary(id=9199, name="Unsaved").stay_nights)
+        row = Itinerary.objects.create(id=9200, name="Not set yet")
+        row.refresh_from_db()
+        self.assertIsNone(row.stay_nights)
+
+    def test_stay_nights_keeps_zero_apart_from_not_set(self):
+        # 0 means same day; None means "read the name". They are not the same.
+        same_day = Itinerary.objects.create(id=9201, name="X", stay_nights=0)
+        unset = Itinerary.objects.create(id=9202, name="Y")
+        same_day.refresh_from_db()
+        unset.refresh_from_db()
+        self.assertEqual(same_day.stay_nights, 0)
+        self.assertIsNotNone(same_day.stay_nights)
+        self.assertIsNone(unset.stay_nights)
+
+    def test_stay_nights_cannot_be_negative(self):
+        row = Itinerary(id=9203, name="Negative", stay_nights=-1)
+        with self.assertRaises(ValidationError):
+            row.full_clean()
+
+    # -- nothing that exists changes ---------------------------------------
+
+    def test_the_mobile_payload_has_the_same_keys_as_before(self):
+        # Since commit 2 the WEB payload carries is_active (and stay_nights);
+        # the mobile payload must keep exactly the keys it always had.
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload(active_only=True)
+        for key in ("itineraries", "travelModes", "visitPurposes"):
+            with self.subTest(key=key):
+                self.assertTrue(payload[key])
+                for item in payload[key]:
+                    self.assertEqual(set(item), {"id", "name"})
+        for item in payload["boatTypes"]:
+            self.assertEqual(set(item), {"id", "name", "requires_capacity_fare"})
+
+    def test_an_inactive_row_is_still_in_the_web_payload(self):
+        # The web is given every option, retired or not (commit 2 filters the
+        # mobile payload only).
+        from .services.tourism import build_reference_tables_payload
+
+        row = Itinerary.objects.create(id=9300, name="Retired later", is_active=False)
+
+        ids = [item["id"] for item in build_reference_tables_payload()["itineraries"]]
+
+        self.assertIn(row.id, ids)
+
+    def test_the_reports_read_stay_nights_before_the_name(self):
+        from .services.tourism import (
+            build_arrival_monitoring_payload,
+            build_tourism_question_answers,
+        )
+
+        # Opposite on purpose: the name says same day, stay_nights says 5; the
+        # name says nights, stay_nights says 0. Since commit 3 stay_nights wins.
+        day_name = Itinerary.objects.create(id=9400, name="Weekend 2 Days", stay_nights=5)
+        night_name = Itinerary.objects.create(id=9401, name="Camp Out", stay_nights=0)
+        quezon = Province.objects.get(name="Quezon")
+        common = dict(
+            full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+            visit_purpose=VisitPurpose.objects.first(), total_visitors=4, filipino_count=4,
+            total_male=4, age_8_59=4, status="arrived",
+        )
+        TouristRecord.objects.create(survey_id="SCH-0001", itinerary=day_name, **common)
+        # A different head count, so that a swap of the two would show in the
+        # totals (4 and 4 would look the same swapped).
+        TouristRecord.objects.create(
+            survey_id="SCH-0002", itinerary=night_name,
+            **{**common, "total_visitors": 6, "filipino_count": 6, "total_male": 6, "age_8_59": 6},
+        )
+
+        rows = {
+            row["survey_id"]: row
+            for row in build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]
+        }
+        self.assertEqual((rows["SCH-0001"]["sameDay"], rows["SCH-0001"]["overnight"]), (0, 4))
+        self.assertEqual((rows["SCH-0002"]["sameDay"], rows["SCH-0002"]["overnight"]), (6, 0))
+
+        answers = {a["id"]: a for a in build_tourism_question_answers({"year": "2026"})}
+        self.assertEqual(
+            answers["stay_type"]["answer"],
+            "Same-day visitors: 6; overnight or multi-day visitors: 4.",
+        )
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class ReferenceOptionPayloadTests(TestCase):
+    """What each client is offered (registration options, commit 2).
+
+    The mobile app gets only the ACTIVE options, in the keys it always read.
+    The web gets every option with is_active, so it can show a retired one and
+    name it on old records. The cache holds the full lists and the filtering is
+    done after it.
+    """
+
+    MOBILE_KEYS = {
+        "itineraries": {"id", "name"},
+        "travelModes": {"id", "name"},
+        "boatTypes": {"id", "name", "requires_capacity_fare"},
+        "visitPurposes": {"id", "name"},
+    }
+    CACHE_KEY = "mobile_reference_tables_v2"
+
+    # Different numbers on purpose (1 active + 2 retired, 1 retired, 1 retired,
+    # 3 retired): a mutant that swaps "active" and "retired" cannot give the
+    # same answer.
+    ITINERARY_ACTIVE, ITINERARY_RETIRED = [9501], [9502, 9503]
+    MODE_RETIRED = [9511]
+    BOAT_RETIRED = [9521]
+    PURPOSE_RETIRED = [9531, 9532, 9533]
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        Itinerary.objects.create(id=9501, name="Added and active", stay_nights=2)
+        for i in self.ITINERARY_RETIRED:
+            Itinerary.objects.create(id=i, name=f"Retired itinerary {i}", is_active=False)
+        for i in self.MODE_RETIRED:
+            TravelMode.objects.create(id=i, name=f"Retired mode {i}", is_active=False)
+        for i in self.BOAT_RETIRED:
+            BoatType.objects.create(
+                id=i, name=f"Retired boat {i}", requires_capacity_fare=True, is_active=False
+            )
+        for i in self.PURPOSE_RETIRED:
+            VisitPurpose.objects.create(id=i, name=f"Retired purpose {i}", is_active=False)
+
+    def _retired(self):
+        return {
+            "itineraries": set(self.ITINERARY_RETIRED),
+            "travelModes": set(self.MODE_RETIRED),
+            "boatTypes": set(self.BOAT_RETIRED),
+            "visitPurposes": set(self.PURPOSE_RETIRED),
+        }
+
+    @staticmethod
+    def _ids(payload, key):
+        return {item["id"] for item in payload[key]}
+
+    def _record(self, survey_id, itinerary):
+        quezon = Province.objects.get(name="Quezon")
+        return TouristRecord.objects.create(
+            survey_id=survey_id, full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=itinerary, travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=4, filipino_count=4, total_male=4, age_8_59=4, status="arrived",
+        )
+
+    def _admin_client(self):
+        user = User.objects.create_user(username="options_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        return client
+
+    # -- who gets what -----------------------------------------------------
+
+    def test_a_retired_option_is_not_in_the_mobile_payload(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload(active_only=True)
+
+        for key, retired in self._retired().items():
+            with self.subTest(key=key):
+                self.assertFalse(self._ids(payload, key) & retired)
+        self.assertIn(9501, self._ids(payload, "itineraries"))  # an active one stays
+
+    def test_a_retired_option_is_in_the_web_payload_marked_inactive(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload()
+
+        for key, retired in self._retired().items():
+            with self.subTest(key=key):
+                rows = {item["id"]: item for item in payload[key]}
+                for i in retired:
+                    self.assertIn(i, rows)
+                    self.assertIs(rows[i]["is_active"], False)
+        self.assertIs(
+            {i["id"]: i for i in payload["itineraries"]}[9501]["is_active"], True
+        )
+
+    def test_the_web_endpoint_carries_is_active_and_stay_nights(self):
+        response = self._admin_client().get("/api/reference-tables/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        itineraries = {item["id"]: item for item in response.json()["itineraries"]}
+        self.assertEqual(itineraries[9501]["stay_nights"], 2)
+        self.assertIsNone(itineraries[9502]["stay_nights"])
+        self.assertIs(itineraries[9502]["is_active"], False)
+        boats = {item["id"]: item for item in response.json()["boatTypes"]}
+        self.assertEqual(
+            set(boats[9521]), {"id", "name", "requires_capacity_fare", "is_active"}
+        )
+
+    def test_the_mobile_payload_keeps_the_old_keys_only(self):
+        from .services.tourism import build_reference_tables_payload
+
+        payload = build_reference_tables_payload(active_only=True)
+
+        for key, keys in self.MOBILE_KEYS.items():
+            with self.subTest(key=key):
+                self.assertTrue(payload[key])
+                for item in payload[key]:
+                    self.assertEqual(set(item), keys)
+
+    def test_the_mobile_bootstrap_endpoint_has_the_old_shape_and_no_retired(self):
+        response = APIClient().get("/api/mobile/tourism/bootstrap/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tables = response.json()["referenceTables"]
+        for key, keys in self.MOBILE_KEYS.items():
+            with self.subTest(key=key):
+                for item in tables[key]:
+                    self.assertEqual(set(item), keys)
+                self.assertFalse(self._ids(tables, key) & self._retired()[key])
+        self.assertEqual(
+            set(tables),
+            {"countries", "regions", "provinces", "itineraries", "travelModes",
+             "boatTypes", "visitPurposes", "resorts"},
+        )
+
+    def test_other_lists_are_untouched(self):
+        from .services.tourism import build_reference_tables_payload
+
+        mobile = build_reference_tables_payload(active_only=True)
+        web = build_reference_tables_payload()
+
+        for key in ("countries", "regions", "provinces"):
+            with self.subTest(key=key):
+                self.assertEqual(mobile[key], web[key])
+                self.assertNotIn("is_active", mobile[key][0])
+
+    # -- history -----------------------------------------------------------
+
+    def test_an_old_record_keeps_its_option_name_after_it_is_retired(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        itinerary = Itinerary.objects.create(id=9600, name="Retired Trail")
+        self._record("OPT-0001", itinerary)
+        Itinerary.objects.filter(pk=9600).update(is_active=False)
+
+        row = build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"][0]
+
+        self.assertEqual(row["itinerary"], "Retired Trail")
+        self.assertEqual(TouristRecord.objects.get(pk="OPT-0001").itinerary.name, "Retired Trail")
+
+    def test_a_retired_option_is_still_accepted_on_a_record(self):
+        # A visitor who opened the form before it was retired must not lose
+        # their registration to an error: the dropdown is the control.
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "Stale Form", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1, "itinerary_id": 9502,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TouristRecord.objects.get(full_name="Stale Form").itinerary_id, 9502)
+
+    # -- defaults ----------------------------------------------------------
+
+    def test_a_default_is_never_a_retired_option(self):
+        from .views.mobile import default_reference_id
+
+        lowest = Itinerary.objects.order_by("id").first()
+        second = Itinerary.objects.order_by("id")[1]
+        Itinerary.objects.filter(pk=lowest.pk).update(is_active=False)
+
+        self.assertEqual(default_reference_id(Itinerary), second.pk)
+
+    def test_the_default_is_the_lowest_active_id(self):
+        from .views.mobile import default_reference_id
+
+        # Retire everything but two, 9501 and a seeded one: the lower id wins.
+        keep = Itinerary.objects.exclude(pk=9501).order_by("id").first().pk
+        Itinerary.objects.exclude(pk__in=[keep, 9501]).update(is_active=False)
+
+        self.assertEqual(default_reference_id(Itinerary), min(keep, 9501))
+
+    def test_every_retirable_list_skips_a_retired_first_row(self):
+        from .views.mobile import default_reference_id
+
+        for model in (TravelMode, BoatType, VisitPurpose):
+            with self.subTest(model=model.__name__):
+                first = model.objects.order_by("id").first()
+                model.objects.filter(pk=first.pk).update(is_active=False)
+                expected = model.objects.filter(is_active=True).order_by("id").first().pk
+                self.assertNotEqual(expected, first.pk)
+                self.assertEqual(default_reference_id(model), expected)
+
+    def test_with_none_active_there_is_no_guess_and_a_400(self):
+        from .views.mobile import default_reference_id
+
+        Itinerary.objects.update(is_active=False)
+        before = TouristRecord.objects.count()
+
+        self.assertIsNone(default_reference_id(Itinerary))
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "No Default", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("itinerary_id", response.json())
+        self.assertEqual(TouristRecord.objects.count(), before)
+
+    def test_a_registration_without_ids_gets_an_active_option(self):
+        Itinerary.objects.filter(pk=Itinerary.objects.order_by("id").first().pk).update(is_active=False)
+        expected = Itinerary.objects.filter(is_active=True).order_by("id").first().pk
+
+        response = APIClient().post(
+            "/api/mobile/tourism/register-visit/",
+            {
+                "full_name": "Defaulted", "contact_number": "09171234567",
+                "arrival_date": "2026-06-01", "total_visitors": 1, "filipino_count": 1,
+                "total_male": 1, "age_8_59": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TouristRecord.objects.get(full_name="Defaulted").itinerary_id, expected)
+
+    def test_the_default_of_the_other_models_is_unchanged(self):
+        # Resort and the places have no is_active; their default is not part of
+        # this change (the Resort default is its own item).
+        from .views.mobile import default_reference_id
+
+        self.assertEqual(default_reference_id(Resort), Resort.objects.first().pk)
+        self.assertEqual(default_reference_id(Country), Country.objects.first().pk)
+
+    # -- the cache ---------------------------------------------------------
+
+    def test_the_cache_does_not_mix_mobile_and_web(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        # mobile first, then web: the web must still see the retired ones
+        cache.clear()
+        build_reference_tables_payload(active_only=True)
+        web = build_reference_tables_payload(active_only=False)
+        self.assertTrue(self._ids(web, "itineraries") >= set(self.ITINERARY_RETIRED))
+
+        # web first, then mobile: the mobile must still not
+        cache.clear()
+        build_reference_tables_payload(active_only=False)
+        mobile = build_reference_tables_payload(active_only=True)
+        self.assertFalse(self._ids(mobile, "itineraries") & set(self.ITINERARY_RETIRED))
+        self.assertFalse(self._ids(mobile, "visitPurposes") & set(self.PURPOSE_RETIRED))
+
+    def test_the_cache_holds_the_full_lists_under_v2(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        build_reference_tables_payload(active_only=True)
+
+        cached = cache.get(self.CACHE_KEY)
+        self.assertIsNotNone(cached)
+        self.assertTrue(
+            {i["id"] for i in cached["itineraries"]} >= set(self.ITINERARY_RETIRED)
+        )
+        self.assertIsNone(cache.get("mobile_reference_tables_v1"))
+
+    def test_an_entry_of_the_old_shape_under_v1_is_ignored(self):
+        from django.core.cache import cache
+        from .services.tourism import build_reference_tables_payload
+
+        cache.set(
+            "mobile_reference_tables_v1",
+            {key: [{"id": 1, "name": "Stale"}] for key in
+             ("countries", "regions", "provinces", "itineraries", "travelModes",
+              "boatTypes", "visitPurposes")},
+            timeout=900,
+        )
+
+        web = build_reference_tables_payload()
+
+        self.assertNotIn("Stale", [i["name"] for i in web["itineraries"]])
+        self.assertIn("is_active", web["itineraries"][0])
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+# The 12 itineraries the live system has, hard-coded on purpose: the local seed
+# has 6, and this test must not depend on what a database holds.
+LIVE_ITINERARY_NAMES = [
+    "Overnight", "Same Day", "2 Nights", "3 Nights", "4 Nights",
+    "5 Nights and above", "6 Nights", "Que", "Island Hopping Circuit",
+    "Beach and Resort Day Tour", "Heritage and Lighthouse Stop",
+    "Eco Adventure Trail",
+]
+# A different head count for every record (all primes, none repeated): a mutant
+# that moves one record between same day and overnight cannot give the same
+# totals.
+STAY_FIXTURE_VISITORS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31]
+
+
+def _stay_fixture():
+    """One arrived record per live itinerary name, on two resorts."""
+    ensure_test_reference_tables()
+    quezon = Province.objects.get(name="Quezon")
+    resorts = list(Resort.objects.order_by("resort_id")[:2])
+    for index, (name, visitors) in enumerate(zip(LIVE_ITINERARY_NAMES, STAY_FIXTURE_VISITORS)):
+        itinerary = Itinerary.objects.create(id=9701 + index, name=name)
+        TouristRecord.objects.create(
+            survey_id=f"STY-{index + 1:02d}", full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=resorts[0] if index < 7 else resorts[1],
+            itinerary=itinerary, travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=visitors, filipino_count=visitors, total_male=visitors,
+            age_8_59=visitors, status="arrived",
+        )
+
+
+def _stay_report_numbers():
+    """What the three reports say about stay, on the fixture."""
+    from .services.tourism import (
+        build_arrival_monitoring_payload,
+        build_dashboard_payload,
+        build_tourism_question_answers,
+    )
+
+    arrival = build_arrival_monitoring_payload({"date": "2026-04-02"})
+    rows = {r["survey_id"]: (r["sameDay"], r["overnight"]) for r in arrival["rows"]}
+    stay_type = build_dashboard_payload({"year": "2026"})["stayType"]
+    answers = {a["id"]: a for a in build_tourism_question_answers({"year": "2026"})}
+    return {
+        "arrival_rows": rows,
+        "dashboard_stay_type": dict(stay_type),
+        "stay_type_answer": answers["stay_type"]["answer"],
+        "overnight_resort_answer": answers["overnight_resort"]["answer"],
+        "average_stay_answer": answers["average_stay"]["answer"],
+    }
+
+
+def _old_name_parse(name):
+    """The name reading every report used before itinerary_stay existed, copied
+    from the old code as the oracle: (same_day, nights)."""
+    text = (name or "").lower()
+    if "day" in text or "same" in text:
+        return True, 0
+    if "2" in text:
+        return False, 2
+    if "3" in text:
+        return False, 3
+    if "4" in text:
+        return False, 4
+    if "5" in text:
+        return False, 5
+    return False, 1
+
+
+class ItineraryStayTests(TestCase):
+    """Reports read an itinerary's stay_nights, and the NAME only when it is None."""
+
+    # What the old code gave for each of the 12 live names: (same_day, nights).
+    # Written out, not computed: if any of these moved, an LGU number moved.
+    LIVE_EXPECTED = {
+        "Overnight": (False, 1),
+        "Same Day": (True, 0),
+        "2 Nights": (False, 2),
+        "3 Nights": (False, 3),
+        "4 Nights": (False, 4),
+        "5 Nights and above": (False, 5),
+        "6 Nights": (False, 1),  # the old reading missed the 6; the name says 6
+        "Que": (False, 1),
+        "Island Hopping Circuit": (False, 1),
+        "Beach and Resort Day Tour": (True, 0),
+        "Heritage and Lighthouse Stop": (False, 1),
+        "Eco Adventure Trail": (False, 1),
+    }
+
+    # The reports on the fixture with every stay_nights None, taken from the OLD
+    # code before it was replaced (the same fixture, run on the old code).
+    GOLDEN_WITH_NULLS = {
+        "arrival_rows": {
+            "STY-01": (0, 1), "STY-02": (2, 0), "STY-03": (0, 3), "STY-04": (0, 5),
+            "STY-05": (0, 7), "STY-06": (0, 11), "STY-07": (0, 13), "STY-08": (0, 17),
+            "STY-09": (0, 19), "STY-10": (23, 0), "STY-11": (0, 29), "STY-12": (0, 31),
+        },
+        "dashboard_stay_type": {"dayTour": 25, "overnight": 136},
+        "stay_type_answer": "Same-day visitors: 25; overnight or multi-day visitors: 136.",
+        "overnight_resort_answer": "Aquazul Hotel and Resort has the highest overnight demand with 96 visitors.",
+        "average_stay_answer": "The estimated average stay is 1.3 night(s) per visitor based on itinerary labels.",
+    }
+
+    # -- the helper --------------------------------------------------------
+
+    def test_the_twelve_live_names_read_exactly_as_the_old_code_did(self):
+        from .services.tourism import itinerary_stay
+
+        self.assertEqual(sorted(self.LIVE_EXPECTED), sorted(LIVE_ITINERARY_NAMES))
+        for name, expected in self.LIVE_EXPECTED.items():
+            with self.subTest(name=name):
+                self.assertEqual(itinerary_stay(name, None), expected)
+                self.assertEqual(itinerary_stay(name), expected)  # None is the default
+                self.assertEqual(itinerary_stay(name, None), _old_name_parse(name))
+
+    def test_the_name_reading_matches_the_old_code_on_tricky_names(self):
+        from .services.tourism import itinerary_stay
+
+        # "2 or 5 nights": the old chain took the 2 first. "Same trip": only
+        # "same" makes it same day. None and "" are 1 night.
+        for name in ["2 or 5 nights", "2 and 3 nights", "Same trip", "Sameday", "Day 4", "Holiday", "25 nights",
+                     "3-4 nights", "", None, "Friday Night", "Weekend 2 Days", "Trip 5", "A 4 B 3"]:
+            with self.subTest(name=name):
+                self.assertEqual(itinerary_stay(name, None), _old_name_parse(name))
+        self.assertEqual(itinerary_stay("2 or 5 nights", None), (False, 2))
+        self.assertEqual(itinerary_stay("Same trip", None), (True, 0))
+
+    def test_weekend_2_days_with_two_nights_is_two_nights_not_same_day(self):
+        # The bug this field exists for: "day" in the name made it a same-day stay.
+        from .services.tourism import itinerary_stay
+
+        self.assertEqual(itinerary_stay("Weekend 2 Days", None), (True, 0))  # the old, wrong, reading
+        self.assertEqual(itinerary_stay("Weekend 2 Days", 2), (False, 2))
+
+    def test_stay_nights_wins_over_the_name_both_ways(self):
+        from .services.tourism import itinerary_stay
+
+        self.assertEqual(itinerary_stay("Same Day", 3), (False, 3))
+        self.assertEqual(itinerary_stay("2 Nights", 0), (True, 0))
+        self.assertEqual(itinerary_stay("Overnight", 7), (False, 7))
+
+    def test_zero_is_a_value_and_none_is_not_set(self):
+        from .services.tourism import itinerary_stay
+
+        # 0 must NOT fall through to the name: "Overnight" with 0 is same day.
+        self.assertEqual(itinerary_stay("Overnight", 0), (True, 0))
+        self.assertEqual(itinerary_stay("Overnight", None), (False, 1))
+
+    def test_the_old_helpers_are_gone(self):
+        import api.services.tourism as tourism
+
+        self.assertFalse(hasattr(tourism, "get_stay_counts"))
+        self.assertFalse(hasattr(tourism, "estimate_stay_nights"))
+
+    # -- the reports, on real data -----------------------------------------
+
+    def test_with_every_stay_nights_none_the_reports_are_what_they_were(self):
+        _stay_fixture()
+        self.assertFalse(Itinerary.objects.exclude(stay_nights=None).filter(id__gte=9701).exists())
+
+        self.assertEqual(_stay_report_numbers(), self.GOLDEN_WITH_NULLS)
+
+    def test_the_reports_use_stay_nights_where_it_is_set(self):
+        _stay_fixture()
+        # Three set, nine still None. Eco Adventure Trail (31): None read as
+        # 1 night -> same day. Beach and Resort Day Tour (23): same day ->
+        # 3 nights. 6 Nights (13): read as 1 -> 6.
+        Itinerary.objects.filter(name="Eco Adventure Trail").update(stay_nights=0)
+        Itinerary.objects.filter(name="Beach and Resort Day Tour").update(stay_nights=3)
+        Itinerary.objects.filter(name="6 Nights").update(stay_nights=6)
+
+        numbers = _stay_report_numbers()
+
+        rows = numbers["arrival_rows"]
+        self.assertEqual(rows["STY-12"], (31, 0))
+        self.assertEqual(rows["STY-10"], (0, 23))
+        self.assertEqual(rows["STY-07"], (0, 13))
+        self.assertEqual(rows["STY-02"], (2, 0))   # a None still reads its name
+        self.assertEqual(rows["STY-03"], (0, 3))
+        self.assertEqual(numbers["dashboard_stay_type"], {"dayTour": 33, "overnight": 128})
+        self.assertEqual(
+            numbers["stay_type_answer"],
+            "Same-day visitors: 33; overnight or multi-day visitors: 128.",
+        )
+        # nights: 214 before; 6 Nights 13 x 1 -> 13 x 6 (+65); Day Tour 0 -> 23 x 3 (+69);
+        # Eco 31 x 1 -> 0 (-31): 317 over 161 visitors.
+        self.assertEqual(
+            numbers["average_stay_answer"],
+            "The estimated average stay is 2.0 night(s) per visitor based on itinerary labels.",
+        )
+        self.assertEqual(
+            numbers["overnight_resort_answer"],
+            "Aquazul Hotel and Resort has the highest overnight demand with 88 visitors.",
+        )
+
+    def test_a_set_stay_nights_does_not_change_the_name_shown(self):
+        _stay_fixture()
+        Itinerary.objects.filter(name="Same Day").update(stay_nights=2)
+
+        from .services.tourism import build_arrival_monitoring_payload
+
+        rows = {r["survey_id"]: r for r in build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]}
+        self.assertEqual(rows["STY-02"]["itinerary"], "Same Day")
+        self.assertEqual((rows["STY-02"]["sameDay"], rows["STY-02"]["overnight"]), (0, 2))
+
+
+class ReferenceOptionApiTests(TestCase):
+    """Add, rename, retire and bring back the four registration options."""
+
+    KINDS = {
+        "itinerary": (Itinerary, "itinerary"),
+        "travel-mode": (TravelMode, "travel_mode"),
+        "boat-type": (BoatType, "boat_type"),
+        "visit-purpose": (VisitPurpose, "visit_purpose"),
+    }
+    PAYLOAD_KEYS = {
+        "itinerary": "itineraries", "travel-mode": "travelModes",
+        "boat-type": "boatTypes", "visit-purpose": "visitPurposes",
+    }
+    CACHE_KEY = "mobile_reference_tables_v2"
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        self.admin = self._client(ROLE_ADMIN, "opt_admin")
+
+    # -- helpers -----------------------------------------------------------
+
+    def _client(self, role=None, username=None):
+        client = APIClient()
+        if role is not None:
+            user = User.objects.create_user(username=username or f"opt_{role}", password="Staff@12345")
+            UserProfile.objects.create(user=user, role=role)
+            client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+            client.user = user
+        return client
+
+    def _url(self, kind, option_id=None, action=None):
+        url = f"/api/reference-options/{kind}/"
+        if option_id is not None:
+            url += f"{option_id}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _record(self, survey_id, **fks):
+        quezon = Province.objects.get(name="Quezon")
+        values = dict(
+            survey_id=survey_id, full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=Itinerary.objects.order_by("id").first(),
+            travel_mode=TravelMode.objects.order_by("id").first(),
+            boat_type=BoatType.objects.order_by("id").first(),
+            visit_purpose=VisitPurpose.objects.order_by("id").first(),
+            total_visitors=4, filipino_count=4, total_male=4, age_8_59=4, status="arrived",
+        )
+        values.update(fks)
+        return TouristRecord.objects.create(**values)
+
+    def _make(self, kind, option_id, name, uses=0, **extra):
+        """An option with exactly `uses` records pointing at it."""
+        model, fk = self.KINDS[kind]
+        option = model.objects.create(id=option_id, name=name, **extra)
+        for i in range(uses):
+            self._record(f"OPT-{kind[:3]}-{option_id}-{i}", **{fk: option})
+        return option
+
+    def _payload(self, active_only=False):
+        from .services.tourism import build_reference_tables_payload
+
+        return build_reference_tables_payload(active_only=active_only)
+
+    def _ids(self, kind, active_only=False):
+        return {item["id"] for item in self._payload(active_only)[self.PAYLOAD_KEYS[kind]]}
+
+    # -- who may ----------------------------------------------------------
+
+    def test_only_the_admin_may_use_any_of_the_five_endpoints(self):
+        option = self._make("itinerary", 9801, "Guarded", uses=1)
+        calls = [
+            ("get", self._url("itinerary")),
+            ("post", self._url("itinerary")),
+            ("patch", self._url("itinerary", option.id)),
+            ("post", self._url("itinerary", option.id, "deactivate")),
+            ("post", self._url("itinerary", option.id, "reactivate")),
+        ]
+        for method, url in calls:
+            with self.subTest(who="nobody", method=method, url=url):
+                self.assertEqual(getattr(self._client(), method)(url, {}, format="json").status_code, 401)
+            for role in (ROLE_TOURISM, ROLE_SANITATION, ROLE_TOURIST):
+                with self.subTest(who=role, method=method, url=url):
+                    client = self._client(role, f"u_{role}_{method}_{url[-12:-1].replace('/', '')}")
+                    self.assertEqual(getattr(client, method)(url, {}, format="json").status_code, 403)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.is_active), ("Guarded", True))  # none of those changed it
+
+    def test_the_admin_is_let_in(self):
+        self.assertEqual(self.admin.get(self._url("itinerary")).status_code, 200)
+
+    def test_an_unknown_kind_is_404_not_500(self):
+        option = self._make("itinerary", 9802, "Known")
+        for method, url in [
+            ("get", "/api/reference-options/boats/"),
+            ("post", "/api/reference-options/boats/"),
+            ("patch", "/api/reference-options/boats/1/"),
+            ("post", "/api/reference-options/boats/1/deactivate/"),
+            ("post", "/api/reference-options/boats/1/reactivate/"),
+            ("get", "/api/reference-options/Itinerary/"),
+        ]:
+            with self.subTest(method=method, url=url):
+                self.assertEqual(getattr(self.admin, method)(url, {}, format="json").status_code, 404)
+        self.assertEqual(self.admin.patch(self._url("itinerary", 99999), {}, format="json").status_code, 404)
+        self.assertEqual(self.admin.post(self._url("itinerary", 99999, "deactivate")).status_code, 404)
+        self.assertTrue(Itinerary.objects.filter(pk=option.pk).exists())
+
+    def test_there_is_no_delete_and_no_put(self):
+        option = self._make("travel-mode", 9803, "Keep Me", uses=1)
+        for method, url in [
+            ("delete", self._url("travel-mode", option.id)),
+            ("delete", self._url("travel-mode")),
+            ("put", self._url("travel-mode", option.id)),
+            ("delete", self._url("travel-mode", option.id, "deactivate")),
+        ]:
+            with self.subTest(method=method, url=url):
+                self.assertEqual(getattr(self.admin, method)(url).status_code, 405)
+        self.assertTrue(TravelMode.objects.filter(pk=option.pk).exists())
+
+    # -- the list ----------------------------------------------------------
+
+    def test_the_list_has_retired_options_and_the_real_record_counts(self):
+        # 3, 1, 0 and 2 records: every count different, so options cannot be swapped unseen.
+        self._make("visit-purpose", 9810, "Three uses", uses=3)
+        self._make("visit-purpose", 9811, "One use", uses=1)
+        self._make("visit-purpose", 9812, "No use", uses=0)
+        self._make("visit-purpose", 9813, "Retired two", uses=2, is_active=False)
+
+        rows = {r["id"]: r for r in self.admin.get(self._url("visit-purpose")).json()}
+
+        self.assertEqual(
+            (rows[9810]["record_count"], rows[9811]["record_count"], rows[9812]["record_count"], rows[9813]["record_count"]),
+            (3, 1, 0, 2),
+        )
+        self.assertIs(rows[9813]["is_active"], False)
+        self.assertEqual(set(rows), set(VisitPurpose.objects.values_list("id", flat=True)))
+
+    def test_the_list_carries_the_fields_of_its_kind(self):
+        self._make("itinerary", 9814, "Two nights", stay_nights=2)
+        self._make("boat-type", 9815, "Ferry", requires_capacity_fare=True)
+
+        itineraries = {r["id"]: r for r in self.admin.get(self._url("itinerary")).json()}
+        boats = {r["id"]: r for r in self.admin.get(self._url("boat-type")).json()}
+        modes = self.admin.get(self._url("travel-mode")).json()
+
+        self.assertEqual(itineraries[9814]["stay_nights"], 2)
+        self.assertIsNone(itineraries[min(itineraries)]["stay_nights"])
+        self.assertIs(boats[9815]["requires_capacity_fare"], True)
+        self.assertNotIn("stay_nights", modes[0])
+        self.assertNotIn("requires_capacity_fare", modes[0])
+
+    # -- adding ------------------------------------------------------------
+
+    def test_add_in_every_kind_and_the_server_gives_the_id(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                top = model.objects.order_by("-id").first().id
+                response = self.admin.post(self._url(kind), {"name": "  Brand   New  "}, format="json")
+
+                self.assertEqual(response.status_code, 201)
+                body = response.json()
+                self.assertEqual(body["id"], top + 1)
+                self.assertEqual(body["name"], "Brand New")  # trimmed, one space
+                self.assertIs(body["is_active"], True)
+                self.assertEqual(body["record_count"], 0)
+                self.assertTrue(model.objects.filter(pk=top + 1, name="Brand New").exists())
+
+    def test_an_id_sent_by_the_client_is_ignored(self):
+        existing = Itinerary.objects.order_by("id").first()
+        before = existing.name
+        top = Itinerary.objects.order_by("-id").first().id
+
+        taken = self.admin.post(self._url("itinerary"), {"id": existing.id, "name": "Wants an old id"}, format="json")
+        far = self.admin.post(self._url("itinerary"), {"id": 99999, "name": "Wants a far id"}, format="json")
+
+        self.assertEqual(taken.status_code, 201)
+        self.assertEqual(far.status_code, 201)
+        self.assertEqual(taken.json()["id"], top + 1)
+        self.assertEqual(far.json()["id"], top + 2)
+        self.assertEqual(Itinerary.objects.get(pk=existing.id).name, before)  # the old row was not replaced
+        self.assertFalse(Itinerary.objects.filter(pk=99999).exists())
+
+    def test_a_patch_cannot_change_the_id_or_retire_by_the_back_door(self):
+        option = self._make("travel-mode", 9820, "Fixed", uses=2)
+        url = self._url("travel-mode", option.id)
+
+        # a PATCH that really changes something (a rename), with extras the
+        # server must not obey; and one that changes nothing
+        renamed = self.admin.patch(
+            url,
+            {"id": 1, "is_active": False, "record_count": 99, "name": "Fixed Again", "confirm_affected_records": 2},
+            format="json",
+        )
+        nothing = self.admin.patch(url, {"id": 1, "is_active": False, "name": "Fixed Again"}, format="json")
+
+        for response in (renamed, nothing):
+            self.assertEqual(response.status_code, 200)
+            # what is ANSWERED must be what is saved: still active, same id
+            self.assertEqual((response.json()["id"], response.json()["is_active"]), (9820, True))
+            self.assertEqual(response.json()["record_count"], 2)  # the server's count
+        option.refresh_from_db()
+        self.assertEqual((option.id, option.name, option.is_active), (9820, "Fixed Again", True))
+        self.assertTrue(TravelMode.objects.filter(pk=1).exists())  # row 1 was not touched
+
+    def test_the_same_name_in_any_dress_is_refused(self):
+        for kind, (model, _) in self.KINDS.items():
+            self._make(kind, 9830, "Same Day Out")
+            for attempt in ["same day out", "Same Day Out ", " Same Day Out", "Same  Day  Out", "SAME   DAY OUT  "]:
+                with self.subTest(kind=kind, attempt=attempt):
+                    before = model.objects.count()
+                    response = self.admin.post(self._url(kind), {"name": attempt}, format="json")
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("name", response.json())
+                    self.assertEqual(model.objects.count(), before)
+
+    def test_the_same_name_is_refused_even_against_a_retired_option(self):
+        self._make("visit-purpose", 9831, "Old Purpose", is_active=False)
+
+        response = self.admin.post(self._url("visit-purpose"), {"name": "old   purpose"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_rename_onto_another_options_name_is_refused(self):
+        self._make("boat-type", 9832, "Alpha Boat")
+        other = self._make("boat-type", 9833, "Beta Boat")
+
+        for attempt in ["alpha boat", "Alpha  Boat ", "ALPHA BOAT"]:
+            with self.subTest(attempt=attempt):
+                response = self.admin.patch(
+                    self._url("boat-type", other.id),
+                    {"name": attempt, "confirm_affected_records": 0}, format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+        other.refresh_from_db()
+        self.assertEqual(other.name, "Beta Boat")
+
+    def test_an_empty_or_huge_name_is_refused(self):
+        for value in ["", "   ", None, 5, "x" * 121]:
+            with self.subTest(name=value):
+                before = Itinerary.objects.count()
+                response = self.admin.post(self._url("itinerary"), {"name": value}, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(Itinerary.objects.count(), before)
+
+    def test_itinerary_stay_nights_and_boat_flag_on_create(self):
+        stay = self.admin.post(self._url("itinerary"), {"name": "Three Days", "stay_nights": 3}, format="json")
+        boat = self.admin.post(self._url("boat-type"), {"name": "Barge", "requires_capacity_fare": True}, format="json")
+        plain = self.admin.post(self._url("boat-type"), {"name": "Raft"}, format="json")
+
+        self.assertEqual(stay.json()["stay_nights"], 3)
+        self.assertIs(boat.json()["requires_capacity_fare"], True)
+        self.assertIs(plain.json()["requires_capacity_fare"], False)
+        for bad in [-1, 61, "3", True, 2.5]:
+            with self.subTest(stay_nights=bad):
+                self.assertEqual(
+                    self.admin.post(self._url("itinerary"), {"name": f"Bad {bad}", "stay_nights": bad}, format="json").status_code,
+                    400,
+                )
+        self.assertEqual(
+            self.admin.post(self._url("boat-type"), {"name": "Bad flag", "requires_capacity_fare": "yes"}, format="json").status_code,
+            400,
+        )
+
+    # -- retiring ----------------------------------------------------------
+
+    def test_the_last_active_option_cannot_be_retired(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                keep = model.objects.order_by("id").first()
+                model.objects.exclude(pk=keep.pk).update(is_active=False)
+
+                refused = self.admin.post(self._url(kind, keep.id, "deactivate"))
+
+                self.assertEqual(refused.status_code, 409)
+                self.assertEqual(refused.json()["code"], "last_active")
+                self.assertTrue(model.objects.get(pk=keep.pk).is_active)
+                # ...but with a second active one, it is allowed
+                other = model.objects.exclude(pk=keep.pk).order_by("id").first()
+                self.assertEqual(self.admin.post(self._url(kind, other.id, "reactivate")).status_code, 200)
+                self.assertEqual(self.admin.post(self._url(kind, keep.id, "deactivate")).status_code, 200)
+
+    def test_retire_and_bring_back_in_every_kind_and_both_are_idempotent(self):
+        for kind, (model, _) in self.KINDS.items():
+            with self.subTest(kind=kind):
+                option = self._make(kind, 9840, "Seasonal", uses=2)
+                logs = ActivityLog.objects.count()
+
+                first = self.admin.post(self._url(kind, option.id, "deactivate"))
+                again = self.admin.post(self._url(kind, option.id, "deactivate"))
+                self.assertEqual((first.status_code, again.status_code), (200, 200))
+                self.assertIs(first.json()["is_active"], False)
+                self.assertEqual(ActivityLog.objects.count(), logs + 1)  # the repeat changed nothing: not logged
+
+                back = self.admin.post(self._url(kind, option.id, "reactivate"))
+                back_again = self.admin.post(self._url(kind, option.id, "reactivate"))
+                self.assertEqual((back.status_code, back_again.status_code), (200, 200))
+                self.assertIs(back.json()["is_active"], True)
+                self.assertEqual(ActivityLog.objects.count(), logs + 2)
+
+    def test_retiring_does_not_hurt_an_existing_record(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
+        itinerary = self._make("itinerary", 9850, "Retiring Trail", uses=0)
+        record = self._record("OPT-KEEP-1", itinerary=itinerary)
+        self._make("itinerary", 9851, "Other Trail", uses=1)
+
+        response = self.admin.post(self._url("itinerary", itinerary.id, "deactivate"))
+
+        self.assertEqual(response.status_code, 200)
+        # (a) the record is whole
+        record.refresh_from_db()
+        self.assertEqual(record.itinerary_id, 9850)
+        self.assertEqual(record.total_visitors, 4)
+        # (b) the report still names it
+        rows = build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]
+        self.assertEqual({r["survey_id"]: r["itinerary"] for r in rows}["OPT-KEEP-1"], "Retiring Trail")
+        # (c) gone from what the mobile app is offered
+        self.assertNotIn(9850, self._ids("itinerary", active_only=True))
+        self.assertIn(9851, self._ids("itinerary", active_only=True))
+        # (d) still in what the web is given, marked
+        web = {i["id"]: i for i in self._payload()["itineraries"]}
+        self.assertIs(web[9850]["is_active"], False)
+
+    # -- renaming ----------------------------------------------------------
+
+    def test_a_rename_needs_the_exact_count_the_server_counted(self):
+        # Three records on this option, one on the other: the right answer is 3.
+        mine = self._make("travel-mode", 9860, "Old Ride", uses=3)
+        self._make("travel-mode", 9861, "Other Ride", uses=1)
+        url = self._url("travel-mode", mine.id)
+
+        missing = self.admin.patch(url, {"name": "New Ride"}, format="json")
+        wrong_low = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 1}, format="json")
+        wrong_high = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 4}, format="json")
+        as_flag = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": True}, format="json")
+        junk = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": "three"}, format="json")
+
+        for response in (missing, wrong_low, wrong_high, as_flag, junk):
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["record_count"], 3)  # the real count is given back
+            self.assertEqual(response.json()["code"], "confirmation_required")
+        mine.refresh_from_db()
+        self.assertEqual(mine.name, "Old Ride")  # none of them renamed it
+
+        right = self.admin.patch(url, {"name": "New Ride", "confirm_affected_records": 3}, format="json")
+        self.assertEqual(right.status_code, 200)
+        self.assertEqual(right.json()["name"], "New Ride")
+        mine.refresh_from_db()
+        self.assertEqual(mine.name, "New Ride")
+
+    def test_true_is_not_a_count_of_one(self):
+        # True == 1 in Python: an option with ONE record must still refuse it.
+        option = self._make("visit-purpose", 9864, "One Record", uses=1)
+
+        response = self.admin.patch(
+            self._url("visit-purpose", option.id), {"name": "One Record 2", "confirm_affected_records": True}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        option.refresh_from_db()
+        self.assertEqual(option.name, "One Record")
+
+    def test_the_count_is_accepted_as_text_digits_too(self):
+        mine = self._make("visit-purpose", 9862, "Text Count", uses=2)
+
+        response = self.admin.patch(
+            self._url("visit-purpose", mine.id), {"name": "Text Count 2", "confirm_affected_records": "2"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_renaming_an_option_nobody_uses_still_needs_a_zero(self):
+        option = self._make("boat-type", 9863, "Unused Boat", uses=0)
+        url = self._url("boat-type", option.id)
+
+        self.assertEqual(self.admin.patch(url, {"name": "Unused 2"}, format="json").status_code, 409)
+        self.assertEqual(
+            self.admin.patch(url, {"name": "Unused 2", "confirm_affected_records": 0}, format="json").status_code, 200
+        )
+
+    def test_an_itinerary_with_no_stay_length_cannot_be_renamed(self):
+        option = self._make("itinerary", 9870, "Reads Its Name", uses=2)  # stay_nights is None
+        url = self._url("itinerary", option.id)
+
+        refused = self.admin.patch(url, {"name": "Reads Another", "confirm_affected_records": 2}, format="json")
+
+        self.assertEqual(refused.status_code, 409)
+        self.assertEqual(refused.json()["code"], "stay_not_set")
+        self.assertIn("NAME", refused.json()["detail"])
+        option.refresh_from_db()
+        self.assertEqual(option.name, "Reads Its Name")
+
+    def test_an_itinerary_with_a_stay_length_can_be_renamed(self):
+        option = self._make("itinerary", 9871, "Weekend 2 Days", uses=2, stay_nights=2)
+
+        response = self.admin.patch(
+            self._url("itinerary", option.id), {"name": "Two Day Weekend", "confirm_affected_records": 2}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.stay_nights), ("Two Day Weekend", 2))
+
+    def test_a_rename_that_also_sets_the_stay_length_is_allowed(self):
+        option = self._make("itinerary", 9872, "Weekend 2 Days", uses=1)
+
+        response = self.admin.patch(
+            self._url("itinerary", option.id),
+            {"name": "Two Day Weekend", "stay_nights": 2, "confirm_affected_records": 1}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual((option.name, option.stay_nights), ("Two Day Weekend", 2))
+
+    def test_the_other_three_kinds_rename_without_a_stay_length(self):
+        for kind in ("travel-mode", "boat-type", "visit-purpose"):
+            with self.subTest(kind=kind):
+                option = self._make(kind, 9873, "Plain Old", uses=1)
+                response = self.admin.patch(
+                    self._url(kind, option.id), {"name": "Plain New", "confirm_affected_records": 1}, format="json"
+                )
+                self.assertEqual(response.status_code, 200)
+
+    def test_changing_the_stay_length_also_needs_the_count(self):
+        option = self._make("itinerary", 9874, "Counted Stay", uses=2, stay_nights=1)
+        url = self._url("itinerary", option.id)
+
+        self.assertEqual(self.admin.patch(url, {"stay_nights": 3}, format="json").status_code, 409)
+        self.assertEqual(
+            self.admin.patch(url, {"stay_nights": 3, "confirm_affected_records": 9}, format="json").status_code, 409
+        )
+        right = self.admin.patch(url, {"stay_nights": 3, "confirm_affected_records": 2}, format="json")
+        self.assertEqual(right.status_code, 200)
+        self.assertEqual(right.json()["stay_nights"], 3)
+        for bad in [-1, 61, "x", True, 1.5]:
+            with self.subTest(stay_nights=bad):
+                self.assertEqual(
+                    self.admin.patch(url, {"stay_nights": bad, "confirm_affected_records": 2}, format="json").status_code,
+                    400,
+                )
+
+    def test_a_patch_that_changes_nothing_writes_and_logs_nothing(self):
+        option = self._make("travel-mode", 9875, "Still", uses=1)
+        logs = ActivityLog.objects.count()
+
+        response = self.admin.patch(self._url("travel-mode", option.id), {"name": "Still"}, format="json")
+        spaced = self.admin.patch(self._url("travel-mode", option.id), {"name": "  Still "}, format="json")
+
+        self.assertEqual((response.status_code, spaced.status_code), (200, 200))
+        self.assertEqual(ActivityLog.objects.count(), logs)
+
+    # -- the cache ---------------------------------------------------------
+
+    def test_every_write_shows_in_the_next_payload(self):
+        from django.core.cache import cache
+
+        # POST
+        self._payload()  # warms the cache
+        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+        created = self.admin.post(self._url("visit-purpose"), {"name": "Cache Purpose"}, format="json").json()
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertIn(created["id"], self._ids("visit-purpose"))
+        self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
+
+        # PATCH
+        self._payload()
+        self.admin.patch(
+            self._url("visit-purpose", created["id"]),
+            {"name": "Cache Purpose Renamed", "confirm_affected_records": 0}, format="json",
+        )
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        names = {i["id"]: i["name"] for i in self._payload()["visitPurposes"]}
+        self.assertEqual(names[created["id"]], "Cache Purpose Renamed")
+
+        # deactivate
+        self._payload(active_only=True)
+        self.admin.post(self._url("visit-purpose", created["id"], "deactivate"))
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertNotIn(created["id"], self._ids("visit-purpose", active_only=True))
+        self.assertIn(created["id"], self._ids("visit-purpose"))
+
+        # reactivate
+        self._payload(active_only=True)
+        self.admin.post(self._url("visit-purpose", created["id"], "reactivate"))
+        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
+
+    def test_a_refused_write_leaves_the_cache_alone(self):
+        from django.core.cache import cache
+
+        option = self._make("travel-mode", 9880, "Held", uses=1)
+        self._payload()
+
+        self.admin.patch(self._url("travel-mode", option.id), {"name": "Held 2"}, format="json")  # 409
+        self.admin.post(self._url("travel-mode"), {"name": ""}, format="json")  # 400
+
+        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+
+    # -- the trace ---------------------------------------------------------
+
+    def test_every_kind_of_write_is_in_the_activity_log(self):
+        option = self._make("itinerary", 9890, "Trace Trail", uses=2, stay_nights=1)
+        admin_user = self.admin.user
+
+        def newest():
+            return ActivityLog.objects.order_by("-id").first()
+
+        before = ActivityLog.objects.count()
+        created = self.admin.post(self._url("itinerary"), {"name": "Logged New"}, format="json").json()
+        log = newest()
+        self.assertEqual((log.user_id, log.module, log.action), (admin_user.pk, "tourism", "create"))
+        self.assertEqual((log.record_type, log.record_id), ("Itinerary", str(created["id"])))
+        self.assertIn("Logged New", log.record_label)
+        self.assertIn("Travel itinerary", log.record_label)
+
+        self.admin.patch(
+            self._url("itinerary", option.id), {"name": "Trace Trail 2", "confirm_affected_records": 2}, format="json"
+        )
+        log = newest()
+        self.assertEqual((log.user_id, log.action, log.record_id), (admin_user.pk, "update", str(option.id)))
+        self.assertIn("Trace Trail", log.record_label)
+        self.assertIn("Trace Trail 2", log.record_label)
+        self.assertIn("2 record(s)", log.record_label)
+
+        self.admin.post(self._url("itinerary", option.id, "deactivate"))
+        log = newest()
+        self.assertEqual((log.user_id, log.action, log.record_id), (admin_user.pk, "update", str(option.id)))
+        self.assertIn("deactivated", log.record_label)
+
+        self.admin.post(self._url("itinerary", option.id, "reactivate"))
+        log = newest()
+        self.assertEqual((log.user_id, log.action), (admin_user.pk, "update"))
+        self.assertIn("reactivated", log.record_label)
+
+        self.assertEqual(ActivityLog.objects.count(), before + 4)
+
+    def test_a_refused_write_is_not_logged(self):
+        option = self._make("travel-mode", 9891, "Refused", uses=1)
+        before = ActivityLog.objects.count()
+
+        self.admin.patch(self._url("travel-mode", option.id), {"name": "Refused 2"}, format="json")  # no count
+        self.admin.post(self._url("travel-mode"), {"name": "refused"}, format="json")  # same name
+        self._client(ROLE_TOURISM, "tourism_try").post(self._url("travel-mode"), {"name": "Nope"}, format="json")
+
+        self.assertEqual(ActivityLog.objects.count(), before)
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class ReferenceOptionProtectedNameTests(TestCase):
+    """A name the Excel import produces is not renamed (commit 4b).
+
+    The import finds options BY NAME (and finds retired ones too). Rename one
+    and the next import creates a new row under the old name, and the reports
+    are split between the two. The list of such names lives in ONE place, the
+    import's own IMPORT_PRODUCED_NAMES, and the admin API reads it from there.
+    """
+
+    KINDS = {
+        "itinerary": Itinerary, "travel-mode": TravelMode,
+        "boat-type": BoatType, "visit-purpose": VisitPurpose,
+    }
+    FKS = {"itinerary": "itinerary", "travel-mode": "travel_mode",
+           "boat-type": "boat_type", "visit-purpose": "visit_purpose"}
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        user = User.objects.create_user(username="prot_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        self.admin = APIClient()
+        self.admin.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+    # -- helpers -----------------------------------------------------------
+
+    @staticmethod
+    def _kind_of(model):
+        return {Itinerary: "itinerary", TravelMode: "travel-mode",
+                BoatType: "boat-type", VisitPurpose: "visit-purpose"}[model]
+
+    def _url(self, kind, option_id=None, action=None):
+        url = f"/api/reference-options/{kind}/"
+        if option_id is not None:
+            url += f"{option_id}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _option_named(self, model, name):
+        """The row with this name (any capitals / spacing), or a new one."""
+        from .services.online_booking import normalize_key
+
+        for option in model.objects.all():
+            if normalize_key(option.name) == normalize_key(name):
+                return option
+        top = model.objects.order_by("-id").first().id
+        return model.objects.create(id=top + 1, name=name)
+
+    def _with_records(self, option, kind, count):
+        quezon = Province.objects.get(name="Quezon")
+        for i in range(count):
+            values = dict(
+                survey_id=f"PRT-{kind[:3]}-{option.id}-{i}", full_name="Group",
+                contact_number="09170000000", country=Country.objects.get(name="Philippines"),
+                region=quezon.region, province=quezon, arrival_date="2026-04-02",
+                resort=Resort.objects.order_by("resort_id").first(),
+                itinerary=Itinerary.objects.order_by("id").first(),
+                travel_mode=TravelMode.objects.order_by("id").first(),
+                boat_type=BoatType.objects.order_by("id").first(),
+                visit_purpose=VisitPurpose.objects.order_by("id").first(),
+                total_visitors=2, filipino_count=2, total_male=2, age_8_59=2, status="arrived",
+            )
+            values[self.FKS[kind]] = option
+            TouristRecord.objects.create(**values)
+
+    def _protected(self):
+        from .services import online_booking
+
+        return [
+            (self._kind_of(model), name)
+            for model, names in online_booking.IMPORT_PRODUCED_NAMES.items()
+            for name in names
+        ]
+
+    # -- the gate ----------------------------------------------------------
+
+    def test_every_name_the_import_produces_refuses_a_rename(self):
+        protected = self._protected()
+        self.assertTrue(protected)
+        for kind, name in protected:
+            with self.subTest(kind=kind, name=name):
+                model = self.KINDS[kind]
+                option = self._option_named(model, name)
+                self._with_records(option, kind, 2)
+                stored_name = option.name
+
+                # even with the right count, even with a stay length: the name wins
+                response = self.admin.patch(
+                    self._url(kind, option.id),
+                    {"name": f"{name} Renamed", "confirm_affected_records": 2, "stay_nights": 1}
+                    if kind == "itinerary" else {"name": f"{name} Renamed", "confirm_affected_records": 2},
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json()["code"], "rename_protected")
+                self.assertIn("Excel import", response.json()["detail"])
+                option.refresh_from_db()
+                self.assertEqual(option.name, stored_name)  # the database is unchanged
+                if kind == "itinerary":
+                    self.assertIsNone(option.stay_nights)  # and nothing else was saved
+
+    def test_a_protected_name_is_protected_in_any_dress(self):
+        # stored as "private vehicle" (lower case, extra space): still protected
+        option = TravelMode.objects.create(id=9901, name="private   vehicle")
+        # (an existing row with that name would make this a duplicate; free the seeded one)
+        TravelMode.objects.filter(name="Private Vehicle").update(name="Private Vehicle (seed)")
+
+        response = self.admin.patch(
+            self._url("travel-mode", option.id), {"name": "Car", "confirm_affected_records": 0}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "rename_protected")
+        option.refresh_from_db()
+        self.assertEqual(option.name, "private   vehicle")
+
+    def test_a_name_that_is_not_produced_still_renames_with_the_right_count(self):
+        option = TravelMode.objects.create(id=9902, name="Public Bus Line")
+        self._with_records(option, "travel-mode", 3)
+
+        response = self.admin.patch(
+            self._url("travel-mode", option.id), {"name": "Bus Line", "confirm_affected_records": 3}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "Bus Line")
+        self.assertIs(response.json()["rename_protected"], False)
+        option.refresh_from_db()
+        self.assertEqual(option.name, "Bus Line")
+
+    def test_a_retired_protected_option_is_still_protected_but_can_be_retired(self):
+        itinerary = self._option_named(Itinerary, "Same Day")
+
+        retired = self.admin.post(self._url("itinerary", itinerary.id, "deactivate"))
+        self.assertEqual(retired.status_code, 200)  # retiring is safe: the import reuses the row
+        itinerary.refresh_from_db()
+        self.assertIs(itinerary.is_active, False)
+        self.assertIs(retired.json()["is_active"], False)
+
+        rename = self.admin.patch(
+            self._url("itinerary", itinerary.id),
+            {"name": "Day Trip", "stay_nights": 0, "confirm_affected_records": 0}, format="json",
+        )
+
+        self.assertEqual(rename.status_code, 409)
+        self.assertEqual(rename.json()["code"], "rename_protected")
+        itinerary.refresh_from_db()
+        self.assertEqual(itinerary.name, "Same Day")
+
+    # -- what the list says ------------------------------------------------
+
+    def test_the_list_marks_exactly_the_protected_options(self):
+        protected = {(kind, name.lower()) for kind, name in self._protected()}
+        for kind in self.KINDS:
+            self._option_named(self.KINDS[kind], "Totally Ordinary Name")  # one that is not protected
+        for kind, model in self.KINDS.items():
+            with self.subTest(kind=kind):
+                rows = self.admin.get(self._url(kind)).json()
+                self.assertTrue(rows)
+                for row in rows:
+                    expected = (kind, " ".join(row["name"].split()).lower()) in protected
+                    self.assertIs(row["rename_protected"], expected, row["name"])
+                if kind == "boat-type":
+                    self.assertFalse(any(r["rename_protected"] for r in rows))  # reached by id, not by name
+                self.assertIs(
+                    {r["name"]: r for r in rows}["Totally Ordinary Name"]["rename_protected"], False
+                )
+
+    def test_a_protected_option_shows_as_protected_after_other_writes(self):
+        created = self.admin.post(self._url("travel-mode"), {"name": "Brand New Ride"}, format="json")
+        self.assertIs(created.json()["rename_protected"], False)
+        # a NEW option cannot take a protected name that already exists
+        again = self.admin.post(self._url("travel-mode"), {"name": "public utility vehicle"}, format="json")
+        self.assertEqual(again.status_code, 400)
+
+    # -- ONE source --------------------------------------------------------
+
+    def test_the_gate_follows_the_list_the_import_owns(self):
+        from .services import online_booking
+
+        ordinary = self._option_named(Itinerary, "Trail X")
+        was_protected = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk__in=[ordinary.pk, was_protected.pk]).update(stay_nights=2)
+
+        with patch.dict(online_booking.IMPORT_PRODUCED_NAMES, {Itinerary: ("Trail X",)}, clear=True):
+            now_protected = self.admin.patch(
+                self._url("itinerary", ordinary.id), {"name": "Trail Y", "confirm_affected_records": 0}, format="json"
+            )
+            no_longer = self.admin.patch(
+                self._url("itinerary", was_protected.id), {"name": "Day Trip", "confirm_affected_records": 0}, format="json"
+            )
+            listing = {r["name"]: r["rename_protected"] for r in self.admin.get(self._url("itinerary")).json()}
+
+        self.assertEqual(now_protected.status_code, 409)
+        self.assertEqual(now_protected.json()["code"], "rename_protected")
+        self.assertEqual(no_longer.status_code, 200)
+        self.assertIs(listing["Trail X"], True)
+        self.assertIs(listing["Day Trip"], False)
+        ordinary.refresh_from_db()
+        was_protected.refresh_from_db()
+        self.assertEqual((ordinary.name, was_protected.name), ("Trail X", "Day Trip"))
+
+    def test_the_list_is_exactly_what_the_import_can_produce(self):
+        # If the normalizers can say a name that is not in the list (or the list
+        # has a name no normalizer says), the two have drifted apart.
+        from .services import online_booking as ob
+
+        produced = {
+            Itinerary: {ob.normalize_itinerary(v) for v in
+                        ["2 nights", "3 night", "4 nights", "5 nights", "day trip", "Overnight", ""]},
+            TravelMode: {ob.normalize_travel_mode(v) for v in ["public utility", ""]},
+            VisitPurpose: {ob.normalize_purpose(v) for v in ["team building", ""]},
+        }
+        for model, names in produced.items():
+            with self.subTest(model=model.__name__):
+                self.assertEqual(names, set(ob.IMPORT_PRODUCED_NAMES[model]))
+        # free text is NOT protected: it becomes whatever the sheet says
+        self.assertEqual(ob.normalize_itinerary("Que"), "Que")
+        self.assertNotIn("Que", ob.IMPORT_PRODUCED_NAMES[Itinerary])
+        self.assertEqual(ob.normalize_travel_mode("Jeepney"), "Jeepney")
+        self.assertEqual(ob.normalize_purpose("swimming"), "Swimming")
+
+    def test_the_api_and_the_import_compare_names_the_same_way(self):
+        from .services.online_booking import normalize_key
+        from .views.reference_options import name_key
+
+        for text in ["Same Day", "same day", " Same  Day ", "SAME\tDAY", "Weekend 2 Days", ""]:
+            with self.subTest(text=text):
+                self.assertEqual(name_key(text), normalize_key(text))
+
+    # -- what the import does with a retired option ------------------------
+
+    def test_the_import_reuses_a_retired_row_instead_of_making_a_new_one(self):
+        # This is why retiring a protected option is safe and needs no gate.
+        from .services.online_booking import ReferenceResolver, normalize_itinerary
+
+        row = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk=row.pk).update(is_active=False)
+        before = Itinerary.objects.count()
+
+        resolved = ReferenceResolver(commit=True).named(Itinerary, normalize_itinerary("day trip"))
+
+        self.assertEqual(resolved.pk, row.pk)
+        self.assertEqual(Itinerary.objects.count(), before)
+
+    def test_renaming_does_make_the_import_create_a_duplicate(self):
+        # The harm the gate prevents, shown by doing it directly (not through
+        # the API, which refuses): rename the row, and the import adds a new
+        # one under the old name.
+        from .services.online_booking import ReferenceResolver, normalize_itinerary
+
+        row = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk=row.pk).update(name="Day Trip")
+        before = Itinerary.objects.count()
+
+        resolved = ReferenceResolver(commit=True).named(Itinerary, normalize_itinerary("day trip"))
+
+        self.assertNotEqual(resolved.pk, row.pk)
+        self.assertEqual(resolved.name, "Same Day")
+        self.assertEqual(Itinerary.objects.count(), before + 1)
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+# The 12 itineraries of the live system with the record split of 2026-10-17:
+# (name, [visitors of the ARRIVED records], [visitors of the records that are not arrived]).
+# Overnight 3 records / 9 visitors, Same Day 5/14, 2 Nights 5/20, 3 Nights 2/8,
+# 4 Nights 2/4, 5 Nights and above 1/2, Eco Adventure Trail 1/4, the rest none:
+# 19 records, 61 visitors, of which 8 records / 31 visitors arrived.
+LIVE_LIKE_SPLIT = [
+    ("Overnight", [4], [3, 2]),
+    ("Same Day", [5], [4, 2, 2, 1]),
+    ("2 Nights", [6, 4], [5, 3, 2]),
+    ("3 Nights", [4], [4]),
+    ("4 Nights", [3, 1], []),
+    ("5 Nights and above", [], [2]),
+    ("6 Nights", [], []),
+    ("Que", [], []),
+    ("Island Hopping Circuit", [], []),
+    ("Beach and Resort Day Tour", [], []),
+    ("Heritage and Lighthouse Stop", [], []),
+    ("Eco Adventure Trail", [4], []),
+]
+
+
+def _live_like_fixture():
+    """The 12 itineraries (ids 1..12, live names, stay_nights not set) and the
+    live record split, on two resorts."""
+    ensure_test_reference_tables()
+    quezon = Province.objects.get(name="Quezon")
+    resorts = list(Resort.objects.order_by("resort_id")[:2])
+    count = 0
+    for index, (name, arrived, others) in enumerate(LIVE_LIKE_SPLIT):
+        itinerary, _ = Itinerary.objects.update_or_create(
+            id=index + 1, defaults={"name": name, "is_active": True, "stay_nights": None}
+        )
+        for kind, visitors_list in (("arrived", arrived), ("other", others)):
+            for visitors in visitors_list:
+                count += 1
+                status = "arrived" if kind == "arrived" else ("no_show" if count % 3 else "pending")
+                TouristRecord.objects.create(
+                    survey_id=f"LV-{count:02d}", full_name="Group", contact_number="09170000000",
+                    country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+                    arrival_date="2026-04-02", resort=resorts[count % 2], itinerary=itinerary,
+                    travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+                    visit_purpose=VisitPurpose.objects.first(), total_visitors=visitors,
+                    filipino_count=visitors, total_male=visitors, age_8_59=visitors, status=status,
+                )
+    return count
+
+
+class ItineraryStayFillTests(TestCase):
+    """Migration 0052: the approved stay_nights, by name, with a reverse."""
+
+    APPROVED = {
+        1: ("Overnight", 1), 2: ("Same Day", 0), 3: ("2 Nights", 2), 4: ("3 Nights", 3),
+        5: ("4 Nights", 4), 6: ("5 Nights and above", 5), 7: ("6 Nights", 6), 8: ("Que", None),
+        9: ("Island Hopping Circuit", None), 10: ("Beach and Resort Day Tour", 0),
+        11: ("Heritage and Lighthouse Stop", None), 12: ("Eco Adventure Trail", None),
+    }
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        self.module = importlib.import_module("api.migrations.0052_set_itinerary_stay_nights")
+        self.apps = django_apps
+
+    def _fill(self):
+        self.module.set_stay_nights(self.apps, None)
+
+    def _unfill(self):
+        self.module.clear_stay_nights(self.apps, None)
+
+    def _values(self):
+        return {i.id: i.stay_nights for i in Itinerary.objects.filter(id__lte=12).order_by("id")}
+
+    # -- the gate: does any live number move? ------------------------------
+
+    def test_the_fixture_is_the_live_split(self):
+        self.assertEqual(_live_like_fixture(), 19)
+        self.assertEqual(TouristRecord.objects.count(), 19)
+        self.assertEqual(sum(TouristRecord.objects.values_list("total_visitors", flat=True)), 61)
+        arrived = TouristRecord.objects.filter(status="arrived")
+        self.assertEqual((arrived.count(), sum(arrived.values_list("total_visitors", flat=True))), (8, 31))
+        by_name = {
+            r["itinerary__name"]: (r["n"], r["v"])
+            for r in TouristRecord.objects.values("itinerary__name").annotate(n=Count("survey_id"), v=Sum("total_visitors"))
+        }
+        self.assertEqual(by_name, {
+            "Overnight": (3, 9), "Same Day": (5, 14), "2 Nights": (5, 20), "3 Nights": (2, 8),
+            "4 Nights": (2, 4), "5 Nights and above": (1, 2), "Eco Adventure Trail": (1, 4),
+        })
+
+    def test_no_number_of_the_live_reports_moves_when_the_fill_runs(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()
+
+        self._fill()
+        after = _stay_report_numbers()
+
+        # the live figures the baseline shows
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
+        self.assertEqual(before["stay_type_answer"], "Same-day visitors: 5; overnight or multi-day visitors: 26.")
+        self.assertIn("1.8 night(s)", before["average_stay_answer"])
+        # and not one of them is different afterwards
+        self.assertEqual(after, before)
+        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
+        self.assertIn("1.8 night(s)", after["average_stay_answer"])
+        # the fill really ran
+        self.assertEqual(self._values()[3], 2)
+
+    def test_the_arrival_rows_of_every_record_stay_the_same(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()["arrival_rows"]
+        self.assertEqual(len(before), 8)  # the 8 arrived records
+
+        self._fill()
+
+        self.assertEqual(_stay_report_numbers()["arrival_rows"], before)
+
+    # -- what the fill sets ------------------------------------------------
+
+    def test_the_fill_sets_exactly_the_approved_values(self):
+        _live_like_fixture()
+
+        self._fill()
+
+        self.assertEqual(self._values(), {pk: nights for pk, (name, nights) in self.APPROVED.items()})
+
+    def test_it_matches_by_name_and_skips_a_row_whose_name_does_not_fit_its_id(self):
+        _live_like_fixture()
+        Itinerary.objects.filter(pk=7).update(name="Seven Nights")  # id 7 but not "6 Nights"
+        Itinerary.objects.filter(pk=3).update(name="  2   NIGHTS ")  # same name in another dress: fits
+
+        import io
+        from contextlib import redirect_stdout
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self._fill()
+
+        values = self._values()
+        self.assertIsNone(values[7])  # skipped, not guessed
+        self.assertEqual(values[3], 2)  # matched in spite of capitals and spaces
+        self.assertIn("id 7", out.getvalue())
+        self.assertIn("Seven Nights", out.getvalue())
+
+    def test_a_name_in_the_wrong_row_is_not_found_by_its_name_either(self):
+        _live_like_fixture()
+        # "6 Nights" moved to another id: the mapping's id 7 now holds another name
+        Itinerary.objects.filter(pk=7).update(name="Que")
+        Itinerary.objects.filter(pk=8).update(name="6 Nights")
+
+        self._fill()
+
+        values = self._values()
+        self.assertIsNone(values[7])
+        self.assertIsNone(values[8])
+
+    def test_a_missing_row_is_skipped_without_a_crash(self):
+        _live_like_fixture()
+        TouristRecord.objects.filter(itinerary_id=12).delete()
+        Itinerary.objects.filter(pk=12).delete()
+
+        self._fill()
+
+        self.assertEqual(self._values()[2], 0)
+        self.assertNotIn(12, self._values())
+
+    def test_a_value_an_admin_already_set_is_never_overwritten(self):
+        _live_like_fixture()
+        Itinerary.objects.filter(pk=3).update(stay_nights=9)  # the approved value is 2
+
+        self._fill()
+
+        self.assertEqual(self._values()[3], 9)
+        self.assertEqual(self._values()[4], 3)  # a row that was not set still gets its value
+
+    def test_running_it_twice_changes_nothing_more(self):
+        _live_like_fixture()
+        self._fill()
+        once = self._values()
+
+        self._fill()
+
+        self.assertEqual(self._values(), once)
+
+    def test_the_rows_left_not_set_are_still_not_set(self):
+        _live_like_fixture()
+
+        self._fill()
+
+        for pk in (8, 9, 11, 12):
+            with self.subTest(pk=pk):
+                self.assertIsNone(self._values()[pk])
+
+    def test_it_changes_no_other_column_and_no_other_table(self):
+        _live_like_fixture()
+        before_itineraries = list(Itinerary.objects.order_by("id").values("id", "name", "is_active"))
+        before_modes = list(TravelMode.objects.order_by("id").values("id", "name", "is_active"))
+        before_records = list(TouristRecord.objects.order_by("survey_id").values_list("survey_id", "itinerary_id", "status", "total_visitors"))
+
+        self._fill()
+
+        self.assertEqual(list(Itinerary.objects.order_by("id").values("id", "name", "is_active")), before_itineraries)
+        self.assertEqual(list(TravelMode.objects.order_by("id").values("id", "name", "is_active")), before_modes)
+        self.assertEqual(
+            list(TouristRecord.objects.order_by("survey_id").values_list("survey_id", "itinerary_id", "status", "total_visitors")),
+            before_records,
+        )
+
+    # -- the reverse -------------------------------------------------------
+
+    def test_the_reverse_puts_every_stay_nights_back_to_none(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()
+        self._fill()
+        self.assertTrue(any(v is not None for v in self._values().values()))
+
+        self._unfill()
+
+        self.assertEqual(set(self._values().values()), {None})
+        self.assertEqual(_stay_report_numbers(), before)
+
+    # -- what the fix is for -----------------------------------------------
+
+    def test_six_nights_is_six_nights_after_the_fill_and_was_one_before(self):
+        from .services.tourism import itinerary_stay
+
+        _live_like_fixture()
+        itinerary = Itinerary.objects.get(pk=7)
+        before = itinerary_stay(itinerary.name, itinerary.stay_nights)
+
+        self._fill()
+        itinerary.refresh_from_db()
+        after = itinerary_stay(itinerary.name, itinerary.stay_nights)
+
+        self.assertEqual(before, (False, 1))  # the name reading missed the 6
+        self.assertEqual(after, (False, 6))
+
+    def test_a_new_six_nights_record_counts_six_nights_in_the_average_stay(self):
+        _live_like_fixture()
+        quezon = Province.objects.get(name="Quezon")
+
+        def add_record(survey_id):
+            return TouristRecord.objects.create(
+                survey_id=survey_id, full_name="Group", contact_number="09170000000",
+                country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+                arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+                itinerary=Itinerary.objects.get(pk=7), travel_mode=TravelMode.objects.first(),
+                boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+                total_visitors=3, filipino_count=3, total_male=3, age_8_59=3, status="arrived",
+            )
+
+        add_record("LV-NEW-6")
+        before = _stay_report_numbers()
+        self._fill()
+        after = _stay_report_numbers()
+
+        # 31 + 3 = 34 visitors; nights 56 + 3 x 1 = 59 before, 56 + 3 x 6 = 74 after
+        self.assertIn("1.7 night(s)", before["average_stay_answer"])  # 59 / 34
+        self.assertIn("2.2 night(s)", after["average_stay_answer"])  # 74 / 34
+        # still an overnight stay either way
+        self.assertEqual(before["dashboard_stay_type"], after["dashboard_stay_type"])
+
+    def test_a_new_record_on_the_beach_and_resort_day_tour_is_same_day_before_and_after(self):
+        _live_like_fixture()
+        quezon = Province.objects.get(name="Quezon")
+        TouristRecord.objects.create(
+            survey_id="LV-NEW-10", full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=Itinerary.objects.get(pk=10), travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=7, filipino_count=7, total_male=7, age_8_59=7, status="arrived",
+        )
+        before = _stay_report_numbers()
+        self._fill()
+        after = _stay_report_numbers()
+
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 12, "overnight": 26})
+        self.assertEqual(after, before)
+
+    def test_the_rows_left_not_set_read_their_name_with_the_same_result(self):
+        from .services.tourism import itinerary_stay
+
+        _live_like_fixture()
+        names = {pk: Itinerary.objects.get(pk=pk).name for pk in (8, 9, 11, 12)}
+        before = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+
+        self._fill()
+
+        after = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+        self.assertEqual(after, before)
+        self.assertEqual(set(after.values()), {(False, 1)})
+
+    def test_the_migration_is_data_only(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+        self.assertEqual(self.module.Migration.dependencies, [("api", "0051_reference_options_active_and_stay")])
+
+
+class ItineraryStayFillMigrationTests(TransactionTestCase):
+    """Migration 0052 through Django's own migrate, forward AND backward."""
+
+    BEFORE = [("api", "0051_reference_options_active_and_stay")]
+    AFTER = [("api", "0052_set_itinerary_stay_nights")]
+
+    def tearDown(self):
+        # leave the test database at the latest migration for the tests after this
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _model(self, target):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        return executor.loader.project_state(target).apps.get_model("api", "Itinerary")
+
+    def _values(self, model):
+        return {row.id: row.stay_nights for row in model.objects.order_by("id")}
+
+    def test_forward_sets_the_values_and_backward_clears_every_one(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.BEFORE)  # undo 0052 (a no-op on the empty tables)
+        model = self._model(self.BEFORE)
+        model.objects.all().delete()
+        for pk, name in [(2, "Same Day"), (3, "2 Nights"), (7, "6 Nights"), (8, "Que"), (10, "Beach and Resort Day Tour")]:
+            model.objects.create(id=pk, name=name)
+        self.assertEqual(set(self._values(model).values()), {None})
+
+        MigrationExecutor(connection).migrate(self.AFTER)
+        model = self._model(self.AFTER)
+        self.assertEqual(self._values(model), {2: 0, 3: 2, 7: 6, 8: None, 10: 0})
+
+        # an admin sets one of the rows that was left not set
+        model.objects.filter(pk=8).update(stay_nights=5)
+
+        MigrationExecutor(connection).migrate(self.BEFORE)  # the reverse of 0052
+        model = self._model(self.BEFORE)
+        self.assertEqual(set(self._values(model).values()), {None})  # all of them, as specified
+
+        MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
+        self.assertEqual(self._values(self._model(self.AFTER)), {2: 0, 3: 2, 7: 6, 8: None, 10: 0})
 
 
 class PeakSeasonShareTests(TestCase):

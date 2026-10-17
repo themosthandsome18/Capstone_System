@@ -644,6 +644,7 @@ export function TourismDataProvider({ children }) {
         deleteResort,
         uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
+        refreshReferenceTables,
         hideFeedbackEntry,
         unhideFeedbackEntry,
         saveTheme,

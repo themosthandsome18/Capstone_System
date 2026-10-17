@@ -408,6 +408,40 @@ export const tourismApi = {
     });
   },
 
+  // Registration options (itinerary, travel-mode, boat-type, visit-purpose).
+  // There is no delete: an option with history is deactivated, never removed.
+  async getReferenceOptions(kind) {
+    return apiRequest(`/reference-options/${encodeURIComponent(kind)}/`);
+  },
+
+  async createReferenceOption(kind, payload) {
+    return apiRequest(`/reference-options/${encodeURIComponent(kind)}/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateReferenceOption(kind, id, payload) {
+    return apiRequest(
+      `/reference-options/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+
+  async deactivateReferenceOption(kind, id) {
+    return apiRequest(
+      `/reference-options/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/deactivate/`,
+      { method: "POST" }
+    );
+  },
+
+  async reactivateReferenceOption(kind, id) {
+    return apiRequest(
+      `/reference-options/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/reactivate/`,
+      { method: "POST" }
+    );
+  },
+
   async createResort(payload) {
     const created = await apiRequest("/resorts/", {
       method: "POST",

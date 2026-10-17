@@ -306,6 +306,21 @@ class NamedReference(models.Model):
         return self.name
 
 
+class ActiveOption(models.Model):
+    """For the choices an admin can retire (item: registration options).
+
+    An inactive option is not offered for NEW registrations, but it stays on
+    the records that already point at it and in the reports: never delete a
+    choice that has history. db_default so that a row inserted by code that
+    does not know this column (the old instance during a deploy) gets True.
+    """
+
+    is_active = models.BooleanField(default=True, db_default=True)
+
+    class Meta:
+        abstract = True
+
+
 class Country(NamedReference):
     type = models.CharField(max_length=20, default="local")
 
@@ -328,22 +343,29 @@ class Province(NamedReference):
     code = models.CharField(max_length=10, blank=True)
 
 
-class Itinerary(NamedReference):
+class Itinerary(NamedReference, ActiveOption):
+    # How long the stay is.
+    #   None = not set yet: the reports fall back to reading the NAME ("day" or
+    #          "same" in it is same day, "2".."5" are nights, else 1 night).
+    #   0    = same day.
+    #   N    = N nights.
+    stay_nights = models.PositiveSmallIntegerField(null=True, blank=True)
+
     class Meta(NamedReference.Meta):
         verbose_name_plural = "itineraries"
 
 
-class TravelMode(NamedReference):
+class TravelMode(NamedReference, ActiveOption):
     pass
 
 
-class BoatType(NamedReference):
+class BoatType(NamedReference, ActiveOption):
     # Whether a booking on this boat takes a Boat Capacity and Fare. The web
     # form reads this instead of the boat's name.
     requires_capacity_fare = models.BooleanField(default=False)
 
 
-class VisitPurpose(NamedReference):
+class VisitPurpose(NamedReference, ActiveOption):
     pass
 
 

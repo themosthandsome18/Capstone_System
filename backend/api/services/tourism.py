@@ -69,8 +69,19 @@ REFERENCE_TABLE_SERIALIZERS = {
     "resorts": (Resort, ResortSerializer),
 }
 
-MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v1"
+# v2: the cached lists carry is_active / stay_nights. A v1 entry has the old
+# shape and must not be read back as if it were this one.
+MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v2"
 MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
+
+# What the mobile app reads of each list an admin can retire. The app gets
+# only the ACTIVE rows and only these keys, exactly the shape it always had.
+MOBILE_OPTION_KEYS = {
+    "itineraries": ("id", "name"),
+    "travelModes": ("id", "name"),
+    "boatTypes": ("id", "name", "requires_capacity_fare"),
+    "visitPurposes": ("id", "name"),
+}
 
 
 def with_origin(queryset):
@@ -129,11 +140,25 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
 ]
 
 
-def build_reference_tables_payload(resorts=None):
+def build_reference_tables_payload(resorts=None, active_only=False):
+    """The reference lists.
+
+    active_only=False (the web): every row, with is_active, so the web can
+    show a retired option and name it on old records.
+    active_only=True (the mobile app): only the active rows, cut back to the
+    keys the app reads.
+
+    The cache always holds the FULL lists; active_only is applied afterwards,
+    in memory. Caching the filtered result under the same key would serve the
+    web a mobile list (or the other way round) for up to 15 minutes.
+    """
     static_payload = cache.get(MOBILE_REFERENCE_TABLES_CACHE_KEY)
     if static_payload is None:
         static_payload = {
-            payload_key: serializer_class(model.objects.all(), many=True).data
+            payload_key: [
+                dict(item)
+                for item in serializer_class(model.objects.all(), many=True).data
+            ]
             for payload_key, (model, serializer_class) in STATIC_REFERENCE_TABLE_SERIALIZERS.items()
         }
         cache.set(
@@ -143,6 +168,14 @@ def build_reference_tables_payload(resorts=None):
         )
 
     payload = dict(static_payload)
+
+    if active_only:
+        for payload_key, keys in MOBILE_OPTION_KEYS.items():
+            payload[payload_key] = [
+                {key: item[key] for key in keys}
+                for item in static_payload[payload_key]
+                if item.get("is_active", True)
+            ]
 
     if resorts is not None:
         payload["resorts"] = ResortSerializer(resorts, many=True).data
@@ -246,7 +279,8 @@ ARRIVAL_MONITORING_TABLE_LIMIT = 300
 
 ARRIVAL_ROW_FIELDS = (
     "survey_id", "arrival_date", "full_name", "total_male", "total_female",
-    "total_visitors", "discounted_count", "itinerary__name", "resort__resort_name", "updated_at",
+    "total_visitors", "discounted_count", "itinerary__name", "itinerary__stay_nights",
+    "resort__resort_name", "updated_at",
 )
 
 
@@ -303,10 +337,39 @@ def filter_arrival_records(params=None):
     return records.select_related("itinerary", "resort"), filters, active_date, today_iso
 
 
+def itinerary_stay(name, stay_nights=None):
+    """How long a stay is, for the reports: (same_day, nights).
+
+    The itinerary's own stay_nights wins when it has one (0 = same day,
+    N = N nights). Only when it is None (not set yet) is the NAME read, exactly
+    as every report did before: "day" or "same" in it is same day, "2".."5"
+    in it are that many nights (the first of them in that order), anything
+    else is 1 night. Reading the name alone makes "Weekend 2 Days" a same-day
+    stay, which is why the field exists.
+    """
+    if stay_nights is not None:
+        return stay_nights == 0, stay_nights
+
+    text = (name or "").lower()
+    if "day" in text or "same" in text:
+        return True, 0
+    if "2" in text:
+        return False, 2
+    if "3" in text:
+        return False, 3
+    if "4" in text:
+        return False, 4
+    if "5" in text:
+        return False, 5
+    return False, 1
+
+
 def arrival_row(val):
     """One Arrival Monitoring row from a record's ARRIVAL_ROW_FIELDS values."""
-    itinerary_name = (val["itinerary__name"] or "").lower()
-    if "day" in itinerary_name or "same" in itinerary_name:
+    is_same_day, _ = itinerary_stay(
+        val["itinerary__name"], val.get("itinerary__stay_nights")
+    )
+    if is_same_day:
         overnight = 0
         same_day = val["total_visitors"]
     else:
@@ -651,11 +714,13 @@ def build_dashboard_payload(params=None):
     day_tour = 0
     overnight = 0
     for item in (
-        arrived_records.values("itinerary__name")
+        arrived_records.values("itinerary__name", "itinerary__stay_nights")
         .annotate(total=Sum("total_visitors"))
     ):
-        itinerary_name = (item["itinerary__name"] or "").lower()
-        if "day" in itinerary_name or "same" in itinerary_name:
+        is_same_day, _ = itinerary_stay(
+            item["itinerary__name"], item["itinerary__stay_nights"]
+        )
+        if is_same_day:
             day_tour += item["total"] or 0
         else:
             overnight += item["total"] or 0
@@ -1171,24 +1236,22 @@ def build_tourism_question_answers(params=None):
     stay_nights_total = 0
     overnight_by_resort = {}
 
-    for val in arrived.values("itinerary__name", "total_visitors", "resort__resort_name"):
-        itinerary_name = (val["itinerary__name"] or "").lower()
+    for val in arrived.values(
+        "itinerary__name", "itinerary__stay_nights", "total_visitors", "resort__resort_name"
+    ):
+        is_same_day, nights = itinerary_stay(
+            val["itinerary__name"], val["itinerary__stay_nights"]
+        )
         # This record's head count. The year total stays in total_visitors,
         # which the answers below divide by.
         record_visitors = val["total_visitors"] or 0
 
-        if "day" in itinerary_name or "same" in itinerary_name:
+        if is_same_day:
             record_overnight = 0
             record_same_day = record_visitors
-            nights = 0
         else:
             record_overnight = record_visitors
             record_same_day = 0
-            if "2" in itinerary_name: nights = 2
-            elif "3" in itinerary_name: nights = 3
-            elif "4" in itinerary_name: nights = 4
-            elif "5" in itinerary_name: nights = 5
-            else: nights = 1
 
         same_day += record_same_day
         overnight += record_overnight
@@ -1350,36 +1413,6 @@ def build_tourism_question_answers(params=None):
 
 def sum_visitors(queryset):
     return queryset.aggregate(total=Sum("total_visitors"))["total"] or 0
-
-
-def get_stay_counts(record):
-    itinerary_name = (record.itinerary.name if record.itinerary_id else "").lower()
-
-    if "day" in itinerary_name or "same" in itinerary_name:
-        return 0, record.total_visitors
-
-    return record.total_visitors, 0
-
-
-def estimate_stay_nights(record):
-    itinerary_name = (record.itinerary.name if record.itinerary_id else "").lower()
-
-    if "day" in itinerary_name or "same" in itinerary_name:
-        return 0
-
-    if "2" in itinerary_name:
-        return 2
-
-    if "3" in itinerary_name:
-        return 3
-
-    if "4" in itinerary_name:
-        return 4
-
-    if "5" in itinerary_name:
-        return 5
-
-    return 1
 
 
 def top_group(queryset, group_field):

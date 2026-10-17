@@ -6,6 +6,12 @@ from .auth_views import (
     logout_view,
     tourist_register_view,
 )
+from .views.reference_options import (
+    reference_option_deactivate,
+    reference_option_detail,
+    reference_option_list,
+    reference_option_reactivate,
+)
 from .views.shared import (
     activity_log_list,
     bootstrap_data,
@@ -132,6 +138,10 @@ urlpatterns = [
     path("tourist-records/", tourist_record_list),
     path("tourist-records/<str:survey_id>/", tourist_record_detail),
     path("tourism-theme/", tourism_theme),
+    path("reference-options/<str:kind>/", reference_option_list),
+    path("reference-options/<str:kind>/<int:option_id>/", reference_option_detail),
+    path("reference-options/<str:kind>/<int:option_id>/deactivate/", reference_option_deactivate),
+    path("reference-options/<str:kind>/<int:option_id>/reactivate/", reference_option_reactivate),
 
     # Sanitation routes
     path("sanitation/bootstrap/", sanitation_bootstrap_data),
