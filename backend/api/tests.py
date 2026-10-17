@@ -18,6 +18,7 @@ from rest_framework.test import APIClient
 from .seeders import ensure_initial_reference_data
 from .seed_data import INITIAL_TOURIST_RECORDS, REFERENCE_TABLES
 from .models import (
+    ACTION_CREATE,
     ACTION_UPDATE,
     BOOKING_STATUS_ARRIVED,
     MODULE_TOURISM,
@@ -7041,6 +7042,350 @@ class EmergencyContactMigrationTests(TransactionTestCase):
 
         MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
         self.assertEqual(self._model(self.AFTER).objects.count(), 5)
+
+
+class EmergencyContactApiTests(TestCase):
+    """Admin CRUD of the emergency contacts: guards, audit trail, and what the app is sent."""
+
+    LIST = "/api/emergency-contacts/"
+    REORDER = "/api/emergency-contacts/reorder/"
+    BOOTSTRAP = "/api/mobile/tourism/bootstrap/"
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        EmergencyContact.objects.all().delete()
+        self.admin = self._client(ROLE_ADMIN, "ec_admin")
+        self.a = EmergencyContact.objects.create(
+            name="Alpha Rescue", contact_numbers="111-1111", category="rescue", display_order=10)
+        self.b = EmergencyContact.objects.create(
+            name="Bravo Police", contact_numbers="222-2222 / 333-3333", category="police", display_order=20)
+        self.c = EmergencyContact.objects.create(
+            name="Charlie Desk", contact_numbers="444-4444", category="desk", display_order=30)
+
+    def _client(self, role=None, username=None):
+        client = APIClient()
+        if role is not None:
+            user = User.objects.create_user(username=username or f"ec_{role}", password="Staff@12345")
+            UserProfile.objects.create(user=user, role=role)
+            client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+            client.user = user
+        return client
+
+    def _url(self, contact=None, action=None):
+        url = self.LIST
+        if contact is not None:
+            url += f"{contact.pk}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _payload_names(self):
+        response = APIClient().get(self.BOOTSTRAP)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [row["name"] for row in response.json()["emergencyContacts"]]
+
+    def _admin_names(self):
+        return [row["name"] for row in self.admin.get(self.LIST).json()]
+
+    def _all_calls(self):
+        return [
+            ("get", self.LIST),
+            ("post", self.LIST),
+            ("patch", self._url(self.a)),
+            ("post", self._url(self.a, "deactivate")),
+            ("post", self._url(self.a, "reactivate")),
+            ("post", self.REORDER),
+        ]
+
+    def _logs(self):
+        return ActivityLog.objects.filter(record_type="EmergencyContact")
+
+    # -- guard 1: admin only ----------------------------------------------
+
+    def test_nobody_logged_out_gets_in_on_any_endpoint(self):
+        before = list(EmergencyContact.objects.values_list("id", "name", "is_active", "display_order"))
+        for method, url in self._all_calls():
+            response = getattr(APIClient(), method)(url, {"name": "Intruder"}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, (method, url))
+        self.assertEqual(
+            before, list(EmergencyContact.objects.values_list("id", "name", "is_active", "display_order")))
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_logged_in_non_admin_is_refused_on_any_endpoint(self):
+        before = list(EmergencyContact.objects.values_list("id", "name", "is_active", "display_order"))
+        for role in (ROLE_TOURISM, ROLE_TOURIST):
+            client = self._client(role, f"ec_{role}")
+            for method, url in self._all_calls():
+                response = getattr(client, method)(url, {"name": "Intruder"}, format="json")
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, (role, method, url))
+        self.assertEqual(
+            before, list(EmergencyContact.objects.values_list("id", "name", "is_active", "display_order")))
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- list --------------------------------------------------------------
+
+    def test_the_admin_list_has_every_contact_in_order_with_its_state(self):
+        self.b.is_active = False
+        self.b.save()
+        rows = self.admin.get(self.LIST).json()
+        self.assertEqual([r["name"] for r in rows], ["Alpha Rescue", "Bravo Police", "Charlie Desk"])
+        self.assertEqual([r["is_active"] for r in rows], [True, False, True])
+        self.assertEqual(
+            set(rows[0]),
+            {"id", "name", "contact_numbers", "email", "description", "hours",
+             "category", "display_order", "is_active"},
+        )
+
+    # -- create ------------------------------------------------------------
+
+    def test_create_answers_and_saves_and_goes_last_and_active(self):
+        response = self.admin.post(self.LIST, {
+            "name": "  Delta   Coast  Guard ", "contact_numbers": "555-5555", "email": "d@example.com",
+            "description": "Boats", "hours": "24/7", "category": "coast_guard",
+            "is_active": False, "display_order": 1, "id": 9999,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        body = response.json()
+        saved = EmergencyContact.objects.get(pk=body["id"])
+        self.assertNotEqual(saved.pk, 9999)
+        for source in (body, {f: getattr(saved, f) for f in body}):
+            self.assertEqual(source["name"], "Delta Coast Guard")
+            self.assertEqual(source["contact_numbers"], "555-5555")
+            self.assertEqual(source["email"], "d@example.com")
+            self.assertEqual(source["description"], "Boats")
+            self.assertEqual(source["hours"], "24/7")
+            self.assertEqual(source["category"], "coast_guard")
+            self.assertEqual(source["display_order"], 40)
+            self.assertIs(source["is_active"], True)
+        self.assertEqual(self._payload_names()[-1], "Delta Coast Guard")
+
+    def test_create_without_a_category_is_other(self):
+        response = self.admin.post(self.LIST, {"name": "Echo", "contact_numbers": "6"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(EmergencyContact.objects.get(name="Echo").category, "other")
+
+    def test_create_refuses_a_missing_name_or_number_and_saves_nothing(self):
+        for body in ({"contact_numbers": "1"}, {"name": "  ", "contact_numbers": "1"}, {"name": "Foxtrot"},
+                     {"name": "Foxtrot", "contact_numbers": "1", "email": "not-an-email"}):
+            response = self.admin.post(self.LIST, body, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, body)
+        self.assertEqual(EmergencyContact.objects.count(), 3)
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- guard 2: the same name -------------------------------------------
+
+    def test_create_refuses_the_same_name_by_the_import_rule(self):
+        from api.services import online_booking
+
+        for clone in ("alpha rescue", "  ALPHA   Rescue ", "Alpha  rescue"):
+            self.assertEqual(online_booking.normalize_key(clone), online_booking.normalize_key("Alpha Rescue"))
+            response = self.admin.post(self.LIST, {"name": clone, "contact_numbers": "9"}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, clone)
+            self.assertIn("name", response.json())
+        self.assertEqual(EmergencyContact.objects.count(), 3)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_rename_to_the_name_of_another_is_refused_and_nothing_changes(self):
+        response = self.admin.patch(self._url(self.b), {"name": "  alpha   RESCUE", "hours": "9-5"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.b.refresh_from_db()
+        self.assertEqual(self.b.name, "Bravo Police")
+        self.assertEqual(self.b.hours, "")
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_contact_may_be_renamed_to_its_own_name_in_other_capitals(self):
+        response = self.admin.patch(self._url(self.a), {"name": "ALPHA  rescue"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["name"], "ALPHA rescue")
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.name, "ALPHA rescue")
+
+    # -- guard 3: the category --------------------------------------------
+
+    def test_an_unknown_category_is_a_400_on_create_and_on_edit(self):
+        for bad in ("hospital", "", None, 5, "RESCUE"):
+            response = self.admin.post(
+                self.LIST, {"name": "Golf", "contact_numbers": "7", "category": bad}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
+            response = self.admin.patch(self._url(self.a), {"category": bad}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.category, "rescue")
+        self.assertFalse(EmergencyContact.objects.filter(name="Golf").exists())
+
+    def test_each_of_the_five_categories_is_accepted(self):
+        for index, code in enumerate(("rescue", "police", "coast_guard", "desk", "other")):
+            response = self.admin.post(
+                self.LIST, {"name": f"Cat {index}", "contact_numbers": "1", "category": code}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, code)
+            self.assertEqual(EmergencyContact.objects.get(name=f"Cat {index}").category, code)
+
+    # -- edit --------------------------------------------------------------
+
+    def test_editing_a_number_answers_saves_and_reaches_the_next_payload(self):
+        before = APIClient().get(self.BOOTSTRAP).json()["emergencyContacts"]
+        self.assertEqual(before[1]["contact_numbers"], "222-2222 / 333-3333")
+        response = self.admin.patch(self._url(self.b), {"contact_numbers": "777-7777"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["contact_numbers"], "777-7777")
+        self.b.refresh_from_db()
+        self.assertEqual(self.b.contact_numbers, "777-7777")
+        after = APIClient().get(self.BOOTSTRAP).json()["emergencyContacts"]
+        self.assertEqual(after[1]["contact_numbers"], "777-7777")
+        self.assertNotEqual(before, after)
+
+    def test_edit_ignores_is_active_and_display_order(self):
+        response = self.admin.patch(
+            self._url(self.a), {"hours": "8-5", "is_active": False, "display_order": 99}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.a.refresh_from_db()
+        self.assertEqual((self.a.hours, self.a.is_active, self.a.display_order), ("8-5", True, 10))
+        self.assertIs(response.json()["is_active"], True)
+        self.assertEqual(response.json()["display_order"], 10)
+
+    def test_edit_of_an_unknown_contact_is_404(self):
+        self.assertEqual(self.admin.patch(self.LIST + "99999/", {"hours": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.admin.post(self.LIST + "99999/deactivate/").status_code, 404)
+
+    # -- deactivate / reactivate ------------------------------------------
+
+    def test_deactivate_hides_from_the_app_and_reactivate_brings_it_back(self):
+        response = self.admin.post(self._url(self.b, "deactivate"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIs(response.json()["is_active"], False)
+        self.b.refresh_from_db()
+        self.assertFalse(self.b.is_active)
+        self.assertEqual(self._payload_names(), ["Alpha Rescue", "Charlie Desk"])
+        self.assertEqual(self._admin_names(), ["Alpha Rescue", "Bravo Police", "Charlie Desk"])
+
+        response = self.admin.post(self._url(self.b, "reactivate"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIs(response.json()["is_active"], True)
+        self.b.refresh_from_db()
+        self.assertTrue(self.b.is_active)
+        self.assertEqual(self._payload_names(), ["Alpha Rescue", "Bravo Police", "Charlie Desk"])
+
+    def test_with_none_active_the_payload_is_an_empty_list_and_the_rows_stay(self):
+        for contact in (self.a, self.b, self.c):
+            self.assertEqual(self.admin.post(self._url(contact, "deactivate")).status_code, 200)
+        response = APIClient().get(self.BOOTSTRAP)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["emergencyContacts"], [])
+        self.assertEqual(EmergencyContact.objects.filter(is_active=False).count(), 3)
+
+    def test_deactivating_twice_logs_once(self):
+        self.admin.post(self._url(self.a, "deactivate"))
+        self.admin.post(self._url(self.a, "deactivate"))
+        self.assertEqual(self._logs().count(), 1)
+
+    # -- no hard delete ----------------------------------------------------
+
+    def test_delete_is_not_allowed_anywhere_and_nothing_is_removed(self):
+        for url in (self._url(self.a), self.LIST, self._url(self.a, "deactivate"), self.REORDER):
+            response = self.admin.delete(url)
+            self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED, url)
+        self.assertEqual(EmergencyContact.objects.count(), 3)
+
+    # -- guard 4: reorder --------------------------------------------------
+
+    def test_reorder_changes_the_admin_list_and_the_payload(self):
+        ids = [self.c.pk, self.a.pk, self.b.pk]
+        response = self.admin.post(self.REORDER, {"ids": ids}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([r["id"] for r in response.json()], ids)
+        self.assertEqual(
+            list(EmergencyContact.objects.order_by("display_order", "id").values_list("id", flat=True)), ids)
+        self.assertEqual(self._payload_names(), ["Charlie Desk", "Alpha Rescue", "Bravo Police"])
+        self.assertEqual(self._admin_names(), ["Charlie Desk", "Alpha Rescue", "Bravo Police"])
+
+    def test_reorder_with_a_bad_list_is_a_400_and_changes_nothing(self):
+        before = list(EmergencyContact.objects.values_list("id", "display_order"))
+        for ids in (
+            [self.a.pk, self.b.pk],                       # missing one
+            [self.c.pk, self.b.pk, self.a.pk, 99999],     # an extra id
+            [self.c.pk, self.b.pk, 99999],                # a nonexistent id in place of one
+            [self.c.pk, self.c.pk, self.a.pk, self.b.pk], # repeated
+            [],
+            "abc",
+            [self.c.pk, True, self.a.pk],
+        ):
+            response = self.admin.post(self.REORDER, {"ids": ids}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, ids)
+            self.assertEqual(before, list(EmergencyContact.objects.values_list("id", "display_order")), ids)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_reorder_does_not_take_true_for_the_id_one(self):
+        EmergencyContact.objects.all().delete()
+        for pk, name, order in ((1, "One", 10), (2, "Two", 20), (3, "Three", 30)):
+            EmergencyContact.objects.create(id=pk, name=name, contact_numbers="1", display_order=order)
+        response = self.admin.post(self.REORDER, {"ids": [3, True, 2]}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            list(EmergencyContact.objects.order_by("id").values_list("id", "display_order")),
+            [(1, 10), (2, 20), (3, 30)])
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- guard 5: the ActivityLog -----------------------------------------
+
+    def test_create_is_logged_with_who_which_and_what(self):
+        body = self.admin.post(self.LIST, {"name": "Hotel Desk", "contact_numbers": "8"}, format="json").json()
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_CREATE)
+        self.assertEqual(log.record_id, str(body["id"]))
+        self.assertIn("added", log.record_label)
+        self.assertIn("Hotel Desk", log.record_label)
+
+    def test_edit_is_logged_with_who_which_and_what(self):
+        self.admin.patch(self._url(self.b), {"contact_numbers": "777-7777"}, format="json")
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.b.pk))
+        self.assertIn("Bravo Police", log.record_label)
+        self.assertIn("edited", log.record_label)
+        self.assertIn("222-2222 / 333-3333", log.record_label)
+        self.assertIn("777-7777", log.record_label)
+
+    def test_deactivate_is_logged_with_who_which_and_what(self):
+        self.admin.post(self._url(self.c, "deactivate"))
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.c.pk))
+        self.assertIn("Charlie Desk", log.record_label)
+        self.assertIn("deactivated", log.record_label)
+
+    def test_reactivate_is_logged_with_who_which_and_what(self):
+        self.c.is_active = False
+        self.c.save()
+        self.admin.post(self._url(self.c, "reactivate"))
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.c.pk))
+        self.assertIn("Charlie Desk", log.record_label)
+        self.assertIn("brought back", log.record_label)
+
+    def test_reorder_is_logged_with_who_and_the_new_order(self):
+        self.admin.post(self.REORDER, {"ids": [self.b.pk, self.c.pk, self.a.pk]}, format="json")
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertIn("reordered", log.record_label)
+        label = log.record_label
+        self.assertTrue(label.index("Bravo Police") < label.index("Charlie Desk") < label.index("Alpha Rescue"))
+
+    # -- guard 6: no cache -------------------------------------------------
+
+    def test_the_payload_contacts_are_not_cached(self):
+        # Read once (a cache would keep this answer), then change, then read.
+        self.assertEqual(self._payload_names(), ["Alpha Rescue", "Bravo Police", "Charlie Desk"])
+        self.admin.post(self._url(self.a, "deactivate"))
+        self.assertEqual(self._payload_names(), ["Bravo Police", "Charlie Desk"])
 
 
 class PeakSeasonShareTests(TestCase):

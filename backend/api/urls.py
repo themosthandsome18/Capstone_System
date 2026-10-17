@@ -6,6 +6,13 @@ from .auth_views import (
     logout_view,
     tourist_register_view,
 )
+from .views.emergency_contacts import (
+    emergency_contact_deactivate,
+    emergency_contact_detail,
+    emergency_contact_list,
+    emergency_contact_reactivate,
+    emergency_contact_reorder,
+)
 from .views.reference_options import (
     reference_option_deactivate,
     reference_option_detail,
@@ -138,6 +145,11 @@ urlpatterns = [
     path("tourist-records/", tourist_record_list),
     path("tourist-records/<str:survey_id>/", tourist_record_detail),
     path("tourism-theme/", tourism_theme),
+    path("emergency-contacts/", emergency_contact_list),
+    path("emergency-contacts/reorder/", emergency_contact_reorder),
+    path("emergency-contacts/<int:contact_id>/", emergency_contact_detail),
+    path("emergency-contacts/<int:contact_id>/deactivate/", emergency_contact_deactivate),
+    path("emergency-contacts/<int:contact_id>/reactivate/", emergency_contact_reactivate),
     path("reference-options/<str:kind>/", reference_option_list),
     path("reference-options/<str:kind>/<int:option_id>/", reference_option_detail),
     path("reference-options/<str:kind>/<int:option_id>/deactivate/", reference_option_deactivate),
