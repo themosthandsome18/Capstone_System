@@ -25,7 +25,9 @@ class LoginApi extends TourismApi {
   int logins = 0;
 
   @override
-  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async => {};
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity({
+    String? expectedSessionToken,
+  }) async => {};
 
   @override
   Future<Map<String, dynamic>> fetchSanitationStaffRecords() async => {};

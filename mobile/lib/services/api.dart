@@ -159,8 +159,18 @@ class TourismApi {
   }
 
   /// Current sanitation staff identity using the existing authenticated session.
-  Future<Map<String, dynamic>> fetchSanitationStaffIdentity() async {
-    final token = await _getStaffAuthToken();
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity({
+    String? expectedSessionToken,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final activeToken = prefs.getString(staffAuthTokenKey);
+    if (expectedSessionToken != null && activeToken != expectedSessionToken) {
+      throw const ApiException(
+        statusCode: 409,
+        message: 'Staff session changed. Reopen the inspection form.',
+      );
+    }
+    final token = expectedSessionToken ?? activeToken;
     if (token == null || token.isEmpty) {
       throw const ApiException(
         statusCode: 401,
@@ -527,6 +537,7 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> submitSanitationInspection({
+    String? expectedSessionToken,
     required int establishmentId,
     required String inspectorName,
     required String inspectionDate,
@@ -536,7 +547,17 @@ class TourismApi {
     required String statusAfterInspection,
     required List<InspectionChecklistDraft> checklistItems,
   }) async {
-    final token = await _getStaffAuthToken();
+    final prefs = await SharedPreferences.getInstance();
+    final activeToken = prefs.getString(staffAuthTokenKey);
+    if (expectedSessionToken != null &&
+        (expectedSessionToken.isEmpty || activeToken != expectedSessionToken)) {
+      throw const ApiException(
+        statusCode: 409,
+        message: 'Staff session changed. Reopen the inspection form.',
+      );
+    }
+    // No await between validation and dispatch; never substitute another session.
+    final token = expectedSessionToken ?? activeToken;
     return _post(
       '/mobile/sanitation/inspections/',
       {

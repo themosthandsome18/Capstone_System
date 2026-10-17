@@ -70,12 +70,19 @@ SanitationBootstrap bootstrapWith(SanitationEstablishment record) {
 /// Records what the inspection form would send, without touching the network.
 class FakeSanitationApi extends TourismApi {
   FakeSanitationApi();
+  @override
+  Future<Map<String, dynamic>> fetchSanitationStaffIdentity({
+    String? expectedSessionToken,
+  }) async => {
+    'user': {'display_name': 'Juan Dela Cruz', 'username': 'jdelacruz'},
+  };
 
   List<InspectionChecklistDraft>? sentChecklist;
   String? sentStatus;
 
   @override
   Future<Map<String, dynamic>> submitSanitationInspection({
+    String? expectedSessionToken,
     required int establishmentId,
     required String inspectorName,
     required String inspectionDate,
@@ -123,7 +130,6 @@ Future<void> chooseStatus(WidgetTester tester, String status) async {
 }
 
 Future<void> submitForm(WidgetTester tester) async {
-  await tester.enterText(find.byType(TextField).first, 'Juan Dela Cruz');
   await tester.pump();
   final button = find.text('Submit Inspection');
   await tester.tap(button);
@@ -133,7 +139,9 @@ Future<void> submitForm(WidgetTester tester) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  SharedPreferences.setMockInitialValues({});
+  setUp(() => SharedPreferences.setMockInitialValues({
+    staffAuthTokenKey: 'test-session',
+  }));
 
   group('buildInspectionChecks', () {
     test('a type with no configured requirements yields no checklist', () {
