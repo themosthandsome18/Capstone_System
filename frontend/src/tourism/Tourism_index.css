@@ -4679,3 +4679,22 @@
   color: var(--th-text-muted);
 }
 
+/* ================= EMERGENCY HOTLINES (admin only) =================
+   Shares the options-* look; only the two always-visible notices are new.
+   Shell --th-* tokens only. */
+.hotlines-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.hotlines-notices p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}

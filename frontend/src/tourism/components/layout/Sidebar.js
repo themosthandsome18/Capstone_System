@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import logo from "../../assets/Tourismlogo.jpg";
 import { useAuth } from "../../../auth/AuthContext";
 import { OPTIONS_PATH, canManageOptions } from "../../optionsAccess";
+import { HOTLINES_PATH, canManageHotlines } from "../../hotlinesAccess";
 import { SETTINGS_PATH, canOpenSettings } from "../../settingsAccess";
 
 const navigation = [
@@ -18,6 +19,7 @@ const navigation = [
 const administration = [
   { to: SETTINGS_PATH, label: "Settings", allowed: canOpenSettings },
   { to: OPTIONS_PATH, label: "Registration Options", allowed: canManageOptions },
+  { to: HOTLINES_PATH, label: "Emergency Hotlines", allowed: canManageHotlines },
 ];
 
 function SidebarLink({ item }) {

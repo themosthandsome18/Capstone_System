@@ -10,6 +10,8 @@ import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
 import Settings from "./pages/Settings";
 import RegistrationOptions from "./pages/RegistrationOptions";
 import { OPTIONS_PATH, OPTIONS_ROLES } from "./optionsAccess";
+import EmergencyHotlines from "./pages/EmergencyHotlines";
+import { HOTLINES_PATH, HOTLINES_ROLES } from "./hotlinesAccess";
 import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
 
 /**
@@ -65,6 +67,11 @@ export const tourismRoutes = [
     path: OPTIONS_PATH,
     allowedRoles: OPTIONS_ROLES,
     element: React.createElement(withErrorBoundary(RegistrationOptions, "Registration Options")),
+  },
+  {
+    path: HOTLINES_PATH,
+    allowedRoles: HOTLINES_ROLES,
+    element: React.createElement(withErrorBoundary(EmergencyHotlines, "Emergency Hotlines")),
   },
 ];
 

@@ -11,7 +11,9 @@ import { TourismChartPaletteContext } from "../../theme/chartPalette";
 import { TourismThemePreviewContext, useTourismShellTheme } from "../../theme/themePreview";
 import Sidebar from "./Sidebar";
 
-const pageInfo = {
+// Exported so a test can check that every route has a title: a path missing
+// here is shown as "Dashboard Overview".
+export const pageInfo = {
   "/": {
     title: "Dashboard Overview",
     showAdd: true,
@@ -50,6 +52,10 @@ const pageInfo = {
   },
   "/options": {
     title: "Registration Options",
+    showAdd: false,
+  },
+  "/hotlines": {
+    title: "Emergency Hotlines",
     showAdd: false,
   },
 };

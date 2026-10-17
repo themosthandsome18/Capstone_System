@@ -442,6 +442,36 @@ export const tourismApi = {
     );
   },
 
+  // Emergency contacts (the hotlines the mobile app lists). Every write answers
+  // with the contact as the server now holds it; reorder answers with the whole
+  // list in its new order. There is no delete: a contact is deactivated.
+  async getEmergencyContacts() {
+    return apiRequest("/emergency-contacts/");
+  },
+
+  async createEmergencyContact(payload) {
+    return apiRequest("/emergency-contacts/", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  async updateEmergencyContact(id, payload) {
+    return apiRequest(`/emergency-contacts/${encodeURIComponent(id)}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deactivateEmergencyContact(id) {
+    return apiRequest(`/emergency-contacts/${encodeURIComponent(id)}/deactivate/`, { method: "POST" });
+  },
+
+  async reactivateEmergencyContact(id) {
+    return apiRequest(`/emergency-contacts/${encodeURIComponent(id)}/reactivate/`, { method: "POST" });
+  },
+
+  async reorderEmergencyContacts(ids) {
+    return apiRequest("/emergency-contacts/reorder/", { method: "POST", body: JSON.stringify({ ids }) });
+  },
+
   async createResort(payload) {
     const created = await apiRequest("/resorts/", {
       method: "POST",
