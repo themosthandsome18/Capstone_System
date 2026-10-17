@@ -6166,6 +6166,275 @@ class ReferenceOptionApiTests(TestCase):
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
 
 
+class ReferenceOptionProtectedNameTests(TestCase):
+    """A name the Excel import produces is not renamed (commit 4b).
+
+    The import finds options BY NAME (and finds retired ones too). Rename one
+    and the next import creates a new row under the old name, and the reports
+    are split between the two. The list of such names lives in ONE place, the
+    import's own IMPORT_PRODUCED_NAMES, and the admin API reads it from there.
+    """
+
+    KINDS = {
+        "itinerary": Itinerary, "travel-mode": TravelMode,
+        "boat-type": BoatType, "visit-purpose": VisitPurpose,
+    }
+    FKS = {"itinerary": "itinerary", "travel-mode": "travel_mode",
+           "boat-type": "boat_type", "visit-purpose": "visit_purpose"}
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        user = User.objects.create_user(username="prot_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        self.admin = APIClient()
+        self.admin.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+    # -- helpers -----------------------------------------------------------
+
+    @staticmethod
+    def _kind_of(model):
+        return {Itinerary: "itinerary", TravelMode: "travel-mode",
+                BoatType: "boat-type", VisitPurpose: "visit-purpose"}[model]
+
+    def _url(self, kind, option_id=None, action=None):
+        url = f"/api/reference-options/{kind}/"
+        if option_id is not None:
+            url += f"{option_id}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _option_named(self, model, name):
+        """The row with this name (any capitals / spacing), or a new one."""
+        from .services.online_booking import normalize_key
+
+        for option in model.objects.all():
+            if normalize_key(option.name) == normalize_key(name):
+                return option
+        top = model.objects.order_by("-id").first().id
+        return model.objects.create(id=top + 1, name=name)
+
+    def _with_records(self, option, kind, count):
+        quezon = Province.objects.get(name="Quezon")
+        for i in range(count):
+            values = dict(
+                survey_id=f"PRT-{kind[:3]}-{option.id}-{i}", full_name="Group",
+                contact_number="09170000000", country=Country.objects.get(name="Philippines"),
+                region=quezon.region, province=quezon, arrival_date="2026-04-02",
+                resort=Resort.objects.order_by("resort_id").first(),
+                itinerary=Itinerary.objects.order_by("id").first(),
+                travel_mode=TravelMode.objects.order_by("id").first(),
+                boat_type=BoatType.objects.order_by("id").first(),
+                visit_purpose=VisitPurpose.objects.order_by("id").first(),
+                total_visitors=2, filipino_count=2, total_male=2, age_8_59=2, status="arrived",
+            )
+            values[self.FKS[kind]] = option
+            TouristRecord.objects.create(**values)
+
+    def _protected(self):
+        from .services import online_booking
+
+        return [
+            (self._kind_of(model), name)
+            for model, names in online_booking.IMPORT_PRODUCED_NAMES.items()
+            for name in names
+        ]
+
+    # -- the gate ----------------------------------------------------------
+
+    def test_every_name_the_import_produces_refuses_a_rename(self):
+        protected = self._protected()
+        self.assertTrue(protected)
+        for kind, name in protected:
+            with self.subTest(kind=kind, name=name):
+                model = self.KINDS[kind]
+                option = self._option_named(model, name)
+                self._with_records(option, kind, 2)
+                stored_name = option.name
+
+                # even with the right count, even with a stay length: the name wins
+                response = self.admin.patch(
+                    self._url(kind, option.id),
+                    {"name": f"{name} Renamed", "confirm_affected_records": 2, "stay_nights": 1}
+                    if kind == "itinerary" else {"name": f"{name} Renamed", "confirm_affected_records": 2},
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json()["code"], "rename_protected")
+                self.assertIn("Excel import", response.json()["detail"])
+                option.refresh_from_db()
+                self.assertEqual(option.name, stored_name)  # the database is unchanged
+                if kind == "itinerary":
+                    self.assertIsNone(option.stay_nights)  # and nothing else was saved
+
+    def test_a_protected_name_is_protected_in_any_dress(self):
+        # stored as "private vehicle" (lower case, extra space): still protected
+        option = TravelMode.objects.create(id=9901, name="private   vehicle")
+        # (an existing row with that name would make this a duplicate; free the seeded one)
+        TravelMode.objects.filter(name="Private Vehicle").update(name="Private Vehicle (seed)")
+
+        response = self.admin.patch(
+            self._url("travel-mode", option.id), {"name": "Car", "confirm_affected_records": 0}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "rename_protected")
+        option.refresh_from_db()
+        self.assertEqual(option.name, "private   vehicle")
+
+    def test_a_name_that_is_not_produced_still_renames_with_the_right_count(self):
+        option = TravelMode.objects.create(id=9902, name="Public Bus Line")
+        self._with_records(option, "travel-mode", 3)
+
+        response = self.admin.patch(
+            self._url("travel-mode", option.id), {"name": "Bus Line", "confirm_affected_records": 3}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "Bus Line")
+        self.assertIs(response.json()["rename_protected"], False)
+        option.refresh_from_db()
+        self.assertEqual(option.name, "Bus Line")
+
+    def test_a_retired_protected_option_is_still_protected_but_can_be_retired(self):
+        itinerary = self._option_named(Itinerary, "Same Day")
+
+        retired = self.admin.post(self._url("itinerary", itinerary.id, "deactivate"))
+        self.assertEqual(retired.status_code, 200)  # retiring is safe: the import reuses the row
+        itinerary.refresh_from_db()
+        self.assertIs(itinerary.is_active, False)
+        self.assertIs(retired.json()["is_active"], False)
+
+        rename = self.admin.patch(
+            self._url("itinerary", itinerary.id),
+            {"name": "Day Trip", "stay_nights": 0, "confirm_affected_records": 0}, format="json",
+        )
+
+        self.assertEqual(rename.status_code, 409)
+        self.assertEqual(rename.json()["code"], "rename_protected")
+        itinerary.refresh_from_db()
+        self.assertEqual(itinerary.name, "Same Day")
+
+    # -- what the list says ------------------------------------------------
+
+    def test_the_list_marks_exactly_the_protected_options(self):
+        protected = {(kind, name.lower()) for kind, name in self._protected()}
+        for kind in self.KINDS:
+            self._option_named(self.KINDS[kind], "Totally Ordinary Name")  # one that is not protected
+        for kind, model in self.KINDS.items():
+            with self.subTest(kind=kind):
+                rows = self.admin.get(self._url(kind)).json()
+                self.assertTrue(rows)
+                for row in rows:
+                    expected = (kind, " ".join(row["name"].split()).lower()) in protected
+                    self.assertIs(row["rename_protected"], expected, row["name"])
+                if kind == "boat-type":
+                    self.assertFalse(any(r["rename_protected"] for r in rows))  # reached by id, not by name
+                self.assertIs(
+                    {r["name"]: r for r in rows}["Totally Ordinary Name"]["rename_protected"], False
+                )
+
+    def test_a_protected_option_shows_as_protected_after_other_writes(self):
+        created = self.admin.post(self._url("travel-mode"), {"name": "Brand New Ride"}, format="json")
+        self.assertIs(created.json()["rename_protected"], False)
+        # a NEW option cannot take a protected name that already exists
+        again = self.admin.post(self._url("travel-mode"), {"name": "public utility vehicle"}, format="json")
+        self.assertEqual(again.status_code, 400)
+
+    # -- ONE source --------------------------------------------------------
+
+    def test_the_gate_follows_the_list_the_import_owns(self):
+        from .services import online_booking
+
+        ordinary = self._option_named(Itinerary, "Trail X")
+        was_protected = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk__in=[ordinary.pk, was_protected.pk]).update(stay_nights=2)
+
+        with patch.dict(online_booking.IMPORT_PRODUCED_NAMES, {Itinerary: ("Trail X",)}, clear=True):
+            now_protected = self.admin.patch(
+                self._url("itinerary", ordinary.id), {"name": "Trail Y", "confirm_affected_records": 0}, format="json"
+            )
+            no_longer = self.admin.patch(
+                self._url("itinerary", was_protected.id), {"name": "Day Trip", "confirm_affected_records": 0}, format="json"
+            )
+            listing = {r["name"]: r["rename_protected"] for r in self.admin.get(self._url("itinerary")).json()}
+
+        self.assertEqual(now_protected.status_code, 409)
+        self.assertEqual(now_protected.json()["code"], "rename_protected")
+        self.assertEqual(no_longer.status_code, 200)
+        self.assertIs(listing["Trail X"], True)
+        self.assertIs(listing["Day Trip"], False)
+        ordinary.refresh_from_db()
+        was_protected.refresh_from_db()
+        self.assertEqual((ordinary.name, was_protected.name), ("Trail X", "Day Trip"))
+
+    def test_the_list_is_exactly_what_the_import_can_produce(self):
+        # If the normalizers can say a name that is not in the list (or the list
+        # has a name no normalizer says), the two have drifted apart.
+        from .services import online_booking as ob
+
+        produced = {
+            Itinerary: {ob.normalize_itinerary(v) for v in
+                        ["2 nights", "3 night", "4 nights", "5 nights", "day trip", "Overnight", ""]},
+            TravelMode: {ob.normalize_travel_mode(v) for v in ["public utility", ""]},
+            VisitPurpose: {ob.normalize_purpose(v) for v in ["team building", ""]},
+        }
+        for model, names in produced.items():
+            with self.subTest(model=model.__name__):
+                self.assertEqual(names, set(ob.IMPORT_PRODUCED_NAMES[model]))
+        # free text is NOT protected: it becomes whatever the sheet says
+        self.assertEqual(ob.normalize_itinerary("Que"), "Que")
+        self.assertNotIn("Que", ob.IMPORT_PRODUCED_NAMES[Itinerary])
+        self.assertEqual(ob.normalize_travel_mode("Jeepney"), "Jeepney")
+        self.assertEqual(ob.normalize_purpose("swimming"), "Swimming")
+
+    def test_the_api_and_the_import_compare_names_the_same_way(self):
+        from .services.online_booking import normalize_key
+        from .views.reference_options import name_key
+
+        for text in ["Same Day", "same day", " Same  Day ", "SAME\tDAY", "Weekend 2 Days", ""]:
+            with self.subTest(text=text):
+                self.assertEqual(name_key(text), normalize_key(text))
+
+    # -- what the import does with a retired option ------------------------
+
+    def test_the_import_reuses_a_retired_row_instead_of_making_a_new_one(self):
+        # This is why retiring a protected option is safe and needs no gate.
+        from .services.online_booking import ReferenceResolver, normalize_itinerary
+
+        row = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk=row.pk).update(is_active=False)
+        before = Itinerary.objects.count()
+
+        resolved = ReferenceResolver(commit=True).named(Itinerary, normalize_itinerary("day trip"))
+
+        self.assertEqual(resolved.pk, row.pk)
+        self.assertEqual(Itinerary.objects.count(), before)
+
+    def test_renaming_does_make_the_import_create_a_duplicate(self):
+        # The harm the gate prevents, shown by doing it directly (not through
+        # the API, which refuses): rename the row, and the import adds a new
+        # one under the old name.
+        from .services.online_booking import ReferenceResolver, normalize_itinerary
+
+        row = self._option_named(Itinerary, "Same Day")
+        Itinerary.objects.filter(pk=row.pk).update(name="Day Trip")
+        before = Itinerary.objects.count()
+
+        resolved = ReferenceResolver(commit=True).named(Itinerary, normalize_itinerary("day trip"))
+
+        self.assertNotEqual(resolved.pk, row.pk)
+        self.assertEqual(resolved.name, "Same Day")
+        self.assertEqual(Itinerary.objects.count(), before + 1)
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
 class PeakSeasonShareTests(TestCase):
     """Key Insights percentages divide by the total the sentence names."""
 

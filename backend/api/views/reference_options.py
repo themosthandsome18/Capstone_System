@@ -30,6 +30,7 @@ from api.models import (
     VisitPurpose,
 )
 from api.permissions import get_user_role
+from api.services import online_booking
 from api.services.activity import log_activity
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
 
@@ -77,8 +78,19 @@ def clean_name(value):
 
 def name_key(value):
     """What 'the same name' means: the same without regard to capitals, to
-    spaces at either end, or to how many spaces sit between words."""
-    return clean_name(value).lower()
+    spaces at either end, or to how many spaces sit between words. It is the
+    import's own comparison (online_booking.normalize_key), so the admin API
+    and the Excel import can never disagree about whether two names match."""
+    if not isinstance(value, str):
+        return ""
+    return online_booking.normalize_key(value)
+
+
+def is_rename_protected(config, name):
+    """True for a name the Excel import produces and looks up by name. Read
+    from the import's own list at the time of the call: one source."""
+    produced = online_booking.IMPORT_PRODUCED_NAMES.get(config["model"], ())
+    return name_key(name) in {name_key(produced_name) for produced_name in produced}
 
 
 def _record_count(config, option):
@@ -92,6 +104,9 @@ def _item(config, option, record_count):
         "name": option.name,
         "is_active": option.is_active,
         "record_count": record_count,
+        # The UI removes the name field for these and says why (the Excel
+        # import creates a new row under the old name if one is renamed).
+        "rename_protected": is_rename_protected(config, option.name),
     }
     if model is Itinerary:
         item["stay_nights"] = option.stay_nights
@@ -245,6 +260,17 @@ def reference_option_detail(request, kind, option_id):
                 return _error(f"stay_nights must be a whole number from 0 to {STAY_NIGHTS_MAX}, or empty.")
 
         renamed = new_name != option.name
+
+        # The Excel import finds these by name. Retired or not, a protected name
+        # is not renamed: the next import would create a new row under it.
+        if renamed and is_rename_protected(config, option.name):
+            return _error(
+                f"'{option.name}' is a name the Excel import creates and looks up by name. "
+                "If it were renamed, the next import would create a new option with the old name "
+                "and the reports would be split between the two.",
+                http_status=status.HTTP_409_CONFLICT,
+                code="rename_protected",
+            )
         stay_changed = stay_given and new_stay != option.stay_nights
 
         if not renamed and not stay_changed:

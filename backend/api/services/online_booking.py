@@ -741,29 +741,56 @@ def normalize_province(value):
     return clean_text(text).title() or "Quezon"
 
 
+# The option names the import itself PRODUCES, and so finds again BY NAME on the
+# next run (ReferenceResolver.named matches every row, retired or not). They are
+# defined once, here, and used by the normalizers below AND by the admin API
+# that refuses to rename them: renaming one would make the next import create a
+# new row under the old name and split the reports. A boat type is not in the
+# list because the import reaches it by id (see BOAT_TYPE_IDS_BY_PREFIX).
+ITINERARY_SAME_DAY = "Same Day"
+ITINERARY_OVERNIGHT = "Overnight"
+ITINERARY_2_NIGHTS = "2 Nights"
+ITINERARY_3_NIGHTS = "3 Nights"
+ITINERARY_4_NIGHTS = "4 Nights"
+ITINERARY_5_NIGHTS = "5 Nights and above"
+TRAVEL_MODE_PUBLIC_UTILITY = "Public Utility Vehicle"
+TRAVEL_MODE_PRIVATE = "Private Vehicle"
+PURPOSE_TEAM_BUILDING = "Team Building"
+PURPOSE_LEISURE = "Leisure"
+
+IMPORT_PRODUCED_NAMES = {
+    Itinerary: (
+        ITINERARY_SAME_DAY, ITINERARY_OVERNIGHT, ITINERARY_2_NIGHTS,
+        ITINERARY_3_NIGHTS, ITINERARY_4_NIGHTS, ITINERARY_5_NIGHTS,
+    ),
+    TravelMode: (TRAVEL_MODE_PUBLIC_UTILITY, TRAVEL_MODE_PRIVATE),
+    VisitPurpose: (PURPOSE_TEAM_BUILDING, PURPOSE_LEISURE),
+}
+
+
 def normalize_itinerary(value):
     text = clean_text(value)
     key = normalize_key(text).replace(" ", "")
     if key in {"2nights", "2night"}:
-        return "2 Nights"
+        return ITINERARY_2_NIGHTS
     if key in {"3nights", "3night"}:
-        return "3 Nights"
+        return ITINERARY_3_NIGHTS
     if key in {"4nights", "4night"}:
-        return "4 Nights"
+        return ITINERARY_4_NIGHTS
     if "5" in key and "night" in key:
-        return "5 Nights and above"
+        return ITINERARY_5_NIGHTS
     if "day" in key:
-        return "Same Day"
+        return ITINERARY_SAME_DAY
     if "overnight" in key or not key:
-        return "Overnight"
+        return ITINERARY_OVERNIGHT
     return text.title()
 
 
 def normalize_travel_mode(value):
     text = clean_text(value)
     if normalize_key(text) == "public utility":
-        return "Public Utility Vehicle"
-    return text or "Private Vehicle"
+        return TRAVEL_MODE_PUBLIC_UTILITY
+    return text or TRAVEL_MODE_PRIVATE
 
 
 TOURIST_BOAT_ID = 1
@@ -812,9 +839,9 @@ def normalize_purpose(value):
     text = clean_text(value)
     key = normalize_key(text)
     if key == "team building":
-        return "Team Building"
+        return PURPOSE_TEAM_BUILDING
     if not text:
-        return "Leisure"
+        return PURPOSE_LEISURE
     return text.title()
 
 
