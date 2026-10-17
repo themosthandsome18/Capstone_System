@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Q, Sum
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -6433,6 +6433,349 @@ class ReferenceOptionProtectedNameTests(TestCase):
 
     def test_the_model_has_no_change_without_a_migration(self):
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+# The 12 itineraries of the live system with the record split of 2026-10-17:
+# (name, [visitors of the ARRIVED records], [visitors of the records that are not arrived]).
+# Overnight 3 records / 9 visitors, Same Day 5/14, 2 Nights 5/20, 3 Nights 2/8,
+# 4 Nights 2/4, 5 Nights and above 1/2, Eco Adventure Trail 1/4, the rest none:
+# 19 records, 61 visitors, of which 8 records / 31 visitors arrived.
+LIVE_LIKE_SPLIT = [
+    ("Overnight", [4], [3, 2]),
+    ("Same Day", [5], [4, 2, 2, 1]),
+    ("2 Nights", [6, 4], [5, 3, 2]),
+    ("3 Nights", [4], [4]),
+    ("4 Nights", [3, 1], []),
+    ("5 Nights and above", [], [2]),
+    ("6 Nights", [], []),
+    ("Que", [], []),
+    ("Island Hopping Circuit", [], []),
+    ("Beach and Resort Day Tour", [], []),
+    ("Heritage and Lighthouse Stop", [], []),
+    ("Eco Adventure Trail", [4], []),
+]
+
+
+def _live_like_fixture():
+    """The 12 itineraries (ids 1..12, live names, stay_nights not set) and the
+    live record split, on two resorts."""
+    ensure_test_reference_tables()
+    quezon = Province.objects.get(name="Quezon")
+    resorts = list(Resort.objects.order_by("resort_id")[:2])
+    count = 0
+    for index, (name, arrived, others) in enumerate(LIVE_LIKE_SPLIT):
+        itinerary, _ = Itinerary.objects.update_or_create(
+            id=index + 1, defaults={"name": name, "is_active": True, "stay_nights": None}
+        )
+        for kind, visitors_list in (("arrived", arrived), ("other", others)):
+            for visitors in visitors_list:
+                count += 1
+                status = "arrived" if kind == "arrived" else ("no_show" if count % 3 else "pending")
+                TouristRecord.objects.create(
+                    survey_id=f"LV-{count:02d}", full_name="Group", contact_number="09170000000",
+                    country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+                    arrival_date="2026-04-02", resort=resorts[count % 2], itinerary=itinerary,
+                    travel_mode=TravelMode.objects.first(), boat_type=BoatType.objects.first(),
+                    visit_purpose=VisitPurpose.objects.first(), total_visitors=visitors,
+                    filipino_count=visitors, total_male=visitors, age_8_59=visitors, status=status,
+                )
+    return count
+
+
+class ItineraryStayFillTests(TestCase):
+    """Migration 0052: the approved stay_nights, by name, with a reverse."""
+
+    APPROVED = {
+        1: ("Overnight", 1), 2: ("Same Day", 0), 3: ("2 Nights", 2), 4: ("3 Nights", 3),
+        5: ("4 Nights", 4), 6: ("5 Nights and above", 5), 7: ("6 Nights", 6), 8: ("Que", None),
+        9: ("Island Hopping Circuit", None), 10: ("Beach and Resort Day Tour", 0),
+        11: ("Heritage and Lighthouse Stop", None), 12: ("Eco Adventure Trail", None),
+    }
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        self.module = importlib.import_module("api.migrations.0052_set_itinerary_stay_nights")
+        self.apps = django_apps
+
+    def _fill(self):
+        self.module.set_stay_nights(self.apps, None)
+
+    def _unfill(self):
+        self.module.clear_stay_nights(self.apps, None)
+
+    def _values(self):
+        return {i.id: i.stay_nights for i in Itinerary.objects.filter(id__lte=12).order_by("id")}
+
+    # -- the gate: does any live number move? ------------------------------
+
+    def test_the_fixture_is_the_live_split(self):
+        self.assertEqual(_live_like_fixture(), 19)
+        self.assertEqual(TouristRecord.objects.count(), 19)
+        self.assertEqual(sum(TouristRecord.objects.values_list("total_visitors", flat=True)), 61)
+        arrived = TouristRecord.objects.filter(status="arrived")
+        self.assertEqual((arrived.count(), sum(arrived.values_list("total_visitors", flat=True))), (8, 31))
+        by_name = {
+            r["itinerary__name"]: (r["n"], r["v"])
+            for r in TouristRecord.objects.values("itinerary__name").annotate(n=Count("survey_id"), v=Sum("total_visitors"))
+        }
+        self.assertEqual(by_name, {
+            "Overnight": (3, 9), "Same Day": (5, 14), "2 Nights": (5, 20), "3 Nights": (2, 8),
+            "4 Nights": (2, 4), "5 Nights and above": (1, 2), "Eco Adventure Trail": (1, 4),
+        })
+
+    def test_no_number_of_the_live_reports_moves_when_the_fill_runs(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()
+
+        self._fill()
+        after = _stay_report_numbers()
+
+        # the live figures the baseline shows
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
+        self.assertEqual(before["stay_type_answer"], "Same-day visitors: 5; overnight or multi-day visitors: 26.")
+        self.assertIn("1.8 night(s)", before["average_stay_answer"])
+        # and not one of them is different afterwards
+        self.assertEqual(after, before)
+        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
+        self.assertIn("1.8 night(s)", after["average_stay_answer"])
+        # the fill really ran
+        self.assertEqual(self._values()[3], 2)
+
+    def test_the_arrival_rows_of_every_record_stay_the_same(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()["arrival_rows"]
+        self.assertEqual(len(before), 8)  # the 8 arrived records
+
+        self._fill()
+
+        self.assertEqual(_stay_report_numbers()["arrival_rows"], before)
+
+    # -- what the fill sets ------------------------------------------------
+
+    def test_the_fill_sets_exactly_the_approved_values(self):
+        _live_like_fixture()
+
+        self._fill()
+
+        self.assertEqual(self._values(), {pk: nights for pk, (name, nights) in self.APPROVED.items()})
+
+    def test_it_matches_by_name_and_skips_a_row_whose_name_does_not_fit_its_id(self):
+        _live_like_fixture()
+        Itinerary.objects.filter(pk=7).update(name="Seven Nights")  # id 7 but not "6 Nights"
+        Itinerary.objects.filter(pk=3).update(name="  2   NIGHTS ")  # same name in another dress: fits
+
+        import io
+        from contextlib import redirect_stdout
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self._fill()
+
+        values = self._values()
+        self.assertIsNone(values[7])  # skipped, not guessed
+        self.assertEqual(values[3], 2)  # matched in spite of capitals and spaces
+        self.assertIn("id 7", out.getvalue())
+        self.assertIn("Seven Nights", out.getvalue())
+
+    def test_a_name_in_the_wrong_row_is_not_found_by_its_name_either(self):
+        _live_like_fixture()
+        # "6 Nights" moved to another id: the mapping's id 7 now holds another name
+        Itinerary.objects.filter(pk=7).update(name="Que")
+        Itinerary.objects.filter(pk=8).update(name="6 Nights")
+
+        self._fill()
+
+        values = self._values()
+        self.assertIsNone(values[7])
+        self.assertIsNone(values[8])
+
+    def test_a_missing_row_is_skipped_without_a_crash(self):
+        _live_like_fixture()
+        TouristRecord.objects.filter(itinerary_id=12).delete()
+        Itinerary.objects.filter(pk=12).delete()
+
+        self._fill()
+
+        self.assertEqual(self._values()[2], 0)
+        self.assertNotIn(12, self._values())
+
+    def test_a_value_an_admin_already_set_is_never_overwritten(self):
+        _live_like_fixture()
+        Itinerary.objects.filter(pk=3).update(stay_nights=9)  # the approved value is 2
+
+        self._fill()
+
+        self.assertEqual(self._values()[3], 9)
+        self.assertEqual(self._values()[4], 3)  # a row that was not set still gets its value
+
+    def test_running_it_twice_changes_nothing_more(self):
+        _live_like_fixture()
+        self._fill()
+        once = self._values()
+
+        self._fill()
+
+        self.assertEqual(self._values(), once)
+
+    def test_the_rows_left_not_set_are_still_not_set(self):
+        _live_like_fixture()
+
+        self._fill()
+
+        for pk in (8, 9, 11, 12):
+            with self.subTest(pk=pk):
+                self.assertIsNone(self._values()[pk])
+
+    def test_it_changes_no_other_column_and_no_other_table(self):
+        _live_like_fixture()
+        before_itineraries = list(Itinerary.objects.order_by("id").values("id", "name", "is_active"))
+        before_modes = list(TravelMode.objects.order_by("id").values("id", "name", "is_active"))
+        before_records = list(TouristRecord.objects.order_by("survey_id").values_list("survey_id", "itinerary_id", "status", "total_visitors"))
+
+        self._fill()
+
+        self.assertEqual(list(Itinerary.objects.order_by("id").values("id", "name", "is_active")), before_itineraries)
+        self.assertEqual(list(TravelMode.objects.order_by("id").values("id", "name", "is_active")), before_modes)
+        self.assertEqual(
+            list(TouristRecord.objects.order_by("survey_id").values_list("survey_id", "itinerary_id", "status", "total_visitors")),
+            before_records,
+        )
+
+    # -- the reverse -------------------------------------------------------
+
+    def test_the_reverse_puts_every_stay_nights_back_to_none(self):
+        _live_like_fixture()
+        before = _stay_report_numbers()
+        self._fill()
+        self.assertTrue(any(v is not None for v in self._values().values()))
+
+        self._unfill()
+
+        self.assertEqual(set(self._values().values()), {None})
+        self.assertEqual(_stay_report_numbers(), before)
+
+    # -- what the fix is for -----------------------------------------------
+
+    def test_six_nights_is_six_nights_after_the_fill_and_was_one_before(self):
+        from .services.tourism import itinerary_stay
+
+        _live_like_fixture()
+        itinerary = Itinerary.objects.get(pk=7)
+        before = itinerary_stay(itinerary.name, itinerary.stay_nights)
+
+        self._fill()
+        itinerary.refresh_from_db()
+        after = itinerary_stay(itinerary.name, itinerary.stay_nights)
+
+        self.assertEqual(before, (False, 1))  # the name reading missed the 6
+        self.assertEqual(after, (False, 6))
+
+    def test_a_new_six_nights_record_counts_six_nights_in_the_average_stay(self):
+        _live_like_fixture()
+        quezon = Province.objects.get(name="Quezon")
+
+        def add_record(survey_id):
+            return TouristRecord.objects.create(
+                survey_id=survey_id, full_name="Group", contact_number="09170000000",
+                country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+                arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+                itinerary=Itinerary.objects.get(pk=7), travel_mode=TravelMode.objects.first(),
+                boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+                total_visitors=3, filipino_count=3, total_male=3, age_8_59=3, status="arrived",
+            )
+
+        add_record("LV-NEW-6")
+        before = _stay_report_numbers()
+        self._fill()
+        after = _stay_report_numbers()
+
+        # 31 + 3 = 34 visitors; nights 56 + 3 x 1 = 59 before, 56 + 3 x 6 = 74 after
+        self.assertIn("1.7 night(s)", before["average_stay_answer"])  # 59 / 34
+        self.assertIn("2.2 night(s)", after["average_stay_answer"])  # 74 / 34
+        # still an overnight stay either way
+        self.assertEqual(before["dashboard_stay_type"], after["dashboard_stay_type"])
+
+    def test_a_new_record_on_the_beach_and_resort_day_tour_is_same_day_before_and_after(self):
+        _live_like_fixture()
+        quezon = Province.objects.get(name="Quezon")
+        TouristRecord.objects.create(
+            survey_id="LV-NEW-10", full_name="Group", contact_number="09170000000",
+            country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+            arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+            itinerary=Itinerary.objects.get(pk=10), travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=7, filipino_count=7, total_male=7, age_8_59=7, status="arrived",
+        )
+        before = _stay_report_numbers()
+        self._fill()
+        after = _stay_report_numbers()
+
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 12, "overnight": 26})
+        self.assertEqual(after, before)
+
+    def test_the_rows_left_not_set_read_their_name_with_the_same_result(self):
+        from .services.tourism import itinerary_stay
+
+        _live_like_fixture()
+        names = {pk: Itinerary.objects.get(pk=pk).name for pk in (8, 9, 11, 12)}
+        before = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+
+        self._fill()
+
+        after = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+        self.assertEqual(after, before)
+        self.assertEqual(set(after.values()), {(False, 1)})
+
+    def test_the_migration_is_data_only(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+        self.assertEqual(self.module.Migration.dependencies, [("api", "0051_reference_options_active_and_stay")])
+
+
+class ItineraryStayFillMigrationTests(TransactionTestCase):
+    """Migration 0052 through Django's own migrate, forward AND backward."""
+
+    BEFORE = [("api", "0051_reference_options_active_and_stay")]
+    AFTER = [("api", "0052_set_itinerary_stay_nights")]
+
+    def tearDown(self):
+        # leave the test database at the latest migration for the tests after this
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _model(self, target):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        return executor.loader.project_state(target).apps.get_model("api", "Itinerary")
+
+    def _values(self, model):
+        return {row.id: row.stay_nights for row in model.objects.order_by("id")}
+
+    def test_forward_sets_the_values_and_backward_clears_every_one(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.BEFORE)  # undo 0052 (a no-op on the empty tables)
+        model = self._model(self.BEFORE)
+        model.objects.all().delete()
+        for pk, name in [(2, "Same Day"), (3, "2 Nights"), (7, "6 Nights"), (8, "Que"), (10, "Beach and Resort Day Tour")]:
+            model.objects.create(id=pk, name=name)
+        self.assertEqual(set(self._values(model).values()), {None})
+
+        MigrationExecutor(connection).migrate(self.AFTER)
+        model = self._model(self.AFTER)
+        self.assertEqual(self._values(model), {2: 0, 3: 2, 7: 6, 8: None, 10: 0})
+
+        # an admin sets one of the rows that was left not set
+        model.objects.filter(pk=8).update(stay_nights=5)
+
+        MigrationExecutor(connection).migrate(self.BEFORE)  # the reverse of 0052
+        model = self._model(self.BEFORE)
+        self.assertEqual(set(self._values(model).values()), {None})  # all of them, as specified
+
+        MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
+        self.assertEqual(self._values(self._model(self.AFTER)), {2: 0, 3: 2, 7: 6, 8: None, 10: 0})
 
 
 class PeakSeasonShareTests(TestCase):
