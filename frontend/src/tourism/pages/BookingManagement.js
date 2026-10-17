@@ -18,6 +18,7 @@ import { useBookingListPolling, useTourismData } from "../context/TourismDataCon
 import { buildReportingYearOptions } from "../utils/reportingYears";
 import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
 import { countryRequiresLocation } from "../utils/countryLocation";
+import { choicesFor } from "../utils/optionChoices";
 import { formatNumber } from "../utils/format";
 import {
   DISCOUNTED_ENTRANCE_FEE,
@@ -1405,8 +1406,8 @@ function BookingManagement() {
                         onChange={(e) => updateField("itinerary_id", e.target.value)}
                       >
                         <option value="">Select itinerary</option>
-                        {referenceTables.itineraries.map((i) => (
-                          <option key={i.id} value={i.id}>{i.name}</option>
+                        {choicesFor(referenceTables.itineraries, editingRecord?.itinerary_id).map((i) => (
+                          <option key={i.id} value={i.id}>{i.label}</option>
                         ))}
                       </select>
                     </WizardField>
@@ -1422,8 +1423,8 @@ function BookingManagement() {
                         onChange={(e) => updateField("travel_mode_id", e.target.value)}
                       >
                         <option value="">Select mode</option>
-                        {referenceTables.travelModes.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
+                        {choicesFor(referenceTables.travelModes, editingRecord?.travel_mode_id).map((t) => (
+                          <option key={t.id} value={t.id}>{t.label}</option>
                         ))}
                       </select>
                     </WizardField>
@@ -1433,8 +1434,8 @@ function BookingManagement() {
                         onChange={(e) => updateField("boat_type_id", e.target.value)}
                       >
                         <option value="">Select boat</option>
-                        {referenceTables.boatTypes.map((b) => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
+                        {choicesFor(referenceTables.boatTypes, editingRecord?.boat_type_id).map((b) => (
+                          <option key={b.id} value={b.id}>{b.label}</option>
                         ))}
                       </select>
                     </WizardField>
@@ -1444,8 +1445,8 @@ function BookingManagement() {
                         onChange={(e) => updateField("visit_purpose_id", e.target.value)}
                       >
                         <option value="">Select purpose</option>
-                        {referenceTables.visitPurposes.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                        {choicesFor(referenceTables.visitPurposes, editingRecord?.visit_purpose_id).map((p) => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
                         ))}
                       </select>
                     </WizardField>
