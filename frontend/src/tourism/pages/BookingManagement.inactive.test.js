@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
-import { RETIRED_MARK, choicesFor } from "../utils/optionChoices";
+import { INACTIVE_MARK, choicesFor } from "../utils/optionChoices";
 import { useTourismData } from "../context/TourismDataContext";
 
 // react-router-dom v7 is ESM that CRA's Jest cannot load; stub what is used.
@@ -22,7 +22,7 @@ jest.mock("../context/TourismDataContext", () => ({
 jest.mock("../../shared/csvExport", () => ({ exportCsv: jest.fn(), datedCsvFilename: jest.fn() }));
 
 // Every option has its own id and name (no two lists look alike), and each
-// retired option belongs to a different record.
+// inactive option belongs to a different record.
 const option = (id, name, extra = {}) => ({ id, name, is_active: true, ...extra });
 const REFERENCE = {
   countries: [{ id: 1, name: "Philippines", type: "local" }],
@@ -85,8 +85,8 @@ function record(surveyId, first, last, ids) {
   };
 }
 
-// A uses a retired itinerary (12) and a retired purpose (42); B uses a retired
-// vehicle (22) and a retired boat (32); C uses only active options.
+// A uses an inactive itinerary (12) and an inactive purpose (42); B uses an inactive
+// vehicle (22) and an inactive boat (32); C uses only active options.
 const RECORD_A = record("SV-A", "Alma", "Reyes", { itinerary: 12, mode: 21, boat: 31, purpose: 42 });
 const RECORD_B = record("SV-B", "Berto", "Cruz", { itinerary: 11, mode: 22, boat: 32, purpose: 41 });
 const RECORD_C = record("SV-C", "Carla", "Dela Paz", { itinerary: 13, mode: 23, boat: 33, purpose: 43 });
@@ -164,7 +164,7 @@ const ACTIVE = {
   boat: ["Banca", "Ferry"],
   purpose: ["Holiday Break", "Retreat"],
 };
-const RETIRED_NAMES = ["Lantern Circuit", "Harbour Walk", "Horse Cart", "Old Outrigger", "Pilgrimage", "Old Errand"];
+const INACTIVE_NAMES = ["Lantern Circuit", "Harbour Walk", "Horse Cart", "Old Outrigger", "Pilgrimage", "Old Errand"];
 
 describe("a NEW record offers only active options", () => {
   async function openAddAtLocation() {
@@ -187,7 +187,7 @@ describe("a NEW record offers only active options", () => {
     expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
   });
 
-  it("all four lists have the active ones only, and no retired name appears in them", async () => {
+  it("all four lists have the active ones only, and no inactive name appears in them", async () => {
     await openAddAtLocation();
     fireEvent.change(selectWith(PLACEHOLDERS.itinerary), { target: { value: "11" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
@@ -196,25 +196,27 @@ describe("a NEW record offers only active options", () => {
     expect(labelsOf(selectWith(PLACEHOLDERS.mode))).toEqual(["Select mode", ...ACTIVE.mode]);
     expect(labelsOf(selectWith(PLACEHOLDERS.boat))).toEqual(["Select boat", ...ACTIVE.boat]);
     expect(labelsOf(selectWith(PLACEHOLDERS.purpose))).toEqual(["Select purpose", ...ACTIVE.purpose]);
-    RETIRED_NAMES.forEach((name) =>
+    INACTIVE_NAMES.forEach((name) =>
       expect(screen.queryByText(name, { exact: false, selector: "option" })).toBeNull()
     );
-    expect(screen.queryByText(RETIRED_MARK.trim(), { exact: false })).toBeNull();
+    expect(screen.queryByText(INACTIVE_MARK.trim(), { exact: false })).toBeNull();
   });
 });
 
-describe("EDITING an old record that uses a retired option", () => {
-  it("record A: the retired itinerary and purpose are listed, selected and marked; the vehicle and boat are active-only", async () => {
+describe("EDITING an old record that uses an inactive option", () => {
+  it("record A: the inactive itinerary and purpose are listed, selected and marked; the vehicle and boat are active-only", async () => {
     await openEdit("SV-A");
     openLocation();
     const itinerary = selectWith(PLACEHOLDERS.itinerary);
     expect(labelsOf(itinerary)).toEqual([
       "Select itinerary",
       "Weekend Trail",
-      `Lantern Circuit${RETIRED_MARK}`,
+      `Lantern Circuit${INACTIVE_MARK}`,
       "Sunset Run",
     ]);
-    expect(shown(itinerary)).toBe(`Lantern Circuit${RETIRED_MARK}`);
+    expect(shown(itinerary)).toBe(`Lantern Circuit${INACTIVE_MARK}`);
+    // the word itself, written out: the same word as the Active / Inactive of the Registration Options page
+    expect(shown(itinerary)).toBe("Lantern Circuit (inactive)");
     expect(itinerary.value).toBe("12");
     expect(screen.queryByText("Harbour Walk", { exact: false, selector: "option" })).toBeNull();
 
@@ -225,30 +227,31 @@ describe("EDITING an old record that uses a retired option", () => {
     expect(labelsOf(purpose)).toEqual([
       "Select purpose",
       "Holiday Break",
-      `Pilgrimage${RETIRED_MARK}`,
+      `Pilgrimage${INACTIVE_MARK}`,
       "Retreat",
     ]);
-    expect(shown(purpose)).toBe(`Pilgrimage${RETIRED_MARK}`);
+    expect(shown(purpose)).toBe(`Pilgrimage${INACTIVE_MARK}`);
     expect(screen.queryByText("Old Errand", { exact: false, selector: "option" })).toBeNull();
   });
 
-  it("record B, a different record, shows ITS retired options, not record A's", async () => {
+  it("record B, a different record, shows ITS inactive options, not record A's", async () => {
     await openEdit("SV-B");
     openLocation();
     expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
     openTravelDetails();
     const mode = selectWith(PLACEHOLDERS.mode);
-    expect(labelsOf(mode)).toEqual(["Select mode", "Jeepney Ride", `Horse Cart${RETIRED_MARK}`, "Pedicab"]);
-    expect(shown(mode)).toBe(`Horse Cart${RETIRED_MARK}`);
+    expect(labelsOf(mode)).toEqual(["Select mode", "Jeepney Ride", `Horse Cart${INACTIVE_MARK}`, "Pedicab"]);
+    expect(shown(mode)).toBe(`Horse Cart${INACTIVE_MARK}`);
+    expect(shown(mode)).toBe("Horse Cart (inactive)");
     const boat = selectWith(PLACEHOLDERS.boat);
-    expect(labelsOf(boat)).toEqual(["Select boat", "Banca", `Old Outrigger${RETIRED_MARK}`, "Ferry"]);
-    expect(shown(boat)).toBe(`Old Outrigger${RETIRED_MARK}`);
+    expect(labelsOf(boat)).toEqual(["Select boat", "Banca", `Old Outrigger${INACTIVE_MARK}`, "Ferry"]);
+    expect(shown(boat)).toBe(`Old Outrigger${INACTIVE_MARK}`);
     expect(labelsOf(selectWith(PLACEHOLDERS.purpose))).toEqual(["Select purpose", ...ACTIVE.purpose]);
     expect(screen.queryByText("Pilgrimage", { exact: false, selector: "option" })).toBeNull();
     expect(screen.queryByText("Lantern Circuit", { exact: false, selector: "option" })).toBeNull();
   });
 
-  it("a record with only active options sees no retired option and no mark", async () => {
+  it("a record with only active options sees no inactive option and no mark", async () => {
     await openEdit("SV-C");
     openLocation();
     expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
@@ -256,15 +259,15 @@ describe("EDITING an old record that uses a retired option", () => {
     expect(labelsOf(selectWith(PLACEHOLDERS.mode))).toEqual(["Select mode", ...ACTIVE.mode]);
     expect(labelsOf(selectWith(PLACEHOLDERS.boat))).toEqual(["Select boat", ...ACTIVE.boat]);
     expect(labelsOf(selectWith(PLACEHOLDERS.purpose))).toEqual(["Select purpose", ...ACTIVE.purpose]);
-    expect(screen.queryByText(RETIRED_MARK.trim(), { exact: false })).toBeNull();
-    RETIRED_NAMES.forEach((name) =>
+    expect(screen.queryByText(INACTIVE_MARK.trim(), { exact: false })).toBeNull();
+    INACTIVE_NAMES.forEach((name) =>
       expect(screen.queryByText(name, { exact: false, selector: "option" })).toBeNull()
     );
   });
 });
 
-describe("SAVING an old record without touching its retired option", () => {
-  it("record A is sent with the SAME ids it had: the retired itinerary 12 and purpose 42", async () => {
+describe("SAVING an old record without touching its inactive option", () => {
+  it("record A is sent with the SAME ids it had: the inactive itinerary 12 and purpose 42", async () => {
     await openEdit("SV-A");
 
     const [surveyId, payload] = await save();
@@ -277,7 +280,7 @@ describe("SAVING an old record without touching its retired option", () => {
     expect(updateRecord).toHaveBeenCalledTimes(1);
   });
 
-  it("record B is sent with ITS retired vehicle 22 and boat 32", async () => {
+  it("record B is sent with ITS inactive vehicle 22 and boat 32", async () => {
     await openEdit("SV-B");
 
     const [surveyId, payload] = await save();
@@ -328,10 +331,10 @@ describe("the helper", () => {
     ]);
   });
 
-  it("an old record: its own retired option too, marked", () => {
+  it("an old record: its own inactive option too, marked", () => {
     expect(choicesFor(list, 2)).toEqual([
       { id: 1, label: "Alpha" },
-      { id: 2, label: `Bravo${RETIRED_MARK}` },
+      { id: 2, label: `Bravo${INACTIVE_MARK}` },
       { id: 3, label: "Charlie" },
     ]);
     expect(choicesFor(list, "2").map((c) => c.id)).toEqual([1, 2, 3]);
