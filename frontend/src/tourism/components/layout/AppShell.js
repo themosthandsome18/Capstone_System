@@ -48,6 +48,10 @@ const pageInfo = {
     title: "Settings",
     showAdd: false,
   },
+  "/options": {
+    title: "Registration Options",
+    showAdd: false,
+  },
 };
 
 function formatToday() {

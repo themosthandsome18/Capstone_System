@@ -8,6 +8,8 @@ import AnalyticsAndReport from "./pages/AnalyticsAndReport";
 import GISMap from "./pages/GISMap";
 import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
 import Settings from "./pages/Settings";
+import RegistrationOptions from "./pages/RegistrationOptions";
+import { OPTIONS_PATH, OPTIONS_ROLES } from "./optionsAccess";
 import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
 
 /**
@@ -58,6 +60,11 @@ export const tourismRoutes = [
     path: SETTINGS_PATH,
     allowedRoles: SETTINGS_ROLES,
     element: React.createElement(withErrorBoundary(Settings, "Settings")),
+  },
+  {
+    path: OPTIONS_PATH,
+    allowedRoles: OPTIONS_ROLES,
+    element: React.createElement(withErrorBoundary(RegistrationOptions, "Registration Options")),
   },
 ];
 

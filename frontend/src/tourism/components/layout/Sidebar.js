@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import logo from "../../assets/Tourismlogo.jpg";
 import { useAuth } from "../../../auth/AuthContext";
+import { OPTIONS_PATH, canManageOptions } from "../../optionsAccess";
 import { SETTINGS_PATH, canOpenSettings } from "../../settingsAccess";
 
 const navigation = [
@@ -14,7 +15,10 @@ const navigation = [
 ];
 
 // Shown only to roles that may open them; the routes are guarded too.
-const administration = [{ to: SETTINGS_PATH, label: "Settings" }];
+const administration = [
+  { to: SETTINGS_PATH, label: "Settings", allowed: canOpenSettings },
+  { to: OPTIONS_PATH, label: "Registration Options", allowed: canManageOptions },
+];
 
 function SidebarLink({ item }) {
   return (
@@ -32,6 +36,7 @@ function SidebarLink({ item }) {
 
 function Sidebar() {
   const { role } = useAuth();
+  const administrationLinks = administration.filter((item) => item.allowed(role));
 
   return (
     <aside className="tourism-sidebar">
@@ -45,10 +50,10 @@ function Sidebar() {
           <SidebarLink key={item.to} item={item} />
         ))}
 
-        {canOpenSettings(role) ? (
+        {administrationLinks.length ? (
           <>
             <p className="sidebar-nav-heading">Administration</p>
-            {administration.map((item) => (
+            {administrationLinks.map((item) => (
               <SidebarLink key={item.to} item={item} />
             ))}
           </>
