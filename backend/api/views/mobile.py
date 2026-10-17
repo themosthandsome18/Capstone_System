@@ -42,6 +42,7 @@ from api.models import (
     Barangay,
     BoatType,
     Country,
+    EmergencyContact,
     FeedbackEntry,
     HouseholdSanitationRecord,
     Itinerary,
@@ -67,6 +68,7 @@ from api.seeders import (
 )
 from api.serializers import (
     BarangaySerializer,
+    PublicEmergencyContactSerializer,
     FeedbackEntrySerializer,
     HouseholdSanitationRecordSerializer,
     ResortSerializer,
@@ -174,6 +176,12 @@ def mobile_tourism_bootstrap(request):
             "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_notifications(top_destination=top_destination),
             "theme": read_tourism_theme(),
+            # Active contacts, in order. A NEW key: the app already installed
+            # reads only the keys it knows (MobileBootstrap.fromJson) and
+            # ignores this one.
+            "emergencyContacts": PublicEmergencyContactSerializer(
+                EmergencyContact.objects.filter(is_active=True), many=True
+            ).data,
         }
     )
 

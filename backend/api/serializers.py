@@ -1058,7 +1058,7 @@ class NotificationPublicSerializer(serializers.ModelSerializer):
 
 import re
 
-from .models import TOURISM_THEME_DEFAULT_COLOR, TourismThemeSetting
+from .models import TOURISM_THEME_DEFAULT_COLOR, EmergencyContact, TourismThemeSetting
 
 TOURISM_THEME_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 TOURISM_THEME_MAX_SAVED_COLORS = 12
@@ -1132,3 +1132,16 @@ class TourismThemeWriteSerializer(serializers.Serializer):
                     "including the Original (Green)."
                 )
         return cleaned
+
+
+class PublicEmergencyContactSerializer(serializers.ModelSerializer):
+    """An emergency contact as the PUBLIC (the mobile app) reads it.
+
+    An explicit list, read-only: the order is already applied and only active
+    contacts are sent, so display_order and is_active are not part of it.
+    """
+
+    class Meta:
+        model = EmergencyContact
+        fields = ["id", "name", "contact_numbers", "email", "description", "hours", "category"]
+        read_only_fields = fields

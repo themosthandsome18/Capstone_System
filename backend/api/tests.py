@@ -25,6 +25,7 @@ from .models import (
     Barangay,
     BoatType,
     Country,
+    EmergencyContact,
     FeedbackEntry,
     HouseholdSanitationRecord,
     Itinerary,
@@ -6776,6 +6777,270 @@ class ItineraryStayFillMigrationTests(TransactionTestCase):
 
         MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
         self.assertEqual(self._values(self._model(self.AFTER)), {2: 0, 3: 2, 7: 6, 8: None, 10: 0})
+
+
+# The four hotlines written in the mobile app, word for word and in its order
+# (mobile/lib/screens/tourism_screens.dart, ProfilePage). The app shows each as
+# a title and one line of "number"; the desk's line is "number • email".
+EMERGENCY_FOUR = [
+    # (title, the line the app shows under it, category)
+    ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "rescue"),
+    ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "police"),
+    ("Coast Guard Sub-Station Mauban", "0917-842-7643", "coast_guard"),
+    ("Mauban Tourism Information Desk", "(042) 784-0555 \u2022 tourism@mauban.gov.ph", "desk"),
+]
+
+
+def _shown_line(contact):
+    """The one line the app shows: the numbers, then the email after a bullet."""
+    return contact.contact_numbers + (f" \u2022 {contact.email}" if contact.email else "")
+
+
+class EmergencyContactTests(TestCase):
+    """The table of emergency contacts and what the mobile bootstrap sends of it."""
+
+    BOOTSTRAP = "/api/mobile/tourism/bootstrap/"
+    PUBLIC_KEYS = {"id", "name", "contact_numbers", "email", "description", "hours", "category"}
+    OLD_BOOTSTRAP_KEYS = {
+        "referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme",
+    }
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        ensure_test_reference_tables()
+        self.module = importlib.import_module("api.migrations.0054_seed_emergency_contacts")
+        self.apps = django_apps
+        EmergencyContact.objects.all().delete()
+
+    def _seed_the_four(self):
+        EmergencyContact.objects.all().delete()
+        self.module.add_contacts(self.apps, None)
+
+    def _payload(self):
+        response = APIClient().get(self.BOOTSTRAP)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.json()
+
+    # -- the table ---------------------------------------------------------
+
+    def test_the_fields_are_exactly_these_and_there_is_no_icon_or_colour(self):
+        names = {f.name for f in EmergencyContact._meta.get_fields()}
+        self.assertEqual(
+            names,
+            {"id", "name", "contact_numbers", "email", "description", "hours",
+             "category", "display_order", "is_active"},
+        )
+        self.assertFalse({"icon", "color", "colour"} & names)
+
+    def test_the_categories_are_these_five(self):
+        self.assertEqual(
+            [value for value, _ in EmergencyContact.CATEGORY_CHOICES],
+            ["rescue", "police", "coast_guard", "desk", "other"],
+        )
+
+    def test_a_new_contact_is_active_and_of_category_other_with_the_optional_fields_empty(self):
+        contact = EmergencyContact.objects.create(name="Barangay Desk", contact_numbers="0917-000-0000")
+        contact.refresh_from_db()
+        self.assertIs(contact.is_active, True)
+        self.assertEqual(contact.category, "other")
+        self.assertEqual((contact.email, contact.description, contact.hours), ("", "", ""))
+        self.assertEqual(contact.display_order, 0)
+
+    def test_a_row_put_in_without_the_column_is_active(self):
+        field = EmergencyContact._meta.get_field("is_active")
+        self.assertIs(field.db_default, True)
+        table = EmergencyContact._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO {table} (name, contact_numbers, email, description, hours, category, display_order) "
+                "VALUES ('Raw row', '0917-111-1111', '', '', '', 'other', 0)"
+            )
+        self.assertIs(EmergencyContact.objects.get(name="Raw row").is_active, True)
+
+    def test_the_order_is_display_order_then_id(self):
+        # display orders that run AGAINST the ids, and a tie
+        late = EmergencyContact.objects.create(name="Created first", contact_numbers="1", display_order=30)
+        early = EmergencyContact.objects.create(name="Created second", contact_numbers="2", display_order=10)
+        tie_a = EmergencyContact.objects.create(name="Tie A", contact_numbers="3", display_order=20)
+        tie_b = EmergencyContact.objects.create(name="Tie B", contact_numbers="4", display_order=20)
+
+        self.assertEqual(
+            [c.pk for c in EmergencyContact.objects.all()],
+            [early.pk, tie_a.pk, tie_b.pk, late.pk],
+        )
+
+    # -- the four, from the data migration ---------------------------------
+
+    def test_the_four_are_exactly_what_the_app_has_and_in_its_order(self):
+        self._seed_the_four()
+
+        rows = list(EmergencyContact.objects.all())
+
+        self.assertEqual(
+            [(c.name, _shown_line(c), c.category) for c in rows],
+            EMERGENCY_FOUR,
+        )
+        self.assertEqual([c.category for c in rows], ["rescue", "police", "coast_guard", "desk"])
+        self.assertTrue(all(c.is_active for c in rows))
+        orders = [c.display_order for c in rows]
+        self.assertEqual(orders, sorted(orders))
+        self.assertEqual(len(set(orders)), 4)
+
+    def test_the_desk_keeps_its_number_and_its_email_apart(self):
+        self._seed_the_four()
+        desk = EmergencyContact.objects.get(category="desk")
+        self.assertEqual(desk.contact_numbers, "(042) 784-0555")
+        self.assertEqual(desk.email, "tourism@mauban.gov.ph")
+
+    def test_it_matches_the_dart_source_on_disk(self):
+        # The app's written list stays as the fallback for good. If someone
+        # changes it, this fails until the seed (and a decision) catches up.
+        import os
+        import re
+
+        from django.conf import settings
+
+        path = os.path.join(settings.BASE_DIR, "..", "mobile", "lib", "screens", "tourism_screens.dart")
+        if not os.path.exists(path):
+            self.skipTest("the mobile source is not next to the backend here")
+        source = open(path, encoding="utf-8").read()
+        cards = re.findall(r"_EmergencyContactCard\(\s*icon:[^,]+,\s*title:\s*'([^']*)',\s*number:\s*'([^']*)',", source)
+
+        self.assertEqual(cards, [(title, line) for title, line, _ in EMERGENCY_FOUR])
+
+    def test_running_the_seed_again_adds_nothing(self):
+        self._seed_the_four()
+        self.module.add_contacts(self.apps, None)
+        self.assertEqual(EmergencyContact.objects.count(), 4)
+
+    def test_the_seed_never_overwrites_what_an_admin_changed(self):
+        self._seed_the_four()
+        police = EmergencyContact.objects.get(category="police")
+        police.contact_numbers = "0999-000-0000"
+        police.save()
+
+        self.module.add_contacts(self.apps, None)
+
+        police.refresh_from_db()
+        self.assertEqual(police.contact_numbers, "0999-000-0000")
+        self.assertEqual(EmergencyContact.objects.count(), 4)
+
+    def test_the_reverse_deletes_those_four_and_nothing_else(self):
+        self._seed_the_four()
+        mine = EmergencyContact.objects.create(name="Barangay Lupon", contact_numbers="0917-222-2222")
+        same_name_other_category = EmergencyContact.objects.create(
+            name="Mauban Municipal Police (PNP)", contact_numbers="x", category="other"
+        )
+
+        self.module.remove_contacts(self.apps, None)
+
+        remaining = set(EmergencyContact.objects.values_list("pk", flat=True))
+        self.assertEqual(remaining, {mine.pk, same_name_other_category.pk})
+        self.assertFalse(EmergencyContact.objects.filter(category__in=["rescue", "coast_guard", "desk"]).exists())
+
+    # -- the payload -------------------------------------------------------
+
+    def test_the_bootstrap_sends_the_active_contacts_in_order(self):
+        self._seed_the_four()
+
+        sent = self._payload()["emergencyContacts"]
+
+        self.assertEqual(
+            [(c["name"], c["contact_numbers"], c["email"], c["category"]) for c in sent],
+            [
+                ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "", "rescue"),
+                ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "", "police"),
+                ("Coast Guard Sub-Station Mauban", "0917-842-7643", "", "coast_guard"),
+                ("Mauban Tourism Information Desk", "(042) 784-0555", "tourism@mauban.gov.ph", "desk"),
+            ],
+        )
+
+    def test_each_contact_has_exactly_the_public_keys(self):
+        self._seed_the_four()
+        for contact in self._payload()["emergencyContacts"]:
+            self.assertEqual(set(contact), self.PUBLIC_KEYS)  # no display_order, no is_active
+
+    def test_an_inactive_contact_is_not_sent_but_is_still_in_the_database(self):
+        self._seed_the_four()
+        EmergencyContact.objects.filter(category="coast_guard").update(is_active=False)
+
+        names = [c["name"] for c in self._payload()["emergencyContacts"]]
+
+        self.assertNotIn("Coast Guard Sub-Station Mauban", names)
+        self.assertEqual(len(names), 3)
+        self.assertEqual(EmergencyContact.objects.count(), 4)
+        self.assertTrue(EmergencyContact.objects.filter(name="Coast Guard Sub-Station Mauban").exists())
+
+    def test_the_payload_follows_display_order(self):
+        self._seed_the_four()
+        # the desk first, the police last
+        EmergencyContact.objects.filter(category="desk").update(display_order=1)
+        EmergencyContact.objects.filter(category="police").update(display_order=99)
+
+        categories = [c["category"] for c in self._payload()["emergencyContacts"]]
+
+        self.assertEqual(categories, ["desk", "rescue", "coast_guard", "police"])
+
+    def test_no_contacts_is_an_empty_list_not_a_missing_key(self):
+        self.assertEqual(self._payload()["emergencyContacts"], [])
+
+    def test_the_keys_the_app_already_reads_are_all_still_there_and_unchanged(self):
+        # without contacts, then with four: only the new key differs
+        without = self._payload()
+        self._seed_the_four()
+        with_four = self._payload()
+
+        self.assertEqual(set(with_four), self.OLD_BOOTSTRAP_KEYS | {"emergencyContacts"})
+        for key in self.OLD_BOOTSTRAP_KEYS:
+            with self.subTest(key=key):
+                self.assertIn(key, without)
+                self.assertEqual(with_four[key], without[key])
+        self.assertTrue(with_four["referenceTables"]["itineraries"])
+        self.assertTrue(with_four["destinations"])
+
+    def test_the_model_has_no_change_without_a_migration(self):
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class EmergencyContactMigrationTests(TransactionTestCase):
+    """Migration 0054 through Django's own migrate, forward and backward."""
+
+    BEFORE = [("api", "0053_emergency_contact")]
+    AFTER = [("api", "0054_seed_emergency_contacts")]
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _model(self, target):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        return executor.loader.project_state(target).apps.get_model("api", "EmergencyContact")
+
+    def test_forward_puts_in_the_four_and_backward_takes_out_only_them(self):
+        MigrationExecutor(connection).migrate(self.BEFORE)  # undo 0054
+        model = self._model(self.BEFORE)
+        model.objects.all().delete()
+        mine = model.objects.create(name="Barangay Lupon", contact_numbers="0917-222-2222")
+
+        MigrationExecutor(connection).migrate(self.AFTER)
+        model = self._model(self.AFTER)
+        self.assertEqual(
+            [(c.name, c.category) for c in model.objects.order_by("display_order", "id") if c.pk != mine.pk],
+            [(name, category) for name, _line, category in EMERGENCY_FOUR],
+        )
+        self.assertEqual(model.objects.count(), 5)
+
+        MigrationExecutor(connection).migrate(self.BEFORE)  # the reverse of 0054
+        model = self._model(self.BEFORE)
+        self.assertEqual(list(model.objects.values_list("pk", flat=True)), [mine.pk])
+
+        MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
+        self.assertEqual(self._model(self.AFTER).objects.count(), 5)
 
 
 class PeakSeasonShareTests(TestCase):

@@ -1381,3 +1381,51 @@ class TourismThemeSetting(models.Model):
 
     def __str__(self):
         return f"Tourism theme {self.primary_color}"
+
+
+class EmergencyContact(models.Model):
+    """An emergency hotline or help desk the mobile app lists for tourists.
+
+    The app today has four of these written in its code, and that written list
+    stays there for good as the fallback (the numbers of an emergency must not
+    depend on the internet). This table is what an admin will edit.
+
+    `category` is a short code, NOT an icon or a colour: the app decides the
+    icon and the colour of each category in its own code. Storing an icon or a
+    colour here would put the look of the app in the database, where a typo
+    cannot be told from a choice and where an icon the app does not know would
+    show nothing.
+    """
+
+    CATEGORY_RESCUE = "rescue"
+    CATEGORY_POLICE = "police"
+    CATEGORY_COAST_GUARD = "coast_guard"
+    CATEGORY_DESK = "desk"
+    CATEGORY_OTHER = "other"
+    CATEGORY_CHOICES = [
+        (CATEGORY_RESCUE, "Rescue"),
+        (CATEGORY_POLICE, "Police"),
+        (CATEGORY_COAST_GUARD, "Coast Guard"),
+        (CATEGORY_DESK, "Help desk"),
+        (CATEGORY_OTHER, "Other"),
+    ]
+
+    name = models.CharField(max_length=160)
+    # Text, and may hold more than one number ("0998-598-8422 / (042) 784-0123"),
+    # as the app shows them today.
+    contact_numbers = models.CharField(max_length=300)
+    email = models.EmailField(blank=True)
+    description = models.TextField(blank=True)
+    hours = models.CharField(max_length=80, blank=True)
+    category = models.CharField(
+        max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    # db_default: a row put in by code that does not know this column is active.
+    is_active = models.BooleanField(default=True, db_default=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+
+    def __str__(self):
+        return self.name
