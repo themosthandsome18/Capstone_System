@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { FiPlus } from "react-icons/fi";
 import { useAuth } from "../../auth/AuthContext";
@@ -48,9 +48,13 @@ function parseStay(text) {
 function RegistrationOptionsPage() {
   const { refreshReferenceTables } = useTourismData();
   const [kind, setKind] = useState(OPTION_TABS[0].kind);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // The rows of each tab, by kind. A tab that has not been opened yet has no
+  // entry (undefined): only then does the page say "Loading...".
+  const [lists, setLists] = useState({});
   const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const listsRef = useRef(lists);
+  listsRef.current = lists;
   const [filter, setFilter] = useState("all");
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -65,23 +69,32 @@ function RegistrationOptionsPage() {
   const [editName, setEditName] = useState("");
   const [editStay, setEditStay] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // The count the server named when it refused a confirmation because the
+  // number had changed; it replaces the one on screen, the list stays as it is.
+  const [countFromServer, setCountFromServer] = useState(null);
 
-  const load = useCallback(async (which) => {
-    setLoading(true);
-    setLoadError("");
-    try {
-      setRows(await tourismApi.getReferenceOptions(which));
-    } catch (error) {
-      setRows([]);
-      setLoadError(error.message || "The options could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // The list is fetched once per tab, the first time the tab is opened. After
+  // that it is kept in step by the server's answer to each write, never by a
+  // second fetch.
   useEffect(() => {
-    load(kind);
-  }, [kind, load]);
+    if (listsRef.current[kind] !== undefined) return undefined;
+    let cancelled = false;
+    setLoadError("");
+    tourismApi
+      .getReferenceOptions(kind)
+      .then((data) => {
+        if (!cancelled) setLists((current) => ({ ...current, [kind]: data }));
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(error.message || "The options could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, retry]);
+
+  const rows = lists[kind];
+  const loading = rows === undefined && !loadError;
 
   function selectTab(next) {
     if (next === kind) return;
@@ -89,48 +102,80 @@ function RegistrationOptionsPage() {
     setAdding(false);
     setEditingId(null);
     setConfirming(false);
+    setCountFromServer(null);
+    setLoadError("");
     setActionError("");
     setNotice("");
   }
 
-  // One way to write: run the call, show the server's own message if it
-  // refuses, and after a success read the list again from the server (the new
-  // state is never guessed from what was sent).
+  // The whole option as the server now holds it (every write answers with it)
+  // goes in place of its row, or into its place by id when it is new. Nothing
+  // is worked out here from what was sent.
+  function putOption(which, option) {
+    setLists((current) => {
+      const list = current[which] || [];
+      if (list.some((item) => item.id === option.id)) {
+        return { ...current, [which]: list.map((item) => (item.id === option.id ? option : item)) };
+      }
+      const at = list.findIndex((item) => item.id > option.id);
+      const next = at === -1 ? [...list, option] : [...list.slice(0, at), option, ...list.slice(at)];
+      return { ...current, [which]: next };
+    });
+  }
+
+  // One way to write: send the request, show the server's own message if it
+  // refuses (and then change nothing in the list), and after a success put the
+  // server's answer in the list. There is no second fetch. The other pages'
+  // reference tables are refreshed in the background; this page does not wait
+  // for them and does not show them.
   async function write(call, successNotice) {
+    const which = kind;
     setWorking(true);
     setActionError("");
     setNotice("");
     try {
-      await call();
-      await load(kind);
-      if (refreshReferenceTables) refreshReferenceTables();
+      const option = await call();
+      putOption(which, option);
+      if (refreshReferenceTables) {
+        Promise.resolve(refreshReferenceTables()).catch(() => {});
+      }
       setNotice(successNotice);
       return true;
     } catch (error) {
       setActionError(error.message || "The change could not be saved.");
-      // A refused count means the number changed under us: read it again.
-      if (error.status === 409) await load(kind);
+      if (
+        error.status === 409 &&
+        error.details &&
+        error.details.code === "confirmation_required" &&
+        Number.isInteger(error.details.record_count)
+      ) {
+        setCountFromServer(error.details.record_count);
+      }
       return false;
     } finally {
       setWorking(false);
     }
   }
 
-  const activeCount = useMemo(() => rows.filter((row) => row.is_active).length, [rows]);
+  const activeCount = useMemo(() => (rows || []).filter((row) => row.is_active).length, [rows]);
 
   const visibleRows = useMemo(() => {
-    if (filter === "active") return rows.filter((row) => row.is_active);
-    if (filter === "inactive") return rows.filter((row) => !row.is_active);
-    return rows;
+    const list = rows || [];
+    if (filter === "active") return list.filter((row) => row.is_active);
+    if (filter === "inactive") return list.filter((row) => !row.is_active);
+    return list;
   }, [rows, filter]);
 
-  const editing = rows.find((row) => row.id === editingId) || null;
+  const editing = (rows || []).find((row) => row.id === editingId) || null;
+  // The number shown and sent: what the server last said for this option.
+  const affectedCount = countFromServer !== null ? countFromServer : editing ? editing.record_count : 0;
 
   function startEdit(row) {
     setEditingId(row.id);
     setEditName(row.name);
     setEditStay(row.stay_nights === null || row.stay_nights === undefined ? "" : String(row.stay_nights));
     setConfirming(false);
+    setCountFromServer(null);
     setActionError("");
     setNotice("");
     setAdding(false);
@@ -139,6 +184,7 @@ function RegistrationOptionsPage() {
   function stopEdit() {
     setEditingId(null);
     setConfirming(false);
+    setCountFromServer(null);
   }
 
   async function submitAdd(event) {
@@ -175,7 +221,7 @@ function RegistrationOptionsPage() {
     if (nameChanged) payload.name = editName;
     if (stayChanged) payload.stay_nights = parseStay(editStay);
     // The number comes from the server's last answer, never from the person.
-    payload.confirm_affected_records = editing.record_count;
+    payload.confirm_affected_records = affectedCount;
     const ok = await write(
       () => tourismApi.updateReferenceOption(kind, editing.id, payload),
       "The change was saved."
@@ -232,16 +278,19 @@ function RegistrationOptionsPage() {
         that already use it, and in the reports. Options are never deleted.
       </p>
 
-      {notice ? (
-        <p className="settings-status success" role="status">
-          {notice}
-        </p>
-      ) : null}
-      {actionError ? (
-        <p className="settings-status error" role="alert">
-          {actionError}
-        </p>
-      ) : null}
+      {/* Always the same height, so a message appearing does not move the page. */}
+      <div className="options-message-area">
+        {notice ? (
+          <p className="settings-status success" role="status">
+            {notice}
+          </p>
+        ) : null}
+        {actionError ? (
+          <p className="settings-status error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+      </div>
 
       {adding ? (
         <form className="settings-card options-form" onSubmit={submitAdd} aria-label={`Add to ${tabLabel}`}>
@@ -314,7 +363,7 @@ function RegistrationOptionsPage() {
         {loadError ? (
           <p className="settings-status error" role="alert">
             {loadError}{" "}
-            <button type="button" className="reply-btn" onClick={() => load(kind)}>
+            <button type="button" className="reply-btn" onClick={() => setRetry((count) => count + 1)}>
               Try again
             </button>
           </p>
@@ -422,7 +471,7 @@ function RegistrationOptionsPage() {
         <section className="settings-card options-form" aria-label={`Edit ${editing.name}`}>
           <div className="report-card-title">
             <h3>Edit {editing.name}</h3>
-            <p>Used by {recordsLabel(editing.record_count)}.</p>
+            <p>Used by {recordsLabel(affectedCount)}.</p>
           </div>
 
           <label className="settings-field">
@@ -469,9 +518,9 @@ function RegistrationOptionsPage() {
             <div className="options-confirm" role="alertdialog" aria-label="Confirm the change">
               <p>
                 This change applies to every record that uses this option and to every report.{" "}
-                {editing.record_count === 0
+                {affectedCount === 0
                   ? "No record uses it yet."
-                  : `It affects ${recordsLabel(editing.record_count)}.`}
+                  : `It affects ${recordsLabel(affectedCount)}.`}
               </p>
               <div className="options-form-actions">
                 <button type="button" className="tourist-record-cancel" onClick={() => setConfirming(false)} disabled={working}>

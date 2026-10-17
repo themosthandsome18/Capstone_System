@@ -4511,6 +4511,16 @@
    Reads only the shell's --th-* tokens (no literal colours), so it follows the
    system colour like the Settings page it sits beside. */
 
+/* The place for the success / error message. It keeps the same height with or
+   without a message, so a message appearing or going does not move the page. */
+.options-message-area {
+  min-height: 48px;
+}
+
+.options-message-area .settings-status {
+  margin: 0;
+}
+
 .options-intro {
   margin: 0;
   font-size: 14px;

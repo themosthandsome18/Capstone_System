@@ -23,6 +23,7 @@ let lists;
 let requests;
 let refreshReferenceTables;
 let failNext;
+let answerWith;
 
 const row = (id, name, extra = {}) => ({
   id,
@@ -41,8 +42,8 @@ function freshLists() {
       row(2, "Same Day", { stay_nights: 0, record_count: 5, rename_protected: true }),
       row(7, "6 Nights", { stay_nights: 6, record_count: 0 }),
       row(8, "Que", { stay_nights: null, record_count: 2 }),
-      row(12, "Eco Adventure Trail", { stay_nights: null, record_count: 1 }),
       row(9, "Island Hopping Circuit", { stay_nights: null, record_count: 4, is_active: false }),
+      row(12, "Eco Adventure Trail", { stay_nights: null, record_count: 1 }),
     ],
     "travel-mode": [
       row(1, "Private Vehicle", { record_count: 10, rename_protected: true }),
@@ -80,6 +81,11 @@ function fakeFetch(url, options = {}) {
     const failure = failNext;
     failNext = null;
     return reply(failure.status, failure.body);
+  }
+  if (answerWith && answerWith.match(method, path)) {
+    const answer = answerWith;
+    answerWith = null;
+    return reply(answer.status || 200, answer.body);
   }
 
   const match = path.match(/^\/reference-options\/([a-z-]+)\/(?:(\d+)\/)?(deactivate\/|reactivate\/)?$/);
@@ -130,6 +136,7 @@ beforeEach(() => {
   lists = freshLists();
   requests = [];
   failNext = null;
+  answerWith = null;
   refreshReferenceTables = jest.fn();
   useAuth.mockReturnValue({ role: "admin" });
   useTourismData.mockReturnValue({ refreshReferenceTables });
@@ -251,11 +258,10 @@ describe("adding", () => {
     expect(posts).toHaveLength(1);
     expect(posts[0].body).toEqual({ name: "Weekend 3 Days", stay_nights: 3 });
     expect(posts[0].body).not.toHaveProperty("id");
-    // the list was read again AFTER the write
-    const order = requests.map((r) => `${r.method} ${r.path}`);
-    expect(order.lastIndexOf("GET /reference-options/itinerary/")).toBeGreaterThan(
-      order.indexOf("POST /reference-options/itinerary/")
-    );
+    // the list is NOT read again: the one GET is the first opening of the tab,
+    // and the POST is the last request to this list
+    expect(sent("GET", "/reference-options/itinerary/")).toHaveLength(1);
+    expect(requests[requests.length - 1]).toMatchObject({ method: "POST", path: "/reference-options/itinerary/" });
     expect(within(screen.getByText("Weekend 3 Days").closest("tr")).getByText("3 nights")).toBeTruthy();
     expect(refreshReferenceTables).toHaveBeenCalled();
   });
@@ -355,9 +361,16 @@ describe("renaming", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("affects 7 record(s)");
     expect(sent("PATCH", "/reference-options/travel-mode/3/")[0].body.confirm_affected_records).toBe(6);
-    // the list was read again, so the row shows the real number now, and the name is unchanged
-    await waitFor(() => expect(within(rowOf(3)).getByText("7 records")).toBeTruthy());
+    // a refused write changes nothing in the list (the row still says 6), and the
+    // new number the server named is the one the person is asked to confirm
+    expect(within(rowOf(3)).getByText("6 records")).toBeTruthy();
+    expect(sent("GET", "/reference-options/travel-mode/")).toHaveLength(1);
     expect(lists["travel-mode"].find((r) => r.id === 3).name).toBe("Public Bus");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect((await screen.findByRole("alertdialog")).textContent).toContain("It affects 7 records");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and save" }));
+    await waitFor(() => expect(screen.getByText("Public Bus Line")).toBeTruthy());
+    expect(sent("PATCH", "/reference-options/travel-mode/3/")[1].body.confirm_affected_records).toBe(7);
   });
 
   it("changes only the stay length of an itinerary, with the same confirmation", async () => {
@@ -515,5 +528,278 @@ describe("there is no way to delete", () => {
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     expect(screen.queryByRole("button", { name: /delete|remove/i })).toBeNull();
     expect(requests.filter((r) => r.method === "DELETE")).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Steady: no "Loading...", no second fetch, and what is shown is the server's
+// ---------------------------------------------------------------------------
+
+// Records every change to the page. A MutationObserver sees even a state that
+// came and went inside one update, which a look at the page afterwards cannot.
+function watchPage() {
+  const seen = { loading: false, tableRemoved: false, loadingNodes: 0 };
+  const observer = new MutationObserver((records) => {
+    records.forEach((record) => {
+      record.addedNodes.forEach((node) => {
+        if ((node.textContent || "").includes("Loading...")) seen.loading = true;
+      });
+      record.removedNodes.forEach((node) => {
+        if (node.nodeType === 1 && (node.tagName === "TABLE" || node.querySelector?.("table"))) {
+          seen.tableRemoved = true;
+        }
+      });
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  return {
+    seen,
+    stop: async () => {
+      await act(async () => {});
+      observer.takeRecords().forEach(() => {});
+      observer.disconnect();
+    },
+  };
+}
+
+describe("steady, with no second fetch", () => {
+  const count = (list) => requests.filter((r) => r.path === `/reference-options/${list}/`).length;
+
+  it("opening a tab for the first time says Loading...; coming back to it does not, and asks nothing", async () => {
+    render(<RegistrationOptions />);
+    expect(screen.getByText("Loading...")).toBeTruthy(); // first opening, nothing to show yet
+    await screen.findByRole("table");
+    expect(screen.queryByText("Loading...")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Vehicle Classification" }));
+    expect(screen.getByText("Loading...")).toBeTruthy(); // another tab, never opened
+    await screen.findByText("Public Bus");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Travel Itinerary" }));
+    expect(screen.queryByText("Loading...")).toBeNull(); // already has its list
+    expect(screen.getByText("Overnight")).toBeTruthy();
+    expect(count("itinerary")).toBe(1);
+    expect(count("travel-mode")).toBe(1);
+  });
+
+  it("deactivate: the row changes at once, no Loading... at any moment, one request", async () => {
+    await open("Vehicle Classification");
+    const before = requests.length;
+    const watch = watchPage();
+
+    fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
+    await waitFor(() => expect(within(rowOf(4)).getByText("Inactive")).toBeTruthy());
+    await watch.stop();
+
+    expect(watch.seen.loading).toBe(false);
+    expect(watch.seen.tableRemoved).toBe(false);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual([
+      "POST /reference-options/travel-mode/4/deactivate/",
+    ]);
+  });
+
+  it("reactivate: the same", async () => {
+    await open("Vehicle Classification");
+    const before = requests.length;
+    const watch = watchPage();
+
+    fireEvent.click(within(rowOf(5)).getByRole("button", { name: "Reactivate Tourist Van" }));
+    await waitFor(() => expect(within(rowOf(5)).getByText("Active")).toBeTruthy());
+    await watch.stop();
+
+    expect(watch.seen.loading).toBe(false);
+    expect(watch.seen.tableRemoved).toBe(false);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual([
+      "POST /reference-options/travel-mode/5/reactivate/",
+    ]);
+  });
+
+  it("add: the new row appears from the server's answer, in its place by id, with no Loading...", async () => {
+    await open("Vehicle Classification");
+    const before = requests.length;
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    fireEvent.change(screen.getByLabelText("New option name"), { target: { value: "Tricycle" } });
+    const watch = watchPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save new option" }));
+    await screen.findByText("Tricycle");
+    await watch.stop();
+
+    expect(watch.seen.loading).toBe(false);
+    expect(watch.seen.tableRemoved).toBe(false);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual([
+      "POST /reference-options/travel-mode/",
+    ]);
+    // ids 1, 3, 4, 5 and the new 6: the new row is last
+    const ids = screen.getAllByTestId(/^option-row-/).map((tr) => tr.getAttribute("data-testid"));
+    expect(ids).toEqual(["option-row-1", "option-row-3", "option-row-4", "option-row-5", "option-row-6"]);
+  });
+
+  it("rename: the name changes at once, no Loading..., one request", async () => {
+    await open("Vehicle Classification");
+    fireEvent.click(within(rowOf(3)).getByRole("button", { name: /^Edit / }));
+    fireEvent.change(screen.getByLabelText("Option name"), { target: { value: "Public Bus Line" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const confirm = await screen.findByRole("button", { name: "Confirm and save" });
+    const before = requests.length;
+    const watch = watchPage();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(within(rowOf(3)).getByText("Public Bus Line")).toBeTruthy());
+    await watch.stop();
+
+    expect(watch.seen.loading).toBe(false);
+    expect(watch.seen.tableRemoved).toBe(false);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual([
+      "PATCH /reference-options/travel-mode/3/",
+    ]);
+  });
+
+  it("a deactivated row leaves the Active filter at once", async () => {
+    await open("Vehicle Classification");
+    fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "active" } });
+    expect(screen.getByTestId("option-row-4")).toBeTruthy();
+
+    fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
+
+    await waitFor(() => expect(screen.queryByTestId("option-row-4")).toBeNull());
+    expect(screen.getByTestId("option-row-3")).toBeTruthy();
+    expect(count("travel-mode")).toBe(1);
+  });
+
+  it("a write that fails changes nothing on screen, shows the error, and asks nothing more", async () => {
+    await open("Vehicle Classification");
+    const tableBefore = screen.getByRole("table").textContent;
+    const before = requests.length;
+    const watch = watchPage();
+    failNext = { status: 500, body: { detail: "The server is having a problem." } };
+
+    fireEvent.click(within(rowOf(3)).getByRole("button", { name: "Deactivate Public Bus" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("The server is having a problem.");
+    await watch.stop();
+
+    expect(screen.getByRole("table").textContent).toBe(tableBefore);
+    expect(within(rowOf(3)).getByText("Active")).toBeTruthy();
+    expect(watch.seen.loading).toBe(false);
+    expect(watch.seen.tableRemoved).toBe(false);
+    expect(requests.length - before).toBe(1);
+    expect(refreshReferenceTables).not.toHaveBeenCalled();
+  });
+
+  it("a failed add or rename also leaves the list as it was", async () => {
+    await open("Vehicle Classification");
+    const tableBefore = screen.getByRole("table").textContent;
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    fireEvent.change(screen.getByLabelText("New option name"), { target: { value: "Public Bus" } });
+    failNext = { status: 400, body: { detail: "Another option already has this name." } };
+    fireEvent.click(screen.getByRole("button", { name: "Save new option" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Another option already has this name.");
+    expect(screen.getByRole("table").textContent).toBe(tableBefore);
+    expect(screen.getAllByTestId(/^option-row-/)).toHaveLength(4);
+  });
+
+  // ---- the most important: what is shown is what the SERVER answered ----
+
+  it("rename shows the server's answer, not what the person typed", async () => {
+    await open("Vehicle Classification");
+    fireEvent.click(within(rowOf(3)).getByRole("button", { name: /^Edit / }));
+    fireEvent.change(screen.getByLabelText("Option name"), { target: { value: "Public Bus Line" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    // the server answers with other values than the page could guess
+    answerWith = {
+      match: (method, path) => method === "PATCH" && path === "/reference-options/travel-mode/3/",
+      body: row(3, "Public Bus Line (as the server holds it)", { record_count: 99, rename_protected: true }),
+    };
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm and save" }));
+
+    await waitFor(() => expect(screen.getByText(/as the server holds it/)).toBeTruthy());
+    expect(within(rowOf(3)).getByText("99 records")).toBeTruthy(); // not the 6 the page knew
+    expect(within(rowOf(3)).getByText("Name set by the import")).toBeTruthy(); // the server's flag
+    expect(screen.queryByText("Public Bus Line", { exact: true })).toBeNull(); // not the typed name
+  });
+
+  it("deactivate shows the server's answer, not 'I deactivated it, so it is inactive'", async () => {
+    await open("Vehicle Classification");
+    answerWith = {
+      match: (method, path) => method === "POST" && path.endsWith("/travel-mode/3/deactivate/"),
+      body: row(3, "Public Bus", { is_active: true, record_count: 8 }), // the server says: still active
+    };
+
+    fireEvent.click(within(rowOf(3)).getByRole("button", { name: "Deactivate Public Bus" }));
+
+    await waitFor(() => expect(within(rowOf(3)).getByText("8 records")).toBeTruthy());
+    expect(within(rowOf(3)).getByText("Active")).toBeTruthy();
+    expect(within(rowOf(3)).queryByText("Inactive")).toBeNull();
+  });
+
+  it("reactivate shows the server's answer too", async () => {
+    await open("Vehicle Classification");
+    answerWith = {
+      match: (method, path) => method === "POST" && path.endsWith("/travel-mode/5/reactivate/"),
+      body: row(5, "Tourist Van", { is_active: false, record_count: 12 }),
+    };
+
+    fireEvent.click(within(rowOf(5)).getByRole("button", { name: "Reactivate Tourist Van" }));
+
+    await waitFor(() => expect(within(rowOf(5)).getByText("12 records")).toBeTruthy());
+    expect(within(rowOf(5)).getByText("Inactive")).toBeTruthy();
+  });
+
+  it("add shows the server's answer: its id, its name, its fields", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    fireEvent.change(screen.getByLabelText("New option name"), { target: { value: "weekend away" } });
+    fireEvent.change(screen.getByLabelText("New option stay length in nights"), { target: { value: "3" } });
+    answerWith = {
+      match: (method, path) => method === "POST" && path === "/reference-options/itinerary/",
+      // id 5 (between 2 and 7), another capitalisation, another stay length
+      body: row(5, "Weekend Away", { stay_nights: 2, record_count: 0 }),
+    };
+
+    fireEvent.click(screen.getByRole("button", { name: "Save new option" }));
+
+    await screen.findByText("Weekend Away");
+    expect(screen.queryByText("weekend away")).toBeNull();
+    expect(within(rowOf(5)).getByText("2 nights")).toBeTruthy(); // not the 3 that was sent
+    const ids = screen.getAllByTestId(/^option-row-/).map((tr) => tr.getAttribute("data-testid"));
+    expect(ids).toEqual(["option-row-1", "option-row-2", "option-row-5", "option-row-7", "option-row-8", "option-row-9", "option-row-12"]);
+  });
+
+  // ---- the other pages ----
+
+  it("the other pages are refreshed once per write, in the background: the page does not wait for them", async () => {
+    refreshReferenceTables.mockImplementation(() => new Promise(() => {})); // never finishes
+    await open("Vehicle Classification");
+
+    fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
+
+    await waitFor(() => expect(within(rowOf(4)).getByText("Inactive")).toBeTruthy());
+    expect(refreshReferenceTables).toHaveBeenCalledTimes(1);
+    // not stuck behind it: the buttons work again
+    expect(within(rowOf(3)).getByRole("button", { name: "Deactivate Public Bus" }).disabled).toBe(false);
+  });
+
+  it("a refresh of the other pages that fails does not disturb this page", async () => {
+    refreshReferenceTables.mockImplementation(() => Promise.reject(new Error("elsewhere")));
+    await open("Vehicle Classification");
+
+    fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
+
+    await waitFor(() => expect(within(rowOf(4)).getByText("Inactive")).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("the message area keeps one place, so a message appearing does not move the page", async () => {
+    await open("Vehicle Classification");
+    const area = document.querySelector(".options-message-area");
+    expect(area).not.toBeNull();
+    expect(area.childElementCount).toBe(0);
+
+    fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
+    await waitFor(() => expect(within(area).getByRole("status")).toBeTruthy());
+
+    expect(document.querySelectorAll(".options-message-area")).toHaveLength(1); // same element, now with a message
   });
 });
