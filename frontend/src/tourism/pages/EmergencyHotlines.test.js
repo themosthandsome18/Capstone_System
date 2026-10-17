@@ -181,10 +181,10 @@ describe("the list", () => {
     expect(screen.getByText(NEXT_VERSION_NOTICE)).toBeTruthy();
     expect(screen.getByText(EMPTY_LIST_NOTICE)).toBeTruthy();
     expect(NEXT_VERSION_NOTICE).toBe(
-      "Ang mga pagbabagong ito ay makikita sa mobile app kapag nailabas na ang susunod na bersiyon ng app."
+      "Changes here reach the mobile app only when the next version of the app is released."
     );
     expect(EMPTY_LIST_NOTICE).toBe(
-      "Kung walang aktibong contact, babalik ang app sa nakatagong listahan nito, para hindi mawala ang mga numero ng emergency kahit walang internet."
+      "If no contact is active, the app falls back to its own built-in list, so the emergency numbers are never missing — even with no internet."
     );
     // still there after an action and after a failure
     fireEvent.click(screen.getByRole("button", { name: "Deactivate Zulu Rescue Base" }));

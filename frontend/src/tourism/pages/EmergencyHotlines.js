@@ -24,9 +24,9 @@ export const FILTERS = [
 // Always on screen. The first one stops an admin from thinking that visitors
 // see a change at once; the second says why an empty list is safe.
 export const NEXT_VERSION_NOTICE =
-  "Ang mga pagbabagong ito ay makikita sa mobile app kapag nailabas na ang susunod na bersiyon ng app.";
+  "Changes here reach the mobile app only when the next version of the app is released.";
 export const EMPTY_LIST_NOTICE =
-  "Kung walang aktibong contact, babalik ang app sa nakatagong listahan nito, para hindi mawala ang mga numero ng emergency kahit walang internet.";
+  "If no contact is active, the app falls back to its own built-in list, so the emergency numbers are never missing — even with no internet.";
 
 const BLANK = { name: "", category: "other", contact_numbers: "", email: "", hours: "", description: "" };
 const FIELDS = ["name", "category", "contact_numbers", "email", "hours", "description"];
