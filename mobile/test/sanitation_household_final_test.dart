@@ -106,7 +106,7 @@ void main() {
               );
               expect(choice('Septic tank'), findsNothing);
             }
-            await tester.enterText(field('Address'), 'Only address');
+            await tester.enterText(field('Existing combined address'), 'Only address');
             await submitEdit(tester);
           },
           () => MockClient((r) async {
@@ -369,7 +369,7 @@ void main() {
     await http.runWithClient(
       () async {
         await pumpEdit(tester, storedHousehold());
-        await tester.enterText(field('Address'), 'Changed address');
+        await tester.enterText(field('Existing combined address'), 'Changed address');
         await tester.tap(find.text('Submit Household Survey'));
         await tester.pump();
         expect(

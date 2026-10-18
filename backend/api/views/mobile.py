@@ -1271,6 +1271,8 @@ def serialize_mobile_household_record(record):
         "household_head": record.household_head,
         "barangay": record.barangay,
         "address": record.address,
+        "house_number": record.house_number,
+        "sitio": record.sitio,
         "male_count": record.male_count,
         "female_count": record.female_count,
         "toilet_type": record.toilet_type,

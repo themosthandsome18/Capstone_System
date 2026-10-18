@@ -908,6 +908,13 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
 
 
 class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
+    # No serializer defaults: omitted fields must survive full and partial updates.
+    house_number = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, allow_null=False,
+    )
+    sitio = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, allow_null=False,
+    )
     toilet_type_label = serializers.CharField(
         source="get_toilet_type_display",
         read_only=True,
@@ -937,6 +944,8 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "household_head",
             "barangay",
             "address",
+            "house_number",
+            "sitio",
             "male_count",
             "female_count",
             "total_members",

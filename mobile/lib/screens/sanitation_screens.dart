@@ -182,6 +182,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
+  final TextEditingController _houseNumber = TextEditingController();
+  final TextEditingController _sitio = TextEditingController();
+  bool _houseNumberEdited = false;
+  bool _sitioEdited = false;
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
@@ -214,6 +218,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       if (_editIncompatibility != null) return;
       final stored = widget.household!.surveyValues!;
       _address.text = stored['address'] as String;
+      _houseNumber.text = widget.household!.houseNumber;
+      _sitio.text = widget.household!.sitio;
       _male = stored['male_count'] as int;
       _female = stored['female_count'] as int;
       _waterLevel = stored['water_level'] as String;
@@ -263,6 +269,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   void dispose() {
     _head.dispose();
     _address.dispose();
+    _houseNumber.dispose();
+    _sitio.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
@@ -303,6 +311,16 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           label: 'Household head',
           textCapitalization: TextCapitalization.words,
         ),
+        AppTextField(
+          controller: _houseNumber,
+          label: 'House Number',
+          onChanged: (_) => _houseNumberEdited = true,
+        ),
+        AppTextField(
+          controller: _sitio,
+          label: 'Sitio',
+          onChanged: (_) => _sitioEdited = true,
+        ),
         DropdownTile<String>(
           label: 'Barangay',
           value: _barangay,
@@ -312,7 +330,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         ),
         AppTextField(
           controller: _address,
-          label: 'Address',
+          label: widget.household == null ? 'Address' : 'Existing combined address',
           textCapitalization: TextCapitalization.words,
         ),
         HouseholdMembersPanel(
@@ -428,6 +446,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Barangay is required.');
       return;
     }
+    if (_houseNumber.text.length > 120 || _sitio.text.length > 120) {
+      showAppMessage(context, 'House Number and Sitio must each be 120 characters or fewer.');
+      return;
+    }
     if (_male + _female <= 0) {
       showAppMessage(context, 'Household member count is required.');
       return;
@@ -470,6 +492,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         address: stored != null && _address.text == stored['address']
             ? _address.text
             : _address.text.trim(),
+        houseNumber: stored == null || stored.containsKey('house_number') || _houseNumberEdited
+            ? _houseNumber.text : null,
+        sitio: stored == null || stored.containsKey('sitio') || _sitioEdited
+            ? _sitio.text : null,
         maleCount: _male,
         femaleCount: _female,
         toiletType: _toiletType,
