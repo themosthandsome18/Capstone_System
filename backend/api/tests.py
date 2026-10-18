@@ -12105,6 +12105,63 @@ import re
 from pathlib import Path
 
 
+class ActivityLogDigestConstraintTests(_BoatFareApiBase, TestCase):
+    """The colleague's unique constraint on ActivityLog (migration 0059,
+    uniq_sanitation_public_digest) covers record_id ONLY for rows with module
+    "sanitation" and record_type "SanitationPublicSubmission". The logs of the boat
+    fare tiers and of the hotlines are module "tourism": the same action on the same
+    thing, repeated, must never be refused by it."""
+
+    NAME = "uniq_sanitation_public_digest"
+
+    def setUp(self):
+        self.setUpData()
+
+    def test_the_constraint_exists_here_and_does_refuse_what_it_is_meant_to(self):
+        from django.db import IntegrityError, transaction
+
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, ActivityLog._meta.db_table)
+        self.assertIn(self.NAME, constraints)  # so the tests below are not vacuous
+        ActivityLog.objects.create(module="sanitation", action="create", record_type="SanitationPublicSubmission", record_id="7", record_label="x")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ActivityLog.objects.create(module="sanitation", action="create", record_type="SanitationPublicSubmission", record_id="7", record_label="x")
+
+    def test_a_tier_deactivated_and_brought_back_twice_the_same_day_is_logged_four_times(self):
+        before = self._logs().count()
+        for _ in range(2):
+            self.assertEqual(self.admin.post(self._url(self.b, "deactivate"), {}, format="json").status_code, 200)
+            self.assertEqual(self.admin.post(self._url(self.b, "reactivate"), {}, format="json").status_code, 200)
+        rows = list(self._logs().order_by("pk").values_list("record_id", "record_label")[before:])
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(len({record_id for record_id, _ in rows}), 1)  # the same record_id four times
+        self.assertEqual(rows[0], rows[2])  # and identical rows, which the constraint does not look at
+        self.assertEqual(rows[1], rows[3])
+
+    def test_a_tier_renamed_and_renamed_back_is_logged_each_time(self):
+        before = self._logs().count()
+        original = self.b.name
+        for _ in range(2):
+            self.assertEqual(self.admin.patch(self._url(self.b), {"name": "Bravo temporary"}, format="json").status_code, 200)
+            self.assertEqual(self.admin.patch(self._url(self.b), {"name": original}, format="json").status_code, 200)
+        self.assertEqual(self._logs().count() - before, 4)
+
+    def test_a_hotline_deactivated_and_brought_back_twice_the_same_day_is_logged_four_times(self):
+        contact = EmergencyContact.objects.create(name="Echo Desk", contact_numbers="555-5555", icon="help_desk", display_order=90)
+        base = "/api/emergency-contacts/"
+        before = ActivityLog.objects.filter(record_type="EmergencyContact").count()
+        for _ in range(2):
+            self.assertEqual(self.admin.post(f"{base}{contact.pk}/deactivate/", {}, format="json").status_code, 200)
+            self.assertEqual(self.admin.post(f"{base}{contact.pk}/reactivate/", {}, format="json").status_code, 200)
+        rows = ActivityLog.objects.filter(record_type="EmergencyContact").order_by("pk")
+        self.assertEqual(rows.count() - before, 4)
+        self.assertEqual(set(rows.values_list("module", flat=True)), {"tourism"})
+
+    def test_our_logs_are_module_tourism_and_so_outside_the_constraint(self):
+        self.admin.post(self._url(self.b, "deactivate"), {}, format="json")
+        self.assertEqual(set(self._logs().values_list("module", "record_type")), {("tourism", "BoatCapacityFare")})
+
+
 # -- Mobile App Content, commit 1: the two tables and their seed ----------------------
 
 MOBILE_CONTENT_DART = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "screens" / "tourism_screens.dart"
