@@ -121,7 +121,7 @@ test("an unrelated edit omits and preserves the existing septic value", async ()
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
   await waitFor(() =>
-    expect(mockUpdateHousehold).toHaveBeenCalledWith(21, { address: "New Address" })
+    expect(mockUpdateHousehold).toHaveBeenCalledWith(21, { address: "New address" })
   );
 });
 
@@ -180,7 +180,7 @@ test.each([null, ""])(
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
     await waitFor(() =>
-      expect(mockUpdateHousehold).toHaveBeenCalledWith(21, { address: "Legacy Address" })
+      expect(mockUpdateHousehold).toHaveBeenCalledWith(21, { address: "Legacy address" })
     );
   }
 );

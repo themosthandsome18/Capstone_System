@@ -92,7 +92,7 @@ void main() {
       expect(tester.widget<LocationConfirmationPanel>(find.byType(LocationConfirmationPanel)).confirmed, isTrue);
       expect(tester.widget<AppTextField>(field('Latitude')).controller.text, '${stored['latitude']}');
       expect(tester.widget<AppTextField>(field('Longitude')).controller.text, '${stored['longitude']}');
-      await tester.enterText(field('Address'), 'Changed address');
+      await tester.enterText(field('Existing combined address'), 'Changed address');
       await submitEdit(tester);
     }, () => client);
     expect(location.calls, 0);
@@ -127,7 +127,7 @@ void main() {
     await pumpEdit(tester, stored);
     for (final entry in {
       'Household head': stored['household_head'],
-      'Address': stored['address'],
+      'Existing combined address': stored['address'],
       'Latitude': '${stored['latitude']}',
       'Longitude': '${stored['longitude']}',
     }.entries) {
@@ -175,7 +175,7 @@ void main() {
         addTearDown(client.close);
         await http.runWithClient(() async {
           await pumpEdit(tester, stored);
-          await tester.enterText(field('Address'), 'Changed address');
+          await tester.enterText(field('Existing combined address'), 'Changed address');
           await submitEdit(tester);
         }, () => client);
         expect(sent, isNotNull);
@@ -220,7 +220,7 @@ void main() {
     addTearDown(client.close);
     await http.runWithClient(() async {
       await pumpEdit(tester, {...storedHousehold(), 'septic_tank_type': null});
-      await tester.enterText(field('Address'), 'Changed address');
+      await tester.enterText(field('Existing combined address'), 'Changed address');
       await submitEdit(tester);
     }, () => client);
     expect(jsonDecode(sent!.body), {'address': 'Changed address'});

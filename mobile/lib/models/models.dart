@@ -740,11 +740,21 @@ class HouseholdSanitationItem {
     'longitude',
   ];
 
+  static const optionalAddressFields = ['house_number', 'sitio'];
+  String get houseNumber => surveyValues?['house_number'] as String? ?? '';
+  String get sitio => surveyValues?['sitio'] as String? ?? '';
+
   String? get editIncompatibility {
     final values = surveyValues;
     if (values == null) return 'stored household fields are unavailable';
     for (final key in surveyFields) {
       if (!values.containsKey(key)) return '$key is missing';
+    }
+    for (final key in optionalAddressFields) {
+      if (values.containsKey(key) &&
+          (values[key] is! String || (values[key] as String).length > 120)) {
+        return '$key is invalid';
+      }
     }
     if (values['id'] is! int || (values['id'] as int) <= 0) {
       return 'id is invalid';
@@ -812,7 +822,7 @@ class HouseholdSanitationItem {
       toiletType: json['toilet_type']?.toString(),
       septicTankType: json['septic_tank_type']?.toString(),
       surveyValues: Map<String, dynamic>.unmodifiable({
-        for (final key in surveyFields)
+        for (final key in [...surveyFields, ...optionalAddressFields])
           if (json.containsKey(key)) key: json[key],
       }),
     );

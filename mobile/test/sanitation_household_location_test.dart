@@ -318,7 +318,7 @@ void main() {
           FakeHouseholdLocation()..enabled = false,
           stored: stored,
         );
-        await tester.enterText(coordinateField('Address'), 'Only address');
+        await tester.enterText(coordinateField('Existing combined address'), 'Only address');
         await capture(tester);
         expect(coordinateText(tester, 'Latitude'), '${stored['latitude']}');
         expect(coordinateText(tester, 'Longitude'), '${stored['longitude']}');

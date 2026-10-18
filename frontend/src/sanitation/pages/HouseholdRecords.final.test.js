@@ -59,7 +59,7 @@ test("unrelated address edit preserves legacy septic, exact raw source and all o
   expect(screen.getByText(/Legacy value: Septic tank/)).toBeInTheDocument();
   fireEvent.change(screen.getByPlaceholderText("House no., Street, sitio"), { target: { value: "New address" } });
   save();
-  await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { address: "New Address" }));
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { address: "New address" }));
 });
 
 test.each(["water_sealed", "pour_flush"])("legacy %s applicable transition requires replacement", (toilet) => {
@@ -136,7 +136,7 @@ test("legacy blank source and unsupported level are visible and preserved", asyn
   expect(screen.getByText(/Legacy water source:/)).toBeInTheDocument();
   expect(screen.getByText(/Legacy water level: none/)).toBeInTheDocument();
   fireEvent.change(screen.getByPlaceholderText("House no., Street, sitio"), { target: { value: "New address" } });
-  save(); await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { address: "New Address" }));
+  save(); await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { address: "New address" }));
 });
 
 test("new records require both source and independently chosen level", () => {

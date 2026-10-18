@@ -23,6 +23,8 @@ class SurveyApi extends TourismApi {
     required String householdHead,
     required String barangay,
     required String address,
+    String? houseNumber,
+    String? sitio,
     required int maleCount,
     required int femaleCount,
     required String toiletType,
@@ -237,7 +239,7 @@ void main() {
           expect(dropdown('Septic tank type'), findsNothing);
         }
         await tester.enterText(
-          find.widgetWithText(AppTextField, 'Address'),
+          find.widgetWithText(AppTextField, 'Existing combined address'),
           'Updated address',
         );
         tester
