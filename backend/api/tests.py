@@ -10410,6 +10410,8 @@ class PublicSanitationBootstrapExposureTests(TestCase):
         self.assertFalse("expires on" in body, "permit-expiry notice leaked")
 
     def test_record_keys_are_present_but_empty_for_old_apks(self):
+        from .services.sanitation import COMMUNITY_REPORT_CATEGORY_PRIORITIES
+
         data = APIClient().get(self.URL).json()
         self.assertEqual(
             set(data),
@@ -10420,9 +10422,12 @@ class PublicSanitationBootstrapExposureTests(TestCase):
                 "complaintData",
                 "householdRecords",
                 "barangays",
+                "reportCategories",
                 "notifications",
             },
         )
+        self.assertIsInstance(data["reportCategories"], list)
+        self.assertEqual(data["reportCategories"], list(COMMUNITY_REPORT_CATEGORY_PRIORITIES))
         self.assertEqual(data["establishments"], [])
         self.assertEqual(data["inspections"], [])
         self.assertEqual(data["complaintData"], {"summary": {}, "rows": []})
