@@ -340,12 +340,13 @@ function EmergencyHotlinesPage() {
                             <div className="hotline-chips">
                               {row.email ? (
                                 <span className="hotline-chip" title={row.email}>
-                                  <FiMail aria-hidden="true" /> {row.email}
+                                  <FiMail aria-hidden="true" />
+                                  <span className="hotline-chip-text">{row.email}</span>
                                 </span>
                               ) : null}
                               {row.description ? (
                                 <span className="hotline-chip" title={row.description}>
-                                  {row.description}
+                                  <span className="hotline-chip-text">{row.description}</span>
                                 </span>
                               ) : null}
                             </div>

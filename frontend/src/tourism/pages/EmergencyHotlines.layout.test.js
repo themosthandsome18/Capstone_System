@@ -124,3 +124,85 @@ describe("the icon lines up with the first line, and does not depend on the chip
     expect(css(preview, "flex")).toMatch(/^(0 0 auto|none)/);
   });
 });
+
+describe("a chip is one line: the icon and the text side by side, never split inside", () => {
+  const LONG_EMAIL = `${"very.long.address.".repeat(8)}name@a-very-long-domain-name-for-a-test.example.com`;
+
+  async function openWithChips() {
+    const rows = [
+      contact(1, "Plain Row"),
+      contact(2, "Email Row", { email: LONG_EMAIL }),
+      contact(3, "Description Row", { description: "A description that is long enough to fill a good part of the line" }),
+      contact(4, "Both Row", { email: "short@example.com", description: "Short note" }),
+    ];
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
+    );
+    render(<EmergencyHotlines />);
+    await screen.findByRole("list");
+  }
+  const chipsOf = () => [...document.querySelectorAll(".hotline-chip")];
+
+  it("makes every chip a centred flex row that may not wrap inside", async () => {
+    await openWithChips();
+    expect(chipsOf()).toHaveLength(4); // email, description, email, description
+    chipsOf().forEach((chip) => {
+      expect(css(chip, "display")).toBe("inline-flex");
+      expect(css(chip, "align-items")).toBe("center");
+      expect(css(chip, "white-space")).toBe("nowrap");
+    });
+  });
+
+  it("lets the CHIP LIST wrap, so a whole chip moves to the next line", async () => {
+    await openWithChips();
+    const lists = [...document.querySelectorAll(".hotline-chips")];
+    expect(lists).toHaveLength(3);
+    lists.forEach((list) => {
+      expect(css(list, "display")).toBe("flex");
+      expect(css(list, "flex-wrap")).toBe("wrap");
+    });
+    // a chip is never wider than the line
+    chipsOf().forEach((chip) => expect(css(chip, "max-width")).toBe("100%"));
+  });
+
+  it("gives every chip the same height, with the icon beside its text and not above it", async () => {
+    await openWithChips();
+    const heights = new Set(chipsOf().map((chip) => css(chip, "min-height")));
+    expect([...heights]).toEqual(["24px"]);
+    const withIcon = chipsOf().filter((chip) => chip.querySelector("svg"));
+    expect(withIcon).toHaveLength(2);
+    withIcon.forEach((chip) => {
+      // in the chip, the icon comes first and the text second, as two flex items of ONE row
+      expect([...chip.children].map((el) => el.tagName.toLowerCase())).toEqual(["svg", "span"]);
+      expect(css(chip.querySelector("svg"), "flex")).toMatch(/^(0 0 auto|none)/);
+    });
+    // the same height whether it has an icon or not
+    const descriptionChip = chipsOf().find((chip) => !chip.querySelector("svg"));
+    expect(css(descriptionChip, "min-height")).toBe("24px");
+    expect(css(descriptionChip, "display")).toBe("inline-flex");
+  });
+
+  it("does not split a very long email in two: one text, one line, cut with an ellipsis if it cannot fit", async () => {
+    await openWithChips();
+    const chip = [...document.querySelectorAll(".hotline-chip")].find((c) => c.textContent.includes("a-very-long-domain"));
+    const text = chip.querySelector(".hotline-chip-text");
+    // the whole address is ONE text, in ONE element (nothing splits it into two lines' worth of boxes)
+    expect(text.textContent).toBe(LONG_EMAIL);
+    expect(text.childNodes).toHaveLength(1);
+    expect(css(text, "white-space")).toBe("nowrap");
+    expect(css(text, "overflow")).toBe("hidden");
+    expect(css(text, "text-overflow")).toBe("ellipsis");
+    expect(css(text, "min-width")).toMatch(/^0(px)?$/);
+    // the person can still read all of it
+    expect(chip.getAttribute("title")).toBe(LONG_EMAIL);
+  });
+
+  it("keeps the other small parts of the row on one line too: the status pill and the buttons", async () => {
+    await openWithChips();
+    const row = rowOf(1);
+    expect(css(row.querySelector(".options-status"), "white-space")).toBe("nowrap");
+    row.querySelectorAll(".hotline-actions button").forEach((button) => {
+      expect(css(button, "white-space")).toBe("nowrap");
+    });
+  });
+});

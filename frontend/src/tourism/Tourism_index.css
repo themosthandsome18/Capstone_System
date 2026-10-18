@@ -4803,16 +4803,43 @@
   margin-top: 6px;
 }
 
+/* A chip is ONE line: the icon (if any) and the text side by side, centred on
+   each other. The base stylesheet makes every svg display:block, which would
+   put an icon above its text, so the chip is a flex row and never wraps inside.
+   When there is not room for the whole chip, the chip list (flex-wrap above)
+   moves the whole chip to the next line. Only a text longer than a full line is
+   cut, with an ellipsis (the full text is in the chip's title). */
 .hotline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: 100%;
-  overflow: hidden;
+  min-height: 24px;
+  box-sizing: border-box;
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
-  text-overflow: ellipsis;
+  line-height: 1.2;
   white-space: nowrap;
   background: var(--th-primary-tint);
   color: var(--th-primary-ink);
+}
+
+.hotline-chip svg {
+  flex: none;
+}
+
+.hotline-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Small parts of the row never split their own words over two lines. */
+.hotline-row .options-status,
+.hotline-actions button {
+  white-space: nowrap;
 }
 
 .hotline-actions {
