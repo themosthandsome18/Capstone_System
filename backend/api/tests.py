@@ -7815,6 +7815,649 @@ class BoatCapacityFarePayloadTests(TestCase):
         self.assertEqual(before, (TouristRecord.objects.count(), BoatCapacityFare.objects.count()))
 
 
+class _BoatFareApiBase:
+    """Shared set-up: four tiers (NOT the seeded nine, different names and
+    orders), records that hold some of them, and an admin and a non-admin."""
+
+    LIST = "/api/boat-capacity-fares/"
+    REORDER = "/api/boat-capacity-fares/reorder/"
+    A_NAME = "Alpha 1-2 pax (One-Way P1000, Two-way P1500)"
+    B_NAME = "Bravo 3-4 pax (One-Way P2000, Two-way P2,500)"
+    C_NAME = "Charlie 5-6 pax (One-Way P3,000, Two-way P3,500)"
+    D_NAME = "Delta 7-8 pax (One-Way P4,000, Two-way P4,500)"
+    ORPHAN = "Zulu 9-10 pax (One-Way P9,000, Two-way P9,500)"  # held by a record, in no tier
+
+    def _make_client(self, role, username):
+        user = User.objects.create_user(username=username, password="Staff@12345")
+        UserProfile.objects.create(user=user, role=role)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        client.user = user
+        return client
+
+    def _record(self, survey_id, fare):
+        return TouristRecord.objects.create(
+            survey_id=survey_id,
+            full_name="Boat Fare Test Group",
+            contact_number="09170000000",
+            country=Country.objects.first(),
+            region=Region.objects.first(),
+            province=Province.objects.first(),
+            arrival_date="2026-04-02",
+            resort=Resort.objects.first(),
+            itinerary=Itinerary.objects.first(),
+            travel_mode=TravelMode.objects.first(),
+            boat_type=BoatType.objects.first(),
+            boat_capacity_fare=fare,
+            visit_purpose=VisitPurpose.objects.first(),
+            total_visitors=4,
+            filipino_count=4,
+            total_male=2,
+            total_female=2,
+            age_8_59=4,
+            status="arrived",
+        )
+
+    def setUpData(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        TouristRecord.objects.all().delete()
+        BoatCapacityFare.objects.all().delete()
+        # created in a different order from their display_order
+        self.c = BoatCapacityFare.objects.create(name=self.C_NAME, display_order=30)
+        self.a = BoatCapacityFare.objects.create(name=self.A_NAME, display_order=10)
+        self.d = BoatCapacityFare.objects.create(name=self.D_NAME, display_order=40)
+        self.b = BoatCapacityFare.objects.create(name=self.B_NAME, display_order=20)
+        # A is held by 2 records, C by 1, B and D by none; one record holds a text in no tier; one holds none
+        self._record("BF-001", self.A_NAME)
+        self._record("BF-002", self.A_NAME)
+        self._record("BF-003", self.C_NAME)
+        self._record("BF-004", self.ORPHAN)
+        self._record("BF-005", "")
+        self.admin = self._make_client(ROLE_ADMIN, "bf_admin")
+
+    def _url(self, fare=None, action=None):
+        url = self.LIST
+        if fare is not None:
+            url += f"{fare.pk}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _stored(self):
+        """Every tier row as it is in the database NOW."""
+        return list(BoatCapacityFare.objects.order_by("pk").values_list("pk", "name", "display_order", "is_active"))
+
+    def _held(self):
+        """Every record's tier text as it is in the database NOW."""
+        return list(TouristRecord.objects.order_by("pk").values_list("pk", "boat_capacity_fare"))
+
+    def _logs(self):
+        return ActivityLog.objects.filter(record_type="BoatCapacityFare")
+
+
+class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
+    """The admin API of the Boat Capacity and Fare tiers (boat fare, commit 3)."""
+
+    def setUp(self):
+        self.setUpData()
+
+    # -- who may use it: 401 and 403 on EACH endpoint ---------------------
+
+    def _anonymous_is_refused(self, method, url):
+        before, held, logs = self._stored(), self._held(), self._logs().count()
+        response = getattr(APIClient(), method)(url, {"name": "Intruder", "ids": []}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, (method, url))
+        self.assertEqual((self._stored(), self._held(), self._logs().count()), (before, held, logs))
+
+    def _non_admin_is_refused(self, method, url):
+        before, held, logs = self._stored(), self._held(), self._logs().count()
+        for role in (ROLE_TOURISM, ROLE_TOURIST):
+            client = self._make_client(role, f"bf_{role}_{method}_{abs(hash(url)) % 1000}")
+            response = getattr(client, method)(url, {"name": "Intruder", "ids": []}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, (role, method, url))
+        self.assertEqual((self._stored(), self._held(), self._logs().count()), (before, held, logs))
+
+    def test_401_on_the_list(self):
+        self._anonymous_is_refused("get", self.LIST)
+
+    def test_403_on_the_list(self):
+        self._non_admin_is_refused("get", self.LIST)
+
+    def test_401_on_create(self):
+        self._anonymous_is_refused("post", self.LIST)
+
+    def test_403_on_create(self):
+        self._non_admin_is_refused("post", self.LIST)
+
+    def test_401_on_rename(self):
+        self._anonymous_is_refused("patch", self._url(self.b))
+
+    def test_403_on_rename(self):
+        self._non_admin_is_refused("patch", self._url(self.b))
+
+    def test_401_on_deactivate(self):
+        self._anonymous_is_refused("post", self._url(self.b, "deactivate"))
+
+    def test_403_on_deactivate(self):
+        self._non_admin_is_refused("post", self._url(self.b, "deactivate"))
+
+    def test_401_on_reactivate(self):
+        self._anonymous_is_refused("post", self._url(self.b, "reactivate"))
+
+    def test_403_on_reactivate(self):
+        self._non_admin_is_refused("post", self._url(self.b, "reactivate"))
+
+    def test_401_on_reorder(self):
+        self._anonymous_is_refused("post", self.REORDER)
+
+    def test_403_on_reorder(self):
+        self._non_admin_is_refused("post", self.REORDER)
+
+    # -- routes ----------------------------------------------------------------
+
+    def test_the_literal_reorder_route_is_registered_before_the_id_route(self):
+        from django.urls import resolve
+
+        from api.views import boat_capacity_fares as views
+
+        self.assertIs(resolve(self.REORDER).func, views.boat_capacity_fare_reorder)
+        self.assertEqual(resolve(self.REORDER).kwargs, {})
+        self.assertIs(resolve(self._url(self.a)).func, views.boat_capacity_fare_detail)
+        self.assertEqual(resolve(self._url(self.a)).kwargs, {"fare_id": self.a.pk})
+        from api import urls as api_urls
+
+        routes = [str(p.pattern) for p in api_urls.urlpatterns if "boat-capacity-fares" in str(p.pattern)]
+        self.assertLess(routes.index("boat-capacity-fares/reorder/"), routes.index("boat-capacity-fares/<int:fare_id>/"))
+
+    # -- no DELETE ----------------------------------------------------------------
+
+    def test_delete_is_405_on_the_list_the_item_and_every_action(self):
+        before, held = self._stored(), self._held()
+        for url in (self.LIST, self._url(self.a), self._url(self.a, "deactivate"),
+                    self._url(self.a, "reactivate"), self.REORDER):
+            self.assertEqual(self.admin.delete(url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED, url)
+        self.assertEqual((self._stored(), self._held(), self._logs().count()), (before, held, 0))
+
+    # -- reading ------------------------------------------------------------------
+
+    def test_the_list_has_every_tier_in_order_with_its_state_and_record_count(self):
+        self.d.is_active = False
+        self.d.save()
+        rows = self.admin.get(self.LIST).json()
+        self.assertEqual([r["name"] for r in rows], [self.A_NAME, self.B_NAME, self.C_NAME, self.D_NAME])
+        self.assertEqual([r["display_order"] for r in rows], [10, 20, 30, 40])
+        self.assertEqual([r["is_active"] for r in rows], [True, True, True, False])
+        for row in rows:
+            self.assertEqual(set(row), {"id", "name", "display_order", "is_active", "record_count"})
+
+    def test_record_count_is_exact_text_and_zero_for_a_tier_nobody_holds(self):
+        rows = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        # tier 1 (A) is held by 2 records and tier 3 (C) by 1; B and D by none
+        self.assertEqual(rows, {self.A_NAME: 2, self.B_NAME: 0, self.C_NAME: 1, self.D_NAME: 0})
+        # a text in no tier, an empty text, and a near-miss do not count
+        self._record("BF-006", self.A_NAME.upper())
+        self._record("BF-007", " " + self.B_NAME)
+        rows = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        self.assertEqual(rows[self.A_NAME], 2)
+        self.assertEqual(rows[self.B_NAME], 0)
+
+    def test_the_list_is_two_queries_for_any_number_of_tiers_not_one_per_tier(self):
+        from django.db import connection as conn
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(conn) as few:
+            self.assertEqual(self.admin.get(self.LIST).status_code, 200)
+        for index in range(25):
+            BoatCapacityFare.objects.create(name=f"Extra tier {index}", display_order=100 + index)
+            self._record(f"BF-X{index}", f"Extra tier {index}")
+        with CaptureQueriesContext(conn) as many:
+            rows = self.admin.get(self.LIST).json()
+        self.assertEqual(len(rows), 29)
+        self.assertEqual(len(many), len(few))
+
+    # -- create --------------------------------------------------------------------
+
+    def test_create_answers_and_stores_a_tier_last_and_active(self):
+        response = self.admin.post(
+            self.LIST,
+            {"name": "  Echo   11-12 pax   (One-Way P5,000)  ", "id": 9999, "is_active": False, "display_order": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        body = response.json()
+        stored = BoatCapacityFare.objects.get(pk=body["id"])
+        self.assertNotEqual(stored.pk, 9999)
+        for source in (body, {"id": stored.pk, "name": stored.name, "display_order": stored.display_order,
+                              "is_active": stored.is_active, "record_count": 0}):
+            self.assertEqual(source["name"], "Echo 11-12 pax (One-Way P5,000)")
+            self.assertEqual(source["display_order"], 50)
+            self.assertIs(source["is_active"], True)
+            self.assertEqual(source["record_count"], 0)
+        self.assertEqual(BoatCapacityFare.objects.count(), 5)
+
+    def test_a_new_tier_whose_text_some_record_already_holds_counts_those_records(self):
+        response = self.admin.post(self.LIST, {"name": self.ORPHAN}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["record_count"], 1)
+        listed = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        self.assertEqual(listed[self.ORPHAN], 1)
+
+    def test_create_refuses_a_bad_name_and_stores_and_logs_nothing(self):
+        before = self._stored()
+        for bad in (None, "", "   ", 5, ["x"], {"a": 1}, "x" * 161):
+            response = self.admin.post(self.LIST, {"name": bad}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, repr(bad)[:30])
+            self.assertEqual(self._stored(), before)
+        self.assertEqual(self.admin.post(self.LIST, {}, format="json").status_code, 400)
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_create_accepts_a_name_of_exactly_160_letters(self):
+        name = "n" * 160
+        response = self.admin.post(self.LIST, {"name": name}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=response.json()["id"]).name, name)
+
+    def test_create_refuses_the_same_name_by_the_import_rule(self):
+        from api.services import online_booking
+
+        before = self._stored()
+        for clone in (self.A_NAME.lower(), "  " + self.A_NAME.replace(" ", "   ") + " ", self.A_NAME.upper()):
+            self.assertEqual(online_booking.normalize_key(clone), online_booking.normalize_key(self.A_NAME))
+            response = self.admin.post(self.LIST, {"name": clone}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, clone)
+            self.assertIn("name", response.json())
+            self.assertEqual(self._stored(), before)
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- rename ----------------------------------------------------------------------
+
+    def test_rename_of_a_tier_nobody_holds_answers_and_stores_and_leaves_the_rest_alone(self):
+        before = {pk: (name, order, active) for pk, name, order, active in self._stored()}
+        response = self.admin.patch(
+            self._url(self.b),
+            {"name": "  Bravo   3-4 pax (One-Way P2,500, Two-way P3,000) ", "is_active": False, "display_order": 99},
+            format="json",
+        )
+        new = "Bravo 3-4 pax (One-Way P2,500, Two-way P3,000)"
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertEqual((body["id"], body["name"], body["display_order"], body["is_active"]), (self.b.pk, new, 20, True))
+        self.assertEqual(body["record_count"], 0)
+
+        now = {pk: (name, order, active) for pk, name, order, active in self._stored()}
+        self.assertEqual(now[self.b.pk], (new, 20, True))  # the name changed; is_active and order were ignored
+        for pk in (self.a.pk, self.c.pk, self.d.pk):
+            self.assertEqual(now[pk], before[pk])
+        self.assertEqual(self._held(), self._held())
+
+    def test_rename_is_refused_while_a_record_holds_the_text_and_nothing_changes(self):
+        for tier, held in ((self.a, 2), (self.c, 1)):
+            before, records = self._stored(), self._held()
+            response = self.admin.patch(self._url(tier), {"name": "Brand new wording"}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, tier.name)
+            body = response.json()
+            self.assertEqual(body["code"], "text_in_use")
+            self.assertEqual(body["record_count"], held)
+            self.assertIn("Add a new tier", body["detail"])
+            self.assertIn("deactivate", body["detail"])
+            self.assertEqual(self._stored(), before)  # the tier is exactly as it was
+            self.assertEqual(self._held(), records)  # and so are the records
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_the_old_text_stays_valid_on_its_records_so_a_refused_rename_leaves_them_listed(self):
+        self.admin.patch(self._url(self.a), {"name": "Brand new wording"}, format="json")
+        listed = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        self.assertEqual(listed[self.A_NAME], 2)
+        self.assertNotIn("Brand new wording", listed)
+
+    def test_rename_to_the_name_of_another_tier_is_refused_and_nothing_changes(self):
+        before = self._stored()
+        response = self.admin.patch(self._url(self.b), {"name": self.D_NAME.upper()}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_rename_to_its_own_name_changes_nothing_and_logs_nothing(self):
+        before = self._stored()
+        response = self.admin.patch(self._url(self.b), {"name": "  " + self.B_NAME + " "}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["name"], self.B_NAME)
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_change_of_capitals_alone_is_a_rename_and_is_stored(self):
+        response = self.admin.patch(self._url(self.b), {"name": self.B_NAME.upper()}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["name"], self.B_NAME.upper())
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME.upper())
+
+    def test_a_tier_may_be_renamed_to_a_text_that_records_already_hold(self):
+        response = self.admin.patch(self._url(self.b), {"name": self.ORPHAN}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["record_count"], 1)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.ORPHAN)
+
+    def test_rename_refuses_a_bad_name_and_an_unknown_tier(self):
+        before = self._stored()
+        for bad in (None, "", "   ", 5, ["x"], "x" * 161):
+            response = self.admin.patch(self._url(self.b), {"name": bad}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, repr(bad)[:30])
+        self.assertEqual(self.admin.patch(self._url(self.b), {"is_active": False}, format="json").status_code, 400)
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self.admin.patch(self.LIST + "99999/", {"name": "x"}, format="json").status_code, 404)
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- deactivate / reactivate ---------------------------------------------------
+
+    def test_deactivate_and_reactivate_answer_and_store(self):
+        response = self.admin.post(self._url(self.a, "deactivate"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIs(response.json()["is_active"], False)
+        self.assertEqual(response.json()["record_count"], 2)  # retiring does not touch the records
+        self.assertIs(BoatCapacityFare.objects.get(pk=self.a.pk).is_active, False)
+        self.assertEqual(self._held(), self._held())
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 2)
+
+        response = self.admin.post(self._url(self.a, "reactivate"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIs(response.json()["is_active"], True)
+        self.assertIs(BoatCapacityFare.objects.get(pk=self.a.pk).is_active, True)
+
+    def test_the_last_active_tier_may_be_deactivated_so_none_can_be_active(self):
+        for tier in (self.a, self.b, self.c, self.d):
+            response = self.admin.post(self._url(tier, "deactivate"))
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(BoatCapacityFare.objects.filter(is_active=True).count(), 0)
+        self.assertEqual(BoatCapacityFare.objects.count(), 4)  # still all there
+        self.assertEqual(self._logs().count(), 4)
+
+    def test_doing_it_twice_changes_and_logs_once(self):
+        self.admin.post(self._url(self.b, "deactivate"))
+        self.admin.post(self._url(self.b, "deactivate"))
+        self.assertEqual(self._logs().count(), 1)
+        self.admin.post(self._url(self.d, "reactivate"))  # already active
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_deactivating_or_reactivating_an_unknown_tier_is_404(self):
+        self.assertEqual(self.admin.post(self.LIST + "99999/deactivate/").status_code, 404)
+        self.assertEqual(self.admin.post(self.LIST + "99999/reactivate/").status_code, 404)
+        self.assertEqual(self._logs().count(), 0)
+
+    # -- reorder -----------------------------------------------------------------------
+
+    def test_reorder_answers_and_stores_the_new_order(self):
+        ids = [self.d.pk, self.b.pk, self.a.pk, self.c.pk]
+        response = self.admin.post(self.REORDER, {"ids": ids}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertEqual([r["id"] for r in body], ids)
+        self.assertEqual([r["display_order"] for r in body], [10, 20, 30, 40])
+        self.assertEqual({r["name"]: r["record_count"] for r in body},
+                         {self.A_NAME: 2, self.B_NAME: 0, self.C_NAME: 1, self.D_NAME: 0})
+
+        stored = list(BoatCapacityFare.objects.order_by("display_order", "id").values_list("pk", "display_order"))
+        self.assertEqual(stored, [(ids[0], 10), (ids[1], 20), (ids[2], 30), (ids[3], 40)])
+        self.assertEqual(BoatCapacityFare.objects.count(), 4)
+
+    def test_reorder_with_a_bad_list_is_400_and_the_database_does_not_move(self):
+        a, b, c, d = (t.pk for t in (self.a, self.b, self.c, self.d))
+        bad_bodies = [
+            {"ids": [a, b, c]},                    # one missing
+            {"ids": [a, b]},                       # two missing
+            {"ids": [a, b, c, d, 99999]},          # an extra
+            {"ids": [a, b, c, 99999]},             # a stranger in place of one
+            {"ids": [d, d, a, b]},                 # repeated
+            {"ids": [a, a, a, a]},                 # all the same
+            {"ids": [a, b, c, d, a]},              # every tier, and one of them twice
+            {"ids": [a, b, c, d, d]},              # likewise, at the end
+            {"ids": [a, a, b, c, d]},              # likewise, at the start
+            {"ids": []},                           # empty
+            {"ids": "abc"},                        # not a list
+            {"ids": None},
+            {"ids": {"0": a}},
+            {"ids": [True, b, c, d]},              # a boolean
+            {"ids": [a, b, c, "4"]},               # text
+            {"ids": [a, b, c, 4.5]},               # a number with a fraction
+            {},                                    # no ids
+            [a, b, c, d],                          # a bare list, not {"ids": ...}
+        ]
+        for body in bad_bodies:
+            before, records = self._stored(), self._held()
+            response = self.admin.post(self.REORDER, body, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, body)
+            self.assertEqual(self._stored(), before, body)  # every row, every column, as before
+            self.assertEqual(self._held(), records, body)
+            self.assertEqual(self._logs().count(), 0, body)
+
+    def test_reorder_with_an_empty_list_is_400_even_when_there_is_no_tier_at_all(self):
+        BoatCapacityFare.objects.all().delete()
+        response = self.admin.post(self.REORDER, {"ids": []}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)  # not a 500
+        self.assertEqual(self._stored(), [])
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_text_in_other_capitals_or_with_a_stray_space_does_not_hold_the_tier(self):
+        self._record("BF-NEAR1", self.B_NAME.upper())
+        self._record("BF-NEAR2", " " + self.B_NAME)
+        before_records = self._held()
+        listed = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        self.assertEqual(listed[self.B_NAME], 0)
+
+        response = self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)  # nobody holds EXACTLY this text
+        self.assertEqual(response.json()["record_count"], 0)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, "Bravo renamed")
+        self.assertEqual(self._held(), before_records)  # the near-miss records are untouched
+
+    def test_reorder_with_ids_equal_to_one_in_a_table_where_true_would_match(self):
+        BoatCapacityFare.objects.all().delete()
+        for pk, name, order in ((1, "One", 10), (2, "Two", 20), (3, "Three", 30)):
+            BoatCapacityFare.objects.create(id=pk, name=name, display_order=order)
+        before = self._stored()
+        response = self.admin.post(self.REORDER, {"ids": [3, True, 2]}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._stored(), before)
+
+    # -- the ActivityLog: who, which tier, what ----------------------------------------
+
+    def _the_log(self):
+        log = self._logs().get()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.module, MODULE_TOURISM)
+        return log
+
+    def test_create_leaves_a_trace(self):
+        body = self.admin.post(self.LIST, {"name": "Foxtrot 13-14 pax"}, format="json").json()
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_CREATE)
+        self.assertEqual(log.record_id, str(body["id"]))
+        self.assertIn("added", log.record_label)
+        self.assertIn("Foxtrot 13-14 pax", log.record_label)
+
+    def test_rename_leaves_a_trace_with_the_old_and_the_new_text(self):
+        self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.b.pk))
+        self.assertIn("renamed", log.record_label)
+        self.assertIn(self.B_NAME, log.record_label)
+        self.assertIn("Bravo renamed", log.record_label)
+
+    def test_deactivate_leaves_a_trace(self):
+        self.admin.post(self._url(self.c, "deactivate"))
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.c.pk))
+        self.assertIn("deactivated", log.record_label)
+        self.assertIn(self.C_NAME, log.record_label)
+
+    def test_reactivate_leaves_a_trace(self):
+        BoatCapacityFare.objects.filter(pk=self.c.pk).update(is_active=False)
+        self.admin.post(self._url(self.c, "reactivate"))
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.c.pk))
+        self.assertIn("brought back", log.record_label)
+        self.assertIn(self.C_NAME, log.record_label)
+
+    def test_reorder_leaves_a_trace_with_the_new_order(self):
+        self.admin.post(self.REORDER, {"ids": [self.d.pk, self.c.pk, self.b.pk, self.a.pk]}, format="json")
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertIn("reordered", log.record_label)
+        label = log.record_label
+        self.assertTrue(label.index("Delta") < label.index("Charlie") < label.index("Bravo") < label.index("Alpha"))
+
+    def test_a_failed_write_leaves_no_trace_of_any_kind(self):
+        self.admin.post(self.LIST, {"name": ""}, format="json")                              # bad name
+        self.admin.post(self.LIST, {"name": self.A_NAME}, format="json")                     # duplicate
+        self.admin.patch(self._url(self.a), {"name": "x"}, format="json")                    # held text
+        self.admin.patch(self._url(self.b), {"name": self.D_NAME}, format="json")            # duplicate
+        self.admin.post(self.REORDER, {"ids": [self.a.pk]}, format="json")                  # incomplete
+        self.admin.post(self.LIST + "99999/deactivate/")                                     # unknown
+        self.assertEqual(self._logs().count(), 0)
+
+
+class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
+    """The rename guard and the lock.
+
+    A TransactionTestCase, so that "inside an atomic block" is something the test
+    can see (a TestCase is wrapped in one the whole time). The real PostgreSQL
+    lock cannot be run here (the tests use SQLite, which has one writer at a
+    time), so what is proved is the order and the block it is in, and that the
+    check and the write are one statement that refuses if a record is there.
+    """
+
+    VIEWS = "api.views.boat_capacity_fares"
+
+    def setUp(self):
+        self.setUpData()
+
+    def test_a_record_that_arrives_between_the_check_and_the_write_is_still_refused(self):
+        from unittest import mock
+
+        from api.views import boat_capacity_fares as views
+
+        real_count = views._count_holders
+        arrived = []
+
+        def count_then_a_booking_arrives(name):
+            count = real_count(name)  # the early check: nobody holds it yet
+            if name == self.B_NAME and not arrived:
+                arrived.append(self._record("BF-LATE", self.B_NAME))  # ...and now someone does
+            return count
+
+        with mock.patch.object(views, "_count_holders", side_effect=count_then_a_booking_arrives):
+            response = self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+
+        self.assertEqual(len(arrived), 1)  # the booking really did arrive in the gap
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "text_in_use")
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME)  # not renamed
+        self.assertEqual(self._logs().count(), 0)
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.B_NAME).count(), 1)
+
+    def test_the_lock_the_check_and_the_write_are_in_one_atomic_block_in_that_order(self):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import boat_capacity_fares as views
+
+        seen = []
+
+        def spy(name, real):
+            def wrapper(*args, **kwargs):
+                seen.append((name, conn.in_atomic_block))
+                return real(*args, **kwargs)
+
+            return wrapper
+
+        self.assertFalse(conn.in_atomic_block)  # here, outside the view, there is no block
+        with mock.patch.object(views, "_lock", spy("lock", views._lock)), \
+                mock.patch.object(views, "_count_holders", spy("count", views._count_holders)), \
+                mock.patch.object(views, "_rename_unless_held", spy("rename", views._rename_unless_held)):
+            response = self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order = [name for name, _inside in seen]
+        self.assertEqual(order[:3], ["lock", "count", "rename"])  # the lock FIRST, then the check, then the write
+        self.assertTrue(all(inside for _name, inside in seen), seen)  # and every one of them inside the block
+
+    def test_the_log_is_written_inside_the_same_block_as_the_write(self):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import boat_capacity_fares as views
+
+        inside = []
+        real_log = views.log_activity
+
+        def spy(*args, **kwargs):
+            inside.append(conn.in_atomic_block)
+            return real_log(*args, **kwargs)
+
+        with mock.patch.object(views, "log_activity", spy):
+            self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+            self.admin.post(self._url(self.c, "deactivate"))
+            self.admin.post(self.REORDER, {"ids": [self.d.pk, self.c.pk, self.b.pk, self.a.pk]}, format="json")
+            self.admin.post(self.LIST, {"name": "Golf new"}, format="json")
+        self.assertEqual(inside, [True, True, True, True])
+
+    def test_a_log_that_fails_takes_the_write_with_it(self):
+        from unittest import mock
+
+        from api.views import boat_capacity_fares as views
+
+        with mock.patch.object(views, "log_activity", side_effect=RuntimeError("the log is down")):
+            admin = self.admin
+            admin.raise_request_exception = False
+            response = admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME)  # no write without its trace
+
+    def test_the_rename_statement_alone_refuses_while_a_record_holds_the_text(self):
+        from api.views import boat_capacity_fares as views
+
+        self.assertEqual(views._rename_unless_held(self.b.pk, self.B_NAME, "Bravo renamed"), 1)
+        self.assertEqual(views._rename_unless_held(self.a.pk, self.A_NAME, "Alpha renamed"), 0)  # held by 2
+        self.assertEqual(views._rename_unless_held(self.b.pk, self.B_NAME, "again"), 0)  # not called that any more
+        names = dict(BoatCapacityFare.objects.values_list("pk", "name"))
+        self.assertEqual(names[self.b.pk], "Bravo renamed")
+        self.assertEqual(names[self.a.pk], self.A_NAME)
+
+    def test_on_postgresql_the_writers_take_the_advisory_lock(self):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import boat_capacity_fares as views
+
+        cursor = mock.MagicMock()
+        cursor.__enter__.return_value = cursor
+        with mock.patch.object(conn, "vendor", "postgresql"), mock.patch.object(conn, "cursor", return_value=cursor):
+            views._lock()
+        cursor.execute.assert_called_once_with("SELECT pg_advisory_xact_lock(%s)", [views.LOCK_ID])
+        # and it is its own lock, not one the other admin APIs hold
+        self.assertNotIn(views.LOCK_ID, {7100001, 7100002, 7100003, 7100004, 7100005})
+
+    def test_on_sqlite_the_lock_does_nothing(self):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import boat_capacity_fares as views
+
+        with mock.patch.object(conn, "cursor") as cursor:
+            views._lock()
+        cursor.assert_not_called()
+
+
 class PeakSeasonShareTests(TestCase):
     """Key Insights percentages divide by the total the sentence names."""
 

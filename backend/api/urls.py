@@ -6,6 +6,13 @@ from .auth_views import (
     logout_view,
     tourist_register_view,
 )
+from .views.boat_capacity_fares import (
+    boat_capacity_fare_deactivate,
+    boat_capacity_fare_detail,
+    boat_capacity_fare_list,
+    boat_capacity_fare_reactivate,
+    boat_capacity_fare_reorder,
+)
 from .views.emergency_contacts import (
     emergency_contact_deactivate,
     emergency_contact_detail,
@@ -145,6 +152,11 @@ urlpatterns = [
     path("tourist-records/", tourist_record_list),
     path("tourist-records/<str:survey_id>/", tourist_record_detail),
     path("tourism-theme/", tourism_theme),
+    path("boat-capacity-fares/", boat_capacity_fare_list),
+    path("boat-capacity-fares/reorder/", boat_capacity_fare_reorder),
+    path("boat-capacity-fares/<int:fare_id>/", boat_capacity_fare_detail),
+    path("boat-capacity-fares/<int:fare_id>/deactivate/", boat_capacity_fare_deactivate),
+    path("boat-capacity-fares/<int:fare_id>/reactivate/", boat_capacity_fare_reactivate),
     path("emergency-contacts/", emergency_contact_list),
     path("emergency-contacts/reorder/", emergency_contact_reorder),
     path("emergency-contacts/<int:contact_id>/", emergency_contact_detail),
