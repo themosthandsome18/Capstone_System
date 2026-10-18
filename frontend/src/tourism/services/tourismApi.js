@@ -472,6 +472,37 @@ export const tourismApi = {
     return apiRequest("/emergency-contacts/reorder/", { method: "POST", body: JSON.stringify({ ids }) });
   },
 
+  // Boat Capacity and Fare tiers (admin). Every write answers with the tier as
+  // the server now holds it; reorder answers with the whole list. There is no
+  // delete: a tier is deactivated. A rename of a text some record holds is
+  // refused with 409 text_in_use.
+  async getBoatCapacityFares() {
+    return apiRequest("/boat-capacity-fares/");
+  },
+
+  async createBoatCapacityFare(payload) {
+    return apiRequest("/boat-capacity-fares/", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  async updateBoatCapacityFare(id, payload) {
+    return apiRequest(`/boat-capacity-fares/${encodeURIComponent(id)}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deactivateBoatCapacityFare(id) {
+    return apiRequest(`/boat-capacity-fares/${encodeURIComponent(id)}/deactivate/`, { method: "POST" });
+  },
+
+  async reactivateBoatCapacityFare(id) {
+    return apiRequest(`/boat-capacity-fares/${encodeURIComponent(id)}/reactivate/`, { method: "POST" });
+  },
+
+  async reorderBoatCapacityFares(ids) {
+    return apiRequest("/boat-capacity-fares/reorder/", { method: "POST", body: JSON.stringify({ ids }) });
+  },
+
   async createResort(payload) {
     const created = await apiRequest("/resorts/", {
       method: "POST",
