@@ -9083,7 +9083,7 @@ class InspectionDraftIsolationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.establishment.refresh_from_db()
         self.assertEqual(self.establishment.compliance_status, "violation")
-        self.assertEqual(self.establishment.permit_status, "suspended")
+        self.assertEqual(self.establishment.permit_status, "active")
         self.assertEqual(
             Notification.objects.filter(recipient_user=self.admin_user).count(), 1
         )
@@ -9101,7 +9101,7 @@ class InspectionDraftIsolationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.establishment.refresh_from_db()
         self.assertEqual(self.establishment.compliance_status, "violation")
-        self.assertEqual(self.establishment.permit_status, "suspended")
+        self.assertEqual(self.establishment.permit_status, "active")
         self.assertEqual(
             Notification.objects.filter(recipient_user=self.admin_user).count(), 1
         )

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.db import transaction
 
 from .models import (
     ActivityLog,
@@ -454,7 +455,29 @@ class SanitaryBusinessTypeSerializer(serializers.ModelSerializer):
         ]
 
 
+class SanitaryEnforcementIssuanceSerializer(serializers.Serializer):
+    stage = serializers.ChoiceField(choices=[
+        "warning", "nov_1", "nov_2", "nov_3", "suspension",
+    ])
+    expected_previous_stage = serializers.ChoiceField(
+        choices=["", "warning", "nov_1", "nov_2", "nov_3", "suspension"],
+        allow_blank=True,
+    )
+
+    def to_internal_value(self, data):
+        unexpected = set(data) - set(self.fields)
+        if unexpected:
+            raise serializers.ValidationError({
+                key: "This field is not accepted." for key in unexpected
+            })
+        return super().to_internal_value(data)
+
+
 class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
+    enforcement_stage = serializers.CharField(read_only=True)
+    enforcement_stage_label = serializers.CharField(
+        source="get_enforcement_stage_display", read_only=True,
+    )
     business_type_name = serializers.CharField(
         source="business_type.name",
         read_only=True,
@@ -508,6 +531,8 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "compliance_status_label",
             "permit_status",
             "permit_status_label",
+            "enforcement_stage",
+            "enforcement_stage_label",
             "latitude",
             "longitude",
             "coordinates",
@@ -523,6 +548,29 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["tracking_code_issued_at"]
+
+    def to_internal_value(self, data):
+        # DRF normally ignores read-only input. Reject it explicitly so callers
+        # cannot mistake a successful general update for an enforcement action.
+        if "enforcement_stage" in data:
+            raise serializers.ValidationError({
+                "enforcement_stage": "Enforcement-stage writes are not enabled.",
+            })
+        return super().to_internal_value(data)
+
+    def update(self, instance, validated_data):
+        # Validate against the locked row, including when issuance completed
+        # after the endpoint first loaded this establishment.
+        using = instance._state.db
+        with transaction.atomic(using=using):
+            current = SanitaryEstablishment.objects.using(using).select_for_update().get(pk=instance.pk)
+            if (current.enforcement_stage == "suspension"
+                    and "permit_status" in validated_data
+                    and validated_data["permit_status"] != "suspended"):
+                raise serializers.ValidationError({
+                    "permit_status": "Reinstatement is unavailable for enforcement-suspended permits.",
+                })
+            return super().update(current, validated_data)
 
     def get_tracking_code_issued_by_name(self, obj):
         user = obj.tracking_code_issued_by

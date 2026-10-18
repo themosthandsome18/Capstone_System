@@ -2,7 +2,7 @@ import random
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
-from django.db import models
+from django.db import models, router, transaction
 
 
 MAUBAN_BARANGAY_CENTERS = {
@@ -714,6 +714,15 @@ PERMIT_STATUS_CHOICES = [
     (PERMIT_STATUS_NO_PERMIT, "No Permit"),
 ]
 
+ENFORCEMENT_STAGE_CHOICES = [
+    ("", "Not recorded"),
+    ("warning", "Warning"),
+    ("nov_1", "Notice of Violation 1"),
+    ("nov_2", "Notice of Violation 2"),
+    ("nov_3", "Notice of Violation 3"),
+    ("suspension", "Suspension"),
+]
+
 RENEWAL_STAGE_NOTICE_SENT = "notice_sent"
 RENEWAL_STAGE_APPLICATION_FILED = "application_filed"
 RENEWAL_STAGE_REQUIREMENTS_REVIEW = "requirements_review"
@@ -847,6 +856,11 @@ class SanitaryEstablishment(models.Model):
         choices=PERMIT_STATUS_CHOICES,
         default=PERMIT_STATUS_ACTIVE,
     )
+    # An explicitly recorded enforcement action, independent of inspection
+    # findings and permit standing. Historical records remain unclassified.
+    enforcement_stage = models.CharField(
+        max_length=30, choices=ENFORCEMENT_STAGE_CHOICES, blank=True, default="",
+    )
 
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
@@ -882,9 +896,19 @@ class SanitaryEstablishment(models.Model):
         return self.business_name
 
     def save(self, *args, **kwargs):
-        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
-            self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
-        super().save(*args, **kwargs)
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            if self.pk:
+                current = type(self).objects.using(using).select_for_update().filter(pk=self.pk).first()
+                if current is not None and current.enforcement_stage == "suspension":
+                    # Internal workflows may hold an instance loaded before
+                    # issuance. Preserve the locked database decision, not that
+                    # stale instance's stage or proposed permit reactivation.
+                    self.enforcement_stage = "suspension"
+                    self.permit_status = PERMIT_STATUS_SUSPENDED
+            if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
+                self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
+            super().save(*args, **kwargs)
 
     @property
     def inspection_frequency(self):
