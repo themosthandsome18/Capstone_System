@@ -242,10 +242,12 @@ def boat_capacity_fare_detail(request, fare_id):
 
 
 def _confirm_required(held_by):
+    # Words for a person, not names of API fields: the front end reads `code` and
+    # `record_count`, never this message.
     return _error(
-        f"The text of this tier is saved on {held_by} record(s). Renaming the tier does not change "
-        "them: they keep the old text, and it will show as 'not in the list' in their own dropdown. "
-        f"To go on, send confirm_affected_records: {held_by}.",
+        f"{held_by} record(s) hold the old text of this tier. Renaming the tier does not change "
+        "them: they keep the old text, and it will show as (not in the list) in their own dropdown. "
+        "The rename needs a confirmation.",
         http_status=status.HTTP_409_CONFLICT,
         code="confirm_required",
         record_count=held_by,

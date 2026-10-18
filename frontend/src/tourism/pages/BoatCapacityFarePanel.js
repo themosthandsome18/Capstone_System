@@ -285,11 +285,11 @@ export default function BoatCapacityFarePanel() {
       </div>
 
       {adding ? (
-        <form className="settings-card options-form" onSubmit={submitAdd} aria-label="Add a tier">
+        <form className="settings-card options-form options-add-form" onSubmit={submitAdd} aria-label="Add a tier">
           <div className="report-card-title">
             <h3>New tier</h3>
           </div>
-          <label className="settings-field">
+          <label className="settings-field settings-field-wide">
             <span>Tier text</span>
             <input
               type="text"
@@ -317,7 +317,7 @@ export default function BoatCapacityFarePanel() {
 
       {editing ? (
         <form
-          className="settings-card options-form"
+          className="settings-card options-form options-edit-form"
           onSubmit={submitEdit}
           aria-label={`Edit ${editing.name}`}
           ref={editFormRef}
@@ -327,7 +327,7 @@ export default function BoatCapacityFarePanel() {
             <h3>Rename a tier</h3>
             <p>Used by {recordsLabel(editing.record_count)}.</p>
           </div>
-          <label className="settings-field">
+          <label className="settings-field settings-field-wide">
             <span>Tier text</span>
             <input
               type="text"

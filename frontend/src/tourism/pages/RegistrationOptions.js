@@ -348,7 +348,7 @@ function RegistrationOptionsPage() {
                 <div className="report-card-title">
                   <h3>New option in {tabLabel}</h3>
                 </div>
-                <label className="settings-field">
+                <label className="settings-field settings-field-wide">
                   <span>Name</span>
                   <input
                     type="text"
@@ -400,7 +400,7 @@ function RegistrationOptionsPage() {
 
             {editing ? (
               <section
-                className="settings-card options-form"
+                className="settings-card options-form options-edit-form"
                 aria-label={`Edit ${editing.name}`}
                 ref={editFormRef}
                 tabIndex={-1}
@@ -410,7 +410,7 @@ function RegistrationOptionsPage() {
                   <p>Used by {recordsLabel(affectedCount)}.</p>
                 </div>
 
-                <label className="settings-field">
+                <label className="settings-field settings-field-wide">
                   <span>Name</span>
                   <input
                     type="text"
