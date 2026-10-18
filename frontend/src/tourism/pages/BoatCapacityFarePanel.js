@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowDown, FiArrowUp, FiPlus } from "react-icons/fi";
 import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
@@ -25,9 +25,17 @@ export const OLD_APP_NOTE =
 export const NO_ACTIVE_WARNING =
   "No tier is active, but at least one boat type still asks for Boat Capacity and Fare. Staff will see an empty dropdown for those boats. Reactivate a tier or add a new one.";
 
-// When the server refuses a rename because records hold the text.
-export const RENAME_GUIDE =
-  "To change the wording, add a new tier with the new text and deactivate this one.";
+// In the edit form, before anything has been asked: what a rename does here. For
+// the fare tiers a rename does NOT change the records that hold the old text (the
+// four other lists say the opposite: there the records show the new name).
+export const RENAME_NOTE =
+  "If records hold the old text of this tier, they keep it when the tier is renamed, and you will be asked to confirm before the rename is made.";
+
+// What the server's own count is asked about. N is the number the SERVER named,
+// never the one written in the "Used by" column of this page.
+export function renameQuestion(count) {
+  return `${count} record(s) hold the old text. They will keep it, and it will show as (not in the list). The tier itself will be renamed. Continue?`;
+}
 
 function inOrder(list) {
   return [...list].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
@@ -37,20 +45,13 @@ function recordsLabel(count) {
   return `${count} record${count === 1 ? "" : "s"}`;
 }
 
-// The words shown for a failed write. A refused rename (409 text_in_use) shows
-// the server's explanation and the way out, never the bare code.
-export function messageFor(error) {
+// The server's number when it asks for a confirmation of a rename, else null.
+function confirmationCount(error) {
   const details = error.details || {};
-  if (error.status === 409 && details.code === "text_in_use") {
-    const held = details.record_count;
-    const explanation =
-      error.message ||
-      (Number.isInteger(held)
-        ? `This text is saved on ${recordsLabel(held)}, so it cannot be renamed.`
-        : "This text is saved on records, so it cannot be renamed.");
-    return /deactivate/i.test(explanation) ? explanation : `${explanation} ${RENAME_GUIDE}`;
+  if (error.status === 409 && details.code === "confirm_required" && Number.isInteger(details.record_count)) {
+    return details.record_count;
   }
-  return error.message || "The change could not be saved.";
+  return null;
 }
 
 export default function BoatCapacityFarePanel() {
@@ -62,11 +63,19 @@ export default function BoatCapacityFarePanel() {
   const [filter, setFilter] = useState("all");
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
+  // The message of the add / edit form, shown INSIDE that form: one message, where
+  // the eye is, and not a second one at the top of the page.
+  const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const [adding, setAdding] = useState(false);
   const [addName, setAddName] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
+  // Set when the server asked for a confirmation of a rename: { count } is the
+  // number the SERVER named. That number, and no other, is what is confirmed.
+  const [ask, setAsk] = useState(null);
+  const editFormRef = useRef(null);
+  const editNameRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,9 +111,12 @@ export default function BoatCapacityFarePanel() {
   // change nothing in the list; on success take the server's answer. No refetch.
   // The other pages' reference tables (the record form) are refreshed in the
   // background; this panel neither waits for that nor shows it.
-  async function write(call, apply, successNotice) {
+  // A refused rename that asks for a confirmation is not an error: it opens the
+  // question, with the number the server named.
+  async function write(call, apply, successNotice, inForm = false) {
     setWorking(true);
     setActionError("");
+    setFormError("");
     setNotice("");
     try {
       const answer = await call();
@@ -115,11 +127,14 @@ export default function BoatCapacityFarePanel() {
       setNotice(successNotice);
       return true;
     } catch (error) {
-      setActionError(messageFor(error));
-      // the refusal carries the count the server has NOW: take it
-      const held = error.details && error.details.record_count;
-      if (error.status === 409 && Number.isInteger(held) && editingId !== null) {
-        setRows((current) => (current || []).map((r) => (r.id === editingId ? { ...r, record_count: held } : r)));
+      const asked = inForm ? confirmationCount(error) : null;
+      if (asked !== null) {
+        setAsk({ count: asked });
+        // the number the server has NOW, for that row too
+        setRows((current) => (current || []).map((r) => (r.id === editingId ? { ...r, record_count: asked } : r)));
+      } else {
+        setAsk(null);
+        (inForm ? setFormError : setActionError)(error.message || "The change could not be saved.");
       }
       return false;
     } finally {
@@ -152,27 +167,62 @@ export default function BoatCapacityFarePanel() {
     setEditingId(row.id);
     setEditName(row.name);
     setAdding(false);
+    setAsk(null);
     setActionError("");
+    setFormError("");
     setNotice("");
   }
 
+  function stopEdit() {
+    setEditingId(null);
+    setAsk(null);
+    setFormError("");
+  }
+
+  // When Edit is pressed the form is at the TOP of the list: bring it into view
+  // and put the cursor in the name field. The same in all five tabs.
+  useEffect(() => {
+    if (editingId === null) return;
+    const form = editFormRef.current;
+    if (!form) return;
+    if (typeof form.scrollIntoView === "function") form.scrollIntoView({ block: "start", behavior: "smooth" });
+    const name = editNameRef.current;
+    const target = name && !name.disabled ? name : form.querySelector("input:not(:disabled)");
+    (target || form).focus();
+  }, [editingId]);
+
   async function submitAdd(event) {
     event.preventDefault();
-    const ok = await write(() => tourismApi.createBoatCapacityFare({ name: addName }), putRow, "The tier was added.");
+    const ok = await write(
+      () => tourismApi.createBoatCapacityFare({ name: addName }),
+      putRow,
+      "The tier was added.",
+      true
+    );
     if (ok) {
       setAdding(false);
       setAddName("");
     }
   }
 
-  async function saveEdit(event) {
-    event.preventDefault();
+  // The first try is sent WITHOUT a confirmation: the server alone says whether
+  // records hold the old text and how many. When confirmedCount is given it is the
+  // number the server named in its last refusal, not the one shown in the table.
+  async function sendRename(confirmedCount) {
+    const payload = { name: editName };
+    if (confirmedCount !== undefined) payload.confirm_affected_records = confirmedCount;
     const ok = await write(
-      () => tourismApi.updateBoatCapacityFare(editing.id, { name: editName }),
+      () => tourismApi.updateBoatCapacityFare(editing.id, payload),
       putRow,
-      "The tier was renamed."
+      "The tier was renamed.",
+      true
     );
-    if (ok) setEditingId(null);
+    if (ok) stopEdit();
+  }
+
+  function submitEdit(event) {
+    event.preventDefault();
+    sendRename();
   }
 
   // The whole list of ids in the new order; the server answers with the list.
@@ -194,7 +244,7 @@ export default function BoatCapacityFarePanel() {
           className="green"
           onClick={() => {
             setAdding((open) => !open);
-            setEditingId(null);
+            stopEdit();
             setActionError("");
             setNotice("");
           }}
@@ -249,6 +299,11 @@ export default function BoatCapacityFarePanel() {
               onChange={(event) => setAddName(event.target.value)}
             />
           </label>
+          {formError ? (
+            <p className="options-reason" role="alert">
+              {formError}
+            </p>
+          ) : null}
           <div className="options-form-actions">
             <button type="button" className="tourist-record-cancel" onClick={() => setAdding(false)} disabled={working}>
               Cancel
@@ -257,6 +312,77 @@ export default function BoatCapacityFarePanel() {
               {working ? "Saving..." : "Save new tier"}
             </button>
           </div>
+        </form>
+      ) : null}
+
+      {editing ? (
+        <form
+          className="settings-card options-form"
+          onSubmit={submitEdit}
+          aria-label={`Edit ${editing.name}`}
+          ref={editFormRef}
+          tabIndex={-1}
+        >
+          <div className="report-card-title">
+            <h3>Rename a tier</h3>
+            <p>Used by {recordsLabel(editing.record_count)}.</p>
+          </div>
+          <label className="settings-field">
+            <span>Tier text</span>
+            <input
+              type="text"
+              aria-label="Tier text"
+              ref={editNameRef}
+              value={editName}
+              maxLength={160}
+              disabled={working || Boolean(ask)}
+              onChange={(event) => setEditName(event.target.value)}
+            />
+          </label>
+
+          {/* ONE message at a time: the question, else the refusal, else the note. */}
+          {ask ? (
+            <div className="options-confirm" role="alertdialog" aria-label="Confirm the rename">
+              <p>{renameQuestion(ask.count)}</p>
+              <div className="options-form-actions">
+                <button type="button" className="tourist-record-cancel" onClick={() => setAsk(null)} disabled={working}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="tourist-record-save"
+                  onClick={() => sendRename(ask.count)}
+                  disabled={working}
+                >
+                  {working ? "Saving..." : "Yes, rename"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {formError ? (
+                <p className="options-reason" role="alert">
+                  {formError}
+                </p>
+              ) : editing.record_count > 0 ? (
+                <p className="options-reason" role="note">
+                  {RENAME_NOTE}
+                </p>
+              ) : null}
+              <div className="options-form-actions">
+                <button type="button" className="tourist-record-cancel" onClick={stopEdit} disabled={working}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="tourist-record-save"
+                  disabled={working || editName.trim() === "" || editName === editing.name}
+                >
+                  {working ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </>
+          )}
         </form>
       ) : null}
 
@@ -395,43 +521,6 @@ export default function BoatCapacityFarePanel() {
           </table>
         ) : null}
       </section>
-
-      {editing ? (
-        <form className="settings-card options-form" onSubmit={saveEdit} aria-label={`Edit ${editing.name}`}>
-          <div className="report-card-title">
-            <h3>Rename a tier</h3>
-            <p>Used by {recordsLabel(editing.record_count)}.</p>
-          </div>
-          <label className="settings-field">
-            <span>Tier text</span>
-            <input
-              type="text"
-              aria-label="Tier text"
-              value={editName}
-              maxLength={160}
-              disabled={working}
-              onChange={(event) => setEditName(event.target.value)}
-            />
-          </label>
-          {editing.record_count > 0 ? (
-            <p className="options-reason" role="note">
-              {recordsLabel(editing.record_count)} hold this exact text, so it cannot be renamed. {RENAME_GUIDE}
-            </p>
-          ) : null}
-          <div className="options-form-actions">
-            <button type="button" className="tourist-record-cancel" onClick={() => setEditingId(null)} disabled={working}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="tourist-record-save"
-              disabled={working || editName.trim() === "" || editName === editing.name}
-            >
-              {working ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      ) : null}
     </div>
   );
 }
