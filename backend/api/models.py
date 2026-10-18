@@ -1116,6 +1116,8 @@ class HouseholdSanitationRecord(models.Model):
     household_head = models.CharField(max_length=160)
     barangay = models.CharField(max_length=120)
     address = models.CharField(max_length=240, blank=True)
+    house_number = models.CharField(max_length=120, blank=True, default="")
+    sitio = models.CharField(max_length=120, blank=True, default="")
 
     male_count = models.PositiveIntegerField(default=0)
     female_count = models.PositiveIntegerField(default=0)

@@ -124,7 +124,9 @@ export function printHouseholdProfile(record) {
             <strong>${record.household_head}</strong>
           </div>
           <div class="box">
-            <span>Barangay & Address</span>
+            <span>House Number</span><strong>${record.house_number || "Not recorded"}</strong>
+            <span>Sitio</span><strong>${record.sitio || "Not recorded"}</strong>
+            <span>Barangay & Existing combined address</span>
             <strong>Brgy. ${record.barangay} ${record.address ? "• " + record.address : ""}</strong>
           </div>
           <div class="box">
@@ -239,6 +241,8 @@ const emptyForm = {
   household_head: "",
   barangay: "",
   address: "",
+  house_number: "",
+  sitio: "",
   male_count: 0,
   female_count: 0,
   toilet_type: "none",
@@ -255,6 +259,8 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "household_head",
   "barangay",
   "address",
+  "house_number",
+  "sitio",
   "male_count",
   "female_count",
   "toilet_type",
@@ -283,6 +289,11 @@ export function buildHouseholdEditPayload(form, snapshot) {
     if (!(field in form)) continue;
     let current = form[field];
     let original = snapshot[field];
+    if (field === "house_number" || field === "sitio") {
+      // Optional fields may be absent in older payloads; compare text exactly.
+      if ((current ?? "") !== (original ?? "")) payload[field] = current;
+      continue;
+    }
     if (field === "male_count" || field === "female_count") {
       current = Number(current) || 0;
       original = Number(original) || 0;
@@ -458,6 +469,8 @@ function HouseholdRecords() {
           item.household_head,
           item.barangay,
           item.address,
+          item.house_number,
+          item.sitio,
           item.toilet_type_label,
           item.water_level_label,
           item.water_source,
@@ -512,7 +525,9 @@ function HouseholdRecords() {
       "Household Code",
       "Household Head",
       "Barangay",
-      "Address",
+      "Existing combined address",
+      "House Number",
+      "Sitio",
       "Male Count",
       "Female Count",
       "Total Members",
@@ -529,6 +544,8 @@ function HouseholdRecords() {
       item.household_head,
       item.barangay,
       item.address,
+      item.house_number,
+      item.sitio,
       item.male_count,
       item.female_count,
       item.total_members,
@@ -576,6 +593,8 @@ function HouseholdRecords() {
       household_head: record.household_head || "",
       barangay: record.barangay || "",
       address: record.address || "",
+      house_number: record.house_number ?? "",
+      sitio: record.sitio ?? "",
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
       toilet_type: record.toilet_type || "none",
@@ -1176,7 +1195,9 @@ function HouseholdRecords() {
               <div className="hh-detail-grid">
                 <HHDetailItem label="Household Code" value={viewRecord.household_code} />
                 <HHDetailItem label="Barangay" value={viewRecord.barangay} />
-                <HHDetailItem label="Address" value={viewRecord.address || "—"} />
+                <HHDetailItem label="House Number" value={viewRecord.house_number || "Not recorded"} />
+                <HHDetailItem label="Sitio" value={viewRecord.sitio || "Not recorded"} />
+                {viewRecord.address && <HHDetailItem label="Existing combined address" value={viewRecord.address} />}
                 <HHDetailItem label="Male Members" value={viewRecord.male_count} />
                 <HHDetailItem label="Female Members" value={viewRecord.female_count} />
                 <HHDetailItem label="Total Members" value={viewRecord.total_members} />
@@ -1307,10 +1328,21 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
         />
       </div>
 
-      {/* Row 2: Barangay & Address */}
       <div className="hh-form-group">
-        <label>Barangay *</label>
-        <select
+        <label htmlFor="hh-house-number">House Number</label>
+        <input id="hh-house-number" type="text" maxLength={120}
+          value={form.house_number}
+          onChange={(e) => updateField("house_number", e.target.value)} />
+      </div>
+      <div className="hh-form-group">
+        <label htmlFor="hh-sitio">Sitio</label>
+        <input id="hh-sitio" type="text" maxLength={120}
+          value={form.sitio}
+          onChange={(e) => updateField("sitio", e.target.value)} />
+      </div>
+      <div className="hh-form-group">
+        <label htmlFor="hh-barangay">Barangay *</label>
+        <select id="hh-barangay"
           value={form.barangay}
           onChange={(e) => updateField("barangay", e.target.value)}
         >
@@ -1324,11 +1356,11 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
       </div>
 
       <div className="hh-form-group">
-        <label>Address *</label>
-        <input
+        <label htmlFor="hh-combined-address">{isEditing ? "Existing combined address" : "Combined address (optional)"}</label>
+        <input id="hh-combined-address"
           type="text"
           value={form.address}
-          onChange={(e) => updateField("address", toTitleCase(e.target.value))}
+          onChange={(e) => updateField("address", e.target.value)}
           placeholder="House no., Street, sitio"
         />
       </div>

@@ -66,6 +66,8 @@ class HouseholdSepticReadbackTests(TestCase):
                     "household_head": record.household_head,
                     "barangay": record.barangay,
                     "address": record.address,
+                    "house_number": "",
+                    "sitio": "",
                     "male_count": record.male_count,
                     "female_count": record.female_count,
                     "toilet_type": record.toilet_type,

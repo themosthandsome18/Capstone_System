@@ -118,7 +118,7 @@ test("address-only edit interaction sends only the changed address", async () =>
   fireEvent.change(address, { target: { value: "New address" } });
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
-  await waitFor(() => expect(mockUpdateHousehold).toHaveBeenCalledWith(11, { address: "New Address" }));
+  await waitFor(() => expect(mockUpdateHousehold).toHaveBeenCalledWith(11, { address: "New address" }));
   expect(mockCreateHousehold).not.toHaveBeenCalled();
 });
 
@@ -170,6 +170,8 @@ test("new household interaction preserves POST payload behavior", async () => {
       household_head: "Reyes, Maria",
       barangay: "Abo-abo",
       address: "",
+      house_number: "",
+      sitio: "",
       male_count: 0,
       female_count: 0,
       toilet_type: "none",
