@@ -790,6 +790,91 @@ class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
         ]
 
 
+class PublicSanitaryComplaintSubmissionSerializer(serializers.Serializer):
+    """Only resident-supplied data; never use the staff serializer for input."""
+
+    complainant_name = serializers.CharField(max_length=160, error_messages={
+        "required": "Please enter your name.", "blank": "Please enter your name.",
+    })
+    contact_number = serializers.CharField(max_length=60, error_messages={
+        "required": "Please enter a valid mobile number (e.g. 09171234567).",
+        "blank": "Please enter a valid mobile number (e.g. 09171234567).",
+    })
+    category = serializers.CharField(max_length=120)
+    barangay = serializers.CharField(max_length=120, error_messages={
+        "required": "Please choose a Mauban barangay from the list.",
+        "blank": "Please choose a Mauban barangay from the list.",
+    })
+    location_address = serializers.CharField(max_length=255, error_messages={
+        "required": "Please enter the location or address of the problem.",
+        "blank": "Please enter the location or address of the problem.",
+    })
+    description = serializers.CharField()
+    client_submission_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    latitude = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
+
+    def to_internal_value(self, data):
+        from collections.abc import Mapping
+        if not isinstance(data, Mapping):
+            raise serializers.ValidationError({"non_field_errors": ["Expected a JSON object or form fields."]})
+        aliases = {"complainant_name": ("full_name", "name"),
+                   "contact_number": ("contact",), "description": ("message",)}
+        # Installed mobile clients send priority and old drafts may carry anonymous
+        # flags. These are accepted but ignored, never used to set model fields.
+        ignored = {"priority", "urgency", "is_anonymous", "anonymous"}
+        allowed = set(self.fields) | ignored | {alias for values in aliases.values() for alias in values}
+        unexpected = set(data) - allowed
+        if unexpected:
+            raise serializers.ValidationError({
+                key: ["This field is not allowed in a public submission."]
+                for key in sorted(unexpected)
+            })
+        values = {key: data[key] for key in self.fields if key in data}
+        for key, alternatives in aliases.items():
+            if not values.get(key):
+                for alias in alternatives:
+                    if data.get(alias):
+                        values[key] = data[alias]
+                        break
+        for key in ("latitude", "longitude"):
+            if values.get(key) in ("", "null", "undefined"):
+                values[key] = None
+        return super().to_internal_value(values)
+
+    def validate(self, data):
+        import math
+        for key in ("latitude", "longitude"):
+            if data.get(key) is not None and not math.isfinite(data[key]):
+                raise serializers.ValidationError({key: "A finite coordinate is required."})
+        return data
+
+    def validate_contact_number(self, value):
+        from .services.public_reporting import normalize_contact
+        value = normalize_contact(value)
+        import re
+        if not re.fullmatch(r"09\d{9}", value):
+            raise serializers.ValidationError("Please enter a valid mobile number (e.g. 09171234567).")
+        return value
+
+    def validate_location_address(self, value):
+        return " ".join(value.split())
+
+    def validate_category(self, value):
+        from .services.sanitation import community_report_category
+        known = community_report_category(value)
+        if known is None:
+            raise serializers.ValidationError("Please choose a category from the list.")
+        return known[0]
+
+    def validate_barangay(self, value):
+        wanted = " ".join(value.split()).lower()
+        for name in Barangay.objects.filter(is_active=True).values_list("name", flat=True):
+            if " ".join(name.split()).lower() == wanted:
+                return name
+        raise serializers.ValidationError("Please choose a Mauban barangay from the list.")
+
+
 class SanitaryComplaintSerializer(serializers.ModelSerializer):
     establishment_name = serializers.CharField(
         source="establishment.business_name",

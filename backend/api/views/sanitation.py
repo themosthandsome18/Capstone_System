@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -23,6 +24,7 @@ from api.models import (
     UserProfile,
 )
 from api.permissions import get_user_role, module_required
+from api.services.public_reporting import PublicSubmissionDeletionProtected, RETENTION_MESSAGE
 from api.seeders import (
     ensure_initial_barangays,
     ensure_initial_household_data,
@@ -463,7 +465,11 @@ def sanitation_complaint_detail(request, complaint_id):
     if request.method == "DELETE":
         label = complaint.category
         record_id_value = complaint.complaint_id
-        complaint.delete()
+        try:
+            with transaction.atomic():
+                complaint.delete()
+        except PublicSubmissionDeletionProtected:
+            return Response({"code": "public_submission_retained", "detail": RETENTION_MESSAGE}, status=409)
         log_activity(
             request,
             MODULE_SANITATION,

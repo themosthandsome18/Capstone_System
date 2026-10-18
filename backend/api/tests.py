@@ -757,7 +757,6 @@ class MobilePublicApiTests(TestCase):
                 "description": "Garbage pile near the walkway.",
                 "latitude": 14.186,
                 "longitude": 121.73,
-                "photo_documentation": "sample-photo.jpg",
             },
             format="json",
         )
@@ -766,7 +765,7 @@ class MobilePublicApiTests(TestCase):
         complaint = SanitaryComplaint.objects.get(
             complainant_name="Resident Reporter"
         )
-        self.assertEqual(complaint.photo_documentation, "sample-photo.jpg")
+        self.assertEqual(complaint.photo_documentation, "")
         self.assertEqual(complaint.status, "pending")
 
     def test_mobile_sanitation_report_history_needs_contact_and_complaint_id(self):
@@ -10741,7 +10740,7 @@ class CommunityReportAddressTests(TestCase):
         complaint = SanitaryComplaint.objects.get()
         self.assertEqual(complaint.location_address, "Corner of Rizal St.")
         self.assertEqual(complaint.description, "Garbage is piling up.")
-        self.assertEqual(response.json()["location_address"], "Corner of Rizal St.")
+        self.assertNotIn("location_address", response.json())  # public receipt only
 
 
 class CommunityReportRateLimitMessageTests(TestCase):
@@ -11091,17 +11090,13 @@ class CommunityReportDuplicateInsideTransactionTests(TestCase):
 
         from api.views import mobile as mobile_views
 
-        existing = SanitaryComplaint.objects.create(
-            complaint_id="SAN-OUTER-0001",
-            complainant_name="Juana Reporter",
-            contact_number="09171234567",
-            category="Improper Garbage Disposal",
-            barangay="Daungan",
-            location_address="Purok 3",
-            reported_date="2026-09-27",
-            description="Saved by the first request.",
-            client_submission_id=self.SID,
+        # Preserve the savepoint regression using a submission with its original
+        # payload proof. Historical rows without that proof now fail closed.
+        created = APIClient().post(
+            self.URL, _community_report_payload(client_submission_id=self.SID), format="json"
         )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        existing = SanitaryComplaint.objects.get(client_submission_id=self.SID)
 
         # The IP throttle, the contact throttle and the view's own check all
         # "miss" the saved report (as when two requests race), so the insert
@@ -11159,7 +11154,7 @@ class CommunityReportBarangayTests(TestCase):
         response = self._post("  cagsiay   ii ")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual(SanitaryComplaint.objects.get().barangay, "Cagsiay II")
-        self.assertEqual(response.json()["barangay"], "Cagsiay II")
+        self.assertNotIn("barangay", response.json())  # public receipt only
 
     def test_the_official_list_is_the_forty_mauban_barangays(self):
         from .seed_data import MAUBAN_BARANGAYS
