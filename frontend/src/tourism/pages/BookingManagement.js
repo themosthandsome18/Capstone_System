@@ -19,6 +19,7 @@ import { buildReportingYearOptions } from "../utils/reportingYears";
 import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
 import { countryRequiresLocation } from "../utils/countryLocation";
 import { choicesFor } from "../utils/optionChoices";
+import { fareChoicesFor, fareTiers } from "../utils/fareChoices";
 import { formatNumber } from "../utils/format";
 import {
   DISCOUNTED_ENTRANCE_FEE,
@@ -134,6 +135,14 @@ function BookingManagement() {
     refreshBookingManagement,
     reportingYears,
   } = useTourismData();
+
+  // The Boat Capacity and Fare tiers come from the server. The built-in nine
+  // (boatCapacityFareOptions) are the fallback for a payload that has no such
+  // list; a list that is there but empty is a real, empty list.
+  const capacityFareTiers = useMemo(
+    () => fareTiers(referenceTables.boatCapacityFares, boatCapacityFareOptions.map((o) => o.name)),
+    [referenceTables.boatCapacityFares]
+  );
 
   const { role } = useAuth();
   const { addEntryRequestId } = useOutletContext() || {};
@@ -493,7 +502,7 @@ function BookingManagement() {
       boat_capacity_fare: capacityFareForBoatType(
         referenceTables.boatTypes,
         form.boat_type_id,
-        form.boat_capacity_fare.trim()
+        form.boat_capacity_fare
       ),
       parking_space: "",
       visit_purpose_id: Number(form.visit_purpose_id),
@@ -1477,8 +1486,8 @@ function BookingManagement() {
                         disabled={!requiresCapacityFare(referenceTables.boatTypes, form.boat_type_id)}
                       >
                         <option value="">Select capacity and fare</option>
-                        {boatCapacityFareOptions.map((o) => (
-                          <option key={o.id} value={o.id}>{o.name}</option>
+                        {fareChoicesFor(capacityFareTiers, editingRecord?.boat_capacity_fare).map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
                     </WizardField>
