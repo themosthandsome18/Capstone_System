@@ -34,12 +34,14 @@ from api.serializers import (
     SanitaryBusinessTypeSerializer,
     SanitaryComplaintSerializer,
     SanitaryEstablishmentSerializer,
+    SanitaryEnforcementIssuanceSerializer,
     SanitaryInspectionCreateSerializer,
     SanitaryInspectionSerializer,
     SanitaryPermitRenewalSerializer,
     SanitaryStaffSerializer,
 )
 from api.services.activity import log_activity
+from api.services.enforcement import issue_enforcement_stage
 from api.services.household import build_household_dashboard_payload
 from api.services.tracking_codes import (
     NOT_CONFIGURED_MESSAGE,
@@ -178,6 +180,24 @@ def sanitation_establishment_detail(request, establishment_id):
         record_id=establishment.pk,
     )
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@module_required("sanitation")
+def sanitation_establishment_enforcement_stage(request, establishment_id):
+    serializer = SanitaryEnforcementIssuanceSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    establishment, event = issue_enforcement_stage(
+        establishment_id, request.user, **serializer.validated_data,
+    )
+    return Response({
+        "id": establishment.pk,
+        "enforcement_stage": establishment.enforcement_stage,
+        "enforcement_stage_label": establishment.get_enforcement_stage_display(),
+        "changed": event is not None,
+        "event_id": event.pk if event else None,
+        "issued_at": event.created_at.isoformat() if event else None,
+    })
 
 
 @api_view(["POST"])

@@ -62,6 +62,7 @@ from .views.sanitation import (
     sanitation_complaint_list,
     sanitation_dashboard_data,
     sanitation_establishment_detail,
+    sanitation_establishment_enforcement_stage,
     sanitation_establishment_tracking_code,
     sanitation_establishment_list,
     sanitation_inspection_detail,
@@ -173,6 +174,10 @@ urlpatterns = [
     path("sanitation/business-types/", sanitation_business_type_list),
     path("sanitation/establishments/", sanitation_establishment_list),
     path("sanitation/establishments/<int:establishment_id>/", sanitation_establishment_detail),
+    path(
+        "sanitation/establishments/<int:establishment_id>/enforcement-stage/",
+        sanitation_establishment_enforcement_stage,
+    ),
     path(
         "sanitation/establishments/<int:establishment_id>/tracking-code/",
         sanitation_establishment_tracking_code,
