@@ -32,6 +32,10 @@ export const PROTECTED_REASON =
   "This name is created by the Excel import. If it were renamed, the next import would create a new option under the old name and the reports would be split between the two.";
 export const STAY_NOT_SET_REASON =
   "The name cannot be changed yet. The reports still work out how long this stay is from its name, so renaming it would change the Same Day / Overnight and average-stay figures. Set the stay length first.";
+// What a rename means for the four reference lists: the records point at the option,
+// so they all show the new name. (The fare tab says the OPPOSITE: its records keep
+// the text they hold. Do not mix the two.)
+export const REFERENCE_RENAME_EFFECT = "all records using this option will now show the new name";
 export const LAST_ACTIVE_REASON =
   "This is the last active option in the list, so it cannot be deactivated: a new registration would have nothing to choose. Add or reactivate another option first.";
 
@@ -64,6 +68,11 @@ function RegistrationOptionsPage() {
   const [filter, setFilter] = useState("all");
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
+  // The message of a form (add or edit) shown INSIDE that form: one message, where
+  // the eye is, instead of a second one at the top of the page.
+  const [formError, setFormError] = useState("");
+  const editFormRef = useRef(null);
+  const editNameRef = useRef(null);
   const [notice, setNotice] = useState("");
 
   const [adding, setAdding] = useState(false);
@@ -119,6 +128,7 @@ function RegistrationOptionsPage() {
     setCountFromServer(null);
     setLoadError("");
     setActionError("");
+    setFormError("");
     setNotice("");
   }
 
@@ -142,10 +152,11 @@ function RegistrationOptionsPage() {
   // server's answer in the list. There is no second fetch. The other pages'
   // reference tables are refreshed in the background; this page does not wait
   // for them and does not show them.
-  async function write(call, successNotice) {
+  async function write(call, successNotice, inForm = false) {
     const which = kind;
     setWorking(true);
     setActionError("");
+    setFormError("");
     setNotice("");
     try {
       const option = await call();
@@ -156,7 +167,7 @@ function RegistrationOptionsPage() {
       setNotice(successNotice);
       return true;
     } catch (error) {
-      setActionError(error.message || "The change could not be saved.");
+      (inForm ? setFormError : setActionError)(error.message || "The change could not be saved.");
       if (
         error.status === 409 &&
         error.details &&
@@ -191,6 +202,7 @@ function RegistrationOptionsPage() {
     setConfirming(false);
     setCountFromServer(null);
     setActionError("");
+    setFormError("");
     setNotice("");
     setAdding(false);
   }
@@ -199,14 +211,28 @@ function RegistrationOptionsPage() {
     setEditingId(null);
     setConfirming(false);
     setCountFromServer(null);
+    setFormError("");
   }
+
+  // When Edit is pressed the form is at the TOP of the list: bring it into view
+  // and put the cursor in the name field (or, if the name is locked, in the first
+  // field that can be typed in). The same in all five tabs.
+  useEffect(() => {
+    if (editingId === null) return;
+    const form = editFormRef.current;
+    if (!form) return;
+    if (typeof form.scrollIntoView === "function") form.scrollIntoView({ block: "start", behavior: "smooth" });
+    const name = editNameRef.current;
+    const target = name && !name.disabled ? name : form.querySelector("input:not(:disabled)");
+    (target || form).focus();
+  }, [editingId]);
 
   async function submitAdd(event) {
     event.preventDefault();
     const payload = { name: addName };
     if (kind === "itinerary" && addStay.trim() !== "") payload.stay_nights = parseStay(addStay);
     if (kind === "boat-type") payload.requires_capacity_fare = addAsksFare;
-    const ok = await write(() => tourismApi.createReferenceOption(kind, payload), "The option was added.");
+    const ok = await write(() => tourismApi.createReferenceOption(kind, payload), "The option was added.", true);
     if (ok) {
       setAdding(false);
       setAddName("");
@@ -238,7 +264,8 @@ function RegistrationOptionsPage() {
     payload.confirm_affected_records = affectedCount;
     const ok = await write(
       () => tourismApi.updateReferenceOption(kind, editing.id, payload),
-      "The change was saved."
+      "The change was saved.",
+      true
     );
     if (ok) stopEdit();
     else setConfirming(false);
@@ -321,7 +348,7 @@ function RegistrationOptionsPage() {
                 <div className="report-card-title">
                   <h3>New option in {tabLabel}</h3>
                 </div>
-                <label className="settings-field">
+                <label className="settings-field settings-field-wide">
                   <span>Name</span>
                   <input
                     type="text"
@@ -355,6 +382,11 @@ function RegistrationOptionsPage() {
                     <span>Asks for Boat Capacity and Fare</span>
                   </label>
                 ) : null}
+                {formError ? (
+                  <p className="options-reason" role="alert">
+                    {formError}
+                  </p>
+                ) : null}
                 <div className="options-form-actions">
                   <button type="button" className="tourist-record-cancel" onClick={() => setAdding(false)} disabled={working}>
                     Cancel
@@ -364,6 +396,101 @@ function RegistrationOptionsPage() {
                   </button>
                 </div>
               </form>
+            ) : null}
+
+            {editing ? (
+              <section
+                className="settings-card options-form options-edit-form"
+                aria-label={`Edit ${editing.name}`}
+                ref={editFormRef}
+                tabIndex={-1}
+              >
+                <div className="report-card-title">
+                  <h3>Edit {editing.name}</h3>
+                  <p>Used by {recordsLabel(affectedCount)}.</p>
+                </div>
+
+                <label className="settings-field settings-field-wide">
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    aria-label="Option name"
+                    ref={editNameRef}
+                    value={editName}
+                    maxLength={120}
+                    disabled={nameLocked || working || confirming}
+                    onChange={(event) => setEditName(event.target.value)}
+                  />
+                </label>
+                {!formError && protectedName ? (
+                  <p className="options-reason" role="note">
+                    {PROTECTED_REASON}
+                  </p>
+                ) : null}
+                {!formError && !protectedName && stayMissing ? (
+                  <p className="options-reason" role="note">
+                    {STAY_NOT_SET_REASON}
+                  </p>
+                ) : null}
+
+                {kind === "itinerary" ? (
+                  <label className="settings-field">
+                    <span>Stay length (nights)</span>
+                    <input
+                      type="number"
+                      aria-label="Stay length in nights"
+                      min={0}
+                      max={60}
+                      value={editStay}
+                      disabled={working || confirming}
+                      onChange={(event) => setEditStay(event.target.value)}
+                    />
+                    <small className="options-hint">
+                      0 = same day. Empty = not set, and the reports read the length from the name.
+                    </small>
+                  </label>
+                ) : null}
+
+                {formError ? (
+                  <p className="options-reason" role="alert">
+                    {formError}
+                  </p>
+                ) : null}
+
+                {confirming ? (
+                  <div className="options-confirm" role="alertdialog" aria-label="Confirm the change">
+                    <p>
+                      This change applies to every record that uses this option and to every report:{" "}
+                      {REFERENCE_RENAME_EFFECT}.{" "}
+                      {affectedCount === 0
+                        ? "No record uses it yet."
+                        : `It affects ${recordsLabel(affectedCount)}.`}
+                    </p>
+                    <div className="options-form-actions">
+                      <button type="button" className="tourist-record-cancel" onClick={() => setConfirming(false)} disabled={working}>
+                        Back
+                      </button>
+                      <button type="button" className="tourist-record-save" onClick={saveEdit} disabled={working}>
+                        {working ? "Saving..." : "Confirm and save"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="options-form-actions">
+                    <button type="button" className="tourist-record-cancel" onClick={stopEdit} disabled={working}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="tourist-record-save"
+                      onClick={() => setConfirming(true)}
+                      disabled={working || !hasChange}
+                    >
+                      Save changes
+                    </button>
+                  </div>
+                )}
+              </section>
             ) : null}
 
             <section className="settings-card options-card" aria-label={`${tabLabel} options`}>
@@ -490,88 +617,6 @@ function RegistrationOptionsPage() {
                 </table>
               ) : null}
             </section>
-
-            {editing ? (
-              <section className="settings-card options-form" aria-label={`Edit ${editing.name}`}>
-                <div className="report-card-title">
-                  <h3>Edit {editing.name}</h3>
-                  <p>Used by {recordsLabel(affectedCount)}.</p>
-                </div>
-
-                <label className="settings-field">
-                  <span>Name</span>
-                  <input
-                    type="text"
-                    aria-label="Option name"
-                    value={editName}
-                    maxLength={120}
-                    disabled={nameLocked || working || confirming}
-                    onChange={(event) => setEditName(event.target.value)}
-                  />
-                </label>
-                {protectedName ? (
-                  <p className="options-reason" role="note">
-                    {PROTECTED_REASON}
-                  </p>
-                ) : null}
-                {!protectedName && stayMissing ? (
-                  <p className="options-reason" role="note">
-                    {STAY_NOT_SET_REASON}
-                  </p>
-                ) : null}
-
-                {kind === "itinerary" ? (
-                  <label className="settings-field">
-                    <span>Stay length (nights)</span>
-                    <input
-                      type="number"
-                      aria-label="Stay length in nights"
-                      min={0}
-                      max={60}
-                      value={editStay}
-                      disabled={working || confirming}
-                      onChange={(event) => setEditStay(event.target.value)}
-                    />
-                    <small className="options-hint">
-                      0 = same day. Empty = not set, and the reports read the length from the name.
-                    </small>
-                  </label>
-                ) : null}
-
-                {confirming ? (
-                  <div className="options-confirm" role="alertdialog" aria-label="Confirm the change">
-                    <p>
-                      This change applies to every record that uses this option and to every report.{" "}
-                      {affectedCount === 0
-                        ? "No record uses it yet."
-                        : `It affects ${recordsLabel(affectedCount)}.`}
-                    </p>
-                    <div className="options-form-actions">
-                      <button type="button" className="tourist-record-cancel" onClick={() => setConfirming(false)} disabled={working}>
-                        Back
-                      </button>
-                      <button type="button" className="tourist-record-save" onClick={saveEdit} disabled={working}>
-                        {working ? "Saving..." : "Confirm and save"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="options-form-actions">
-                    <button type="button" className="tourist-record-cancel" onClick={stopEdit} disabled={working}>
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="tourist-record-save"
-                      onClick={() => setConfirming(true)}
-                      disabled={working || !hasChange}
-                    >
-                      Save changes
-                    </button>
-                  </div>
-                )}
-              </section>
-            ) : null}
         </>
       ) : null}
     </div>

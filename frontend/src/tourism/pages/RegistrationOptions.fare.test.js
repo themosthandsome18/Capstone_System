@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import RegistrationOptions from "./RegistrationOptions";
-import { NO_ACTIVE_WARNING, OLD_APP_NOTE, RENAME_GUIDE, TEXT_NOTE } from "./BoatCapacityFarePanel";
+import { NO_ACTIVE_WARNING, OLD_APP_NOTE, RENAME_NOTE, TEXT_NOTE, renameQuestion } from "./BoatCapacityFarePanel";
+import { REFERENCE_RENAME_EFFECT } from "./RegistrationOptions";
 import { useAuth } from "../../auth/AuthContext";
 import { useTourismData } from "../context/TourismDataContext";
 
@@ -129,14 +130,15 @@ function fakeFetch(url, options = {}) {
     return reply(200, found);
   }
   if (method === "PATCH") {
-    if (found.record_count > 0) {
+    if (found.record_count > 0 && body.confirm_affected_records !== found.record_count) {
       return reply(409, {
-        detail: `The text of this tier is saved on ${found.record_count} record(s), so it cannot be renamed: those records would keep the old text. Add a new tier with the new wording and deactivate this one.`,
-        code: "text_in_use",
+        detail: `The text of this tier is saved on ${found.record_count} record(s). Renaming the tier does not change them. To go on, send confirm_affected_records: ${found.record_count}.`,
+        code: "confirm_required",
         record_count: found.record_count,
       });
     }
     found.name = body.name.trim();
+    found.record_count = 0; // nobody holds the new text; the records stay on the old one
     return reply(200, found);
   }
   return reply(405, { detail: "method not allowed" });
@@ -403,53 +405,298 @@ describe("a failed write", () => {
   });
 });
 
-describe("f) a refused rename (409 text_in_use)", () => {
-  it("shows the server's explanation and the way out, never the bare code, and changes nothing", async () => {
-    await openFareTab();
-    fireEvent.click(screen.getByRole("button", { name: /^Edit Mike/ }));
-    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike with new wording" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+const patches = () => requests.filter((r) => r.method === "PATCH");
+const editFormOf = (name) => screen.getByRole("form", { name: `Edit ${name}` });
+const openEdit = async (namePattern) => {
+  fireEvent.click(screen.getByRole("button", { name: namePattern }));
+};
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("cannot be renamed");
-    expect(alert.textContent).toContain("3 record(s)");
-    expect(alert.textContent).toMatch(/Add a new tier with the new wording and deactivate this one/);
-    expect(document.body.textContent).not.toContain("text_in_use");
-    expect(within(rowOf(12)).getByText("Mike 1-2 pax (One-Way P1000, Two-way P1400)")).toBeTruthy(); // not renamed
-    expect(screen.queryByText("Mike with new wording", { selector: "td" })).toBeNull();
-    expect(fareWrites()).toHaveLength(1);
+describe("C) renaming a tier that records hold: the server's number, asked, confirmed", () => {
+  const MIKE = "Mike 1-2 pax (One-Way P1000, Two-way P1400)";
+
+  it("c) nobody holds the text: it goes straight through, with nothing asked and no confirmation sent", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Tango/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Tango renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await within(rowOf(5)).findByText("Tango renamed");
+    expect(patches()).toEqual([{ method: "PATCH", path: "/boat-capacity-fares/5/", body: { name: "Tango renamed" } }]);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(patches()[0].body).not.toHaveProperty("confirm_affected_records");
+  });
+
+  it("the first try carries NO confirmation, even though the table says records hold the text", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("alertdialog");
+    expect(patches()).toHaveLength(1);
+    expect(patches()[0].body).toEqual({ name: "Mike renamed" });
+  });
+
+  it("asks the question with the SERVER's number, in the words given, and changes nothing yet", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toContain(
+      "3 record(s) hold the old text. They will keep it, and it will show as (not in the list). The tier itself will be renamed. Continue?"
+    );
+    expect(renameQuestion(3)).toBe(
+      "3 record(s) hold the old text. They will keep it, and it will show as (not in the list). The tier itself will be renamed. Continue?"
+    );
+    expect(within(rowOf(12)).getByText(MIKE)).toBeTruthy(); // not renamed yet
+    expect(document.body.textContent).not.toContain("confirm_required");
     expect(refreshReferenceTables).not.toHaveBeenCalled();
   });
 
-  it("adds the way out itself when the server's words do not contain it", async () => {
+  it("a) THE SERVER'S NUMBER WINS: the screen says 3, the server says 5, and 5 is what is confirmed", async () => {
     await openFareTab();
-    failNext = { status: 409, body: { detail: "This text is in use.", code: "text_in_use", record_count: 6 } };
-    fireEvent.click(screen.getByRole("button", { name: /^Edit Tango/ }));
-    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Tango other" } });
+    expect(within(rowOf(12)).getByText("3 records")).toBeTruthy(); // what the page shows
+    answerWith = {
+      match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/",
+      status: 409,
+      body: { detail: "Held.", code: "confirm_required", record_count: 5 },
+    };
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("This text is in use.");
-    expect(alert.textContent).toContain(RENAME_GUIDE);
-    expect(document.body.textContent).not.toContain("text_in_use");
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toContain("5 record(s) hold the old text");
+    expect(dialog.textContent).not.toContain("3 record(s)");
+
+    answerWith = {
+      match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/",
+      body: tier(12, "Mike renamed", 10, 0),
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await within(rowOf(12)).findByText("Mike renamed");
+    expect(patches()).toHaveLength(2);
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 5 }); // NOT 3
+    expect(patches()[1].body.confirm_affected_records).not.toBe(3);
   });
 
-  it("takes the count the server named, for that row", async () => {
+  it("what is confirmed is the number the admin was ASKED about, even if the row changes while the question is open", async () => {
     await openFareTab();
-    failNext = { status: 409, body: { detail: "Held.", code: "text_in_use", record_count: 9 } };
-    fireEvent.click(screen.getByRole("button", { name: /^Edit Tango/ }));
-    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Tango other" } });
+    answerWith = {
+      match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/",
+      status: 409,
+      body: { detail: "Held.", code: "confirm_required", record_count: 5 },
+    };
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByRole("alert");
-    expect(within(rowOf(5)).getByText("9 records")).toBeTruthy();
+    expect((await screen.findByRole("alertdialog")).textContent).toContain("5 record(s) hold the old text");
+
+    // While the question is open, another action replaces the row with a newer answer that says 7.
+    answerWith = {
+      match: (method, path) => method === "POST" && path === "/boat-capacity-fares/12/deactivate/",
+      body: tier(12, "Mike 1-2 pax (One-Way P1000, Two-way P1400)", 10, 7, { is_active: false }),
+    };
+    fireEvent.click(screen.getByRole("button", { name: /^Deactivate Mike/ }));
+    await within(rowOf(12)).findByText("7 records");
+
+    // The question still says what the admin was asked: 5. Not the 7 the table now shows.
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toContain("5 record(s) hold the old text");
+    expect(dialog.textContent).not.toContain("7 record(s)");
+
+    answerWith = { match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/", body: tier(12, "Mike renamed", 10, 0, { is_active: false }) };
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await within(rowOf(12)).findByText("Mike renamed");
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 5 }); // the number asked, not 7
   });
 
-  it("says beforehand, in the edit panel, that a tier some records hold cannot be renamed", async () => {
+  it("b) refused twice: 3 and then 4. The question is asked again with 4, and the third try sends 4, not 3", async () => {
     await openFareTab();
-    fireEvent.click(screen.getByRole("button", { name: /^Edit Tango/ }));
-    expect(screen.queryByText(/hold this exact text/)).toBeNull(); // nobody holds Tango
+    const refusal = (n) => ({
+      match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/",
+      status: 409,
+      body: { detail: "Held.", code: "confirm_required", record_count: n },
+    });
+    answerWith = refusal(3);
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect((await screen.findByRole("alertdialog")).textContent).toContain("3 record(s) hold the old text");
+
+    answerWith = refusal(4); // a booking came in meanwhile: the server now says 4
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await waitFor(() => expect(screen.getByRole("alertdialog").textContent).toContain("4 record(s) hold the old text"));
+    expect(screen.getByRole("alertdialog").textContent).not.toContain("3 record(s)");
+    expect(patches()).toHaveLength(2); // asked again, NOT resent on its own
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 3 });
+    expect(within(rowOf(12)).getByText("4 records")).toBeTruthy(); // the row takes the server's new number too
+
+    answerWith = { match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/", body: tier(12, "Mike renamed", 10, 0) };
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await within(rowOf(12)).findByText("Mike renamed");
+    expect(patches()).toHaveLength(3);
+    expect(patches()[2].body).toEqual({ name: "Mike renamed", confirm_affected_records: 4 }); // the NEW number
+  });
+
+  it("the whole way with the real count: the answer replaces the row, which then shows 0 records, and the form closes", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await within(rowOf(12)).findByText("Mike renamed");
+
+    expect(patches().map((p) => p.body)).toEqual([
+      { name: "Mike renamed" },
+      { name: "Mike renamed", confirm_affected_records: 3 },
+    ]);
+    expect(within(rowOf(12)).getByText("0 records")).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("form", { name: /^Edit / })).toBeNull();
+    expect(screen.getByText("The tier was renamed.")).toBeTruthy();
+    expect(refreshReferenceTables).toHaveBeenCalledTimes(1);
+    expect(fareGets()).toHaveLength(1); // no refetch
+  });
+
+  it("'Back' withdraws the question and sends nothing more", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(patches()).toHaveLength(1);
+    expect(within(rowOf(12)).getByText(MIKE)).toBeTruthy();
+  });
+
+  it("an error that is not a confirmation request shows its words, in the form, and no question", async () => {
+    await openFareTab();
+    failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
+    await openEdit(/^Edit Tango/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike 1-2 pax (One-Way P1000, Two-way P1400)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/already has this name/)).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(editFormOf("Tango 3-4 pax (One-Way P2000, Two-way P2400)").textContent).toContain("already has this name");
+  });
+});
+
+describe("e) the note in the edit form says what is true now", () => {
+  it("says records keep the old text and that a confirmation will be asked: it no longer says 'cannot be renamed'", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    expect(screen.getByText(RENAME_NOTE)).toBeTruthy();
+    expect(RENAME_NOTE).toMatch(/keep it/);
+    expect(RENAME_NOTE).toMatch(/confirm/);
+    expect(RENAME_NOTE).not.toMatch(/cannot be renamed/i);
+    expect(document.body.textContent).not.toMatch(/cannot be renamed/i);
+    expect(document.body.textContent).not.toMatch(/hold this exact text/);
+  });
+
+  it("does not show that note for a tier nobody holds", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Tango/);
+    expect(screen.queryByText(RENAME_NOTE)).toBeNull();
+  });
+});
+
+describe("d) ONE message, in the form", () => {
+  it("a refused save shows its words once, inside the form, with nothing at the top of the page", async () => {
+    await openFareTab();
+    failNext = { status: 500, body: { detail: "The database is busy. Try again." } };
+    await openEdit(/^Edit Tango/);
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Tango other" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("The database is busy. Try again.");
+    expect(screen.getAllByText("The database is busy. Try again.")).toHaveLength(1);
+    const form = editFormOf("Tango 3-4 pax (One-Way P2000, Two-way P2400)");
+    expect(form.contains(screen.getByText("The database is busy. Try again."))).toBe(true);
+    expect(document.querySelector(".options-message-area .settings-status.error")).toBeNull();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("in the form there is only ever one of: the note, the question, the refusal", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
+    const form = () => editFormOf(MIKE_NAME);
+    const MIKE_NAME = "Mike 1-2 pax (One-Way P1000, Two-way P1400)";
+    const boxes = () => form().querySelectorAll('[role="note"], [role="alert"], [role="alertdialog"]');
+    expect(boxes()).toHaveLength(1); // the note
+    fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Mike renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("alertdialog");
+    expect(boxes()).toHaveLength(1); // the question replaced the note
+    expect(screen.queryByText(RENAME_NOTE)).toBeNull();
+    failNext = { status: 500, body: { detail: "The database is busy. Try again." } };
+    fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
+    await screen.findByText("The database is busy. Try again.");
+    expect(boxes()).toHaveLength(1); // the refusal replaced the question
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("a refused ADD shows its words once, inside the add form", async () => {
+    await openFareTab();
+    failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
+    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "Dup" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
+    await screen.findByText(/already has this name/);
+    expect(screen.getAllByText(/already has this name/)).toHaveLength(1);
+    expect(screen.getByRole("form", { name: "Add a tier" }).textContent).toContain("already has this name");
+    expect(document.querySelector(".options-message-area .settings-status.error")).toBeNull();
+  });
+
+  it("an action outside a form (deactivate) still shows its refusal at the top", async () => {
+    await openFareTab();
+    failNext = { status: 500, body: { detail: "The database is busy. Try again." } };
+    fireEvent.click(screen.getByRole("button", { name: /^Deactivate Mike/ }));
+    await screen.findByText("The database is busy. Try again.");
+    expect(document.querySelector(".options-message-area .settings-status.error")).not.toBeNull();
+  });
+});
+
+describe("the edit form is at the TOP, and the cursor is in it", () => {
+  let scrolled;
+  beforeEach(() => {
+    scrolled = jest.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrolled;
+  });
+  afterEach(() => {
+    delete window.HTMLElement.prototype.scrollIntoView;
+  });
+
+  it("comes before the table in the page, is scrolled into view, and has the cursor in the name field", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Sierra/);
+    const form = editFormOf("Sierra 7-8 pax (One-Way P4000, Two-way P4400)");
+    const table = screen.getByRole("table");
+    expect(form.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // the form first
+    expect(scrolled).toHaveBeenCalledTimes(1);
+    expect(scrolled.mock.instances[0]).toBe(form);
+    expect(document.activeElement).toBe(screen.getByLabelText("Tier text"));
+  });
+
+  it("does the same each time Edit is pressed, on another row too", async () => {
+    await openFareTab();
+    await openEdit(/^Edit Mike/);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Edit Mike/ }));
-    expect(screen.getByText(/3 records hold this exact text, so it cannot be renamed/)).toBeTruthy();
+    await openEdit(/^Edit Tango/);
+    expect(scrolled).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(screen.getByLabelText("Tier text"));
+    expect(screen.getByLabelText("Tier text").value).toBe("Tango 3-4 pax (One-Way P2000, Two-way P2400)");
+  });
+});
+
+describe("D) the words differ between the fare tab and the four other tabs", () => {
+  it("the fare question says the records KEEP the old text; the four tabs say the records show the NEW name", () => {
+    const fareText = renameQuestion(3);
+    expect(fareText).toMatch(/keep it/);
+    expect(fareText).toMatch(/not in the list/);
+    expect(fareText).not.toContain(REFERENCE_RENAME_EFFECT);
+    expect(REFERENCE_RENAME_EFFECT).toBe("all records using this option will now show the new name");
+    expect(REFERENCE_RENAME_EFFECT).not.toMatch(/keep/);
+    expect(fareText).not.toBe(REFERENCE_RENAME_EFFECT);
   });
 });
 

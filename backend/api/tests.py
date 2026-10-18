@@ -8094,20 +8094,231 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
             self.assertEqual(now[pk], before[pk])
         self.assertEqual(self._held(), self._held())
 
-    def test_rename_is_refused_while_a_record_holds_the_text_and_nothing_changes(self):
+    def test_rename_of_a_held_tier_without_a_confirmation_is_409_confirm_required_and_nothing_changes(self):
         for tier, held in ((self.a, 2), (self.c, 1)):
             before, records = self._stored(), self._held()
             response = self.admin.patch(self._url(tier), {"name": "Brand new wording"}, format="json")
             self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, tier.name)
             body = response.json()
-            self.assertEqual(body["code"], "text_in_use")
-            self.assertEqual(body["record_count"], held)
-            self.assertIn("Add a new tier", body["detail"])
-            self.assertIn("deactivate", body["detail"])
-            self.assertEqual(self._stored(), before)  # the tier is exactly as it was
+            self.assertEqual(body["code"], "confirm_required")
+            self.assertNotEqual(body["code"], "text_in_use")
+            self.assertEqual(body["record_count"], held)  # the SERVER's number
+            self.assertIn(f"{held} record(s) hold the old text", body["detail"])  # the number, in words
+            self.assertIn("they keep the old text", body["detail"])
+            self.assertEqual(self._stored(), before)  # the tier is exactly as it was: the NAME did not change
             self.assertEqual(self._held(), records)  # and so are the records
         self.assertEqual(self._logs().count(), 0)
 
+    def test_rename_of_an_unheld_tier_goes_through_with_no_confirmation(self):
+        response = self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["name"], "Bravo renamed")
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, "Bravo renamed")
+
+    def test_a_confirmation_that_is_not_needed_does_not_get_in_the_way(self):
+        for sent in (0, 5, "7", None):
+            tier = BoatCapacityFare.objects.create(name=f"Spare tier {sent}", display_order=90)
+            response = self.admin.patch(
+                self._url(tier), {"name": f"Spare renamed {sent}", "confirm_affected_records": sent}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK, sent)
+            self.assertEqual(BoatCapacityFare.objects.get(pk=tier.pk).name, f"Spare renamed {sent}")
+
+    def test_a_confirmation_that_is_too_high_is_409_and_nothing_changes(self):
+        before, records = self._stored(), self._held()
+        response = self.admin.patch(
+            self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 3}, format="json"
+        )  # A is held by 2
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "confirm_required")
+        self.assertEqual(response.json()["record_count"], 2)  # the real number, not the one sent
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self._held(), records)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_confirmation_that_is_too_low_is_409_and_nothing_changes(self):
+        before, records = self._stored(), self._held()
+        response = self.admin.patch(
+            self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 1}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "confirm_required")
+        self.assertEqual(response.json()["record_count"], 2)
+        self.assertEqual(self._stored(), before)
+        self.assertEqual(self._held(), records)
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_confirmation_that_is_not_a_whole_number_is_409_and_nothing_changes(self):
+        before = self._stored()
+        for bad in (True, False, None, "abc", "", -2, 2.5, [2], {"n": 2}, 0):
+            response = self.admin.patch(
+                self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": bad}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, repr(bad))
+            self.assertEqual(response.json()["code"], "confirm_required", repr(bad))
+            self.assertEqual(self._stored(), before, repr(bad))
+        self.assertEqual(self._logs().count(), 0)
+
+    def test_a_confirmation_with_the_right_number_renames_the_tier_and_leaves_every_record_on_the_old_text(self):
+        # Three records hold tier A (two from the fixture and one more).
+        self._record("BF-A3", self.A_NAME)
+        holders = list(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).order_by("pk").values_list("pk", flat=True))
+        self.assertEqual(len(holders), 3)
+        every_record_before = self._held()
+        tiers_before = {pk: (name, order, active) for pk, name, order, active in self._stored()}
+
+        response = self.admin.patch(
+            self._url(self.a), {"name": "  Alpha   brand new   wording ", "confirm_affected_records": 3}, format="json"
+        )
+
+        # the answer
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertEqual((body["id"], body["name"], body["display_order"], body["is_active"]),
+                         (self.a.pk, "Alpha brand new wording", 10, True))
+        self.assertEqual(body["record_count"], 0)  # nobody holds the NEW text
+        # the tier table, read again: the name is NEW, nothing else about the tier moved
+        now = {pk: (name, order, active) for pk, name, order, active in self._stored()}
+        self.assertEqual(now[self.a.pk], ("Alpha brand new wording", 10, True))
+        for pk in (self.b.pk, self.c.pk, self.d.pk):
+            self.assertEqual(now[pk], tiers_before[pk])
+        # the three records, read again from the database: the OLD text, letter for letter
+        for pk in holders:
+            self.assertEqual(TouristRecord.objects.get(pk=pk).boat_capacity_fare, self.A_NAME)
+        # and no record at all was changed
+        self.assertEqual(self._held(), every_record_before)
+
+    def test_after_the_rename_the_new_text_is_held_by_nobody_and_the_log_says_how_many_were_left(self):
+        self._record("BF-A3", self.A_NAME)
+        self.admin.patch(self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 3}, format="json")
+        listed = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
+        self.assertEqual(listed["Alpha renamed"], 0)
+        self.assertNotIn(self.A_NAME, listed)  # the old text is no longer a tier...
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 3)  # ...but 3 records hold it
+        log = self._logs().get()
+        self.assertIn("3 record(s) keep the old text", log.record_label)
+
+    def test_the_log_of_a_rename_has_the_old_name_the_new_name_and_the_number_left_behind(self):
+        self.admin.patch(self._url(self.c), {"name": "Charlie renamed", "confirm_affected_records": 1}, format="json")
+        log = self._the_log()
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, str(self.c.pk))
+        self.assertIn("renamed", log.record_label)
+        self.assertIn(self.C_NAME, log.record_label)        # the old name
+        self.assertIn("Charlie renamed", log.record_label)  # the new name
+        self.assertIn("1 record(s) keep the old text", log.record_label)  # how many were left behind
+        self.assertIn("no record was changed", log.record_label)
+
+    def test_a_rename_of_an_unheld_tier_is_logged_with_a_count_of_zero(self):
+        self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+        log = self._the_log()
+        self.assertIn(self.B_NAME, log.record_label)
+        self.assertIn("Bravo renamed", log.record_label)
+        self.assertIn("0 record(s) keep the old text", log.record_label)
+
+    # The names of the fields of the API, which a person at the LGU has no use for.
+    API_WORDS = ("confirm_affected_records", "confirm_required", "record_count", "text_in_use",
+                 "display_order", "is_active", "api", "json", "payload", "field")
+
+    def _refusals(self):
+        """Every way the 409 can come: no number, a wrong one (high and low), a bad one."""
+        out = []
+        for payload in (
+            {"name": "Alpha renamed"},
+            {"name": "Alpha renamed", "confirm_affected_records": 99},
+            {"name": "Alpha renamed", "confirm_affected_records": 1},
+            {"name": "Alpha renamed", "confirm_affected_records": "abc"},
+            {"name": "Alpha renamed", "confirm_affected_records": True},
+        ):
+            out.append((payload, self.admin.patch(self._url(self.a), payload, format="json")))
+        return out
+
+    def test_the_words_of_the_409_are_for_a_person_not_the_names_of_api_fields(self):
+        for payload, response in self._refusals():
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, payload)
+            detail = response.json()["detail"]
+            for word in self.API_WORDS:
+                self.assertNotIn(word, detail.lower(), (word, payload))
+            self.assertNotIn("_", detail, payload)  # no snake_case name of a field at all
+
+    def test_the_409_says_how_many_records_hold_the_text_that_they_keep_it_and_that_a_confirmation_is_needed(self):
+        response = self.admin.patch(self._url(self.a), {"name": "Alpha renamed"}, format="json")
+        detail = response.json()["detail"]
+        self.assertEqual(
+            detail,
+            "2 record(s) hold the old text of this tier. Renaming the tier does not change them: they keep "
+            "the old text, and it will show as (not in the list) in their own dropdown. "
+            "The rename needs a confirmation.",
+        )
+        # the number in the words is the server's, whatever was sent
+        wrong = self.admin.patch(
+            self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 99}, format="json"
+        ).json()["detail"]
+        self.assertIn("2 record(s) hold the old text", wrong)
+        self.assertNotIn("99", wrong)
+
+    def test_the_code_and_the_count_the_front_end_reads_are_still_there(self):
+        for payload, response in self._refusals():
+            body = response.json()
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, payload)
+            self.assertEqual(body["code"], "confirm_required", payload)  # what the front end reads
+            self.assertEqual(body["record_count"], 2, payload)  # the real number
+            self.assertEqual(set(body), {"detail", "code", "record_count"}, payload)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.a.pk).name, self.A_NAME)  # nothing changed
+
+    def test_the_race_refusal_uses_the_same_words_with_the_new_number(self):
+        from unittest import mock
+
+        from api.views import boat_capacity_fares as views
+
+        real_count = views._count_holders
+        arrived = []
+
+        def count_then_a_booking_arrives(name):
+            count = real_count(name)
+            if name == self.A_NAME and not arrived:
+                arrived.append(self._record("BF-LATE", self.A_NAME))
+            return count
+
+        with mock.patch.object(views, "_count_holders", side_effect=count_then_a_booking_arrives):
+            response = self.admin.patch(
+                self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 2}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "confirm_required")
+        self.assertEqual(response.json()["record_count"], 3)
+        self.assertIn("3 record(s) hold the old text", response.json()["detail"])
+        self.assertNotIn("confirm_affected_records", response.json()["detail"])
+
+    def test_the_old_ban_is_gone_text_in_use_is_never_answered(self):
+        for payload in ({"name": "x1"}, {"name": "x2", "confirm_affected_records": 99}, {"name": "x3", "confirm_affected_records": 2}):
+            response = self.admin.patch(self._url(self.a), payload, format="json")
+            self.assertNotIn("text_in_use", response.content.decode())
+
+    def test_no_write_to_the_records_table_is_ever_made_by_any_of_the_writes(self):
+        import re
+
+        from django.db import connection as conn
+        from django.test.utils import CaptureQueriesContext
+
+        self._record("BF-A3", self.A_NAME)
+        with CaptureQueriesContext(conn) as queries:
+            self.admin.post(self.LIST, {"name": "Echo new"}, format="json")
+            self.admin.patch(self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 3}, format="json")
+            self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
+            self.admin.post(self._url(self.c, "deactivate"))
+            self.admin.post(self._url(self.c, "reactivate"))
+            self.admin.post(self.REORDER, {"ids": [self.d.pk, self.c.pk, self.b.pk, self.a.pk]}, format="json")
+        # the table each statement WRITES to (the one named right after UPDATE / INSERT INTO / DELETE FROM);
+        # a subquery that only READS api_touristrecord inside an UPDATE of the tier table is not a write to it
+        target = re.compile(r'^\s*(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM|REPLACE\s+INTO)\s+"?([A-Za-z0-9_]+)"?', re.I)
+        written = [m.group(1) for q in queries.captured_queries if (m := target.match(q["sql"]))]
+        self.assertIn("api_boatcapacityfare", written)  # the tier table WAS written
+        self.assertIn("api_activitylog", written)  # and so was the log
+        self.assertNotIn("api_touristrecord", written)  # the records never
+        self.assertGreater(len(queries.captured_queries), 10)  # the writes did run
+        reads = [q["sql"] for q in queries.captured_queries if "api_touristrecord" in q["sql"]]
+        self.assertTrue(reads)  # records were counted, only counted
     def test_the_old_text_stays_valid_on_its_records_so_a_refused_rename_leaves_them_listed(self):
         self.admin.patch(self._url(self.a), {"name": "Brand new wording"}, format="json")
         listed = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
@@ -8337,7 +8548,7 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
     def setUp(self):
         self.setUpData()
 
-    def test_a_record_that_arrives_between_the_check_and_the_write_is_still_refused(self):
+    def test_a_record_that_arrives_between_the_count_and_the_write_is_still_refused_for_an_unheld_tier(self):
         from unittest import mock
 
         from api.views import boat_capacity_fares as views
@@ -8346,7 +8557,7 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
         arrived = []
 
         def count_then_a_booking_arrives(name):
-            count = real_count(name)  # the early check: nobody holds it yet
+            count = real_count(name)  # the count: nobody holds it, so no confirmation is asked
             if name == self.B_NAME and not arrived:
                 arrived.append(self._record("BF-LATE", self.B_NAME))  # ...and now someone does
             return count
@@ -8356,11 +8567,67 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
 
         self.assertEqual(len(arrived), 1)  # the booking really did arrive in the gap
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.json()["code"], "text_in_use")
+        self.assertEqual(response.json()["code"], "confirm_required")
+        self.assertEqual(response.json()["record_count"], 1)  # the number as it is NOW
         self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME)  # not renamed
         self.assertEqual(self._logs().count(), 0)
         self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.B_NAME).count(), 1)
 
+    def test_a_record_that_arrives_after_the_admin_confirmed_the_number_makes_the_number_wrong_and_is_refused(self):
+        from unittest import mock
+
+        from api.views import boat_capacity_fares as views
+
+        real_count = views._count_holders
+        arrived = []
+
+        def count_then_a_booking_arrives(name):
+            count = real_count(name)  # 2: the number the admin saw and confirmed
+            if name == self.A_NAME and not arrived:
+                arrived.append(self._record("BF-LATE", self.A_NAME))  # a third record arrives in the gap
+            return count
+
+        before_records = self._held()
+        with mock.patch.object(views, "_count_holders", side_effect=count_then_a_booking_arrives):
+            response = self.admin.patch(
+                self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 2}, format="json"
+            )
+
+        self.assertEqual(len(arrived), 1)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "confirm_required")
+        self.assertEqual(response.json()["record_count"], 3)  # the admin must now confirm 3, not 2
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.a.pk).name, self.A_NAME)  # nothing renamed
+        self.assertEqual(self._logs().count(), 0)
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 3)
+        self.assertEqual(
+            [row for row in self._held() if row[0] != "BF-LATE"], before_records
+        )  # the old records are as they were
+
+    def test_confirming_the_new_number_after_that_refusal_then_goes_through(self):
+        from unittest import mock
+
+        from api.views import boat_capacity_fares as views
+
+        real_count = views._count_holders
+        arrived = []
+
+        def count_then_a_booking_arrives(name):
+            count = real_count(name)
+            if name == self.A_NAME and not arrived:
+                arrived.append(self._record("BF-LATE", self.A_NAME))
+            return count
+
+        with mock.patch.object(views, "_count_holders", side_effect=count_then_a_booking_arrives):
+            first = self.admin.patch(self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": 2}, format="json")
+        self.assertEqual(first.status_code, 409)
+        second = self.admin.patch(
+            self._url(self.a), {"name": "Alpha renamed", "confirm_affected_records": first.json()["record_count"]}, format="json"
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.a.pk).name, "Alpha renamed")
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 3)  # all three left on the old text
+        self.assertIn("3 record(s) keep the old text", self._logs().get().record_label)
     def test_the_lock_the_check_and_the_write_are_in_one_atomic_block_in_that_order(self):
         from unittest import mock
 
@@ -8380,7 +8647,7 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
         self.assertFalse(conn.in_atomic_block)  # here, outside the view, there is no block
         with mock.patch.object(views, "_lock", spy("lock", views._lock)), \
                 mock.patch.object(views, "_count_holders", spy("count", views._count_holders)), \
-                mock.patch.object(views, "_rename_unless_held", spy("rename", views._rename_unless_held)):
+                mock.patch.object(views, "_rename_if_still_held_by", spy("rename", views._rename_if_still_held_by)):
             response = self.admin.patch(self._url(self.b), {"name": "Bravo renamed"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -8421,16 +8688,25 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME)  # no write without its trace
 
-    def test_the_rename_statement_alone_refuses_while_a_record_holds_the_text(self):
+    def test_the_rename_statement_alone_matches_only_while_the_count_is_the_expected_one(self):
         from api.views import boat_capacity_fares as views
 
-        self.assertEqual(views._rename_unless_held(self.b.pk, self.B_NAME, "Bravo renamed"), 1)
-        self.assertEqual(views._rename_unless_held(self.a.pk, self.A_NAME, "Alpha renamed"), 0)  # held by 2
-        self.assertEqual(views._rename_unless_held(self.b.pk, self.B_NAME, "again"), 0)  # not called that any more
+        # B is held by nobody: expected 0 matches, expected 1 or 5 does not
+        self.assertEqual(views._rename_if_still_held_by(self.b.pk, self.B_NAME, "Bravo x", 1), 0)
+        self.assertEqual(views._rename_if_still_held_by(self.b.pk, self.B_NAME, "Bravo x", 5), 0)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.b.pk).name, self.B_NAME)
+        self.assertEqual(views._rename_if_still_held_by(self.b.pk, self.B_NAME, "Bravo renamed", 0), 1)
+        # A is held by 2: expected 2 matches, 0, 1 and 3 do not
+        for wrong in (0, 1, 3):
+            self.assertEqual(views._rename_if_still_held_by(self.a.pk, self.A_NAME, "Alpha x", wrong), 0)
+        self.assertEqual(BoatCapacityFare.objects.get(pk=self.a.pk).name, self.A_NAME)
+        # the old name no longer matches (the tier is not called that any more)
+        self.assertEqual(views._rename_if_still_held_by(self.b.pk, self.B_NAME, "again", 0), 0)
         names = dict(BoatCapacityFare.objects.values_list("pk", "name"))
         self.assertEqual(names[self.b.pk], "Bravo renamed")
         self.assertEqual(names[self.a.pk], self.A_NAME)
-
+        self.assertEqual(views._rename_if_still_held_by(self.a.pk, self.A_NAME, "Alpha renamed", 2), 1)
+        self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 2)  # the records stayed
     def test_on_postgresql_the_writers_take_the_advisory_lock(self):
         from unittest import mock
 

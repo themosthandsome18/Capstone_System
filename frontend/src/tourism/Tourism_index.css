@@ -4661,6 +4661,23 @@
   cursor: not-allowed;
 }
 
+/* The text of a name or of a fare tier can be long (up to 42 letters for the tiers), so
+   its box takes the whole width of the form, not the 160px of the Settings page that
+   `.settings-field input` gives every input. Only the name / tier-text boxes are marked
+   `settings-field-wide`; the stay-length box and the other pages keep their width. */
+.options-form .settings-field-wide input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* In the four reference tabs the page's own layout (a column with a 24px gap) already
+   spaces the add and edit forms from the list. The fare tab keeps its pieces in one box
+   without that layout, so there both forms get the same 24px of their own. */
+.boat-fare-panel .options-edit-form,
+.boat-fare-panel .options-add-form {
+  margin-bottom: 24px;
+}
+
 .options-form-actions {
   display: flex;
   justify-content: flex-end;
