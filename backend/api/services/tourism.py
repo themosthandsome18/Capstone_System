@@ -8,6 +8,7 @@ from ..models import (
     BOOKING_STATUS_ARRIVED,
     BOOKING_STATUS_NO_SHOW,
     BOOKING_STATUS_PENDING,
+    BoatCapacityFare,
     BoatType,
     Country,
     Itinerary,
@@ -140,6 +141,34 @@ TOURIST_RECORD_PAYLOAD_FIELDS = [
 ]
 
 
+def build_boat_capacity_fares_payload(active_only=False):
+    """The "Boat Capacity and Fare" tiers, in their display order.
+
+    active_only=False (the web): every row, as {id, name, display_order,
+    is_active}, so the web can show a retired tier on an old record.
+    active_only=True (the mobile app): only the active tiers, as {name} and
+    nothing else, in the right order. NO id: a record keeps the tier as TEXT, so
+    the app sends the text back and an id would be of no use there; an id it
+    could send is an invitation to a bug.
+
+    Read on every request, never cached: a change an admin makes shows in the
+    next bootstrap. (The reference tables are cached for 15 minutes; this small
+    list is deliberately outside that cache, like emergencyContacts.)
+    """
+    rows = BoatCapacityFare.objects.all()
+    if active_only:
+        return [{"name": row.name} for row in rows.filter(is_active=True)]
+    return [
+        {
+            "id": row.id,
+            "name": row.name,
+            "display_order": row.display_order,
+            "is_active": row.is_active,
+        }
+        for row in rows
+    ]
+
+
 def build_reference_tables_payload(resorts=None, active_only=False):
     """The reference lists.
 
@@ -176,6 +205,9 @@ def build_reference_tables_payload(resorts=None, active_only=False):
                 for item in static_payload[payload_key]
                 if item.get("is_active", True)
             ]
+
+    # Outside the cache above: read now, every time.
+    payload["boatCapacityFares"] = build_boat_capacity_fares_payload(active_only)
 
     if resorts is not None:
         payload["resorts"] = ResortSerializer(resorts, many=True).data

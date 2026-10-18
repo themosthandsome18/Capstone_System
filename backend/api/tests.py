@@ -5233,7 +5233,7 @@ class ReferenceOptionPayloadTests(TestCase):
         self.assertEqual(
             set(tables),
             {"countries", "regions", "provinces", "itineraries", "travelModes",
-             "boatTypes", "visitPurposes", "resorts"},
+             "boatTypes", "visitPurposes", "resorts", "boatCapacityFares"},
         )
 
     def test_other_lists_are_untouched(self):
@@ -7590,6 +7590,229 @@ class BoatCapacityFareSeedTests(TransactionTestCase):
 
         MigrationExecutor(connection).migrate(self.AFTER)
         self.assertEqual(set(connection.introspection.table_names()), before)
+
+
+class BoatCapacityFarePayloadTests(TestCase):
+    """referenceTables.boatCapacityFares (boat fare, commit 2).
+
+    The web gets every tier with its id, order and state; the mobile app gets
+    the active tiers' NAMES, in order, and no id. The list is read on every
+    request, outside the 15-minute cache of the reference tables.
+    """
+
+    MOBILE = "/api/mobile/tourism/bootstrap/"
+    WEB_BOOTSTRAP = "/api/bootstrap/"
+    WEB_TABLES = "/api/reference-tables/"
+    CACHE_KEY = "mobile_reference_tables_v2"
+    OLD_LISTS = ("itineraries", "travelModes", "boatTypes", "visitPurposes")
+
+    def setUp(self):
+        import importlib
+
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        self.seed = importlib.import_module("api.migrations.0056_seed_boat_capacity_fares")
+        user = User.objects.create_user(username="bcf_payload_staff", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_TOURISM)
+        self.staff = APIClient()
+        self.staff.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+    # -- helpers -----------------------------------------------------------
+
+    def _nine(self):
+        BoatCapacityFare.objects.all().delete()
+        for index, name in enumerate(self.seed.TIERS):
+            BoatCapacityFare.objects.create(name=name, display_order=10 * (index + 1))
+
+    def _mobile(self):
+        response = APIClient().get(self.MOBILE)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.json()["referenceTables"]["boatCapacityFares"]
+
+    def _web(self):
+        response = self.staff.get(self.WEB_TABLES)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.json()["boatCapacityFares"]
+
+    # -- the shape ----------------------------------------------------------
+
+    def test_the_mobile_list_is_the_active_names_in_order_and_nothing_else(self):
+        self._nine()
+        mobile = self._mobile()
+        self.assertEqual(mobile, [{"name": name} for name in self.seed.TIERS])
+        for item in mobile:
+            self.assertEqual(set(item), {"name"})
+            self.assertNotIn("id", item)
+
+    def test_the_web_list_is_every_tier_with_id_name_order_and_state(self):
+        self._nine()
+        BoatCapacityFare.objects.filter(display_order=30).update(is_active=False)
+        web = self._web()
+        self.assertEqual(len(web), 9)
+        for item in web:
+            self.assertEqual(set(item), {"id", "name", "display_order", "is_active"})
+        self.assertEqual([item["name"] for item in web], self.seed.TIERS)
+        self.assertEqual([item["display_order"] for item in web], [10, 20, 30, 40, 50, 60, 70, 80, 90])
+        self.assertEqual([item["is_active"] for item in web], [True, True, False] + [True] * 6)
+        self.assertEqual(
+            [item["id"] for item in web],
+            list(BoatCapacityFare.objects.order_by("display_order").values_list("id", flat=True)),
+        )
+
+    def test_both_web_endpoints_and_the_mobile_one_carry_the_key(self):
+        self._nine()
+        self.assertEqual(len(self._web()), 9)
+        bootstrap = self.staff.get(self.WEB_BOOTSTRAP)
+        self.assertEqual(bootstrap.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(bootstrap.json()["referenceTables"]["boatCapacityFares"]), 9)
+        self.assertEqual(len(self._mobile()), 9)
+
+    def test_no_id_reaches_the_mobile_app_whatever_the_table_holds(self):
+        BoatCapacityFare.objects.all().delete()
+        BoatCapacityFare.objects.create(id=777, name="Only tier", display_order=1)
+        BoatCapacityFare.objects.create(id=778, name="Retired tier", display_order=2, is_active=False)
+        mobile = self._mobile()
+        self.assertEqual(mobile, [{"name": "Only tier"}])
+        self.assertNotIn("777", str(mobile))
+        self.assertNotIn("id", mobile[0])
+
+    def test_an_empty_table_gives_an_empty_list_for_both_not_an_error_or_a_missing_key(self):
+        BoatCapacityFare.objects.all().delete()
+        self.assertEqual(self._mobile(), [])
+        self.assertEqual(self._web(), [])
+
+    def test_with_every_tier_retired_the_app_gets_an_empty_list_and_the_web_still_has_them(self):
+        self._nine()
+        BoatCapacityFare.objects.update(is_active=False)
+        self.assertEqual(self._mobile(), [])
+        web = self._web()
+        self.assertEqual(len(web), 9)
+        self.assertEqual({item["is_active"] for item in web}, {False})
+
+    # -- the server wins ----------------------------------------------------
+
+    def _different_list(self):
+        """Not the seeded nine: a tenth tier put FIRST, two tiers swapped in
+        order, and one retired. Nothing a page could guess from the nine."""
+        self._nine()
+        BoatCapacityFare.objects.create(name="21-25 pax (One-Way P6,000, Two-way P6,500)", display_order=5)
+        third = BoatCapacityFare.objects.get(display_order=30)
+        fourth = BoatCapacityFare.objects.get(display_order=40)
+        third.display_order, fourth.display_order = 40, 30
+        third.save()
+        fourth.save()
+        BoatCapacityFare.objects.filter(display_order=70).update(is_active=False)
+
+    def test_the_servers_list_comes_out_not_the_nine(self):
+        self._different_list()
+        tiers = self.seed.TIERS
+        expected_web = [
+            "21-25 pax (One-Way P6,000, Two-way P6,500)",  # the tenth, first
+            tiers[0], tiers[1],
+            tiers[3], tiers[2],  # swapped
+            tiers[4], tiers[5],
+            tiers[6],  # retired: in the web list, not in the app's
+            tiers[7], tiers[8],
+        ]
+        expected_mobile = [name for name in expected_web if name != tiers[6]]
+
+        self.assertNotEqual(expected_mobile, tiers)
+        self.assertEqual([item["name"] for item in self._web()], expected_web)
+        self.assertEqual([item["name"] for item in self._mobile()], expected_mobile)
+        self.assertEqual(len(expected_web), 10)
+        self.assertEqual(len(expected_mobile), 9)  # as many as the seed, and a different nine
+
+    # -- no 15-minute delay ---------------------------------------------------
+
+    def test_a_change_shows_in_the_very_next_bootstrap_even_with_the_cache_warm(self):
+        from django.core.cache import cache
+
+        self._nine()
+        # warm everything that is cached, as a first visit would
+        self.assertEqual(len(self._mobile()), 9)
+        self.assertEqual(len(self._web()), 9)
+        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+
+        BoatCapacityFare.objects.filter(display_order=50).update(is_active=False)
+
+        mobile = [item["name"] for item in self._mobile()]
+        self.assertNotIn(self.seed.TIERS[4], mobile)
+        self.assertEqual(len(mobile), 8)
+        web = {item["name"]: item for item in self._web()}
+        self.assertIn(self.seed.TIERS[4], web)
+        self.assertIs(web[self.seed.TIERS[4]]["is_active"], False)
+
+        # and a rename, a reorder and a new tier, each in the very next answer
+        BoatCapacityFare.objects.filter(display_order=10).update(name="Renamed first tier", display_order=95)
+        BoatCapacityFare.objects.create(name="Brand new tier", display_order=1)
+        mobile = [item["name"] for item in self._mobile()]
+        self.assertEqual(mobile[0], "Brand new tier")
+        self.assertEqual(mobile[-1], "Renamed first tier")
+        self.assertNotIn(self.seed.TIERS[0], mobile)
+
+    def test_the_list_is_not_in_the_cache_and_the_cache_key_is_still_v2(self):
+        from django.core.cache import cache
+
+        from .services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
+
+        self._nine()
+        self._mobile()
+        self._web()
+        self.assertEqual(MOBILE_REFERENCE_TABLES_CACHE_KEY, "mobile_reference_tables_v2")
+        cached = cache.get(self.CACHE_KEY)
+        self.assertIsNotNone(cached)
+        self.assertNotIn("boatCapacityFares", cached)
+
+    # -- nothing else moved ----------------------------------------------------
+
+    def test_the_four_existing_lists_do_not_depend_on_the_new_one(self):
+        from .services.tourism import build_reference_tables_payload
+
+        self._nine()
+        with_nine_mobile = build_reference_tables_payload(active_only=True)
+        with_nine_web = build_reference_tables_payload()
+        BoatCapacityFare.objects.all().delete()
+        BoatCapacityFare.objects.create(name="Something else entirely", display_order=1)
+        other_mobile = build_reference_tables_payload(active_only=True)
+        other_web = build_reference_tables_payload()
+
+        for key in self.OLD_LISTS:
+            with self.subTest(key=key):
+                self.assertEqual(with_nine_mobile[key], other_mobile[key])
+                self.assertEqual(with_nine_web[key], other_web[key])
+        self.assertEqual(
+            set(with_nine_mobile),
+            {"countries", "regions", "provinces", "itineraries", "travelModes", "boatTypes",
+             "visitPurposes", "resorts", "boatCapacityFares"},
+        )
+        # the shapes the app has always read
+        for key, keys in {
+            "itineraries": {"id", "name"}, "travelModes": {"id", "name"},
+            "boatTypes": {"id", "name", "requires_capacity_fare"}, "visitPurposes": {"id", "name"},
+        }.items():
+            for item in with_nine_mobile[key]:
+                self.assertEqual(set(item), keys)
+
+    def test_the_cached_lists_are_not_touched_by_adding_the_key(self):
+        from django.core.cache import cache
+
+        self._nine()
+        self._web()
+        cached_before = {key: list(value) for key, value in cache.get(self.CACHE_KEY).items()}
+        self._mobile()
+        self._web()
+        cached_after = cache.get(self.CACHE_KEY)
+        self.assertEqual(set(cached_before), set(cached_after))
+        self.assertEqual(cached_before, {key: list(value) for key, value in cached_after.items()})
+
+    def test_adding_the_key_changes_no_stored_data(self):
+        self._nine()
+        before = (TouristRecord.objects.count(), BoatCapacityFare.objects.count())
+        self._mobile()
+        self._web()
+        self.assertEqual(before, (TouristRecord.objects.count(), BoatCapacityFare.objects.count()))
 
 
 class PeakSeasonShareTests(TestCase):
