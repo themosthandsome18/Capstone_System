@@ -5,30 +5,39 @@ A record keeps its tier as TEXT (TouristRecord.boat_capacity_fare), exactly as i
 was when the record was saved. Nothing points at a tier by id. So:
 
 * A tier is never deleted here (there is no DELETE endpoint): it is deactivated.
-* A tier whose text some record holds is not RENAMED (409 text_in_use): the
-  record would keep the old text and be left holding a text that is not in the
-  list. The admin adds a new tier and deactivates the old one instead.
+* A tier can be RENAMED. Renaming never touches a record: the record keeps the
+  text it already holds (the form shows it as "(not in the list)"). So when
+  records hold the old text, the rename needs a CONFIRMATION, as the rename of a
+  registration option does: the client must send confirm_affected_records equal
+  to the number the SERVER counted, or the answer is 409 confirm_required with
+  that number. When no record holds the text, the rename goes through at once.
+  The ActivityLog keeps the old name, the new name and how many records were left
+  on the old text: it is the only trace of where they went.
 * There is no "cannot deactivate the last one" guard: the field is optional on
   the form, so a list with no active tier is allowed.
 
 Every write is written to the ActivityLog, inside the same transaction as the
 write itself: no write without its trace, and no trace for a write that failed.
 
-The rename guard. The check "no record holds this text" and the write of the new
-name are ONE statement (an UPDATE that only matches while no record holds the
-text), run inside one atomic block under the advisory lock. The lock keeps two
-admins' writes in turn; it does not stop a booking from being saved, because a
-booking does not take it. What the single statement gives is that the check and
-the write cannot be separated by anything: there is no moment "after counting,
-before writing" for a booking to slip into. What it cannot give, and nothing here
-can, is a promise about records saved AFTER the rename: an app that was not yet
-updated keeps sending the old text. That state is allowed on purpose (the form
-shows such a text as "not in the list").
+The rename. The check "how many records hold the old text" and the write of the
+new name are ONE statement (an UPDATE that only matches while that number is still
+exactly the one the server counted and the client confirmed), run inside one atomic
+block under the advisory lock. The lock keeps two admins' writes in turn; it does
+not stop a booking from being saved, because a booking does not take it. What the
+single statement gives is that the count and the write cannot be separated by
+anything: if a booking holding the old text is saved in the gap, the number no
+longer matches, nothing is renamed, and the answer is 409 confirm_required with the
+new number. What it cannot give, and nothing here can, is a promise about records
+saved AFTER the rename: an app that was not yet updated keeps sending the old text.
+That state is allowed on purpose.
+
+NOTHING HERE WRITES TO TouristRecord. Records are only counted.
 """
 from functools import wraps
 
 from django.db import connection, transaction
-from django.db.models import Count, Exists, Max, OuterRef
+from django.db.models import Count, IntegerField, Max, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.http import Http404
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -44,7 +53,7 @@ from api.models import (
 )
 from api.permissions import get_user_role
 from api.services.activity import log_activity
-from api.views.reference_options import clean_name, name_key
+from api.views.reference_options import _parse_confirmation, clean_name, name_key
 
 LOCK_ID = 7100006
 ORDER_STEP = 10
@@ -99,11 +108,23 @@ def _count_holders(name):
     return TouristRecord.objects.filter(boat_capacity_fare=name).count()
 
 
-def _rename_unless_held(fare_id, old_name, new_name):
-    """Rename in ONE statement that only matches while no record holds the old
-    text. -> the number of rows changed (0 = refused: held, or no longer there)."""
-    held = Exists(TouristRecord.objects.filter(boat_capacity_fare=OuterRef("name")))
-    return BoatCapacityFare.objects.filter(pk=fare_id, name=old_name).filter(~held).update(name=new_name)
+def _rename_if_still_held_by(fare_id, old_name, new_name, expected):
+    """Rename in ONE statement that only matches while exactly `expected` records
+    hold the old text. -> the number of rows changed (0 = refused: the number
+    changed in the meantime, or the tier is no longer called that)."""
+    held = (
+        TouristRecord.objects.filter(boat_capacity_fare=OuterRef("name"))
+        .order_by()
+        .values("boat_capacity_fare")
+        .annotate(n=Count("pk"))
+        .values("n")
+    )
+    return (
+        BoatCapacityFare.objects.filter(pk=fare_id, name=old_name)
+        .annotate(held_now=Coalesce(Subquery(held, output_field=IntegerField()), 0))
+        .filter(held_now=expected)
+        .update(name=new_name)
+    )
 
 
 def _item(fare, record_count):
@@ -196,27 +217,37 @@ def boat_capacity_fare_detail(request, fare_id):
         if _name_taken(new_name, excluding=fare.pk):
             return _error(_DUPLICATE, name=["Already used."])
 
+        # How many records hold the old text, counted HERE (never taken from the request).
         held_by = _count_holders(old_name)
         if held_by:
-            return _in_use(old_name, held_by)
+            confirmed = _parse_confirmation(request.data.get("confirm_affected_records"))
+            if confirmed is None or confirmed != held_by:
+                return _confirm_required(held_by)
 
-        # The check and the write are this one statement (see the module note).
-        if not _rename_unless_held(fare.pk, old_name, new_name):
-            return _in_use(old_name, _count_holders(old_name))
+        # The count and the write are this one statement (see the module note): it
+        # renames only while the number is still exactly the one counted above.
+        if not _rename_if_still_held_by(fare.pk, old_name, new_name, held_by):
+            return _confirm_required(_count_holders(old_name))
 
         fare.refresh_from_db()
-        _log(request, fare, ACTION_UPDATE, f"renamed: '{old_name}' to '{new_name}' (no record held the old text)")
+        _log(
+            request,
+            fare,
+            ACTION_UPDATE,
+            f"renamed: '{old_name}' to '{new_name}'; {held_by} record(s) keep the old text "
+            "(no record was changed)",
+        )
         count = _count_holders(new_name)
     return Response(_item(fare, count))
 
 
-def _in_use(name, held_by):
+def _confirm_required(held_by):
     return _error(
-        f"The text of this tier is saved on {held_by} record(s), so it cannot be renamed: "
-        "those records would keep the old text. Add a new tier with the new wording and "
-        "deactivate this one.",
+        f"The text of this tier is saved on {held_by} record(s). Renaming the tier does not change "
+        "them: they keep the old text, and it will show as 'not in the list' in their own dropdown. "
+        f"To go on, send confirm_affected_records: {held_by}.",
         http_status=status.HTTP_409_CONFLICT,
-        code="text_in_use",
+        code="confirm_required",
         record_count=held_by,
     )
 
