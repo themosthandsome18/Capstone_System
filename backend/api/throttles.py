@@ -136,6 +136,8 @@ class CommunityReportContactRateThrottle(_FixedScopeRateThrottle):
         from .views.mobile import PH_MOBILE_NUMBER, normalize_contact_digits
 
         data = getattr(request, "data", {}) or {}
+        if not hasattr(data, "get"):
+            return None
         contact = normalize_contact_digits(
             data.get("contact_number") or data.get("contact") or ""
         )

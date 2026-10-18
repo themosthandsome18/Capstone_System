@@ -69,6 +69,7 @@ from api.seeders import (
 from api.serializers import (
     BarangaySerializer,
     PublicEmergencyContactSerializer,
+    PublicSanitaryComplaintSubmissionSerializer,
     FeedbackEntrySerializer,
     HouseholdSanitationRecordSerializer,
     ResortSerializer,
@@ -90,8 +91,12 @@ from api.throttles import (
     CommunityReportContactRateThrottle,
     CommunityReportIpRateThrottle,
 )
+from api.services.public_reporting import (
+    matching_submission, public_receipt, record_submission, submission_fingerprint,
+)
 from api.services.activity import log_activity
 from api.services.sanitation import (
+    COMMUNITY_REPORT_CATEGORY_PRIORITIES,
     community_report_category,
     generate_complaint_id,
     apply_default_next_due_date,
@@ -679,170 +684,87 @@ def mobile_feedback_submit(request):
 def mobile_sanitation_report_submit(request):
     try:
         ensure_mobile_barangays()
+        from collections.abc import Mapping
+        if not isinstance(request.data, Mapping):
+            return Response({"detail": "Expected a JSON object or form fields.",
+                             "errors": {"non_field_errors": ["Expected an object."]}}, status=400)
+        fields = copy_request_fields(request)
+        unexpected_uploads = set(request.FILES) - {"photo", "image"}
+        if unexpected_uploads:
+            return Response({"errors": {key: ["This upload field is not allowed."]
+                                        for key in sorted(unexpected_uploads)}}, status=400)
+        # Existing Flutter photo submissions remain supported; the new web form
+        # will not expose photos in this phase.
+        uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
+        public_input = PublicSanitaryComplaintSubmissionSerializer(data=fields)
+        if not public_input.is_valid():
+            first_errors = next(iter(public_input.errors.values()))
+            return Response({"detail": str(first_errors[0]),
+                             "errors": public_input.errors}, status=400)
+        data = dict(public_input.validated_data)
+        submission_id = data.pop("client_submission_id", "") or None
+        fingerprint = submission_fingerprint(data, uploads)
 
-        # A resend of a form that was already saved (the first reply was lost,
-        # e.g. to a timeout) gets that report back, and creates nothing.
-        submission_id = community_report_submission_id(request)
+        def retry_response(existing):
+            proof = matching_submission(existing, fingerprint)
+            if proof is None:
+                return Response({
+                    "code": "submission_conflict",
+                    "detail": "This submission identifier cannot be reused for these details.",
+                }, status=status.HTTP_409_CONFLICT)
+            return Response(public_receipt(existing, proof["priority"]), status=200)
+
         if submission_id:
             existing = find_existing_community_report(submission_id)
             if existing is not None:
-                return Response(
-                    SanitaryComplaintSerializer(existing, context={"request": request}).data,
-                    status=status.HTTP_200_OK,
-                )
+                return retry_response(existing)
 
-        data = copy_request_fields(request)
-        data.pop("client_submission_id", None)
-        uploads = request.FILES.getlist("photo") or request.FILES.getlist("image")
-
-        data["complaint_id"] = generate_complaint_id()
-        data["complainant_name"] = (
-            data.get("complainant_name") or data.get("full_name") or data.get("name") or ""
-        ).strip()
-        data["contact_number"] = (
-            data.get("contact_number") or data.get("contact") or ""
-        ).strip()
-        data["reported_date"] = data.get("reported_date") or timezone.localdate().isoformat()
-        data["status"] = COMPLAINT_STATUS_PENDING
-        data["barangay"] = data.get("barangay") or "Unspecified"
-        data["description"] = (
-            data.get("description") or data.get("message") or ""
-        ).strip()
-        data["location_address"] = " ".join(
-            str(data.get("location_address") or "").split()
+        data.update(
+            complaint_id=generate_complaint_id(), status=COMPLAINT_STATUS_PENDING,
+            reported_date=timezone.localdate().isoformat(),
+            priority=community_report_category(data["category"])[1],
         )
-
-        # Client decision: anonymous reports are not acted on, so a name and a
-        # reachable Philippine mobile number are required. Any anonymous flag
-        # is ignored; a blank name is rejected whatever the flag says.
-        identity_error = community_report_identity_error(
-            data["complainant_name"], data["contact_number"]
-        )
-        if identity_error:
-            return Response(
-                {"error": identity_error, "detail": identity_error},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not data["location_address"]:
-            message = (
-                "Please enter the location or address of the problem."
-            )
-            return Response(
-                {"error": message, "detail": message},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        official_barangay = official_barangay_name(data.get("barangay"))
-        if official_barangay is None:
-            message = (
-                "Please choose a Mauban barangay from the list."
-            )
-            return Response(
-                {"error": message, "detail": message},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        data["barangay"] = official_barangay
-        data["contact_number"] = normalize_contact_digits(data["contact_number"])
-        for flag in ("is_anonymous", "anonymous"):
-            data.pop(flag, None)
-
-        # Urgency comes from the category only; anything the client sends
-        # ("priority", "urgency") is discarded. Unknown categories fail fast.
-        known = community_report_category(data.get("category"))
-        if known is None:
-            message = (
-                "Please choose a category from the list."
-            )
-            return Response(
-                {"error": message, "detail": message},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        data["category"], data["priority"] = known
-        data.pop("urgency", None)
-
-        if uploads and not data.get("photo_documentation"):
-            try:
-                saved_urls = []
-                for upload in uploads:
-                    saved_urls.append(save_image_file(upload, "complaints"))
-                data["photo_documentation"] = ",".join(saved_urls)
-            except UploadValidationError as val_err:
-                return Response(
-                    {"error": val_err.message, "detail": val_err.message},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except StorageServiceError as stor_err:
-                return Response(
-                    {"error": stor_err.message, "detail": stor_err.message},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-        # Clean and validate coordinates
-        for field in ["latitude", "longitude"]:
-            val = data.get(field)
-            if val in ("", None, "null", "undefined"):
-                data.pop(field, None)
-            else:
-                try:
-                    fval = float(val)
-                    if abs(fval) < 0.0001:
-                        data.pop(field, None)
-                    else:
-                        data[field] = fval
-                except (ValueError, TypeError):
-                    data.pop(field, None)
-
+        for key in ("latitude", "longitude"):
+            if data.get(key) is None or abs(data[key]) < 0.0001:
+                data.pop(key, None)
+        # Validate all report fields before writing any photo to storage.
         serializer = SanitaryComplaintSerializer(data=data, context={"request": request})
         if not serializer.is_valid():
-            error_msgs = []
-            for field, errs in serializer.errors.items():
-                if isinstance(errs, list):
-                    error_msgs.append(f"{field}: {', '.join(str(e) for e in errs)}")
-                else:
-                    error_msgs.append(f"{field}: {errs}")
-            return Response(
-                {"detail": "Validation error: " + "; ".join(error_msgs), "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "Please check the submitted fields.",
+                             "errors": serializer.errors}, status=400)
+        if uploads:
+            try:
+                saved_urls = [save_image_file(upload, "complaints") for upload in uploads]
+                data["photo_documentation"] = ",".join(saved_urls)
+            except UploadValidationError as error:
+                return Response({"error": error.message, "detail": error.message}, status=400)
+            except StorageServiceError as error:
+                return Response({"error": error.message, "detail": error.message}, status=503)
 
         try:
             with transaction.atomic():
-                complaint = serializer.save(client_submission_id=submission_id)
+                complaint = serializer.save(
+                    client_submission_id=submission_id,
+                    photo_documentation=data.get("photo_documentation", ""),
+                )
+                if submission_id:
+                    record_submission(complaint, fingerprint)
+                log_activity(
+                    request, MODULE_SANITATION, ACTION_CREATE, complaint,
+                    label=complaint.category, record_id=complaint.complaint_id,
+                )
         except IntegrityError:
-            # Two requests with the same id raced past the check above; the
-            # other one saved first, so answer with its report.
-            existing = (
-                find_existing_community_report(submission_id) if submission_id else None
-            )
+            existing = find_existing_community_report(submission_id) if submission_id else None
             if existing is None:
                 raise
-            return Response(
-                SanitaryComplaintSerializer(existing, context={"request": request}).data,
-                status=status.HTTP_200_OK,
-            )
-        # Only a saved report counts toward the contact's daily limit.
+            return retry_response(existing)
         CommunityReportContactRateThrottle.record_success(request)
-
-        log_activity(
-            request,
-            MODULE_SANITATION,
-            ACTION_CREATE,
-            complaint,
-            label=complaint.category,
-            record_id=complaint.complaint_id,
-        )
-
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(public_receipt(complaint, complaint.priority), status=201)
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception("Error in mobile_sanitation_report_submit: %s", exc)
-        # The details are in the log; the reporter gets a fixed message.
-        message = (
-            "Server problem. Please try again later."
-        )
-        return Response(
-            {"error": message, "detail": message},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        message = "Server problem. Please try again later."
+        return Response({"error": message, "detail": message}, status=500)
 
 
 @api_view(["GET"])
@@ -905,8 +827,10 @@ def copy_request_fields(request):
 def community_report_submission_id(request):
     """The form's client_submission_id (at most 64 characters), or None."""
     data = getattr(request, "data", {}) or {}
+    if not hasattr(data, "get"):
+        return None
     value = str(data.get("client_submission_id") or "").strip()
-    return value[:64] or None
+    return value if 0 < len(value) <= 64 else None
 
 
 def official_barangay_name(name):
@@ -1181,6 +1105,7 @@ def mobile_sanitation_bootstrap(request):
             "complaintData": {"summary": {}, "rows": []},
             "householdRecords": [],
             "barangays": get_cached_active_barangays(),
+            "reportCategories": list(COMMUNITY_REPORT_CATEGORY_PRIORITIES),
             "notifications": build_mobile_sanitation_notifications(
                 expiring_permits=[],
                 open_complaints=[],

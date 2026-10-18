@@ -125,6 +125,13 @@ class ActivityLog(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["record_id"],
+                condition=models.Q(module="sanitation", record_type="SanitationPublicSubmission"),
+                name="uniq_sanitation_public_digest",
+            ),
+        ]
 
     def __str__(self):
         actor = self.user.username if self.user_id else "Deleted user"

@@ -1,6 +1,12 @@
 from django.contrib import admin
 from django import forms
 from django.db import transaction
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseForbidden
+
+from .services.public_reporting import (
+    PublicSubmissionDeletionProtected, RETENTION_MESSAGE, is_public_submission_digest,
+)
 
 from .models import (
     ActivityLog,
@@ -119,6 +125,31 @@ class ActivityLogAdmin(admin.ModelAdmin):
         "record_label",
         "created_at",
     )
+
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+        if (obj is not None and super().has_delete_permission(request, obj)
+                and is_public_submission_digest(obj)):
+            return HttpResponseForbidden(RETENTION_MESSAGE)
+        return super().delete_view(request, object_id, extra_context)
+
+    def get_deleted_objects(self, objs, request):
+        deletable, counts, permissions, protected = super().get_deleted_objects(objs, request)
+        if any(is_public_submission_digest(obj) for obj in objs):
+            protected.append(RETENTION_MESSAGE)
+        return deletable, counts, permissions, protected
+
+    def delete_model(self, request, obj):
+        try:
+            super().delete_model(request, obj)
+        except PublicSubmissionDeletionProtected as error:
+            raise PermissionDenied(RETENTION_MESSAGE) from error
+
+    def delete_queryset(self, request, queryset):
+        try:
+            super().delete_queryset(request, queryset)
+        except PublicSubmissionDeletionProtected as error:
+            raise PermissionDenied(RETENTION_MESSAGE) from error
 
 
 @admin.register(Barangay)

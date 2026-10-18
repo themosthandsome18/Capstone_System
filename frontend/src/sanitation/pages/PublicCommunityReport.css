@@ -1,0 +1,43 @@
+.public-community-report {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: #f1f5f4;
+  color: #172b25;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+.public-community-report *, .public-community-report *::before, .public-community-report *::after { box-sizing: border-box; }
+.public-community-report .public-report-card { width: 100%; max-width: 640px; margin: 0 auto; padding: 28px; border-radius: 16px; background: #fff; }
+.public-community-report h1 { margin: 0 0 12px; font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.2; }
+.public-community-report h2 { font-size: 1.15rem; margin: 0 0 8px; }
+.public-community-report p { margin: 0 0 16px; }
+.public-community-report .public-report-eyebrow { color: #285b47; font-weight: 700; margin-bottom: 8px; }
+.public-community-report fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.public-community-report .public-report-legend { font-weight: 700; margin-bottom: 16px; }
+.public-community-report .public-report-field { min-width: 0; margin-bottom: 18px; }
+.public-community-report .public-report-field > label { display: block; margin-bottom: 6px; font-weight: 600; }
+.public-community-report input:not([type="checkbox"]), .public-community-report select, .public-community-report textarea {
+  display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; padding: 10px 12px;
+  border: 1px solid #75887f; border-radius: 7px; background: #fff; color: #172b25; font: inherit;
+}
+.public-community-report textarea { resize: vertical; }
+.public-community-report input:focus-visible, .public-community-report select:focus-visible,
+.public-community-report textarea:focus-visible, .public-community-report button:focus-visible { outline: 3px solid #126e51; outline-offset: 3px; }
+.public-community-report [aria-invalid="true"] { border-color: #a32020; }
+.public-community-report .public-report-field-error { margin: 6px 0 0; color: #9a1919; }
+.public-community-report .public-report-feedback { padding: 12px; margin: 16px 0; border-left: 4px solid #9e5710; background: #fff4df; overflow-wrap: anywhere; }
+.public-community-report .public-report-privacy { padding: 16px; margin-bottom: 20px; background: #edf5f0; border-radius: 8px; }
+.public-community-report .public-report-ack { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; min-height: 44px; }
+.public-community-report .public-report-ack input { flex: 0 0 22px; width: 22px; height: 22px; margin: 2px 0 0; accent-color: #126e51; }
+.public-community-report button { min-height: 48px; max-width: 100%; padding: 12px 20px; border: 1px solid #12553f; border-radius: 8px; background: #12553f; color: white; font: inherit; font-weight: 600; cursor: pointer; white-space: normal; }
+.public-community-report button:disabled { opacity: .6; cursor: wait; }
+.public-community-report button + button { margin: 12px 0 0 12px; }
+.public-community-report .public-report-secondary { background: white; color: #12553f; }
+.public-community-report .public-report-receipt dd { margin: 0 0 16px; font-weight: 700; overflow-wrap: anywhere; }
+.public-community-report .public-report-receipt dt { color: #415c50; }
+@media (max-width: 480px) {
+  .public-community-report { padding: 12px; }
+  .public-community-report .public-report-card { padding: 18px; }
+  .public-community-report button { width: 100%; }
+  .public-community-report button + button { margin: 12px 0 0; }
+}
