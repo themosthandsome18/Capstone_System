@@ -22,8 +22,10 @@ from .models import (
     ACTION_UPDATE,
     BOOKING_STATUS_ARRIVED,
     MODULE_TOURISM,
+    ActiveOption,
     ActivityLog,
     Barangay,
+    BoatCapacityFare,
     BoatType,
     Country,
     EmergencyContact,
@@ -7387,6 +7389,207 @@ class EmergencyContactApiTests(TestCase):
         self.assertEqual(self._payload_names(), ["Alpha Rescue", "Bravo Police", "Charlie Desk"])
         self.admin.post(self._url(self.a, "deactivate"))
         self.assertEqual(self._payload_names(), ["Bravo Police", "Charlie Desk"])
+
+
+def _repo_file(*parts):
+    from pathlib import Path
+
+    return Path(__file__).resolve().parent.parent.parent.joinpath(*parts)
+
+
+def web_fare_tiers():
+    """The nine tiers as BookingManagement.js has them NOW, read from the real
+    file (not copied here), so that drift between the two cannot hide."""
+    import re
+
+    source = _repo_file("frontend", "src", "tourism", "pages", "BookingManagement.js").read_text(encoding="utf-8")
+    block = source[source.index("const boatCapacityFareOptions = ["):]
+    block = block[: block.index("];")]
+    pairs = re.findall(r'\{ id: "([^"]*)", name: "([^"]*)" \}', block)
+    assert all(a == b for a, b in pairs), "a web tier has an id different from its name"
+    return [name for _id, name in pairs]
+
+
+def dart_fare_tiers():
+    """The tiers as mobile/lib/utils/helpers.dart has them NOW (the leading
+    empty string is the 'Select capacity and fare' choice, not a tier)."""
+    import re
+
+    source = _repo_file("mobile", "lib", "utils", "helpers.dart").read_text(encoding="utf-8")
+    block = source[source.index("const boatCapacityFareOptions = ["):]
+    block = block[: block.index("];")]
+    return [text for text in re.findall(r"'([^']*)'", block) if text]
+
+
+class BoatCapacityFareModelTests(TestCase):
+    """The table for the Boat Capacity and Fare tiers. Nothing reads it yet."""
+
+    def test_the_fields_are_exactly_these(self):
+        fields = {f.name: f for f in BoatCapacityFare._meta.get_fields()}
+        self.assertEqual(set(fields), {"id", "name", "display_order", "is_active"})
+        self.assertEqual(type(fields["id"]).__name__, "BigAutoField")
+        self.assertEqual(fields["name"].max_length, 160)
+        self.assertEqual(fields["display_order"].default, 0)
+        self.assertIs(fields["is_active"].default, True)
+        self.assertIs(fields["is_active"].db_default, True)
+        self.assertEqual(BoatCapacityFare._meta.ordering, ["display_order", "id"])
+        self.assertTrue(issubclass(BoatCapacityFare, ActiveOption))
+
+    def test_the_name_is_as_long_as_the_column_that_holds_it_on_a_record(self):
+        # a tier must always fit in TouristRecord.boat_capacity_fare
+        self.assertEqual(
+            BoatCapacityFare._meta.get_field("name").max_length,
+            TouristRecord._meta.get_field("boat_capacity_fare").max_length,
+        )
+
+    def test_nothing_points_at_it(self):
+        self.assertEqual(
+            [f.name for f in BoatCapacityFare._meta.get_fields() if f.is_relation], []
+        )
+        self.assertEqual(
+            [f.name for f in TouristRecord._meta.get_fields()
+             if f.is_relation and getattr(f.related_model, "__name__", "") == "BoatCapacityFare"],
+            [],
+        )
+
+    def test_a_row_put_in_without_the_column_is_active(self):
+        table = BoatCapacityFare._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute(f"INSERT INTO {table} (name, display_order) VALUES ('Raw tier', 0)")
+        self.assertIs(BoatCapacityFare.objects.get(name="Raw tier").is_active, True)
+
+    def test_the_order_is_display_order_then_id(self):
+        BoatCapacityFare.objects.all().delete()
+        late = BoatCapacityFare.objects.create(name="Created first", display_order=30)
+        early = BoatCapacityFare.objects.create(name="Created second", display_order=10)
+        tie_a = BoatCapacityFare.objects.create(name="Tie A", display_order=20)
+        tie_b = BoatCapacityFare.objects.create(name="Tie B", display_order=20)
+        self.assertEqual(
+            list(BoatCapacityFare.objects.all()), [early, tie_a, tie_b, late]
+        )
+
+    def test_the_migration_that_makes_the_table_only_makes_the_table(self):
+        import importlib
+        from django.db import migrations
+
+        make = importlib.import_module("api.migrations.0055_boat_capacity_fare")
+        self.assertEqual(len(make.Migration.operations), 1)
+        operation = make.Migration.operations[0]
+        self.assertIsInstance(operation, migrations.CreateModel)
+        self.assertEqual(operation.name, "BoatCapacityFare")
+        self.assertEqual(make.Migration.dependencies, [("api", "0054_seed_emergency_contacts")])
+
+        seed = importlib.import_module("api.migrations.0056_seed_boat_capacity_fares")
+        self.assertEqual(len(seed.Migration.operations), 1)
+        self.assertIsInstance(seed.Migration.operations[0], migrations.RunPython)
+        self.assertEqual(seed.Migration.dependencies, [("api", "0055_boat_capacity_fare")])
+
+
+class BoatCapacityFareSeedTests(TransactionTestCase):
+    """Migrations 0055/0056 through Django's own migrate, forward and backward."""
+
+    BEFORE = [("api", "0055_boat_capacity_fare")]
+    AFTER = [("api", "0056_seed_boat_capacity_fares")]
+    SEED_LOGGER = "api.migrations.0056_seed_boat_capacity_fares"
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _model(self, target):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        return executor.loader.project_state(target).apps.get_model("api", "BoatCapacityFare")
+
+    def _fresh_before(self):
+        MigrationExecutor(connection).migrate(self.BEFORE)  # undo 0056 (a real reverse)
+        model = self._model(self.BEFORE)
+        model.objects.all().delete()
+        return model
+
+    def test_the_two_files_the_tiers_are_read_from_still_agree_with_each_other(self):
+        web, dart = web_fare_tiers(), dart_fare_tiers()
+        self.assertEqual(len(web), 9)
+        self.assertEqual(len(dart), 9)
+        self.assertEqual(web, dart)
+
+    def test_the_real_migrate_puts_in_nine_active_rows_equal_letter_for_letter_to_both_files(self):
+        self._fresh_before()
+        MigrationExecutor(connection).migrate(self.AFTER)
+        rows = list(self._model(self.AFTER).objects.order_by("display_order", "id"))
+
+        self.assertEqual(len(rows), 9)
+        self.assertTrue(all(row.is_active for row in rows))
+        self.assertEqual([row.display_order for row in rows], [10, 20, 30, 40, 50, 60, 70, 80, 90])
+        names = [row.name for row in rows]
+        self.assertEqual(names, web_fare_tiers())
+        self.assertEqual(names, dart_fare_tiers())
+        # the commas were NOT tidied: records hold exactly this text
+        self.assertEqual(names[0], "1-2 pax (One-Way P1500, Two-way P2000)")
+        self.assertEqual(names[1], "3-4 pax (One-Way P2000, Two-way P2,500)")
+        self.assertFalse(any("P1,500" in n or "P2,000" in n for n in names))
+
+    def test_running_the_real_migration_a_second_time_still_leaves_nine(self):
+        self._fresh_before()
+        MigrationExecutor(connection).migrate(self.AFTER)
+        self.assertEqual(self._model(self.AFTER).objects.count(), 9)
+
+        # Forget that 0056 ran (keep its rows) and let Django run it again.
+        executor = MigrationExecutor(connection)
+        executor.recorder.record_unapplied("api", "0056_seed_boat_capacity_fares")
+        with self.assertLogs(self.SEED_LOGGER, level="WARNING") as logs:
+            MigrationExecutor(connection).migrate(self.AFTER)
+
+        model = self._model(self.AFTER)
+        self.assertEqual(model.objects.count(), 9)
+        self.assertEqual(len(logs.records), 9)  # every one of the nine was skipped, and said so
+        self.assertEqual(
+            [r.name for r in model.objects.order_by("display_order", "id")], web_fare_tiers()
+        )
+
+    def test_a_tier_with_the_same_name_in_other_capitals_and_spaces_is_skipped_and_logged(self):
+        model = self._fresh_before()
+        mine = model.objects.create(name="  1-2 PAX (one-way p1500,   two-way p2000)  ", display_order=0)
+
+        with self.assertLogs(self.SEED_LOGGER, level="WARNING") as logs:
+            MigrationExecutor(connection).migrate(self.AFTER)
+
+        model = self._model(self.AFTER)
+        self.assertEqual(model.objects.count(), 9)  # 8 new + the one that was already there
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("1-2 pax (One-Way P1500, Two-way P2000)", logs.records[0].getMessage())
+        kept = model.objects.get(pk=mine.pk)
+        self.assertEqual((kept.name, kept.display_order), (mine.name, 0))  # untouched
+        self.assertFalse(model.objects.filter(name="1-2 pax (One-Way P1500, Two-way P2000)").exists())
+
+    def test_the_real_reverse_takes_out_the_nine_and_keeps_rows_added_by_hand(self):
+        self._fresh_before()
+        MigrationExecutor(connection).migrate(self.AFTER)
+        model = self._model(self.AFTER)
+        added = model.objects.create(name="21-25 pax (One-Way P6,000, Two-way P6,500)", display_order=100)
+        # a seeded tier that an admin re-wrote is no longer "one of the nine"
+        reworded = model.objects.create(name="1-2 pax (One-Way P1,500, Two-way P2,000)", display_order=5)
+        self.assertEqual(model.objects.count(), 11)
+
+        MigrationExecutor(connection).migrate(self.BEFORE)  # the reverse of 0056
+        model = self._model(self.BEFORE)
+        self.assertEqual(
+            sorted(model.objects.values_list("pk", flat=True)), sorted([added.pk, reworded.pk])
+        )
+        self.assertEqual(model.objects.count(), 2)
+
+        MigrationExecutor(connection).migrate(self.AFTER)  # and forward again
+        self.assertEqual(self._model(self.AFTER).objects.count(), 11)
+
+    def test_going_back_past_0055_removes_the_table_and_touches_no_other(self):
+        before = set(connection.introspection.table_names())
+        MigrationExecutor(connection).migrate([("api", "0054_seed_emergency_contacts")])
+        gone = before - set(connection.introspection.table_names())
+        self.assertEqual(gone, {BoatCapacityFare._meta.db_table})
+
+        MigrationExecutor(connection).migrate(self.AFTER)
+        self.assertEqual(set(connection.introspection.table_names()), before)
 
 
 class PeakSeasonShareTests(TestCase):

@@ -1439,3 +1439,28 @@ class EmergencyContact(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class BoatCapacityFare(ActiveOption):
+    """A tier of the "Boat Capacity and Fare" dropdown (for example
+    "1-2 pax (One-Way P1500, Two-way P2000)").
+
+    NOT a reference table in the usual sense: nothing points at it. A record
+    keeps the tier as TEXT in TouristRecord.boat_capacity_fare, exactly as it was
+    when the record was saved, so editing or retiring a tier here never changes
+    a past record, and a record may hold a text that is not listed here (an old
+    app, an Excel import). That is why this is not a NamedReference: no foreign
+    key, so no manually assigned id, and the order is its own column.
+
+    `name` is the exact text saved on records; 160 is the length of that column.
+    No report reads or parses it.
+    """
+
+    name = models.CharField(max_length=160)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+
+    def __str__(self):
+        return self.name
