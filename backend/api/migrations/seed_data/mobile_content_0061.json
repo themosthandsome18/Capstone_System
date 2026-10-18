@@ -1,0 +1,137 @@
+{
+  "source": "mobile/lib/screens/tourism_screens.dart",
+  "blocks": [
+    {
+      "key": "welcome",
+      "title": "Mabuhay, {name}! 🌊",
+      "subtitle": "Welcome to the historic jewel of Lamon Bay — home to the white sandbars of Cagbalete Island, cascading waterfalls, and world-class Buntal weaving craftsmanship.",
+      "body": ""
+    },
+    {
+      "key": "why_visit",
+      "title": "Why Visit Mauban, Quezon?",
+      "subtitle": "The historic coastal sanctuary of southern Luzon",
+      "body": "Nestled along the Pacific coast of Lamon Bay, Mauban boasts powdery white sandbars with expansive tidal ripples, centuries-old ancestral trees, cascading mountain pools, and a proud cultural identity shaped by Gat Uban and palm artisans."
+    },
+    {
+      "key": "travel_guide",
+      "title": "📖 Mauban Travel Guide & Local Tips",
+      "subtitle": "",
+      "body": ""
+    },
+    {
+      "key": "port_guide",
+      "title": "Mauban Port ↔ Cagbalete Boats",
+      "subtitle": "",
+      "body": "Standard boat departures from Mauban Port: 07:00 AM, 10:00 AM, 01:00 PM, and 04:00 PM.\nIsland Port Arrival: Sabang Port (during high tide) or Mappit Port (during low tide).\nEnvironmental Fee: {fee_regular} per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay {fee_discounted}. Pay at the {fee_office}.\nBoat fare is separate. You arrange and pay it directly with the boat operator; the Tourism Office does not collect it."
+    },
+    {
+      "key": "fee_office",
+      "title": "",
+      "subtitle": "",
+      "body": "Tourism Office, 2nd Floor, Mauban Municipal Hall"
+    }
+  ],
+  "items": [
+    {
+      "section": "why_visit",
+      "icon": "beach",
+      "title": "Cagbalete Island",
+      "short_text": "Pristine Sandbars",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 10,
+      "is_active": true
+    },
+    {
+      "section": "why_visit",
+      "icon": "craft",
+      "title": "Buntal Weaving",
+      "short_text": "Artisan Hats & Crafts",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 20,
+      "is_active": true
+    },
+    {
+      "section": "why_visit",
+      "icon": "waterfall",
+      "title": "Forest Cascades",
+      "short_text": "Dahican & Alitap Falls",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 30,
+      "is_active": true
+    },
+    {
+      "section": "why_visit",
+      "icon": "food",
+      "title": "Quezon Flavors",
+      "short_text": "Habhab & Fresh Seafood",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 40,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "boat",
+      "title": "Cagbalete Island Boat Guide",
+      "short_text": "Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. The Environmental Fee is paid at the {fee_office}. The boat fare is separate and is paid to the boat operator.",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 10,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "festival",
+      "title": "Maubanin Buntal Festival (May)",
+      "short_text": "A week-long celebration showcasing giant woven Buntal hats, street dancing, and the historical legacy of Gat Uban.",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 20,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "receipt",
+      "title": "Environmental Fee",
+      "short_text": "All tourists register at the {fee_office}. Receipts serve as your official entry pass to the island sanctuaries.",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 30,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "waste",
+      "title": "Solid Waste & Leave No Trace Policy",
+      "short_text": "Help keep Cagbalete and Mauban pristine by avoiding single-use plastics and taking your trash back to mainland disposal points.",
+      "full_text": "",
+      "style": "tile",
+      "display_order": 40,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "event",
+      "title": "Upcoming: Fiesta de Mauban & Buntal Festival",
+      "short_text": "Celebrate the feast of San Buenaventura with colorful Buntal weaving and boat regatta.",
+      "full_text": "",
+      "style": "banner",
+      "display_order": 50,
+      "is_active": true
+    },
+    {
+      "section": "travel_guide",
+      "icon": "eco",
+      "title": "Clean Coast & Eco-Tourism Policy",
+      "short_text": "Please dispose of trash responsibly and support local community bangkeros and weavers.",
+      "full_text": "",
+      "style": "banner",
+      "display_order": 60,
+      "is_active": true
+    }
+  ]
+}

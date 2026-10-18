@@ -1466,3 +1466,104 @@ class BoatCapacityFare(ActiveOption):
 
     def __str__(self):
         return self.name
+
+
+class MobileContentItem(models.Model):
+    """One card or pillar of the text a tourist reads in the mobile app, in a list
+    an admin will edit (Mobile App Content). Two sections share this table because
+    their shape is the same:
+
+    * why_visit: the pillars under "Why Visit Mauban, Quezon?" (a 2x2 grid).
+    * travel_guide: the guides and the notices of the Travel Guide list.
+
+    `style` is how the APP draws the item, and it is kept so that moving the two
+    notices into the same list as the guides changes nothing a visitor sees:
+    a "banner" is the blurred strip at the bottom of the Home page, a "tile" is the
+    white card. The admin edits one list; the app draws each as it does today.
+
+    `icon` is the NAME of an icon (the app and the web page own the picture and
+    the colour of each name), as for EmergencyContact. `short_text` is the line the
+    app shows on the item; `full_text` is the long explanation that opens when the
+    item is tapped. With no `full_text` the item is not tappable and has no arrow.
+    Nothing here is ever deleted: an item is made inactive.
+    """
+
+    SECTION_WHY_VISIT = "why_visit"
+    SECTION_TRAVEL_GUIDE = "travel_guide"
+    SECTION_CHOICES = [
+        (SECTION_WHY_VISIT, "Why Visit"),
+        (SECTION_TRAVEL_GUIDE, "Travel Guide & Tips"),
+    ]
+
+    STYLE_TILE = "tile"
+    STYLE_BANNER = "banner"
+    STYLE_CHOICES = [
+        (STYLE_TILE, "Tile"),
+        (STYLE_BANNER, "Banner"),
+    ]
+
+    ICON_NAMES = [
+        "beach",
+        "craft",
+        "waterfall",
+        "food",
+        "boat",
+        "festival",
+        "receipt",
+        "waste",
+        "event",
+        "eco",
+        "info",
+    ]
+    ICON_CHOICES = [(name, name) for name in ICON_NAMES]
+
+    section = models.CharField(max_length=20, choices=SECTION_CHOICES)
+    icon = models.CharField(max_length=20, choices=ICON_CHOICES, default="info")
+    title = models.CharField(max_length=160)
+    short_text = models.TextField()
+    # May be empty: then the item is not tappable.
+    full_text = models.TextField(blank=True, default="")
+    # db_default: a row inserted by code that does not know this column (the old
+    # instance during a deploy) is a tile and is active.
+    style = models.CharField(
+        max_length=10, choices=STYLE_CHOICES, default=STYLE_TILE, db_default=STYLE_TILE
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_default=True)
+
+    class Meta:
+        ordering = ["section", "display_order", "id"]
+
+    def __str__(self):
+        return f"{self.section}: {self.title}"
+
+
+class MobileContentBlock(models.Model):
+    """A piece of the mobile app's text that exists once and is not a list: the
+    welcome banner, the "Why Visit" introduction, the heading of the travel guide,
+    the port guide and the place where the environmental fee is paid.
+
+    One row per `key`, put in by a migration. There is no way to add or delete
+    one: the app asks for these keys by name. A text may hold {placeholders}; the
+    server fills them in before sending (name, fee_regular, fee_discounted,
+    fee_office). The amounts of the fee are never typed here: they come from the
+    one constant the reports use.
+    """
+
+    KEY_WELCOME = "welcome"
+    KEY_WHY_VISIT = "why_visit"
+    KEY_TRAVEL_GUIDE = "travel_guide"
+    KEY_PORT_GUIDE = "port_guide"
+    KEY_FEE_OFFICE = "fee_office"
+    KEYS = [KEY_WELCOME, KEY_WHY_VISIT, KEY_TRAVEL_GUIDE, KEY_PORT_GUIDE, KEY_FEE_OFFICE]
+
+    key = models.CharField(max_length=40, unique=True)
+    title = models.CharField(max_length=160, blank=True, default="")
+    subtitle = models.CharField(max_length=300, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.key
