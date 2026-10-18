@@ -68,6 +68,14 @@ export function updateSanitationEstablishment(id, payload) {
   );
 }
 
+export function issueSanitationEnforcementStage(id, stage, expectedPreviousStage) {
+  return save(
+    sanitationPath(`/establishments/${encodeURIComponent(id)}/enforcement-stage/`),
+    "POST",
+    { stage, expected_previous_stage: expectedPreviousStage }
+  );
+}
+
 
 export function deleteSanitationEstablishment(id) {
   return remove(sanitationPath(`/establishments/${encodeURIComponent(id)}/`));

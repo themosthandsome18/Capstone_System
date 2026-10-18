@@ -1,4 +1,12 @@
 from django.contrib import admin
+from django import forms
+from django.db import transaction
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseForbidden
+
+from .services.public_reporting import (
+    PublicSubmissionDeletionProtected, RETENTION_MESSAGE, is_public_submission_digest,
+)
 
 from .models import (
     ActivityLog,
@@ -118,6 +126,31 @@ class ActivityLogAdmin(admin.ModelAdmin):
         "created_at",
     )
 
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+        if (obj is not None and super().has_delete_permission(request, obj)
+                and is_public_submission_digest(obj)):
+            return HttpResponseForbidden(RETENTION_MESSAGE)
+        return super().delete_view(request, object_id, extra_context)
+
+    def get_deleted_objects(self, objs, request):
+        deletable, counts, permissions, protected = super().get_deleted_objects(objs, request)
+        if any(is_public_submission_digest(obj) for obj in objs):
+            protected.append(RETENTION_MESSAGE)
+        return deletable, counts, permissions, protected
+
+    def delete_model(self, request, obj):
+        try:
+            super().delete_model(request, obj)
+        except PublicSubmissionDeletionProtected as error:
+            raise PermissionDenied(RETENTION_MESSAGE) from error
+
+    def delete_queryset(self, request, queryset):
+        try:
+            super().delete_queryset(request, queryset)
+        except PublicSubmissionDeletionProtected as error:
+            raise PermissionDenied(RETENTION_MESSAGE) from error
+
 
 @admin.register(Barangay)
 class BarangayAdmin(admin.ModelAdmin):
@@ -145,8 +178,36 @@ class SanitaryRequirementAdmin(admin.ModelAdmin):
     list_filter = ("business_type", "permit_size", "is_required")
 
 
+class SanitaryEstablishmentAdminForm(forms.ModelForm):
+    class Meta:
+        model = SanitaryEstablishment
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.instance.pk:
+            using = self.instance._state.db
+            with transaction.atomic(using=using):
+                current = SanitaryEstablishment.objects.using(using).select_for_update().filter(pk=self.instance.pk).first()
+                if (current is not None and current.enforcement_stage == "suspension"
+                        and "permit_status" in self.data
+                        and self.data["permit_status"] != "suspended"):
+                    raise forms.ValidationError(
+                        "Reinstatement is unavailable for enforcement-suspended permits."
+                    )
+        return cleaned
+
+
 @admin.register(SanitaryEstablishment)
 class SanitaryEstablishmentAdmin(admin.ModelAdmin):
+    form = SanitaryEstablishmentAdminForm
+    readonly_fields = ("enforcement_stage",)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is not None and obj.enforcement_stage == "suspension":
+            return self.readonly_fields + ("permit_status",)
+        return self.readonly_fields
+
     list_display = (
         "business_name",
         "owner_name",

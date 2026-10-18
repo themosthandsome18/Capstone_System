@@ -3625,6 +3625,22 @@
   white-space: nowrap;
 }
 
+/* Explicit manual enforcement stages. */
+.enforcement-stage {
+  display: inline-block;
+  padding: 5px 9px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.enforcement-stage--neutral { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+.enforcement-stage--yellow { background: #fef9c3; color: #713f12; border-color: #eab308; }
+.enforcement-stage--orange { background: #ffedd5; color: #9a3412; border-color: #f97316; }
+.enforcement-stage--red { background: #fee2e2; color: #991b1b; border-color: #dc2626; }
+.enforcement-action { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
+.enforcement-action button { max-width: 100%; padding: 6px 10px; white-space: normal; cursor: pointer; }
+.enforcement-action button:disabled { cursor: wait; opacity: 0.6; }
+
 /* 🔴 CRITICAL / MALALA: Suspended */
 .permit-alert-card.permit-alert--critical {
   border-left: 7px solid #dc2626;
@@ -3795,7 +3811,7 @@
 
 .permit-table-card table {
   width: 100%;
-  min-width: 860px;
+  min-width: 1000px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -3823,29 +3839,34 @@
 
 .permit-table-card th:nth-child(1),
 .permit-table-card td:nth-child(1) {
-  width: 26%;
+  width: 19%;
 }
 
 .permit-table-card th:nth-child(2),
 .permit-table-card td:nth-child(2) {
-  width: 24%;
+  width: 15%;
 }
 
 .permit-table-card th:nth-child(3),
 .permit-table-card td:nth-child(3) {
-  width: 16%;
+  width: 12%;
 }
 
 .permit-table-card th:nth-child(4),
 .permit-table-card td:nth-child(4) {
-  width: 16%;
+  width: 18%;
   text-align: center;
 }
 
 .permit-table-card th:nth-child(5),
 .permit-table-card td:nth-child(5) {
-  width: 18%;
+  width: 15%;
   text-align: center;
+}
+
+.permit-table-card th:nth-child(6),
+.permit-table-card td:nth-child(6) {
+  width: 21%;
 }
 
 .permit-table-card tbody tr:hover {
@@ -3939,6 +3960,26 @@
 }
 
 @media (max-width: 760px) {
+  /* Only Permit Monitoring: keep its scroll viewport usable beside the
+     otherwise fixed 280px navigation, without changing other routes. */
+  .sanitation-layout:has(.permit-page) {
+    flex-direction: column;
+  }
+
+  .sanitation-layout:has(.permit-page) > .sanitation-sidebar {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    max-height: 240px;
+  }
+
+  .sanitation-main:has(.permit-page) {
+    margin-left: 0;
+    width: 100%;
+  }
+
   .permit-alert-grid {
     grid-template-columns: 1fr;
   }
@@ -3956,7 +3997,7 @@
   }
 
   .permit-table-card table {
-    min-width: 780px;
+    min-width: 1000px;
   }
 }
 

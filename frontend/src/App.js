@@ -5,6 +5,7 @@ import LoginPage from "./auth/LoginPage";
 import ModuleSelectionPage from "./auth/ModuleSelectionPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import VerifyPermit from "./sanitation/pages/VerifyPermit";
+import PublicCommunityReport from "./sanitation/pages/PublicCommunityReport";
 
 import AppShell from "./tourism/components/layout/AppShell";
 import { TourismDataProvider } from "./tourism/context/TourismDataContext";
@@ -56,6 +57,7 @@ function App() {
               {/* Public & Authentication Routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/verify-permit/:code" element={<VerifyPermit />} />
+              <Route path="/report-sanitation" element={<PublicCommunityReport />} />
 
               {/* Module Selection (Admin Only) */}
               <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>

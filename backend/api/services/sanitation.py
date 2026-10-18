@@ -101,7 +101,8 @@ PERMIT_STATUS_BY_COMPLIANCE = {
     SANITARY_STATUS_GOOD: PERMIT_STATUS_ACTIVE,
     SANITARY_STATUS_UPCOMING: PERMIT_STATUS_RENEWAL_DUE,
     SANITARY_STATUS_FOR_COMPLETION: PERMIT_STATUS_CONDITIONAL,
-    SANITARY_STATUS_VIOLATION: PERMIT_STATUS_SUSPENDED,
+    # A violation records a finding, not a suspension order. Leave permit
+    # standing unchanged; suspension is issued through manual enforcement.
 }
 
 RENEWAL_STAGE_ORDER = [

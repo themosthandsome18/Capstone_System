@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiAlertCircle,
@@ -9,6 +9,21 @@ import {
   FiSearch,
 } from "react-icons/fi";
 import { useSanitationData } from "../context/SanitationDataContext";
+import { useAuth } from "../../auth/AuthContext";
+import { issueSanitationEnforcementStage } from "../services/sanitationApi";
+
+const enforcementStages = {
+  "": { label: "Not recorded", color: "neutral", next: "warning" },
+  warning: { label: "Warning", color: "yellow", next: "nov_1" },
+  nov_1: { label: "Notice of Violation 1", color: "orange", next: "nov_2" },
+  nov_2: { label: "Notice of Violation 2", color: "orange", next: "nov_3" },
+  nov_3: { label: "Notice of Violation 3", color: "orange", next: "suspension" },
+  suspension: { label: "Suspension", color: "red" },
+};
+
+function enforcementConfig(row) {
+  return enforcementStages[row.enforcement_stage ?? ""] || { label: "Unknown stage", color: "neutral" };
+}
 
 const permitStatusOptions = [
   { value: "all", label: "All" },
@@ -48,8 +63,76 @@ const SEVERITY_CONFIG = {
 
 function PermitMonitoring() {
   const navigate = useNavigate();
-  const { establishments, inspections, permitData, loading, error } =
+  const { establishments, inspections, permitData, loading, error,
+    refreshEstablishments, refreshPermitData } =
     useSanitationData();
+  const { role } = useAuth();
+  const canIssue = role === "admin" || role === "sanitation";
+  const issuingRef = useRef(false);
+  const [issuing, setIssuing] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  async function refreshMonitoring() {
+    // Both must succeed before a new decision can use the displayed values.
+    await Promise.all([refreshEstablishments(), refreshPermitData()]);
+    setRefreshRequired(false);
+  }
+
+  async function issueStage(row) {
+    const config = enforcementConfig(row);
+    if (issuingRef.current || refreshRequired || !canIssue || !config.next) return;
+    issuingRef.current = true;
+    const nextLabel = enforcementStages[config.next].label;
+    const confirmed = window.confirm(
+      `${row.business_name}\nCurrent enforcement stage: ${config.label}\nIssue: ${nextLabel}?` +
+      (config.next === "suspension" ? "\nThis also suspends the permit. Reinstatement is unavailable." : "")
+    );
+    if (!confirmed) {
+      issuingRef.current = false;
+      return;
+    }
+    setIssuing(true);
+    setFeedback(null);
+    let result;
+    let requestError;
+    try {
+      result = await issueSanitationEnforcementStage(row.id, config.next, row.enforcement_stage ?? "");
+    } catch (error) {
+      requestError = error;
+    }
+    try {
+      await refreshMonitoring();
+      if (requestError?.status === 409) {
+        setFeedback({ error: true, message: "The enforcement stage changed. Records refreshed. Review the current stage and confirm a new decision." });
+      } else if (requestError) {
+        setFeedback({ error: true, message: requestError.details?.detail || requestError.message || "Unable to issue enforcement stage." });
+      } else {
+        setFeedback({ message: result.changed ? `${nextLabel} issued for ${row.business_name}.` : "No change was needed. Records refreshed." });
+      }
+    } catch {
+      setRefreshRequired(true);
+      setFeedback({ error: true, message: result ? "Request completed, but records could not be refreshed. Refresh before issuing another stage." : "Unable to refresh current records. Refresh before making another issuance decision." });
+    } finally {
+      issuingRef.current = false;
+      setIssuing(false);
+    }
+  }
+
+  async function retryRefresh() {
+    if (issuingRef.current) return;
+    issuingRef.current = true;
+    setIssuing(true);
+    try {
+      await refreshMonitoring();
+      setFeedback({ message: "Records refreshed. Review the current stage before issuing." });
+    } catch {
+      setFeedback({ error: true, message: "Records could not be refreshed. Issuance remains unavailable." });
+    } finally {
+      issuingRef.current = false;
+      setIssuing(false);
+    }
+  }
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -139,6 +222,8 @@ function PermitMonitoring() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {feedback ? <p role={feedback.error ? "alert" : "status"}>{feedback.message}</p> : null}
+      {refreshRequired ? <button type="button" disabled={issuing} onClick={retryRefresh}>Refresh monitoring records</button> : null}
 
       <div className="permit-stat-grid">
         <PermitStat
@@ -263,8 +348,8 @@ function PermitMonitoring() {
       <section className="permit-table-card">
         <div className="permit-table-top">
           <div>
-            <h2>Permit Status - Auto-generated from Inspection Results</h2>
-            <p>Violations are integrated; no separate violations module needed.</p>
+            <h2>Permit Status and Enforcement Stages</h2>
+            <p>Inspection findings and permit standing are shown separately from manually issued enforcement stages.</p>
           </div>
 
           <div className="permit-tools">
@@ -300,6 +385,7 @@ function PermitMonitoring() {
                 <th>Last Inspection</th>
                 <th>Permit Status</th>
                 <th>Compliance</th>
+                <th>Enforcement Stage</th>
               </tr>
             </thead>
 
@@ -337,11 +423,26 @@ function PermitMonitoring() {
                         {row.compliance_status_label}
                       </span>
                     </td>
+                    <td>
+                      <span className={`enforcement-stage enforcement-stage--${enforcementConfig(row).color}`}>
+                        {enforcementConfig(row).label}
+                      </span>
+                      {canIssue && enforcementConfig(row).next ? (
+                        <div className="enforcement-action">
+                          <small>Next: {enforcementStages[enforcementConfig(row).next].label}</small>
+                          <button type="button" disabled={issuing || refreshRequired}
+                            aria-label={`Issue ${enforcementStages[enforcementConfig(row).next].label} for ${row.business_name}`}
+                            onClick={(event) => { event.stopPropagation(); issueStage(row); }}>
+                            Issue {enforcementStages[enforcementConfig(row).next].label}
+                          </button>
+                        </div>
+                      ) : null}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="permit-empty">
+                  <td colSpan="6" className="permit-empty">
                     No permit records found.
                   </td>
                 </tr>
