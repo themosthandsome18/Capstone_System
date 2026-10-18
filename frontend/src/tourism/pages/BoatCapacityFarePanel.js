@@ -1,0 +1,437 @@
+import { useEffect, useMemo, useState } from "react";
+import { FiArrowDown, FiArrowUp, FiPlus } from "react-icons/fi";
+import { useTourismData } from "../context/TourismDataContext";
+import { tourismApi } from "../services/tourismApi";
+
+// The fifth tab of Registration Options: the tiers of the "Boat Capacity and
+// Fare" dropdown. It is its own component inside the same shell, and it works
+// the way the other tabs do: the list is fetched once, the first time the tab is
+// opened, and after that each write puts the server's own ANSWER in place of the
+// row. There is no second fetch and no "Loading..." after the first open.
+
+export const FARE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+// Always on screen.
+export const TEXT_NOTE =
+  "The chosen tier is saved as text on each record. Renaming or retiring a tier does NOT change old records — they keep the text they already hold, and that text will appear in the record's own dropdown marked (inactive) or (not in the list).";
+export const OLD_APP_NOTE =
+  "Visitors using an older version of the app may still send the old wording until a new app version is released.";
+
+// Only when no tier is active and a boat type still asks for the field.
+export const NO_ACTIVE_WARNING =
+  "No tier is active, but at least one boat type still asks for Boat Capacity and Fare. Staff will see an empty dropdown for those boats. Reactivate a tier or add a new one.";
+
+// When the server refuses a rename because records hold the text.
+export const RENAME_GUIDE =
+  "To change the wording, add a new tier with the new text and deactivate this one.";
+
+function inOrder(list) {
+  return [...list].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
+}
+
+function recordsLabel(count) {
+  return `${count} record${count === 1 ? "" : "s"}`;
+}
+
+// The words shown for a failed write. A refused rename (409 text_in_use) shows
+// the server's explanation and the way out, never the bare code.
+export function messageFor(error) {
+  const details = error.details || {};
+  if (error.status === 409 && details.code === "text_in_use") {
+    const held = details.record_count;
+    const explanation =
+      error.message ||
+      (Number.isInteger(held)
+        ? `This text is saved on ${recordsLabel(held)}, so it cannot be renamed.`
+        : "This text is saved on records, so it cannot be renamed.");
+    return /deactivate/i.test(explanation) ? explanation : `${explanation} ${RENAME_GUIDE}`;
+  }
+  return error.message || "The change could not be saved.";
+}
+
+export default function BoatCapacityFarePanel() {
+  const { referenceTables, refreshReferenceTables } = useTourismData();
+  // undefined until the first load: only then does the panel say "Loading...".
+  const [rows, setRows] = useState(undefined);
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [filter, setFilter] = useState("all");
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadError("");
+    tourismApi
+      .getBoatCapacityFares()
+      .then((data) => {
+        if (!cancelled) setRows(inOrder(data));
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(error.message || "The tiers could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [retry]);
+
+  const loading = rows === undefined && !loadError;
+
+  // The tier as the server now holds it goes in place of its row, or into its
+  // place by order when it is new. Nothing is worked out here from what was sent.
+  function putRow(tier) {
+    setRows((current) => {
+      const list = current || [];
+      if (list.some((item) => item.id === tier.id)) {
+        return list.map((item) => (item.id === tier.id ? tier : item));
+      }
+      return inOrder([...list, tier]);
+    });
+  }
+
+  // One way to write: send, and on a refusal show the server's own words and
+  // change nothing in the list; on success take the server's answer. No refetch.
+  // The other pages' reference tables (the record form) are refreshed in the
+  // background; this panel neither waits for that nor shows it.
+  async function write(call, apply, successNotice) {
+    setWorking(true);
+    setActionError("");
+    setNotice("");
+    try {
+      const answer = await call();
+      apply(answer);
+      if (refreshReferenceTables) {
+        Promise.resolve(refreshReferenceTables()).catch(() => {});
+      }
+      setNotice(successNotice);
+      return true;
+    } catch (error) {
+      setActionError(messageFor(error));
+      // the refusal carries the count the server has NOW: take it
+      const held = error.details && error.details.record_count;
+      if (error.status === 409 && Number.isInteger(held) && editingId !== null) {
+        setRows((current) => (current || []).map((r) => (r.id === editingId ? { ...r, record_count: held } : r)));
+      }
+      return false;
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const activeCount = useMemo(() => (rows || []).filter((row) => row.is_active).length, [rows]);
+  // A boat type that is still in use (not retired) and asks for the field.
+  const someBoatAsksForIt = useMemo(
+    () =>
+      ((referenceTables && referenceTables.boatTypes) || []).some(
+        (boat) => boat.requires_capacity_fare === true && boat.is_active !== false
+      ),
+    [referenceTables]
+  );
+  const showNoActiveWarning = rows !== undefined && activeCount === 0 && someBoatAsksForIt;
+
+  const visibleRows = useMemo(() => {
+    const list = rows || [];
+    if (filter === "active") return list.filter((row) => row.is_active);
+    if (filter === "inactive") return list.filter((row) => !row.is_active);
+    return list;
+  }, [rows, filter]);
+
+  const editing = (rows || []).find((row) => row.id === editingId) || null;
+  const canReorder = filter === "all";
+
+  function startEdit(row) {
+    setEditingId(row.id);
+    setEditName(row.name);
+    setAdding(false);
+    setActionError("");
+    setNotice("");
+  }
+
+  async function submitAdd(event) {
+    event.preventDefault();
+    const ok = await write(() => tourismApi.createBoatCapacityFare({ name: addName }), putRow, "The tier was added.");
+    if (ok) {
+      setAdding(false);
+      setAddName("");
+    }
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault();
+    const ok = await write(
+      () => tourismApi.updateBoatCapacityFare(editing.id, { name: editName }),
+      putRow,
+      "The tier was renamed."
+    );
+    if (ok) setEditingId(null);
+  }
+
+  // The whole list of ids in the new order; the server answers with the list.
+  function move(index, step) {
+    const ids = rows.map((row) => row.id);
+    [ids[index], ids[index + step]] = [ids[index + step], ids[index]];
+    write(
+      () => tourismApi.reorderBoatCapacityFares(ids),
+      (answer) => setRows(inOrder(answer)),
+      "The order was changed."
+    );
+  }
+
+  return (
+    <div className="boat-fare-panel" aria-label="Boat Capacity and Fare tiers">
+      <div className="options-form-actions">
+        <button
+          type="button"
+          className="green"
+          onClick={() => {
+            setAdding((open) => !open);
+            setEditingId(null);
+            setActionError("");
+            setNotice("");
+          }}
+          disabled={working}
+        >
+          <FiPlus />
+          Add tier
+        </button>
+      </div>
+
+      <div className="hotlines-notices" role="note" aria-label="About the Boat Capacity and Fare tiers">
+        <p>{TEXT_NOTE}</p>
+        <p>{OLD_APP_NOTE}</p>
+      </div>
+
+      {showNoActiveWarning ? (
+        <p className="options-reason" role="alert">
+          {NO_ACTIVE_WARNING}
+        </p>
+      ) : null}
+
+      <p className="options-intro">
+        A tier that is deactivated is no longer offered for new records. It stays on the records that already hold
+        it. Tiers are never deleted.
+      </p>
+
+      <div className="options-message-area">
+        {notice ? (
+          <p className="settings-status success" role="status">
+            {notice}
+          </p>
+        ) : null}
+        {actionError ? (
+          <p className="settings-status error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+      </div>
+
+      {adding ? (
+        <form className="settings-card options-form" onSubmit={submitAdd} aria-label="Add a tier">
+          <div className="report-card-title">
+            <h3>New tier</h3>
+          </div>
+          <label className="settings-field">
+            <span>Tier text</span>
+            <input
+              type="text"
+              aria-label="New tier text"
+              value={addName}
+              maxLength={160}
+              onChange={(event) => setAddName(event.target.value)}
+            />
+          </label>
+          <div className="options-form-actions">
+            <button type="button" className="tourist-record-cancel" onClick={() => setAdding(false)} disabled={working}>
+              Cancel
+            </button>
+            <button type="submit" className="tourist-record-save" disabled={working || addName.trim() === ""}>
+              {working ? "Saving..." : "Save new tier"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      <section className="settings-card options-card" aria-label="Boat Capacity and Fare tiers">
+        <div className="options-toolbar">
+          <div className="report-card-title">
+            <h3>Boat Capacity and Fare</h3>
+          </div>
+          <label className="settings-field options-filter">
+            <span>Show</span>
+            <select aria-label="Filter tiers by status" value={filter} onChange={(event) => setFilter(event.target.value)}>
+              {FARE_FILTERS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {!canReorder ? <p className="options-hint">The order can only be changed while all tiers are shown.</p> : null}
+
+        {loading ? <p className="options-empty">Loading...</p> : null}
+        {loadError ? (
+          <p className="settings-status error" role="alert">
+            {loadError}{" "}
+            <button type="button" className="reply-btn" onClick={() => setRetry((count) => count + 1)}>
+              Try again
+            </button>
+          </p>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <table className="options-table">
+            <thead>
+              <tr>
+                <th>Tier text</th>
+                <th>Order</th>
+                <th>Used by</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.length ? (
+                visibleRows.map((row) => {
+                  const index = rows.findIndex((item) => item.id === row.id);
+                  return (
+                    <tr
+                      key={row.id}
+                      className={row.is_active ? "" : "options-row-inactive"}
+                      data-testid={`fare-row-${row.id}`}
+                    >
+                      <td>{row.name}</td>
+                      <td>{row.display_order}</td>
+                      <td>{recordsLabel(row.record_count)}</td>
+                      <td>
+                        <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>
+                          {row.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="options-actions">
+                          <button
+                            type="button"
+                            className="reply-btn"
+                            aria-label={`Move ${row.name} up`}
+                            disabled={working || !canReorder || index === 0}
+                            onClick={() => move(index, -1)}
+                          >
+                            <FiArrowUp />
+                          </button>
+                          <button
+                            type="button"
+                            className="reply-btn"
+                            aria-label={`Move ${row.name} down`}
+                            disabled={working || !canReorder || index === rows.length - 1}
+                            onClick={() => move(index, 1)}
+                          >
+                            <FiArrowDown />
+                          </button>
+                          <button
+                            type="button"
+                            className="reply-btn"
+                            aria-label={`Edit ${row.name}`}
+                            disabled={working}
+                            onClick={() => startEdit(row)}
+                          >
+                            Edit
+                          </button>
+                          {row.is_active ? (
+                            <button
+                              type="button"
+                              className="reply-btn"
+                              aria-label={`Deactivate ${row.name}`}
+                              disabled={working}
+                              onClick={() =>
+                                write(
+                                  () => tourismApi.deactivateBoatCapacityFare(row.id),
+                                  putRow,
+                                  "The tier was deactivated."
+                                )
+                              }
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="reply-btn"
+                              aria-label={`Reactivate ${row.name}`}
+                              disabled={working}
+                              onClick={() =>
+                                write(
+                                  () => tourismApi.reactivateBoatCapacityFare(row.id),
+                                  putRow,
+                                  "The tier was reactivated."
+                                )
+                              }
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={5} className="options-empty">
+                    No tiers to show for this filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : null}
+      </section>
+
+      {editing ? (
+        <form className="settings-card options-form" onSubmit={saveEdit} aria-label={`Edit ${editing.name}`}>
+          <div className="report-card-title">
+            <h3>Rename a tier</h3>
+            <p>Used by {recordsLabel(editing.record_count)}.</p>
+          </div>
+          <label className="settings-field">
+            <span>Tier text</span>
+            <input
+              type="text"
+              aria-label="Tier text"
+              value={editName}
+              maxLength={160}
+              disabled={working}
+              onChange={(event) => setEditName(event.target.value)}
+            />
+          </label>
+          {editing.record_count > 0 ? (
+            <p className="options-reason" role="note">
+              {recordsLabel(editing.record_count)} hold this exact text, so it cannot be renamed. {RENAME_GUIDE}
+            </p>
+          ) : null}
+          <div className="options-form-actions">
+            <button type="button" className="tourist-record-cancel" onClick={() => setEditingId(null)} disabled={working}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="tourist-record-save"
+              disabled={working || editName.trim() === "" || editName === editing.name}
+            >
+              {working ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
+  );
+}

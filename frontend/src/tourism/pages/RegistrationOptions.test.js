@@ -167,15 +167,18 @@ describe("who may open it", () => {
 });
 
 describe("the four lists", () => {
-  it("has the four tabs, each asking the server for its own list", async () => {
+  it("has the four reference tabs (each asking the server for its own list) and the fare tab", async () => {
     await open();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
       "Travel Itinerary",
       "Vehicle Classification",
       "Boat Classification",
       "Visit Purpose",
+      "Boat Capacity and Fare",
     ]);
     expect(sent("GET", "/reference-options/itinerary/")).toHaveLength(1);
+    // the fare list is not asked for until its own tab is opened
+    expect(requests.filter((r) => r.path.startsWith("/boat-capacity-fares/"))).toHaveLength(0);
 
     for (const [name, kind] of [
       ["Vehicle Classification", "travel-mode"],
