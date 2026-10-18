@@ -335,22 +335,20 @@ function EmergencyHotlinesPage() {
                         <ContactIcon name={row.icon} />
                         <div className="hotline-main">
                           <div className="hotline-name">{row.name}</div>
-                          <div className="hotline-number">{row.contact_numbers}</div>
-                          {row.email || row.description ? (
-                            <div className="hotline-chips">
-                              {row.email ? (
-                                <span className="hotline-chip" title={row.email}>
-                                  <FiMail aria-hidden="true" />
-                                  <span className="hotline-chip-text">{row.email}</span>
-                                </span>
-                              ) : null}
-                              {row.description ? (
-                                <span className="hotline-chip" title={row.description}>
-                                  <span className="hotline-chip-text">{row.description}</span>
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
+                          <div className="hotline-meta">
+                            <div className="hotline-number">{row.contact_numbers}</div>
+                            {row.email ? (
+                              <span className="hotline-chip" title={row.email}>
+                                <FiMail aria-hidden="true" />
+                                <span className="hotline-chip-text">{row.email}</span>
+                              </span>
+                            ) : null}
+                            {row.description ? (
+                              <span className="hotline-chip" title={row.description}>
+                                <span className="hotline-chip-text">{row.description}</span>
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                       <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>

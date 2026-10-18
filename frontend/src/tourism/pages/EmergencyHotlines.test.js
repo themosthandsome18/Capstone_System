@@ -556,7 +556,13 @@ describe("optional details are chips that appear only when there is something", 
     await open();
     const plain = rowOf(4); // no email, no description
     expect(plain.querySelectorAll(".hotline-chip")).toHaveLength(0);
-    expect(plain.querySelector(".hotline-chips")).toBeNull();
+    // two lines only: the name, and the number (nothing else on the second line)
+    const meta = plain.querySelector(".hotline-meta");
+    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-number"]);
+    expect([...plain.querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])).toEqual([
+      "hotline-name",
+      "hotline-meta",
+    ]);
     // nothing in the row is an empty element standing in for a missing value
     const empties = [...plain.querySelectorAll("div, span, p")].filter(
       (el) => el.children.length === 0 && el.textContent.trim() === ""

@@ -153,13 +153,14 @@ describe("a chip is one line: the icon and the text side by side, never split in
     });
   });
 
-  it("lets the CHIP LIST wrap, so a whole chip moves to the next line", async () => {
+  it("lets the SECOND LINE wrap, so a whole chip (or the number) moves to the next line", async () => {
     await openWithChips();
-    const lists = [...document.querySelectorAll(".hotline-chips")];
-    expect(lists).toHaveLength(3);
-    lists.forEach((list) => {
-      expect(css(list, "display")).toBe("flex");
-      expect(css(list, "flex-wrap")).toBe("wrap");
+    const lines = [...document.querySelectorAll(".hotline-meta")];
+    expect(lines).toHaveLength(4); // one per row
+    lines.forEach((line) => {
+      expect(css(line, "display")).toBe("flex");
+      expect(css(line, "flex-wrap")).toBe("wrap");
+      expect(css(line, "align-items")).toBe("center");
     });
     // a chip is never wider than the line
     chipsOf().forEach((chip) => expect(css(chip, "max-width")).toBe("100%"));
@@ -204,5 +205,87 @@ describe("a chip is one line: the icon and the text side by side, never split in
     row.querySelectorAll(".hotline-actions button").forEach((button) => {
       expect(css(button, "white-space")).toBe("nowrap");
     });
+  });
+});
+
+describe("the second line: the number and the chips side by side", () => {
+  const rows = () => [
+    contact(1, "Plain Row"),
+    contact(2, "Email Row", { email: "one@example.com" }),
+    contact(3, "Description Row", { description: "A short note" }),
+    contact(4, "Both Row", { email: "two@example.com", description: "Another short note" }),
+  ];
+  async function open() {
+    const data = rows();
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(data), json: async () => data })
+    );
+    render(<EmergencyHotlines />);
+    await screen.findByRole("list");
+  }
+
+  it("puts the number and the chips in ONE flex row, as neighbours (not one block under the other)", async () => {
+    await open();
+    [2, 3, 4].forEach((id) => {
+      const meta = rowOf(id).querySelector(".hotline-meta");
+      const number = meta.querySelector(".hotline-number");
+      const chips = [...meta.querySelectorAll(".hotline-chip")];
+      expect(chips.length).toBeGreaterThan(0);
+      expect(css(meta, "display")).toBe("flex");
+      expect(css(meta, "flex-direction") || "row").toMatch(/^row/);
+      // the number and every chip are direct children of that one row
+      expect(number.parentElement).toBe(meta);
+      chips.forEach((chip) => expect(chip.parentElement).toBe(meta));
+      // and the first chip comes right after the number, on the same line
+      expect(number.nextElementSibling).toBe(chips[0]);
+    });
+    // the row has exactly two lines in its text part: the name, then this one
+    expect(
+      [...rowOf(4).querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])
+    ).toEqual(["hotline-name", "hotline-meta"]);
+  });
+
+  it("gives a row with no email and no description just two lines and no chip place", async () => {
+    await open();
+    const main = rowOf(1).querySelector(".hotline-main");
+    expect([...main.children].map((el) => el.className.split(" ")[0])).toEqual(["hotline-name", "hotline-meta"]);
+    const meta = main.querySelector(".hotline-meta");
+    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-number"]);
+    expect(main.querySelectorAll(".hotline-chip")).toHaveLength(0);
+    // nothing empty is standing in for a chip
+    const empties = [...main.querySelectorAll("*")].filter((el) => el.children.length === 0 && el.textContent.trim() === "" && el.tagName.toLowerCase() !== "svg" && !el.closest("svg"));
+    expect(empties).toEqual([]);
+  });
+
+  it("lets two chips wrap as WHOLE chips: the number and each chip are items of one wrapping row", async () => {
+    await open();
+    const meta = rowOf(4).querySelector(".hotline-meta");
+    expect([...meta.children].map((el) => el.className.split(" ")[0])).toEqual([
+      "hotline-number",
+      "hotline-chip",
+      "hotline-chip",
+    ]);
+    expect(css(meta, "flex-wrap")).toBe("wrap");
+    meta.querySelectorAll(".hotline-chip").forEach((chip) => {
+      expect(css(chip, "white-space")).toBe("nowrap"); // never split inside
+      expect(css(chip, "display")).toBe("inline-flex");
+      expect(css(chip, "max-width")).toBe("100%");
+    });
+    // the earlier rules still hold: the icon is on the first line, the right group is in the middle
+    const row = rowOf(4);
+    expect(css(row.querySelector(".hotline-body"), "align-items")).toBe("flex-start");
+    expect(css(row, "align-items")).toBe("center");
+  });
+
+  it("leaves the preview card alone: it has no chips, so it has no second-line row either", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
+    const preview = screen.getByRole("group", { name: "Preview" });
+    expect(preview.querySelector(".hotline-meta")).toBeNull();
+    expect(preview.querySelector(".hotline-chip")).toBeNull();
+    expect([...preview.querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])).toEqual([
+      "hotline-name",
+      "hotline-number",
+    ]);
   });
 });

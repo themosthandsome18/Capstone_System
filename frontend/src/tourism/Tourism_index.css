@@ -4796,19 +4796,28 @@
   color: var(--contact-color, var(--th-text-muted));
 }
 
-.hotline-chips {
+/* The SECOND LINE of a row: the number and the chips side by side. If they do
+   not all fit, a whole item (the number, or a whole chip) drops to the next
+   line; nothing is split inside. With no chip it is just the number. */
+.hotline-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: -6px;
+}
+
+.hotline-meta .hotline-number {
+  min-width: 0;
+  margin-top: 0;
 }
 
 /* A chip is ONE line: the icon (if any) and the text side by side, centred on
    each other. The base stylesheet makes every svg display:block, which would
    put an icon above its text, so the chip is a flex row and never wraps inside.
-   When there is not room for the whole chip, the chip list (flex-wrap above)
-   moves the whole chip to the next line. Only a text longer than a full line is
-   cut, with an ellipsis (the full text is in the chip's title). */
+   When there is not room for the whole chip, the second line (.hotline-meta,
+   flex-wrap) moves the whole chip to the next line. Only a text longer than a
+   full line is cut, with an ellipsis (the full text is in the chip's title). */
 .hotline-chip {
   display: inline-flex;
   align-items: center;
