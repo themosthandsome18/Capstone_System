@@ -4954,3 +4954,11 @@
   font-size: 12px;
   color: var(--th-text-muted);
 }
+
+/* ================= MOBILE APP CONTENT (Commit 4) =================
+   The body of a tab of the Mobile App Content page. It spaces its children as
+   .reports-page spaces the children of a page (24px, one column), so a panel that
+   used to be a whole page looks the same inside a tab. */
+.mobile-content-panel {
+  @apply flex flex-col gap-6;
+}

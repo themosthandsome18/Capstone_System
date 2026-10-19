@@ -113,6 +113,8 @@ export function capture(container) {
     form: html(container.querySelector("form")),
     section: html(container.querySelector('section[aria-label="Emergency contacts"]')),
     chrome: html(container.querySelector(".reports-header")),
+    // Not in the golden (the old page had no panel): the first thing in the panel, where the Add button now is.
+    addRow: html(container.querySelector(".mobile-content-panel > :first-child")),
   };
 }
 
