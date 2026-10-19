@@ -52,7 +52,7 @@ from api.models import (
     TouristRecord,
 )
 from api.permissions import get_user_role
-from api.services.activity import log_activity
+from api.services.activity import LABEL_MAX, count_of, log_activity, moved_ids, reorder_note, shorten_label
 from api.views.reference_options import _parse_confirmation, clean_name, name_key
 
 LOCK_ID = 7100006
@@ -145,13 +145,29 @@ def _name_taken(name, excluding=None):
     return False
 
 
+LABEL_PREFIX = "Boat Capacity and Fare tier "
+
+
+def _rename_note(old_name, new_name, held_by):
+    """The part of the rename's log label after the prefix. The two names can be 160
+    characters each, which with the rest would be more than the 255 the column holds
+    (a 500 on PostgreSQL), so each is shortened to its share. The end of the sentence,
+    how many records keep the old text, is what the label exists to say and stays whole."""
+    kept = f"{count_of(held_by, 'record')} {'keeps' if held_by == 1 else 'keep'} the old text"
+    template = "renamed: '{}' to '{}'; " + kept + " (no record was changed)"
+    overhead = len(LABEL_PREFIX) + len(template.format("", ""))
+    share = max((LABEL_MAX - overhead) // 2, 20)
+    return template.format(shorten_label(old_name, share), shorten_label(new_name, share))
+
+
 def _log(request, fare, action, text, record_id=None):
     log_activity(
         request,
         MODULE_TOURISM,
         action,
         fare,
-        label=f"Boat Capacity and Fare tier {text}",
+        # (the reorder label lists every tier: the nine real ones make 439 characters)
+        label=shorten_label(LABEL_PREFIX + text),
         record_id=fare.pk if record_id is None else record_id,
     )
 
@@ -234,8 +250,7 @@ def boat_capacity_fare_detail(request, fare_id):
             request,
             fare,
             ACTION_UPDATE,
-            f"renamed: '{old_name}' to '{new_name}'; {held_by} record(s) keep the old text "
-            "(no record was changed)",
+            _rename_note(old_name, new_name, held_by),
         )
         count = _count_holders(new_name)
     return Response(_item(fare, count))
@@ -302,6 +317,8 @@ def boat_capacity_fare_reorder(request):
             return _error("ids must list every existing tier exactly once, with no other id.")
 
         ordered = [existing[fare_id] for fare_id in ids]
+        # (read before the write: `existing` is in the order the app shows, display_order then id)
+        moved = moved_ids(list(existing), ids)
         for position, fare in enumerate(ordered, start=1):
             fare.display_order = position * ORDER_STEP
         BoatCapacityFare.objects.bulk_update(ordered, ["display_order"])
@@ -309,7 +326,7 @@ def boat_capacity_fare_reorder(request):
             request,
             ordered[0],
             ACTION_UPDATE,
-            "reordered: " + ", ".join(f"'{fare.name}'" for fare in ordered),
+            reorder_note([existing[fare_id].name for fare_id in moved], "tier", LABEL_PREFIX),
             record_id="reorder",
         )
         counts = _holder_counts()
