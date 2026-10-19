@@ -7585,9 +7585,14 @@ class BoatCapacityFareSeedTests(TransactionTestCase):
         before = set(connection.introspection.table_names())
         MigrationExecutor(connection).migrate([("api", "0054_seed_emergency_contacts")])
         gone = before - set(connection.introspection.table_names())
-        self.assertEqual(gone, {BoatCapacityFare._meta.db_table})
+        # Going back past 0055 also takes back every later migration, so the tables
+        # that migrations AFTER 0055 created (Mobile App Content, 0060) go with it.
+        later = {"api_mobilecontentitem", "api_mobilecontentblock"}
+        self.assertEqual(gone - later, {BoatCapacityFare._meta.db_table})
 
-        MigrationExecutor(connection).migrate(self.AFTER)
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())  # forward again, to the latest
         self.assertEqual(set(connection.introspection.table_names()), before)
 
 
@@ -12100,3 +12105,465 @@ class TourismThemeApiTests(TestCase):
         self.assertEqual(mobile.status_code, status.HTTP_200_OK)
         self.assertEqual(mobile.json()["theme"]["primary_color"], "#AA5500")
         self.assertNotIn("updated_by", mobile.json()["theme"])
+
+import re
+from pathlib import Path
+
+
+class ActivityLogDigestConstraintTests(_BoatFareApiBase, TestCase):
+    """The colleague's unique constraint on ActivityLog (migration 0059,
+    uniq_sanitation_public_digest) covers record_id ONLY for rows with module
+    "sanitation" and record_type "SanitationPublicSubmission". The logs of the boat
+    fare tiers and of the hotlines are module "tourism": the same action on the same
+    thing, repeated, must never be refused by it."""
+
+    NAME = "uniq_sanitation_public_digest"
+
+    def setUp(self):
+        self.setUpData()
+
+    def test_the_constraint_exists_here_and_does_refuse_what_it_is_meant_to(self):
+        from django.db import IntegrityError, transaction
+
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, ActivityLog._meta.db_table)
+        self.assertIn(self.NAME, constraints)  # so the tests below are not vacuous
+        ActivityLog.objects.create(module="sanitation", action="create", record_type="SanitationPublicSubmission", record_id="7", record_label="x")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ActivityLog.objects.create(module="sanitation", action="create", record_type="SanitationPublicSubmission", record_id="7", record_label="x")
+
+    def test_a_tier_deactivated_and_brought_back_twice_the_same_day_is_logged_four_times(self):
+        before = self._logs().count()
+        for _ in range(2):
+            self.assertEqual(self.admin.post(self._url(self.b, "deactivate"), {}, format="json").status_code, 200)
+            self.assertEqual(self.admin.post(self._url(self.b, "reactivate"), {}, format="json").status_code, 200)
+        rows = list(self._logs().order_by("pk").values_list("record_id", "record_label")[before:])
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(len({record_id for record_id, _ in rows}), 1)  # the same record_id four times
+        self.assertEqual(rows[0], rows[2])  # and identical rows, which the constraint does not look at
+        self.assertEqual(rows[1], rows[3])
+
+    def test_a_tier_renamed_and_renamed_back_is_logged_each_time(self):
+        before = self._logs().count()
+        original = self.b.name
+        for _ in range(2):
+            self.assertEqual(self.admin.patch(self._url(self.b), {"name": "Bravo temporary"}, format="json").status_code, 200)
+            self.assertEqual(self.admin.patch(self._url(self.b), {"name": original}, format="json").status_code, 200)
+        self.assertEqual(self._logs().count() - before, 4)
+
+    def test_a_hotline_deactivated_and_brought_back_twice_the_same_day_is_logged_four_times(self):
+        contact = EmergencyContact.objects.create(name="Echo Desk", contact_numbers="555-5555", icon="help_desk", display_order=90)
+        base = "/api/emergency-contacts/"
+        before = ActivityLog.objects.filter(record_type="EmergencyContact").count()
+        for _ in range(2):
+            self.assertEqual(self.admin.post(f"{base}{contact.pk}/deactivate/", {}, format="json").status_code, 200)
+            self.assertEqual(self.admin.post(f"{base}{contact.pk}/reactivate/", {}, format="json").status_code, 200)
+        rows = ActivityLog.objects.filter(record_type="EmergencyContact").order_by("pk")
+        self.assertEqual(rows.count() - before, 4)
+        self.assertEqual(set(rows.values_list("module", flat=True)), {"tourism"})
+
+    def test_our_logs_are_module_tourism_and_so_outside_the_constraint(self):
+        self.admin.post(self._url(self.b, "deactivate"), {}, format="json")
+        self.assertEqual(set(self._logs().values_list("module", "record_type")), {("tourism", "BoatCapacityFare")})
+
+
+# -- Mobile App Content, commit 1: the two tables and their seed ----------------------
+
+MOBILE_CONTENT_DART = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "screens" / "tourism_screens.dart"
+# What the seed's three placeholders stand for in the Dart (the port guide is the only place).
+PORT_FEE_REGULAR = "₱80"
+PORT_FEE_DISCOUNTED = "₱64"
+# Dart icon -> the name stored (the table in docs of the spec; the app draws the picture).
+MOBILE_CONTENT_ICONS = {
+    "beach_access": "beach",
+    "workspace_premium": "craft",
+    "water_drop": "waterfall",
+    "restaurant_menu": "food",
+    "directions_boat_outlined": "boat",
+    "festival_outlined": "festival",
+    "receipt_long_outlined": "receipt",
+    "delete_outline": "waste",
+    "event_available_outlined": "event",
+    "eco_outlined": "eco",
+}
+
+
+def _mobile_content_module():
+    import importlib
+
+    return importlib.import_module("api.migrations.0061_seed_mobile_content")
+
+
+class MobileContentMigrationTests(TransactionTestCase):
+    """Migrations 0060 and 0061 through Django's own migrate, forward AND backward."""
+
+    # BEFORE is the migration just before ours: the tests never reverse anyone else's.
+    BEFORE = [("api", "0059_activitylog_public_digest_uniqueness")]
+    MIDDLE = [("api", "0060_mobile_content")]
+    AFTER = [("api", "0061_seed_mobile_content")]
+    NEW_TABLES = {"api_mobilecontentitem", "api_mobilecontentblock"}
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _models(self, target):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        state = executor.loader.project_state(target).apps
+        return state.get_model("api", "MobileContentItem"), state.get_model("api", "MobileContentBlock")
+
+    def _schema(self):
+        """{table: [(column, type), ...]} of every table that is not one of the two new ones."""
+        out = {}
+        with connection.cursor() as cursor:
+            for table in connection.introspection.table_names(cursor):
+                if table in self.NEW_TABLES:
+                    continue
+                description = connection.introspection.get_table_description(cursor, table)
+                out[table] = sorted((col.name, str(col.type_code)) for col in description)
+        return out
+
+    def _tables(self):
+        with connection.cursor() as cursor:
+            return set(connection.introspection.table_names(cursor))
+
+    def test_a_the_real_migrate_gives_ten_items_and_five_blocks_and_changes_no_other_table(self):
+        MigrationExecutor(connection).migrate(self.BEFORE)
+        self.assertFalse(self.NEW_TABLES & self._tables())
+        schema_before = self._schema()
+
+        MigrationExecutor(connection).migrate(self.AFTER)
+        self.assertTrue(self.NEW_TABLES <= self._tables())
+        Item, Block = self._models(self.AFTER)
+        self.assertEqual(Item.objects.count(), 10)
+        self.assertEqual(Block.objects.count(), 5)
+        self.assertEqual(
+            sorted(Block.objects.values_list("key", flat=True)),
+            ["fee_office", "port_guide", "travel_guide", "welcome", "why_visit"],
+        )
+        # g) no existing table got a new, changed or removed column
+        self.assertEqual(self._schema(), schema_before)
+
+    def test_d_a_second_run_adds_nothing_and_changes_nothing(self):
+        from django.apps import apps as django_apps
+
+        MigrationExecutor(connection).migrate(self.BEFORE)  # a clean start: the seed is run by this migrate
+        MigrationExecutor(connection).migrate(self.AFTER)
+        Item, Block = self._models(self.AFTER)
+        self.assertEqual((Item.objects.count(), Block.objects.count()), (10, 5))
+        # an admin has edited one of each: the second run must not undo it or add a twin
+        Item.objects.filter(title="Environmental Fee").update(short_text="edited", full_text="a long text")
+        Block.objects.filter(key="welcome").update(subtitle="edited too")
+        snapshot = (
+            list(Item.objects.order_by("id").values()),
+            list(Block.objects.order_by("id").values()),
+        )
+        module = _mobile_content_module()
+        module.add_content(django_apps, None)
+        module.add_content(django_apps, None)
+        self.assertEqual(Item.objects.count(), 10)
+        self.assertEqual(Block.objects.count(), 5)
+        self.assertEqual(
+            (list(Item.objects.order_by("id").values()), list(Block.objects.order_by("id").values())),
+            snapshot,
+        )
+
+    def test_e_the_reverse_removes_what_was_seeded_and_keeps_what_was_added_by_hand(self):
+        MigrationExecutor(connection).migrate(self.BEFORE)  # a clean start: the seed is run by this migrate
+        MigrationExecutor(connection).migrate(self.AFTER)
+        Item, Block = self._models(self.AFTER)
+        self.assertEqual((Item.objects.count(), Block.objects.count()), (10, 5))
+        Item.objects.create(section="travel_guide", title="Added by hand", short_text="mine", icon="info", display_order=99)
+        Block.objects.create(key="added_by_hand", title="mine")
+
+        MigrationExecutor(connection).migrate(self.MIDDLE)  # the reverse of 0061 only
+        self.assertTrue(self.NEW_TABLES <= self._tables())  # the tables are still there
+        Item, Block = self._models(self.MIDDLE)
+        self.assertEqual(list(Item.objects.values_list("title", flat=True)), ["Added by hand"])
+        self.assertEqual(list(Block.objects.values_list("key", flat=True)), ["added_by_hand"])
+
+        MigrationExecutor(connection).migrate(self.AFTER)  # and forward again: the seed returns beside it
+        Item, Block = self._models(self.AFTER)
+        self.assertEqual(Item.objects.count(), 11)
+        self.assertEqual(Block.objects.count(), 6)
+
+    def test_g_the_migrations_only_create_and_seed(self):
+        import importlib
+        from io import StringIO
+
+        from django.db import migrations as dj_migrations
+
+        m60 = importlib.import_module("api.migrations.0060_mobile_content").Migration
+        m61 = importlib.import_module("api.migrations.0061_seed_mobile_content").Migration
+        self.assertEqual(m60.dependencies, [("api", "0059_activitylog_public_digest_uniqueness")])
+        self.assertEqual(m61.dependencies, [("api", "0060_mobile_content")])
+        self.assertTrue(all(isinstance(op, dj_migrations.CreateModel) for op in m60.operations))
+        self.assertEqual(sorted(op.name for op in m60.operations), ["MobileContentBlock", "MobileContentItem"])
+        self.assertEqual([type(op) for op in m61.operations], [dj_migrations.RunPython])
+        out = StringIO()
+        call_command("sqlmigrate", "api", "0060", stdout=out, verbosity=0)
+        sql = out.getvalue().upper()
+        self.assertIn("CREATE TABLE", sql)
+        self.assertNotIn("ALTER", sql)
+        self.assertNotIn("DROP", sql)
+        call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class MobileContentSeedTests(TestCase):
+    """The seed against the Dart file the app is built from: letter for letter."""
+
+    def setUp(self):
+        from django.apps import apps as django_apps
+
+        from api.models import MobileContentBlock, MobileContentItem
+
+        self.Item, self.Block = MobileContentItem, MobileContentBlock
+        self.Item.objects.all().delete()
+        self.Block.objects.all().delete()
+        _mobile_content_module().add_content(django_apps, None)
+        self.dart = MOBILE_CONTENT_DART.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    # -- helpers ---------------------------------------------------------------------
+
+    def _literal(self, text):
+        """The text as the Dart writes it: single quotes, nothing to escape."""
+        self.assertNotIn("'", text)
+        self.assertNotIn("\\", text)
+        self.assertNotIn("$", text)
+        return "'" + text + "'"
+
+    def _block(self, key):
+        return self.Block.objects.get(key=key)
+
+    def _fee_filled(self, text):
+        """The port guide with its placeholders replaced by what the Dart has written."""
+        office = self._block("fee_office").body
+        return (
+            text.replace("{fee_regular}", PORT_FEE_REGULAR)
+            .replace("{fee_discounted}", PORT_FEE_DISCOUNTED)
+            .replace("{fee_office}", office)
+        )
+
+    # -- b) letter for letter ---------------------------------------------------------
+
+    CONSTRUCTORS = {
+        ("why_visit", "tile"): ("_buildPillarItem", "sub"),
+        ("travel_guide", "tile"): ("_buildGuideTile", "desc"),
+        ("travel_guide", "banner"): ("InfoBanner", "text"),
+    }
+
+    def _dart_pattern(self, item):
+        name, field = self.CONSTRUCTORS[(item.section, item.style)]
+        return re.compile(
+            re.escape(name)
+            + r"\(\s*icon: Icons\.(\w+),\s*title: "
+            + re.escape(self._literal(item.title))
+            + r",\s*"
+            + field
+            + r": "
+            + re.escape(self._literal(self._fee_filled(item.short_text)))
+            + r","
+        )
+
+    def test_b_every_item_is_in_the_dart_letter_for_letter_with_its_icon(self):
+        self.assertEqual(self.Item.objects.count(), 10)
+        for item in self.Item.objects.all():
+            match = self._dart_pattern(item).search(self.dart)
+            self.assertIsNotNone(match, f"{item.title!r} is not in the Dart as stored")
+            self.assertEqual(MOBILE_CONTENT_ICONS[match.group(1)], item.icon, item.title)
+
+    def test_b_the_dart_has_no_item_that_is_not_stored(self):
+        self.assertEqual(len(re.findall(r"_buildPillarItem\(\s*icon: Icons\.", self.dart)), 4)
+        self.assertEqual(len(re.findall(r"_buildGuideTile\(\s*icon: Icons\.", self.dart)), 4)
+        self.assertEqual(len(re.findall(r"InfoBanner\(\s*icon: Icons\.", self.dart)), 2)
+
+    def test_b_the_welcome_banner_why_visit_and_the_heading_are_in_the_dart(self):
+        welcome = self._block("welcome")
+        self.assertEqual(welcome.title.count("{name}"), 1)
+        guest = welcome.title.replace("{name}", "Explorer")
+        member = welcome.title.replace("{name}", "${widget.profile.displayName}")
+        self.assertIn(f"? {self._literal(guest)}", self.dart)
+        # (the member form has Dart's own ${...} interpolation, so it is written out here)
+        self.assertIn(": '" + member + "'", self.dart)
+        self.assertEqual(welcome.body, "")
+        after_greeting = self.dart[self.dart.index("'" + member + "'"):]
+        self.assertTrue(
+            re.match(r".*?Text\(\s*" + re.escape(self._literal(welcome.subtitle)), after_greeting, re.S),
+            "the welcome text is not the one that follows the greeting",
+        )
+        why = self._block("why_visit")
+        region = self.dart[self.dart.index("class _MaubanTownHighlightsCard"):self.dart.index("Widget _buildPillarItem")]
+        self.assertTrue(
+            re.search(
+                r"Text\(\s*" + re.escape(self._literal(why.title)) + r".*?Text\(\s*" + re.escape(self._literal(why.subtitle))
+                + r".*?Text\(\s*" + re.escape(self._literal(why.body)),
+                region,
+                re.S,
+            ),
+            "Why Visit: title, subtitle and paragraph are not in this order in the Dart",
+        )
+        heading = self._block("travel_guide")
+        region = self.dart[self.dart.index("class _MaubanTownGuideSection"):self.dart.index("class DestinationListPage")]
+        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(heading.title)), region))
+        self.assertEqual((heading.subtitle, heading.body), ("", ""))
+
+    def test_b_the_port_guide_is_the_dart_lines_once_the_placeholders_are_filled(self):
+        port = self._block("port_guide")
+        region = self.dart[self.dart.index("Widget _buildPortGuideCard"):self.dart.index("class ProfilePage")]
+        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(port.title)), region))
+        lines = port.body.split("\n")
+        self.assertEqual(len(lines), 4)
+        for line in lines:
+            filled = "• " + self._fee_filled(line)
+            self.assertTrue(
+                re.search(r"Text\(\s*" + re.escape(self._literal(filled)) + r",", region),
+                f"not in the Dart port guide: {filled!r}",
+            )
+        # and the place of the Tourism Office is the one the Dart writes
+        self.assertIn(self._block("fee_office").body, self.dart)
+        self.assertEqual((self._block("fee_office").title, self._block("fee_office").subtitle), ("", ""))
+
+    # -- c) style, section and order are where the Dart shows them ---------------------
+
+    def test_c_the_two_notices_are_banners_and_the_four_guides_and_four_pillars_are_tiles(self):
+        banners = list(self.Item.objects.filter(style="banner").order_by("display_order").values_list("title", flat=True))
+        self.assertEqual(banners, ["Upcoming: Fiesta de Mauban & Buntal Festival", "Clean Coast & Eco-Tourism Policy"])
+        self.assertEqual(self.Item.objects.filter(section="travel_guide", style="banner").count(), 2)
+        self.assertEqual(self.Item.objects.filter(section="travel_guide", style="tile").count(), 4)
+        self.assertEqual(self.Item.objects.filter(section="why_visit", style="tile").count(), 4)
+        self.assertEqual(self.Item.objects.filter(section="why_visit", style="banner").count(), 0)
+        # the Dart agrees: each stored item is built by the constructor of its style
+        # (b checks the match; here no OTHER constructor writes the same title)
+        for item in self.Item.objects.all():
+            expected = self.CONSTRUCTORS[(item.section, item.style)][0]
+            for name in {"_buildPillarItem", "_buildGuideTile", "InfoBanner"} - {expected}:
+                other = re.search(
+                    re.escape(name) + r"\(\s*icon: Icons\.\w+,\s*title: " + re.escape(self._literal(item.title)), self.dart
+                )
+                self.assertIsNone(other, f"{item.title!r} is drawn by {name} in the Dart, not {expected}")
+
+    def test_c_the_order_is_the_order_the_app_shows_today(self):
+        # tiles and pillars: the order they are written in the Dart
+        for section, style in (("why_visit", "tile"), ("travel_guide", "tile"), ("travel_guide", "banner")):
+            items = list(self.Item.objects.filter(section=section, style=style).order_by("display_order", "id"))
+            positions = [self.dart.index("title: " + self._literal(i.title)) for i in items]
+            self.assertEqual(positions, sorted(positions), (section, style))
+        orders = [i.display_order for i in self.Item.objects.filter(section="travel_guide").order_by("display_order")]
+        self.assertEqual(len(set(orders)), 6)
+        # the Home page builds the guides first and the notices after them
+        self.assertLess(self.dart.index("_MaubanTownGuideSection()"), self.dart.index("const InfoBanner("))
+        tiles = self.Item.objects.filter(section="travel_guide", style="tile").order_by("-display_order").first()
+        banner = self.Item.objects.filter(section="travel_guide", style="banner").order_by("display_order").first()
+        self.assertLess(tiles.display_order, banner.display_order)
+
+    def test_c_everything_is_active_and_nothing_can_be_tapped_yet(self):
+        self.assertFalse(self.Item.objects.filter(is_active=False).exists())
+        self.assertEqual(set(self.Item.objects.values_list("full_text", flat=True)), {""})
+
+    # -- f) the placeholders ----------------------------------------------------------
+
+    def _all_texts(self):
+        out = []
+        for item in self.Item.objects.all():
+            out += [item.title, item.short_text, item.full_text]
+        for block in self.Block.objects.all():
+            out += [block.title, block.subtitle, block.body]
+        return out
+
+    def test_f_the_only_placeholders_are_the_four_and_each_is_where_it_belongs(self):
+        found = set()
+        for text in self._all_texts():
+            found |= set(re.findall(r"\{[^{}]*\}", text))
+            self.assertEqual(text.count("{"), text.count("}"), text)
+            self.assertEqual(text.count("{"), len(re.findall(r"\{[^{}]*\}", text)), text)
+        self.assertEqual(found, {"{name}", "{fee_regular}", "{fee_discounted}", "{fee_office}"})
+        # {name} is in the greeting only; the three fee ones are in the port guide only
+        for block in self.Block.objects.all():
+            for field in ("title", "subtitle", "body"):
+                text = getattr(block, field)
+                if block.key == "welcome" and field == "title":
+                    self.assertEqual(set(re.findall(r"\{[^{}]*\}", text)), {"{name}"})
+                elif block.key == "port_guide" and field == "body":
+                    self.assertEqual(
+                        set(re.findall(r"\{[^{}]*\}", text)), {"{fee_regular}", "{fee_discounted}", "{fee_office}"}
+                    )
+                else:
+                    self.assertEqual(re.findall(r"\{[^{}]*\}", text), [], (block.key, field))
+        # the items: only the two tiles that name the Tourism Office have a placeholder, and it is {fee_office}
+        with_office = []
+        for item in self.Item.objects.all():
+            for text in (item.title, item.short_text, item.full_text):
+                holders = re.findall(r"\{[^{}]*\}", text)
+                if holders:
+                    self.assertEqual(holders, ["{fee_office}"], item.title)
+                    with_office.append(item.title)
+        self.assertEqual(sorted(with_office), ["Cagbalete Island Boat Guide", "Environmental Fee"])
+
+    def test_f_the_place_of_the_tourism_office_has_one_source_and_three_readers(self):
+        """"2nd Floor" is written ONCE, in the block fee_office; the three texts that name
+        the place say {fee_office}."""
+        self.assertEqual(self._block("fee_office").body, "Tourism Office, 2nd Floor, Mauban Municipal Hall")
+        readers = []
+        for item in self.Item.objects.all():
+            for field in ("title", "short_text", "full_text"):
+                readers += [(item.title, field)] * getattr(item, field).count("{fee_office}")
+        for block in self.Block.objects.exclude(key="fee_office"):
+            for field in ("title", "subtitle", "body"):
+                readers += [(block.key, field)] * getattr(block, field).count("{fee_office}")
+        self.assertEqual(
+            sorted(readers),
+            [
+                ("Cagbalete Island Boat Guide", "short_text"),
+                ("Environmental Fee", "short_text"),
+                ("port_guide", "body"),
+            ],
+        )
+        # and no literal place, in whole or in part, anywhere else
+        for item in self.Item.objects.all():
+            for text in (item.title, item.short_text, item.full_text):
+                self.assertNotIn("2nd Floor", text, item.title)
+                self.assertNotIn("Municipal Hall", text, item.title)
+        for block in self.Block.objects.exclude(key="fee_office"):
+            for text in (block.title, block.subtitle, block.body):
+                self.assertNotIn("2nd Floor", text, block.key)
+                self.assertNotIn("Municipal Hall", text, block.key)
+
+    def test_f_no_amount_of_money_is_stored_anywhere(self):
+        for text in self._all_texts():
+            self.assertIsNone(re.search(r"(₱|PHP|Php)\s?\d", text), text)
+        port = self._block("port_guide").body
+        self.assertIn("Environmental Fee: {fee_regular} per visitor", port)
+        self.assertIn("pay {fee_discounted}.", port)
+        self.assertIn("Pay at the {fee_office}.", port)
+
+    # -- the shape of the two tables -----------------------------------------------------
+
+    def test_the_default_of_style_and_is_active_is_in_the_database_itself(self):
+        """A row put in by code that does not know these columns is a tile and is active."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO api_mobilecontentitem (section, icon, title, short_text, full_text, display_order) "
+                "VALUES ('travel_guide', 'info', 'Raw row', 'x', '', 5)"
+            )
+        row = self.Item.objects.get(title="Raw row")
+        self.assertEqual((row.style, row.is_active), ("tile", True))
+
+    def test_the_icon_names_are_the_eleven_of_the_spec_and_the_seed_uses_ten(self):
+        self.assertEqual(
+            set(self.Item.ICON_NAMES),
+            set(MOBILE_CONTENT_ICONS.values()) | {"info"},
+        )
+        self.assertEqual(
+            set(self.Item.objects.values_list("icon", flat=True)),
+            set(MOBILE_CONTENT_ICONS.values()),
+        )
+
+    def test_the_seed_file_is_what_the_script_makes_from_the_dart(self):
+        import subprocess
+        import sys
+
+        script = MOBILE_CONTENT_DART.parents[3] / "backend" / "tools" / "extract_mobile_content_seed.py"
+        result = subprocess.run([sys.executable, "-I", str(script), "--check"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
