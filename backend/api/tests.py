@@ -12769,3 +12769,150 @@ class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
         self.admin.patch(self._url(tier), {"name": _long_tier_name("Echo")}, format="json")
         self.admin.post(self._url(tier, "deactivate"), {}, format="json")
         self._fits(self._labels())
+
+
+class HotlineLabelLengthTests(TestCase):
+    """The log labels of the hotlines fit the column (varchar(255)) in the worst cases, through the real
+    endpoints, and the labels of ordinary length are byte for byte what they were. A description has no
+    limit, so the first edit of a long one used to be a 500 on PostgreSQL."""
+
+    LIST = "/api/emergency-contacts/"
+    REORDER = "/api/emergency-contacts/reorder/"
+    HEAD = "Emergency contact "
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        EmergencyContact.objects.all().delete()
+        user = User.objects.create_user(username="hl_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        self.admin = APIClient()
+        self.admin.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+    def _url(self, contact=None, action=None):
+        url = self.LIST
+        if contact is not None:
+            url += f"{contact.pk}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _labels(self):
+        return list(ActivityLog.objects.filter(record_type="EmergencyContact").order_by("pk").values_list("record_label", flat=True))
+
+    def _fits(self, labels):
+        column = ActivityLog._meta.get_field("record_label").max_length
+        for label in labels:
+            self.assertLessEqual(len(label), column, label[:70])  # explicitly: SQLite would accept any length
+
+    def _contact(self, name="Bravo Police", numbers="222-2222 / 333-3333", **extra):
+        return EmergencyContact.objects.create(name=name, contact_numbers=numbers, display_order=extra.pop("display_order", 10), **extra)
+
+    # -- ordinary labels do not change at all ----------------------------------------------
+
+    def test_ordinary_labels_are_byte_for_byte_what_they_were(self):
+        self.assertEqual(self.admin.post(self.LIST, {"name": "Hotel Desk", "contact_numbers": "8"}, format="json").status_code, 201)
+        bravo = self._contact()
+        self.assertEqual(self.admin.patch(self._url(bravo), {"contact_numbers": "777-7777"}, format="json").status_code, 200)
+        self.assertEqual(self.admin.post(self._url(bravo, "deactivate"), {}, format="json").status_code, 200)
+        self.assertEqual(self.admin.post(self._url(bravo, "reactivate"), {}, format="json").status_code, 200)
+        hotel = EmergencyContact.objects.get(name="Hotel Desk")
+        self.assertEqual(self.admin.post(self.REORDER, {"ids": [hotel.pk, bravo.pk]}, format="json").status_code, 200)
+        self.assertEqual(
+            self._labels(),
+            [
+                "Emergency contact 'Hotel Desk' added: 'Hotel Desk'",
+                "Emergency contact 'Bravo Police' edited: contact_numbers: '222-2222 / 333-3333' to '777-7777'",
+                "Emergency contact 'Bravo Police' deactivated",
+                "Emergency contact 'Bravo Police' brought back (active)",
+                "Emergency contacts reordered: 'Hotel Desk', 'Bravo Police'",
+            ],
+        )
+
+    # -- the worst cases --------------------------------------------------------------------
+
+    def test_editing_a_long_description_is_logged_within_255_and_the_edit_is_kept(self):
+        old, new = ("old words " * 300)[:2999] + "z", ("new words " * 500)[:4999] + "z"
+        contact = self._contact(description=old)
+        response = self.admin.patch(self._url(contact), {"description": new}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(EmergencyContact.objects.get(pk=contact.pk).description, new)  # the edit was NOT lost to the label
+        label = self._labels()[-1]
+        self._fits([label])
+        self.assertTrue(label.startswith("Emergency contact 'Bravo Police' edited: description: '"))
+        self.assertIn("' to '", label)
+        self.assertEqual(label.count("…"), 2)  # the old value and the new one were each shortened, and say so
+
+    def test_two_long_fields_changed_together_both_show_in_the_label(self):
+        contact = self._contact(numbers="1" * 299 + "2", description="d " * 1500)
+        response = self.admin.patch(
+            self._url(contact), {"contact_numbers": "3" * 299 + "4", "description": "e " * 2500}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        label = self._labels()[-1]
+        self._fits([label])
+        self.assertIn("contact_numbers: '", label)
+        self.assertIn("; description: '", label)  # the second field was not eaten by the first
+        # and nothing was cut at the end of the label: every one of the four values was shortened to its own
+        # share (four ellipses, each inside quotes) and the last value is closed, not chopped
+        self.assertEqual(label.count("' to '"), 2)
+        self.assertEqual(label.count("…"), 4)
+        self.assertTrue(label.endswith("…'"), label)
+
+    def test_changing_every_field_to_its_longest_value_fits(self):
+        contact = self._contact(description="x " * 800)
+        new_name = _long_tier_name("Zulu")
+        email = "x" * 64 + "@" + ".".join(["d" * 60] * 3) + ".com"
+        self.assertLessEqual(len(email), 254)
+        response = self.admin.patch(
+            self._url(contact),
+            {"name": new_name, "contact_numbers": "9" * 300, "email": email, "description": "y " * 3000, "icon": "fire"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        stored = EmergencyContact.objects.get(pk=contact.pk)
+        self.assertEqual((stored.name, stored.icon, len(stored.contact_numbers)), (new_name, "fire", 300))
+        label = self._labels()[-1]
+        self._fits([label])
+        from api.services.activity import shorten_label
+
+        shown = shorten_label(new_name, 60)  # a name is carried in a label up to 60 characters, cut at a word
+        self.assertTrue(shown.endswith("…") and len(shown) <= 60 and new_name.startswith(shown[:-1]))
+        self.assertTrue(label.startswith(f"{self.HEAD}'{shown}' edited: name: '"), label)
+
+    def test_adding_deactivating_and_bringing_back_a_160_character_contact_fit(self):
+        name = _long_tier_name("Yankee")
+        response = self.admin.post(self.LIST, {"name": name, "contact_numbers": "5"}, format="json")
+        self.assertEqual(response.status_code, 201, response.content)
+        contact = EmergencyContact.objects.get(name=name)
+        self.assertEqual(self.admin.post(self._url(contact, "deactivate"), {}, format="json").status_code, 200)
+        self.assertEqual(self.admin.post(self._url(contact, "reactivate"), {}, format="json").status_code, 200)
+        labels = self._labels()
+        self.assertEqual(len(labels), 3)
+        self._fits(labels)
+        from api.services.activity import shorten_label
+
+        short = shorten_label(name, 60)
+        self.assertTrue(short.endswith("…") and len(short) <= 60 and name.startswith(short[:-1]))
+        self.assertEqual(labels[0], f"{self.HEAD}'{short}' added: '{short}'")
+        self.assertEqual(labels[1], f"{self.HEAD}'{short}' deactivated")
+        self.assertEqual(labels[2], f"{self.HEAD}'{short}' brought back (active)")
+
+    def test_the_reorder_of_many_long_contacts_fits_and_is_applied(self):
+        made = [self._contact(name=_long_tier_name(f"C{n}"), display_order=10 * (n + 1)) for n in range(12)]
+        response = self.admin.post(self.REORDER, {"ids": [c.pk for c in reversed(made)]}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([row["id"] for row in response.json()], [c.pk for c in reversed(made)])
+        label = self._labels()[-1]
+        self._fits([label])
+        self.assertTrue(label.startswith("Emergency contacts reordered: '"))
+        self.assertTrue(label.endswith("…"))  # this label still lists the names, so it is cut (see the report)
+
+    def test_no_label_written_by_these_is_longer_than_the_column(self):
+        contact = self._contact(name=_long_tier_name("X-ray"), description="q " * 2000)
+        self.admin.patch(self._url(contact), {"description": "r " * 2000, "name": _long_tier_name("Whisky")}, format="json")
+        self.admin.post(self._url(contact, "deactivate"), {}, format="json")
+        self._fits(self._labels())
+        self.assertEqual(len(self._labels()), 2)
