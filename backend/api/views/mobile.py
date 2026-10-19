@@ -143,11 +143,14 @@ def get_cached_active_barangays():
 def _app_content_or_nothing():
     """{"appContent": ...}, or {} if building it fails for a reason nobody foresaw. The app is only told about
     its texts here; every other key of the bootstrap, which every installed app depends on, must not be lost
-    because of them. The app then shows the texts it has written in its own code."""
+    because of them. The app then shows the texts it has written in its own code. The failure is logged at ERROR
+    with the word APPCONTENT_FAILED."""
     try:
         return {"appContent": build_app_content()}
     except Exception:
-        logger.exception("mobile content: appContent could not be built, so it is not sent")
+        # ERROR level and a fixed word to search for in the Render logs: this is a SILENT failure path on purpose (the
+        # bootstrap still answers 200), so the log and the "is appContent there" check on live are the only ways to see it.
+        logger.error("APPCONTENT_FAILED: appContent could not be built, so the bootstrap is sent without it", exc_info=True)
         return {}
 
 

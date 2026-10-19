@@ -275,11 +275,30 @@ class AppContentNothingIsWrittenTests(AppContentBase):
 
 class AppContentFailureTests(AppContentBase):
     def test_if_it_cannot_be_built_the_bootstrap_still_answers_with_every_old_key_unchanged(self):
-        with patch("api.views.mobile.build_app_content", side_effect=RuntimeError("boom")), self.assertLogs("api.views.mobile", level="ERROR"):
+        with patch("api.views.mobile.build_app_content", side_effect=RuntimeError("boom")), self.assertLogs("api.views.mobile", level="ERROR") as logs:
             response = APIClient().get(BOOTSTRAP)
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b"appContent", response.content)
         self.assertEqual(response.content, GOLDEN)  # byte for byte what the old code sent
+        # the silent path is not silent in the log: ERROR level, a fixed word to search for on Render, and the traceback
+        self.assertEqual([record.levelname for record in logs.records], ["ERROR"])
+        self.assertIn("APPCONTENT_FAILED", logs.records[0].getMessage())
+        self.assertIsNotNone(logs.records[0].exc_info)
+        self.assertIn("boom", "\n".join(logs.output))
+
+    def test_a_failure_below_the_view_is_contained_the_same_way(self):
+        # not a patched builder: the real one, with the database read failing under it
+        with patch("api.services.mobile_content.MobileContentBlock.objects") as blocks, self.assertLogs("api.views.mobile", level="ERROR") as logs:
+            blocks.all.side_effect = RuntimeError("the table is not there")
+            response = APIClient().get(BOOTSTRAP)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, GOLDEN)
+        self.assertIn("APPCONTENT_FAILED", logs.output[0])
+
+    def test_the_failure_of_a_healthy_world_is_not_reported(self):
+        # no ERROR is logged when it works (so an ERROR with that word always means something)
+        with self.assertNoLogs("api.views.mobile", level="WARNING"):
+            self.get()
 
 
 class AppContentTheThreeFencesTests(AppContentBase):
@@ -331,3 +350,41 @@ class AppContentTheThreeFencesTests(AppContentBase):
         self.assertIn(b"Changed place", value)     # ... and the changes are all in the new key (the fixture: they really happened)
         self.assertIn(b"Brand New", value)
         self.assertNotIn(b"Cagbalete Island Boat Guide", value)
+
+
+# 60 KB: about 18 times what appContent is today (3.4 KB) and about 2 times the whole bootstrap today (27.7 KB). It is a canary
+# against growth nobody expected (a bug that repeats a text, a field added to every item), NOT a limit on what the LGU may write:
+# when it fails we look at WHY before anybody raises it. The API allows far more (40 items x 2 sections x 5000 letters of full text:
+# 428 KB of plain letters, 1.65 MB of emoji), which is why this is a canary and not a rule.
+SIZE_CANARY_BYTES = 60 * 1024
+
+
+def appcontent_size(test):
+    return len(split(test.get())[1])
+
+
+class AppContentSizeCanaryTests(AppContentBase):
+    def test_the_appcontent_of_today_is_far_below_the_canary(self):
+        size = appcontent_size(self)
+        self.assertGreater(size, 3000)  # the fixture: it measured the real thing, not an empty key
+        self.assertLess(size, SIZE_CANARY_BYTES, f"appContent is {size} bytes; find out why before raising SIZE_CANARY_BYTES")
+
+    def test_the_canary_does_bite_when_the_content_grows(self):
+        # a LGU that fills both sections with 20 items of 1,500 letters of full text each: far more than today, and the measure sees it
+        for section in ("why_visit", "travel_guide"):
+            for number in range(20):
+                MobileContentItem.objects.create(
+                    id=300 + number + (0 if section == "why_visit" else 100), section=section, title=f"Item {number}",
+                    short_text="x", full_text=("word " * 300), display_order=100 + number,
+                )
+        size = appcontent_size(self)
+        self.assertGreater(size, SIZE_CANARY_BYTES)
+
+
+class DartFixtureTests(AppContentBase):
+    def test_the_file_the_dart_test_reads_is_byte_for_byte_what_the_server_renders(self):
+        path = HERE.parent.parent / "mobile" / "test" / "data" / "app_content_commit3.json"
+        if not path.exists():
+            self.skipTest("the mobile source is not next to the backend here")
+        _, value = split(self.get())
+        self.assertEqual(path.read_bytes(), value)
