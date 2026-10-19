@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import timedelta
 from functools import wraps
@@ -103,6 +104,7 @@ from api.services.sanitation import (
     sync_establishment_after_inspection,
     with_establishment_rollups,
 )
+from api.services.mobile_content import build_app_content
 from api.services.tourism import build_reference_tables_payload, read_tourism_theme
 from api.services.upload import (
     StorageServiceError,
@@ -110,6 +112,8 @@ from api.services.upload import (
     save_image_file,
     validate_image_file,
 )
+
+logger = logging.getLogger(__name__)
 
 # The mobile feedback screen allows at most this many photos per review.
 MAX_FEEDBACK_PHOTOS = 5
@@ -134,6 +138,17 @@ def get_cached_active_barangays():
             timeout=MOBILE_ACTIVE_BARANGAYS_CACHE_TIMEOUT,
         )
     return data
+
+
+def _app_content_or_nothing():
+    """{"appContent": ...}, or {} if building it fails for a reason nobody foresaw. The app is only told about
+    its texts here; every other key of the bootstrap, which every installed app depends on, must not be lost
+    because of them. The app then shows the texts it has written in its own code."""
+    try:
+        return {"appContent": build_app_content()}
+    except Exception:
+        logger.exception("mobile content: appContent could not be built, so it is not sent")
+        return {}
 
 
 @api_view(["GET"])
@@ -187,6 +202,9 @@ def mobile_tourism_bootstrap(request):
             "emergencyContacts": PublicEmergencyContactSerializer(
                 EmergencyContact.objects.filter(is_active=True), many=True
             ).data,
+            # The texts of Mobile App Content, with the fee placeholders filled in. The LAST key, so the bytes
+            # before it are exactly what they were. An app already installed ignores it.
+            **_app_content_or_nothing(),
         }
     )
 
