@@ -1,0 +1,14 @@
+{
+  "name": "Mauban Sanitation Reporting",
+  "short_name": "Report Sanitation",
+  "id": "/report-sanitation/",
+  "start_url": "/report-sanitation/",
+  "scope": "/report-sanitation/",
+  "display": "standalone",
+  "theme_color": "#07613B",
+  "background_color": "#f1f5f4",
+  "icons": [
+    { "src": "/report-sanitation/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/report-sanitation/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
