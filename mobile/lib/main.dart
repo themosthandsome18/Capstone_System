@@ -25,6 +25,12 @@ import 'package:flutter/services.dart';
 import 'utils/web_branding.dart';
 import 'utils/web_download.dart';
 
+import 'sanitation_public/owner_models.dart';
+import 'sanitation_public/owner_formatting.dart';
+
+export 'sanitation_public/owner_models.dart' show OwnerRequirementItem, OwnerPermitStatus;
+export 'sanitation_public/owner_formatting.dart' show normalizeOwnerTrackingCode, ownerExpiryText;
+
 part 'constants/colors.dart';
 part 'theme/brand_theme.dart';
 part 'utils/helpers.dart';
