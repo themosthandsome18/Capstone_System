@@ -69,6 +69,20 @@ class FillTests(SimpleTestCase):
         self.assertIn("{ fee_regular }", filled)  # a name with spaces around it is a different name
         self.assertEqual(filled, "Hello {fee_ofice} {x} {} { fee_regular } {₱80}")  # the inner pair of the double bracket is a placeholder
 
+    def test_the_six_malformed_ones_as_the_filler_alone_would_treat_them(self):
+        """The filler is NOT the fence for these: the admin API refuses all six at save time (see
+        test_mobile_content_placeholders_api). This pins what would reach a visitor if one ever got past it."""
+        expected = {
+            "{{fee_regular}}": "{₱80}",
+            "{ fee_regular }": "{ fee_regular }",
+            "{fee_regular }": "{fee_regular }",
+            "{ fee_regular}": "{ fee_regular}",
+            "{FEE_REGULAR}": "{FEE_REGULAR}",
+            "{{name}}": "{{name}}",
+        }
+        for text, shown in expected.items():
+            self.assertEqual(svc.fill(text, self.values()), shown, text)
+
     def test_a_text_with_no_placeholder_comes_back_the_same(self):
         for text in ("", "Plain text.", "Mauban Port ↔ Cagbalete Boats \U0001F30A", "multi\nline\ntext"):
             self.assertEqual(svc.fill(text, self.values()), text)
