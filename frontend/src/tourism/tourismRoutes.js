@@ -1,4 +1,5 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 import { withErrorBoundary } from "../shared/ErrorBoundary";
 import Dashboard from "./pages/Dashboard";
 import BookingManagement from "./pages/BookingManagement";
@@ -10,9 +11,16 @@ import ActivityLogsPage from "../shared/pages/ActivityLogsPage";
 import Settings from "./pages/Settings";
 import RegistrationOptions from "./pages/RegistrationOptions";
 import { OPTIONS_PATH, OPTIONS_ROLES } from "./optionsAccess";
-import EmergencyHotlines from "./pages/EmergencyHotlines";
+import MobileAppContent from "./pages/MobileAppContent";
+import { MOBILE_CONTENT_PATH, MOBILE_CONTENT_ROLES, tabPath } from "./mobileContentAccess";
 import { HOTLINES_PATH, HOTLINES_ROLES } from "./hotlinesAccess";
 import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
+
+// The old address of the Emergency Hotlines page: sent, in place, to its tab of the Mobile App Content page. It is a
+// component (not an element made here) so that nothing is built until the route is shown.
+function HotlinesMovedToMobileContent() {
+  return <Navigate to={tabPath("hotlines")} replace />;
+}
 
 /**
  * Modular Tourism Routes
@@ -69,9 +77,14 @@ export const tourismRoutes = [
     element: React.createElement(withErrorBoundary(RegistrationOptions, "Registration Options")),
   },
   {
+    path: MOBILE_CONTENT_PATH,
+    allowedRoles: MOBILE_CONTENT_ROLES,
+    element: React.createElement(withErrorBoundary(MobileAppContent, "Mobile App Content")),
+  },
+  {
     path: HOTLINES_PATH,
     allowedRoles: HOTLINES_ROLES,
-    element: React.createElement(withErrorBoundary(EmergencyHotlines, "Emergency Hotlines")),
+    element: React.createElement(HotlinesMovedToMobileContent),
   },
 ];
 

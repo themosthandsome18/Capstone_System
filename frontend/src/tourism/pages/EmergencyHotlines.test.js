@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import EmergencyHotlines, {
+import {
+  EmergencyHotlinesPanel,
   EMPTY_LIST_NOTICE,
   ICON_NOTE,
   NEXT_VERSION_NOTICE,
@@ -137,22 +138,9 @@ const pressedIcons = () =>
     .map((b) => b.getAttribute("aria-label"));
 
 async function open() {
-  render(<EmergencyHotlines />);
+  render(<EmergencyHotlinesPanel />);
   await screen.findByRole("list");
 }
-
-describe("who may open it", () => {
-  it("sends anyone but the admin away, and asks the server for nothing", () => {
-    for (const role of ["tourism", "sanitation", undefined]) {
-      useAuth.mockReturnValue({ role });
-      const { unmount } = render(<EmergencyHotlines />);
-      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
-      expect(screen.queryByRole("list")).toBeNull();
-      unmount();
-    }
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-});
 
 describe("the list", () => {
   it("asks once, and shows each contact's details in the server's order", async () => {
@@ -226,7 +214,7 @@ describe("the list", () => {
   });
 
   it("says Loading... only the first time", async () => {
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     expect(screen.getByText("Loading...")).toBeTruthy();
     await screen.findByRole("list");
     expect(screen.queryByText("Loading...")).toBeNull();
@@ -234,7 +222,7 @@ describe("the list", () => {
 
   it("shows the server's message when the list cannot be loaded", async () => {
     failNext = { status: 500, body: { detail: "The server is down." } };
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
   });

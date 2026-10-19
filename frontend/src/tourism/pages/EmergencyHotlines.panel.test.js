@@ -3,7 +3,7 @@
 import { configure, render, screen } from "@testing-library/react";
 import fs from "fs";
 import path from "path";
-import EmergencyHotlines, { EmergencyHotlinesPanel } from "./EmergencyHotlines";
+import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { createServer, runScenarios } from "./hotlinesGolden.helpers";
 import golden from "./golden/emergency-hotlines-before-split-552c048.json";
 import { useAuth } from "../../auth/AuthContext";
@@ -61,31 +61,6 @@ describe("the panel alone", () => {
     expect(panel.className).toBe("mobile-content-panel");
     expect(panel.firstElementChild.querySelector("button").textContent).toBe("Add contact");
     expect(panel.children[1].className).toBe("hotlines-notices"); // right after the button row
-  });
-});
-
-describe("the page that is still the route of /hotlines in this commit", () => {
-  it("is the header (h1 and subtitle, no actions) and the panel, for the admin", async () => {
-    useAuth.mockReturnValue({ role: "admin" });
-    global.fetch = jest.fn(createServer().fetch);
-    const { container } = render(<EmergencyHotlines />);
-    await screen.findByRole("list");
-    expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Emergency Hotlines"]);
-    expect(container.querySelector(".reports-header .reports-actions")).toBeNull();
-    expect(container.firstElementChild.className).toBe("reports-page settings-page options-page hotlines-page");
-    expect(container.querySelectorAll(".mobile-content-panel")).toHaveLength(1);
-  });
-
-  it("still sends anyone but the admin away, and mounts no panel for them", () => {
-    for (const role of ["tourism", "sanitation", "tourist", undefined]) {
-      useAuth.mockReturnValue({ role });
-      global.fetch = jest.fn();
-      const { container, unmount } = render(<EmergencyHotlines />);
-      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
-      expect(container.querySelector(".mobile-content-panel")).toBeNull();
-      expect(global.fetch).not.toHaveBeenCalled();
-      unmount();
-    }
   });
 });
 

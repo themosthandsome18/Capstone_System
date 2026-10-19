@@ -54,8 +54,13 @@ export const pageInfo = {
     title: "Registration Options",
     showAdd: false,
   },
+  "/mobile-content": {
+    title: "Mobile App Content",
+    showAdd: false,
+  },
+  // the old address of the Emergency Hotlines: it only redirects, but the top bar must not say "Dashboard Overview" meanwhile
   "/hotlines": {
-    title: "Emergency Hotlines",
+    title: "Mobile App Content",
     showAdd: false,
   },
 };

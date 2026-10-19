@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import EmergencyHotlines from "./EmergencyHotlines";
+import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { useAuth } from "../../auth/AuthContext";
 
 jest.mock(
@@ -49,7 +49,7 @@ const rowOf = (id) => screen.getByTestId(`hotline-row-${id}`);
 
 describe("the icon lines up with the first line, and does not depend on the chips", () => {
   async function open() {
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
 
@@ -138,7 +138,7 @@ describe("a chip is one line: the icon and the text side by side, never split in
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
   const chipsOf = () => [...document.querySelectorAll(".hotline-chip")];
@@ -220,7 +220,7 @@ describe("the second line: the number and the chips side by side", () => {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(data), json: async () => data })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
 
