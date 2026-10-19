@@ -7098,7 +7098,8 @@ class EmergencyContactTests(TestCase):
         self._seed_the_four()
         with_four = self._payload()
 
-        self.assertEqual(set(with_four), self.OLD_BOOTSTRAP_KEYS | {"emergencyContacts"})
+        # Mobile App Content Commit 3: appContent is a new key too (changed on purpose; the old keys are still compared one by one)
+        self.assertEqual(set(with_four), self.OLD_BOOTSTRAP_KEYS | {"emergencyContacts", "appContent"})
         for key in self.OLD_BOOTSTRAP_KEYS:
             with self.subTest(key=key):
                 self.assertIn(key, without)
@@ -14083,20 +14084,29 @@ class MobileContentItemSeedTests(_ItemApiBase, TestCase):
 
 
 class MobileContentItemIsolationTests(_ItemApiBase, TestCase):
-    """Nothing here reaches the app yet: the mobile bootstrap is byte for byte the same."""
+    """Since Commit 3 the items reach the app, but ONLY through the key appContent (last in the bootstrap): every
+    other byte of the bootstrap is the same whatever the admin does. (Changed on purpose in Commit 3: before it, the
+    whole bootstrap was byte for byte the same; api/test_mobile_content_app_content.py holds the fences against the
+    golden bootstrap of the old code.)"""
+
+    MARK = b',"appContent":'
 
     def test_the_bootstrap_is_the_same_before_and_after_the_admin_changes_everything(self):
         self.setUpItems()
         url = "/api/mobile/tourism/bootstrap/"
         first = APIClient().get(url)
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts"})
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
         self._ok("post", self.LIST, self._new(), expect=201)
         self._ok("patch", self._url(self.festival), {"title": "Changed title"})
         self._ok("post", self._url(self.boat, "deactivate"))
         self.assertEqual(_Item.objects.get(pk=self.festival.pk).title, "Changed title")  # the fixture: things really changed
         second = APIClient().get(url)
-        self.assertEqual(second.content, first.content)
+        self.assertEqual(first.content.count(self.MARK), 1)
+        self.assertEqual(second.content.count(self.MARK), 1)
+        self.assertEqual(second.content.split(self.MARK)[0], first.content.split(self.MARK)[0])  # everything BEFORE appContent: same bytes
+        self.assertNotEqual(second.content, first.content)  # ... and the changes are in appContent
+        self.assertIn(b"Changed title", second.content.split(self.MARK)[1])
 
 
 class MobileContentItemEditPlaceholderTests(_ItemApiBase, TestCase):
@@ -14730,8 +14740,16 @@ class MobileContentBlockIsolationTests(_BlockApiBase, TestCase):
         url = "/api/mobile/tourism/bootstrap/"
         first = APIClient().get(url)
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts"})
+        # Changed on purpose in Commit 3: the blocks reach the app through appContent, so the whole body is no longer the
+        # same; everything before that last key is (the golden fences are in api/test_mobile_content_app_content.py).
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
         self._ok("welcome", {"subtitle": "Changed"})
         self._ok("fee_office", {"body": "Changed place"})
         self.assertEqual(self._block("welcome").subtitle, "Changed")  # the fixture: things really changed
-        self.assertEqual(APIClient().get(url).content, first.content)
+        second = APIClient().get(url).content
+        mark = b',"appContent":'
+        self.assertEqual(first.content.count(mark), 1)
+        self.assertEqual(second.count(mark), 1)
+        self.assertEqual(second.split(mark)[0], first.content.split(mark)[0])
+        self.assertNotEqual(second, first.content)
+        self.assertIn(b"Changed place", second.split(mark)[1])  # (the place is put into the port guide)
