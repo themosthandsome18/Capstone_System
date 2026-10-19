@@ -13287,3 +13287,834 @@ class NoLabelSaysRecordSTests(TestCase):
                        "1 contact moved", "Emergency contacts reordered"):
             self.assertIn(needed, joined)  # ... and every form the words can take was among them
         self.assertEqual([label for label in labels if "(s)" in label], [])
+
+
+# -- Mobile App Content, commit 2b: the endpoints of the items ------------------------------------------------------
+
+from api.models import MobileContentItem as _Item  # noqa: E402
+
+
+class _ItemApiBase:
+    """Nine items in two sections (one switched off), an admin, and the helpers every test uses."""
+
+    LIST = "/api/mobile-content/items/"
+    FEE_FIELDS = ("title", "short_text", "full_text")
+
+    def setUpItems(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        _Item.objects.all().delete()
+        self.admin = self._client(ROLE_ADMIN, "mc_admin")
+        mk = _Item.objects.create
+        # Travel Guide & Tips: positions 10 20 30 40 50 (the last one switched off)
+        self.boat = mk(section="travel_guide", icon="boat", title="Boat Guide", short_text="Fares are paid at the {fee_office}.", display_order=10)
+        self.fee = mk(
+            section="travel_guide", icon="receipt", title="Environmental Fee",
+            short_text="Pay {fee_regular}, or {fee_discounted} if you qualify.", display_order=20,
+        )
+        self.festival = mk(
+            section="travel_guide", icon="festival", title="Festival", short_text="A week of street dancing.",
+            full_text="The long story of the festival.\n\nA second paragraph.", display_order=30,
+        )
+        self.notice = mk(section="travel_guide", icon="event", title="Notice", short_text="The fiesta is coming.", style="banner", display_order=40)
+        self.spare = mk(section="travel_guide", icon="info", title="Spare", short_text="A spare tile.", display_order=50, is_active=False)
+        # Why Visit: positions 10 20 30 40
+        self.pillars = [
+            mk(section="why_visit", icon=icon, title=title, short_text=short, display_order=order)
+            for icon, title, short, order in (
+                ("beach", "Beach", "White sandbars", 10), ("craft", "Weaving", "Hats and crafts", 20),
+                ("waterfall", "Falls", "Cool water", 30), ("food", "Flavors", "Habhab", 40),
+            )
+        ]
+
+    def _client(self, role, username):
+        user = User.objects.create_user(username=username, password="Staff@12345")
+        UserProfile.objects.create(user=user, role=role)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        client.user = user
+        return client
+
+    def _url(self, item=None, action=None):
+        url = self.LIST
+        if item is not None:
+            url += f"{item.pk}/"
+        if action:
+            url += f"{action}/"
+        return url
+
+    def _logs(self):
+        return ActivityLog.objects.filter(record_type="MobileContentItem").order_by("pk")
+
+    def _state(self):
+        return list(_Item.objects.order_by("pk").values()), self._logs().count()
+
+    def _refuse(self, method, url, body=None, expect=400):
+        """The request is refused AND nothing was written and nothing was logged."""
+        before = self._state()
+        response = getattr(self.admin, method)(url, body or {}, format="json")
+        self.assertEqual(response.status_code, expect, (body, response.content))
+        self.assertEqual(self._state(), before, body)
+        return response.json()
+
+    def _ok(self, method, url, body=None, expect=200):
+        response = getattr(self.admin, method)(url, body or {}, format="json")
+        self.assertEqual(response.status_code, expect, (body, response.content))
+        return response.json()
+
+    def _new(self, **extra):
+        body = {"section": "travel_guide", "title": "Brand New", "short_text": "A new line."}
+        body.update(extra)
+        return body
+
+
+FIELD_WORDS = ("display_order", "short_text", "full_text", "is_active", "section", "style", "icon", "confirm_dropped", "fee_regular", "fee_office")
+
+
+class MobileContentItemAccessTests(_ItemApiBase, TestCase):
+    """Admin only, on EACH operation; and the same request from the admin works (so a refusal is about who, not what)."""
+
+    def setUp(self):
+        self.setUpItems()
+        self.tourism = self._client(ROLE_TOURISM, "mc_tourism")
+        self.tourist = self._client(ROLE_TOURIST, "mc_tourist")
+        self.anonymous = APIClient()
+
+    def _operations(self):
+        return [
+            ("get", self.LIST, None, 200),
+            ("post", self.LIST, self._new(title="Access Probe"), 201),
+            ("patch", self._url(self.boat), {"short_text": "Fares are paid at the {fee_office}. Thank you."}, 200),
+            ("post", self._url(self.boat, "deactivate"), {}, 200),
+            ("post", self._url(self.spare, "reactivate"), {}, 200),
+        ]
+
+    def _check(self, who, expected):
+        for method, url, body, _ok in self._operations():
+            before = self._state()
+            response = getattr(who, method)(url, body, format="json")
+            self.assertEqual(response.status_code, expected, (method, url))
+            self.assertEqual(self._state(), before, (method, url))  # nothing written, nothing logged
+
+    def test_the_fixture_is_ready_and_the_same_requests_work_for_the_admin(self):
+        self.assertEqual(_Item.objects.count(), 9)
+        self.assertEqual(len(self._operations()), 5)
+        for method, url, body, ok in self._operations():
+            response = getattr(self.admin, method)(url, body, format="json")
+            self.assertEqual(response.status_code, ok, (method, url, response.content))
+
+    def test_anonymous_is_401_on_every_operation(self):
+        self._check(self.anonymous, status.HTTP_401_UNAUTHORIZED)
+
+    def test_the_tourism_role_is_403_on_every_operation(self):
+        self._check(self.tourism, status.HTTP_403_FORBIDDEN)
+
+    def test_a_tourist_is_403_on_every_operation(self):
+        self._check(self.tourist, status.HTTP_403_FORBIDDEN)
+
+    def test_there_is_no_delete_and_no_reorder(self):
+        for method, url in (("delete", self._url(self.boat)), ("post", self.LIST + "reorder/"), ("put", self._url(self.boat))):
+            response = getattr(self.admin, method)(url, {"ids": [1]}, format="json")
+            self.assertIn(response.status_code, (404, 405), (method, url))
+        self.assertEqual(_Item.objects.count(), 9)
+
+
+class MobileContentItemListTests(_ItemApiBase, TestCase):
+    def setUp(self):
+        self.setUpItems()
+
+    def test_the_list_has_every_item_with_its_section_in_order_and_whether_it_can_be_tapped(self):
+        rows = self._ok("get", self.LIST)
+        self.assertEqual(len(rows), 9)
+        self.assertEqual([r["section"] for r in rows], ["travel_guide"] * 5 + ["why_visit"] * 4)
+        self.assertEqual([r["display_order"] for r in rows if r["section"] == "travel_guide"], [10, 20, 30, 40, 50])
+        self.assertEqual({r["title"] for r in rows if r["tappable"]}, {"Festival"})  # only the item that has a full text
+        self.assertEqual(sum(1 for r in rows if r["full_text"]), 1)  # (the fixture: exactly one has one)
+        self.assertEqual(set(rows[0]), {"id", "section", "icon", "title", "short_text", "full_text", "style", "display_order", "is_active", "tappable"})
+
+    def test_an_item_that_is_switched_off_is_still_listed(self):
+        rows = self._ok("get", self.LIST)
+        self.assertEqual([r["is_active"] for r in rows if r["title"] == "Spare"], [False])
+        self.assertFalse(_Item.objects.get(title="Spare").is_active)  # (the fixture: it really is off)
+
+    def test_the_section_filter_gives_only_that_section(self):
+        self.assertEqual(_Item.objects.filter(section="why_visit").count(), 4)
+        self.assertEqual(_Item.objects.filter(section="travel_guide").count(), 5)  # (both sections have items: the filter has something to do)
+        why = self._ok("get", self.LIST + "?section=why_visit")
+        guide = self._ok("get", self.LIST + "?section=travel_guide")
+        self.assertEqual({r["section"] for r in why}, {"why_visit"})
+        self.assertEqual(len(why), 4)
+        self.assertEqual({r["section"] for r in guide}, {"travel_guide"})
+        self.assertEqual(len(guide), 5)
+
+    def test_a_section_that_does_not_exist_is_refused(self):
+        body = self._ok("get", self.LIST + "?section=nope", expect=400)
+        self.assertIn("section", body["detail"].lower())
+
+
+class MobileContentItemCreateTests(_ItemApiBase, TestCase):
+    def setUp(self):
+        self.setUpItems()
+
+    def test_a_new_item_is_created_at_the_end_of_its_section_active_and_logged(self):
+        self.assertEqual(max(_Item.objects.filter(section="travel_guide").values_list("display_order", flat=True)), 50)  # (the fixture)
+        body = self._ok("post", self.LIST, self._new(icon="eco", full_text="More to read."), expect=201)
+        item = _Item.objects.get(pk=body["id"])
+        self.assertEqual((item.section, item.icon, item.title, item.short_text, item.full_text, item.style),
+                         ("travel_guide", "eco", "Brand New", "A new line.", "More to read.", "tile"))
+        self.assertEqual((item.display_order, item.is_active), (60, True))  # the end of the list, 10 after the last
+        self.assertEqual((body["tappable"], body["warnings"]), (True, []))
+        log = self._logs().get()
+        self.assertEqual((log.user, log.module, log.action, log.record_type, log.record_id), (self.admin.user, "tourism", ACTION_CREATE, "MobileContentItem", str(item.pk)))
+        self.assertEqual(log.record_label, "Mobile content item (Travel Guide & Tips) 'Brand New' added")
+
+    def test_the_default_icon_is_info_and_the_default_look_is_a_tile(self):
+        body = self._ok("post", self.LIST, self._new(), expect=201)
+        self.assertEqual((body["icon"], body["style"], body["full_text"], body["tappable"]), ("info", "tile", "", False))
+
+    def test_a_banner_can_be_created_in_the_travel_guide_without_a_full_text(self):
+        body = self._ok("post", self.LIST, self._new(style="banner"), expect=201)
+        self.assertEqual(body["style"], "banner")
+
+    def test_a_position_given_is_used_when_it_is_free(self):
+        self.assertFalse(_Item.objects.filter(section="travel_guide", display_order=35).exists())  # (free)
+        self.assertEqual(self._ok("post", self.LIST, self._new(display_order=35), expect=201)["display_order"], 35)
+        self.assertEqual(self._ok("post", self.LIST, self._new(title="Digits", display_order="36"), expect=201)["display_order"], 36)
+
+    def test_the_same_title_may_be_used_in_the_other_section(self):
+        self.assertTrue(_Item.objects.filter(section="why_visit", title="Beach").exists())  # (the title exists in Why Visit)
+        self._ok("post", self.LIST, self._new(title="Beach"), expect=201)  # ... and is free in the Travel Guide
+
+    def test_every_icon_of_the_list_is_accepted_and_each_item_keeps_its_own(self):
+        icons = list(_Item.ICON_NAMES)
+        self.assertEqual(len(icons), 11)
+        for number, icon in enumerate(icons):
+            body = self._ok("post", self.LIST, self._new(title=f"Icon {number}", icon=icon), expect=201)
+            self.assertEqual(body["icon"], icon)
+
+    # -- what is refused, and nothing is written -----------------------------------------------------------
+
+    def test_what_is_missing_or_the_wrong_kind_is_refused(self):
+        cases = [
+            {"section": None}, {"section": "elsewhere"}, {"section": 5},
+            {"title": None}, {"title": ""}, {"title": "   \n  "}, {"title": 123},
+            {"short_text": None}, {"short_text": ""}, {"short_text": "  "}, {"short_text": ["a"]},
+            {"full_text": 7},
+            {"icon": "unknown"}, {"icon": "Beach"}, {"icon": ""}, {"icon": 3},
+            {"style": "card"}, {"style": ""}, {"style": 1},
+            {"section": "why_visit", "style": "banner"},
+            {"style": "banner", "full_text": "Banners have none."},
+            {"display_order": 0}, {"display_order": 10000}, {"display_order": -5}, {"display_order": "abc"},
+            {"display_order": 1.5}, {"display_order": True}, {"display_order": ""},
+            {"title": "bad\x07title"}, {"short_text": "bad\x00line"}, {"full_text": "bad\x1btext"},
+        ]
+        self.assertGreaterEqual(len(cases), 30)
+        for change in cases:
+            body = self._new()
+            for key, value in change.items():
+                if value is None:
+                    body.pop(key, None)  # None means "leave it out of the request"
+                else:
+                    body[key] = value
+            self.assertNotEqual(body, self._new(), change)  # the fixture: every case really differs from a good request
+            reply = self._refuse("post", self.LIST, body)
+            self.assertTrue(reply["detail"], change)
+
+    def test_the_longest_texts_are_accepted_and_one_more_letter_is_refused(self):
+        limits = {"travel_guide": (160, 400), "why_visit": (60, 80)}
+        for section, (title_max, short_max) in limits.items():
+            ok = self._ok(
+                "post", self.LIST,
+                {"section": section, "title": "t" * title_max, "short_text": "s" * short_max, "full_text": "f" * 5000},
+                expect=201,
+            )
+            self.assertEqual((len(ok["title"]), len(ok["short_text"]), len(ok["full_text"])), (title_max, short_max, 5000))
+            for field, longest in (("title", title_max), ("short_text", short_max), ("full_text", 5000)):
+                body = {"section": section, "title": "Other " + section, "short_text": "x"}
+                body[field] = "z" * (longest + 1)
+                reply = self._refuse("post", self.LIST, body)
+                self.assertIn(str(longest), reply["detail"])  # it says what the most is
+
+    def test_a_title_that_is_already_used_in_the_section_is_refused_whatever_its_capitals_or_spaces(self):
+        for clash in ("Boat Guide", "boat guide", "  BOAT   guide ", "Boat\nGuide"):
+            reply = self._refuse("post", self.LIST, self._new(title=clash))
+            self.assertIn("already has this title", reply["detail"])
+
+    def test_a_position_that_is_taken_is_refused_and_the_refusal_says_who_and_what_is_free(self):
+        self.assertEqual(self.festival.display_order, 30)  # (the fixture: 30 is held by Festival)
+        reply = self._refuse("post", self.LIST, self._new(display_order=30))
+        self.assertEqual(
+            reply["detail"],
+            "Position 30 is already used by 'Festival'. Free positions next to it: 25 (just before it) and 35 (just after it).",
+        )
+        self.assertNotIn("_", reply["detail"])  # no name of a field, for a person who is not a programmer
+        for number in (25, 35):
+            self.assertFalse(_Item.objects.filter(section="travel_guide", display_order=number).exists())  # (and they really are free)
+        self._ok("post", self.LIST, self._new(display_order=25), expect=201)  # the advice works
+
+    def test_a_section_that_is_full_refuses_a_new_item_and_switched_off_items_count(self):
+        _Item.objects.filter(section="why_visit").delete()
+        _Item.objects.bulk_create([
+            _Item(section="why_visit", title=f"Filler {n}", short_text="x", display_order=n + 1, is_active=bool(n % 2)) for n in range(40)
+        ])
+        self.assertEqual(_Item.objects.filter(section="why_visit", is_active=False).count(), 20)  # (half are off, and they count)
+        self.assertEqual(_Item.objects.filter(section="why_visit").count(), 40)
+        reply = self._refuse("post", self.LIST, {"section": "why_visit", "title": "One too many", "short_text": "x"})
+        self.assertIn("40", reply["detail"])
+        self._ok("post", self.LIST, self._new(title="The other section is not full"), expect=201)
+
+    # -- the texts as they are stored -----------------------------------------------------------------------------
+
+    def test_a_title_and_a_short_line_are_one_line_with_single_spaces(self):
+        body = self._ok("post", self.LIST, self._new(title="  A   spaced \n title  ", short_text="Two\nlines   here"), expect=201)
+        self.assertEqual((body["title"], body["short_text"]), ("A spaced title", "Two lines here"))
+
+    def test_a_full_text_keeps_its_paragraphs_and_loses_trailing_spaces_and_extra_blank_lines(self):
+        raw = "First paragraph.   \r\n\r\n\r\n\r\nSecond paragraph.  \r\nStill the second.\r\n\r\n   "
+        body = self._ok("post", self.LIST, self._new(full_text=raw), expect=201)
+        self.assertEqual(body["full_text"], "First paragraph.\n\nSecond paragraph.\nStill the second.")
+
+    def test_a_full_text_of_only_spaces_is_no_full_text_and_the_item_cannot_be_tapped(self):
+        body = self._ok("post", self.LIST, self._new(full_text="   \n \t  \n"), expect=201)
+        self.assertEqual((body["full_text"], body["tappable"]), ("", False))
+
+    # -- {placeholders} -------------------------------------------------------------------------------------------------
+
+    ACCEPTED_PLACEHOLDERS = [
+        "{fee_regular}", "{fee_discounted}", "{fee_office}", "Pay {fee_regular} at the {fee_office}.",
+        "{fee_office} and {fee_office} again", "No placeholder at all", "Pay {fee_regular} or {fee_discounted} at {fee_office}",
+    ]
+    REFUSED_PLACEHOLDERS = [
+        "{hindi_kilala}", "{fee_ofice}", "{fee_office", "fee_office}", "{}", "{ fee_office }", "{Fee_Office}", "{FEE_OFFICE}",
+        "{name}", "{{fee_office}}", "{fee_office}}", "{{fee_office}", "Pay at {fee_regular and {fee_office}", "text } with a stray bracket",
+        "{fee-office}", "{fee_regular }", "{amount}",
+    ]
+
+    def test_only_placeholders_the_app_can_fill_are_accepted_in_every_text(self):
+        self.assertGreaterEqual(len(self.ACCEPTED_PLACEHOLDERS), 6)
+        self.assertGreaterEqual(len(self.REFUSED_PLACEHOLDERS), 15)
+        self.assertTrue(all(("{" in text or "}" in text) for text in self.REFUSED_PLACEHOLDERS))  # the fixture: every refused example has a bracket
+        self.assertTrue(any("{" in text for text in self.ACCEPTED_PLACEHOLDERS))                  # ... and the accepted ones are not just plain text
+        number = 0
+        for field in self.FEE_FIELDS:
+            for text in self.ACCEPTED_PLACEHOLDERS:
+                number += 1
+                body = self._new(title=f"Accepted {number}")
+                body[field] = text
+                reply = self._ok("post", self.LIST, body, expect=201)
+                self.assertEqual(reply[field], text)  # stored exactly as written
+            for text in self.REFUSED_PLACEHOLDERS:
+                body = self._new(title="Refused probe")
+                body[field] = text
+                reply = self._refuse("post", self.LIST, body)
+                self.assertTrue(reply["detail"], (field, text))
+
+    def test_a_near_miss_is_answered_with_what_was_probably_meant(self):
+        reply = self._refuse("post", self.LIST, self._new(short_text="Pay at the {fee_ofice}."))
+        self.assertIn("{fee_ofice}", reply["detail"])
+        self.assertIn("Did you mean {fee_office}?", reply["detail"])
+        reply = self._refuse("post", self.LIST, self._new(short_text="Pay at the {hindi_kilala}."))
+        self.assertNotIn("Did you mean", reply["detail"])  # nothing near it: no guess
+
+    def test_the_visitors_name_is_only_for_the_welcome_greeting(self):
+        reply = self._refuse("post", self.LIST, self._new(short_text="Welcome, {name}!"))
+        self.assertIn("welcome greeting", reply["detail"])
+
+    # -- the entrance fee typed by hand ---------------------------------------------------------------------------------------
+
+    REFUSED_AMOUNTS = ["₱80", "₱ 80", "PHP 80", "Php64", "P64", "₱64.00", "php 80.", "Pay ₱80 per visitor", "the fee is P80"]
+    ACCEPTED_AMOUNTS = ["₱800", "₱80,000", "₱80.50", "₱640", "P8", "APR80", "Room 80", "64 pax", "1980", "₱50"]
+
+    def test_the_two_fee_amounts_cannot_be_typed_but_other_numbers_and_amounts_can(self):
+        self.assertTrue(all(("80" in text or "64" in text) for text in self.REFUSED_AMOUNTS))   # the fixture: every refused one has the number
+        self.assertTrue(sum(1 for text in self.ACCEPTED_AMOUNTS if "80" in text or "64" in text) >= 6)  # ... and the near misses have it too
+        number = 0
+        for field in self.FEE_FIELDS:
+            for text in self.REFUSED_AMOUNTS:
+                body = self._new(title="Amount probe")
+                body[field] = text
+                reply = self._refuse("post", self.LIST, body)
+                self.assertIn("{fee_regular}", reply["detail"])  # it points to what to write instead
+            for text in self.ACCEPTED_AMOUNTS:
+                number += 1
+                body = self._new(title=f"Amount ok {number}")
+                body[field] = text
+                self.assertEqual(self._ok("post", self.LIST, body, expect=201)[field], text)
+
+    def test_another_peso_amount_is_accepted_with_a_warning(self):
+        body = self._ok("post", self.LIST, self._new(short_text="Entry to the cave is ₱150."), expect=201)
+        self.assertEqual(len(body["warnings"]), 1)
+        self.assertIn("peso amount", body["warnings"][0])
+
+    # -- warnings -----------------------------------------------------------------------------------------------------------------
+
+    def test_a_pillar_that_is_longer_than_a_line_is_accepted_with_a_warning(self):
+        body = self._ok("post", self.LIST, {"section": "why_visit", "title": "T" * 30, "short_text": "S" * 40}, expect=201)
+        self.assertEqual(len(body["warnings"]), 2)
+        self.assertTrue(all("cut it off" in w for w in body["warnings"]))
+        quiet = self._ok("post", self.LIST, {"section": "why_visit", "title": "Short", "short_text": "Short too"}, expect=201)
+        self.assertEqual(quiet["warnings"], [])
+
+    def test_a_long_short_line_in_the_travel_guide_is_accepted_with_a_warning(self):
+        body = self._ok("post", self.LIST, self._new(short_text="s" * 301), expect=201)
+        self.assertEqual(len(body["warnings"]), 1)
+        self.assertIn("300", body["warnings"][0])
+
+
+class MobileContentItemEditTests(_ItemApiBase, TestCase):
+    def setUp(self):
+        self.setUpItems()
+
+    def test_an_edit_changes_what_was_sent_and_nothing_else_and_is_logged(self):
+        before = _Item.objects.filter(pk=self.festival.pk).values().get()
+        body = self._ok("patch", self._url(self.festival), {"title": "Festival of May", "icon": "event", "display_order": 35})
+        after = _Item.objects.filter(pk=self.festival.pk).values().get()
+        self.assertEqual({k for k in before if before[k] != after[k]}, {"title", "icon", "display_order"})
+        self.assertEqual((body["title"], body["icon"], body["display_order"]), ("Festival of May", "event", 35))
+        log = self._logs().get()
+        self.assertEqual((log.action, log.record_id), (ACTION_UPDATE, str(self.festival.pk)))
+        self.assertEqual(log.record_label, "Mobile content item (Travel Guide & Tips) 'Festival of May' edited: title, icon festival to event, position 30 to 35")
+
+    def test_the_log_names_the_texts_that_changed_but_never_holds_them(self):
+        marker = "ZZ-LONG-TEXT-MARKER"
+        self._ok("patch", self._url(self.festival), {"short_text": "A new short line", "full_text": marker + " " + "w" * 300})
+        label = self._logs().get().record_label
+        self.assertTrue(label.endswith("edited: short line, full text"), label)
+        self.assertNotIn(marker, label)
+
+    def test_an_edit_that_changes_nothing_writes_nothing_and_logs_nothing(self):
+        same = {"title": "Festival", "short_text": "A week of street dancing.", "icon": "festival", "display_order": 30,
+                "style": "tile", "full_text": "The long story of the festival.\n\nA second paragraph.", "section": "travel_guide", "is_active": True}
+        row = _Item.objects.get(pk=self.festival.pk)
+        self.assertEqual({k: getattr(row, k) for k in same}, same)  # the fixture: every value sent IS the current one
+        before = self._state()
+        body = self._ok("patch", self._url(self.festival), same)
+        self.assertEqual(self._state(), before)
+        self.assertEqual(body["title"], "Festival")
+        # and a real change, right after, is logged exactly once (so the silence above was not a broken log)
+        self._ok("patch", self._url(self.festival), {"title": "Festival 2"})
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_a_title_changed_only_in_capitals_or_spaces_is_an_edit_not_a_clash_with_itself(self):
+        body = self._ok("patch", self._url(self.boat), {"title": "  boat   GUIDE "})
+        self.assertEqual(body["title"], "boat GUIDE")
+
+    def test_the_section_and_whether_it_is_shown_cannot_be_changed_here(self):
+        reply = self._refuse("patch", self._url(self.boat), {"section": "why_visit"})
+        self.assertIn("another section", reply["detail"])
+        reply = self._refuse("patch", self._url(self.boat), {"is_active": False})
+        self.assertIn("Deactivate", reply["detail"])
+        reply = self._refuse("patch", self._url(self.spare), {"is_active": True})
+        self.assertIn("Bring back", reply["detail"])
+        self._ok("patch", self._url(self.boat), {"section": "travel_guide", "is_active": True, "title": "Boat Guide 2"})  # the same values are fine
+
+    def test_the_same_refusals_as_when_adding_hold_when_editing(self):
+        cases = [
+            (self.boat, {"title": ""}), (self.boat, {"title": "t" * 161}), (self.boat, {"short_text": ""}), (self.boat, {"short_text": "s" * 401}),
+            (self.boat, {"full_text": "f" * 5001}), (self.boat, {"icon": "nope"}), (self.boat, {"style": "card"}),
+            (self.boat, {"display_order": 0}), (self.boat, {"display_order": "x"}), (self.boat, {"title": "Environmental Fee"}),
+            (self.boat, {"title": "bad\x07"}), (self.boat, {"short_text": "{hindi_kilala}"}), (self.boat, {"short_text": "Pay P80"}),
+            (self.pillars[0], {"style": "banner"}), (self.pillars[0], {"title": "t" * 61}), (self.pillars[0], {"short_text": "s" * 81}),
+            (self.notice, {"full_text": "A banner has none"}),
+            (self.festival, {"style": "banner"}),  # the tile that HAS a full text cannot become a banner
+        ]
+        self.assertTrue(self.festival.full_text)  # (the fixture: Festival has a full text, so the last case is the real one)
+        for item, change in cases:
+            self._refuse("patch", self._url(item), change)
+
+    def test_the_tile_that_has_a_full_text_becomes_a_banner_once_the_full_text_is_cleared_in_the_same_edit(self):
+        body = self._ok("patch", self._url(self.festival), {"style": "banner", "full_text": ""})
+        self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", "", False))
+
+    def test_a_banner_becomes_a_tile_and_can_then_have_a_full_text(self):
+        body = self._ok("patch", self._url(self.notice), {"style": "tile", "full_text": "Now it opens."})
+        self.assertEqual((body["style"], body["tappable"]), ("tile", True))
+
+    def test_an_item_that_is_switched_off_can_still_be_edited(self):
+        self.assertFalse(self.spare.is_active)
+        body = self._ok("patch", self._url(self.spare), {"short_text": "Edited while off"})
+        self.assertEqual((body["short_text"], body["is_active"]), ("Edited while off", False))
+
+    def test_an_item_that_does_not_exist_is_404(self):
+        self.assertFalse(_Item.objects.filter(pk=999999).exists())
+        for method, url in (("patch", self.LIST + "999999/"), ("post", self.LIST + "999999/deactivate/"), ("post", self.LIST + "999999/reactivate/")):
+            self._refuse(method, url, {"title": "x"}, expect=404)
+
+    # -- the position ------------------------------------------------------------------------------------------------------------
+
+    def test_a_position_taken_by_another_item_is_refused_with_who_holds_it_and_the_free_numbers(self):
+        self.assertEqual((self.festival.display_order, self.fee.display_order, self.notice.display_order), (30, 20, 40))  # the fixture
+        reply = self._refuse("patch", self._url(self.notice), {"display_order": 30})
+        self.assertEqual(
+            reply["detail"],
+            "Position 30 is already used by 'Festival'. Free positions next to it: 25 (just before it) and 35 (just after it).",
+        )
+        for word in FIELD_WORDS:
+            self.assertNotIn(word, reply["detail"])
+        self.assertNotIn("_", reply["detail"])
+        self._ok("patch", self._url(self.notice), {"display_order": 35})  # the advice works ...
+        self.assertEqual(_Item.objects.get(pk=self.notice.pk).display_order, 35)
+
+    def test_with_no_room_between_two_items_the_advice_is_the_end_of_the_list(self):
+        _Item.objects.filter(pk=self.festival.pk).update(display_order=21)
+        _Item.objects.filter(pk=self.spare.pk).update(display_order=22)  # 10, 20, 21, 22, 40: nothing is free next to 21
+        reply = self._refuse("patch", self._url(self.notice), {"display_order": 21})
+        self.assertEqual(reply["detail"], "Position 21 is already used by 'Festival'. Position 50 is free (the end of the list).")
+        reply = self._refuse("patch", self._url(self.notice), {"display_order": 20})
+        self.assertIn("already used by 'Environmental Fee'", reply["detail"])
+
+    def test_at_the_top_of_the_list_there_is_room_above_and_none_below(self):
+        _Item.objects.filter(pk=self.boat.pk).update(display_order=1)
+        _Item.objects.filter(pk=self.fee.pk).update(display_order=2)
+        reply = self._refuse("patch", self._url(self.notice), {"display_order": 1})
+        self.assertEqual(reply["detail"], "Position 1 is already used by 'Boat Guide'. Position 60 is free (the end of the list).")
+
+    def test_a_position_of_the_other_section_is_not_a_clash(self):
+        self.assertFalse(_Item.objects.filter(section="why_visit", display_order=50).exists())
+        self.assertTrue(_Item.objects.filter(section="travel_guide", display_order=50).exists())  # (50 is taken, but in the other section)
+        self.assertEqual(self._ok("patch", self._url(self.pillars[3]), {"display_order": 50})["display_order"], 50)
+
+    def test_two_items_swap_their_positions_in_three_edits(self):
+        self._ok("patch", self._url(self.boat), {"display_order": 99})
+        self._ok("patch", self._url(self.fee), {"display_order": 10})
+        self._ok("patch", self._url(self.boat), {"display_order": 20})
+        rows = {r["title"]: r["display_order"] for r in self._ok("get", self.LIST + "?section=travel_guide")}
+        self.assertEqual((rows["Boat Guide"], rows["Environmental Fee"]), (20, 10))
+
+    # -- taking a fee placeholder out needs a confirmation ----------------------------------------------------------------------------
+
+    def test_taking_the_place_of_payment_out_of_the_text_needs_a_confirmation(self):
+        self.assertIn("{fee_office}", self.boat.short_text)  # the fixture: the text really has it
+        change = {"short_text": "Fares are paid to the boat operator."}
+        reply = self._refuse("patch", self._url(self.boat), change, expect=409)
+        self.assertEqual((reply["code"], reply["dropped"]), ("confirm_required", ["fee_office"]))
+        self.assertIn("the place where the fee is paid", reply["detail"])
+        self.assertNotIn("fee_", reply["detail"])  # in words, not in the name of a placeholder
+        self.assertNotIn("_", reply["detail"])
+        body = self._ok("patch", self._url(self.boat), dict(change, confirm_dropped=["fee_office"]))
+        self.assertEqual(body["short_text"], "Fares are paid to the boat operator.")
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_a_confirmation_must_be_exactly_what_the_server_found(self):
+        change = {"short_text": "No amounts here."}
+        self.assertEqual(sorted(re.findall(r"fee_\w+", self.fee.short_text)), ["fee_discounted", "fee_regular"])  # the fixture: two to lose
+        for wrong in (None, [], ["fee_regular"], ["fee_discounted"], ["fee_regular", "fee_discounted", "fee_office"], "fee_regular", ["x"], {"fee_regular": 1}):
+            body = dict(change)
+            if wrong is not None:
+                body["confirm_dropped"] = wrong
+            reply = self._refuse("patch", self._url(self.fee), body, expect=409)
+            self.assertEqual(reply["dropped"], ["fee_discounted", "fee_regular"])
+            self.assertIn("the regular fee amount", reply["detail"])
+            self.assertIn("the discounted fee amount", reply["detail"])
+        self._ok("patch", self._url(self.fee), dict(change, confirm_dropped=["fee_regular", "fee_discounted"]))
+
+    def test_a_placeholder_that_moves_to_another_text_of_the_item_is_not_taken_out(self):
+        body = self._ok("patch", self._url(self.boat), {"short_text": "Fares are paid to the boat operator.", "full_text": "Fares are paid at the {fee_office}."})
+        self.assertEqual(self._logs().count(), 1)
+        self.assertTrue(body["tappable"])
+
+    def test_replacing_one_fee_placeholder_by_another_takes_the_first_out(self):
+        reply = self._refuse("patch", self._url(self.boat), {"short_text": "Pay {fee_regular}."}, expect=409)
+        self.assertEqual(reply["dropped"], ["fee_office"])
+
+    def test_changing_a_text_that_has_no_fee_placeholder_needs_no_confirmation(self):
+        self.assertEqual(re.findall(r"\{", self.festival.short_text + self.festival.full_text), [])  # the fixture: nothing to lose
+        self._ok("patch", self._url(self.festival), {"short_text": "Edited freely"})
+
+    def test_keeping_the_placeholder_while_changing_the_words_needs_no_confirmation(self):
+        self._ok("patch", self._url(self.boat), {"short_text": "Boat fares are paid at the {fee_office}, not on the boat."})
+
+
+class MobileContentItemSwitchTests(_ItemApiBase, TestCase):
+    def setUp(self):
+        self.setUpItems()
+
+    def test_deactivate_and_bring_back_change_only_whether_it_is_shown_and_are_logged_each_time(self):
+        before = _Item.objects.filter(pk=self.boat.pk).values().get()
+        body = self._ok("post", self._url(self.boat, "deactivate"))
+        self.assertEqual(body["is_active"], False)
+        self.assertEqual(self._ok("post", self._url(self.boat, "reactivate"))["is_active"], True)
+        self.assertEqual(_Item.objects.filter(pk=self.boat.pk).values().get(), before)  # nothing else about it moved
+        self.assertEqual(
+            [l.record_label for l in self._logs()],
+            ["Mobile content item (Travel Guide & Tips) 'Boat Guide' deactivated", "Mobile content item (Travel Guide & Tips) 'Boat Guide' brought back (active)"],
+        )
+
+    def test_switching_to_the_state_it_is_already_in_writes_and_logs_nothing(self):
+        self.assertTrue(self.boat.is_active)
+        before = self._state()
+        self.assertEqual(self._ok("post", self._url(self.boat, "reactivate"))["is_active"], True)
+        self.assertEqual(self._state(), before)
+        self.assertFalse(self.spare.is_active)
+        self.assertEqual(self._ok("post", self._url(self.spare, "deactivate"))["is_active"], False)
+        self.assertEqual(self._state(), before)
+
+    def test_the_same_pair_twice_the_same_day_is_logged_four_times(self):
+        for _ in range(2):
+            self._ok("post", self._url(self.boat, "deactivate"))
+            self._ok("post", self._url(self.boat, "reactivate"))
+        labels = [l.record_label for l in self._logs()]
+        self.assertEqual(len(labels), 4)
+        self.assertEqual((labels[0], labels[1]), (labels[2], labels[3]))  # identical rows: the colleague's constraint does not look at them
+
+    def test_switching_off_the_last_item_of_a_section_warns_that_the_whole_part_disappears(self):
+        for pillar in self.pillars[:3]:
+            self.assertEqual(self._ok("post", self._url(pillar, "deactivate"))["warnings"], [])  # others are still shown
+        last = self._ok("post", self._url(self.pillars[3], "deactivate"))
+        self.assertEqual(_Item.objects.filter(section="why_visit", is_active=True).count(), 0)
+        self.assertEqual(len(last["warnings"]), 1)
+        self.assertIn("Why Visit", last["warnings"][0])
+        self.assertIn("leave that whole part out", last["warnings"][0])
+
+    def test_the_trace_is_complete(self):
+        self._ok("post", self.LIST, self._new(), expect=201)
+        self._ok("patch", self._url(self.festival), {"short_text": "x"})
+        self._ok("post", self._url(self.festival, "deactivate"))
+        rows = list(self._logs())
+        self.assertEqual([r.action for r in rows], [ACTION_CREATE, ACTION_UPDATE, ACTION_UPDATE])
+        for row in rows:
+            self.assertEqual((row.user, row.module, row.record_type), (self.admin.user, "tourism", "MobileContentItem"))
+            self.assertTrue(row.record_id.isdigit())
+
+
+class MobileContentItemLabelTests(_ItemApiBase, TestCase):
+    """The log labels fit the column in the worst cases (SQLite would accept any length, so the length is checked)."""
+
+    def setUp(self):
+        self.setUpItems()
+
+    def _fits(self, label):
+        self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length, label[:80])
+
+    def test_a_160_character_title_with_a_400_character_short_line_is_logged_within_255(self):
+        title, short = ("T" * 159) + "z", ("s" * 399) + "z"
+        body = self._ok("post", self.LIST, self._new(title=title, short_text=short, full_text="f" * 5000), expect=201)
+        item = _Item.objects.get(pk=body["id"])
+        self.assertEqual((len(item.title), len(item.short_text)), (160, 400))  # the fixture: stored at full length
+        label = self._logs().get().record_label
+        self._fits(label)
+        self.assertTrue(label.endswith("' added"), label)
+
+    def test_every_field_changed_at_once_on_the_longest_title_keeps_the_whole_list_of_changes(self):
+        long_title = ("T" * 159) + "z"
+        self._ok("patch", self._url(self.festival), {"title": long_title})
+        change = {"short_text": "s" * 400, "full_text": "g" * 5000, "icon": "eco", "style": "tile", "display_order": 31}
+        self.assertEqual(_Item.objects.get(pk=self.festival.pk).title, long_title)  # the fixture: the title really is 160 letters
+        self._ok("patch", self._url(self.festival), change)
+        label = self._logs().last().record_label
+        self._fits(label)
+        self.assertTrue(label.endswith("edited: short line, full text, icon festival to eco, position 30 to 31"), label)  # the end is whole
+
+    def test_a_pillar_title_is_in_the_label_in_full_up_to_its_limit(self):
+        body = self._ok("post", self.LIST, {"section": "why_visit", "title": "P" * 60, "short_text": "x"}, expect=201)
+        label = self._logs().last().record_label
+        self._fits(label)
+        self.assertIn("'" + "P" * 60 + "'", label)  # 60 is the share a title has in a label: not cut
+        self.assertEqual(body["title"], "P" * 60)
+
+    def test_the_labels_of_ordinary_titles_are_not_touched(self):
+        self._ok("patch", self._url(self.boat), {"title": "Cagbalete Island Boat Guide"})
+        self.assertEqual(
+            self._logs().get().record_label,
+            "Mobile content item (Travel Guide & Tips) 'Cagbalete Island Boat Guide' edited: title",
+        )
+
+
+class MobileContentItemAtomicTests(_ItemApiBase, TestCase):
+    """The write and its trace are one: if the trace cannot be written, the write is undone."""
+
+    def setUp(self):
+        self.setUpItems()
+
+    def _breaks(self):
+        return patch("api.views.mobile_content.log_activity", side_effect=RuntimeError("the log is broken"))
+
+    def test_when_the_log_fails_an_edit_is_undone(self):
+        before = self._state()
+        with self._breaks(), self.assertRaises(RuntimeError):
+            self.admin.patch(self._url(self.boat), {"short_text": "Fares are paid at the {fee_office}. Changed."}, format="json")
+        self.assertEqual(self._state(), before)
+        self._ok("patch", self._url(self.boat), {"short_text": "Fares are paid at the {fee_office}. Changed."})  # the control: it works without the failure
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_when_the_log_fails_an_add_is_undone(self):
+        before = self._state()
+        with self._breaks(), self.assertRaises(RuntimeError):
+            self.admin.post(self.LIST, self._new(), format="json")
+        self.assertEqual(self._state(), before)
+        self._ok("post", self.LIST, self._new(), expect=201)
+
+    def test_when_the_log_fails_a_switch_is_undone(self):
+        before = self._state()
+        with self._breaks(), self.assertRaises(RuntimeError):
+            self.admin.post(self._url(self.boat, "deactivate"), {}, format="json")
+        self.assertEqual(self._state(), before)
+        self.assertEqual(self._ok("post", self._url(self.boat, "deactivate"))["is_active"], False)
+
+
+class MobileContentItemSeedTests(_ItemApiBase, TestCase):
+    """What the migration put in the tables is accepted by these rules: the checks are not stricter than the real content."""
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        ensure_test_reference_tables()
+        _Item.objects.all().delete()
+        self.admin = self._client(ROLE_ADMIN, "mc_seed_admin")
+        importlib.import_module("api.migrations.0061_seed_mobile_content").add_content(django_apps, None)
+
+    def test_every_seeded_item_accepts_an_edit_with_its_own_values_and_nothing_changes(self):
+        items = list(_Item.objects.all())
+        self.assertEqual(len(items), 10)  # the fixture: the whole seed is there
+        self.assertEqual({i.section for i in items}, {"why_visit", "travel_guide"})
+        self.assertEqual(sum(1 for i in items if "{" in i.title + i.short_text + i.full_text), 2)  # ... including the two with {fee_office}
+        before = self._state()
+        for item in items:
+            sent = {f: getattr(item, f) for f in ("icon", "title", "short_text", "full_text", "style", "display_order")}
+            body = self._ok("patch", self._url(item), sent)
+            self.assertEqual(body["warnings"], [], item.title)  # and the seed raises no warning
+        self.assertEqual(self._state(), before)
+
+    def test_every_seeded_item_is_something_that_could_be_added_today(self):
+        for number, item in enumerate(_Item.objects.all()):
+            body = {
+                "section": item.section, "icon": item.icon, "style": item.style, "title": item.title + " copy",
+                "short_text": item.short_text, "full_text": item.full_text,
+            }
+            self._ok("post", self.LIST, body, expect=201)
+
+    def test_the_icons_the_view_accepts_are_the_icons_of_the_model(self):
+        from api.views.mobile_content import ICONS
+
+        self.assertEqual(ICONS, set(_Item.ICON_NAMES))
+        self.assertEqual(len(ICONS), 11)
+
+
+class MobileContentItemIsolationTests(_ItemApiBase, TestCase):
+    """Nothing here reaches the app yet: the mobile bootstrap is byte for byte the same."""
+
+    def test_the_bootstrap_is_the_same_before_and_after_the_admin_changes_everything(self):
+        self.setUpItems()
+        url = "/api/mobile/tourism/bootstrap/"
+        first = APIClient().get(url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts"})
+        self._ok("post", self.LIST, self._new(), expect=201)
+        self._ok("patch", self._url(self.festival), {"title": "Changed title"})
+        self._ok("post", self._url(self.boat, "deactivate"))
+        self.assertEqual(_Item.objects.get(pk=self.festival.pk).title, "Changed title")  # the fixture: things really changed
+        second = APIClient().get(url)
+        self.assertEqual(second.content, first.content)
+
+
+class MobileContentItemEditPlaceholderTests(_ItemApiBase, TestCase):
+    """The placeholder rules hold when EDITING, in every text, as they do when adding."""
+
+    def setUp(self):
+        self.setUpItems()
+
+    def _reset(self):
+        # a tile with no placeholder at all, so no edit here takes a fee placeholder out (that is another test)
+        _Item.objects.filter(pk=self.spare.pk).update(title="Spare", short_text="x", full_text="", style="tile")
+        row = _Item.objects.get(pk=self.spare.pk)
+        self.assertEqual(("{" in row.title + row.short_text + row.full_text), False)  # the fixture: nothing to lose
+
+    def test_the_same_placeholders_are_accepted_and_refused_when_editing_every_text(self):
+        accepted, refused = MobileContentItemCreateTests.ACCEPTED_PLACEHOLDERS, MobileContentItemCreateTests.REFUSED_PLACEHOLDERS
+        refused = refused + ["Welcome, {name}!"]
+        self.assertGreaterEqual(len(accepted), 6)
+        self.assertGreaterEqual(len(refused), 15)
+        self.assertTrue(all(("{" in t or "}" in t) for t in refused))
+        for field in self.FEE_FIELDS:
+            for text in refused:
+                self._reset()
+                self._refuse("patch", self._url(self.spare), {field: text})
+            for text in accepted:
+                self._reset()
+                before = getattr(_Item.objects.get(pk=self.spare.pk), field)
+                self.assertNotEqual(before, text)  # the fixture: the edit really changes the text
+                body = self._ok("patch", self._url(self.spare), {field: text})
+                self.assertEqual(body[field], text)
+
+    def test_the_visitors_name_is_refused_when_editing_too(self):
+        self._reset()
+        reply = self._refuse("patch", self._url(self.spare), {"short_text": "Welcome, {name}!"})
+        self.assertIn("welcome greeting", reply["detail"])
+
+    def test_the_fee_amounts_typed_by_hand_are_refused_when_editing_too(self):
+        for text in MobileContentItemCreateTests.REFUSED_AMOUNTS:
+            self._reset()
+            self._refuse("patch", self._url(self.spare), {"short_text": text})
+        for text in MobileContentItemCreateTests.ACCEPTED_AMOUNTS:
+            self._reset()
+            self.assertEqual(self._ok("patch", self._url(self.spare), {"short_text": text})["short_text"], text)
+
+
+class MobileContentItemLockTests(_ItemApiBase, TestCase):
+    """PostgreSQL is where two admins can collide, and SQLite ignores the lock, so the ORDER is what is checked:
+    the lock first, then the checks and the write, all in one block (as for the boat fare)."""
+
+    def setUp(self):
+        self.setUpItems()
+
+    def _watch(self, request_fn, names):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import mobile_content as views
+
+        seen = []
+        # (a TestCase wraps the test in a transaction, so "inside the view's block" is one savepoint deeper than here)
+        outside = len(conn.savepoint_ids)
+
+        def spy(name, real):
+            def wrapper(*args, **kwargs):
+                seen.append((name, len(conn.savepoint_ids) > outside))
+                return real(*args, **kwargs)
+
+            return wrapper
+
+        patches = [mock.patch.object(views, name, spy(name, getattr(views, name))) for name in names]
+        for p in patches:
+            p.start()
+        try:
+            response = request_fn()
+        finally:
+            for p in patches:
+                p.stop()
+        return response, seen
+
+    def test_adding_takes_the_lock_before_it_checks_and_writes_all_in_one_block(self):
+        response, seen = self._watch(lambda: self.admin.post(self.LIST, self._new(), format="json"), ["_lock", "name_key", "log_activity"])
+        self.assertEqual(response.status_code, 201)
+        order = [name for name, _inside in seen]
+        self.assertEqual(order[0], "_lock")  # the lock FIRST
+        self.assertIn("name_key", order)     # (the fixture: the title check ran)
+        self.assertEqual(order[-1], "log_activity")  # and the trace last, in the same block
+        self.assertTrue(all(inside for _name, inside in seen), seen)
+
+    def test_editing_takes_the_lock_before_it_checks_and_writes_all_in_one_block(self):
+        response, seen = self._watch(
+            lambda: self.admin.patch(self._url(self.festival), {"title": "Festival renamed", "display_order": 35}, format="json"),
+            ["_lock", "name_key", "_check_position", "log_activity"],
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        order = [name for name, _inside in seen]
+        self.assertEqual(order[0], "_lock")
+        self.assertIn("name_key", order)
+        self.assertIn("_check_position", order)  # (the fixture: both checks ran)
+        self.assertEqual(order[-1], "log_activity")
+        self.assertTrue(all(inside for _name, inside in seen), seen)
+
+    def test_switching_takes_the_lock_first_and_logs_in_the_same_block(self):
+        response, seen = self._watch(
+            lambda: self.admin.post(self._url(self.boat, "deactivate"), {}, format="json"), ["_lock", "log_activity"]
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([name for name, _inside in seen], ["_lock", "log_activity"])
+        self.assertTrue(all(inside for _name, inside in seen), seen)
