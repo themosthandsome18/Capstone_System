@@ -31,7 +31,7 @@ from api.models import (
 )
 from api.permissions import get_user_role
 from api.services import online_booking
-from api.services.activity import log_activity
+from api.services.activity import count_of, log_activity
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
 
 KINDS = {
@@ -319,7 +319,7 @@ def reference_option_detail(request, kind, option_id):
         parts.append(f"renamed: '{old_name}' to '{new_name}'")
     if stay_changed:
         parts.append(f"stay length of '{new_name}' changed from {old_stay} to {new_stay}")
-    _log(request, config, option, "; ".join(parts) + f" ({affected} record(s))")
+    _log(request, config, option, "; ".join(parts) + f" ({count_of(affected, 'record')})")
     _bust_cache()
     return Response(_item(config, option, affected))
 

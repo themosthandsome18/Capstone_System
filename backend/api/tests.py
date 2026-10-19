@@ -6119,6 +6119,19 @@ class ReferenceOptionApiTests(TestCase):
 
     # -- the trace ---------------------------------------------------------
 
+    def test_the_label_of_a_rename_says_1_record_not_record_s(self):
+        single = self._make("itinerary", 9950, "Single Trail", uses=1, stay_nights=1)
+        ask = self.admin.patch(self._url("itinerary", single.id), {"name": "Single Trail 2"}, format="json")
+        self.assertEqual((ask.status_code, ask.json()["record_count"]), (409, 1))  # the fixture really has exactly one record
+        self.assertEqual(ActivityLog.objects.count(), 0)  # and nothing is logged until the confirmed rename
+        done = self.admin.patch(
+            self._url("itinerary", single.id), {"name": "Single Trail 2", "confirm_affected_records": 1}, format="json"
+        )
+        self.assertEqual(done.status_code, 200, done.content)
+        label = ActivityLog.objects.get().record_label
+        self.assertTrue(label.endswith("(1 record)"), label)
+        self.assertNotIn("(s)", label)
+
     def test_every_kind_of_write_is_in_the_activity_log(self):
         option = self._make("itinerary", 9890, "Trace Trail", uses=2, stay_nights=1)
         admin_user = self.admin.user
@@ -6141,7 +6154,8 @@ class ReferenceOptionApiTests(TestCase):
         self.assertEqual((log.user_id, log.action, log.record_id), (admin_user.pk, "update", str(option.id)))
         self.assertIn("Trace Trail", log.record_label)
         self.assertIn("Trace Trail 2", log.record_label)
-        self.assertIn("2 record(s)", log.record_label)
+        self.assertIn("(2 records)", log.record_label)
+        self.assertNotIn("(s)", log.record_label)
 
         self.admin.post(self._url("itinerary", option.id, "deactivate"))
         log = newest()
@@ -7378,8 +7392,8 @@ class EmergencyContactApiTests(TestCase):
         self.assertEqual(log.user, self.admin.user)
         self.assertEqual(log.action, ACTION_UPDATE)
         self.assertIn("reordered", log.record_label)
-        label = log.record_label
-        self.assertTrue(label.index("Bravo Police") < label.index("Charlie Desk") < label.index("Alpha Rescue"))
+        # [Alpha, Bravo, Charlie] became [Bravo, Charlie, Alpha]: one contact moved, and the label says which
+        self.assertEqual(log.record_label, "Emergency contacts reordered: 1 contact moved: 'Alpha Rescue'")
 
     # -- guard 6: no cache -------------------------------------------------
 
@@ -8200,7 +8214,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         self.assertNotIn(self.A_NAME, listed)  # the old text is no longer a tier...
         self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 3)  # ...but 3 records hold it
         log = self._logs().get()
-        self.assertIn("3 record(s) keep the old text", log.record_label)
+        self.assertIn("3 records keep the old text", log.record_label)
 
     def test_the_log_of_a_rename_has_the_old_name_the_new_name_and_the_number_left_behind(self):
         self.admin.patch(self._url(self.c), {"name": "Charlie renamed", "confirm_affected_records": 1}, format="json")
@@ -8210,7 +8224,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         self.assertIn("renamed", log.record_label)
         self.assertIn(self.C_NAME, log.record_label)        # the old name
         self.assertIn("Charlie renamed", log.record_label)  # the new name
-        self.assertIn("1 record(s) keep the old text", log.record_label)  # how many were left behind
+        self.assertIn("1 record keeps the old text", log.record_label)  # how many were left behind (one: "keeps")
         self.assertIn("no record was changed", log.record_label)
 
     def test_a_rename_of_an_unheld_tier_is_logged_with_a_count_of_zero(self):
@@ -8218,7 +8232,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         log = self._the_log()
         self.assertIn(self.B_NAME, log.record_label)
         self.assertIn("Bravo renamed", log.record_label)
-        self.assertIn("0 record(s) keep the old text", log.record_label)
+        self.assertIn("0 records keep the old text", log.record_label)
 
     # The names of the fields of the API, which a person at the LGU has no use for.
     API_WORDS = ("confirm_affected_records", "confirm_required", "record_count", "text_in_use",
@@ -8526,7 +8540,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         self.assertIn("reordered", log.record_label)
         label = log.record_label
         # the label says how many moved and names the movers in the new order; Delta, now first, did not move
-        self.assertIn("3 of 4 tier(s) moved", label)
+        self.assertIn("3 tiers moved", label)
         self.assertTrue(label.index("Charlie") < label.index("Bravo") < label.index("Alpha"))
         self.assertNotIn("Delta", label)
 
@@ -8634,7 +8648,7 @@ class BoatCapacityFareRenameGuardTests(_BoatFareApiBase, TransactionTestCase):
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         self.assertEqual(BoatCapacityFare.objects.get(pk=self.a.pk).name, "Alpha renamed")
         self.assertEqual(TouristRecord.objects.filter(boat_capacity_fare=self.A_NAME).count(), 3)  # all three left on the old text
-        self.assertIn("3 record(s) keep the old text", self._logs().get().record_label)
+        self.assertIn("3 records keep the old text", self._logs().get().record_label)
     def test_the_lock_the_check_and_the_write_are_in_one_atomic_block_in_that_order(self):
         from unittest import mock
 
@@ -12663,7 +12677,7 @@ class ShortenLabelTests(TestCase):
     def test_the_worst_cases_of_the_two_new_endpoints_and_of_the_rename(self):
         title160, short400 = ("t" * 159) + "z", ("s" * 399) + "z"
         content_label = f"Mobile content item (travel_guide) '{title160}' edited: short_text '{short400}'"
-        rename_label = f"Boat Capacity and Fare tier renamed: '{title160}' to '{title160}'; 2 record(s) keep the old text"
+        rename_label = f"Boat Capacity and Fare tier renamed: '{title160}' to '{title160}'; 2 records keep the old text"
         for label in (content_label, rename_label):
             self.assertGreater(len(label), 255)  # the case is real: it does NOT fit as it is
             self.assertLessEqual(len(self.cut(label)), 255)
@@ -12708,8 +12722,8 @@ class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
         self.assertEqual(
             self._labels()[-2:],
             [
-                f"{self.PREFIX}renamed: '{original}' to '{broken}'; 3 record(s) keep the old text (no record was changed)",
-                f"{self.PREFIX}renamed: '{broken}' to '{original}'; 0 record(s) keep the old text (no record was changed)",
+                f"{self.PREFIX}renamed: '{original}' to '{broken}'; 3 records keep the old text (no record was changed)",
+                f"{self.PREFIX}renamed: '{broken}' to '{original}'; 0 records keep the old text (no record was changed)",
             ],
         )
 
@@ -12727,7 +12741,7 @@ class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
         label = self._labels()[-1]
         self._fits([label])
         self.assertTrue(label.startswith(self.PREFIX + "renamed: '"))
-        self.assertTrue(label.endswith("; 2 record(s) keep the old text (no record was changed)"), label)  # the end is whole
+        self.assertTrue(label.endswith("; 2 records keep the old text (no record was changed)"), label)  # the end is whole
         self.assertEqual(label.count("…"), 2)  # each name was shortened, and says so
         self.assertIn(old[:30], label)
         self.assertIn(new[:30], label)
@@ -12754,7 +12768,7 @@ class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
         self.assertEqual([row["name"] for row in response.json()], list(reversed(real)))
         label = self._labels()[-1]
         self._fits([label])
-        self.assertEqual(label, self.PREFIX + "reordered: 8 of 9 tier(s) moved")  # (the form of this label: BoatFareReorderLabelTests)
+        self.assertEqual(label, self.PREFIX + "reordered: 8 tiers moved")  # (the form of this label: BoatFareReorderLabelTests)
 
     def test_the_reorder_of_many_160_character_tiers_fits(self):
         extra = [BoatCapacityFare.objects.create(name=_long_tier_name(f"T{n}"), display_order=100 + n) for n in range(5)]
@@ -12816,12 +12830,12 @@ class HotlineLabelLengthTests(TestCase):
 
     def test_ordinary_labels_are_byte_for_byte_what_they_were(self):
         self.assertEqual(self.admin.post(self.LIST, {"name": "Hotel Desk", "contact_numbers": "8"}, format="json").status_code, 201)
-        bravo = self._contact()
+        bravo = self._contact(display_order=20)
         self.assertEqual(self.admin.patch(self._url(bravo), {"contact_numbers": "777-7777"}, format="json").status_code, 200)
         self.assertEqual(self.admin.post(self._url(bravo, "deactivate"), {}, format="json").status_code, 200)
         self.assertEqual(self.admin.post(self._url(bravo, "reactivate"), {}, format="json").status_code, 200)
         hotel = EmergencyContact.objects.get(name="Hotel Desk")
-        self.assertEqual(self.admin.post(self.REORDER, {"ids": [hotel.pk, bravo.pk]}, format="json").status_code, 200)
+        self.assertEqual(self.admin.post(self.REORDER, {"ids": [bravo.pk, hotel.pk]}, format="json").status_code, 200)
         self.assertEqual(
             self._labels(),
             [
@@ -12829,7 +12843,7 @@ class HotlineLabelLengthTests(TestCase):
                 "Emergency contact 'Bravo Police' edited: contact_numbers: '222-2222 / 333-3333' to '777-7777'",
                 "Emergency contact 'Bravo Police' deactivated",
                 "Emergency contact 'Bravo Police' brought back (active)",
-                "Emergency contacts reordered: 'Hotel Desk', 'Bravo Police'",
+                "Emergency contacts reordered: 1 contact moved: 'Hotel Desk'",
             ],
         )
 
@@ -12909,8 +12923,7 @@ class HotlineLabelLengthTests(TestCase):
         self.assertEqual([row["id"] for row in response.json()], [c.pk for c in reversed(made)])
         label = self._labels()[-1]
         self._fits([label])
-        self.assertTrue(label.startswith("Emergency contacts reordered: '"))
-        self.assertTrue(label.endswith("…"))  # this label still lists the names, so it is cut (see the report)
+        self.assertEqual(label, "Emergency contacts reordered: 11 contacts moved")  # (the form of this label: HotlineReorderLabelTests)
 
     def test_no_label_written_by_these_is_longer_than_the_column(self):
         contact = self._contact(name=_long_tier_name("X-ray"), description="q " * 2000)
@@ -12924,9 +12937,9 @@ class MovedTiersTests(TestCase):
     """_moved_ids: which tiers MOVED, the fewest whose move explains the new order."""
 
     def setUp(self):
-        from api.views.boat_capacity_fares import _moved_ids
+        from api.services.activity import moved_ids
 
-        self.moved = _moved_ids
+        self.moved = moved_ids
 
     def test_nothing_moves_when_the_order_is_the_same(self):
         self.assertEqual(self.moved([1, 2, 3, 4], [1, 2, 3, 4]), [])
@@ -13000,24 +13013,24 @@ class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
     def test_one_tier_moved_to_the_front_is_named_alone(self):
         real, t = self._nine()
         self._send([t[4]] + t[:4] + t[5:])
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 9 tier(s) moved: '{real[4]}'")
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 tier moved: '{real[4]}'")
 
     def test_one_tier_moved_to_the_end_is_named_alone(self):
         real, t = self._nine()
         self._send(t[1:] + [t[0]])
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 9 tier(s) moved: '{real[0]}'")
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 tier moved: '{real[0]}'")
 
     def test_two_tiers_moved_are_both_named_in_the_new_order(self):
         real, t = self._nine()
         self._send([t[7], t[0], t[2], t[3], t[4], t[5], t[6], t[8], t[1]])
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 2 of 9 tier(s) moved: '{real[7]}', '{real[1]}'")
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 2 tiers moved: '{real[7]}', '{real[1]}'")
 
     def test_all_nine_reversed_gives_the_number_only(self):
         real, t = self._nine()
         naive = self.PREFIX + "reordered: " + ", ".join(f"'{name}'" for name in reversed(real))
         self.assertGreater(len(naive), 255)  # the old label for this: 439 characters, a 500 on live
         self._send(list(reversed(t)))
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 8 of 9 tier(s) moved")  # one tier always stays
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 8 tiers moved")  # one tier always stays
 
     def test_the_same_order_sent_again_says_no_tier_moved(self):
         shown = list(BoatCapacityFare.objects.order_by("display_order", "id"))  # the order the app shows
@@ -13028,17 +13041,17 @@ class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
     def test_the_old_order_is_the_order_the_app_shows_not_the_order_of_the_ids(self):
         a, b, c, d = self.a, self.b, self.c, self.d  # display_order 10, 20, 30, 40; created as c, a, d, b
         self._send([b, a, c, d])
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 4 tier(s) moved: '{a.name}'")
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 tier moved: '{a.name}'")
 
     def test_two_long_names_are_named_in_a_shortened_form_when_that_fits(self):
         BoatCapacityFare.objects.all().delete()
         names = ["Short one", _long_tier_name("Lima")[:100].rstrip(), "Short two", _long_tier_name("Mike")[:100].rstrip(), "Short three"]
         t = [BoatCapacityFare.objects.create(name=n, display_order=(i + 1) * 10) for i, n in enumerate(names)]
-        naive = f"{self.PREFIX}reordered: 2 of 5 tier(s) moved: '{names[3]}', '{names[1]}'"
+        naive = f"{self.PREFIX}reordered: 2 tiers moved: '{names[3]}', '{names[1]}'"
         self.assertGreater(len(naive), 255)  # in full they would NOT fit ...
         self._send([t[3], t[0], t[2], t[4], t[1]])
         label = self._label()
-        self.assertTrue(label.startswith(f"{self.PREFIX}reordered: 2 of 5 tier(s) moved: '"), label)
+        self.assertTrue(label.startswith(f"{self.PREFIX}reordered: 2 tiers moved: '"), label)
         self.assertEqual(label.count("…"), 2)  # ... shortened they do, and say so
         self.assertIn(names[3][:30], label)
         self.assertIn(names[1][:30], label)
@@ -13048,20 +13061,20 @@ class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
         t = [BoatCapacityFare.objects.create(name=_long_tier_name(f"N{n:02d}"), display_order=(n + 1) * 10) for n in range(40)]
         response = self._send(list(reversed(t)))
         self.assertEqual([row["id"] for row in response.json()], [x.pk for x in reversed(t)])  # the reorder itself happened
-        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 39 of 40 tier(s) moved")
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 39 tiers moved")
 
     def test_no_order_of_forty_long_tiers_can_make_a_label_longer_than_the_column(self):
         import random
 
-        from api.views.boat_capacity_fares import _moved_ids, _reorder_note
+        from api.services.activity import moved_ids, reorder_note
 
         ids = list(range(1, 41))
         names = {i: _long_tier_name(f"P{i:02d}") for i in ids}
         for seed in range(400):
             shuffled = ids[:]
             random.Random(seed).shuffle(shuffled)
-            moved = _moved_ids(ids, shuffled)
-            note = _reorder_note([names[i] for i in moved], len(ids))
+            moved = moved_ids(ids, shuffled)
+            note = reorder_note([names[i] for i in moved], "tier", self.PREFIX)
             self.assertLessEqual(len(self.PREFIX + note), 255, (seed, len(moved)))
             self.assertTrue(note.startswith("reordered: "))
         # and the same through the real endpoint for a few of them
@@ -13074,19 +13087,20 @@ class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
             self._label()
 
     def test_names_are_listed_exactly_while_they_fit_and_the_number_alone_when_they_do_not(self):
-        from api.views.boat_capacity_fares import LABEL_PREFIX, _reorder_note
+        from api.services.activity import reorder_note
+        from api.views.boat_capacity_fares import LABEL_PREFIX
 
-        head = len(LABEL_PREFIX) + len("reordered: 4 of 9 tier(s) moved: ")
+        head = len(LABEL_PREFIX) + len("reordered: 4 tiers moved: ")
         three = ["a" * 50, "b" * 50, "c" * 50]
         # the three 50-character names, their quotes and separators, then the last name sized to reach 255 exactly
         used = head + sum(len(n) + 2 for n in three) + 2 * 3
         last = 255 - used - 2
         self.assertTrue(0 < last <= 60)
-        fits = _reorder_note(three + ["d" * last], 9)
+        fits = reorder_note(three + ["d" * last], "tier", LABEL_PREFIX)
         self.assertEqual(len(LABEL_PREFIX + fits), 255)
         self.assertTrue(fits.endswith("'" + "d" * last + "'"))  # exactly at the column: still named
-        over = _reorder_note(three + ["d" * (last + 1)], 9)
-        self.assertEqual(over, "reordered: 4 of 9 tier(s) moved")  # one character more: the number only
+        over = reorder_note(three + ["d" * (last + 1)], "tier", LABEL_PREFIX)
+        self.assertEqual(over, "reordered: 4 tiers moved")  # one character more: the number only
 
     def test_the_trace_is_still_a_trace(self):
         self._send([self.d, self.c, self.b, self.a])
@@ -13095,3 +13109,181 @@ class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
         self.assertEqual(log.action, ACTION_UPDATE)
         self.assertEqual(log.record_id, "reorder")
         self.assertEqual(log.module, "tourism")
+
+
+class CountOfTests(TestCase):
+    """api.services.activity.count_of: '1 tier', '8 tiers' (no "(s)")."""
+
+    def test_one_is_singular_everything_else_is_plural(self):
+        from api.services.activity import count_of
+
+        self.assertEqual(count_of(1, "tier"), "1 tier")
+        self.assertEqual(count_of(0, "tier"), "0 tiers")
+        self.assertEqual(count_of(2, "tier"), "2 tiers")
+        self.assertEqual(count_of(8, "record"), "8 records")
+        self.assertEqual(count_of(1, "contact"), "1 contact")
+        self.assertEqual(count_of(3, "person", "people"), "3 people")
+        self.assertEqual(count_of(1, "person", "people"), "1 person")
+
+
+class HotlineReorderLabelTests(TestCase):
+    """The hotline reorder label is the same summary as the boat fare's: how many moved and, while that
+    fits, which; the number alone when it does not."""
+
+    LIST = "/api/emergency-contacts/"
+    REORDER = "/api/emergency-contacts/reorder/"
+    HEAD = "Emergency contacts "
+    REAL_NAMES = [
+        "Mauban MDRRMO / Rescue 24/7",
+        "Mauban Municipal Police (PNP)",
+        "Coast Guard Sub-Station Mauban",
+        "Mauban Tourism Information Desk",
+        "Mauban Rural Health Unit",
+        "Bureau of Fire Protection Mauban",
+        "Quezon Medical Center Emergency Room",
+        "Mauban Municipal Disaster Operations Center",
+        "Mauban Port Management Office Hotline",
+    ]
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        EmergencyContact.objects.all().delete()
+        user = User.objects.create_user(username="hr_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        self.admin = APIClient()
+        self.admin.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+
+    def _make(self, names, scrambled=False):
+        made = [EmergencyContact.objects.create(name=n, contact_numbers="1", display_order=(i + 1) * 10) for i, n in enumerate(names)]
+        self.assertEqual(list(EmergencyContact.objects.values_list("name", flat=True)), names)  # the fixture: this is the order shown
+        return made
+
+    def _send(self, order):
+        response = self.admin.post(self.REORDER, {"ids": [c.pk for c in order]}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(list(EmergencyContact.objects.values_list("pk", flat=True)), [c.pk for c in order])  # and it was applied
+        label = ActivityLog.objects.filter(record_type="EmergencyContact").order_by("pk").last().record_label
+        self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)
+        return label
+
+    def test_one_contact_moved_is_named_alone(self):
+        c = self._make([f"C{n}" for n in range(1, 7)])
+        self.assertEqual(self._send([c[3]] + c[:3] + c[4:]), f"{self.HEAD}reordered: 1 contact moved: 'C4'")
+
+    def test_two_contacts_moved_are_both_named_in_the_new_order(self):
+        c = self._make([f"C{n}" for n in range(1, 7)])
+        self.assertEqual(
+            self._send([c[4], c[0], c[2], c[3], c[5], c[1]]),
+            f"{self.HEAD}reordered: 2 contacts moved: 'C5', 'C2'",
+        )
+
+    def test_all_but_one_of_nine_real_sized_contacts_gives_the_number_only(self):
+        c = self._make(self.REAL_NAMES)
+        naive = self.HEAD + "reordered: 8 contacts moved: " + ", ".join(f"'{n}'" for n in reversed(self.REAL_NAMES[1:]))
+        self.assertGreater(len(naive), 255)  # the fixture: with these names the list really does not fit ...
+        self.assertEqual(self._send(list(reversed(c))), f"{self.HEAD}reordered: 8 contacts moved")  # ... so the number alone
+
+    def test_a_few_realistic_contacts_reversed_still_fit_and_are_named(self):
+        c = self._make(self.REAL_NAMES[:4])
+        label = self._send(list(reversed(c)))
+        self.assertEqual(
+            label,
+            f"{self.HEAD}reordered: 3 contacts moved: '{self.REAL_NAMES[2]}', '{self.REAL_NAMES[1]}', '{self.REAL_NAMES[0]}'",
+        )  # three realistic names fit, so they are named (this is the other side of the line above)
+
+    def test_the_head_counts_toward_the_limit_names_that_fit_alone_but_not_with_it_give_the_number(self):
+        names = ["a" * 50, "b" * 50, "c" * 50, "d" * 50, "e" * 50]
+        named = "reordered: 4 contacts moved: " + ", ".join(f"'{n}'" for n in ("d" * 50, "c" * 50, "b" * 50, "a" * 50))
+        # the fixture: on its own the list is within 255, and with "Emergency contacts " in front it is not
+        self.assertLessEqual(len(named), 255)
+        self.assertGreater(len(self.HEAD + named), 255)
+        c = self._make(names)
+        self.assertEqual(self._send(list(reversed(c))), f"{self.HEAD}reordered: 4 contacts moved")  # so: the number, not a cut list
+
+    def test_forty_long_contacts_reversed_give_the_number_only(self):
+        c = self._make([_long_tier_name(f"L{n:02d}") for n in range(40)])
+        self.assertEqual(self._send(list(reversed(c))), f"{self.HEAD}reordered: 39 contacts moved")
+
+    def test_no_order_of_forty_long_contacts_can_make_a_label_longer_than_the_column(self):
+        import random
+
+        from api.services.activity import moved_ids, reorder_note
+
+        ids = list(range(1, 41))
+        names = {i: _long_tier_name(f"Q{i:02d}") for i in ids}
+        seen_forms = set()
+        for seed in range(400):
+            shuffled = ids[:]
+            random.Random(seed).shuffle(shuffled)
+            moved = moved_ids(ids, shuffled)
+            note = reorder_note([names[i] for i in moved], "contact", self.HEAD)
+            self.assertLessEqual(len(self.HEAD + note), 255, seed)
+            seen_forms.add("named" if "'" in note else "number")
+        self.assertEqual(seen_forms, {"number"})  # (with 160-character names no order of forty can be named: the fixture bites)
+
+    def test_the_same_order_again_says_no_contact_moved_and_the_old_order_is_the_one_shown(self):
+        names = ["Zeta", "Alpha", "Mike"]
+        # created in an order that is NOT the order shown (display_order decides)
+        made = [
+            EmergencyContact.objects.create(name="Mike", contact_numbers="1", display_order=30),
+            EmergencyContact.objects.create(name="Zeta", contact_numbers="1", display_order=10),
+            EmergencyContact.objects.create(name="Alpha", contact_numbers="1", display_order=20),
+        ]
+        self.assertEqual(list(EmergencyContact.objects.values_list("name", flat=True)), names)  # the fixture: shown as Zeta, Alpha, Mike
+        shown = list(EmergencyContact.objects.all())
+        self.assertNotEqual([c.pk for c in shown], sorted(c.pk for c in shown))  # the fixture: shown order is NOT the order of the ids
+        self.assertEqual(len(made), 3)
+        self.assertEqual(self._send(shown), f"{self.HEAD}reordered: no contact moved")
+
+
+class NoLabelSaysRecordSTests(TestCase):
+    """No ActivityLog label has a "(s)" in it, for any count: 0, 1 or more."""
+
+    def test_the_labels_of_every_kind_of_write_in_these_modules_have_no_s_in_brackets(self):
+        user = User.objects.create_user(username="no_s_admin", password="Staff@12345")
+        UserProfile.objects.create(user=user, role=ROLE_ADMIN)
+        admin = APIClient()
+        admin.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        ensure_test_reference_tables()
+        EmergencyContact.objects.all().delete()
+        BoatCapacityFare.objects.all().delete()
+        TouristRecord.objects.all().delete()
+
+        # the boat fare: a rename that leaves 0, 1 and 3 records behind, and reorders of 0, 1 and several tiers
+        def tier_with(name, holders):
+            tier = BoatCapacityFare.objects.create(name=name, display_order=BoatCapacityFare.objects.count() * 10 + 10)
+            for n in range(holders):
+                _BoatFareApiBase._record(self, f"NS-{name[:3]}-{n}", name)
+            return tier
+
+        base = "/api/boat-capacity-fares/"
+        for name, holders in (("Zero tier", 0), ("One tier", 1), ("Three tier", 3)):
+            tier = tier_with(name, holders)
+            body = {"name": name + " renamed"}
+            if holders:
+                self.assertEqual(admin.patch(f"{base}{tier.pk}/", body, format="json").status_code, 409)  # asks first
+                body["confirm_affected_records"] = holders
+            self.assertEqual(admin.patch(f"{base}{tier.pk}/", body, format="json").status_code, 200)
+        for how in ("same", "rotate", "reverse"):
+            current = list(BoatCapacityFare.objects.order_by("display_order", "id").values_list("pk", flat=True))  # the order NOW
+            order = {"same": current, "rotate": current[1:] + current[:1], "reverse": list(reversed(current))}[how]
+            self.assertEqual(admin.post(f"{base}reorder/", {"ids": order}, format="json").status_code, 200)
+        # the hotlines: add, edit, deactivate, bring back, reorder
+        created = admin.post("/api/emergency-contacts/", {"name": "Hot A", "contact_numbers": "1"}, format="json").json()
+        admin.post("/api/emergency-contacts/", {"name": "Hot B", "contact_numbers": "2"}, format="json")
+        admin.patch(f"/api/emergency-contacts/{created['id']}/", {"contact_numbers": "9"}, format="json")
+        admin.post(f"/api/emergency-contacts/{created['id']}/deactivate/", {}, format="json")
+        admin.post(f"/api/emergency-contacts/{created['id']}/reactivate/", {}, format="json")
+        contact_ids = list(EmergencyContact.objects.order_by("display_order", "id").values_list("pk", flat=True))
+        admin.post("/api/emergency-contacts/reorder/", {"ids": list(reversed(contact_ids))}, format="json")
+
+        labels = list(ActivityLog.objects.values_list("record_label", flat=True))
+        self.assertEqual(len(labels), 12)  # the fixture: 3 renames + 3 reorders of tiers, 6 writes of contacts: all logged
+        joined = " | ".join(labels)
+        for needed in ("0 records keep", "1 record keeps", "3 records keep", "1 tier moved", "tiers moved", "no tier moved",
+                       "1 contact moved", "Emergency contacts reordered"):
+            self.assertIn(needed, joined)  # ... and every form the words can take was among them
+        self.assertEqual([label for label in labels if "(s)" in label], [])

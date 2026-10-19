@@ -30,6 +30,52 @@ def shorten_label(text, limit=LABEL_MAX):
     return cut.rstrip(" ,;:") + ELLIPSIS
 
 
+NAME_SHARE = 60  # how much of a name (a tier, a contact, a title: up to 160) a label carries
+
+
+def count_of(number, singular, plural=None):
+    """'1 tier', '8 tiers': the right form for a person to read (no "(s)")."""
+    return f"{number} {singular if number == 1 else (plural or singular + 's')}"
+
+
+def moved_ids(old_ids, new_ids):
+    """The ids that MOVED, in the new order: the fewest whose move explains the new order.
+    The ones that did not move are a longest run that was already in the same relative
+    order before (a longest increasing subsequence of their old positions), so putting the
+    first one last is ONE move, not nine that changed place. At least one never moves (the
+    one the others are measured against). When two answers are equally short, the first
+    one found is used: swapping two neighbours is one move, and which of the two is called
+    the mover is not meaningful but it is always the same one."""
+    old_position = {item_id: index for index, item_id in enumerate(old_ids)}
+    sequence = [old_position[item_id] for item_id in new_ids]
+    length = [1] * len(sequence)
+    previous = [-1] * len(sequence)
+    for i in range(len(sequence)):
+        for j in range(i):
+            if sequence[j] < sequence[i] and length[j] + 1 > length[i]:
+                length[i], previous[i] = length[j] + 1, j
+    stay = set()
+    if sequence:
+        i = max(range(len(sequence)), key=lambda k: length[k])
+        while i != -1:
+            stay.add(i)
+            i = previous[i]
+    return [item_id for index, item_id in enumerate(new_ids) if index not in stay]
+
+
+def reorder_note(moved_names, noun, prefix=""):
+    """The part of a reorder's log label from "reordered:" on: HOW MANY moved, and which
+    ones while that fits in the column; when it does not fit, only the number. `prefix` is
+    what the label already has in front (it counts toward the 255). A list of every item
+    (what these labels used to be) is 439 characters for the nine real boat fare tiers and
+    says less than a short summary does."""
+    if not moved_names:
+        return f"reordered: no {noun} moved"
+    count = f"reordered: {count_of(len(moved_names), noun)} moved"
+    named = count + ": " + ", ".join(f"'{shorten_label(name, NAME_SHARE)}'" for name in moved_names)
+    return named if len(prefix + named) <= LABEL_MAX else count
+
+
 def log_activity(request, module, action, instance, label=None, record_id=None):
     user = request.user if request.user.is_authenticated else None
 

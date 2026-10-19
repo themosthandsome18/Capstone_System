@@ -30,7 +30,7 @@ from api.models import (
     EmergencyContact,
 )
 from api.permissions import get_user_role
-from api.services.activity import LABEL_MAX, log_activity, shorten_label
+from api.services.activity import LABEL_MAX, NAME_SHARE, log_activity, moved_ids, reorder_note, shorten_label
 from api.views.reference_options import clean_name, name_key
 
 LOCK_ID = 7100005
@@ -89,7 +89,7 @@ def _name_taken(name, excluding=None):
 
 
 LABEL_PREFIX = "Emergency contact "
-NAME_SHARE = 60  # how much of a contact's name a log label carries (the name can be 160)
+REORDER_PREFIX = "Emergency contacts "
 
 
 def _edit_note(changes):
@@ -262,6 +262,8 @@ def emergency_contact_reorder(request):
             return _error(
                 "ids must list every existing contact exactly once, with no other id."
             )
+        # (read before the write: `existing` is in the order the app shows, display_order then id)
+        moved = moved_ids(list(existing), ids)
         for position, contact_id in enumerate(ids, start=1):
             contact = existing[contact_id]
             contact.display_order = position * ORDER_STEP
@@ -273,7 +275,9 @@ def emergency_contact_reorder(request):
                 MODULE_TOURISM,
                 ACTION_UPDATE,
                 ordered[0],
-                label=shorten_label("Emergency contacts reordered: " + ", ".join(f"'{c.name}'" for c in ordered)),
+                label=shorten_label(
+                    REORDER_PREFIX + reorder_note([existing[contact_id].name for contact_id in moved], "contact", REORDER_PREFIX)
+                ),
                 record_id="reorder",
             )
     return Response([_item(contact) for contact in ordered])
