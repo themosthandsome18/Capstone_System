@@ -30,7 +30,7 @@ from api.models import (
     EmergencyContact,
 )
 from api.permissions import get_user_role
-from api.services.activity import log_activity
+from api.services.activity import LABEL_MAX, NAME_SHARE, log_activity, moved_ids, reorder_note, shorten_label
 from api.views.reference_options import clean_name, name_key
 
 LOCK_ID = 7100005
@@ -88,13 +88,30 @@ def _name_taken(name, excluding=None):
     return False
 
 
+LABEL_PREFIX = "Emergency contact "
+REORDER_PREFIX = "Emergency contacts "
+
+
+def _edit_note(changes):
+    """The "edited: ..." part of the label of an edit. `changes` is [(field, old, new)].
+    A description has no limit and a name or a list of numbers is long, so each old and
+    new value is shortened to its share of the 255 the column holds (a longer label is a
+    500 on PostgreSQL). Values of ordinary length are not touched."""
+    fixed = sum(len(f"{field}: '' to ''") for field, _old, _new in changes) + 2 * (len(changes) - 1)
+    overhead = len(LABEL_PREFIX) + len("'' ") + NAME_SHARE + len("edited: ") + fixed
+    share = max((LABEL_MAX - overhead) // (2 * len(changes)), 12)
+    return "edited: " + "; ".join(
+        f"{field}: '{shorten_label(old, share)}' to '{shorten_label(new, share)}'" for field, old, new in changes
+    )
+
+
 def _log(request, contact, text):
     log_activity(
         request,
         MODULE_TOURISM,
         ACTION_CREATE if text.startswith("added") else ACTION_UPDATE,
         contact,
-        label=f"Emergency contact '{contact.name}' {text}",
+        label=shorten_label(f"{LABEL_PREFIX}'{shorten_label(contact.name, NAME_SHARE)}' {text}"),
         record_id=contact.pk,
     )
 
@@ -161,7 +178,7 @@ def emergency_contact_list(request):
             display_order=(top or 0) + ORDER_STEP, is_active=True, **values
         )
 
-    _log(request, contact, f"added: '{contact.name}'")
+    _log(request, contact, f"added: '{shorten_label(contact.name, NAME_SHARE)}'")
     return Response(_item(contact), status=status.HTTP_201_CREATED)
 
 
@@ -186,7 +203,7 @@ def emergency_contact_detail(request, contact_id):
             return _error(_DUPLICATE, name=["Already used."])
 
         changes = [
-            f"{field}: '{getattr(contact, field)}' to '{value}'"
+            (field, getattr(contact, field), value)
             for field, value in values.items()
             if getattr(contact, field) != value
         ]
@@ -196,7 +213,7 @@ def emergency_contact_detail(request, contact_id):
             setattr(contact, field, value)
         contact.save(update_fields=list(values))
 
-    _log(request, contact, "edited: " + "; ".join(changes))
+    _log(request, contact, _edit_note(changes))
     return Response(_item(contact))
 
 
@@ -245,6 +262,8 @@ def emergency_contact_reorder(request):
             return _error(
                 "ids must list every existing contact exactly once, with no other id."
             )
+        # (read before the write: `existing` is in the order the app shows, display_order then id)
+        moved = moved_ids(list(existing), ids)
         for position, contact_id in enumerate(ids, start=1):
             contact = existing[contact_id]
             contact.display_order = position * ORDER_STEP
@@ -256,7 +275,9 @@ def emergency_contact_reorder(request):
                 MODULE_TOURISM,
                 ACTION_UPDATE,
                 ordered[0],
-                label="Emergency contacts reordered: " + ", ".join(f"'{c.name}'" for c in ordered),
+                label=shorten_label(
+                    REORDER_PREFIX + reorder_note([existing[contact_id].name for contact_id in moved], "contact", REORDER_PREFIX)
+                ),
                 record_id="reorder",
             )
     return Response([_item(contact) for contact in ordered])

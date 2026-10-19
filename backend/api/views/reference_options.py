@@ -31,7 +31,7 @@ from api.models import (
 )
 from api.permissions import get_user_role
 from api.services import online_booking
-from api.services.activity import log_activity
+from api.services.activity import LABEL_MAX, count_of, log_activity, shorten_label
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
 
 KINDS = {
@@ -144,9 +144,32 @@ def _log(request, config, option, text):
         MODULE_TOURISM,
         ACTION_CREATE if text.startswith("added") else ACTION_UPDATE,
         option,
-        label=f"{config['label']} option {text}",
+        label=shorten_label(f"{config['label']} option {text}"),  # (two names of 120 letters do not fit in 255)
         record_id=option.pk,
     )
+
+
+def _change_note(config, renamed, stay_changed, old_name, new_name, old_stay, new_stay, affected):
+    """The label of a rename and/or a new stay length, after "<kind> option ". A name can be 120 letters and
+    up to three of them are in it, which is more than the 255 the column holds (a 500 on PostgreSQL), so each
+    is shortened to its share. The end of the sentence, how many records the change touched, is what the
+    label exists to say and stays whole (the boat fare rename does the same)."""
+    pieces, names = [], 0
+    if renamed:
+        pieces.append("renamed: '{}' to '{}'")
+        names += 2
+    if stay_changed:
+        pieces.append("stay length of '{}' changed from %s to %s" % (old_stay, new_stay))
+        names += 1
+    template = "; ".join(pieces) + f" ({count_of(affected, 'record')})"
+    overhead = len(f"{config['label']} option ") + len(template.format(*[""] * names))
+    share = max((LABEL_MAX - overhead) // names, 20)
+    shown = []
+    if renamed:
+        shown += [shorten_label(old_name, share), shorten_label(new_name, share)]
+    if stay_changed:
+        shown.append(shorten_label(new_name, share))
+    return template.format(*shown)
 
 
 def _error(detail, http_status=status.HTTP_400_BAD_REQUEST, **extra):
@@ -314,12 +337,7 @@ def reference_option_detail(request, kind, option_id):
             fields.append("stay_nights")
         option.save(update_fields=fields)
 
-    parts = []
-    if renamed:
-        parts.append(f"renamed: '{old_name}' to '{new_name}'")
-    if stay_changed:
-        parts.append(f"stay length of '{new_name}' changed from {old_stay} to {new_stay}")
-    _log(request, config, option, "; ".join(parts) + f" ({affected} record(s))")
+    _log(request, config, option, _change_note(config, renamed, stay_changed, old_name, new_name, old_stay, new_stay, affected))
     _bust_cache()
     return Response(_item(config, option, affected))
 
