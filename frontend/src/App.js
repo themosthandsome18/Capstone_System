@@ -6,6 +6,7 @@ import ModuleSelectionPage from "./auth/ModuleSelectionPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import VerifyPermit from "./sanitation/pages/VerifyPermit";
 import PublicCommunityReport from "./sanitation/pages/PublicCommunityReport";
+import PublicReportingMetadata from "./sanitation/components/PublicReportingMetadata";
 
 import AppShell from "./tourism/components/layout/AppShell";
 import { TourismDataProvider } from "./tourism/context/TourismDataContext";
@@ -52,6 +53,7 @@ function App() {
     <ErrorBoundary featureName="System Root">
       <AuthProvider>
         <BrowserRouter>
+          <PublicReportingMetadata />
           <AppModuleProviders>
             <Routes>
               {/* Public & Authentication Routes */}

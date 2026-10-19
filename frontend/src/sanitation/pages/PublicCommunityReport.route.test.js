@@ -24,14 +24,14 @@ global.TextEncoder = require("util").TextEncoder;
 global.TextDecoder = require("util").TextDecoder;
 const App = require("../../App").default;
 
-test("/report-sanitation opens with the real public router and auth provider, without login or staff shell", async () => {
+test.each(["/report-sanitation", "/report-sanitation/"])("%s opens with the real public router and auth provider, without login or staff shell", async (pathname) => {
   window.localStorage.clear();
-  window.history.replaceState({}, "", "/report-sanitation");
+  window.history.replaceState({}, "", pathname);
   fetchPublicReportOptions.mockResolvedValue({ categories: ["Synthetic concern"], barangays: ["Synthetic barangay"] });
   render(<App />);
   await screen.findByRole("option", { name: "Synthetic concern" });
   expect(screen.getByRole("heading", { name: "Report a sanitation concern" })).toBeInTheDocument();
-  expect(window.location.pathname).toBe("/report-sanitation");
+  expect(window.location.pathname).toBe(pathname);
   expect(getCurrentUser).not.toHaveBeenCalled();
   expect(screen.queryByText("Login screen")).not.toBeInTheDocument();
 });
