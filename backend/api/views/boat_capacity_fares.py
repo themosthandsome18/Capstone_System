@@ -52,7 +52,7 @@ from api.models import (
     TouristRecord,
 )
 from api.permissions import get_user_role
-from api.services.activity import log_activity
+from api.services.activity import LABEL_MAX, log_activity, shorten_label
 from api.views.reference_options import _parse_confirmation, clean_name, name_key
 
 LOCK_ID = 7100006
@@ -145,13 +145,28 @@ def _name_taken(name, excluding=None):
     return False
 
 
+LABEL_PREFIX = "Boat Capacity and Fare tier "
+
+
+def _rename_note(old_name, new_name, held_by):
+    """The part of the rename's log label after the prefix. The two names can be 160
+    characters each, which with the rest would be more than the 255 the column holds
+    (a 500 on PostgreSQL), so each is shortened to its share. The end of the sentence,
+    how many records keep the old text, is what the label exists to say and stays whole."""
+    template = "renamed: '{}' to '{}'; {} record(s) keep the old text (no record was changed)"
+    overhead = len(LABEL_PREFIX) + len(template.format("", "", held_by))
+    share = max((LABEL_MAX - overhead) // 2, 20)
+    return template.format(shorten_label(old_name, share), shorten_label(new_name, share), held_by)
+
+
 def _log(request, fare, action, text, record_id=None):
     log_activity(
         request,
         MODULE_TOURISM,
         action,
         fare,
-        label=f"Boat Capacity and Fare tier {text}",
+        # (the reorder label lists every tier: the nine real ones make 439 characters)
+        label=shorten_label(LABEL_PREFIX + text),
         record_id=fare.pk if record_id is None else record_id,
     )
 
@@ -234,8 +249,7 @@ def boat_capacity_fare_detail(request, fare_id):
             request,
             fare,
             ACTION_UPDATE,
-            f"renamed: '{old_name}' to '{new_name}'; {held_by} record(s) keep the old text "
-            "(no record was changed)",
+            _rename_note(old_name, new_name, held_by),
         )
         count = _count_holders(new_name)
     return Response(_item(fare, count))

@@ -12567,3 +12567,205 @@ class MobileContentSeedTests(TestCase):
         script = MOBILE_CONTENT_DART.parents[3] / "backend" / "tools" / "extract_mobile_content_seed.py"
         result = subprocess.run([sys.executable, "-I", str(script), "--check"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+# -- ActivityLog labels must fit the column (varchar(255)); SQLite does not check, so these tests do ----------
+
+
+class ShortenLabelTests(TestCase):
+    """api.services.activity.shorten_label: the ONE helper that cuts a label to the column."""
+
+    def setUp(self):
+        from api.services.activity import ELLIPSIS, LABEL_MAX, shorten_label
+
+        self.cut, self.limit, self.dots = shorten_label, LABEL_MAX, ELLIPSIS
+
+    def test_the_limit_is_the_column_and_it_is_255(self):
+        self.assertEqual(self.limit, ActivityLog._meta.get_field("record_label").max_length)
+        self.assertEqual(self.limit, 255)  # a change of the column must be a decision, not an accident
+
+    def test_text_that_fits_is_returned_unchanged(self):
+        for text in ("", "short", "x" * 254, "x" * 255, "word " * 51):
+            self.assertEqual(len(text) <= 255, True)
+            self.assertEqual(self.cut(text), text)
+        self.assertEqual(self.cut("x" * 10, 10), "x" * 10)  # exactly at the limit: not touched
+
+    def test_one_over_the_limit_is_cut_and_marked(self):
+        result = self.cut("x" * 256)
+        self.assertLessEqual(len(result), 255)
+        self.assertTrue(result.endswith(self.dots))
+        result = self.cut("x" * 11, 10)
+        self.assertEqual(len(result), 10)
+        self.assertTrue(result.endswith(self.dots))
+
+    def test_never_longer_than_the_limit_for_any_length_and_any_limit(self):
+        shapes = (
+            lambda n: "x" * n,
+            lambda n: ("word " * (n // 5 + 1))[:n],
+            lambda n: ("a, b; c: " * (n // 9 + 1))[:n],
+            lambda n: ("verylongword " * (n // 12 + 1))[:n],
+            lambda n: (" " * n),
+        )
+        for limit in (255, 100, 80, 20, 5, 2, 1, 0):
+            for length in list(range(0, 40)) + [100, 254, 255, 256, 257, 400, 700]:
+                for shape in shapes:
+                    text = shape(length)
+                    result = self.cut(text, limit)
+                    self.assertLessEqual(len(result), limit, (limit, length, shape(length)[:20]))
+                    if len(text) <= limit:
+                        self.assertEqual(result, text)
+                    elif limit >= 1:
+                        self.assertTrue(result.endswith(self.dots), (limit, length))
+
+    def test_what_is_kept_is_the_start_of_the_original(self):
+        text = "Mobile content item 'The Title' edited: " + "alpha beta gamma " * 40
+        result = self.cut(text)
+        self.assertTrue(text.startswith(result[: -len(self.dots)]))
+
+    def test_the_cut_is_at_a_space_when_one_is_near(self):
+        text = "word " * 100
+        mid_word = 0
+        for limit in range(30, 70):  # some limits fall between words, most fall INSIDE a word
+            result = self.cut(text, limit)
+            kept = result[: -len(self.dots)]
+            self.assertEqual(set(kept.split()), {"word"}, (limit, result))  # whole words only: never "wor" or "w"
+            self.assertEqual(text[len(kept)], " ", (limit, result))  # the next character was the space
+            self.assertLessEqual(len(result), limit)
+            if not text[limit - len(self.dots)].isspace():
+                mid_word += 1
+        self.assertGreater(mid_word, 20)  # the loop really did cut inside words (a test that only meets spaces proves nothing)
+
+    def test_the_cut_is_hard_when_the_last_space_is_far_back(self):
+        result = self.cut("ab " + "x" * 400, 100)  # the only space is at 2: breaking there would throw the room away
+        self.assertEqual(len(result), 100)
+        self.assertTrue(result.startswith("ab xxxx"))
+
+    def test_a_long_word_with_no_space_is_cut_hard(self):
+        result = self.cut("x" * 400, 100)
+        self.assertEqual(result, "x" * 99 + self.dots)
+
+    def test_spaces_and_punctuation_are_not_left_in_front_of_the_ellipsis(self):
+        result = self.cut("alpha, beta; gamma: delta " * 20, 60)
+        kept = result[: -len(self.dots)]
+        self.assertFalse(kept.endswith((" ", ",", ";", ":")))
+
+    def test_cutting_twice_changes_nothing(self):
+        once = self.cut("alpha beta gamma " * 40)
+        self.assertEqual(self.cut(once), once)
+
+    def test_text_that_is_not_text_is_turned_into_text(self):
+        self.assertEqual(self.cut(12345), "12345")
+        self.assertEqual(self.cut(None), "None")
+
+    def test_the_worst_cases_of_the_two_new_endpoints_and_of_the_rename(self):
+        title160, short400 = ("t" * 159) + "z", ("s" * 399) + "z"
+        content_label = f"Mobile content item (travel_guide) '{title160}' edited: short_text '{short400}'"
+        rename_label = f"Boat Capacity and Fare tier renamed: '{title160}' to '{title160}'; 2 record(s) keep the old text"
+        for label in (content_label, rename_label):
+            self.assertGreater(len(label), 255)  # the case is real: it does NOT fit as it is
+            self.assertLessEqual(len(self.cut(label)), 255)
+
+
+def _long_tier_name(tag):
+    """A tier name of exactly 160 characters (the longest the column allows), made of words."""
+    name = (f"{tag} " + "abcdefghi " * 20)[:159] + "z"
+    assert len(name) == 160 and "  " not in name
+    return name
+
+
+class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
+    """The log labels of the boat fare tiers fit the column, in the worst cases, and the realistic
+    ones are byte for byte what they were."""
+
+    PREFIX = "Boat Capacity and Fare tier "
+
+    def setUp(self):
+        self.setUpData()
+
+    def _labels(self):
+        return list(ActivityLog.objects.filter(record_type="BoatCapacityFare").order_by("pk").values_list("record_label", flat=True))
+
+    def _fits(self, labels):
+        column = ActivityLog._meta.get_field("record_label").max_length
+        for label in labels:
+            self.assertLessEqual(len(label), column, label[:60])  # explicitly: SQLite would accept any length
+
+    # -- realistic labels do not change at all -------------------------------------------
+
+    def test_the_rename_of_the_owner_on_live_has_exactly_the_same_label_as_before(self):
+        original = "1-2 pax (One-Way P1500, Two-way P2000)"
+        broken = "1-2 pax (One-Way P1500, Two-way P2000"  # the closing bracket dropped, as on 2026-10-18
+        tier = BoatCapacityFare.objects.create(name=original, display_order=5)
+        for n in range(3):
+            self._record(f"LB-{n}", original)
+        response = self.admin.patch(self._url(tier), {"name": broken, "confirm_affected_records": 3}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        response = self.admin.patch(self._url(tier), {"name": original}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            self._labels()[-2:],
+            [
+                f"{self.PREFIX}renamed: '{original}' to '{broken}'; 3 record(s) keep the old text (no record was changed)",
+                f"{self.PREFIX}renamed: '{broken}' to '{original}'; 0 record(s) keep the old text (no record was changed)",
+            ],
+        )
+
+    # -- the worst cases ------------------------------------------------------------------
+
+    def test_a_rename_between_two_160_character_names_fits_and_keeps_its_end(self):
+        old, new = _long_tier_name("Alpha"), _long_tier_name("Bravo")
+        self.assertEqual(self.admin.post(self.LIST, {"name": old}, format="json").status_code, 201)
+        tier = BoatCapacityFare.objects.get(name=old)
+        self._record("LB-L1", old)
+        self._record("LB-L2", old)
+        response = self.admin.patch(self._url(tier), {"name": new, "confirm_affected_records": 2}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)  # the write was NOT lost to the label
+        self.assertEqual(BoatCapacityFare.objects.get(pk=tier.pk).name, new)
+        label = self._labels()[-1]
+        self._fits([label])
+        self.assertTrue(label.startswith(self.PREFIX + "renamed: '"))
+        self.assertTrue(label.endswith("; 2 record(s) keep the old text (no record was changed)"), label)  # the end is whole
+        self.assertEqual(label.count("…"), 2)  # each name was shortened, and says so
+        self.assertIn(old[:30], label)
+        self.assertIn(new[:30], label)
+
+    def test_adding_deactivating_and_bringing_back_a_160_character_tier_fit(self):
+        name = _long_tier_name("Charlie")
+        self.assertEqual(self.admin.post(self.LIST, {"name": name}, format="json").status_code, 201)
+        tier = BoatCapacityFare.objects.get(name=name)
+        self.assertEqual(self.admin.post(self._url(tier, "deactivate"), {}, format="json").status_code, 200)
+        self.assertEqual(self.admin.post(self._url(tier, "reactivate"), {}, format="json").status_code, 200)
+        self._fits(self._labels())
+        self.assertGreaterEqual(len(self._labels()), 3)
+
+    def test_the_reorder_of_the_nine_real_tiers_fits_though_it_names_them_all(self):
+        import importlib
+
+        real = importlib.import_module("api.migrations.0056_seed_boat_capacity_fares").TIERS
+        BoatCapacityFare.objects.all().delete()
+        tiers = [BoatCapacityFare.objects.create(name=name, display_order=(i + 1) * 10) for i, name in enumerate(real)]
+        naive = self.PREFIX + "reordered: " + ", ".join(f"'{name}'" for name in reversed(real))
+        self.assertGreater(len(naive), 255)  # live: 439. This is the case that would have been a 500
+        response = self.admin.post(self.REORDER, {"ids": [t.pk for t in reversed(tiers)]}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([row["name"] for row in response.json()], list(reversed(real)))
+        label = self._labels()[-1]
+        self._fits([label])
+        self.assertTrue(label.startswith(self.PREFIX + "reordered: '"))
+        self.assertTrue(label.endswith("…"))
+
+    def test_the_reorder_of_many_160_character_tiers_fits(self):
+        extra = [BoatCapacityFare.objects.create(name=_long_tier_name(f"T{n}"), display_order=100 + n) for n in range(5)]
+        ids = [t.pk for t in reversed(list(BoatCapacityFare.objects.order_by("display_order", "id")))]
+        self.assertEqual(len(ids), 4 + len(extra))
+        response = self.admin.post(self.REORDER, {"ids": ids}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self._fits([self._labels()[-1]])
+
+    def test_no_label_written_by_any_of_these_is_longer_than_the_column(self):
+        name = _long_tier_name("Delta")
+        self.admin.post(self.LIST, {"name": name}, format="json")
+        tier = BoatCapacityFare.objects.get(name=name)
+        self.admin.patch(self._url(tier), {"name": _long_tier_name("Echo")}, format="json")
+        self.admin.post(self._url(tier, "deactivate"), {}, format="json")
+        self._fits(self._labels())
