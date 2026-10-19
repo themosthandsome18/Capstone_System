@@ -8525,7 +8525,10 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         self.assertEqual(log.action, ACTION_UPDATE)
         self.assertIn("reordered", log.record_label)
         label = log.record_label
-        self.assertTrue(label.index("Delta") < label.index("Charlie") < label.index("Bravo") < label.index("Alpha"))
+        # the label says how many moved and names the movers in the new order; Delta, now first, did not move
+        self.assertIn("3 of 4 tier(s) moved", label)
+        self.assertTrue(label.index("Charlie") < label.index("Bravo") < label.index("Alpha"))
+        self.assertNotIn("Delta", label)
 
     def test_a_failed_write_leaves_no_trace_of_any_kind(self):
         self.admin.post(self.LIST, {"name": ""}, format="json")                              # bad name
@@ -12751,8 +12754,7 @@ class BoatFareLabelLengthTests(_BoatFareApiBase, TestCase):
         self.assertEqual([row["name"] for row in response.json()], list(reversed(real)))
         label = self._labels()[-1]
         self._fits([label])
-        self.assertTrue(label.startswith(self.PREFIX + "reordered: '"))
-        self.assertTrue(label.endswith("…"))
+        self.assertEqual(label, self.PREFIX + "reordered: 8 of 9 tier(s) moved")  # (the form of this label: BoatFareReorderLabelTests)
 
     def test_the_reorder_of_many_160_character_tiers_fits(self):
         extra = [BoatCapacityFare.objects.create(name=_long_tier_name(f"T{n}"), display_order=100 + n) for n in range(5)]
@@ -12916,3 +12918,180 @@ class HotlineLabelLengthTests(TestCase):
         self.admin.post(self._url(contact, "deactivate"), {}, format="json")
         self._fits(self._labels())
         self.assertEqual(len(self._labels()), 2)
+
+
+class MovedTiersTests(TestCase):
+    """_moved_ids: which tiers MOVED, the fewest whose move explains the new order."""
+
+    def setUp(self):
+        from api.views.boat_capacity_fares import _moved_ids
+
+        self.moved = _moved_ids
+
+    def test_nothing_moves_when_the_order_is_the_same(self):
+        self.assertEqual(self.moved([1, 2, 3, 4], [1, 2, 3, 4]), [])
+        self.assertEqual(self.moved([7], [7]), [])
+
+    def test_one_tier_put_first_or_last_is_one_move(self):
+        self.assertEqual(self.moved([1, 2, 3, 4, 5], [4, 1, 2, 3, 5]), [4])
+        self.assertEqual(self.moved([1, 2, 3, 4, 5], [2, 3, 4, 5, 1]), [1])
+        self.assertEqual(self.moved([1, 2, 3, 4, 5], [3, 1, 2, 4, 5]), [3])
+
+    def test_a_swap_of_two_neighbours_is_one_move_and_it_is_always_the_same_one(self):
+        # the tier that was first (and is now second) is the one reported: the answer is fixed, not left to chance
+        self.assertEqual(self.moved([1, 2, 3, 4], [1, 3, 2, 4]), [2])
+        self.assertEqual(self.moved([10, 20], [20, 10]), [10])
+        self.assertEqual(self.moved([1, 2, 3, 4, 5], [1, 2, 3, 5, 4]), [4])  # the last two swapped: the first of the pair
+
+    def test_the_reversed_list_moves_all_but_one(self):
+        for n in (2, 3, 9, 40):
+            ids = list(range(1, n + 1))
+            self.assertEqual(len(self.moved(ids, list(reversed(ids)))), n - 1)
+
+    def test_it_is_the_fewest_for_every_order_of_six_tiers(self):
+        import itertools
+
+        old = [11, 12, 13, 14, 15, 16]
+        for new in itertools.permutations(old):
+            new = list(new)
+            sequence = [old.index(i) for i in new]
+            best = 0  # the most tiers that can stay, found the slow way: try every set
+            for mask in range(1 << 6):
+                kept = [sequence[k] for k in range(6) if mask >> k & 1]
+                if kept == sorted(kept) and len(set(kept)) == len(kept):
+                    best = max(best, len(kept))
+            moved = self.moved(old, new)
+            self.assertEqual(len(moved), 6 - best, new)
+            stay = [i for i in new if i not in moved]
+            self.assertEqual(stay, sorted(stay, key=old.index), new)  # the ones that stay kept their relative order
+            self.assertEqual([i for i in new if i in moved], moved)  # and the movers come in the new order
+
+    def test_the_same_input_gives_the_same_answer(self):
+        old, new = list(range(1, 41)), [5, 3, 1, 2, 4] + list(range(6, 41))
+        self.assertEqual(self.moved(old, new), self.moved(old, new))
+
+
+class BoatFareReorderLabelTests(_BoatFareApiBase, TestCase):
+    """The log label of a reorder says HOW MANY tiers moved and, while that fits, which; it never
+    lists every tier, and it is never longer than the column."""
+
+    PREFIX = "Boat Capacity and Fare tier "
+
+    def setUp(self):
+        self.setUpData()
+
+    def _nine(self):
+        import importlib
+
+        real = importlib.import_module("api.migrations.0056_seed_boat_capacity_fares").TIERS
+        BoatCapacityFare.objects.all().delete()
+        return real, [BoatCapacityFare.objects.create(name=n, display_order=(i + 1) * 10) for i, n in enumerate(real)]
+
+    def _send(self, tiers):
+        response = self.admin.post(self.REORDER, {"ids": [t.pk for t in tiers]}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        return response
+
+    def _label(self):
+        label = ActivityLog.objects.filter(record_type="BoatCapacityFare").order_by("pk").last().record_label
+        self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length, label[:60])
+        return label
+
+    def test_one_tier_moved_to_the_front_is_named_alone(self):
+        real, t = self._nine()
+        self._send([t[4]] + t[:4] + t[5:])
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 9 tier(s) moved: '{real[4]}'")
+
+    def test_one_tier_moved_to_the_end_is_named_alone(self):
+        real, t = self._nine()
+        self._send(t[1:] + [t[0]])
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 9 tier(s) moved: '{real[0]}'")
+
+    def test_two_tiers_moved_are_both_named_in_the_new_order(self):
+        real, t = self._nine()
+        self._send([t[7], t[0], t[2], t[3], t[4], t[5], t[6], t[8], t[1]])
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 2 of 9 tier(s) moved: '{real[7]}', '{real[1]}'")
+
+    def test_all_nine_reversed_gives_the_number_only(self):
+        real, t = self._nine()
+        naive = self.PREFIX + "reordered: " + ", ".join(f"'{name}'" for name in reversed(real))
+        self.assertGreater(len(naive), 255)  # the old label for this: 439 characters, a 500 on live
+        self._send(list(reversed(t)))
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 8 of 9 tier(s) moved")  # one tier always stays
+
+    def test_the_same_order_sent_again_says_no_tier_moved(self):
+        shown = list(BoatCapacityFare.objects.order_by("display_order", "id"))  # the order the app shows
+        self.assertNotEqual([t.pk for t in shown], sorted(t.pk for t in shown))  # (this fixture is not in id order)
+        self._send(shown)
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: no tier moved")
+
+    def test_the_old_order_is_the_order_the_app_shows_not_the_order_of_the_ids(self):
+        a, b, c, d = self.a, self.b, self.c, self.d  # display_order 10, 20, 30, 40; created as c, a, d, b
+        self._send([b, a, c, d])
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 1 of 4 tier(s) moved: '{a.name}'")
+
+    def test_two_long_names_are_named_in_a_shortened_form_when_that_fits(self):
+        BoatCapacityFare.objects.all().delete()
+        names = ["Short one", _long_tier_name("Lima")[:100].rstrip(), "Short two", _long_tier_name("Mike")[:100].rstrip(), "Short three"]
+        t = [BoatCapacityFare.objects.create(name=n, display_order=(i + 1) * 10) for i, n in enumerate(names)]
+        naive = f"{self.PREFIX}reordered: 2 of 5 tier(s) moved: '{names[3]}', '{names[1]}'"
+        self.assertGreater(len(naive), 255)  # in full they would NOT fit ...
+        self._send([t[3], t[0], t[2], t[4], t[1]])
+        label = self._label()
+        self.assertTrue(label.startswith(f"{self.PREFIX}reordered: 2 of 5 tier(s) moved: '"), label)
+        self.assertEqual(label.count("…"), 2)  # ... shortened they do, and say so
+        self.assertIn(names[3][:30], label)
+        self.assertIn(names[1][:30], label)
+
+    def test_forty_long_tiers_reversed_give_the_number_only(self):
+        BoatCapacityFare.objects.all().delete()
+        t = [BoatCapacityFare.objects.create(name=_long_tier_name(f"N{n:02d}"), display_order=(n + 1) * 10) for n in range(40)]
+        response = self._send(list(reversed(t)))
+        self.assertEqual([row["id"] for row in response.json()], [x.pk for x in reversed(t)])  # the reorder itself happened
+        self.assertEqual(self._label(), f"{self.PREFIX}reordered: 39 of 40 tier(s) moved")
+
+    def test_no_order_of_forty_long_tiers_can_make_a_label_longer_than_the_column(self):
+        import random
+
+        from api.views.boat_capacity_fares import _moved_ids, _reorder_note
+
+        ids = list(range(1, 41))
+        names = {i: _long_tier_name(f"P{i:02d}") for i in ids}
+        for seed in range(400):
+            shuffled = ids[:]
+            random.Random(seed).shuffle(shuffled)
+            moved = _moved_ids(ids, shuffled)
+            note = _reorder_note([names[i] for i in moved], len(ids))
+            self.assertLessEqual(len(self.PREFIX + note), 255, (seed, len(moved)))
+            self.assertTrue(note.startswith("reordered: "))
+        # and the same through the real endpoint for a few of them
+        BoatCapacityFare.objects.all().delete()
+        t = [BoatCapacityFare.objects.create(name=names[i], display_order=i * 10) for i in ids]
+        for seed in (1, 2, 3):
+            order = t[:]
+            random.Random(seed).shuffle(order)
+            self._send(order)
+            self._label()
+
+    def test_names_are_listed_exactly_while_they_fit_and_the_number_alone_when_they_do_not(self):
+        from api.views.boat_capacity_fares import LABEL_PREFIX, _reorder_note
+
+        head = len(LABEL_PREFIX) + len("reordered: 4 of 9 tier(s) moved: ")
+        three = ["a" * 50, "b" * 50, "c" * 50]
+        # the three 50-character names, their quotes and separators, then the last name sized to reach 255 exactly
+        used = head + sum(len(n) + 2 for n in three) + 2 * 3
+        last = 255 - used - 2
+        self.assertTrue(0 < last <= 60)
+        fits = _reorder_note(three + ["d" * last], 9)
+        self.assertEqual(len(LABEL_PREFIX + fits), 255)
+        self.assertTrue(fits.endswith("'" + "d" * last + "'"))  # exactly at the column: still named
+        over = _reorder_note(three + ["d" * (last + 1)], 9)
+        self.assertEqual(over, "reordered: 4 of 9 tier(s) moved")  # one character more: the number only
+
+    def test_the_trace_is_still_a_trace(self):
+        self._send([self.d, self.c, self.b, self.a])
+        log = ActivityLog.objects.filter(record_type="BoatCapacityFare").order_by("pk").last()
+        self.assertEqual(log.user, self.admin.user)
+        self.assertEqual(log.action, ACTION_UPDATE)
+        self.assertEqual(log.record_id, "reorder")
+        self.assertEqual(log.module, "tourism")

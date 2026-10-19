@@ -159,6 +159,46 @@ def _rename_note(old_name, new_name, held_by):
     return template.format(shorten_label(old_name, share), shorten_label(new_name, share), held_by)
 
 
+NAME_SHARE = 60  # how much of a tier's name the reorder label carries (a name can be 160)
+
+
+def _moved_ids(old_ids, new_ids):
+    """The ids of the tiers that MOVED, in the new order: the fewest whose move explains the
+    new order. The tiers that did not move are a longest run that was already in the same
+    relative order before (a longest increasing subsequence of their old positions), so
+    putting the first tier at the end is ONE move, not nine tiers that changed place. At
+    least one tier never moves (the one the others are measured against). When two answers
+    are equally short, the first one found is used: swapping two neighbours is one move,
+    and which of the two is called the mover is not meaningful."""
+    old_position = {fare_id: index for index, fare_id in enumerate(old_ids)}
+    sequence = [old_position[fare_id] for fare_id in new_ids]
+    length = [1] * len(sequence)
+    previous = [-1] * len(sequence)
+    for i in range(len(sequence)):
+        for j in range(i):
+            if sequence[j] < sequence[i] and length[j] + 1 > length[i]:
+                length[i], previous[i] = length[j] + 1, j
+    stay = set()
+    if sequence:
+        i = max(range(len(sequence)), key=lambda k: length[k])
+        while i != -1:
+            stay.add(i)
+            i = previous[i]
+    return [fare_id for index, fare_id in enumerate(new_ids) if index not in stay]
+
+
+def _reorder_note(moved_names, total):
+    """The part of the reorder's log label after the prefix: HOW MANY tiers moved, and which
+    ones while that fits in the column; when it does not fit, only the number. A list of
+    every tier (what this label used to be) is 439 characters for the nine real ones and
+    says less than a short summary does."""
+    if not moved_names:
+        return "reordered: no tier moved"
+    count = f"reordered: {len(moved_names)} of {total} tier(s) moved"
+    named = count + ": " + ", ".join(f"'{shorten_label(name, NAME_SHARE)}'" for name in moved_names)
+    return named if len(LABEL_PREFIX + named) <= LABEL_MAX else count
+
+
 def _log(request, fare, action, text, record_id=None):
     log_activity(
         request,
@@ -316,6 +356,8 @@ def boat_capacity_fare_reorder(request):
             return _error("ids must list every existing tier exactly once, with no other id.")
 
         ordered = [existing[fare_id] for fare_id in ids]
+        # (read before the write: `existing` is in the order the app shows, display_order then id)
+        moved = _moved_ids(list(existing), ids)
         for position, fare in enumerate(ordered, start=1):
             fare.display_order = position * ORDER_STEP
         BoatCapacityFare.objects.bulk_update(ordered, ["display_order"])
@@ -323,7 +365,7 @@ def boat_capacity_fare_reorder(request):
             request,
             ordered[0],
             ACTION_UPDATE,
-            "reordered: " + ", ".join(f"'{fare.name}'" for fare in ordered),
+            _reorder_note([existing[fare_id].name for fare_id in moved], len(ordered)),
             record_id="reorder",
         )
         counts = _holder_counts()
