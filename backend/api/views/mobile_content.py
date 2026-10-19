@@ -36,6 +36,7 @@ from rest_framework.response import Response
 from api.models import ACTION_CREATE, ACTION_UPDATE, MODULE_TOURISM, ROLE_ADMIN, MobileContentBlock, MobileContentItem
 from api.permissions import get_user_role
 from api.services import tourism as tourism_services
+from api.services.mobile_content import FEE_PLACEHOLDERS, PLACEHOLDER  # one definition, shared with what the bootstrap fills in
 from api.services.activity import NAME_SHARE, count_of, log_activity, shorten_label
 from api.views.reference_options import clean_name, name_key
 
@@ -67,14 +68,12 @@ WORDS = {  # what the person sees, never the name of a field
     "body": "The text",
 }
 
-FEE_PLACEHOLDERS = ("fee_regular", "fee_discounted", "fee_office")
 KNOWN_PLACEHOLDERS = FEE_PLACEHOLDERS + ("name",)
 FEE_WORDS = {
     "fee_regular": "the regular fee amount",
     "fee_discounted": "the discounted fee amount",
     "fee_office": "the place where the fee is paid",
 }
-PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 # The two entrance fee amounts typed by hand: P80, PHP 64, ₱80.00 ... but not ₱800, ₱80,000 or ₱80.50.
 FEE_AMOUNT = re.compile(r"(?<![A-Za-z0-9])(?:₱|PHP|Php|php|P)\s?(?:80|64)(?:\.0+)?(?![\d,]|\.\d)")
 ANY_PESO = re.compile(r"(?:₱|PHP|Php|php)\s?\d")
