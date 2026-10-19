@@ -6139,6 +6139,52 @@ class ReferenceOptionApiTests(TestCase):
         label = ActivityLog.objects.get().record_label
         self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)  # explicitly: SQLite accepts any length
         self.assertTrue(label.startswith("Travel itinerary option renamed: '"), label)
+        # what the label exists to say, how many records the change touched, is whole: each name was shortened instead
+        self.assertTrue(label.endswith(" (2 records)"), label)
+        self.assertIn("; stay length of '", label)  # the second half of the label is there too
+        self.assertEqual(label.count("\u2026"), 3)  # the old name, the new name and the new name again: each said it was cut
+        self.assertIn(old[:25], label)
+        self.assertIn(new[:25], label)
+
+    def test_a_rename_alone_between_two_120_letter_names_keeps_the_count_whole(self):
+        old, new = self._name120("Delta"), self._name120("Echo")
+        option = self._make("travel-mode", 9962, old, uses=1)
+        naive = f"Vehicle classification option renamed: '{old}' to '{new}' (1 record)"
+        self.assertGreater(len(naive), 255)  # the fixture: written in full it does not fit
+        done = self.admin.patch(
+            self._url("travel-mode", option.id), {"name": new, "confirm_affected_records": 1}, format="json"
+        )
+        self.assertEqual(done.status_code, 200, done.content)
+        label = ActivityLog.objects.get().record_label
+        self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)
+        self.assertTrue(label.startswith("Vehicle classification option renamed: '"), label)
+        self.assertTrue(label.endswith(" (1 record)"), label)  # one record: the singular, whole
+        self.assertEqual(label.count("\u2026"), 2)
+
+    def test_a_stay_length_change_alone_names_the_option_once_and_needs_no_cut_when_it_fits(self):
+        name = self._name120("Foxtrot")
+        option = self._make("itinerary", 9963, name, uses=2, stay_nights=1)
+        done = self.admin.patch(
+            self._url("itinerary", option.id), {"stay_nights": 2, "confirm_affected_records": 2}, format="json"
+        )
+        self.assertEqual(done.status_code, 200, done.content)
+        label = ActivityLog.objects.get().record_label
+        self.assertEqual(label, f"Travel itinerary option stay length of '{name}' changed from 1 to 2 (2 records)")  # one name: it fits, untouched
+        self.assertLessEqual(len(label), 255)
+
+    def test_a_name_in_the_label_always_gets_at_least_20_letters_of_room(self):
+        from api.views.reference_options import _change_note
+
+        old, new = self._name120("Golf"), self._name120("Hotel")
+        # not reachable with the real kinds (their names are short); the function is asked directly with a kind whose name is 200 letters
+        config = {"label": "K" * 200}
+        note = _change_note(config, True, True, old, new, 1, 2, 3)
+        # 20 letters of room each, cut at the end of a word: the names are still there (with no floor the room would be
+        # negative and the names would be empty), and the count is whole
+        self.assertEqual(
+            note,
+            "renamed: 'Golf abcdefghi…' to 'Hotel abcdefghi…'; stay length of 'Hotel abcdefghi…' changed from 1 to 2 (3 records)",
+        )
 
     def test_adding_and_switching_an_option_with_a_120_letter_name_fit_the_column(self):
         name = self._name120("Charlie")
