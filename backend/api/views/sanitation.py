@@ -42,7 +42,7 @@ from api.serializers import (
     SanitaryPermitRenewalSerializer,
     SanitaryStaffSerializer,
 )
-from api.services.activity import log_activity
+from api.services.activity import log_activity, shorten_label
 from api.services.enforcement import issue_enforcement_stage
 from api.services.household import build_household_dashboard_payload
 from api.services.tracking_codes import (
@@ -758,7 +758,7 @@ def sanitation_staff_list(request):
         MODULE_SANITATION,
         ACTION_CREATE,
         new_user,
-        label=f"{new_user.get_full_name() or new_user.username} ({new_user.username})",
+        label=shorten_label(f"{new_user.get_full_name() or new_user.username} ({new_user.username})"),
         record_id=new_user.pk,
     )
 
@@ -839,7 +839,7 @@ def sanitation_staff_detail(request, user_id):
         MODULE_SANITATION,
         ACTION_UPDATE,
         staff_user,
-        label=f"{staff_user.get_full_name() or staff_user.username} ({staff_user.username}) - {status_label}",
+        label=shorten_label(f"{staff_user.get_full_name() or staff_user.username} ({staff_user.username}) - {status_label}"),
         record_id=staff_user.pk,
     )
 
