@@ -85,11 +85,15 @@ class CheckLiveAppContentTests(SimpleTestCase):
     def test_it_exits_nonzero_when_a_check_fails(self):
         from unittest.mock import patch
 
-        with patch.object(self.tool.urllib.request, "urlopen") as urlopen:
+        import contextlib
+        import io
+
+        with patch.object(self.tool.urllib.request, "urlopen") as urlopen, contextlib.redirect_stdout(io.StringIO()) as printed:
             urlopen.return_value.read.return_value = GOLDEN
             self.assertEqual(self.tool.main([]), 1)
             urlopen.return_value.read.return_value = self.good
             self.assertEqual(self.tool.main([]), 0)
+        self.assertIn("FAIL appContent IS in the bootstrap", printed.getvalue())
 
     def test_a_month_turning_is_told_from_a_real_change(self):
         """On 1 November the arrivals of a destination go back to 0 with nothing deployed: the byte checks must fail (the old bytes DID
