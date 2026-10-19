@@ -31,7 +31,7 @@ from api.models import (
 )
 from api.permissions import get_user_role
 from api.services import online_booking
-from api.services.activity import count_of, log_activity
+from api.services.activity import count_of, log_activity, shorten_label
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
 
 KINDS = {
@@ -144,7 +144,7 @@ def _log(request, config, option, text):
         MODULE_TOURISM,
         ACTION_CREATE if text.startswith("added") else ACTION_UPDATE,
         option,
-        label=f"{config['label']} option {text}",
+        label=shorten_label(f"{config['label']} option {text}"),  # (two names of 120 letters do not fit in 255)
         record_id=option.pk,
     )
 

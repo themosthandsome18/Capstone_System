@@ -6119,6 +6119,48 @@ class ReferenceOptionApiTests(TestCase):
 
     # -- the trace ---------------------------------------------------------
 
+    def _name120(self, tag):
+        name = (f"{tag} " + "abcdefghi " * 20)[:119] + "z"
+        assert len(name) == 120 and "  " not in name
+        return name
+
+    def test_the_label_of_the_worst_rename_is_within_the_column_and_the_rename_is_kept(self):
+        old, new = self._name120("Alpha"), self._name120("Bravo")
+        option = self._make("itinerary", 9960, old, uses=2, stay_nights=1)
+        naive = f"Travel itinerary option renamed: '{old}' to '{new}'; stay length of '{new}' changed from 1 to 3 (2 records)"
+        self.assertGreater(len(naive), 255)  # the fixture: written in full this label is NOT within the column
+        ask = self.admin.patch(self._url("itinerary", option.id), {"name": new, "stay_nights": 3}, format="json")
+        self.assertEqual((ask.status_code, ask.json()["record_count"]), (409, 2))  # (it asks first, with the real number)
+        done = self.admin.patch(
+            self._url("itinerary", option.id), {"name": new, "stay_nights": 3, "confirm_affected_records": 2}, format="json"
+        )
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(Itinerary.objects.get(pk=option.id).name, new)  # the rename itself was NOT lost to its label
+        label = ActivityLog.objects.get().record_label
+        self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)  # explicitly: SQLite accepts any length
+        self.assertTrue(label.startswith("Travel itinerary option renamed: '"), label)
+
+    def test_adding_and_switching_an_option_with_a_120_letter_name_fit_the_column(self):
+        name = self._name120("Charlie")
+        created = self.admin.post(self._url("itinerary"), {"name": name}, format="json")
+        self.assertEqual(created.status_code, 201, created.content)
+        option_id = created.json()["id"]
+        self.assertEqual(self.admin.post(self._url("itinerary", option_id, "deactivate")).status_code, 200)
+        self.assertEqual(self.admin.post(self._url("itinerary", option_id, "reactivate")).status_code, 200)
+        labels = list(ActivityLog.objects.order_by("pk").values_list("record_label", flat=True))
+        self.assertEqual(len(labels), 3)  # (added, deactivated, brought back: all three were logged)
+        for label in labels:
+            self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)
+            self.assertIn(name[:40], label)
+
+    def test_the_labels_of_ordinary_names_are_not_touched(self):
+        option = self._make("itinerary", 9961, "Short Trail", uses=1, stay_nights=1)
+        self.admin.patch(self._url("itinerary", option.id), {"name": "Short Trail 2", "confirm_affected_records": 1}, format="json")
+        self.assertEqual(
+            ActivityLog.objects.get().record_label,
+            "Travel itinerary option renamed: 'Short Trail' to 'Short Trail 2' (1 record)",
+        )
+
     def test_the_label_of_a_rename_says_1_record_not_record_s(self):
         single = self._make("itinerary", 9950, "Single Trail", uses=1, stay_nights=1)
         ask = self.admin.patch(self._url("itinerary", single.id), {"name": "Single Trail 2"}, format="json")
