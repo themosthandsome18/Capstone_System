@@ -14160,3 +14160,532 @@ class MobileContentItemLockTests(_ItemApiBase, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([name for name, _inside in seen], ["_lock", "log_activity"])
         self.assertTrue(all(inside for _name, inside in seen), seen)
+
+
+# -- Mobile App Content, commit 2c: the endpoints of the blocks -----------------------------------------------------------
+
+from api.models import MobileContentBlock as _Block  # noqa: E402
+
+
+class _BlockApiBase:
+    """The five blocks as the migration put them in (the real texts), the ten real items, an admin and the helpers."""
+
+    LIST = "/api/mobile-content/blocks/"
+    ORDER = ["welcome", "why_visit", "travel_guide", "port_guide", "fee_office"]
+
+    def setUpBlocks(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+        from django.core.cache import cache
+
+        cache.clear()
+        ensure_test_reference_tables()
+        _Item.objects.all().delete()
+        _Block.objects.all().delete()
+        importlib.import_module("api.migrations.0061_seed_mobile_content").add_content(django_apps, None)
+        self.admin = self._client(ROLE_ADMIN, "mb_admin")
+
+    def _client(self, role, username):
+        user = User.objects.create_user(username=username, password="Staff@12345")
+        UserProfile.objects.create(user=user, role=role)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
+        client.user = user
+        return client
+
+    def _url(self, key=None):
+        return self.LIST + (f"{key}/" if key else "")
+
+    def _logs(self):
+        return ActivityLog.objects.filter(record_type="MobileContentBlock").order_by("pk")
+
+    def _state(self):
+        return list(_Block.objects.order_by("pk").values()), self._logs().count(), ActivityLog.objects.count()
+
+    def _refuse(self, key, body, expect=400):
+        """Refused, AND nothing was written, AND nothing was logged anywhere."""
+        before = self._state()
+        response = self.admin.patch(self._url(key), body, format="json")
+        self.assertEqual(response.status_code, expect, (key, body, response.content))
+        self.assertEqual(self._state(), before, (key, body))
+        return response.json()
+
+    def _ok(self, key, body, expect=200):
+        response = self.admin.patch(self._url(key), body, format="json")
+        self.assertEqual(response.status_code, expect, (key, body, response.content))
+        return response.json()
+
+    def _block(self, key):
+        return _Block.objects.get(key=key)
+
+
+class MobileContentBlockAccessTests(_BlockApiBase, TestCase):
+    def setUp(self):
+        self.setUpBlocks()
+        self.tourism = self._client(ROLE_TOURISM, "mb_tourism")
+        self.tourist = self._client(ROLE_TOURIST, "mb_tourist")
+
+    def _operations(self):
+        return [("get", self.LIST, None, 200), ("patch", self._url("welcome"), {"subtitle": "A new welcome line."}, 200)]
+
+    def _check(self, who, expected):
+        for method, url, body, _ok in self._operations():
+            before = self._state()
+            response = getattr(who, method)(url, body, format="json")
+            self.assertEqual(response.status_code, expected, (method, url))
+            self.assertEqual(self._state(), before, (method, url))
+
+    def test_the_same_requests_work_for_the_admin(self):
+        self.assertEqual(_Block.objects.count(), 5)  # the fixture
+        for method, url, body, ok in self._operations():
+            self.assertEqual(getattr(self.admin, method)(url, body, format="json").status_code, ok, (method, url))
+
+    def test_anonymous_is_401(self):
+        self._check(APIClient(), status.HTTP_401_UNAUTHORIZED)
+
+    def test_the_tourism_role_is_403(self):
+        self._check(self.tourism, status.HTTP_403_FORBIDDEN)
+
+    def test_a_tourist_is_403(self):
+        self._check(self.tourist, status.HTTP_403_FORBIDDEN)
+
+    def test_a_block_cannot_be_added_or_deleted(self):
+        before = self._state()
+        for method, url in (
+            ("post", self.LIST), ("post", self._url("brand_new")), ("delete", self._url("welcome")), ("delete", self.LIST), ("put", self._url("welcome")),
+        ):
+            response = getattr(self.admin, method)(url, {"key": "brand_new", "title": "x"}, format="json")
+            self.assertIn(response.status_code, (404, 405), (method, url))
+        self.assertEqual(self._state(), before)
+        self.assertEqual(_Block.objects.count(), 5)
+
+    def test_a_key_that_is_not_one_of_the_five_is_404_even_when_a_row_with_it_exists(self):
+        _Block.objects.create(key="extra", title="x")
+        self.assertTrue(_Block.objects.filter(key="extra").exists())  # the fixture: the row is really there
+        self._refuse("extra", {"title": "changed"}, expect=404)
+        self._refuse("nope", {"title": "changed"}, expect=404)
+
+
+class MobileContentBlockListTests(_BlockApiBase, TestCase):
+    def setUp(self):
+        self.setUpBlocks()
+
+    def test_the_five_blocks_come_in_their_fixed_order_whatever_the_order_in_the_database(self):
+        rows = {b.key: (b.title, b.subtitle, b.body) for b in _Block.objects.all()}
+        _Block.objects.all().delete()
+        for key in reversed(self.ORDER):  # created backwards
+            _Block.objects.create(key=key, title=rows[key][0], subtitle=rows[key][1], body=rows[key][2])
+        self.assertEqual(list(_Block.objects.values_list("key", flat=True)), list(reversed(self.ORDER)))  # the fixture: the database order is NOT the fixed one
+        body = self._ok_get()
+        self.assertEqual([b["key"] for b in body["blocks"]], self.ORDER)
+
+    def _ok_get(self):
+        response = self.admin.get(self.LIST)
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_a_row_that_is_not_one_of_the_five_is_not_listed(self):
+        _Block.objects.create(key="extra", title="x")
+        self.assertEqual(_Block.objects.count(), 6)  # the fixture
+        self.assertEqual([b["key"] for b in self._ok_get()["blocks"]], self.ORDER)
+
+    def test_only_the_blocks_that_exist_are_listed(self):
+        _Block.objects.filter(key="travel_guide").delete()
+        self.assertEqual(_Block.objects.count(), 4)  # the fixture
+        self.assertEqual([b["key"] for b in self._ok_get()["blocks"]], ["welcome", "why_visit", "port_guide", "fee_office"])
+
+    def test_each_block_says_what_it_holds_and_the_texts_are_the_stored_ones(self):
+        body = self._ok_get()
+        by_key = {b["key"]: b for b in body["blocks"]}
+        self.assertEqual(set(by_key["welcome"]), {"key", "name", "title", "subtitle", "body", "fields", "limits", "allowed_placeholders"})
+        self.assertEqual(
+            {k: b["fields"] for k, b in by_key.items()},
+            {"welcome": ["title", "subtitle"], "why_visit": ["title", "subtitle", "body"], "travel_guide": ["title"],
+             "port_guide": ["title", "body"], "fee_office": ["body"]},
+        )
+        for key, block in by_key.items():
+            stored = self._block(key)
+            self.assertEqual((block["title"], block["subtitle"], block["body"]), (stored.title, stored.subtitle, stored.body))
+        self.assertEqual(by_key["welcome"]["title"], "Mabuhay, {name}! \U0001f30a")  # the fixture is the real seed
+        self.assertEqual(by_key["fee_office"]["body"], "Tourism Office, 2nd Floor, Mauban Municipal Hall")
+
+    def test_the_limits_are_in_the_answer_so_the_web_page_does_not_have_to_know_them(self):
+        by_key = {b["key"]: b["limits"] for b in self._ok_get()["blocks"]}
+        self.assertEqual(by_key["welcome"], {"title": {"kind": "line", "max": 160, "required": True}, "subtitle": {"kind": "line", "max": 300, "required": True}})
+        self.assertEqual(by_key["why_visit"]["body"], {"kind": "text", "max": 600, "required": True})
+        self.assertEqual(by_key["port_guide"]["body"], {"kind": "lines", "max": 400, "max_lines": 8, "required": True})
+        self.assertEqual(by_key["fee_office"], {"body": {"kind": "line", "max": 120, "required": True}})
+        self.assertEqual(set(by_key["travel_guide"]), {"title"})
+
+    def test_the_allowed_placeholders_are_in_the_answer_per_field(self):
+        by_key = {b["key"]: b["allowed_placeholders"] for b in self._ok_get()["blocks"]}
+        fee = ["fee_regular", "fee_discounted", "fee_office"]
+        self.assertEqual(by_key["welcome"], {"title": fee + ["name"], "subtitle": fee + ["name"]})
+        self.assertEqual(by_key["why_visit"], {"title": fee, "subtitle": fee, "body": fee})
+        self.assertEqual(by_key["port_guide"], {"title": fee, "body": fee})
+        self.assertEqual(by_key["fee_office"], {"body": []})  # the place holds no placeholder of its own
+        notes = self._ok_get()["placeholders"]
+        self.assertEqual(set(notes), {"fee_regular", "fee_discounted", "fee_office", "name"})
+
+    def test_the_entrance_fee_is_in_the_answer_read_only_and_comes_from_the_one_constant(self):
+        from unittest import mock
+
+        from api.services import tourism as tourism_services
+
+        body = self._ok_get()
+        self.assertEqual(body["fee"], {"regular": tourism_services.REGULAR_ENTRANCE_FEE, "discounted": tourism_services.DISCOUNTED_ENTRANCE_FEE})
+        self.assertEqual((body["fee"]["regular"], body["fee"]["discounted"]), (80, 64))
+        self.assertNotEqual(tourism_services.REGULAR_ENTRANCE_FEE, 99)  # the fixture
+        with mock.patch.object(tourism_services, "REGULAR_ENTRANCE_FEE", 99), mock.patch.object(tourism_services, "DISCOUNTED_ENTRANCE_FEE", 77):
+            changed = self._ok_get()["fee"]
+        self.assertEqual(changed, {"regular": 99, "discounted": 77})  # read when asked, not copied into this file
+        # and it cannot be set through this API
+        self.assertEqual(self.admin.patch(self._url("welcome"), {"fee": {"regular": 1}}, format="json").status_code, 200)
+        self.assertEqual(self._ok_get()["fee"], {"regular": 80, "discounted": 64})
+
+
+class MobileContentBlockEditTests(_BlockApiBase, TestCase):
+    def setUp(self):
+        self.setUpBlocks()
+
+    # -- the welcome banner ----------------------------------------------------------------------------------
+
+    def test_the_welcome_banner_takes_the_visitors_name_in_the_title_and_in_the_subtitle(self):
+        body = self._ok("welcome", {"title": "Kumusta, {name}! \U0001f30a", "subtitle": "Welcome, {name}, to Mauban."})
+        self.assertEqual((body["title"], body["subtitle"]), ("Kumusta, {name}! \U0001f30a", "Welcome, {name}, to Mauban."))
+        self.assertEqual(self._block("welcome").subtitle, "Welcome, {name}, to Mauban.")
+
+    def test_the_visitors_name_belongs_to_the_welcome_banner_and_to_no_other_text(self):
+        pairs = [("why_visit", "title"), ("why_visit", "subtitle"), ("why_visit", "body"), ("travel_guide", "title"), ("port_guide", "title"), ("port_guide", "body")]
+        self.assertEqual(len(pairs), 6)
+        for key, field in pairs:
+            reply = self._refuse(key, {field: "Hello {name}"})
+            self.assertIn("welcome greeting", reply["detail"], (key, field))
+        reply = self._refuse("fee_office", {"body": "Hall of {name}"})
+        self.assertTrue(reply["detail"])
+
+    def test_the_welcome_banner_needs_a_title_and_a_subtitle_and_shows_no_text(self):
+        self.assertEqual(self._block("welcome").body, "")  # the fixture: the unused part is empty
+        for body in ({"title": ""}, {"title": "   "}, {"subtitle": ""}, {"subtitle": "  \n "}, {"title": 5}, {"subtitle": ["x"]}):
+            self._refuse("welcome", body)
+        reply = self._refuse("welcome", {"body": "Something the app never shows"})
+        self.assertIn("must stay empty", reply["detail"])
+        self.assertNotIn("_", reply["detail"])
+
+    def test_a_part_the_app_does_not_show_may_be_sent_empty(self):
+        body = self._ok("welcome", {"body": "", "subtitle": "A new welcome line."})
+        self.assertEqual((body["body"], body["subtitle"]), ("", "A new welcome line."))
+
+    def test_the_longest_and_one_letter_more_for_each_text_of_each_block(self):
+        cases = [("welcome", "title", 160), ("welcome", "subtitle", 300), ("why_visit", "title", 160), ("why_visit", "subtitle", 300),
+                 ("why_visit", "body", 600), ("travel_guide", "title", 160), ("port_guide", "title", 160), ("fee_office", "body", 120)]
+        for key, field, longest in cases:
+            before = getattr(self._block(key), field)
+            self.assertNotEqual(before, "x" * longest)  # the fixture: the longest really is a change
+            self.assertEqual(self._ok(key, {field: "x" * longest})[field], "x" * longest)
+            reply = self._refuse(key, {field: "y" * (longest + 1)})
+            self.assertIn(str(longest), reply["detail"], (key, field))
+
+    def test_a_single_line_text_loses_its_double_spaces_and_line_breaks(self):
+        body = self._ok("why_visit", {"title": "  Why   visit \n here  ", "subtitle": "One\nline"})
+        self.assertEqual((body["title"], body["subtitle"]), ("Why visit here", "One line"))
+
+    def test_the_introduction_keeps_its_paragraphs(self):
+        raw = "First paragraph.  \r\n\r\n\r\n\r\nSecond paragraph.\r\nStill the second.  \r\n"
+        self.assertEqual(self._ok("why_visit", {"body": raw})["body"], "First paragraph.\n\nSecond paragraph.\nStill the second.")
+
+    def test_a_character_that_cannot_be_shown_is_refused_in_every_kind_of_text(self):
+        for key, field in (("welcome", "title"), ("why_visit", "body"), ("fee_office", "body"), ("travel_guide", "title")):
+            self._refuse(key, {field: "bad\x07text"})
+            self._refuse(key, {field: "bad\x00text"})
+        self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\nbad\x1btext"})
+        self._ok("why_visit", {"body": "A tab\tis allowed"})  # a tab and a line break are not "characters that cannot be shown"
+
+    def test_the_introduction_cannot_be_emptied(self):
+        for blank in ("", "   \n  \t "):
+            self._refuse("why_visit", {"body": blank})
+
+    # -- the heading of the travel guide -----------------------------------------------------------------------
+
+    def test_the_travel_guide_heading_is_a_title_and_nothing_else(self):
+        self.assertEqual((self._block("travel_guide").subtitle, self._block("travel_guide").body), ("", ""))  # the fixture
+        self.assertEqual(self._ok("travel_guide", {"title": "\U0001f4d6 Guide & tips"})["title"], "\U0001f4d6 Guide & tips")
+        for field in ("subtitle", "body"):
+            self._refuse("travel_guide", {field: "text"})
+        self._refuse("travel_guide", {"title": ""})
+
+    # -- the port guide -----------------------------------------------------------------------------------------
+
+    PORT_KEEP = "Departures {fee_regular} {fee_discounted} at the {fee_office}."  # a line that keeps every fee placeholder
+
+    def test_the_port_guide_is_one_to_eight_lines(self):
+        for count in (1, 2, 8):
+            lines = [self.PORT_KEEP] + [f"Line {n}" for n in range(2, count + 1)]
+            self.assertEqual(len(lines), count)
+            body = self._ok("port_guide", {"body": "\n".join(lines)})
+            self.assertEqual(body["body"].split("\n"), lines)
+        nine = "\n".join([self.PORT_KEEP] + [f"Line {n}" for n in range(2, 10)])
+        self.assertEqual(len(nine.split("\n")), 9)  # the fixture: nine lines
+        self.assertIn("8", self._refuse("port_guide", {"body": nine})["detail"])
+        for blank in ("", "  \n \n  "):
+            self._refuse("port_guide", {"body": blank})
+
+    def test_blank_lines_and_extra_spaces_are_cleaned_away_before_the_lines_are_counted(self):
+        raw = f"{self.PORT_KEEP}\r\n\r\n   \r\nSecond   line  \r\n\r\n"
+        body = self._ok("port_guide", {"body": raw})
+        self.assertEqual(body["body"], f"{self.PORT_KEEP}\nSecond line")
+        # eight real lines with blank lines between them are still eight lines
+        spaced = "\n\n".join([self.PORT_KEEP] + [f"Line {n}" for n in range(2, 9)])
+        self.assertEqual(len([l for l in spaced.split("\n") if l]), 8)
+        self.assertGreater(len(spaced.split("\n")), 8)  # the fixture: counted raw it would be more than eight
+        self.assertEqual(len(self._ok("port_guide", {"body": spaced})["body"].split("\n")), 8)
+
+    def test_a_line_that_starts_with_a_bullet_is_refused_and_the_message_says_which_line(self):
+        for bullet_line in ("• Starts with a bullet", "   • Spaces first", "•"):
+            reply = self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\nA good line\n{bullet_line}"})
+            self.assertIn("Line 3 starts with a bullet", reply["detail"])
+        # a dash or a bullet in the middle of a line is nobody's business
+        body = self._ok("port_guide", {"body": f"{self.PORT_KEEP}\n- a dash is fine\nBoats • and more"})
+        self.assertEqual(len(body["body"].split("\n")), 3)
+
+    def test_each_line_of_the_port_guide_has_a_limit(self):
+        longest = self.PORT_KEEP + "x" * (400 - len(self.PORT_KEEP))
+        self.assertEqual(len(longest), 400)
+        self.assertEqual(self._ok("port_guide", {"body": longest})["body"], longest)
+        reply = self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\n" + "z" * 401})
+        self.assertIn("Line 2 is 401 letters", reply["detail"])
+
+    def test_a_control_character_in_a_port_guide_line_is_refused(self):
+        self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\nbad\x07line"})
+
+    def test_the_port_guide_has_no_subtitle(self):
+        self._refuse("port_guide", {"subtitle": "not shown"})
+
+    # -- placeholders: the same rules as for the items, in every text of every block ---------------------------------
+
+    def test_placeholders_in_the_blocks_the_same_rules_as_the_items(self):
+        accepted, refused = MobileContentItemCreateTests.ACCEPTED_PLACEHOLDERS, MobileContentItemCreateTests.REFUSED_PLACEHOLDERS
+        refused = [t for t in refused if t != "{name}"]  # (the name has its own test: it is allowed in the welcome banner)
+        self.assertGreaterEqual(len(accepted), 6)
+        self.assertGreaterEqual(len(refused), 15)
+        self.assertTrue(all(("{" in t or "}" in t) for t in refused))
+        keep = "{fee_regular} {fee_discounted} {fee_office}"  # texts that keep the fee placeholders, so nothing is "taken out"
+        targets = [("welcome", "title"), ("welcome", "subtitle"), ("why_visit", "title"), ("why_visit", "subtitle"), ("why_visit", "body"),
+                   ("travel_guide", "title"), ("port_guide", "title")]
+        for key, field in targets:
+            for text in refused:
+                self._refuse(key, {field: text})
+            for text in accepted:
+                reply = self._ok(key, {field: text + " " + keep})
+                self.assertEqual(reply[field], text + " " + keep)
+        for text in refused:  # the port guide is lines: the refused text can be on any line
+            self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\n{text}"})
+        for text in accepted:
+            self._ok("port_guide", {"body": f"{self.PORT_KEEP}\n{text}"})
+
+    def test_a_near_miss_in_a_block_is_answered_with_what_was_meant(self):
+        reply = self._refuse("why_visit", {"body": "Pay at the {fee_ofice}."})
+        self.assertIn("Did you mean {fee_office}?", reply["detail"])
+
+    def test_the_fee_amounts_cannot_be_typed_in_any_block(self):
+        for key, field in (("welcome", "subtitle"), ("why_visit", "body"), ("travel_guide", "title"), ("port_guide", "title")):
+            for text in MobileContentItemCreateTests.REFUSED_AMOUNTS:
+                reply = self._refuse(key, {field: text})
+                self.assertIn("{fee_regular}", reply["detail"])
+        for text in MobileContentItemCreateTests.REFUSED_AMOUNTS:
+            self._refuse("port_guide", {"body": f"{self.PORT_KEEP}\n{text}"})
+        for text in MobileContentItemCreateTests.ACCEPTED_AMOUNTS:
+            self._ok("why_visit", {"subtitle": text})
+
+    # -- taking a fee placeholder out ------------------------------------------------------------------------------------
+
+    def test_taking_a_fee_placeholder_out_of_the_port_guide_needs_a_confirmation(self):
+        body = self._block("port_guide").body
+        for name in ("fee_regular", "fee_discounted", "fee_office"):
+            self.assertIn("{" + name + "}", body)  # the fixture: the real port guide has all three
+        change = {"body": "Boats leave at seven.\nThe boat fare is separate."}
+        reply = self._refuse("port_guide", change, expect=409)
+        self.assertEqual((reply["code"], reply["dropped"]), ("confirm_required", ["fee_discounted", "fee_office", "fee_regular"]))
+        for words in ("the regular fee amount", "the discounted fee amount", "the place where the fee is paid"):
+            self.assertIn(words, reply["detail"])
+        self.assertNotIn("_", reply["detail"])
+        self._ok("port_guide", dict(change, confirm_dropped=["fee_regular", "fee_discounted", "fee_office"]))
+        self.assertEqual(self._block("port_guide").body, "Boats leave at seven.\nThe boat fare is separate.")
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_a_confirmation_must_be_exactly_what_the_server_found(self):
+        change = {"body": f"Departures {{fee_regular}} {{fee_discounted}}.\nNo place named."}
+        for wrong in (None, [], ["fee_regular"], ["fee_office", "fee_regular"], "fee_office", {"fee_office": 1}, ["x"]):
+            body = dict(change)
+            if wrong is not None:
+                body["confirm_dropped"] = wrong
+            reply = self._refuse("port_guide", body, expect=409)
+            self.assertEqual(reply["dropped"], ["fee_office"])
+        self._ok("port_guide", dict(change, confirm_dropped=["fee_office"]))
+
+    def test_a_placeholder_that_moves_to_another_line_or_text_of_the_block_is_not_taken_out(self):
+        body = self._ok("port_guide", {"body": "{fee_office} first now.\nThen {fee_regular} and {fee_discounted}."})
+        self.assertEqual(self._logs().count(), 1)
+        self.assertIn("{fee_office} first", body["body"])
+        # a placeholder that is only in the title and is lost needs the confirmation too (the whole block counts)
+        _Block.objects.filter(key="port_guide").update(title="Boats ({fee_regular})", body="Pay {fee_discounted} at the {fee_office}.")
+        row = self._block("port_guide")
+        self.assertIn("{fee_regular}", row.title)       # the fixture: it is in the title ...
+        self.assertNotIn("{fee_regular}", row.body)      # ... and nowhere else in the block
+        reply = self._refuse("port_guide", {"title": "Boats"}, expect=409)
+        self.assertEqual(reply["dropped"], ["fee_regular"])
+        # but losing it from the title while the body still has it is not taking it out
+        _Block.objects.filter(key="port_guide").update(body="Pay {fee_regular} {fee_discounted} at the {fee_office}.")
+        self._ok("port_guide", {"title": "Boats"})
+
+    def test_taking_the_visitors_name_out_of_the_welcome_banner_is_allowed_with_a_warning(self):
+        self.assertIn("{name}", self._block("welcome").title)  # the fixture
+        body = self._ok("welcome", {"title": "Welcome to Mauban", "subtitle": "The same line for everyone."})
+        self.assertEqual(len(body["warnings"]), 1)
+        self.assertIn("visitor's name", body["warnings"][0])
+        quiet = self._ok("welcome", {"title": "Welcome again {name}"})
+        self.assertEqual(quiet["warnings"], [])
+
+    # -- the place where the fee is paid ----------------------------------------------------------------------------------
+
+    def test_the_place_where_the_fee_is_paid_is_plain_words_and_cannot_be_empty(self):
+        for blank in ("", "   "):
+            self._refuse("fee_office", {"body": blank})
+        for text in ("Hall of {fee_office}", "{fee_regular}", "a { b", "b } c", "{}", "{name}", "{x"):
+            self.assertTrue("{" in text or "}" in text)
+            reply = self._refuse("fee_office", {"body": text})
+            self.assertIn("bracket", reply["detail"])
+        for text in ("₱80 counter", "Window P64"):
+            self._refuse("fee_office", {"body": text})
+        self.assertEqual(self._ok("fee_office", {"body": "  Municipal   Hall,\nGround Floor "})["body"], "Municipal Hall, Ground Floor")
+
+    def test_the_place_has_no_title_and_no_subtitle(self):
+        self.assertEqual((self._block("fee_office").title, self._block("fee_office").subtitle), ("", ""))  # the fixture
+        for field in ("title", "subtitle"):
+            self._refuse("fee_office", {field: "something"})
+
+    def test_editing_the_place_says_how_many_texts_of_the_app_use_it(self):
+        used = sum(
+            text.count("{fee_office}")
+            for text in [i.title + i.short_text + i.full_text for i in _Item.objects.all()]
+            + [b.title + b.subtitle + b.body for b in _Block.objects.exclude(key="fee_office")]
+        )
+        self.assertEqual(used, 3)  # the fixture: the Boat Guide tile, the Environmental Fee tile and the port guide
+        body = self._ok("fee_office", {"body": "Municipal Hall, Room 5"})
+        self.assertEqual(len(body["warnings"]), 1)
+        self.assertIn("used in 3 texts of the app", body["warnings"][0])
+        self.assertIn("All of them change", body["warnings"][0])
+        self.assertEqual(self._logs().count(), 1)  # no confirmation was needed for it
+
+    def test_a_place_used_in_one_text_is_said_in_the_singular(self):
+        _Item.objects.all().delete()
+        _Block.objects.filter(key="port_guide").update(body="Departures at seven.\nPay at the {fee_office}.")
+        body = self._ok("fee_office", {"body": "Municipal Hall, Room 6"})
+        self.assertIn("used in 1 text of the app", body["warnings"][0])
+        self.assertIn("It changes with this edit", body["warnings"][0])
+
+    # -- no change, the key, the trace -----------------------------------------------------------------------------------------
+
+    def test_every_block_accepts_an_edit_with_its_own_texts_and_nothing_changes(self):
+        before = self._state()
+        for key in self.ORDER:
+            block = self._block(key)
+            sent = {"title": block.title, "subtitle": block.subtitle, "body": block.body}
+            body = self._ok(key, sent)
+            self.assertEqual((body["title"], body["subtitle"], body["body"]), (block.title, block.subtitle, block.body))
+            self.assertEqual(body["warnings"], [])
+        self.assertEqual(self._state(), before)  # nothing written, nothing logged (and the real texts passed every rule)
+        self._ok("welcome", {"subtitle": "A real change"})
+        self.assertEqual(self._logs().count(), 1)  # so the silence above was not a broken log
+
+    def test_the_key_in_the_request_may_be_the_same_but_not_another(self):
+        self._ok("welcome", {"key": "welcome", "subtitle": "Same key is fine"})
+        reply = self._refuse("welcome", {"key": "why_visit", "subtitle": "Another key"})
+        self.assertIn("cannot be changed", reply["detail"])
+
+    def test_the_trace_names_the_block_and_what_changed_and_never_the_text(self):
+        marker = "ZZ-MARKER-TEXT"
+        self._ok("why_visit", {"title": "A new title", "body": marker + " " + "w" * 300})
+        self._ok("port_guide", {"title": "Boats"})
+        self._ok("fee_office", {"body": "The Hall"})
+        rows = list(self._logs())
+        self.assertEqual(
+            [r.record_label for r in rows],
+            ["Mobile content block (Why Visit introduction) edited: title, text",
+             "Mobile content block (Port & Boat Guide) edited: title",
+             "Mobile content block (Place where the fee is paid) edited: text"],
+        )
+        self.assertEqual([r.record_id for r in rows], ["why_visit", "port_guide", "fee_office"])  # the key, not a number
+        for row in rows:
+            self.assertEqual((row.user, row.module, row.action, row.record_type), (self.admin.user, "tourism", ACTION_UPDATE, "MobileContentBlock"))
+            self.assertNotIn(marker, row.record_label)
+            self.assertLessEqual(len(row.record_label), ActivityLog._meta.get_field("record_label").max_length)
+
+    def test_the_same_edit_twice_the_same_day_is_logged_twice(self):
+        self._ok("welcome", {"subtitle": "First"})
+        self._ok("welcome", {"subtitle": "Second"})
+        self._ok("welcome", {"subtitle": "First"})
+        self._ok("welcome", {"subtitle": "Second"})
+        labels = [r.record_label for r in self._logs()]
+        self.assertEqual(len(labels), 4)
+        self.assertEqual(labels[0], labels[2])  # identical rows: the colleague's constraint does not look at them
+
+
+class MobileContentBlockAtomicTests(_BlockApiBase, TestCase):
+    def setUp(self):
+        self.setUpBlocks()
+
+    def test_when_the_log_fails_the_edit_is_undone(self):
+        before = self._state()
+        with patch("api.views.mobile_content.log_activity", side_effect=RuntimeError("the log is broken")), self.assertRaises(RuntimeError):
+            self.admin.patch(self._url("welcome"), {"subtitle": "A change that must not stay"}, format="json")
+        self.assertEqual(self._state(), before)
+        self._ok("welcome", {"subtitle": "A change that must not stay"})  # the control: without the failure it works
+        self.assertEqual(self._logs().count(), 1)
+
+    def test_the_lock_comes_first_and_the_check_the_write_and_the_trace_are_in_one_block(self):
+        from unittest import mock
+
+        from django.db import connection as conn
+
+        from api.views import mobile_content as views
+
+        outside = len(conn.savepoint_ids)
+        seen = []
+
+        def spy(name, real):
+            def wrapper(*args, **kwargs):
+                seen.append((name, len(conn.savepoint_ids) > outside))
+                return real(*args, **kwargs)
+
+            return wrapper
+
+        names = ["_lock", "_clean_block_field", "log_activity"]
+        patches = [mock.patch.object(views, n, spy(n, getattr(views, n))) for n in names]
+        for p in patches:
+            p.start()
+        try:
+            response = self.admin.patch(self._url("welcome"), {"subtitle": "Lock order"}, format="json")
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(response.status_code, 200)
+        order = [n for n, _inside in seen]
+        self.assertEqual(order[0], "_lock")
+        self.assertIn("_clean_block_field", order)  # the fixture: the check ran
+        self.assertEqual(order[-1], "log_activity")
+        self.assertTrue(all(inside for _n, inside in seen), seen)
+
+
+class MobileContentBlockIsolationTests(_BlockApiBase, TestCase):
+    def test_the_bootstrap_is_the_same_before_and_after_every_block_is_edited(self):
+        self.setUpBlocks()
+        url = "/api/mobile/tourism/bootstrap/"
+        first = APIClient().get(url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts"})
+        self._ok("welcome", {"subtitle": "Changed"})
+        self._ok("fee_office", {"body": "Changed place"})
+        self.assertEqual(self._block("welcome").subtitle, "Changed")  # the fixture: things really changed
+        self.assertEqual(APIClient().get(url).content, first.content)

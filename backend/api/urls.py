@@ -21,6 +21,8 @@ from .views.emergency_contacts import (
     emergency_contact_reorder,
 )
 from .views.mobile_content import (
+    mobile_content_block_detail,
+    mobile_content_block_list,
     mobile_content_item_deactivate,
     mobile_content_item_detail,
     mobile_content_item_list,
@@ -169,6 +171,8 @@ urlpatterns = [
     path("emergency-contacts/<int:contact_id>/", emergency_contact_detail),
     path("emergency-contacts/<int:contact_id>/deactivate/", emergency_contact_deactivate),
     path("emergency-contacts/<int:contact_id>/reactivate/", emergency_contact_reactivate),
+    path("mobile-content/blocks/", mobile_content_block_list),
+    path("mobile-content/blocks/<str:key>/", mobile_content_block_detail),
     path("mobile-content/items/", mobile_content_item_list),
     path("mobile-content/items/<int:item_id>/", mobile_content_item_detail),
     path("mobile-content/items/<int:item_id>/deactivate/", mobile_content_item_deactivate),

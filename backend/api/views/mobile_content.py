@@ -33,9 +33,10 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from api.models import ACTION_CREATE, ACTION_UPDATE, MODULE_TOURISM, ROLE_ADMIN, MobileContentItem
+from api.models import ACTION_CREATE, ACTION_UPDATE, MODULE_TOURISM, ROLE_ADMIN, MobileContentBlock, MobileContentItem
 from api.permissions import get_user_role
-from api.services.activity import NAME_SHARE, log_activity, shorten_label
+from api.services import tourism as tourism_services
+from api.services.activity import NAME_SHARE, count_of, log_activity, shorten_label
 from api.views.reference_options import clean_name, name_key
 
 LOCK_ID = 7100007
@@ -62,6 +63,8 @@ WORDS = {  # what the person sees, never the name of a field
     "title": "The title",
     "short_text": "The short line",
     "full_text": "The full text",
+    "subtitle": "The subtitle",
+    "body": "The text",
 }
 
 FEE_PLACEHOLDERS = ("fee_regular", "fee_discounted", "fee_office")
@@ -135,58 +138,62 @@ def _refuse(detail, field=None, http_status=status.HTTP_400_BAD_REQUEST, **extra
 # -- the texts ---------------------------------------------------------------------------------
 
 
-def _text(data, field, section, single_line, required):
-    """-> the cleaned text of one text field, or raises _Refused."""
-    value = data.get(field)
+def _clean(value, field, word, limit, single_line, required):
+    """-> one text, cleaned: plain text, one line or paragraphs, within `limit`; or raises _Refused."""
     if value is None:
         value = ""
     if not isinstance(value, str):
-        _refuse(f"{WORDS[field]} must be text.", field)
+        _refuse(f"{word} must be text.", field)
     value = value.replace("\r\n", "\n").replace("\r", "\n")
     if CONTROL.search(value):
-        _refuse(f"{WORDS[field]} has a character that cannot be shown. Remove it and try again.", field)
+        _refuse(f"{word} has a character that cannot be shown. Remove it and try again.", field)
     if single_line:
         value = clean_name(value)
     else:
         lines = [line.rstrip() for line in value.split("\n")]
         value = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     if required and not value:
-        _refuse(f"{WORDS[field]} is required.", field)
-    limit = HARD[section][field]
+        _refuse(f"{word} is required.", field)
     if len(value) > limit:
-        _refuse(f"{WORDS[field]} is {len(value)} letters long. The most it can have here is {limit}.", field)
+        _refuse(f"{word} is {len(value)} letters long. The most it can have here is {limit}.", field)
     return value
 
 
-def _check_placeholders(text, field, allowed):
+def _text(data, field, section, single_line, required):
+    """-> the cleaned text of one text field of an item, or raises _Refused."""
+    return _clean(data.get(field), field, WORDS[field], HARD[section][field], single_line, required)
+
+
+def _check_placeholders(text, field, allowed, word=None):
     """Refuse a {placeholder} the server or the app will not fill in, and any bracket left over."""
+    word = word or WORDS[field]
     for found in PLACEHOLDER.finditer(text):
         name = found.group()[1:-1]
         if name in allowed:
             continue
         if name in KNOWN_PLACEHOLDERS:  # {name} outside the welcome greeting
             _refuse(
-                f"{WORDS[field]} uses {{{name}}}, which can only be used in the welcome greeting. "
+                f"{word} uses {{{name}}}, which can only be used in the welcome greeting. "
                 "Take it out of this text.",
                 field,
             )
         near = difflib.get_close_matches(name.lower(), allowed, n=1, cutoff=0.7)
         hint = f" Did you mean {{{near[0]}}}?" if near else ""
         _refuse(
-            f"{WORDS[field]} has {{{name}}}, which the app does not know how to fill in, so visitors "
+            f"{word} has {{{name}}}, which the app does not know how to fill in, so visitors "
             f"would see it as it is written.{hint}",
             field,
         )
     rest = PLACEHOLDER.sub("", text)
     if "{" in rest or "}" in rest:
         _refuse(
-            f"{WORDS[field]} has a curly bracket that is not closed or has no partner, so visitors would "
+            f"{word} has a curly bracket that is not closed or has no partner, so visitors would "
             "see it as it is written. Write a placeholder in full, for example {fee_office}, or take the bracket out.",
             field,
         )
     if FEE_AMOUNT.search(text):
         _refuse(
-            f"{WORDS[field]} has the entrance fee amount typed in. It cannot be typed, because it would go "
+            f"{word} has the entrance fee amount typed in. It cannot be typed, because it would go "
             "out of date when the fee changes. Write {fee_regular} for the regular amount or "
             "{fee_discounted} for the discounted one, and the app will show the current amount.",
             field,
@@ -518,3 +525,233 @@ def mobile_content_item_deactivate(request, item_id):
 @admin_required
 def mobile_content_item_reactivate(request, item_id):
     return _set_active(request, item_id, True)
+
+
+# =============================================================================================================
+# The BLOCKS: five fixed texts. No create, no delete: the app asks for them by name.
+# =============================================================================================================
+
+BLOCK_ORDER = ["welcome", "why_visit", "travel_guide", "port_guide", "fee_office"]
+BLOCK_FIELDS = ("title", "subtitle", "body")
+NOUNS = {"title": "title", "subtitle": "subtitle", "body": "text"}  # what a person calls them
+_FEE = FEE_PLACEHOLDERS
+# kind: "line" (one line), "text" (paragraphs) or "lines" (a few lines, each one a bullet in the app)
+BLOCKS = {
+    "welcome": {
+        "name": "Welcome banner",
+        "fields": {
+            "title": {"kind": "line", "max": 160, "placeholders": _FEE + ("name",)},
+            "subtitle": {"kind": "line", "max": 300, "placeholders": _FEE + ("name",)},
+        },
+    },
+    "why_visit": {
+        "name": "Why Visit introduction",
+        "fields": {
+            "title": {"kind": "line", "max": 160, "placeholders": _FEE},
+            "subtitle": {"kind": "line", "max": 300, "placeholders": _FEE},
+            "body": {"kind": "text", "max": 600, "placeholders": _FEE},
+        },
+    },
+    "travel_guide": {
+        "name": "Travel Guide heading",
+        "fields": {"title": {"kind": "line", "max": 160, "placeholders": _FEE}},
+    },
+    "port_guide": {
+        "name": "Port & Boat Guide",
+        "fields": {
+            "title": {"kind": "line", "max": 160, "placeholders": _FEE},
+            "body": {"kind": "lines", "max": 400, "max_lines": 8, "placeholders": _FEE},
+        },
+    },
+    "fee_office": {  # put into the other texts in place of {fee_office}: so it holds no placeholder of its own
+        "name": "Place where the fee is paid",
+        "fields": {"body": {"kind": "line", "max": 120, "placeholders": ()}},
+    },
+}
+PLACEHOLDER_NOTES = {
+    "fee_regular": "The regular entrance fee. The server fills in the amount the reports use; it cannot be typed.",
+    "fee_discounted": "The discounted entrance fee. The server fills in the amount the reports use; it cannot be typed.",
+    "fee_office": "The place where the fee is paid. It is written once, in its own block, and filled in wherever this is used.",
+    "name": "The visitor's name (a guest is called Explorer). The app fills it in; it belongs to the welcome banner only.",
+}
+BLOCK_CHANGE_WORDS = NOUNS
+
+
+def _block_word(key, field):
+    if key == "fee_office":
+        return "The place"
+    return WORDS[field]
+
+
+def _block_item(block):
+    spec = BLOCKS[block.key]
+    fields = spec["fields"]
+    return {
+        "key": block.key,
+        "name": spec["name"],
+        "title": block.title,
+        "subtitle": block.subtitle,
+        "body": block.body,
+        "fields": [field for field in BLOCK_FIELDS if field in fields],  # the ones the app shows; the others stay empty
+        "limits": {
+            field: {k: v for k, v in rules.items() if k in ("kind", "max", "max_lines")} | {"required": True}
+            for field, rules in fields.items()
+        },
+        "allowed_placeholders": {field: list(rules["placeholders"]) for field, rules in fields.items()},
+    }
+
+
+def _fee_now():
+    return {"regular": tourism_services.REGULAR_ENTRANCE_FEE, "discounted": tourism_services.DISCOUNTED_ENTRANCE_FEE}
+
+
+def _clean_block_field(key, field, data):
+    """-> the cleaned value of one field of a block, or raises _Refused."""
+    rules = BLOCKS[key]["fields"].get(field)
+    word = _block_word(key, field)
+    if rules is None:  # a part the app does not show for this block: it must stay empty
+        value = data.get(field)
+        if value is not None and (not isinstance(value, str) or value.strip()):
+            _refuse(f"The app shows no {NOUNS[field]} for “{BLOCKS[key]['name']}”, so it must stay empty.", field)
+        return ""
+    raw = data.get(field)
+    if rules["kind"] == "lines":
+        value = _clean_lines(raw, field, word, rules)
+    else:
+        value = _clean(raw, field, word, rules["max"], rules["kind"] == "line", True)
+    if key == "fee_office" and ("{" in value or "}" in value):
+        _refuse(
+            "The place has to be plain words. It is put into the other texts where they say it should appear, "
+            "so it cannot hold a bracket of its own.",
+            field,
+        )
+    if rules["placeholders"] or key != "fee_office":
+        _check_placeholders(value, field, rules["placeholders"], word)
+    elif FEE_AMOUNT.search(value):
+        _refuse(f"{word} has the entrance fee amount typed in. It cannot be typed here.", field)
+    return value
+
+
+def _clean_lines(raw, field, word, rules):
+    """The text of a block that is a few lines, each one a bullet in the app: blank lines go, a bullet typed by hand is refused."""
+    if raw is None:
+        raw = ""
+    if not isinstance(raw, str):
+        _refuse(f"{word} must be text.", field)
+    if CONTROL.search(raw.replace("\r\n", "\n").replace("\r", "\n")):
+        _refuse(f"{word} has a character that cannot be shown. Remove it and try again.", field)
+    lines = [clean_name(line) for line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    lines = [line for line in lines if line]
+    if not lines:
+        _refuse(f"{word} is required.", field)
+    if len(lines) > rules["max_lines"]:
+        _refuse(f"{word} has {len(lines)} lines. The most it can have here is {rules['max_lines']}.", field)
+    for number, line in enumerate(lines, start=1):
+        if line.startswith("\u2022"):
+            _refuse(
+                f"Line {number} starts with a bullet (•). The app puts the bullet in front of every line by itself, "
+                "so write the line without it.",
+                field,
+            )
+        if len(line) > rules["max"]:
+            _refuse(f"Line {number} is {len(line)} letters long. The most a line can have here is {rules['max']}.", field)
+    return "\n".join(lines)
+
+
+def _all_fee_placeholders(values):
+    return _fee_placeholders(*[values[field] for field in BLOCK_FIELDS])
+
+
+def _uses_of_the_fee_office():
+    """How many texts of the app say where the fee is paid (and so change when that place is edited)."""
+    marker = "{fee_office}"
+    items = sum(
+        1 for i in MobileContentItem.objects.all() if marker in i.title + "\n" + i.short_text + "\n" + i.full_text
+    )
+    blocks = sum(
+        1 for b in MobileContentBlock.objects.exclude(key="fee_office") if marker in b.title + "\n" + b.subtitle + "\n" + b.body
+    )
+    return items + blocks
+
+
+def _block_log(request, block, changes):
+    words = ", ".join(NOUNS[field] for field in changes)
+    label = f"Mobile content block ({BLOCKS[block.key]['name']}) edited: {words}"
+    log_activity(request, MODULE_TOURISM, ACTION_UPDATE, block, label=shorten_label(label), record_id=block.key)
+
+
+@api_view(["GET"])
+@admin_required
+def mobile_content_block_list(request):
+    """The five blocks in their fixed order, what each may hold, and the entrance fee as the reports know it (read-only)."""
+    rows = {block.key: block for block in MobileContentBlock.objects.filter(key__in=BLOCK_ORDER)}
+    fee = _fee_now()
+    return Response(
+        {
+            "blocks": [_block_item(rows[key]) for key in BLOCK_ORDER if key in rows],
+            "fee": fee,
+            "placeholders": PLACEHOLDER_NOTES,
+        }
+    )
+
+
+@api_view(["PATCH"])
+@admin_required
+def mobile_content_block_detail(request, key):
+    if key not in BLOCKS:
+        raise Http404("No such block.")
+    try:
+        data = _body(request)
+        with transaction.atomic():
+            _lock()
+            try:
+                block = MobileContentBlock.objects.get(key=key)
+            except MobileContentBlock.DoesNotExist:
+                raise Http404("No such block.")
+            if "key" in data and data.get("key") != key:
+                _refuse("The name of a block cannot be changed.", "key")
+
+            new = {field: getattr(block, field) for field in BLOCK_FIELDS}
+            for field in BLOCK_FIELDS:
+                if field in data:
+                    new[field] = _clean_block_field(key, field, data)
+
+            changes = [field for field in BLOCK_FIELDS if new[field] != getattr(block, field)]
+            if not changes:
+                body = _block_item(block)
+                body["warnings"] = []
+                return Response(body)
+
+            before = {field: getattr(block, field) for field in BLOCK_FIELDS}
+            dropped = sorted(_all_fee_placeholders(before) - _all_fee_placeholders(new))
+            if dropped:
+                confirmed = data.get("confirm_dropped")
+                if not isinstance(confirmed, list) or sorted(str(name) for name in confirmed) != dropped:
+                    what = " and ".join(FEE_WORDS[name] for name in dropped)
+                    _refuse(
+                        f"This change takes {what} out of the text, so visitors will no longer be told it here. "
+                        "It needs a confirmation.",
+                        http_status=status.HTTP_409_CONFLICT,
+                        code="confirm_required",
+                        dropped=dropped,
+                    )
+
+            warnings = []
+            if key == "welcome" and "{name}" in before["title"] + before["subtitle"] and "{name}" not in new["title"] + new["subtitle"]:
+                warnings.append("The welcome banner no longer uses the visitor's name, so everyone is greeted the same way.")
+            if key == "fee_office":
+                used = _uses_of_the_fee_office()
+                warnings.append(
+                    f"The place where the fee is paid is used in {count_of(used, 'text')} of the app. "
+                    + ("All of them change with this edit." if used != 1 else "It changes with this edit.")
+                )
+
+            for field in changes:
+                setattr(block, field, new[field])
+            block.save(update_fields=changes)
+            _block_log(request, block, changes)
+    except _Refused as refused:
+        return refused.response
+    body = _block_item(block)
+    body["warnings"] = warnings
+    return Response(body)
