@@ -26,6 +26,23 @@ OLD_KEYS = ["referenceTables", "destinations", "featuredDestinations", "barangay
 BLOCKS = {"welcome": ["title", "subtitle"], "why_visit": ["title", "subtitle", "body"], "travel_guide": ["title"], "port_guide": ["title", "body"]}
 ITEM_KEYS = ["id", "icon", "title", "short_text", "full_text", "style", "tappable"]
 CANARY_BYTES = 60 * 1024  # the same canary as the backend test (SIZE_CANARY_BYTES); a surprise, not a limit
+# What of the OLD bytes can move with nobody deploying anything: a resort's monthly_arrivals is the number of ARRIVED records of THIS
+# calendar month, so it changes when the month turns (1 November) and whenever a record of the month is checked in. It is in
+# destinations, featuredDestinations and referenceTables.resorts, and it decides which destination is on top, so also the order of
+# those lists and the "is trending" line of notifications (and an advisory that expires drops out). Nothing else moves by itself.
+MOVES_WITH_THE_CALENDAR = {"destinations", "featuredDestinations", "notifications", "referenceTables.resorts"}
+
+
+def _moved(data, saved):
+    keys = []
+    for key in OLD_KEYS:
+        if key == "referenceTables" and isinstance(data.get(key), dict) and isinstance(saved.get(key), dict):
+            for sub in sorted(set(data[key]) | set(saved[key])):
+                if data[key].get(sub) != saved[key].get(sub):
+                    keys.append(f"referenceTables.{sub}")
+        elif data.get(key) != saved.get(key):
+            keys.append(key)
+    return keys
 
 
 def _texts(content):
@@ -86,6 +103,13 @@ def check(body, before=None):
             body[: body.index(MARK)] + b"}" == before if MARK in body else False,
             f"{len(before)} bytes saved before")
         add("prefix and suffix: not one byte moved", body == before[:-1] + MARK + value + b"}")
+        try:
+            moved = _moved(data, json.loads(before))
+        except ValueError:
+            moved = ["(the saved file is not JSON)"]
+        add("INFO old keys that differ from the saved bootstrap", True, str(moved) if moved else "none")
+        add("only keys that move with the calendar differ (monthly arrivals, the trending line)", set(moved) <= MOVES_WITH_THE_CALENDAR,
+            f"unexpected: {sorted(set(moved) - MOVES_WITH_THE_CALENDAR)}; an admin edit, or a real problem" if not set(moved) <= MOVES_WITH_THE_CALENDAR else "")
     add("INFO", True, f"whole bootstrap {len(body)} bytes sha256 {hashlib.sha256(body).hexdigest()}; "
                       f"appContent {len(value)} bytes sha256 {hashlib.sha256(value).hexdigest()}")
     return out

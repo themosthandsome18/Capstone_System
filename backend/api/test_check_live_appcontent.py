@@ -90,3 +90,25 @@ class CheckLiveAppContentTests(SimpleTestCase):
             self.assertEqual(self.tool.main([]), 1)
             urlopen.return_value.read.return_value = self.good
             self.assertEqual(self.tool.main([]), 0)
+
+    def test_a_month_turning_is_told_from_a_real_change(self):
+        """On 1 November the arrivals of a destination go back to 0 with nothing deployed: the byte checks must fail (the old bytes DID
+        move) but the check that names WHAT moved must say it was only what the calendar moves."""
+        saved = json.loads(GOLDEN)
+        self.assertTrue(saved["destinations"] and saved["notifications"])  # the fixture: there is something to move
+        calendar = json.loads(self.good)
+        calendar["destinations"][0]["monthly_arrivals"] = 0
+        calendar["destinations"].reverse()
+        calendar["notifications"] = []
+        calendar["referenceTables"]["resorts"] = []
+        body = json.dumps(calendar, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        failed = self.failed(body)
+        self.assertIn("everything before appContent is byte for byte the saved bootstrap", failed)  # the bytes did move ...
+        self.assertNotIn("only keys that move with the calendar differ (monthly arrivals, the trending line)", failed)  # ... but only the calendar's
+        self.assertEqual([d for n, ok, d in self.tool.check(body, GOLDEN) if n == "INFO old keys that differ from the saved bootstrap"],
+                         ["['referenceTables.resorts', 'destinations', 'notifications']"])
+        real = json.loads(self.good)
+        real["theme"]["primary_color"] = "#000000"
+        real["barangays"] = []
+        body = json.dumps(real, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        self.assertIn("only keys that move with the calendar differ (monthly arrivals, the trending line)", self.failed(body))
