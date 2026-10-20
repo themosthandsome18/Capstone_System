@@ -67,7 +67,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+
   assets:
+    - assets/fonts/roboto_license.txt
     - assets/tourism_logo.jpg
     - assets/sanitary_logo.jpg
     - assets/mauban_barangays.json

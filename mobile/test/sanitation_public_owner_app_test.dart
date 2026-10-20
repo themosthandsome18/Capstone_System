@@ -81,7 +81,7 @@ void main() {
         app.theme!.colorScheme,
         ColorScheme.fromSeed(seedColor: AppColors.deepGreen),
       );
-      expect(app.theme!.textTheme.bodyMedium!.fontFamily, 'Arial');
+      expect(app.theme!.textTheme.bodyMedium!.fontFamily, 'Roboto');
     },
   );
 
@@ -341,4 +341,45 @@ void main() {
       expect(visited, hasLength(5));
     },
   );
+
+  testWidgets('public text retains accented names and expiry punctuation', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      route: public.PublicOwnerApp.ownerRoute,
+      lookup: (_) async => OwnerPermitStatus.fromJson({
+        'business_name': 'Ni\u00f1o / NI\u00d1O Caf\u00e9',
+        'business_type': 'Food Establishment',
+        'barangay': 'Santo Ni\u00f1o',
+        'permit_status': 'active',
+        'permit_status_label': 'Active',
+        'permit_expiry_date': '2026-11-11',
+        'days_left': 1,
+        'renewal_notice': 'Owner\u2019s notice \u2013 please check.',
+      }),
+    );
+    await check(tester, 'MBN-ACCENTS');
+    expect(find.text('Ni\u00f1o / NI\u00d1O Caf\u00e9'), findsOneWidget);
+    expect(
+      find.text('Food Establishment \u00b7 Santo Ni\u00f1o'),
+      findsOneWidget,
+    );
+    expect(find.text('Nov 11, 2026 \u00b7 1 day'), findsOneWidget);
+    expect(
+      find.text('Owner\u2019s notice \u2013 please check.'),
+      findsOneWidget,
+    );
+  });
+
+  test('local Roboto font and redistribution license are bundled', () async {
+    final font = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+    expect(font.lengthInBytes, 171676);
+    expect(font.getUint32(0), 0x00010000); // TrueType sfnt header.
+    final license = await rootBundle.loadString(
+      'assets/fonts/roboto_license.txt',
+    );
+    expect(license, contains('Apache License'));
+    expect(license, contains('Version 2.0, January 2004'));
+  });
 }
