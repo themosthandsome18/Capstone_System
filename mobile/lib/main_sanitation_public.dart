@@ -56,7 +56,7 @@ class PublicOwnerApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.canvas,
-        fontFamily: 'Arial',
+        fontFamily: 'Roboto',
         useMaterial3: true,
       ),
       initialRoute: initialRoute,
