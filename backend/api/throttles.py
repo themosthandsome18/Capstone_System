@@ -4,6 +4,8 @@ from django.core.cache import caches
 from rest_framework.exceptions import Throttled
 from rest_framework.throttling import ScopedRateThrottle
 
+from .services import owner_throttle_history
+
 
 class _MessageOnlyThrottled(Throttled):
     """A 429 whose detail is exactly `detail`.
@@ -68,7 +70,8 @@ class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
             return True
         self.now = self.timer()
         self.history = [
-            stamp for stamp in self.cache.get(self.key, []) if stamp > self.now - self.duration
+            stamp for stamp in owner_throttle_history.read_history(self.cache, self.key)
+            if stamp > self.now - self.duration
         ]
         if len(self.history) >= self.num_requests:
             raise _MessageOnlyThrottled(wait=self.wait(), detail=self.message)
@@ -81,12 +84,7 @@ class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
         key = throttle.get_cache_key(request, None)
         if key is None:
             return
-        now = throttle.timer()
-        history = [
-            stamp for stamp in throttle.cache.get(key, []) if stamp > now - throttle.duration
-        ]
-        history.insert(0, now)
-        throttle.cache.set(key, history, throttle.duration)
+        owner_throttle_history.record_failure(throttle.cache, key, throttle.duration, throttle.timer)
 
 
 def _is_resend_of_saved_report(request):
