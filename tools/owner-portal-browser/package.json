@@ -1,0 +1,11 @@
+{
+  "name": "owner-portal-browser-proof",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test browser_cors.test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  }
+}
