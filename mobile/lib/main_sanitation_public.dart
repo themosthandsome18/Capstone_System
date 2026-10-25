@@ -1,16 +1,42 @@
 import 'package:flutter/material.dart';
 
 import 'constants/colors.dart';
+import 'sanitation_public/owner_lookup_browser_transport_stub.dart'
+    if (dart.library.js_interop) 'sanitation_public/owner_lookup_browser_transport.dart'
+    as browser;
+import 'sanitation_public/owner_lookup_client.dart';
+import 'sanitation_public/owner_lookup_configuration.dart';
 import 'sanitation_public/owner_models.dart';
 import 'sanitation_public/owner_portal_view.dart';
 
 void main() {
-  runApp(
-    PublicOwnerApp(
-      lookup: _disabledLookup,
-      formatError: (_) =>
-          "This service isn't available yet. Please try again later.",
-    ),
+  runApp(createPublicOwnerApp());
+}
+
+/// Compose public lookup only for explicit fixture settings on a browser.
+PublicOwnerApp createPublicOwnerApp({
+  OwnerLookupConfiguration? configuration,
+  OwnerLookupTransport? Function()? transportFactory,
+}) {
+  final settings = configuration ?? OwnerLookupConfiguration.fromEnvironment();
+  if (settings.enabled) {
+    final transport =
+        (transportFactory ?? browser.createOwnerLookupTransport)();
+    if (transport != null) {
+      final client = OwnerLookupClient(
+        apiBase: settings.apiBase!,
+        transport: transport,
+      );
+      return PublicOwnerApp(
+        lookup: client.lookup,
+        formatError: ownerLookupErrorMessage,
+      );
+    }
+  }
+  return PublicOwnerApp(
+    lookup: _disabledLookup,
+    formatError: (_) =>
+        "This service isn't available yet. Please try again later.",
   );
 }
 
