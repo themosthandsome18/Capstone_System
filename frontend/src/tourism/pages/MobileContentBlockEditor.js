@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
 import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
@@ -36,6 +36,22 @@ export const BUILT_IN_BUTTON_NOTE = "This only fills the form. Press Save to kee
 const LABELS = { title: "Title", subtitle: "Subtitle", body: "Text" };
 // what the server calls each field in its own messages ("The title is required.")
 const WORDS = { title: "The title", subtitle: "The subtitle", body: "The text" };
+
+// A text of ONE line is held in a box that grows as the text gets longer and wraps it, so that a person can read all of what they wrote; but
+// it stays ONE line: Enter does nothing in it, and a new line that comes in another way (a paste, a keyboard) becomes a space. What is sent
+// is not changed by this: the server's cleaning (a new line is a space) is applied to the text before it is sent, as it always was.
+const NEW_LINES = /\r\n|\r|\n/g;
+const withoutNewLines = (value) => value.replace(NEW_LINES, " ");
+
+// The box is as high as its text (and no higher). It is made small first so that it can also shrink.
+function fit(control) {
+  if (!control) return;
+  control.style.height = "auto";
+  if (control.scrollHeight > 0) {
+    const border = Math.max(0, control.offsetHeight - control.clientHeight);
+    control.style.height = `${control.scrollHeight + border}px`;
+  }
+}
 
 const pick = (block, fields) => Object.fromEntries(fields.map((field) => [field, block[field] ?? ""]));
 const plural = (number, one, many) => `${number} ${number === 1 ? one : many}`;
@@ -118,6 +134,16 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
       control.setSelectionRange(position, position);
     }
   });
+
+  // every box of one line fits its text after each draw, and again when the window changes its width (the text wraps differently)
+  useLayoutEffect(() => {
+    Object.values(controls.current).forEach((control) => control && control.dataset.line === "true" && fit(control));
+  });
+  useEffect(() => {
+    const refit = () => Object.values(controls.current).forEach((control) => control && control.dataset.line === "true" && fit(control));
+    window.addEventListener("resize", refit);
+    return () => window.removeEventListener("resize", refit);
+  }, []);
 
   const loading = block === undefined && !loadError;
   const fields = block ? block.fields : [];
@@ -304,21 +330,31 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
               {fields.map((field) => {
                 const limit = limits[field];
                 const tooMany = over(field);
-                const Control = limit.kind === "text" ? "textarea" : "input";
+                const oneLine = limit.kind !== "text";
                 const names = Array.isArray(allowed[field]) ? allowed[field] : [];
                 const problems = placeholderWarnings(form[field], names);
                 return (
                   <label key={field} className="settings-field settings-field-wide">
                     <span>{LABELS[field] || field}</span>
-                    <Control
-                      {...(Control === "input" ? { type: "text" } : { rows: 6 })}
+                    <textarea
+                      {...(oneLine
+                        ? {
+                            rows: 1,
+                            className: "mobile-content-line",
+                            "data-line": "true",
+                            onKeyDown: (event) => {
+                              // Enter does nothing here (but not while a letter is still being composed: that Enter belongs to the keyboard)
+                              if (event.key === "Enter" && !event.nativeEvent.isComposing) event.preventDefault();
+                            },
+                          }
+                        : { rows: 6 })}
                       aria-label={LABELS[field] || field}
                       ref={(element) => {
                         controls.current[field] = element;
                       }}
                       value={form[field] ?? ""}
                       disabled={working}
-                      onChange={(event) => type(field, event.target.value)}
+                      onChange={(event) => type(field, oneLine ? withoutNewLines(event.target.value) : event.target.value)}
                     />
                     {names.length ? (
                       <span className="mobile-content-insert" role="group" aria-label={`Placeholders for the ${(LABELS[field] || field).toLowerCase()}`}>

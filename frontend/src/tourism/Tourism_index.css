@@ -5030,3 +5030,31 @@
   align-items: flex-start;
   gap: 6px;
 }
+
+/* A text of ONE line in the editor of Mobile App Content is held in a box that grows with its text and wraps it (Commit 5c-fix); it stays one
+   line (the page stops Enter and turns a pasted new line into a space). It looks like the boxes of the other forms. */
+.options-form .settings-field-wide textarea.mobile-content-line {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid var(--th-border-strong);
+  border-radius: 8px;
+  background: var(--th-surface);
+  padding: 9px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.options-form .settings-field-wide textarea.mobile-content-line:focus {
+  border-color: var(--th-primary);
+}
+
+.options-form .settings-field-wide textarea.mobile-content-line:disabled {
+  background: var(--th-surface-alt);
+  cursor: not-allowed;
+}
