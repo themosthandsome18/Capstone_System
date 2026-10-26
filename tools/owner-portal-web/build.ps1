@@ -13,17 +13,97 @@ AdditionalProtectedDirectory. Inspect retained output after a failed build.
 Prerequisite: C:\src\flutter-3.44.0\flutter, framework revision 559ffa3f75e7402d65a8def9c28389a9b2e6fe42.
 Initial path checks do not protect against malicious concurrent substitution.
 No SDK installation, shared-shell replacement, or dependency upgrades occur.
+LookupMode defaults to disabled. Explicit local-fixture mode is non-production,
+uses only the synthetic service at http://127.0.0.1:8765/api/, and must never
+be used for production publication.
 #>
 param(
     [Parameter(Mandatory = $true)]
     [string] $BuildRoot,
     [Parameter(Mandatory = $true)]
     [string] $OutputDirectory,
-    [string[]] $AdditionalProtectedDirectory = @()
+    [string[]] $AdditionalProtectedDirectory = @(),
+    [string] $LookupMode = 'disabled'
 )
+
+if ($LookupMode -cne 'disabled' -and $LookupMode -cne 'local-fixture') {
+    throw 'LookupMode must be exactly disabled or local-fixture.'
+}
+$ownerApiBase = if ($LookupMode -ceq 'local-fixture') { 'http://127.0.0.1:8765/api/' } else { '' }
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+function Assert-OwnerFixtureMetadata {
+    param([string] $Json, [System.Collections.IDictionary] $Expected, [string] $Entrypoint)
+    $metadata = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
+    if ($null -eq $metadata -or $metadata -isnot [pscustomobject] -or
+        @($metadata.PSObject.Properties).Count -ne $Expected.Count) {
+        throw 'Fixture metadata must contain exactly the required fields.'
+    }
+    foreach ($key in $Expected.Keys) {
+        $property = @($metadata.PSObject.Properties | Where-Object { $_.Name -ceq $key })
+        if ($property.Count -ne 1 -or $null -eq $property[0].Value -or
+            $property[0].Value.GetType() -ne $Expected[$key].GetType() -or
+            $property[0].Value -cne $Expected[$key]) {
+            throw "Fixture metadata field is missing, mistyped, or mismatched: $key"
+        }
+    }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $Entrypoint).Hash -cne $metadata.compiledEntrypointSha256) {
+        throw 'Fixture metadata entrypoint hash differs from the compiled artifact.'
+    }
+}
+
+function Write-OwnerFixtureMetadata {
+    param(
+        $OutputLease,
+        [string] $SourceHead,
+        [string] $BuildScriptSha256,
+        [string] $FlutterFrameworkRevision,
+        [string] $PubspecLockSha256
+    )
+    if ($SourceHead -cnotmatch '^[0-9a-f]{40}$' -or
+        $BuildScriptSha256 -cnotmatch '^[0-9A-F]{64}$' -or
+        $PubspecLockSha256 -cnotmatch '^[0-9A-F]{64}$' -or
+        $FlutterFrameworkRevision -cne '559ffa3f75e7402d65a8def9c28389a9b2e6fe42') {
+        throw 'Fixture metadata requires verified source and toolchain identities.'
+    }
+    $OutputLease.ValidateOwnership()
+    $entrypoint = Join-Path $OutputLease.Path 'main.dart.js'
+    $entryInfo = Get-Item -LiteralPath $entrypoint -Force -ErrorAction Stop
+    if ($entryInfo.PSIsContainer -or $entryInfo.Length -eq 0 -or
+        ($entryInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'Fixture metadata requires a nonempty regular compiled entrypoint.'
+    }
+    $expected = [ordered]@{
+        label = 'NON-PRODUCTION ' + [char]0x2014 + ' LOCAL FIXTURE ONLY'
+        productionPublishAllowed = $false
+        lookupMode = 'local-fixture'
+        apiBaseUrl = 'http://127.0.0.1:8765/api/'
+        sourceHead = $SourceHead
+        buildScriptSha256 = $BuildScriptSha256
+        flutterFrameworkRevision = $FlutterFrameworkRevision
+        pubspecLockSha256 = $PubspecLockSha256
+        compiledEntrypointSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $entrypoint).Hash
+    }
+    $marker = Join-Path $OutputLease.Path 'NON_PRODUCTION_LOCAL_FIXTURE_ONLY.json'
+    if (Test-Path -LiteralPath $marker) { throw 'Fixture metadata marker already exists.' }
+    $pending = Join-Path $OutputLease.Path ('.fixture-metadata-' + [guid]::NewGuid().ToString('N') + '.pending')
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($expected | ConvertTo-Json -Depth 3))
+    $stream = [IO.File]::Open($pending, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+        $stream.Position = 0
+        $reader = [IO.StreamReader]::new($stream, [Text.UTF8Encoding]::new($false, $true), $false, 1024, $true)
+        try { $writtenJson = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        Assert-OwnerFixtureMetadata -Json $writtenJson -Expected $expected -Entrypoint $entrypoint
+        $OutputLease.ValidateOwnership()
+    } finally { $stream.Dispose() }
+    # Same-directory rename publishes only validated bytes; this overload never overwrites.
+    # Failures retain the pending file for inspection, without a complete marker.
+    [IO.File]::Move($pending, $marker)
+}
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'This script requires Windows.' }
 
@@ -325,6 +405,13 @@ namespace OwnerWebSafety {
 if (-not ('OwnerWebSafety.Context' -as [type])) { Add-Type -TypeDefinition $pathSafetyCode }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+if ($LookupMode -ceq 'local-fixture') {
+    $fixtureScriptHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash
+    $fixtureSourceHead = & git -C $repo rev-parse --verify HEAD
+    if ($LASTEXITCODE -ne 0 -or $fixtureSourceHead -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'Cannot verify fixture source HEAD.'
+    }
+}
 $sourceMobile = Join-Path $repo 'mobile'
 $sourceShell = Join-Path $sourceMobile 'web_owner'
 $sourceLock = Join-Path $sourceMobile 'pubspec.lock'
@@ -438,8 +525,8 @@ try {
             '--suppress-analytics', 'build', 'web', '--release', '--no-pub',
             '--target=lib/main_sanitation_public.dart', '--base-href=/',
             '--no-web-resources-cdn',
-            '--dart-define=SANITATION_OWNER_LOOKUP_MODE=disabled',
-            '--dart-define=SANITATION_OWNER_API_BASE_URL=',
+            "--dart-define=SANITATION_OWNER_LOOKUP_MODE=$LookupMode",
+            "--dart-define=SANITATION_OWNER_API_BASE_URL=$ownerApiBase",
             "--output=$output"
         )
         Write-Host ($flutter + ' ' + ($flutterArgs -join ' '))
@@ -456,6 +543,16 @@ try {
     $after = @(& git -C $repo status --porcelain=v1 --untracked-files=all)
     if ($LASTEXITCODE -ne 0) { throw 'Cannot verify source Git status.' }
     if (($before -join "`n") -cne ($after -join "`n")) { throw 'Source Git status changed during build.' }
+    if ($LookupMode -ceq 'local-fixture') {
+        $finalSourceHead = & git -C $repo rev-parse --verify HEAD
+        if ($LASTEXITCODE -ne 0 -or $finalSourceHead -cne $fixtureSourceHead -or
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash -cne $fixtureScriptHash) {
+            throw 'Fixture source HEAD or build script changed during build.'
+        }
+        Write-OwnerFixtureMetadata -OutputLease $outputLease -SourceHead $fixtureSourceHead `
+            -BuildScriptSha256 $fixtureScriptHash -FlutterFrameworkRevision $version.frameworkRevision `
+            -PubspecLockSha256 $sourceLockHash
+    }
     $outputLease.RetainArtifact()
     Write-Host "Build artifact: $output"
     Write-Host 'Source Git status unchanged.'
