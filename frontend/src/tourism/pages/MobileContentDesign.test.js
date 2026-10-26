@@ -358,13 +358,11 @@ describe("the CSS holds the values of the design", () => {
   });
 
   it("the note and the main button", () => {
-    const note = ".mobile-content-page .mobile-content-note,\n.mobile-content-page .mobile-content-notices";
-    expect(CSS).toContain(`\n${note} {`);
-    const rule = `.mobile-content-page .mobile-content-note,\n.mobile-content-page .mobile-content-notices`;
+    const rule = ".mobile-content-page .mobile-content-note";
     expect(decl(rule, "background")).toBe("#fbf1e4");
     expect(decl(rule, "border-radius")).toBe("11px");
     expect(decl(rule, "padding")).toBe("13px 15px");
-    const text = ".mobile-content-page .mobile-content-note p,\n.mobile-content-page .mobile-content-notices p";
+    const text = ".mobile-content-page .mobile-content-note p";
     expect(decl(text, "font-size")).toBe("13.5px");
     expect(decl(text, "color")).toBe("#6b543e");
     const button = ".mobile-content-page .mobile-content-card .tourist-record-save";

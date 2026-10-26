@@ -291,19 +291,28 @@ describe("the pillars are in the left column, under the editor", () => {
 });
 
 describe("the notices", () => {
-  it("the line about the next version is a small note under the editor; it is not at the top", async () => {
+  it("there is no bar of notices at the top of the page", async () => {
     const { container } = await open();
-    const top = screen.getByRole("note", { name: "About these changes" });
-    expect(within(top).queryByText(NEXT_VERSION_NOTICE)).toBeNull();
-    const note = screen.getByText(NEXT_VERSION_NOTICE);
-    expect(note.closest(".mobile-content-note")).not.toBeNull();
-    expect(container.querySelector(".mobile-content-main").contains(note)).toBe(true);
-    expect(NEXT_VERSION_NOTICE).toBe("Changes here reach the mobile app only when the next version of the app is released.");
+    expect(container.querySelector(".mobile-content-panel").firstElementChild.className).not.toContain("hotlines-notices"); // the fixture: the page is drawn
+    expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull();
+    expect(container.querySelector(".mobile-content-notices")).toBeNull();
   });
 
-  it("the line about the check for another editor is still shown (it is NOT moved: it warns about the clash that cannot be seen)", async () => {
-    await open();
-    expect(within(screen.getByRole("note", { name: "About these changes" })).getByText(CHECK_NOTICE)).toBeTruthy();
+  it("the line about the next version and the line about the check for another editor are two small notes under the editor, side by side, always shown", async () => {
+    const { container } = await open();
+    const main = container.querySelector(".mobile-content-main");
+    const form = within(main).getByRole("form", { name: "Why Visit Mauban, Quezon?" });
+    const next = screen.getByText(NEXT_VERSION_NOTICE);
+    const check = screen.getByText(CHECK_NOTICE);
+    [next, check].forEach((note) => {
+      expect(note.closest(".mobile-content-note")).not.toBeNull();
+      expect(main.contains(note)).toBe(true);
+      expect(form.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+    expect(next.closest(".mobile-content-note").nextElementSibling).toBe(check.closest(".mobile-content-note")); // side by side
+    expect(within(main).getByLabelText(PILLARS_HEADING, { selector: "section" }).compareDocumentPosition(check) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy(); // before the list of pillars
+    expect(NEXT_VERSION_NOTICE).toBe("Changes here reach the mobile app only when the next version of the app is released.");
+    expect(CHECK_NOTICE).toMatch(/not a guarantee/);
     expect(CHECK_NOTICE).toMatch(/last save wins/);
   });
 });

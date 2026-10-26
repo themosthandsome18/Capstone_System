@@ -342,10 +342,6 @@ export default function MobileContentBlockEditor({
 
   return (
     <div className="mobile-content-panel">
-      <div className="hotlines-notices mobile-content-notices" role="note" aria-label="About these changes">
-        <p>{CHECK_NOTICE}</p>
-      </div>
-
       <div className="options-message-area">
         {notice ? (
           <p className="settings-status success" role="status">
@@ -520,6 +516,7 @@ export default function MobileContentBlockEditor({
           ) : null}
           {block && note ? <Note>{note}</Note> : null}
           {block ? <Note>{NEXT_VERSION_NOTICE}</Note> : null}
+          {block ? <Note>{CHECK_NOTICE}</Note> : null}
           {below}
         </div>
 

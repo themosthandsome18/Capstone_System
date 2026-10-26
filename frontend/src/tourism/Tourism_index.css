@@ -5241,8 +5241,7 @@
 }
 
 /* a note: a soft box with an icon on its left */
-.mobile-content-page .mobile-content-note,
-.mobile-content-page .mobile-content-notices {
+.mobile-content-page .mobile-content-note {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -5252,13 +5251,7 @@
   color: var(--mc-note-ink);
 }
 
-.mobile-content-page .mobile-content-notices {
-  flex-direction: column;
-  gap: 4px;
-}
-
-.mobile-content-page .mobile-content-note p,
-.mobile-content-page .mobile-content-notices p {
+.mobile-content-page .mobile-content-note p {
   margin: 0;
   font-size: 13.5px;
   font-weight: 500;

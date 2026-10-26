@@ -134,16 +134,19 @@ describe("what it shows", () => {
     expect(screen.getByRole("heading", { name: "Welcome banner" })).toBeTruthy();
   });
 
-  it("says that changes reach the app only with its next version (a small note under the form), and that the check for another editor is not a guarantee (at the top)", async () => {
+  it("says that changes reach the app only with its next version, and that the check for another editor is not a guarantee: two small notes under the form, and no bar at the top", async () => {
     const { container } = await open();
-    const notes = screen.getByRole("note", { name: "About these changes" });
-    expect(within(notes).getByText(CHECK_NOTICE)).toBeTruthy();
-    expect(within(notes).queryByText(NEXT_VERSION_NOTICE)).toBeNull(); // (moved in 5g: it is a note under the form now)
-    const next = screen.getByText(NEXT_VERSION_NOTICE);
-    expect(next.closest(".mobile-content-note")).not.toBeNull();
-    expect(next.closest("form")).toBeNull(); // under the box, not in it
-    expect(screen.getByRole("form", { name: "Welcome banner" }).compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(container.querySelector(".mobile-content-main").contains(next)).toBe(true); // in the left column
+    expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull(); // (the bar at the top was taken away in 5h)
+    const form = screen.getByRole("form", { name: "Welcome banner" });
+    const main = container.querySelector(".mobile-content-main");
+    [NEXT_VERSION_NOTICE, CHECK_NOTICE].forEach((text) => {
+      const note = screen.getByText(text);
+      expect(note.closest(".mobile-content-note")).not.toBeNull();
+      expect(note.closest("form")).toBeNull(); // under the box, not in it
+      expect(form.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(main.contains(note)).toBe(true); // in the left column
+    });
+    expect(screen.getByText(NEXT_VERSION_NOTICE).compareDocumentPosition(screen.getByText(CHECK_NOTICE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // side by side: the next version first
     expect(CHECK_NOTICE).toMatch(/not a guarantee/);
     expect(CHECK_NOTICE).toMatch(/last save wins/);
   });
