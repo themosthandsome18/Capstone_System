@@ -12,7 +12,7 @@ export function canManageMobileContent(role) {
 // The five tabs, in order. `ready` is false for a tab whose editor has not been built yet: it shows a message and
 // asks the server for nothing.
 export const MOBILE_CONTENT_TABS = [
-  { key: "welcome", label: "Welcome", ready: false },
+  { key: "welcome", label: "Welcome", ready: true },
   { key: "why-visit", label: "Why Visit", ready: false },
   { key: "travel-guide", label: "Travel Guide & Tips", ready: false },
   { key: "port-guide", label: "Port & Boat Guide", ready: false },

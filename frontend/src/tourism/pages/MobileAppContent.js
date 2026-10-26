@@ -8,12 +8,26 @@ import {
   knownTab,
 } from "../mobileContentAccess";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
+import MobileContentBlockEditor from "./MobileContentBlockEditor";
 
 export const NOT_READY_NOTICE =
   "Not available yet. The editor for this tab is coming in an upcoming update. The mobile app still shows its built-in text.";
 
 function TabPanel({ tab }) {
   if (tab.key === "hotlines") return <EmergencyHotlinesPanel />;
+  if (tab.key === "welcome") {
+    return (
+      <MobileContentBlockEditor
+        blockKey="welcome"
+        heading="Welcome banner"
+        intro="The greeting at the top of the Home page of the mobile app."
+        hints={{
+          title:
+            "{name} is replaced, in the app, by the name of the visitor who is logged in. A visitor who is not logged in is greeted as Explorer.",
+        }}
+      />
+    );
+  }
   // A tab whose editor does not exist yet: a message, and no request to the server.
   return (
     <div className="hotlines-notices" role="note" aria-label={`${tab.label}: not available yet`}>

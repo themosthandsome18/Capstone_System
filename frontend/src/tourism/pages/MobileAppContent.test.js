@@ -1,4 +1,4 @@
-// The Mobile App Content page (Commit 4c): five tabs, the tab in the address, the four tabs that are not built yet, who may
+// The Mobile App Content page (Commit 4c; the Welcome tab since 5b): five tabs, the tab in the address, the tabs that are not built yet, who may
 // open it. The Emergency Hotlines inside it are held to the golden of the old page in EmergencyHotlines.golden.test.js.
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileAppContent, { NOT_READY_NOTICE } from "./MobileAppContent";
@@ -11,15 +11,35 @@ jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual:
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
 const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines"];
-const NOT_BUILT = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide"];
+const NOT_BUILT = ["Why Visit", "Travel Guide & Tips", "Port & Boat Guide"]; // (the Welcome has its editor since 5b)
 const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines"];
 
+// The Welcome tab asks for the blocks; a fake answers it, and the Hotlines are answered by their own fake, as before.
+const BLOCKS_LIST = {
+  blocks: [
+    {
+      key: "welcome", name: "Welcome banner", title: "Mabuhay, {name}!", subtitle: "Welcome.", body: "", fields: ["title", "subtitle"],
+      limits: { title: { kind: "line", max: 160, required: true }, subtitle: { kind: "line", max: 300, required: true } },
+      allowed_placeholders: { title: ["name"], subtitle: ["name"] },
+    },
+  ],
+  fee: { regular: 80, discounted: 64 },
+  placeholders: {},
+};
+let blockRequests;
 let server;
 beforeEach(() => {
   router.__setSearch("");
   useAuth.mockReturnValue({ role: "admin" });
   server = createServer();
-  global.fetch = jest.fn(server.fetch);
+  blockRequests = [];
+  global.fetch = jest.fn((url, options = {}) => {
+    if (url.includes("/mobile-content/blocks/")) {
+      blockRequests.push(`${(options.method || "GET").toUpperCase()} ${url.replace(/^.*\/api/, "")}`);
+      return Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(BLOCKS_LIST), json: async () => JSON.parse(JSON.stringify(BLOCKS_LIST)) });
+    }
+    return server.fetch(url, options);
+  });
 });
 
 // a page that was opened on the Hotlines has asked for the contacts: let the answer arrive inside act()
@@ -51,11 +71,12 @@ describe("the page", () => {
     expect(router.__changes()).toEqual([]); // nothing was written into the address just by opening
   });
 
-  it("marks the four tabs that are not built with Coming soon, and not the Hotlines", async () => {
+  it("marks the three tabs that are not built with Coming soon, and not the Welcome or the Hotlines", async () => {
     render(<MobileAppContent />);
     await settled();
     NOT_BUILT.forEach((label) => expect(tab(label).textContent).toContain("Coming soon"));
     expect(tab("Emergency Hotlines").textContent).not.toContain("Coming soon");
+    expect(tab("Welcome").textContent).not.toContain("Coming soon");
   });
 });
 
@@ -65,6 +86,7 @@ describe("the tab is in the address", () => {
       router.__setSearch(`?tab=${key}`);
       const { unmount } = render(<MobileAppContent />);
       expect(selected().map(labelOf)).toEqual([LABELS[index]]);
+      await settled();
       unmount();
     }
   });
@@ -80,6 +102,7 @@ describe("the tab is in the address", () => {
     });
     expect(router.__changes()).toHaveLength(5);
     expect(router.__changes().every((change) => change.options.replace === true)).toBe(true);
+    await settled();
   });
 
   it("stays on the tab after a refresh (the page opened again with the address it had)", () => {
@@ -103,14 +126,15 @@ describe("the tab is in the address", () => {
     }
   });
 
-  it("does not touch the address when the tab is a good one", () => {
+  it("does not touch the address when the tab is a good one", async () => {
     router.__setSearch("?tab=welcome");
     render(<MobileAppContent />);
+    await settled();
     expect(router.__changes()).toEqual([]);
   });
 });
 
-describe("the four tabs that are not built", () => {
+describe("the three tabs that are not built", () => {
   it("say it is not available yet, without the word commit, and ask the server for NOTHING", async () => {
     render(<MobileAppContent />);
     await screen.findByRole("list");
@@ -127,7 +151,7 @@ describe("the four tabs that are not built", () => {
   });
 
   it("send no request at all when the page is opened on one of them", async () => {
-    for (const key of ["welcome", "why-visit", "travel-guide", "port-guide"]) {
+    for (const key of ["why-visit", "travel-guide", "port-guide"]) {
       router.__setSearch(`?tab=${key}`);
       server.requests.length = 0;
       const { unmount } = render(<MobileAppContent />);
@@ -146,7 +170,7 @@ describe("the tabs keep what they show", () => {
     await screen.findByRole("list");
     fireEvent.click(screen.getByRole("button", { name: /Add contact/ }));
     fireEvent.change(screen.getByLabelText("Contact name"), { target: { value: "Half typed" } });
-    fireEvent.click(tab("Welcome"));
+    fireEvent.click(tab("Why Visit"));
     expect(screen.getByLabelText("Contact name").closest('[role="tabpanel"]').hidden).toBe(true); // still there, but hidden
     fireEvent.click(tab("Emergency Hotlines"));
     expect(screen.getByLabelText("Contact name").value).toBe("Half typed");
@@ -188,5 +212,36 @@ describe("who may open it", () => {
     view.rerender(<MobileAppContent />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByRole("tablist")).toBeNull();
+  });
+});
+
+describe("the Welcome tab", () => {
+  it("asks for the blocks once, when it is first opened, and never for the Hotlines", async () => {
+    render(<MobileAppContent />);
+    await settled();
+    expect(blockRequests).toEqual([]); // the page opens on the Hotlines: the Welcome has asked for nothing
+    fireEvent.click(tab("Welcome"));
+    await screen.findByLabelText("Title");
+    expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]);
+    fireEvent.click(tab("Emergency Hotlines"));
+    fireEvent.click(tab("Welcome"));
+    await settled();
+    expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]); // kept, not asked again
+    expect(requests().filter((r) => r.path.startsWith("/emergency-contacts/"))).toHaveLength(1); // the Hotlines asked once, at the start
+  });
+
+  it("opened first, makes no request to the Hotlines at all", async () => {
+    router.__setSearch("?tab=welcome");
+    render(<MobileAppContent />);
+    await screen.findByLabelText("Title");
+    expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]);
+    expect(requests()).toEqual([]);
+    expect(selected().map(labelOf)).toEqual(["Welcome"]);
+  });
+
+  it("is not the tab the page opens on: that is still the Hotlines", async () => {
+    render(<MobileAppContent />);
+    await settled();
+    expect(selected().map(labelOf)).toEqual(["Emergency Hotlines"]);
   });
 });
