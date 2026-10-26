@@ -1,6 +1,6 @@
 # Sanitation Owner Portal Web Release
 
-Status recorded 2026-10-26: local integration on `sanitation/owner-web-combined`, source HEAD `d18980222fb6a8e1c54c232cc5f8bfd1c2c523a7`; fetched main base `4391711995189651e1b25da8df2b9a4864506ff3`. Documentation is prepared for review, not committed or published. See [progress](../PROGRESS.md) and [audit](../PROJECT_AUDIT.md) for the six commits and evidence boundaries.
+Status recorded 2026-10-26: local integration on `sanitation/owner-web-combined` reached the seven-commit checkpoint `6275cd0a14d62789d25fa29fd6d2b9a7c6d0f13f`, including this runbook's documentation commit; fetched main base was `4391711995189651e1b25da8df2b9a4864506ff3`. The earlier six-commit implementation checkpoint was `d18980222fb6a8e1c54c232cc5f8bfd1c2c523a7`. A status-correction commit advances HEAD without changing these historical identities. At this checkpoint no branch push, PR, main merge or deployment had occurred. See [progress](../PROGRESS.md) and [audit](../PROJECT_AUDIT.md) for the seven commits and evidence boundaries.
 
 ## Purpose and prerequisites
 
@@ -122,4 +122,4 @@ Limits to retain in release decisions:
 - Loading disables the input and removes the submit button's role/tappable semantics. Its generic wrapper may remain focusable and report enabled; use exact control identity, visible loading state and actual POST counts. The old positional selector could match Back. Mobile resizing exposed stale accessibility hitboxes. These automation observations do not establish screen-reader correctness.
 - Timeout evidence proves canceled Fetch, safe recovery and an unsuccessful late server write without UI overwrite; it does not prove receipt of a successful late response. Denied-origin compiled-UI acceptance remains unclaimed.
 
-One integration documentation owner maintains this runbook with the progress/audit entries. Review and separately authorize documentation commit before subsequent PR/release steps; no authorization follows automatically from this document.
+One integration documentation owner maintains this runbook with the progress/audit entries. The original documentation commit is `6275cd0a14d62789d25fa29fd6d2b9a7c6d0f13f`. Documentation status corrections require separate review and local commit authorization. Before a branch push, perform a fresh Git/main publication preflight. Branch push, PR review/merge and production release each require separate authorization; no authorization follows automatically from this document.
