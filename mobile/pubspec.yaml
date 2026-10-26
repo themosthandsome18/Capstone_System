@@ -33,6 +33,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   http: ^1.2.2
+  web: 1.1.1
   flutter_map: ^8.3.0
   latlong2: ^0.9.1
   image_picker: ^1.2.2
@@ -67,7 +68,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+
   assets:
+    - assets/fonts/roboto_license.txt
     - assets/tourism_logo.jpg
     - assets/sanitary_logo.jpg
     - assets/mauban_barangays.json
