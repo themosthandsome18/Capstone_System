@@ -4970,3 +4970,63 @@
   font-weight: 600;
   color: var(--th-text-muted);
 }
+
+/* The editor of a block of Mobile App Content with its preview and the app's built-in text beside it (Commit 5c). Only the shell's
+   --th-* tokens are used; on a narrow screen the three parts are one under the other. */
+.mobile-content-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.mobile-content-main,
+.mobile-content-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .mobile-content-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mobile-content-insert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-content-filled {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.mobile-content-missing {
+  font-weight: 700;
+  text-decoration: underline wavy;
+  text-underline-offset: 3px;
+}
+
+.mobile-content-muted {
+  color: var(--th-text-muted);
+}
+
+.mobile-content-preview-field,
+.mobile-content-builtin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-builtin-use {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}

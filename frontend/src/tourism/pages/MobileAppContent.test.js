@@ -239,6 +239,18 @@ describe("the Welcome tab", () => {
     expect(selected().map(labelOf)).toEqual(["Welcome"]);
   });
 
+  it("shows the app's built-in text even when the server cannot be reached (and no form)", async () => {
+    router.__setSearch("?tab=welcome");
+    global.fetch = jest.fn(() => Promise.reject(new TypeError("Failed to fetch")));
+    render(<MobileAppContent />);
+    await screen.findByRole("button", { name: "Try again" }); // the server has failed
+    const column = screen.getByLabelText("What the app shows now (built-in text)");
+    expect(column.textContent).toContain("Mabuhay, Explorer!");
+    expect(column.textContent).toContain("Showing the app's built-in text only.");
+    expect(screen.queryByLabelText("Title")).toBeNull(); // the fixture: the form is not there, the column is
+    await settled();
+  });
+
   it("is not the tab the page opens on: that is still the Hotlines", async () => {
     render(<MobileAppContent />);
     await settled();

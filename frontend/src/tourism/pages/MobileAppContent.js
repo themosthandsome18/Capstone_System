@@ -9,6 +9,7 @@ import {
 } from "../mobileContentAccess";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
+import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
 export const NOT_READY_NOTICE =
   "Not available yet. The editor for this tab is coming in an upcoming update. The mobile app still shows its built-in text.";
@@ -20,6 +21,7 @@ function TabPanel({ tab }) {
       <MobileContentBlockEditor
         blockKey="welcome"
         heading="Welcome banner"
+        builtIn={BUILT_IN_BLOCKS.welcome}
         intro="The greeting at the top of the Home page of the mobile app."
         hints={{
           title:
