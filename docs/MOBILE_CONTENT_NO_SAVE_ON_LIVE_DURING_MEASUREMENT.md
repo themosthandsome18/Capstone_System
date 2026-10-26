@@ -43,3 +43,11 @@ A measurement is only worth anything if it can tell the code apart from the data
 
 Nothing in the mobile app reads `appContent` yet, so a saved text reaches no visitor today. That does not make a save harmless to a
 measurement: the bootstrap that every installed app downloads already carries the saved text.
+
+## Measuring: never run the heavy suites at the same time
+
+Added 2026-10-26, at the owner's instruction. **The heavy suites (backend, frontend, Dart) are run ONE AT A TIME, never together, and nothing else heavy
+runs beside them** (a build, a mutation run, a second suite). Reason: in this project the conditions of a measurement have differed from the conditions of
+the real run six times (a golden that passed alone and not in the whole suite, a test that passed alone and exceeded its five seconds beside another
+suite, the same on a sanitation test of the colleague, and others). A suite run beside another one measures the load, not the code. If a test fails
+under load, it is run alone AND the whole suite is run again with nothing beside it, and the report says both, with what was running.
