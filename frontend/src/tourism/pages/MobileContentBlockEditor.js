@@ -3,6 +3,7 @@ import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
 import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
 import { NEXT_VERSION_NOTICE } from "./EmergencyHotlines";
+import { DetailMock, MOCK_SUBTITLE, MOCK_TITLE, TileFoot, TileGrid } from "./MobileContentWhyVisitMocks";
 
 // The editor of ONE block of Mobile App Content (the Welcome banner, and later the others). It shows the fields the server says the
 // app shows for that block (so a field the app does not show is not on the page), counts and limits them the way the server does,
@@ -75,11 +76,39 @@ function Parts({ parts }) {
   });
 }
 
+// A note: a soft box with an icon on its left.
+function Note({ children }) {
+  return (
+    <div className="mobile-content-note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 11v5" />
+        <path d="M12 8h.01" />
+      </svg>
+      <p>{children}</p>
+    </div>
+  );
+}
+
 export const BANNER_NAME_NOTE = "Ang pangalan ay galing sa naka-login na bisita, hindi sa inyong isinulat.";
 
 // The design of the page (5e) names some boxes differently from the server's words ("Greeting", "Paragraph"); `labels` says which, field by field.
 // `banner` draws the preview as the banner of the app. `note` is a line under the form. Without them the editor looks and reads as it did.
-export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, intro, hints = {}, labels = {}, note, banner = false, builtIn }) {
+export default function MobileContentBlockEditor({
+  blockKey,
+  heading,
+  eyebrow,
+  intro,
+  hints = {},
+  labels = {},
+  note,
+  banner = false,
+  pillars,
+  below,
+  builtIn,
+}) {
+  // how the preview is drawn: as the banner of the app (Welcome), as the tiles and their page (Why Visit: given the pillars), or as plain text
+  const mock = banner ? "banner" : pillars ? "sheet" : null;
   const labelOf = (field) => labels[field] || LABELS[field] || field;
   const wordOf = (field) => (labels[field] ? `The ${labels[field].toLowerCase()}` : WORDS[field] || "This");
   // undefined until the first load: only then the page says "Loading...".
@@ -288,14 +317,14 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
   const anyName = previews.some((item) => item.usesName);
   const anyFilled = previews.some((item) => item.shown && item.shown.parts.some((part) => part.kind === "filled"));
 
-  // Each field of the preview. In the banner, the name of the field is only for a screen reader (the banner shows the text, as the app does).
+  // Each field of the preview. In a mock, the name of the field is only for a screen reader (the mock shows the text, as the app does).
   const previewFields = previews.map((item) => (
     <div
       key={item.field}
-      className={`mobile-content-preview-field${banner ? ` mobile-content-banner-${item.field}` : ""}`}
+      className={`mobile-content-preview-field${mock ? ` mobile-content-${mock}-${item.field}` : ""}`}
       data-testid={`preview-${item.field}`}
     >
-      <small className={banner ? "mobile-content-sr" : "options-hint"}>{labelOf(item.field)}</small>
+      <small className={mock ? "mobile-content-sr" : "options-hint"}>{labelOf(item.field)}</small>
       {item.empty ? (
         <p className="mobile-content-muted">{PREVIEW_EMPTY}</p>
       ) : item.officeMissing ? (
@@ -314,7 +343,6 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
   return (
     <div className="mobile-content-panel">
       <div className="hotlines-notices mobile-content-notices" role="note" aria-label="About these changes">
-        <p>{NEXT_VERSION_NOTICE}</p>
         <p>{CHECK_NOTICE}</p>
       </div>
 
@@ -490,29 +518,36 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
               )}
             </form>
           ) : null}
-          {block && note ? (
-            <div className="mobile-content-note">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 11v5" />
-                <path d="M12 8h.01" />
-              </svg>
-              <p>{note}</p>
-            </div>
-          ) : null}
+          {block && note ? <Note>{note}</Note> : null}
+          {block ? <Note>{NEXT_VERSION_NOTICE}</Note> : null}
+          {below}
         </div>
 
         <div className="mobile-content-side">
           {block ? (
             <section className="settings-card options-card mobile-content-card" aria-label="What the app will show">
               <div className="report-card-title">
-                {banner ? <p className="mobile-content-eyebrow">Live preview</p> : null}
-                {banner ? <h2>How it will look in the app</h2> : <h3>What the app will show</h3>}
+                {mock ? <p className="mobile-content-eyebrow">Live preview</p> : null}
+                {banner ? <h2>How it will look in the app</h2> : pillars ? <h2>{MOCK_TITLE}</h2> : <h3>What the app will show</h3>}
+                {pillars && !banner ? <p>{MOCK_SUBTITLE}</p> : null}
               </div>
               {banner ? (
                 <div className="mobile-content-phone">
                   <div className="mobile-content-banner">{previewFields}</div>
                 </div>
+              ) : pillars ? (
+                <>
+                  <div className="mobile-content-phone">
+                    <div className="mobile-content-sheet">
+                      {previewFields}
+                      <TileGrid state={pillars} />
+                    </div>
+                    <TileFoot state={pillars} />
+                  </div>
+                  <div className="mobile-content-phone">
+                    <DetailMock state={pillars} />
+                  </div>
+                </>
               ) : (
                 previewFields
               )}

@@ -9,11 +9,29 @@ import {
 } from "../mobileContentAccess";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
-import MobileContentPillars from "./MobileContentPillars";
+import { PillarsView, usePillars } from "./MobileContentPillars";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
 export const NOT_READY_NOTICE =
   "Not available yet. The editor for this tab is coming in an upcoming update. The mobile app still shows its built-in text.";
+
+// The Why Visit tab reads the pillars ONCE; the editor draws them in its preview, and the list under the editor shows them.
+function WhyVisitTab() {
+  const pillars = usePillars();
+  return (
+    <MobileContentBlockEditor
+      blockKey="why_visit"
+      heading="Why Visit Mauban, Quezon?"
+      eyebrow="Pambungad"
+      labels={{ body: "Paragraph" }}
+      builtIn={BUILT_IN_BLOCKS.why_visit}
+      intro="The title, the subtitle and the paragraph of the Why Visit page of the mobile app."
+      hints={{ body: "Enter starts a new line. A blank line between two lines makes a new paragraph." }}
+      pillars={pillars}
+      below={<PillarsView state={pillars} />}
+    />
+  );
+}
 
 function TabPanel({ tab }) {
   if (tab.key === "hotlines") return <EmergencyHotlinesPanel />;
@@ -34,22 +52,7 @@ function TabPanel({ tab }) {
       />
     );
   }
-  if (tab.key === "why-visit") {
-    return (
-      <div className="mobile-content-panel">
-        <MobileContentBlockEditor
-          blockKey="why_visit"
-          heading="Why Visit Mauban, Quezon?"
-          eyebrow="Pambungad"
-          labels={{ body: "Paragraph" }}
-          builtIn={BUILT_IN_BLOCKS.why_visit}
-          intro="The title, the subtitle and the paragraph of the Why Visit page of the mobile app."
-          hints={{ body: "Enter starts a new line. A blank line between two lines makes a new paragraph." }}
-        />
-        <MobileContentPillars />
-      </div>
-    );
-  }
+  if (tab.key === "why-visit") return <WhyVisitTab />;
   // A tab whose editor does not exist yet: a message, and no request to the server.
   return (
     <div className="hotlines-notices" role="note" aria-label={`${tab.label}: not available yet`}>

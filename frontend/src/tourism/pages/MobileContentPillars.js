@@ -43,7 +43,11 @@ export const PILLAR_ICONS = {
   info: { tone: "neutral", paths: ["M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0", "M12 11v5", "M12 8h.01"] },
 };
 
-export default function MobileContentPillars() {
+// Has the item a full text to open? The server says so (`tappable`); when it does not say, the full text is looked at. Used by the list and by the preview.
+export const hasDetail = (item) => (item.tappable === undefined ? Boolean(item.full_text) : Boolean(item.tappable));
+
+// ONE request for the pillars, shared by the list and by the preview of the Why Visit (so the preview adds no request).
+export function usePillars() {
   const [items, setItems] = useState(undefined); // undefined until the first answer
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -64,6 +68,11 @@ export default function MobileContentPillars() {
     };
   }, [retry]);
 
+  return { items, error, reload: () => setRetry((count) => count + 1) };
+}
+
+export function PillarsView({ state }) {
+  const { items, error, reload } = state;
   return (
     <section className="settings-card options-card mobile-content-card" aria-label={PILLARS_HEADING}>
       <div className="report-card-title">
@@ -77,7 +86,7 @@ export default function MobileContentPillars() {
       {error ? (
         <p className="settings-status error" role="alert">
           {error}{" "}
-          <button type="button" className="reply-btn" onClick={() => setRetry((count) => count + 1)}>
+          <button type="button" className="reply-btn" onClick={reload}>
             Try again
           </button>
         </p>
@@ -88,7 +97,7 @@ export default function MobileContentPillars() {
           {items.map((item) => {
             const icon = PILLAR_ICONS[item.icon] || PILLAR_ICONS.info;
             const tone = ICON_TONES[icon.tone];
-            const detail = item.tappable === undefined ? Boolean(item.full_text) : Boolean(item.tappable);
+            const detail = hasDetail(item);
             return (
               <li key={item.id} className="mobile-content-pillar" data-active={item.is_active ? "true" : "false"} data-detail={detail ? "yes" : "no"}>
                 <span className="mobile-content-pillar-icon" data-icon={item.icon} style={{ background: tone.background }} aria-hidden="true">
@@ -125,4 +134,8 @@ export default function MobileContentPillars() {
       </div>
     </section>
   );
+}
+
+export default function MobileContentPillars() {
+  return <PillarsView state={usePillars()} />;
 }

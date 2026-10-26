@@ -134,11 +134,16 @@ describe("what it shows", () => {
     expect(screen.getByRole("heading", { name: "Welcome banner" })).toBeTruthy();
   });
 
-  it("says that changes reach the app only with its next version, and that the check for another editor is not a guarantee", async () => {
-    await open();
+  it("says that changes reach the app only with its next version (a small note under the form), and that the check for another editor is not a guarantee (at the top)", async () => {
+    const { container } = await open();
     const notes = screen.getByRole("note", { name: "About these changes" });
-    expect(within(notes).getByText(NEXT_VERSION_NOTICE)).toBeTruthy();
     expect(within(notes).getByText(CHECK_NOTICE)).toBeTruthy();
+    expect(within(notes).queryByText(NEXT_VERSION_NOTICE)).toBeNull(); // (moved in 5g: it is a note under the form now)
+    const next = screen.getByText(NEXT_VERSION_NOTICE);
+    expect(next.closest(".mobile-content-note")).not.toBeNull();
+    expect(next.closest("form")).toBeNull(); // under the box, not in it
+    expect(screen.getByRole("form", { name: "Welcome banner" }).compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".mobile-content-main").contains(next)).toBe(true); // in the left column
     expect(CHECK_NOTICE).toMatch(/not a guarantee/);
     expect(CHECK_NOTICE).toMatch(/last save wins/);
   });
