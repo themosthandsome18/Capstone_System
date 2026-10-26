@@ -71,24 +71,10 @@ function Parts({ parts }) {
   });
 }
 
-// A note: a soft box with an icon on its left.
-function Note({ children }) {
-  return (
-    <div className="mobile-content-note">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 11v5" />
-        <path d="M12 8h.01" />
-      </svg>
-      <p>{children}</p>
-    </div>
-  );
-}
-
 export const BANNER_NAME_NOTE = "Ang pangalan ay galing sa naka-login na bisita, hindi sa inyong isinulat.";
 
 // The design of the page (5e) names some boxes differently from the server's words ("Greeting", "Paragraph"); `labels` says which, field by field.
-// `banner` draws the preview as the banner of the app. `note` is a line under the form. Without them the editor looks and reads as it did.
+// `banner` draws the preview as the banner of the app. Without them the editor looks and reads as it did.
 export default function MobileContentBlockEditor({
   blockKey,
   heading,
@@ -96,7 +82,6 @@ export default function MobileContentBlockEditor({
   intro,
   hints = {},
   labels = {},
-  note,
   banner = false,
   pillars,
   below,
@@ -509,7 +494,6 @@ export default function MobileContentBlockEditor({
               )}
             </form>
           ) : null}
-          {block && note ? <Note>{note}</Note> : null}
           {below}
         </div>
 

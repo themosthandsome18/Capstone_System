@@ -7,7 +7,7 @@ import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileAppContent from "./MobileAppContent";
 import { BANNER_NAME_NOTE, NAME_NOTE } from "./MobileContentBlockEditor";
-import { ICON_TONES, PILLAR_ICONS, PILLARS_DESIGN_NOTE, PILLARS_HEADING, TAG_DETAIL, TAG_NO_DETAIL } from "./MobileContentPillars";
+import { ICON_TONES, PILLAR_ICONS, PILLARS_HEADING, TAG_DETAIL, TAG_NO_DETAIL } from "./MobileContentPillars";
 import { useAuth } from "../../auth/AuthContext";
 
 const router = require("../testing/routerStub");
@@ -18,7 +18,6 @@ jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 // ---- the words of the design (written here once, as the owner gave them) ----
 const LEAD = "Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.";
 const GREETING_HINT = "Ang {name} ay papalitan ng app ng pangalan ng bisita. Kung aalisin ninyo ito, pare-pareho ang makikita ng lahat.";
-const WELCOME_NOTE = "Ito ang unang nakikita ng bisita pagbukas ng app. Panatilihing maikli — ang mahabang talata ay nagtutulak pababa sa mga mahalagang tile.";
 const FEE = ["fee_regular", "fee_discounted", "fee_office"];
 
 const BLOCKS = {
@@ -128,15 +127,13 @@ describe("the Welcome tab", () => {
     expect(screen.queryByLabelText("Subtitle")).toBeNull();
   });
 
-  it("has the hint of the design under the Greeting, and the note under the box", async () => {
-    await openTab("welcome", "Greeting");
+  it("has the hint of the design under the Greeting (a hint of the field), and no note box on the page", async () => {
+    const { container } = await openTab("welcome", "Greeting");
     const greeting = screen.getByLabelText("Greeting").closest(".settings-field");
     expect(within(greeting).getByText(GREETING_HINT)).toBeTruthy();
-    const note = screen.getByText(WELCOME_NOTE);
-    expect(note.closest(".mobile-content-note")).not.toBeNull();
-    expect(note.closest(".mobile-content-note").querySelector("svg")).not.toBeNull(); // the icon on its left
-    expect(note.closest("form")).toBeNull(); // under the box, not in it
-    expect(screen.getByRole("form", { name: "Welcome banner" }).compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".mobile-content-note")).toBeNull(); // the note under the box was taken away in 5j
+    expect(screen.queryByText(/Ito ang unang nakikita ng bisita pagbukas ng app/)).toBeNull();
+    expect(screen.queryByText(/Panatilihing maikli/)).toBeNull();
   });
 
   it("keeps the Save inside the box, and the server's words for an error follow the new names", async () => {
@@ -235,8 +232,8 @@ describe("the Why Visit tab", () => {
     expect(drawing(boxes[3]).getAttribute("stroke")).toBe(ICON_TONES.neutral.stroke);
     expect(boxes[0].querySelector('[data-part="title"]').textContent).toBe("Cagbalete Island");
     expect(boxes[0].querySelector('[data-part="text"]').textContent).toBe("Pristine Sandbars");
-    expect(within(card).getByText(PILLARS_DESIGN_NOTE).closest(".mobile-content-note").querySelector("svg")).not.toBeNull();
-    expect(PILLARS_DESIGN_NOTE).toBe("Ang nakikita sa apat na kahon ay buod lamang. Ang buong impormasyon ay lumalabas kapag pinindot — at ang kahong walang laman ay hindi napipindot.");
+    expect(card.querySelector(".mobile-content-note")).toBeNull(); // no note box (it was taken away in 5j)
+    expect(within(card).queryByText(/Ang nakikita sa apat na kahon ay buod lamang/)).toBeNull();
   });
 
   it("is still a list to read: nothing to type in, no Edit, no Add pillar, no Save in it", async () => {
@@ -357,14 +354,9 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(hint, "line-height")).toBe("1.55");
   });
 
-  it("the note and the main button", () => {
-    const rule = ".mobile-content-page .mobile-content-note";
-    expect(decl(rule, "background")).toBe("#fbf1e4");
-    expect(decl(rule, "border-radius")).toBe("11px");
-    expect(decl(rule, "padding")).toBe("13px 15px");
-    const text = ".mobile-content-page .mobile-content-note p";
-    expect(decl(text, "font-size")).toBe("13.5px");
-    expect(decl(text, "color")).toBe("#6b543e");
+  it("the main button (and no rule left for a note box)", () => {
+    expect(CSS).not.toMatch(/mobile-content-note/);
+    expect(CSS).not.toMatch(/--mc-note/);
     const button = ".mobile-content-page .mobile-content-card .tourist-record-save";
     expect(decl(button, "background")).toBe("#8a5a33");
     expect(decl(button, "color")).toBe("#ffffff");

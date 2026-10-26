@@ -5077,8 +5077,6 @@
   --mc-label: #8a6e55;
   --mc-hint: #8a7664;
   --mc-tab: #65564a;
-  --mc-note-bg: #fbf1e4;
-  --mc-note-ink: #6b543e;
   font-family: var(--mc-font);
   background: linear-gradient(165deg, #f8e9d8, #f0d7be);
   border-radius: 20px;
@@ -5238,30 +5236,6 @@
 
 .mobile-content-page .mobile-content-card .tourist-record-save:disabled {
   opacity: 0.55;
-}
-
-/* a note: a soft box with an icon on its left */
-.mobile-content-page .mobile-content-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 13px 15px;
-  border-radius: 11px;
-  background: var(--mc-note-bg);
-  color: var(--mc-note-ink);
-}
-
-.mobile-content-page .mobile-content-note p {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-  line-height: 1.55;
-  color: var(--mc-note-ink);
-}
-
-.mobile-content-page .mobile-content-note svg {
-  flex: none;
-  margin-top: 2px;
 }
 
 /* the live preview: the banner of the app, in a frame */

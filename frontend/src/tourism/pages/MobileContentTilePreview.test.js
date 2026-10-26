@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileAppContent from "./MobileAppContent";
-import { PILLARS_DESIGN_NOTE, PILLARS_HEADING } from "./MobileContentPillars";
+import { PILLARS_HEADING } from "./MobileContentPillars";
 import { LOAD_ERROR, MOCK_SUBTITLE, MOCK_TITLE, NO_DETAIL_AT_ALL, NO_FULL_TEXT, footLine } from "./MobileContentWhyVisitMocks";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -301,10 +301,13 @@ describe("the notices", () => {
     expect(container.querySelector(".mobile-content-notices")).toBeNull();
   });
 
-  it("the note that explains how the four boxes work stays, in the list of pillars (it explains, it does not warn)", async () => {
-    await open();
+  it("there is no note box at all on the Why Visit, not even in the list of pillars (the note about the four boxes was taken away in 5j)", async () => {
+    const { container } = await open();
     const list = screen.getByLabelText(PILLARS_HEADING, { selector: "section" });
-    expect(within(list).getByText(PILLARS_DESIGN_NOTE).closest(".mobile-content-note")).not.toBeNull();
+    expect(within(list).getAllByRole("listitem")).toHaveLength(4); // the fixture: the list is drawn
+    expect(container.querySelector(".mobile-content-note")).toBeNull();
+    expect(screen.queryByText(/Ang nakikita sa apat na kahon ay buod lamang/)).toBeNull();
+    expect(screen.queryByText(/Ang buong impormasyon ay lumalabas kapag pinindot/)).toBeNull();
   });
 });
 

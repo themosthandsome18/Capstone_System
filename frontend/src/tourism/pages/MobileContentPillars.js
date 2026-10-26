@@ -9,8 +9,6 @@ export const PILLARS_HEADING = "The pillars of Why Visit";
 export const PILLARS_NOTICE =
   "These are the tiles the app shows under this text. They cannot be edited here yet: that is coming in an upcoming update. " +
   "Until then the app shows them as they are listed here.";
-export const PILLARS_DESIGN_NOTE =
-  "Ang nakikita sa apat na kahon ay buod lamang. Ang buong impormasyon ay lumalabas kapag pinindot — at ang kahong walang laman ay hindi napipindot.";
 export const PILLARS_EMPTY = "There are no pillars to show.";
 export const PILLARS_ERROR_FALLBACK = "The pillars could not be loaded.";
 export const SWITCHED_OFF = "Switched off: the app does not show it";
@@ -124,14 +122,6 @@ export function PillarsView({ state }) {
           })}
         </ul>
       ) : null}
-      <div className="mobile-content-note">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 11v5" />
-          <path d="M12 8h.01" />
-        </svg>
-        <p>{PILLARS_DESIGN_NOTE}</p>
-      </div>
     </section>
   );
 }

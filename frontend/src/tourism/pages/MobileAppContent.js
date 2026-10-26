@@ -48,7 +48,6 @@ function TabPanel({ tab }) {
         hints={{
           title: "Ang {name} ay papalitan ng app ng pangalan ng bisita. Kung aalisin ninyo ito, pare-pareho ang makikita ng lahat.",
         }}
-        note="Ito ang unang nakikita ng bisita pagbukas ng app. Panatilihing maikli — ang mahabang talata ay nagtutulak pababa sa mga mahalagang tile."
       />
     );
   }
