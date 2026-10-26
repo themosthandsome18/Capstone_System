@@ -51,3 +51,13 @@ runs beside them** (a build, a mutation run, a second suite). Reason: in this pr
 the real run six times (a golden that passed alone and not in the whole suite, a test that passed alone and exceeded its five seconds beside another
 suite, the same on a sanitation test of the colleague, and others). A suite run beside another one measures the load, not the code. If a test fails
 under load, it is run alone AND the whole suite is run again with nothing beside it, and the report says both, with what was running.
+
+### What was measured about the frontend suite on this machine (2026-10-26, Commit 5b)
+
+The whole frontend suite, with the default number of workers (15 on the 16 logical CPUs of this machine) and the developer's own servers running beside it
+(`react-scripts start` and two `manage.py runserver`, none of them started by Claude), fails ONE test of the colleague's, `HouseholdRecords.final.test.js`,
+"new Bottomless POST uses independent selected source and level without total", by the default 5 seconds (it takes about 1.5 s alone; the file takes 28 s inside
+the suite). This happened 5 times out of 5 with the editor test of Commit 5b in the suite; the same suite without that one file passed, the suite of the previous
+commit passed, and the test passes alone. With `--maxWorkers=6` all 1,014 tests pass in 35 seconds. So it is load: too many workers on a machine that is also running
+other things. On this machine run the frontend suite as `CI=true npx react-scripts test --watchAll=false --maxWorkers=6`, and say so in the report; a test of the
+colleague's that needs more than its 5 seconds under load is the colleague's to change (a timeout), not ours. Nothing of the colleague's was changed.
