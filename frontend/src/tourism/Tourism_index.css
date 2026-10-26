@@ -5020,8 +5020,7 @@
   color: var(--th-text-muted);
 }
 
-.mobile-content-preview-field,
-.mobile-content-builtin-field {
+.mobile-content-preview-field {
   display: flex;
   flex-direction: column;
   gap: 4px;

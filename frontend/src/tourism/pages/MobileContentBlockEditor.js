@@ -7,7 +7,7 @@ import { NEXT_VERSION_NOTICE } from "./EmergencyHotlines";
 // The editor of ONE block of Mobile App Content (the Welcome banner, and later the others). It shows the fields the server says the
 // app shows for that block (so a field the app does not show is not on the page), counts and limits them the way the server does,
 // and saves with one PATCH of only what changed. Beside the form: what the app will show (the typed text, with the placeholders filled
-// in as the server fills them) and what the app shows now (its built-in text), with a button that puts that text into the form.
+// in as the server fills them). Inside the form, a button puts the app's own (built-in) text into the form: it fills the form and sends nothing.
 
 export { NEXT_VERSION_NOTICE };
 export const CHECK_NOTICE =
@@ -29,8 +29,7 @@ export const FEE_NOTE =
 export const NAME_NOTE =
   "Explorer is only what a visitor who is not logged in is called. A visitor who is logged in sees their own name here.";
 export const FILLED_NOTE = "The amounts and the place where the fee is paid are filled in from the system. They are not typed here.";
-export const BUILT_IN_ONLY = "Showing the app's built-in text only.";
-export const BUILT_IN_BUTTON = "Use the app's built-in text";
+export const BUILT_IN_BUTTON = "Ibalik ang orihinal na teksto";
 export const BUILT_IN_BUTTON_NOTE = "This only fills the form. Press Save to keep it.";
 
 const LABELS = { title: "Title", subtitle: "Subtitle", body: "Text" };
@@ -289,10 +288,6 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
   const anyName = previews.some((item) => item.usesName);
   const anyFilled = previews.some((item) => item.shown && item.shown.parts.some((part) => part.kind === "filled"));
 
-  // ---- the built-in text, shown as a guest would read it ----
-  const builtInFields = builtIn ? (block ? fields : Object.keys(builtIn)) : [];
-  const builtInShown = builtInFields.map((field) => ({ field, shown: previewParts(builtIn[field], context) }));
-
   // Each field of the preview. In the banner, the name of the field is only for a screen reader (the banner shows the text, as the app does).
   const previewFields = previews.map((item) => (
     <div
@@ -443,6 +438,15 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
                 );
               })}
 
+              {builtIn ? (
+                <div className="mobile-content-builtin-use">
+                  <button type="button" className="reply-btn" onClick={useBuiltIn} disabled={working}>
+                    {BUILT_IN_BUTTON}
+                  </button>
+                  <small className="options-hint">{BUILT_IN_BUTTON_NOTE}</small>
+                </div>
+              ) : null}
+
               {ask ? (
                 <div className="options-confirm" role="alertdialog" aria-label="Confirm the change">
                   <p>{ask.message}</p>
@@ -535,38 +539,6 @@ export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, i
             </section>
           ) : null}
 
-          {builtIn ? (
-            <section className="settings-card options-card mobile-content-card" aria-label="What the app shows now (built-in text)">
-              <div className="report-card-title">
-                <h3>What the app shows now (built-in text)</h3>
-              </div>
-              <p className="options-hint">
-                The text the app has written in its own code. It is what a visitor reads until the app is changed to read the text from here.
-              </p>
-              {loadError ? <p className="options-hint">{BUILT_IN_ONLY}</p> : null}
-              {builtInShown.map((item) => (
-                <div key={item.field} className="mobile-content-builtin-field" data-testid={`builtin-${item.field}`}>
-                  <small className="options-hint">{labelOf(item.field)}</small>
-                  <p>
-                    <Parts parts={item.shown.parts} />
-                  </p>
-                </div>
-              ))}
-              {builtInShown.some((item) => item.shown.usesName) ? (
-                <p className="options-hint" role="note">
-                  {NAME_NOTE}
-                </p>
-              ) : null}
-              {block ? (
-                <div className="mobile-content-builtin-use">
-                  <button type="button" className="reply-btn" onClick={useBuiltIn} disabled={working}>
-                    {BUILT_IN_BUTTON}
-                  </button>
-                  <small className="options-hint">{BUILT_IN_BUTTON_NOTE}</small>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
         </div>
       </div>
     </div>

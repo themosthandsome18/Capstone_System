@@ -164,7 +164,7 @@ describe("the Welcome tab", () => {
     expect(paragraph.querySelector("p").textContent).toBe("Welcome to Mauban.");
     expect(within(banner).getAllByText(/^(Greeting|Paragraph)$/).every((label) => label.className === "mobile-content-sr")).toBe(true); // names for a screen reader only
     expect(within(preview).getByText(BANNER_NAME_NOTE)).toBeTruthy();
-    expect(within(preview).queryByText(NAME_NOTE)).toBeNull(); // the old line is not in the preview; it stays in the built-in column
+    expect(within(preview).queryByText(NAME_NOTE)).toBeNull(); // the old line is not in the preview (and the built-in column is gone)
   });
 
   it("has no pill that says Municipality of Mauban, anywhere", async () => {
@@ -173,12 +173,23 @@ describe("the Welcome tab", () => {
     expect(document.body.textContent).not.toMatch(/Municipality of Mauban/);
   });
 
-  it("keeps the column of the built-in text and its button", async () => {
+  it("has no box of the app's built-in text; the right column is the live preview and nothing else", async () => {
     await openTab("welcome", "Greeting");
-    const builtIn = screen.getByLabelText("What the app shows now (built-in text)");
-    expect(builtIn.className).toContain("mobile-content-card");
-    expect(within(builtIn).getByRole("button", { name: "Use the app's built-in text" })).toBeTruthy();
-    expect(within(builtIn).getByText(NAME_NOTE)).toBeTruthy();
+    expect(screen.getByTestId("preview-title")).toBeTruthy(); // the fixture: the preview is drawn
+    expect(screen.queryByLabelText("What the app shows now (built-in text)")).toBeNull();
+    expect(screen.queryByText(/What the app shows now/)).toBeNull();
+    const side = document.querySelector(".mobile-content-side");
+    expect(side.children).toHaveLength(1);
+    expect(side.firstElementChild.getAttribute("aria-label")).toBe("What the app will show");
+    expect(document.body.textContent).not.toContain(NAME_NOTE); // the line about Explorer was in that box; the preview has the line of the design
+  });
+
+  it("keeps the button, inside the box of the editor, as Ibalik ang orihinal na teksto, with its note", async () => {
+    await openTab("welcome", "Greeting");
+    const form = screen.getByRole("form", { name: "Welcome banner" });
+    expect(within(form).getByRole("button", { name: "Ibalik ang orihinal na teksto" })).toBeTruthy();
+    expect(within(form).getByText("This only fills the form. Press Save to keep it.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Use the app's built-in text" })).toBeNull();
   });
 });
 

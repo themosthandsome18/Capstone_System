@@ -1,11 +1,10 @@
-// The preview, the built-in column, the button that fills the form with the app's own text, and the buttons and the warnings for the
+// The preview, the button (inside the form) that fills the form with the app's own text, and the buttons and the warnings for the
 // placeholders (Commit 5c). The REAL tourismApi builds the requests; a fake server answers. Every test with a fixture asserts, inside the
 // test, that the fixture reached the case it is meant to test.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import MobileContentBlockEditor, {
   BUILT_IN_BUTTON,
   BUILT_IN_BUTTON_NOTE,
-  BUILT_IN_ONLY,
   FEE_NOTE,
   FILLED_NOTE,
   NAME_NOTE,
@@ -101,7 +100,6 @@ const field = (name) => screen.getByLabelText(name);
 const type = (name, value) => fireEvent.change(field(name), { target: { value } });
 const saveButton = () => screen.getByRole("button", { name: /^(Save|Saving\.\.\.)$/ });
 const preview = (name) => screen.getByTestId(`preview-${name}`);
-const builtIn = (name) => screen.getByTestId(`builtin-${name}`);
 const writes = () => requests.filter((r) => r.method !== "GET");
 const marks = (container, kind) => [...container.querySelectorAll(`[data-kind="${kind}"]`)].map((node) => node.textContent);
 
@@ -281,14 +279,13 @@ describe("state: a placeholder that is not allowed, or a bracket with no partner
 });
 
 describe("state: the content cannot be loaded", () => {
-  it("still shows the app's built-in text, and says it is the only thing shown, with Try again; no form, no preview", async () => {
+  it("shows the error with Try again; no form, no preview, no column of the app's text, nothing to fill", async () => {
     state.failGet = { status: 500, body: { detail: "The server is down." } };
     render(<MobileContentBlockEditor blockKey="welcome" heading="Welcome banner" builtIn={BUILT_IN_BLOCKS.welcome} />);
     await screen.findByText(/The server is down\./);
-    expect(builtIn("title").textContent).toContain("Mabuhay, Explorer! \u{1F30A}");
-    expect(builtIn("subtitle").textContent).toContain(BUILT_IN_BLOCKS.welcome.subtitle);
-    expect(screen.getByText(BUILT_IN_ONLY)).toBeTruthy();
-    expect(BUILT_IN_ONLY).toBe("Showing the app's built-in text only.");
+    expect(screen.queryByLabelText("What the app shows now (built-in text)")).toBeNull(); // (the column was taken away in 5e)
+    expect(screen.queryByTestId("builtin-title")).toBeNull();
+    expect(screen.queryByText(/Showing the app's built-in text only/)).toBeNull();
     expect(screen.queryByLabelText("Title")).toBeNull(); // the fixture: there is no form
     expect(screen.queryByLabelText("What the app will show")).toBeNull();
     expect(screen.queryByRole("button", { name: BUILT_IN_BUTTON })).toBeNull(); // nothing to fill
@@ -303,42 +300,57 @@ describe("state: the content cannot be loaded", () => {
     state.failGet = null;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByLabelText("Title");
-    expect(screen.queryByText(BUILT_IN_ONLY)).toBeNull();
+    expect(screen.queryByText(/The server is down\./)).toBeNull();
     expect(screen.getByLabelText("What the app will show")).toBeTruthy();
     expect(screen.getByRole("button", { name: BUILT_IN_BUTTON })).toBeTruthy();
   });
 
-  it("is shown while it is still loading, too", async () => {
+  it("while it is still loading there is no form, no column and no button yet", async () => {
     render(<MobileContentBlockEditor blockKey="welcome" heading="Welcome banner" builtIn={BUILT_IN_BLOCKS.welcome} />);
-    expect(builtIn("title").textContent).toContain("Explorer"); // before any answer
+    expect(screen.getByText("Loading...")).toBeTruthy(); // the fixture: no answer has come yet
+    expect(screen.queryByLabelText("What the app shows now (built-in text)")).toBeNull();
+    expect(screen.queryByRole("button", { name: BUILT_IN_BUTTON })).toBeNull();
     await settled();
   });
 
-  it("the block missing from the list is no different", async () => {
+  it("the block missing from the list is no different: the message, and nothing else", async () => {
     render(<MobileContentBlockEditor blockKey="no_such_block" heading="x" builtIn={BUILT_IN_BLOCKS.welcome} />);
     await screen.findByText("This text is not available.");
-    expect(builtIn("title")).toBeTruthy();
-  });
-});
-
-describe("the built-in column", () => {
-  it("shows the app's text for every field the page edits, as a guest reads it, and says who Explorer is", async () => {
-    await open();
-    expect(screen.getByLabelText("What the app shows now (built-in text)")).toBeTruthy();
-    expect(builtIn("title").textContent).toContain("Mabuhay, Explorer! \u{1F30A}");
-    expect(builtIn("subtitle").textContent).toContain(BUILT_IN_BLOCKS.welcome.subtitle);
-    expect(within(screen.getByLabelText("What the app shows now (built-in text)")).getByText(NAME_NOTE)).toBeTruthy();
-    expect(screen.queryByTestId("builtin-body")).toBeNull(); // the welcome has no text to show
-  });
-
-  it("is not there when the page is not given the app's text", async () => {
-    await open({ builtIn: undefined });
     expect(screen.queryByLabelText("What the app shows now (built-in text)")).toBeNull();
     expect(screen.queryByRole("button", { name: BUILT_IN_BUTTON })).toBeNull();
   });
 });
 
+describe("the app's built-in text is not a column of its own (5e)", () => {
+  it("there is no box that shows it, and the only box beside the form is the preview", async () => {
+    const { container } = await open();
+    expect(screen.getByRole("button", { name: BUILT_IN_BUTTON })).toBeTruthy(); // the fixture: the page was given the app's text
+    expect(screen.queryByLabelText("What the app shows now (built-in text)")).toBeNull();
+    expect(screen.queryByText(/What the app shows now/)).toBeNull();
+    expect(container.querySelector(".mobile-content-side").children).toHaveLength(1);
+    expect(container.querySelector(".mobile-content-side").firstElementChild.getAttribute("aria-label")).toBe("What the app will show");
+  });
+
+  it("the button is not there when the page is not given the app's text", async () => {
+    await open({ builtIn: undefined });
+    expect(screen.queryByRole("button", { name: BUILT_IN_BUTTON })).toBeNull();
+    expect(screen.queryByText(BUILT_IN_BUTTON_NOTE)).toBeNull();
+  });
+});
+
 describe("the button that puts the app's built-in text into the form", () => {
+  it("is inside the form, above the Save, with its note, and says Ibalik ang orihinal na teksto", async () => {
+    const { container } = await open();
+    const form = screen.getByRole("form", { name: "Welcome banner" });
+    const button = within(form).getByRole("button", { name: BUILT_IN_BUTTON });
+    expect(BUILT_IN_BUTTON).toBe("Ibalik ang orihinal na teksto");
+    expect(button.type).toBe("button"); // it does not submit the form
+    expect(button.closest(".mobile-content-side")).toBeNull(); // not in the right column
+    expect(within(form).getByText(BUILT_IN_BUTTON_NOTE)).toBeTruthy();
+    expect(button.compareDocumentPosition(saveButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // the Save comes after it
+    expect(container.querySelectorAll("button.reply-btn").length).toBeGreaterThan(1); // the fixture: the placeholder buttons are there too
+  });
+
   it("only fills the form: the template with its placeholder, and not one request is sent", async () => {
     await open();
     expect(field("Subtitle").value).not.toBe(BUILT_IN_BLOCKS.welcome.subtitle); // the fixture: the saved text differs from the built-in
