@@ -52,6 +52,14 @@ the real run six times (a golden that passed alone and not in the whole suite, a
 suite, the same on a sanitation test of the colleague, and others). A suite run beside another one measures the load, not the code. If a test fails
 under load, it is run alone AND the whole suite is run again with nothing beside it, and the report says both, with what was running.
 
+### THE STANDARD COMMAND for the frontend suite, and why (owner's instruction, 2026-10-26)
+
+**`cd frontend && CI=true npx react-scripts test --watchAll=false --maxWorkers=6`**
+
+Every number reported from now on for the frontend suite is the result of THIS command, and the report says so. The default (15 workers on the 16 logical CPUs
+of this machine, with the developer's own servers running beside it) fails one timeout of a test that is not ours; see below. Nothing of the colleague's is
+changed for this. The backend and the Dart suites are run as they are (`manage.py test`, `flutter test`), one at a time.
+
 ### What was measured about the frontend suite on this machine (2026-10-26, Commit 5b)
 
 The whole frontend suite, with the default number of workers (15 on the 16 logical CPUs of this machine) and the developer's own servers running beside it
