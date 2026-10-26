@@ -5,8 +5,7 @@ import fs from "fs";
 import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileAppContent from "./MobileAppContent";
-import { CHECK_NOTICE, NEXT_VERSION_NOTICE } from "./MobileContentBlockEditor";
-import { PILLARS_HEADING } from "./MobileContentPillars";
+import { PILLARS_DESIGN_NOTE, PILLARS_HEADING } from "./MobileContentPillars";
 import { LOAD_ERROR, MOCK_SUBTITLE, MOCK_TITLE, NO_DETAIL_AT_ALL, NO_FULL_TEXT, footLine } from "./MobileContentWhyVisitMocks";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -291,29 +290,21 @@ describe("the pillars are in the left column, under the editor", () => {
 });
 
 describe("the notices", () => {
-  it("there is no bar of notices at the top of the page", async () => {
+  it("neither of the two notes (the next version of the app, the check for another editor) is on the page, and there is no bar at the top", async () => {
     const { container } = await open();
-    expect(container.querySelector(".mobile-content-panel").firstElementChild.className).not.toContain("hotlines-notices"); // the fixture: the page is drawn
+    expect(container.querySelector(".mobile-content-main").children.length).toBeGreaterThan(1); // the fixture: the page is drawn
+    expect(screen.queryByText(/Changes here reach the mobile app only when the next version/)).toBeNull();
+    expect(screen.queryByText(/Before it saves, this page checks whether someone else has changed/)).toBeNull();
+    expect(screen.queryByText(/the last save wins/)).toBeNull();
     expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull();
+    expect(container.querySelector(".mobile-content-panel").firstElementChild.className).not.toContain("hotlines-notices");
     expect(container.querySelector(".mobile-content-notices")).toBeNull();
   });
 
-  it("the line about the next version and the line about the check for another editor are two small notes under the editor, side by side, always shown", async () => {
-    const { container } = await open();
-    const main = container.querySelector(".mobile-content-main");
-    const form = within(main).getByRole("form", { name: "Why Visit Mauban, Quezon?" });
-    const next = screen.getByText(NEXT_VERSION_NOTICE);
-    const check = screen.getByText(CHECK_NOTICE);
-    [next, check].forEach((note) => {
-      expect(note.closest(".mobile-content-note")).not.toBeNull();
-      expect(main.contains(note)).toBe(true);
-      expect(form.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    });
-    expect(next.closest(".mobile-content-note").nextElementSibling).toBe(check.closest(".mobile-content-note")); // side by side
-    expect(within(main).getByLabelText(PILLARS_HEADING, { selector: "section" }).compareDocumentPosition(check) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy(); // before the list of pillars
-    expect(NEXT_VERSION_NOTICE).toBe("Changes here reach the mobile app only when the next version of the app is released.");
-    expect(CHECK_NOTICE).toMatch(/not a guarantee/);
-    expect(CHECK_NOTICE).toMatch(/last save wins/);
+  it("the note that explains how the four boxes work stays, in the list of pillars (it explains, it does not warn)", async () => {
+    await open();
+    const list = screen.getByLabelText(PILLARS_HEADING, { selector: "section" });
+    expect(within(list).getByText(PILLARS_DESIGN_NOTE).closest(".mobile-content-note")).not.toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 // The editor of one block of Mobile App Content (Commit 5b: the Welcome banner). A fake of the server sits behind a fake fetch, so the
 // REAL tourismApi / apiRequest build the requests; a test looks at what the person sees AND at the requests that were sent.
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import MobileContentBlockEditor, { CHECK_NOTICE, NEXT_VERSION_NOTICE, SAVED_NOTICE } from "./MobileContentBlockEditor";
+import MobileContentBlockEditor, { SAVED_NOTICE } from "./MobileContentBlockEditor";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
 const HINTS = { title: "{name} is replaced, in the app, by the name of the visitor who is logged in. A visitor who is not logged in is greeted as Explorer." };
@@ -134,21 +134,14 @@ describe("what it shows", () => {
     expect(screen.getByRole("heading", { name: "Welcome banner" })).toBeTruthy();
   });
 
-  it("says that changes reach the app only with its next version, and that the check for another editor is not a guarantee: two small notes under the form, and no bar at the top", async () => {
+  it("has neither of the two notes that were under the form (the next version of the app, the check for another editor): they were taken away in 5i", async () => {
     const { container } = await open();
-    expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull(); // (the bar at the top was taken away in 5h)
-    const form = screen.getByRole("form", { name: "Welcome banner" });
-    const main = container.querySelector(".mobile-content-main");
-    [NEXT_VERSION_NOTICE, CHECK_NOTICE].forEach((text) => {
-      const note = screen.getByText(text);
-      expect(note.closest(".mobile-content-note")).not.toBeNull();
-      expect(note.closest("form")).toBeNull(); // under the box, not in it
-      expect(form.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(main.contains(note)).toBe(true); // in the left column
-    });
-    expect(screen.getByText(NEXT_VERSION_NOTICE).compareDocumentPosition(screen.getByText(CHECK_NOTICE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // side by side: the next version first
-    expect(CHECK_NOTICE).toMatch(/not a guarantee/);
-    expect(CHECK_NOTICE).toMatch(/last save wins/);
+    expect(screen.getByRole("form", { name: "Welcome banner" })).toBeTruthy(); // the fixture: the page is drawn
+    expect(screen.queryByText(/Changes here reach the mobile app only when the next version/)).toBeNull();
+    expect(screen.queryByText(/Before it saves, this page checks whether someone else has changed/)).toBeNull();
+    expect(screen.queryByText(/not a guarantee: if two people save at the very same moment/)).toBeNull();
+    expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull();
+    expect(container.querySelector(".mobile-content-notices")).toBeNull();
   });
 
   it("says what {name} becomes: the logged-in visitor's own name, and Explorer only for one who is not logged in", async () => {

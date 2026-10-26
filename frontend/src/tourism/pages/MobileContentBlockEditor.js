@@ -2,7 +2,6 @@ import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "r
 import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
 import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
-import { NEXT_VERSION_NOTICE } from "./EmergencyHotlines";
 import { DetailMock, MOCK_SUBTITLE, MOCK_TITLE, TileFoot, TileGrid } from "./MobileContentWhyVisitMocks";
 
 // The editor of ONE block of Mobile App Content (the Welcome banner, and later the others). It shows the fields the server says the
@@ -10,10 +9,6 @@ import { DetailMock, MOCK_SUBTITLE, MOCK_TITLE, TileFoot, TileGrid } from "./Mob
 // and saves with one PATCH of only what changed. Beside the form: what the app will show (the typed text, with the placeholders filled
 // in as the server fills them). Inside the form, a button puts the app's own (built-in) text into the form: it fills the form and sends nothing.
 
-export { NEXT_VERSION_NOTICE };
-export const CHECK_NOTICE =
-  "Before it saves, this page checks whether someone else has changed the text you changed since you opened it. " +
-  "This check is not a guarantee: if two people save at the very same moment, the last save wins.";
 export const SAVED_NOTICE = "The change was saved.";
 export const LOAD_ERROR_FALLBACK = "The content could not be loaded.";
 export const NO_BLOCK_NOTICE = "This text is not available.";
@@ -515,8 +510,6 @@ export default function MobileContentBlockEditor({
             </form>
           ) : null}
           {block && note ? <Note>{note}</Note> : null}
-          {block ? <Note>{NEXT_VERSION_NOTICE}</Note> : null}
-          {block ? <Note>{CHECK_NOTICE}</Note> : null}
           {below}
         </div>
 
