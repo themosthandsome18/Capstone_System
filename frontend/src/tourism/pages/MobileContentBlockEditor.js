@@ -76,7 +76,13 @@ function Parts({ parts }) {
   });
 }
 
-export default function MobileContentBlockEditor({ blockKey, heading, intro, hints = {}, builtIn }) {
+export const BANNER_NAME_NOTE = "Ang pangalan ay galing sa naka-login na bisita, hindi sa inyong isinulat.";
+
+// The design of the page (5e) names some boxes differently from the server's words ("Greeting", "Paragraph"); `labels` says which, field by field.
+// `banner` draws the preview as the banner of the app. `note` is a line under the form. Without them the editor looks and reads as it did.
+export default function MobileContentBlockEditor({ blockKey, heading, eyebrow, intro, hints = {}, labels = {}, note, banner = false, builtIn }) {
+  const labelOf = (field) => labels[field] || LABELS[field] || field;
+  const wordOf = (field) => (labels[field] ? `The ${labels[field].toLowerCase()}` : WORDS[field] || "This");
   // undefined until the first load: only then the page says "Loading...".
   const [block, setBlock] = useState(undefined);
   const [context, setContext] = useState(previewContext(null));
@@ -287,9 +293,32 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
   const builtInFields = builtIn ? (block ? fields : Object.keys(builtIn)) : [];
   const builtInShown = builtInFields.map((field) => ({ field, shown: previewParts(builtIn[field], context) }));
 
+  // Each field of the preview. In the banner, the name of the field is only for a screen reader (the banner shows the text, as the app does).
+  const previewFields = previews.map((item) => (
+    <div
+      key={item.field}
+      className={`mobile-content-preview-field${banner ? ` mobile-content-banner-${item.field}` : ""}`}
+      data-testid={`preview-${item.field}`}
+    >
+      <small className={banner ? "mobile-content-sr" : "options-hint"}>{labelOf(item.field)}</small>
+      {item.empty ? (
+        <p className="mobile-content-muted">{PREVIEW_EMPTY}</p>
+      ) : item.officeMissing ? (
+        <>
+          <small className="options-hint">{PREVIEW_INSTEAD}</small>
+          <p className="mobile-content-muted">{item.instead ? <Parts parts={item.instead.parts} /> : null}</p>
+        </>
+      ) : (
+        <p>
+          <Parts parts={item.shown.parts} />
+        </p>
+      )}
+    </div>
+  ));
+
   return (
     <div className="mobile-content-panel">
-      <div className="hotlines-notices" role="note" aria-label="About these changes">
+      <div className="hotlines-notices mobile-content-notices" role="note" aria-label="About these changes">
         <p>{NEXT_VERSION_NOTICE}</p>
         <p>{CHECK_NOTICE}</p>
       </div>
@@ -325,9 +354,10 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
           ) : null}
 
           {block ? (
-            <form className="settings-card options-form" onSubmit={submit} aria-label={heading}>
+            <form className="settings-card options-form mobile-content-card" onSubmit={submit} aria-label={heading}>
               <div className="report-card-title">
-                <h3>{heading}</h3>
+                {eyebrow ? <p className="mobile-content-eyebrow">{eyebrow}</p> : null}
+                <h2>{heading}</h2>
                 {intro ? <p>{intro}</p> : null}
               </div>
 
@@ -341,7 +371,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                 return (
                   <div key={field} className="settings-field settings-field-wide">
                     <label htmlFor={id}>
-                      <span>{LABELS[field] || field}</span>
+                      <span>{labelOf(field)}</span>
                     </label>
                     <textarea
                       id={id}
@@ -369,7 +399,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                       onChange={(event) => type(field, oneLine ? withoutNewLines(event.target.value) : event.target.value)}
                     />
                     {names.length ? (
-                      <div className="mobile-content-insert" role="group" aria-label={`Placeholders for the ${(LABELS[field] || field).toLowerCase()}`}>
+                      <div className="mobile-content-insert" role="group" aria-label={`Placeholders for the ${labelOf(field).toLowerCase()}`}>
                         <small className="options-hint">Put in:</small>
                         {names.map((name) => (
                           <button
@@ -377,7 +407,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                             type="button"
                             className="reply-btn"
                             title={notes[name] || undefined}
-                            aria-label={`Put in {${name}} in the ${(LABELS[field] || field).toLowerCase()}`}
+                            aria-label={`Put in {${name}} in the ${labelOf(field).toLowerCase()}`}
                             disabled={working}
                             onClick={() => insert(field, name)}
                           >
@@ -396,7 +426,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                       </small>
                     ) : empty(field) ? (
                       <small className="options-reason" role="alert">
-                        {WORDS[field] || "This"} is required.
+                        {wordOf(field)} is required.
                       </small>
                     ) : null}
                     {problems.map((problem) => (
@@ -429,7 +459,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                 <div className="options-confirm" role="alertdialog" aria-label="Someone else changed this text">
                   {conflict.fields.map((field) => (
                     <p key={field}>
-                      Someone else changed the {(LABELS[field] || field).toLowerCase()} since you opened it. It now says:{" "}
+                      Someone else changed the {labelOf(field).toLowerCase()} since you opened it. It now says:{" "}
                       {"“"}
                       {conflict.latest[field]}
                       {"”"} Yours says: {"“"}
@@ -456,31 +486,32 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
               )}
             </form>
           ) : null}
+          {block && note ? (
+            <div className="mobile-content-note">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v5" />
+                <path d="M12 8h.01" />
+              </svg>
+              <p>{note}</p>
+            </div>
+          ) : null}
         </div>
 
         <div className="mobile-content-side">
           {block ? (
-            <section className="settings-card options-card" aria-label="What the app will show">
+            <section className="settings-card options-card mobile-content-card" aria-label="What the app will show">
               <div className="report-card-title">
-                <h3>What the app will show</h3>
+                {banner ? <p className="mobile-content-eyebrow">Live preview</p> : null}
+                {banner ? <h2>How it will look in the app</h2> : <h3>What the app will show</h3>}
               </div>
-              {previews.map((item) => (
-                <div key={item.field} className="mobile-content-preview-field" data-testid={`preview-${item.field}`}>
-                  <small className="options-hint">{LABELS[item.field] || item.field}</small>
-                  {item.empty ? (
-                    <p className="mobile-content-muted">{PREVIEW_EMPTY}</p>
-                  ) : item.officeMissing ? (
-                    <>
-                      <small className="options-hint">{PREVIEW_INSTEAD}</small>
-                      <p className="mobile-content-muted">{item.instead ? <Parts parts={item.instead.parts} /> : null}</p>
-                    </>
-                  ) : (
-                    <p>
-                      <Parts parts={item.shown.parts} />
-                    </p>
-                  )}
+              {banner ? (
+                <div className="mobile-content-phone">
+                  <div className="mobile-content-banner">{previewFields}</div>
                 </div>
-              ))}
+              ) : (
+                previewFields
+              )}
               {anyOfficeMissing ? (
                 <p className="options-reason" role="note">
                   {OFFICE_NOTE}
@@ -493,7 +524,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
               ) : null}
               {anyName ? (
                 <p className="options-hint" role="note">
-                  {NAME_NOTE}
+                  {banner ? BANNER_NAME_NOTE : NAME_NOTE}
                 </p>
               ) : null}
               {anyFilled ? (
@@ -505,7 +536,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
           ) : null}
 
           {builtIn ? (
-            <section className="settings-card options-card" aria-label="What the app shows now (built-in text)">
+            <section className="settings-card options-card mobile-content-card" aria-label="What the app shows now (built-in text)">
               <div className="report-card-title">
                 <h3>What the app shows now (built-in text)</h3>
               </div>
@@ -515,7 +546,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
               {loadError ? <p className="options-hint">{BUILT_IN_ONLY}</p> : null}
               {builtInShown.map((item) => (
                 <div key={item.field} className="mobile-content-builtin-field" data-testid={`builtin-${item.field}`}>
-                  <small className="options-hint">{LABELS[item.field] || item.field}</small>
+                  <small className="options-hint">{labelOf(item.field)}</small>
                   <p>
                     <Parts parts={item.shown.parts} />
                   </p>

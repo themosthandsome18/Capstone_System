@@ -5009,26 +5009,6 @@
   padding: 0 3px;
 }
 
-/* The four pillars of Why Visit: a list to read, with no form and nothing to press (Commit 5d). */
-.mobile-content-pillars {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.mobile-content-pillars li {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-wrap: anywhere;
-}
-
-.mobile-content-pillars strong {
-  color: var(--th-text-main);
-}
 
 .mobile-content-missing {
   font-weight: 700;
@@ -5081,4 +5061,351 @@
 .options-form .settings-field-wide textarea.mobile-content-line:disabled {
   background: var(--th-surface-alt);
   cursor: not-allowed;
+}
+
+/* ================= MOBILE APP CONTENT: THE DESIGN (Commit 5e) =================
+   Looks only. The palette is the design's own and is written ONCE, here, as --mc-* on the page. It does not follow the theme of the app (the design
+   is warm, the theme is green), except where a theme token says the same thing: white is --th-surface, the main text is --th-text-main.
+   The font is the admin's own, Public Sans: no font is added for one page. Everything is scoped to .mobile-content-page / .mobile-content-card, so the
+   Hotlines panel and the other pages of the app look as they did. */
+.mobile-content-page {
+  --mc-font: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --mc-teal: #2e7d74;
+  --mc-brown: #8a5a33;
+  --mc-card: #fffdfb;
+  --mc-line: #efe1d1;
+  --mc-input-line: #e0cdb7;
+  --mc-label: #8a6e55;
+  --mc-hint: #8a7664;
+  --mc-tab: #65564a;
+  --mc-note-bg: #fbf1e4;
+  --mc-note-ink: #6b543e;
+  font-family: var(--mc-font);
+  background: linear-gradient(165deg, #f8e9d8, #f0d7be);
+  border-radius: 20px;
+  padding: 28px;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-page {
+    padding: 16px;
+  }
+}
+
+.mobile-content-page .mobile-content-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mc-teal);
+}
+
+.mobile-content-page .reports-header h1 {
+  margin: 4px 0 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-page .reports-header p.mobile-content-lead {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+/* the tab bar: a white box with the tabs in it */
+.mobile-content-page .mobile-content-tabs {
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 13px;
+  background: var(--th-surface);
+}
+
+.mobile-content-page .mobile-content-tabs button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--mc-tab);
+  background: transparent;
+  box-shadow: none;
+}
+
+.mobile-content-page .mobile-content-tabs button.active {
+  background: var(--mc-teal);
+  color: #ffffff;
+  font-weight: 700;
+  border: 0;
+  box-shadow: none;
+}
+
+.mobile-content-page .mobile-content-tabs .mobile-content-soon {
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* the boxes (cards) of the editor, the preview, the built-in text and the pillars */
+.mobile-content-page .mobile-content-card {
+  background: var(--mc-card);
+  border: 1px solid var(--mc-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05);
+  padding: 20px;
+}
+
+.mobile-content-page .mobile-content-card h2,
+.mobile-content-page .mobile-content-card h3 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-page .mobile-content-card .mobile-content-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mc-teal);
+}
+
+.mobile-content-page .mobile-content-card .report-card-title > p:not(.mobile-content-eyebrow) {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-page .mobile-content-card .settings-field > label span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mc-label);
+}
+
+.mobile-content-page .mobile-content-card .options-hint {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 10px;
+  background: var(--th-surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea:focus {
+  outline: 2px solid var(--mc-teal);
+  outline-offset: 0;
+  border-color: var(--mc-teal);
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea:disabled {
+  background: var(--th-surface-alt);
+}
+
+/* the main button of a card */
+.mobile-content-page .mobile-content-card .tourist-record-save {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--mc-brown);
+  border-radius: 9px;
+  background: var(--mc-brown);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-content-page .mobile-content-card .tourist-record-save:disabled {
+  opacity: 0.55;
+}
+
+/* a note: a soft box with an icon on its left */
+.mobile-content-page .mobile-content-note,
+.mobile-content-page .mobile-content-notices {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 15px;
+  border-radius: 11px;
+  background: var(--mc-note-bg);
+  color: var(--mc-note-ink);
+}
+
+.mobile-content-page .mobile-content-notices {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-content-page .mobile-content-note p,
+.mobile-content-page .mobile-content-notices p {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--mc-note-ink);
+}
+
+.mobile-content-page .mobile-content-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* the live preview: the banner of the app, in a frame */
+.mobile-content-phone {
+  padding: 14px 13px;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  background: #f7fafb;
+}
+
+.mobile-content-banner {
+  padding: 17px 16px;
+  border-radius: 15px;
+  background: #6b3410;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-banner .mobile-content-preview-field {
+  gap: 0;
+}
+
+.mobile-content-banner p {
+  margin: 0;
+}
+
+.mobile-content-banner .mobile-content-banner-title p {
+  margin: 12px 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.mobile-content-banner .mobile-content-banner-subtitle p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #f3d8be;
+}
+
+.mobile-content-banner .mobile-content-muted {
+  color: #f3d8be;
+}
+
+.mobile-content-banner .mobile-content-filled {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mobile-content-banner .options-hint {
+  color: #f3d8be;
+}
+
+/* a name for a screen reader only */
+.mobile-content-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* the pillars: small boxes in a grid; a list to read */
+.mobile-content-pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(248px, 100%), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-pillar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid var(--mc-line);
+  border-radius: 13px;
+  background: var(--th-surface);
+  min-width: 0;
+}
+
+.mobile-content-pillar[data-active="false"] {
+  opacity: 0.7;
+}
+
+.mobile-content-pillar-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.mobile-content-pillar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-pillar-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.mobile-content-pillar-top strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-pillar-text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-tag {
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #f2e8db;
+  color: #7a6450;
+}
+
+.mobile-content-tag[data-detail="yes"] {
+  background: #dcf0e4;
+  color: #176b3b;
 }

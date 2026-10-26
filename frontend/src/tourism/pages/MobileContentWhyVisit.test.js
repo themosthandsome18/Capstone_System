@@ -373,7 +373,7 @@ describe("the four pillars", () => {
     const list = await screen.findByRole("list", { name: PILLARS_HEADING });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((row) => row.querySelector("strong").textContent)).toEqual(["Cagbalete Island", "Buntal Weaving", "Forest Cascades", "Quezon Flavors"]);
-    expect(rows.map((row) => row.querySelector("span").textContent)).toEqual([
+    expect(rows.map((row) => row.querySelector('[data-part="text"]').textContent)).toEqual([
       "Pristine Sandbars",
       "Artisan Hats & Crafts",
       "Dahican & Alitap Falls",
@@ -421,7 +421,7 @@ describe("the Why Visit tab in the page", () => {
     await screen.findByLabelText("Title");
     expect(screen.getByRole("tab", { name: /^Why Visit/ }).getAttribute("aria-selected")).toBe("true"); // the fixture: this tab is the one shown
     expect(screen.getByRole("tab", { name: /^Why Visit/ }).textContent).not.toContain("Coming soon");
-    expect(field("Text").rows).toBe(6);
+    expect(field("Paragraph").rows).toBe(6);
     expect(requests.map((r) => `${r.method} ${r.path}`).sort()).toEqual(["GET /mobile-content/blocks/", "GET /mobile-content/items/?section=why_visit"]);
     expect(requests.some((r) => r.path.includes("emergency-contacts"))).toBe(false);
     await settled();
@@ -431,7 +431,7 @@ describe("the Why Visit tab in the page", () => {
   it("opened from another tab, it asks for the pillars once, and leaving and coming back asks for nothing more", async () => {
     router.__setSearch("?tab=welcome");
     render(<MobileAppContent />);
-    await screen.findByLabelText("Title");
+    await screen.findByLabelText("Greeting");
     expect(requests.filter((r) => r.path.startsWith("/mobile-content/items/"))).toHaveLength(0); // the Welcome does not ask for the pillars
     fireEvent.click(screen.getByRole("tab", { name: /^Why Visit/ }));
     await screen.findByRole("list", { name: PILLARS_HEADING });
@@ -446,7 +446,7 @@ describe("the Why Visit tab in the page", () => {
   it("the Welcome and the Why Visit keep their own text: the editor of one does not show the other", async () => {
     router.__setSearch("?tab=why-visit");
     render(<MobileAppContent />);
-    await screen.findByLabelText("Text");
+    await screen.findByLabelText("Paragraph");
     expect(state.blocks.welcome.title).not.toBe(state.blocks.why_visit.title); // the fixture
     const panel = screen.getByRole("tabpanel");
     expect(within(panel).getByLabelText("Title").value).toBe("Why Visit Mauban?");

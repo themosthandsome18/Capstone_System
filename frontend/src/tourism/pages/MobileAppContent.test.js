@@ -232,7 +232,7 @@ describe("the Welcome tab", () => {
     await settled();
     expect(blockRequests).toEqual([]); // the page opens on the Hotlines: the Welcome has asked for nothing
     fireEvent.click(tab("Welcome"));
-    await screen.findByLabelText("Title");
+    await screen.findByLabelText("Greeting");
     expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]);
     fireEvent.click(tab("Emergency Hotlines"));
     fireEvent.click(tab("Welcome"));
@@ -244,7 +244,7 @@ describe("the Welcome tab", () => {
   it("opened first, makes no request to the Hotlines at all", async () => {
     router.__setSearch("?tab=welcome");
     render(<MobileAppContent />);
-    await screen.findByLabelText("Title");
+    await screen.findByLabelText("Greeting");
     expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]);
     expect(requests()).toEqual([]);
     expect(selected().map(labelOf)).toEqual(["Welcome"]);
@@ -258,7 +258,7 @@ describe("the Welcome tab", () => {
     const column = screen.getByLabelText("What the app shows now (built-in text)");
     expect(column.textContent).toContain("Mabuhay, Explorer!");
     expect(column.textContent).toContain("Showing the app's built-in text only.");
-    expect(screen.queryByLabelText("Title")).toBeNull(); // the fixture: the form is not there, the column is
+    expect(screen.queryByLabelText("Greeting")).toBeNull(); // the fixture: the form is not there, the column is
     await settled();
   });
 

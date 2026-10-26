@@ -22,12 +22,15 @@ function TabPanel({ tab }) {
       <MobileContentBlockEditor
         blockKey="welcome"
         heading="Welcome banner"
+        eyebrow="Pambungad"
         builtIn={BUILT_IN_BLOCKS.welcome}
+        banner
         intro="The greeting at the top of the Home page of the mobile app."
+        labels={{ title: "Greeting", subtitle: "Paragraph" }}
         hints={{
-          title:
-            "{name} is replaced, in the app, by the name of the visitor who is logged in. A visitor who is not logged in is greeted as Explorer.",
+          title: "Ang {name} ay papalitan ng app ng pangalan ng bisita. Kung aalisin ninyo ito, pare-pareho ang makikita ng lahat.",
         }}
+        note="Ito ang unang nakikita ng bisita pagbukas ng app. Panatilihing maikli — ang mahabang talata ay nagtutulak pababa sa mga mahalagang tile."
       />
     );
   }
@@ -36,7 +39,9 @@ function TabPanel({ tab }) {
       <div className="mobile-content-panel">
         <MobileContentBlockEditor
           blockKey="why_visit"
-          heading="Why Visit page"
+          heading="Why Visit Mauban, Quezon?"
+          eyebrow="Pambungad"
+          labels={{ body: "Paragraph" }}
           builtIn={BUILT_IN_BLOCKS.why_visit}
           intro="The title, the subtitle and the paragraph of the Why Visit page of the mobile app."
           hints={{ body: "Enter starts a new line. A blank line between two lines makes a new paragraph." }}
@@ -84,12 +89,15 @@ export default function MobileAppContent() {
     <div className="reports-page settings-page options-page mobile-content-page">
       <div className="reports-header">
         <div>
+          <p className="mobile-content-eyebrow">Mauban Tourism App</p>
           <h1>Mobile App Content</h1>
-          <p>The texts and the emergency hotlines the mobile app shows to visitors</p>
+          <p className="mobile-content-lead">
+            Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.
+          </p>
         </div>
       </div>
 
-      <div className="report-tabs" role="tablist" aria-label="Mobile app content">
+      <div className="report-tabs mobile-content-tabs" role="tablist" aria-label="Mobile app content">
         {MOBILE_CONTENT_TABS.map((item) => (
           <button
             key={item.key}

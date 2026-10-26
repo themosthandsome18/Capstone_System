@@ -40,7 +40,7 @@ describe("the Emergency Hotlines, as a tab of Mobile App Content, against the go
   };
   const goldenButton = (chrome) => parse(chrome).querySelector(".reports-actions button").outerHTML;
   const NEW_HEADER =
-    '<div class="reports-header"><div><h1>Mobile App Content</h1><p>The texts and the emergency hotlines the mobile app shows to visitors</p></div></div>';
+    '<div class="reports-header"><div><p class="mobile-content-eyebrow">Mauban Tourism App</p><h1>Mobile App Content</h1><p class="mobile-content-lead">Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.</p></div></div>';
 
   it("shows exactly the same screen and sends exactly the same requests, step by step, except for the two written differences", async () => {
     const record = await runScenarios(() => render(<MobileAppContent />));
