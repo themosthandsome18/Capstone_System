@@ -259,6 +259,17 @@ function isBackendValidationError(error) {
   return Boolean(error?.status);
 }
 
+// A write of a Mobile App Content block that the server will only accept after a confirmation (it takes a fee placeholder out of
+// a text, so visitors would no longer be told that amount or where to pay it) is answered 409 with code "confirm_required" and
+// the list of the placeholders that would be dropped. This returns { dropped, message } for exactly that answer, and null for
+// every other error, so a caller cannot take another 409 or another failure for a request to confirm.
+export function blockConfirmRequired(error) {
+  const details = error && error.details;
+  if (!error || error.status !== 409 || !details || typeof details !== "object") return null;
+  if (details.code !== "confirm_required" || !Array.isArray(details.dropped)) return null;
+  return { dropped: details.dropped.slice(), message: details.detail || error.message || "" };
+}
+
 export const tourismApi = {
   async getBootstrapData() {
     const remote = await apiRequest("/bootstrap/");
@@ -501,6 +512,30 @@ export const tourismApi = {
 
   async reorderBoatCapacityFares(ids) {
     return apiRequest("/boat-capacity-fares/reorder/", { method: "POST", body: JSON.stringify({ ids }) });
+  },
+
+  // Mobile App Content blocks (admin): the five texts that are not lists. The list answers with every block, what each may hold
+  // (limits, allowed placeholders), the entrance fee as the reports know it and a note for each placeholder. A write sends only
+  // the fields that changed; the answer is the whole block as the server now holds it, with "warnings". A write that takes a fee
+  // placeholder out is refused with 409 confirm_required (see blockConfirmRequired): send it again with the list of the names
+  // in `confirmDropped`.
+  async getMobileContentBlocks() {
+    return apiRequest("/mobile-content/blocks/");
+  },
+
+  async updateMobileContentBlock(key, changes, confirmDropped) {
+    if (confirmDropped !== undefined && !Array.isArray(confirmDropped)) {
+      throw new TypeError("confirmDropped must be the list of placeholder names the server asked about");
+    }
+    if (changes && Object.prototype.hasOwnProperty.call(changes, "confirm_dropped")) {
+      throw new TypeError("the confirmation goes in the third argument, not among the changes");
+    }
+    const body = { ...changes };
+    if (confirmDropped !== undefined) body.confirm_dropped = [...confirmDropped];
+    return apiRequest(`/mobile-content/blocks/${encodeURIComponent(key)}/`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
   },
 
   async createResort(payload) {
