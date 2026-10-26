@@ -5001,9 +5001,33 @@
   gap: 6px;
 }
 
+/* What the system filled in (an amount, the place where the fee is paid, the visitor's name) has a soft tint behind it. It must NOT look like a
+   link, so it has no underline; the placeholder it came from is still in its title (the tooltip). */
 .mobile-content-filled {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+  background: var(--th-primary-tint-strong);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+/* The four pillars of Why Visit: a list to read, with no form and nothing to press (Commit 5d). */
+.mobile-content-pillars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-pillars li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-pillars strong {
+  color: var(--th-text-main);
 }
 
 .mobile-content-missing {

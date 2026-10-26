@@ -11,7 +11,7 @@ jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual:
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
 const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines"];
-const NOT_BUILT = ["Why Visit", "Travel Guide & Tips", "Port & Boat Guide"]; // (the Welcome has its editor since 5b)
+const NOT_BUILT = ["Travel Guide & Tips", "Port & Boat Guide"]; // (the Welcome has its editor since 5b, the Why Visit since 5d)
 const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines"];
 
 // The Welcome tab asks for the blocks; a fake answers it, and the Hotlines are answered by their own fake, as before.
@@ -26,6 +26,13 @@ const BLOCKS_LIST = {
   fee: { regular: 80, discounted: 64 },
   placeholders: {},
 };
+// (5d) the Why Visit tab asks for its block too, and for its four pillars: this page-level file only needs the page to find them
+BLOCKS_LIST.blocks.push({
+  key: "why_visit", name: "Why Visit", title: "Why Visit", subtitle: "Sub", body: "Body", fields: ["title", "subtitle", "body"],
+  limits: { title: { kind: "line", max: 160, required: true }, subtitle: { kind: "line", max: 300, required: true }, body: { kind: "text", max: 600, required: true } },
+  allowed_placeholders: { title: ["fee_regular"], subtitle: ["fee_regular"], body: ["fee_regular"] },
+});
+const PILLARS = [{ id: 1, section: "why_visit", title: "One", short_text: "First", is_active: true }];
 let blockRequests;
 let server;
 beforeEach(() => {
@@ -34,6 +41,9 @@ beforeEach(() => {
   server = createServer();
   blockRequests = [];
   global.fetch = jest.fn((url, options = {}) => {
+    if (url.includes("/mobile-content/items/")) {
+      return Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(PILLARS), json: async () => JSON.parse(JSON.stringify(PILLARS)) });
+    }
     if (url.includes("/mobile-content/blocks/")) {
       blockRequests.push(`${(options.method || "GET").toUpperCase()} ${url.replace(/^.*\/api/, "")}`);
       return Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(BLOCKS_LIST), json: async () => JSON.parse(JSON.stringify(BLOCKS_LIST)) });
@@ -71,12 +81,13 @@ describe("the page", () => {
     expect(router.__changes()).toEqual([]); // nothing was written into the address just by opening
   });
 
-  it("marks the three tabs that are not built with Coming soon, and not the Welcome or the Hotlines", async () => {
+  it("marks the two tabs that are not built with Coming soon, and not the Welcome, the Why Visit or the Hotlines", async () => {
     render(<MobileAppContent />);
     await settled();
     NOT_BUILT.forEach((label) => expect(tab(label).textContent).toContain("Coming soon"));
     expect(tab("Emergency Hotlines").textContent).not.toContain("Coming soon");
     expect(tab("Welcome").textContent).not.toContain("Coming soon");
+    expect(tab("Why Visit").textContent).not.toContain("Coming soon");
   });
 });
 
@@ -107,13 +118,13 @@ describe("the tab is in the address", () => {
 
   it("stays on the tab after a refresh (the page opened again with the address it had)", () => {
     const first = render(<MobileAppContent />);
-    fireEvent.click(tab("Why Visit"));
+    fireEvent.click(tab("Port & Boat Guide")); // (a tab that asks for nothing; was the Why Visit before 5d)
     const address = `?${router.__changes().at(-1).search}`;
-    expect(address).toBe("?tab=why-visit");
+    expect(address).toBe("?tab=port-guide");
     first.unmount();
     router.__setSearch(address);
     render(<MobileAppContent />);
-    expect(selected().map(labelOf)).toEqual(["Why Visit"]);
+    expect(selected().map(labelOf)).toEqual(["Port & Boat Guide"]);
   });
 
   it("puts right an address that names a tab that does not exist: shows the Hotlines and corrects it in place", async () => {
@@ -134,7 +145,7 @@ describe("the tab is in the address", () => {
   });
 });
 
-describe("the three tabs that are not built", () => {
+describe("the two tabs that are not built", () => {
   it("say it is not available yet, without the word commit, and ask the server for NOTHING", async () => {
     render(<MobileAppContent />);
     await screen.findByRole("list");
@@ -151,7 +162,7 @@ describe("the three tabs that are not built", () => {
   });
 
   it("send no request at all when the page is opened on one of them", async () => {
-    for (const key of ["why-visit", "travel-guide", "port-guide"]) {
+    for (const key of ["travel-guide", "port-guide"]) {
       router.__setSearch(`?tab=${key}`);
       server.requests.length = 0;
       const { unmount } = render(<MobileAppContent />);
@@ -170,7 +181,7 @@ describe("the tabs keep what they show", () => {
     await screen.findByRole("list");
     fireEvent.click(screen.getByRole("button", { name: /Add contact/ }));
     fireEvent.change(screen.getByLabelText("Contact name"), { target: { value: "Half typed" } });
-    fireEvent.click(tab("Why Visit"));
+    fireEvent.click(tab("Port & Boat Guide")); // (was the Why Visit before 5d)
     expect(screen.getByLabelText("Contact name").closest('[role="tabpanel"]').hidden).toBe(true); // still there, but hidden
     fireEvent.click(tab("Emergency Hotlines"));
     expect(screen.getByLabelText("Contact name").value).toBe("Half typed");

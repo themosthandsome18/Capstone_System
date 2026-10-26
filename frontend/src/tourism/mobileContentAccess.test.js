@@ -41,10 +41,10 @@ describe("Mobile App Content access and tabs", () => {
     ["tourism", "sanitation", "tourist", "", undefined, null].forEach((role) => expect(canManageMobileContent(role)).toBe(false));
   });
 
-  test("five tabs, in this order, and only the Welcome and the Hotlines are built", () => {
+  test("five tabs, in this order, and the Welcome, the Why Visit and the Hotlines are built (since 5d)", () => {
     expect(MOBILE_CONTENT_TABS.map((tab) => [tab.key, tab.label, tab.ready])).toEqual([
       ["welcome", "Welcome", true],
-      ["why-visit", "Why Visit", false],
+      ["why-visit", "Why Visit", true],
       ["travel-guide", "Travel Guide & Tips", false],
       ["port-guide", "Port & Boat Guide", false],
       ["hotlines", "Emergency Hotlines", true],

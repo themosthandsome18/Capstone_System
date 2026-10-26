@@ -128,7 +128,7 @@ describe("what it shows", () => {
     expect(field("Subtitle").value).toBe(WELCOME_SUBTITLE);
     expect(screen.queryByLabelText("Text")).toBeNull(); // the welcome has no text: nothing is offered for it
     // a text of one line is held in a box that grows (a textarea of one row), so that all of it can be read: two of them, and no other
-    expect([...container.querySelectorAll("textarea")].map((box) => box.getAttribute("aria-label"))).toEqual(["Title", "Subtitle"]);
+    expect([...container.querySelectorAll("textarea")].map((box) => box.labels[0].textContent)).toEqual(["Title", "Subtitle"]);
     container.querySelectorAll("textarea").forEach((box) => expect(box.rows).toBe(1));
     expect(container.querySelectorAll("input")).toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Welcome banner" })).toBeTruthy();

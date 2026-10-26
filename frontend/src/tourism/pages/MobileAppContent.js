@@ -9,6 +9,7 @@ import {
 } from "../mobileContentAccess";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
+import MobileContentPillars from "./MobileContentPillars";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
 export const NOT_READY_NOTICE =
@@ -28,6 +29,20 @@ function TabPanel({ tab }) {
             "{name} is replaced, in the app, by the name of the visitor who is logged in. A visitor who is not logged in is greeted as Explorer.",
         }}
       />
+    );
+  }
+  if (tab.key === "why-visit") {
+    return (
+      <div className="mobile-content-panel">
+        <MobileContentBlockEditor
+          blockKey="why_visit"
+          heading="Why Visit page"
+          builtIn={BUILT_IN_BLOCKS.why_visit}
+          intro="The title, the subtitle and the paragraph of the Why Visit page of the mobile app."
+          hints={{ body: "Enter starts a new line. A blank line between two lines makes a new paragraph." }}
+        />
+        <MobileContentPillars />
+      </div>
     );
   }
   // A tab whose editor does not exist yet: a message, and no request to the server.

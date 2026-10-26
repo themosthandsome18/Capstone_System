@@ -13,7 +13,7 @@ export function canManageMobileContent(role) {
 // asks the server for nothing.
 export const MOBILE_CONTENT_TABS = [
   { key: "welcome", label: "Welcome", ready: true },
-  { key: "why-visit", label: "Why Visit", ready: false },
+  { key: "why-visit", label: "Why Visit", ready: true },
   { key: "travel-guide", label: "Travel Guide & Tips", ready: false },
   { key: "port-guide", label: "Port & Boat Guide", ready: false },
   { key: "hotlines", label: "Emergency Hotlines", ready: true },

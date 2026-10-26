@@ -523,6 +523,12 @@ export const tourismApi = {
     return apiRequest("/mobile-content/blocks/");
   },
 
+  // The items of one section of Mobile App Content (admin), read only here: the four pillars of Why Visit are the items of the section
+  // "why_visit". Nothing writes to them from this page yet.
+  async getMobileContentItems(section) {
+    return apiRequest(`/mobile-content/items/?section=${encodeURIComponent(section)}`);
+  },
+
   async updateMobileContentBlock(key, changes, confirmDropped) {
     if (confirmDropped !== undefined && !Array.isArray(confirmDropped)) {
       throw new TypeError("confirmDropped must be the list of placeholder names the server asked about");

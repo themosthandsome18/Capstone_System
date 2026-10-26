@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
 import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
@@ -56,7 +56,8 @@ function fit(control) {
 const pick = (block, fields) => Object.fromEntries(fields.map((field) => [field, block[field] ?? ""]));
 const plural = (number, one, many) => `${number} ${number === 1 ? one : many}`;
 
-// The parts of a text, drawn: what was filled in is underlined, what could not be filled in or is not a placeholder is marked.
+// The parts of a text, drawn: what was filled in has a soft tint behind it (it is not a link: it cannot be pressed), what could not be filled in
+// or is not a placeholder is underlined with a wave.
 function Parts({ parts }) {
   return parts.map((part, index) => {
     if (part.kind === "text") return <Fragment key={index}>{part.text}</Fragment>;
@@ -95,6 +96,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
   const inFlight = useRef(false); // a second press in the same moment must not send a second request
   const controls = useRef({});
   const caret = useRef(null);
+  const uid = useId(); // the boxes are named by their <label for>, so each needs an id of its own (two editors may be on one page)
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +159,8 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
   const empty = (field) => limits[field].required && cleaned[field] === "";
   const changed = fields.filter((field) => cleaned[field] !== baseline[field]);
   const canSave = !working && changed.length > 0 && fields.every((field) => !over(field) && !empty(field));
+  // The Save button is there, and open (while the server's question or the clash of two edits is shown, it is replaced by their buttons).
+  const saveOpen = canSave && !ask && !conflict;
 
   function type(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -261,7 +265,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
 
   function submit(event) {
     event.preventDefault();
-    if (canSave) send();
+    if (saveOpen) send();
   }
 
   // ---- the preview: what the typed text becomes ----
@@ -333,22 +337,30 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                 const oneLine = limit.kind !== "text";
                 const names = Array.isArray(allowed[field]) ? allowed[field] : [];
                 const problems = placeholderWarnings(form[field], names);
+                const id = `${uid}-${field}`;
                 return (
-                  <label key={field} className="settings-field settings-field-wide">
-                    <span>{LABELS[field] || field}</span>
+                  <div key={field} className="settings-field settings-field-wide">
+                    <label htmlFor={id}>
+                      <span>{LABELS[field] || field}</span>
+                    </label>
                     <textarea
+                      id={id}
+                      aria-describedby={`${id}-count`}
                       {...(oneLine
                         ? {
                             rows: 1,
                             className: "mobile-content-line",
                             "data-line": "true",
                             onKeyDown: (event) => {
-                              // Enter does nothing here (but not while a letter is still being composed: that Enter belongs to the keyboard)
-                              if (event.key === "Enter" && !event.nativeEvent.isComposing) event.preventDefault();
+                              // Enter does not start a new line here; it is the same as pressing Save, when Save is open (but not while a
+                              // letter is still being composed: that Enter belongs to the keyboard)
+                              if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                if (saveOpen) send();
+                              }
                             },
                           }
                         : { rows: 6 })}
-                      aria-label={LABELS[field] || field}
                       ref={(element) => {
                         controls.current[field] = element;
                       }}
@@ -357,7 +369,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                       onChange={(event) => type(field, oneLine ? withoutNewLines(event.target.value) : event.target.value)}
                     />
                     {names.length ? (
-                      <span className="mobile-content-insert" role="group" aria-label={`Placeholders for the ${(LABELS[field] || field).toLowerCase()}`}>
+                      <div className="mobile-content-insert" role="group" aria-label={`Placeholders for the ${(LABELS[field] || field).toLowerCase()}`}>
                         <small className="options-hint">Put in:</small>
                         {names.map((name) => (
                           <button
@@ -372,10 +384,10 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                             {`{${name}}`}
                           </button>
                         ))}
-                      </span>
+                      </div>
                     ) : null}
                     {hints[field] ? <small className="options-hint">{hints[field]}</small> : null}
-                    <small className="options-hint" data-testid={`count-${field}`}>
+                    <small className="options-hint" id={`${id}-count`} data-testid={`count-${field}`}>
                       {counts[field]} / {limit.max}
                     </small>
                     {tooMany ? (
@@ -397,7 +409,7 @@ export default function MobileContentBlockEditor({ blockKey, heading, intro, hin
                         {fieldErrors[field]}
                       </small>
                     ) : null}
-                  </label>
+                  </div>
                 );
               })}
 
