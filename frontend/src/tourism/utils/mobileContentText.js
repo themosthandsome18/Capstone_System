@@ -24,5 +24,34 @@ export function normalizeText(text) {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-// `kind` is the one the server names for a field: "line" or "text".
-export const normalizeFor = (kind, text) => (kind === "text" ? normalizeText(text) : normalizeLine(text));
+// A text of LINES (the port guide: each line is a bullet in the app): every line cleaned as a line, the blank lines gone (api/views/mobile_content.py,
+// _clean_lines). The lines are kept apart by a new line; a text with no line at all is "".
+export const BULLET = "\u2022";
+const splitLines = (text) => (text == null ? "" : String(text)).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+export function linesOf(text) {
+  return splitLines(text).map(normalizeLine).filter((line) => line !== "");
+}
+
+export const normalizeLines = (text) => linesOf(text).join("\n");
+
+// How many lines the server will find, and the letters of the longest one (the two numbers that the limits of a text of lines are about).
+export const lineCount = (text) => linesOf(text).length;
+export const longestLine = (text) => linesOf(text).reduce((most, line) => Math.max(most, countLetters(line)), 0);
+
+// The numbers (1, 2, ...) of the lines, counted as the server counts them (after the blank lines are gone), that are longer than `max`.
+export function longLines(text, max) {
+  return linesOf(text)
+    .map((line, index) => ({ number: index + 1, over: countLetters(line) - max }))
+    .filter((entry) => entry.over > 0);
+}
+
+// The numbers of the lines that start with a bullet: the server refuses them, because the app puts the bullet in front of every line by itself.
+export const bulletLines = (text) => linesOf(text).flatMap((line, index) => (line.startsWith(BULLET) ? [index + 1] : []));
+
+// `kind` is the one the server names for a field: "line", "text" or "lines".
+export function normalizeFor(kind, text) {
+  if (kind === "text") return normalizeText(text);
+  if (kind === "lines") return normalizeLines(text);
+  return normalizeLine(text);
+}

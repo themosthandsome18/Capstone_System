@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
-import { countLetters, normalizeFor } from "../utils/mobileContentText";
+import { bulletLines, countLetters, lineCount, longLines, longestLine, normalizeFor } from "../utils/mobileContentText";
 import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
 import { DetailMock, MOCK_SUBTITLE, MOCK_TITLE, TileFoot, TileGrid } from "./MobileContentWhyVisitMocks";
 
@@ -46,6 +46,22 @@ function fit(control) {
     const border = Math.max(0, control.offsetHeight - control.clientHeight);
     control.style.height = `${control.scrollHeight + border}px`;
   }
+}
+
+// The parts of a text of LINES, cut at its new lines: one list of parts for each line (the app puts a bullet in front of every one).
+function partsByLine(parts) {
+  const lines = [[]];
+  parts.forEach((part) => {
+    if (part.kind !== "text") {
+      lines[lines.length - 1].push(part);
+      return;
+    }
+    part.text.split("\n").forEach((piece, index) => {
+      if (index > 0) lines.push([]);
+      if (piece !== "") lines[lines.length - 1].push({ ...part, text: piece });
+    });
+  });
+  return lines.filter((line) => line.length);
 }
 
 const pick = (block, fields) => Object.fromEntries(fields.map((field) => [field, block[field] ?? ""]));
@@ -168,11 +184,17 @@ export default function MobileContentBlockEditor({
 
   // What the server will find: the typed text, cleaned the way it cleans it.
   const cleaned = Object.fromEntries(fields.map((field) => [field, normalizeFor(limits[field].kind, form[field])]));
-  const counts = Object.fromEntries(fields.map((field) => [field, countLetters(cleaned[field])]));
-  const over = (field) => Math.max(0, counts[field] - limits[field].max);
+  // A text of LINES (kind "lines": every line a bullet in the app) has two limits: how long a line is, and how many lines there are. Its counter is the
+  // LONGEST line; the other is the number of lines. A text of one line or of paragraphs is counted whole, as it always was.
+  const isLines = (field) => limits[field].kind === "lines";
+  const counts = Object.fromEntries(fields.map((field) => [field, isLines(field) ? longestLine(cleaned[field]) : countLetters(cleaned[field])]));
+  const over = (field) => (isLines(field) ? 0 : Math.max(0, counts[field] - limits[field].max));
+  const linesOver = (field) => (isLines(field) ? longLines(cleaned[field], limits[field].max) : []);
+  const tooManyLines = (field) => (isLines(field) ? Math.max(0, lineCount(cleaned[field]) - (limits[field].max_lines || Infinity)) : 0);
   const empty = (field) => limits[field].required && cleaned[field] === "";
   const changed = fields.filter((field) => cleaned[field] !== baseline[field]);
-  const canSave = !working && changed.length > 0 && fields.every((field) => !over(field) && !empty(field));
+  const canSave =
+    !working && changed.length > 0 && fields.every((field) => !over(field) && !linesOver(field).length && !tooManyLines(field) && !empty(field));
   // The Save button is there, and open (while the server's question or the clash of two edits is shown, it is replaced by their buttons).
   const saveOpen = canSave && !ask && !conflict;
 
@@ -310,8 +332,28 @@ export default function MobileContentBlockEditor({
       ) : item.officeMissing ? (
         <>
           <small className="options-hint">{PREVIEW_INSTEAD}</small>
-          <p className="mobile-content-muted">{item.instead ? <Parts parts={item.instead.parts} /> : null}</p>
+          {item.instead && limits[item.field] && limits[item.field].kind === "lines" ? (
+            <ul className="mobile-content-bullets mobile-content-muted">
+              {partsByLine(item.instead.parts).map((line, index) => (
+                <li key={index}>
+                  <span aria-hidden="true">{"\u2022 "}</span>
+                  <Parts parts={line} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mobile-content-muted">{item.instead ? <Parts parts={item.instead.parts} /> : null}</p>
+          )}
         </>
+      ) : limits[item.field] && limits[item.field].kind === "lines" ? (
+        <ul className="mobile-content-bullets">
+          {partsByLine(item.shown.parts).map((line, index) => (
+            <li key={index}>
+              <span aria-hidden="true">{"\u2022 "}</span>
+              <Parts parts={line} />
+            </li>
+          ))}
+        </ul>
       ) : (
         <p>
           <Parts parts={item.shown.parts} />
@@ -363,9 +405,16 @@ export default function MobileContentBlockEditor({
               {fields.map((field) => {
                 const limit = limits[field];
                 const tooMany = over(field);
-                const oneLine = limit.kind !== "text";
+                const oneLine = limit.kind === "line"; // "text" and "lines" keep their new lines
+                const lines = isLines(field);
                 const names = Array.isArray(allowed[field]) ? allowed[field] : [];
-                const problems = placeholderWarnings(form[field], names);
+                // a line that starts with a bullet is refused by the server: the person is told before they press Save
+                const bullets = lines
+                  ? bulletLines(form[field]).map(
+                      (number) => `Line ${number} starts with a bullet (\u2022). The app puts the bullet in front of every line by itself, so write the line without it.`
+                    )
+                  : [];
+                const problems = [...placeholderWarnings(form[field], names), ...bullets];
                 const id = `${uid}-${field}`;
                 return (
                   <div key={field} className="settings-field settings-field-wide">
@@ -416,9 +465,30 @@ export default function MobileContentBlockEditor({
                       </div>
                     ) : null}
                     {hints[field] ? <small className="options-hint">{hints[field]}</small> : null}
-                    <small className="options-hint" id={`${id}-count`} data-testid={`count-${field}`}>
-                      {counts[field]} / {limit.max}
-                    </small>
+                    {lines ? (
+                      <>
+                        <small className="options-hint" id={`${id}-count`} data-testid={`count-${field}`}>
+                          {lineCount(cleaned[field])} / {limit.max_lines} lines
+                        </small>
+                        <small className="options-hint" data-testid={`longest-${field}`}>
+                          Longest line: {counts[field]} / {limit.max}
+                        </small>
+                      </>
+                    ) : (
+                      <small className="options-hint" id={`${id}-count`} data-testid={`count-${field}`}>
+                        {counts[field]} / {limit.max}
+                      </small>
+                    )}
+                    {tooManyLines(field) ? (
+                      <small className="options-reason" role="alert" data-testid={`toomanylines-${field}`}>
+                        Too many lines by {tooManyLines(field)}. The most it can have is {limit.max_lines}.
+                      </small>
+                    ) : null}
+                    {linesOver(field).map((entry) => (
+                      <small key={entry.number} className="options-reason" role="alert" data-testid={`longline-${field}`}>
+                        Line {entry.number} is too long by {plural(entry.over, "letter", "letters")}.
+                      </small>
+                    ))}
                     {tooMany ? (
                       <small className="options-reason" role="alert">
                         Too long by {plural(tooMany, "letter", "letters")}.
