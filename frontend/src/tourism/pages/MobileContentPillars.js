@@ -13,10 +13,10 @@ import { MAX_ITEMS_PER_SECTION } from "../utils/mobileContentTileRules";
 export const PILLARS_HEADING = "The pillars of Why Visit";
 export const PILLARS_NOTICE = "Ang Edit ang kinalalagyan ng buong impormasyong lumalabas kapag pinindot.";
 export const ADD_LABEL = "+ Add pillar";
-export const PILLARS_FULL = `This list is full: a section can hold ${MAX_ITEMS_PER_SECTION} tiles, and the ones that are switched off are counted. Edit one of those instead of adding a new one.`;
+export const PILLARS_FULL = `This list is full: a section can hold ${MAX_ITEMS_PER_SECTION} tiles, and the ones that are deactivated are counted. Edit one of those instead of adding a new one.`;
 export const PILLARS_EMPTY = "There are no pillars to show.";
 export const PILLARS_ERROR_FALLBACK = "The pillars could not be loaded.";
-export const SWITCHED_OFF = "Switched off: the app does not show it";
+export const DEACTIVATED_MARK = "Deactivated: the app does not show it";
 export const TAG_DETAIL = "Has detail";
 export const TAG_NO_DETAIL = "No detail yet";
 
@@ -49,7 +49,7 @@ export function usePillars() {
 
 export function PillarsView({ state }) {
   const { items, error, reload } = state;
-  // a full section (the server's 40, the ones switched off counted) cannot take a new tile: say so, instead of a link that would only be refused
+  // a full section (the server's 40, the ones deactivated counted) cannot take a new tile: say so, instead of a link that would only be refused
   const full = Boolean(items) && items.length >= MAX_ITEMS_PER_SECTION;
   return (
     <section className="settings-card options-card mobile-content-card" aria-label={PILLARS_HEADING}>
@@ -111,7 +111,7 @@ export function PillarsView({ state }) {
                   <span className="mobile-content-pillar-text" data-part="text">
                     {item.short_text}
                   </span>
-                  {item.is_active ? null : <small className="options-hint">{SWITCHED_OFF}</small>}
+                  {item.is_active ? null : <small className="options-hint">{DEACTIVATED_MARK}</small>}
                 </div>
                 <Link className="mobile-content-pillar-edit" to={tileEditPath(item.id)} aria-label={`Edit ${item.title}`}>
                   Edit

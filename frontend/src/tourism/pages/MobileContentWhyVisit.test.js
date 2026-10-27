@@ -10,7 +10,7 @@ import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileAppContent from "./MobileAppContent";
 import MobileContentBlockEditor, { SAVED_NOTICE } from "./MobileContentBlockEditor";
-import MobileContentPillars, { PILLARS_EMPTY, PILLARS_HEADING, PILLARS_NOTICE, SWITCHED_OFF } from "./MobileContentPillars";
+import MobileContentPillars, { PILLARS_EMPTY, PILLARS_HEADING, PILLARS_NOTICE, DEACTIVATED_MARK } from "./MobileContentPillars";
 import { useAuth } from "../../auth/AuthContext";
 
 const router = require("../testing/routerStub");
@@ -379,8 +379,8 @@ describe("the four pillars", () => {
       "Dahican & Alitap Falls",
       "Habhab & Fresh Seafood",
     ]);
-    expect(within(rows[2]).getByText(SWITCHED_OFF)).toBeTruthy();
-    [0, 1, 3].forEach((index) => expect(within(rows[index]).queryByText(SWITCHED_OFF)).toBeNull());
+    expect(within(rows[2]).getByText(DEACTIVATED_MARK)).toBeTruthy();
+    [0, 1, 3].forEach((index) => expect(within(rows[index]).queryByText(DEACTIVATED_MARK)).toBeNull());
     expect(screen.getByRole("note").textContent).toBe(PILLARS_NOTICE);
     expect(PILLARS_NOTICE).toBe("Ang Edit ang kinalalagyan ng buong impormasyong lumalabas kapag pinindot.");
     expect(document.body.textContent).not.toMatch(/cannot be edited here yet|upcoming update/);

@@ -15,7 +15,7 @@ import {
   ORDER_MIN,
 } from "../utils/mobileContentTileRules";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
-import { ICON_TONES, PILLAR_ICONS, SWITCHED_OFF } from "./MobileContentPillars";
+import { DEACTIVATED_MARK, ICON_TONES, PILLAR_ICONS } from "./MobileContentPillars";
 
 // The page of ONE tile (a pillar of Why Visit, a card of the Travel Guide): /mobile-content/tile?id=12 to edit it, ?section=why_visit to add one
 // (Commit 6b). A page, not a pop-up. It is a FORM: the title, the icon, the short line (one line, like a title), the full text (paragraphs), and the
@@ -35,9 +35,9 @@ export const BANNER_NOTE = "A banner has no full text: only a tile opens a page 
 export const SHORT_HINT = "Ito ang nakikita agad sa Home. Panatilihing maikli — pinuputol ito ng app kapag masyadong mahaba.";
 export const FULL_HINT =
   "Kapag blangko ito, hindi napipindot ang tile — teksto lang, gaya ng dati. Lumalabas lang ang arrow kapag may laman.";
-export const SWITCHED_OFF_NOTICE = "The tile was switched off.";
-export const BROUGHT_BACK_NOTICE = "The tile was brought back.";
-export const OFF_LINE = "No tile is ever deleted: one that is switched off stays here, and it still counts toward the 40 a section can hold.";
+export const DEACTIVATED_NOTICE = "The tile was deactivated.";
+export const REACTIVATED_NOTICE = "The tile was reactivated.";
+export const OFF_LINE = "No tile is ever deleted: one that is deactivated stays here, and it still counts toward the 40 a section can hold.";
 export const BADGE_FILLED = "May laman";
 export const BADGE_EMPTY = "Walang laman";
 
@@ -133,7 +133,7 @@ export default function MobileContentTileEditor() {
   const [notice, setNotice] = useState("");
   const [warnings, setWarnings] = useState([]);
   const [ask, setAsk] = useState(null); // the server asks for a confirmation: { dropped, message }
-  const [offAsk, setOffAsk] = useState(false); // "Switch off" was pressed: the page asks first
+  const [offAsk, setOffAsk] = useState(false); // "Deactivate" was pressed: the page asks first
   const [conflict, setConflict] = useState(null); // someone else changed what I changed: { latest, latestValues, fields }
   const [context, setContext] = useState(previewContext(null)); // the fee and the place where it is paid, to fill the placeholders in the preview
   const [leave, setLeave] = useState(null); // { to, replace }: the page goes back to the tab
@@ -326,7 +326,7 @@ export default function MobileContentTileEditor() {
     setConflict(null);
   }
 
-  // Switch a tile off, or bring it back: ONE POST. The answer is the tile as the server holds it now (and the warning, when it was the last one on).
+  // Deactivate a tile, or reactivate it: ONE POST. The answer is the tile as the server holds it now (and the warning, when it was the last one on).
   // What was typed in the form stays where it is; only the state of the tile changes.
   async function setActive(active) {
     if (inFlight.current) return;
@@ -339,10 +339,10 @@ export default function MobileContentTileEditor() {
     try {
       const answer = active ? await tourismApi.reactivateMobileContentItem(itemId) : await tourismApi.deactivateMobileContentItem(itemId);
       setItem((current) => ({ ...current, is_active: answer.is_active }));
-      setNotice(active ? BROUGHT_BACK_NOTICE : SWITCHED_OFF_NOTICE);
+      setNotice(active ? REACTIVATED_NOTICE : DEACTIVATED_NOTICE);
       setWarnings(Array.isArray(answer.warnings) ? answer.warnings : []);
     } catch (error) {
-      setActionError(error.message || "The tile could not be switched.");
+      setActionError(error.message || "The tile could not be deactivated or reactivated.");
     } finally {
       inFlight.current = false;
       setWorking(false);
@@ -544,17 +544,17 @@ export default function MobileContentTileEditor() {
             <div className="mobile-content-tile-status">
               {item.is_active ? null : (
                 <span className="mobile-content-off-mark" role="status" data-testid="off-mark">
-                  {SWITCHED_OFF}
+                  {DEACTIVATED_MARK}
                 </span>
               )}
               {offAsk ? (
-                <div className="mobile-content-off-ask" role="alertdialog" aria-label="Confirm switching off">
-                  <span>{`Switch off “${item.title}”? The app will not show it. It stays here, and you can bring it back.`}</span>
+                <div className="mobile-content-off-ask" role="alertdialog" aria-label="Confirm deactivating">
+                  <span>{`Deactivate “${item.title}”? The app will not show it. It stays here, and you can reactivate it.`}</span>
                   <button type="button" className="mobile-content-small-button" onClick={() => setOffAsk(false)} disabled={working}>
                     Cancel
                   </button>
                   <button type="button" className="mobile-content-small-button" onClick={() => setActive(false)} disabled={working}>
-                    Yes, switch off
+                    Yes, deactivate
                   </button>
                 </div>
               ) : (
@@ -564,7 +564,7 @@ export default function MobileContentTileEditor() {
                   onClick={() => (item.is_active ? setOffAsk(true) : setActive(true))}
                   disabled={working}
                 >
-                  {item.is_active ? "Switch off" : "Bring back"}
+                  {item.is_active ? "Deactivate" : "Reactivate"}
                 </button>
               )}
               <span className="mobile-content-off-line">{OFF_LINE}</span>

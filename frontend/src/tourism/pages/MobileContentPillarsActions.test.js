@@ -134,7 +134,7 @@ describe("+ Add pillar", () => {
     const why = screen.getByTestId("pillars-full");
     expect(why.textContent).toBe(PILLARS_FULL);
     expect(PILLARS_FULL).toMatch(/40 tiles/);
-    expect(PILLARS_FULL).toMatch(/switched off are counted/);
+    expect(PILLARS_FULL).toMatch(/deactivated are counted/);
     expect(button.getAttribute("aria-describedby")).toBe(why.id);
     fireEvent.click(button);
     expect(router.__clicks()).toEqual([]);
@@ -188,6 +188,15 @@ describe("no request is added", () => {
     expect(card().querySelectorAll("form, input, textarea, select, [contenteditable]")).toHaveLength(0);
     expect(within(card()).queryByText(/^(Save|Delete|Remove|Switch off)/)).toBeNull();
     expect(within(card()).queryByRole("button", { name: /save|delete|remove/i })).toBeNull();
+  });
+});
+
+describe("one word for the switch (7b)", () => {
+  it("the list of pillars says Deactivated for a pillar that is off, and nothing says switched off", async () => {
+    await open();
+    expect(items.some((box) => !box.is_active)).toBe(true); // the fixture: one pillar is off
+    expect(within(rowOf("Forest Cascades")).getByText("Deactivated: the app does not show it")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/switch(ed|ing)? off|bring (it )?back|brought back|Bring back/i);
   });
 });
 

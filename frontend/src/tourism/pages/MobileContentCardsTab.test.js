@@ -15,6 +15,8 @@ import {
   NO_MATCH,
   NOTHING_SHOWN,
   SECTION_TITLE_FALLBACK,
+  WHERE_BOTTOM,
+  WHERE_MIDDLE,
   applyFilter,
   isAmountLocked,
   previewNotes,
@@ -241,7 +243,7 @@ describe("the lines of the list", () => {
     const { container } = await open();
     const hint = screen.getByText(LIST_HINT);
     const locked = screen.getByText(LOCKED_LINE);
-    expect(LIST_HINT).toBe("Isang listahan ito — parehong kard ang gabay at ang paalala, magkasama sa ibaba ng Home. Ang Order ang nagsasabi kung alin ang nauuna. Napipindot ang bawat isa kapag may buong teksto.");
+    expect(LIST_HINT).toBe("Parehong kard ang gabay at ang paalala, pero magkaiba ang pwesto sa Home: ang gabay ay nasa gitna (hindi ito lumalabas kapag may hinahanap o piniling kategorya ang bisita), ang paalala ay nasa ibaba. Ang pinakamaliit na Order ang nauuna sa loob ng bawat grupo. Sa preview, may arrow ang gabay na may buong teksto.");
     expect(LOCKED_LINE).toBe("Ang Amount locked sa isang kard ay nangangahulugang ang halaga doon ay galing sa iisang pinagmulan — hindi ito maisusulat nang kamay, para hindi ito maiba sa kuwenta ng ulat.");
     expect(hint.tagName).toBe("P");
     expect(locked.tagName).toBe("P");
@@ -332,21 +334,21 @@ describe("a card", () => {
     expect(router.__clicks().at(-1)).toEqual({ to: "/mobile-content/tile?id=6", replace: false });
   });
 
-  it("has Deactivate on a card that is on and Bring back on one that is off", async () => {
+  it("has Deactivate on a card that is on and Reactivate on one that is off", async () => {
     await open();
     expect(within(rowOf("Boat Guide")).getByRole("button", { name: "Deactivate Boat Guide" }).textContent).toBe("Deactivate");
-    expect(within(rowOf("Leave No Trace")).getByRole("button", { name: "Bring back Leave No Trace" }).textContent).toBe("Bring back");
+    expect(within(rowOf("Leave No Trace")).getByRole("button", { name: "Reactivate Leave No Trace" }).textContent).toBe("Reactivate");
     expect(within(rowOf("Leave No Trace")).queryByRole("button", { name: /^Deactivate/ })).toBeNull();
   });
 });
 
-describe("deactivating and bringing back", () => {
+describe("deactivating and reactivating", () => {
   it("asks first; nothing is sent until the person says yes; Cancel changes nothing", async () => {
     await open();
     const before = requests.length;
     fireEvent.click(within(rowOf("Boat Guide")).getByRole("button", { name: "Deactivate Boat Guide" }));
     const question = within(rowOf("Boat Guide")).getByRole("alertdialog", { name: "Confirm deactivating" });
-    expect(question.textContent).toMatch(/Deactivate “Boat Guide”\? The app will not show it\. It stays here, and you can bring it back\./);
+    expect(question.textContent).toMatch(/Deactivate “Boat Guide”\? The app will not show it\. It stays here, and you can reactivate it\./);
     expect(requests.length).toBe(before);
     fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -363,7 +365,7 @@ describe("deactivating and bringing back", () => {
     await screen.findByText("“Boat Guide” was deactivated.");
     expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/1/deactivate/" }]);
     expect(rowOf("Boat Guide").querySelector('[data-part="status"]').textContent).toBe("Deactivated");
-    expect(within(rowOf("Boat Guide")).getByRole("button", { name: "Bring back Boat Guide" })).toBeTruthy();
+    expect(within(rowOf("Boat Guide")).getByRole("button", { name: "Reactivate Boat Guide" })).toBeTruthy();
     expect(frame().textContent).not.toContain("Boat Guide"); // gone from the preview
     choose("Active only");
     expect(count()).toBe("4 cards");
@@ -377,11 +379,11 @@ describe("deactivating and bringing back", () => {
     expect((await screen.findByText(state.warnOff)).getAttribute("role")).toBe("status");
   });
 
-  it("brings a card back with ONE POST and no question", async () => {
+  it("reactivates a card with ONE POST and no question", async () => {
     await open();
     const before = requests.length;
-    fireEvent.click(within(rowOf("Leave No Trace")).getByRole("button", { name: "Bring back Leave No Trace" }));
-    await screen.findByText("“Leave No Trace” was brought back.");
+    fireEvent.click(within(rowOf("Leave No Trace")).getByRole("button", { name: "Reactivate Leave No Trace" }));
+    await screen.findByText("“Leave No Trace” was reactivated.");
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/4/reactivate/" }]);
     expect(rowOf("Leave No Trace").querySelector('[data-part="status"]').textContent).toBe("Active");
@@ -396,6 +398,24 @@ describe("deactivating and bringing back", () => {
     fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
     expect((await screen.findByText(words)).getAttribute("role")).toBe("alert");
     expect(rowOf("Boat Guide").querySelector('[data-part="status"]').textContent).toBe("Active");
+  });
+});
+
+describe("one word for the switch: Deactivate and Reactivate (7b)", () => {
+  const OLD = /switch(ed|ing)? off|bring (it )?back|brought back|Bring back/i;
+
+  it("nothing on the tab says Switch off, Bring back or brought back, before, during or after a switch", async () => {
+    await open();
+    expect(document.body.textContent).not.toMatch(OLD);
+    fireEvent.click(within(rowOf("Boat Guide")).getByRole("button", { name: "Deactivate Boat Guide" }));
+    expect(document.body.textContent).not.toMatch(OLD);
+    expect(screen.getByRole("alertdialog").textContent).toContain("you can reactivate it");
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
+    await screen.findByText("“Boat Guide” was deactivated.");
+    fireEvent.click(within(rowOf("Boat Guide")).getByRole("button", { name: "Reactivate Boat Guide" }));
+    await screen.findByText("“Boat Guide” was reactivated.");
+    expect(document.body.textContent).not.toMatch(OLD);
+    expect(items.length).toBe(6); // the fixture reached the case
   });
 });
 
@@ -414,14 +434,49 @@ describe("the preview", () => {
     expect(side.getAttribute("aria-label")).toBe("What the app will show");
   });
 
-  it("puts the banners on TOP, then the title of the section, then the tiles", async () => {
+  it("puts the title of the section and the tiles first (the middle of the Home), and the banners after them (the bottom of the Home), each part with its own label", async () => {
     await open();
     expect(banners()).toHaveLength(2); // the fixture: two banners that are on
     expect(tiles()).toHaveLength(3); // and three tiles that are on (the fourth is off)
+    expect([...frame().children].map((child) => child.getAttribute("data-testid"))).toEqual([
+      "guide-where-middle",
+      "guide-section-title",
+      "guide-tile",
+      "guide-tile",
+      "guide-tile",
+      "guide-where-bottom",
+      "guide-banner",
+      "guide-banner",
+    ]);
     const title = screen.getByTestId("guide-section-title");
-    banners().forEach((banner) => expect(banner.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()); // each banner before the title
-    tiles().forEach((tile) => expect(title.compareDocumentPosition(tile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()); // each tile after it
-    expect([...frame().children].map((child) => child.getAttribute("data-testid"))).toEqual(["guide-banner", "guide-banner", "guide-section-title", "guide-tile", "guide-tile", "guide-tile"]);
+    tiles().forEach((tile) => expect(title.compareDocumentPosition(tile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()); // each tile after the title
+    banners().forEach((banner) => expect(tiles().at(-1).compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()); // each banner after the last tile
+    banners().forEach((banner) => expect(banner.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()); // and the title before each banner
+  });
+
+  it("says which part of the Home each group is, and does not put them together", async () => {
+    await open();
+    expect(screen.getByTestId("guide-where-middle").textContent).toBe("Home — gitna: ang gabay");
+    expect(screen.getByTestId("guide-where-bottom").textContent).toBe("Home — ibaba: ang paalala");
+    expect(WHERE_MIDDLE).toBe("Home — gitna: ang gabay");
+    expect(WHERE_BOTTOM).toBe("Home — ibaba: ang paalala");
+    expect(screen.getByTestId("guide-where-bottom").getAttribute("data-where")).toBe("bottom"); // set apart by its own rule
+    expect(screen.getByTestId("guide-where-bottom").compareDocumentPosition(screen.getByTestId("guide-where-middle")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+
+  it("with no banner there is no label of the bottom; with no tile there is no title and no label of the middle", async () => {
+    items = items.filter((box) => box.style !== "banner");
+    const first = await open();
+    expect(banners()).toHaveLength(0); // the fixture
+    expect(screen.queryByTestId("guide-where-bottom")).toBeNull();
+    expect(screen.getByTestId("guide-where-middle")).toBeTruthy();
+    first.unmount();
+    items = FIXTURE().filter((box) => box.style === "banner");
+    await open();
+    expect(tiles()).toHaveLength(0); // the fixture: only banners
+    expect(screen.queryByTestId("guide-where-middle")).toBeNull();
+    expect(screen.queryByTestId("guide-section-title")).toBeNull();
+    expect(screen.getByTestId("guide-where-bottom")).toBeTruthy();
   });
 
   it("the title of the section is the one the server holds (the block), and the words of the design when there is none", async () => {
@@ -664,6 +719,16 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(".mobile-content-guide-text strong", "font-weight")).toBe("700");
     expect(decl(".mobile-content-guide-text span", "font-size")).toBe("11px");
     expect(decl(".mobile-content-guide-text span", "color")).toBe("#5e6f77");
+  });
+
+  it("the labels of the two parts of the Home: the same small capitals as the other labels, the bottom one set apart by a dashed line", () => {
+    const where = ".mobile-content-guide-where";
+    expect(decl(where, "font-size")).toBe("10.5px");
+    expect(decl(where, "text-transform")).toBe("uppercase");
+    expect(decl(where, "letter-spacing")).toBe("0.09em");
+    expect(decl(where, "font-weight")).toBe("700");
+    expect(decl(where, "color")).toBe("#8fa0a8");
+    expect(decl(`${where}[data-where="bottom"]`, "border-top")).toBe("1px dashed #d5e2e8");
   });
 
   it("every rule of the tab starts with a class of its own", () => {

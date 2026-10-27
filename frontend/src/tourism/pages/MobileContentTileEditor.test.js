@@ -6,9 +6,9 @@ import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileContentTileEditor, {
   ADDED_NOTICE,
-  BROUGHT_BACK_NOTICE,
+  REACTIVATED_NOTICE,
   OFF_LINE,
-  SWITCHED_OFF_NOTICE,
+  DEACTIVATED_NOTICE,
   BADGE_EMPTY,
   BADGE_FILLED,
   BANNER_NOTE,
@@ -23,7 +23,7 @@ import MobileContentTileEditor, {
   SAVED_NOTICE,
   SHORT_HINT,
 } from "./MobileContentTileEditor";
-import { ICON_TONES, PILLAR_ICONS, SWITCHED_OFF } from "./MobileContentPillars";
+import { ICON_TONES, PILLAR_ICONS, DEACTIVATED_MARK } from "./MobileContentPillars";
 import { previewContext, previewParts, previewText } from "../utils/mobileContentPreview";
 import { HARD_LIMITS, ICON_NAMES, ORDER_MAX, ORDER_MIN } from "../utils/mobileContentTileRules";
 import { useAuth } from "../../auth/AuthContext";
@@ -1175,9 +1175,9 @@ describe("the live preview", () => {
   });
 });
 
-describe("switching a tile off, and bringing it back (6d)", () => {
-  const offButton = () => screen.getByRole("button", { name: "Switch off" });
-  const onButton = () => screen.getByRole("button", { name: "Bring back" });
+describe("deactivating a tile, and reactivating it (6d)", () => {
+  const offButton = () => screen.getByRole("button", { name: "Deactivate" });
+  const onButton = () => screen.getByRole("button", { name: "Reactivate" });
 
   it("there is a small button, in the head of the page and far from Save, for a tile that is on; none for a new tile", async () => {
     const view = await open("?id=12");
@@ -1186,18 +1186,18 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     expect(button.className).toBe("mobile-content-small-button");
     expect(button.closest("form")).toBeNull(); // not in the form, not next to Save
     expect(button.closest(".reports-header")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Bring back" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reactivate" })).toBeNull();
     view.unmount();
     await open("?section=why_visit");
-    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Bring back" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deactivate" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reactivate" })).toBeNull();
     expect(screen.queryByText(OFF_LINE)).toBeNull();
   });
 
   it("says in one line, not in a box, that nothing is deleted: the tile stays and still counts toward the 40", async () => {
     const { container } = await open("?id=12");
     const line = screen.getByText(OFF_LINE);
-    expect(OFF_LINE).toBe("No tile is ever deleted: one that is switched off stays here, and it still counts toward the 40 a section can hold.");
+    expect(OFF_LINE).toBe("No tile is ever deleted: one that is deactivated stays here, and it still counts toward the 40 a section can hold.");
     expect(line.tagName).toBe("SPAN");
     expect(line.className).toBe("mobile-content-off-line");
     expect(container.querySelector(".mobile-content-note")).toBeNull(); // not a note box
@@ -1208,8 +1208,8 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     await open("?id=12");
     const before = requests.length;
     fireEvent.click(offButton());
-    const question = screen.getByRole("alertdialog", { name: "Confirm switching off" });
-    expect(question.textContent).toMatch(/Switch off “Cagbalete Island”\? The app will not show it\. It stays here, and you can bring it back\./);
+    const question = screen.getByRole("alertdialog", { name: "Confirm deactivating" });
+    expect(question.textContent).toMatch(/Deactivate “Cagbalete Island”\? The app will not show it\. It stays here, and you can reactivate it\./);
     expect(requests.length).toBe(before); // nothing sent yet
     fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -1222,14 +1222,14 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     await open("?id=12");
     const before = requests.length;
     fireEvent.click(offButton());
-    fireEvent.click(within(screen.getByRole("alertdialog", { name: "Confirm switching off" })).getByRole("button", { name: "Yes, switch off" }));
-    await screen.findByText(SWITCHED_OFF_NOTICE);
+    fireEvent.click(within(screen.getByRole("alertdialog", { name: "Confirm deactivating" })).getByRole("button", { name: "Yes, deactivate" }));
+    await screen.findByText(DEACTIVATED_NOTICE);
     expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/12/deactivate/", body: null }]); // one POST, and no GET after it
     expect(items[0].is_active).toBe(false);
-    expect(screen.getByTestId("off-mark").textContent).toBe(SWITCHED_OFF);
+    expect(screen.getByTestId("off-mark").textContent).toBe(DEACTIVATED_MARK);
     expect(screen.getByTestId("off-mark").getAttribute("role")).toBe("status");
     expect(onButton()).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deactivate" })).toBeNull();
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
@@ -1237,7 +1237,7 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     state.warnOff = "No item of “Why Visit” is shown now, so the app will leave that whole part out.";
     await open("?id=12");
     fireEvent.click(offButton());
-    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
     const warning = await screen.findByText(state.warnOff);
     expect(warning.getAttribute("role")).toBe("status");
   });
@@ -1246,8 +1246,8 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     await open("?id=12");
     type("Title", "Typed but not saved");
     fireEvent.click(offButton());
-    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
-    await screen.findByText(SWITCHED_OFF_NOTICE);
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
+    await screen.findByText(DEACTIVATED_NOTICE);
     expect(field("Title").value).toBe("Typed but not saved");
     expect(save().disabled).toBe(false);
     fireEvent.click(save());
@@ -1258,9 +1258,9 @@ describe("switching a tile off, and bringing it back (6d)", () => {
   it("a tile that is off is marked as soon as the page opens, with a button to bring it back", async () => {
     items[0].is_active = false;
     await open("?id=12");
-    expect(screen.getByTestId("off-mark").textContent).toBe(SWITCHED_OFF);
+    expect(screen.getByTestId("off-mark").textContent).toBe(DEACTIVATED_MARK);
     expect(onButton().className).toBe("mobile-content-small-button");
-    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deactivate" })).toBeNull();
   });
 
   it("brings it back with ONE POST and no question; the mark goes", async () => {
@@ -1268,7 +1268,7 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     await open("?id=12");
     const before = requests.length;
     fireEvent.click(onButton());
-    await screen.findByText(BROUGHT_BACK_NOTICE);
+    await screen.findByText(REACTIVATED_NOTICE);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/12/reactivate/", body: null }]);
     expect(items[0].is_active).toBe(true);
@@ -1281,7 +1281,7 @@ describe("switching a tile off, and bringing it back (6d)", () => {
     state.failNext = { status: 403, body: { detail: words } };
     await open("?id=12");
     fireEvent.click(offButton());
-    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
     const alert = await screen.findByText(words);
     expect(alert.getAttribute("role")).toBe("alert");
     expect(screen.queryByTestId("off-mark")).toBeNull();
@@ -1298,20 +1298,42 @@ describe("switching a tile off, and bringing it back (6d)", () => {
       return real(url, options);
     });
     fireEvent.click(offButton());
-    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
     await settled();
-    expect(screen.getByRole("button", { name: "Switch off" }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Deactivate" }).disabled).toBe(true);
     release();
-    await screen.findByText(SWITCHED_OFF_NOTICE);
+    await screen.findByText(DEACTIVATED_NOTICE);
     expect(writes()).toHaveLength(1);
   });
 
   it("a tile of the Travel Guide is switched with the same two calls", async () => {
     await open("?id=21");
     fireEvent.click(offButton());
-    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
-    await screen.findByText(SWITCHED_OFF_NOTICE);
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
+    await screen.findByText(DEACTIVATED_NOTICE);
     expect(writes().map((r) => r.path)).toEqual(["/mobile-content/items/21/deactivate/"]);
+  });
+});
+
+describe("one word for the switch: Deactivate and Reactivate (7b)", () => {
+  const OLD = /switch(ed|ing)? off|bring (it )?back|brought back|Bring back/i;
+
+  it("nothing on the page says Switch off, Bring back or brought back: not on a tile that is on, not in the question, not after, not on a tile that is off", async () => {
+    await open("?id=12");
+    expect(document.body.textContent).not.toMatch(OLD);
+    expect(screen.getByRole("button", { name: "Deactivate" })).toBeTruthy(); // the fixture: the new word is there
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
+    expect(screen.getByRole("alertdialog", { name: "Confirm deactivating" }).textContent).toContain("you can reactivate it");
+    expect(document.body.textContent).not.toMatch(OLD);
+    fireEvent.click(screen.getByRole("button", { name: "Yes, deactivate" }));
+    await screen.findByText(DEACTIVATED_NOTICE);
+    expect(DEACTIVATED_NOTICE).toBe("The tile was deactivated.");
+    expect(screen.getByTestId("off-mark").textContent).toBe("Deactivated: the app does not show it");
+    expect(document.body.textContent).not.toMatch(OLD);
+    fireEvent.click(screen.getByRole("button", { name: "Reactivate" }));
+    await screen.findByText(REACTIVATED_NOTICE);
+    expect(REACTIVATED_NOTICE).toBe("The tile was reactivated.");
+    expect(document.body.textContent).not.toMatch(OLD);
   });
 });
 

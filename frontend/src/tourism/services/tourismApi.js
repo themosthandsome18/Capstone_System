@@ -531,8 +531,8 @@ export const tourismApi = {
   },
 
   // The items of Mobile App Content (admin): the pillars of Why Visit ("why_visit") and the cards of the Travel Guide ("travel_guide"). The list
-  // is every item of the section, the ones switched off too, in the order the app shows them; with no section, every item of both.
-  // There is no call for ONE item, and there is no delete: an item is switched off (deactivate) and brought back (reactivate).
+  // is every item of the section, the ones deactivated too, in the order the app shows them; with no section, every item of both.
+  // There is no call for ONE item, and there is no delete: an item is deactivated and reactivated.
   // Every write answers with the item as the server now holds it, with "warnings". An edit sends only the fields that changed; one that
   // takes a fee placeholder out of a text is refused with 409 confirm_required (see blockConfirmRequired): send it again with the list of
   // the names in `confirmDropped`.

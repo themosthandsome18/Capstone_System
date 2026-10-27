@@ -10,13 +10,15 @@ import { Parts } from "./MobileContentFilled";
 // The tab "Travel Guide & Tips" (Commit 7a): ONE list of cards, the guides and the notices together. A card is a tile (white, it can have a full text and
 // then an arrow) or a banner (a coloured strip, with no full text). The list reads the cards of the section once, with the blocks (for the title of the
 // section and for the fee and the place where it is paid); the filter works on what was read and asks for nothing. Each card has the doors of the page of a
-// tile (Edit) and the switch (Deactivate / Bring back: one POST each). The page of a tile does the writing; this tab writes only the switch.
+// tile (Edit) and the switch (Deactivate / Reactivate: one POST each). The page of a tile does the writing; this tab writes only the switch.
 
 export const SECTION = "travel_guide";
 export const ADD_CARD = "+ Add card";
 export const CARDS_FULL = `This list is full: a section can hold ${MAX_ITEMS_PER_SECTION} cards, and the ones that are deactivated are counted. Edit one of those instead of adding a new one.`;
 export const LIST_HINT =
-  "Isang listahan ito — parehong kard ang gabay at ang paalala, magkasama sa ibaba ng Home. Ang Order ang nagsasabi kung alin ang nauuna. Napipindot ang bawat isa kapag may buong teksto.";
+  "Parehong kard ang gabay at ang paalala, pero magkaiba ang pwesto sa Home: ang gabay ay nasa gitna (hindi ito lumalabas kapag may hinahanap o piniling kategorya ang bisita), ang paalala ay nasa ibaba. Ang pinakamaliit na Order ang nauuna sa loob ng bawat grupo. Sa preview, may arrow ang gabay na may buong teksto.";
+export const WHERE_MIDDLE = "Home — gitna: ang gabay";
+export const WHERE_BOTTOM = "Home — ibaba: ang paalala";
 export const LOCKED_LINE =
   "Ang Amount locked sa isang kard ay nangangahulugang ang halaga doon ay galing sa iisang pinagmulan — hindi ito maisusulat nang kamay, para hindi ito maiba sa kuwenta ng ulat.";
 export const FILTERS = [
@@ -30,7 +32,7 @@ export const NO_CARDS = "There are no cards yet.";
 export const NO_MATCH = "No card matches this filter.";
 export const NOTHING_SHOWN = "Walang aktibong kard na maipapakita.";
 export const LOAD_ERROR_FALLBACK = "The cards could not be loaded.";
-export const OFF_QUESTION = (title) => `Deactivate “${title}”? The app will not show it. It stays here, and you can bring it back.`;
+export const OFF_QUESTION = (title) => `Deactivate “${title}”? The app will not show it. It stays here, and you can reactivate it.`;
 export const AMOUNT_LOCKED = "Amount locked";
 export const TAG_BANNER = "Banner";
 export const ACTIVE_LABEL = "Active";
@@ -57,7 +59,8 @@ export function readCard(item, context) {
   return { title, line, full, omitted: title.officeMissing || line.officeMissing || full.officeMissing };
 }
 
-// What the preview draws: the banners (on top), then the section title, then the tiles; only the cards that are on, and that can be filled in.
+// What the preview draws, in the order of the Home of the app: the section title and the tiles (the middle of the Home), then the banners (the bottom of
+// the Home, after the destinations); only the cards that are on, and that can be filled in.
 export function previewPlan(items, context) {
   const on = (Array.isArray(items) ? items : []).filter((item) => item.is_active);
   const read = on.map((item) => ({ item, ...readCard(item, context) }));
@@ -168,22 +171,11 @@ function Preview({ cards, title }) {
         <div className="mobile-content-phone mobile-content-guide-frame" data-testid="guide-frame">
           {error ? <p className="mobile-content-foot">{LOAD_ERROR_FALLBACK}</p> : null}
           {!error && items === undefined ? <p className="mobile-content-foot">Loading...</p> : null}
-          {plan.banners.map((card) => {
-            const tone = ICON_TONES[(PILLAR_ICONS[card.item.icon] || PILLAR_ICONS.info).tone];
-            return (
-              <div key={card.item.id} className="mobile-content-guide-banner" data-testid="guide-banner" style={{ background: tone.background }}>
-                <IconBox name={card.item.icon} size={19} radius={0} drawing={19} />
-                <div className="mobile-content-guide-text">
-                  <strong data-part="title">
-                    <Parts parts={card.title.parts} />
-                  </strong>
-                  <span data-part="line">
-                    <Parts parts={card.line.parts} />
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {plan.tiles.length ? (
+            <p className="mobile-content-guide-where" data-testid="guide-where-middle">
+              {WHERE_MIDDLE}
+            </p>
+          ) : null}
           {plan.tiles.length ? <p className="mobile-content-guide-title" data-testid="guide-section-title">{title}</p> : null}
           {plan.tiles.map((card) => {
             const tone = ICON_TONES[(PILLAR_ICONS[card.item.icon] || PILLAR_ICONS.info).tone];
@@ -215,6 +207,27 @@ function Preview({ cards, title }) {
                     <path d="M9 5l7 7-7 7" />
                   </svg>
                 ) : null}
+              </div>
+            );
+          })}
+          {plan.banners.length ? (
+            <p className="mobile-content-guide-where" data-where="bottom" data-testid="guide-where-bottom">
+              {WHERE_BOTTOM}
+            </p>
+          ) : null}
+          {plan.banners.map((card) => {
+            const tone = ICON_TONES[(PILLAR_ICONS[card.item.icon] || PILLAR_ICONS.info).tone];
+            return (
+              <div key={card.item.id} className="mobile-content-guide-banner" data-testid="guide-banner" style={{ background: tone.background }}>
+                <IconBox name={card.item.icon} size={19} radius={0} drawing={19} />
+                <div className="mobile-content-guide-text">
+                  <strong data-part="title">
+                    <Parts parts={card.title.parts} />
+                  </strong>
+                  <span data-part="line">
+                    <Parts parts={card.line.parts} />
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -253,10 +266,10 @@ export function TravelGuideTab({ cards }) {
     try {
       const answer = active ? await tourismApi.reactivateMobileContentItem(item.id) : await tourismApi.deactivateMobileContentItem(item.id);
       replaceItem(answer);
-      setNotice(active ? `“${item.title}” was brought back.` : `“${item.title}” was deactivated.`);
+      setNotice(active ? `“${item.title}” was reactivated.` : `“${item.title}” was deactivated.`);
       setWarnings(Array.isArray(answer.warnings) ? answer.warnings : []);
     } catch (failure) {
-      setSwitchError(failure.message || "The card could not be switched.");
+      setSwitchError(failure.message || "The card could not be deactivated or reactivated.");
     } finally {
       setWorking(null);
     }
@@ -379,11 +392,11 @@ export function TravelGuideTab({ cards }) {
                       <button
                         type="button"
                         className="mobile-content-small-button"
-                        aria-label={`${item.is_active ? "Deactivate" : "Bring back"} ${item.title}`}
+                        aria-label={`${item.is_active ? "Deactivate" : "Reactivate"} ${item.title}`}
                         onClick={() => (item.is_active ? setAsking(item.id) : switchCard(item, true))}
                         disabled={working !== null}
                       >
-                        {item.is_active ? "Deactivate" : "Bring back"}
+                        {item.is_active ? "Deactivate" : "Reactivate"}
                       </button>
                     )}
                   </div>

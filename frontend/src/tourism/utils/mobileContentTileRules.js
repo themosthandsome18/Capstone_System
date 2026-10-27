@@ -17,7 +17,7 @@ export const ORDER_MIN = 1;
 export const ORDER_MAX = 9999;
 export const ORDER_STEP = 10;
 
-// the most items a section can hold, the ones switched off counted
+// the most items a section can hold, the ones deactivated counted
 export const MAX_ITEMS_PER_SECTION = 40;
 
 // "hard": the server refuses a longer text. "advised": the server accepts it and answers with a warning, because the app cuts it with "..."
