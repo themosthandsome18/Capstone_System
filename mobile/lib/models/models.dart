@@ -15,6 +15,7 @@ class MobileBootstrap {
     required this.notifications,
     this.isOffline = false,
     this.theme = TourismTheme.none,
+    this.appContent = AppContent.none,
   });
 
   final List<Destination> destinations;
@@ -33,6 +34,9 @@ class MobileBootstrap {
   /// The colour setting from the web admin. Read here, not applied anywhere
   /// yet: see theme/brand_theme.dart.
   final TourismTheme theme;
+
+  /// The texts the web admin edits (Mobile App Content). Read here, not shown anywhere yet: see models/app_content.dart.
+  final AppContent appContent;
 
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
@@ -53,6 +57,7 @@ class MobileBootstrap {
       notifications: parseList(json['notifications'], AppNotification.fromJson),
       isOffline: false,
       theme: TourismTheme.fromJson(json['theme']),
+      appContent: AppContent.fromJson(json['appContent']),
     );
   }
 
