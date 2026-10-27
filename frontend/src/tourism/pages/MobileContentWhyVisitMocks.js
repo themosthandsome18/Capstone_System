@@ -1,4 +1,4 @@
-import { PILLAR_ICONS, hasDetail } from "./MobileContentPillars";
+import { PILLAR_ICONS, hasDetail } from "../utils/mobileContentIcons";
 
 // The two mocks of the live preview of the Why Visit tab (Commit 5g): the tile grid as the app draws it, and the page that opens when a tile that has
 // detail is pressed. Both are drawn from the data the page already holds (the pillars it read, once): which tile has an arrow, the line under the grid,

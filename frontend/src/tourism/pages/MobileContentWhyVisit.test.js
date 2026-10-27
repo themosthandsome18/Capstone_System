@@ -382,14 +382,16 @@ describe("the four pillars", () => {
     expect(within(rows[2]).getByText(SWITCHED_OFF)).toBeTruthy();
     [0, 1, 3].forEach((index) => expect(within(rows[index]).queryByText(SWITCHED_OFF)).toBeNull());
     expect(screen.getByRole("note").textContent).toBe(PILLARS_NOTICE);
-    expect(PILLARS_NOTICE).toMatch(/cannot be edited here yet/);
+    expect(PILLARS_NOTICE).toBe("Ang Edit ang kinalalagyan ng buong impormasyong lumalabas kapag pinindot.");
+    expect(document.body.textContent).not.toMatch(/cannot be edited here yet|upcoming update/);
   });
 
   it("have no form, no Save and nothing to press or type in, and make one GET and nothing else", async () => {
     const { container } = render(<MobileContentPillars />);
     await screen.findByRole("list", { name: PILLARS_HEADING });
     expect(container.querySelectorAll("li")).toHaveLength(4); // the fixture reached the case
-    expect(container.querySelectorAll("form, input, textarea, select, button, a, [contenteditable]")).toHaveLength(0);
+    expect(container.querySelectorAll("form, input, textarea, select, button, [contenteditable]")).toHaveLength(0);
+    expect([...container.querySelectorAll("a")].every((link) => /^\/mobile-content\/tile\?/.test(link.getAttribute("href")))).toBe(true); // only the links to the page of a tile (6d)
     expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
     await settled();
     expect(requests).toEqual([{ method: "GET", path: "/mobile-content/items/?section=why_visit", body: null }]);

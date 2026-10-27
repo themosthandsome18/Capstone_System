@@ -284,8 +284,9 @@ describe("the pillars are in the left column, under the editor", () => {
     expect(card().parentElement.className).toContain("mobile-content-side"); // and the preview is on the other side
     expect(main.contains(card())).toBe(false);
     expect(within(list).getAllByRole("listitem")).toHaveLength(4); // the fixture
-    expect(list.querySelectorAll("form, input, textarea, select, button, a")).toHaveLength(0);
-    expect(within(list).queryByText(/^(Edit|Add pillar)/)).toBeNull();
+    expect(list.querySelectorAll("form, input, textarea, select, button")).toHaveLength(0);
+    expect(within(list).getAllByRole("link", { name: /^Edit / })).toHaveLength(4); // (since 6d) the door to the page of each tile
+    expect(within(list).getByRole("link", { name: "+ Add pillar" })).toBeTruthy();
   });
 });
 

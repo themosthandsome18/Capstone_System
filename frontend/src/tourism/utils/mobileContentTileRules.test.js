@@ -4,7 +4,7 @@
 // Every test says, inside it, that what it read from the backend is not empty (a test that read nothing would compare nothing).
 import fs from "fs";
 import path from "path";
-import { PILLAR_ICONS } from "../pages/MobileContentPillars";
+import { PILLAR_ICONS } from "./mobileContentIcons";
 import {
   ADVISED_LIMITS,
   EDITABLE_FIELDS,

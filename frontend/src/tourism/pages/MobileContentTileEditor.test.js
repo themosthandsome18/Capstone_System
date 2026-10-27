@@ -6,6 +6,9 @@ import path from "path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import MobileContentTileEditor, {
   ADDED_NOTICE,
+  BROUGHT_BACK_NOTICE,
+  OFF_LINE,
+  SWITCHED_OFF_NOTICE,
   BADGE_EMPTY,
   BADGE_FILLED,
   BANNER_NOTE,
@@ -20,7 +23,7 @@ import MobileContentTileEditor, {
   SAVED_NOTICE,
   SHORT_HINT,
 } from "./MobileContentTileEditor";
-import { ICON_TONES, PILLAR_ICONS } from "./MobileContentPillars";
+import { ICON_TONES, PILLAR_ICONS, SWITCHED_OFF } from "./MobileContentPillars";
 import { previewContext, previewParts, previewText } from "../utils/mobileContentPreview";
 import { HARD_LIMITS, ICON_NAMES, ORDER_MAX, ORDER_MIN } from "../utils/mobileContentTileRules";
 import { useAuth } from "../../auth/AuthContext";
@@ -88,6 +91,13 @@ beforeEach(() => {
       });
       found.tappable = Boolean(found.full_text);
       return reply(200, { ...found, warnings: state.warn ? [state.warn] : [] });
+    }
+    const toggle = route.match(/^\/mobile-content\/items\/(\d+)\/(deactivate|reactivate)\/$/);
+    if (method === "POST" && toggle) {
+      const found = items.find((candidate) => candidate.id === Number(toggle[1]));
+      found.is_active = toggle[2] === "reactivate";
+      const warnings = state.warnOff && toggle[2] === "deactivate" ? [state.warnOff] : [];
+      return reply(200, { ...found, warnings });
     }
     if (method === "POST" && route === "/mobile-content/items/") {
       const made = { id: state.nextId++, style: "tile", is_active: true, full_text: "", display_order: 50, icon: "info", ...body };
@@ -1162,6 +1172,146 @@ describe("the live preview", () => {
     await open("?id=13");
     const side = screen.getByLabelText("What the app will show");
     expect(side.textContent).not.toMatch(/nangyayari na|already|sa app ngayon|the app (shows|keeps|will)/i);
+  });
+});
+
+describe("switching a tile off, and bringing it back (6d)", () => {
+  const offButton = () => screen.getByRole("button", { name: "Switch off" });
+  const onButton = () => screen.getByRole("button", { name: "Bring back" });
+
+  it("there is a small button, in the head of the page and far from Save, for a tile that is on; none for a new tile", async () => {
+    const view = await open("?id=12");
+    expect(items[0].is_active).toBe(true); // the fixture
+    const button = offButton();
+    expect(button.className).toBe("mobile-content-small-button");
+    expect(button.closest("form")).toBeNull(); // not in the form, not next to Save
+    expect(button.closest(".reports-header")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Bring back" })).toBeNull();
+    view.unmount();
+    await open("?section=why_visit");
+    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Bring back" })).toBeNull();
+    expect(screen.queryByText(OFF_LINE)).toBeNull();
+  });
+
+  it("says in one line, not in a box, that nothing is deleted: the tile stays and still counts toward the 40", async () => {
+    const { container } = await open("?id=12");
+    const line = screen.getByText(OFF_LINE);
+    expect(OFF_LINE).toBe("No tile is ever deleted: one that is switched off stays here, and it still counts toward the 40 a section can hold.");
+    expect(line.tagName).toBe("SPAN");
+    expect(line.className).toBe("mobile-content-off-line");
+    expect(container.querySelector(".mobile-content-note")).toBeNull(); // not a note box
+    expect(line.closest(".reports-header")).not.toBeNull();
+  });
+
+  it("asks before it switches off, and sends nothing until the person says yes", async () => {
+    await open("?id=12");
+    const before = requests.length;
+    fireEvent.click(offButton());
+    const question = screen.getByRole("alertdialog", { name: "Confirm switching off" });
+    expect(question.textContent).toMatch(/Switch off “Cagbalete Island”\? The app will not show it\. It stays here, and you can bring it back\./);
+    expect(requests.length).toBe(before); // nothing sent yet
+    fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(requests.length).toBe(before);
+    expect(items[0].is_active).toBe(true);
+    expect(screen.queryByTestId("off-mark")).toBeNull();
+  });
+
+  it("sends ONE POST, to the address of that tile, and shows the tile as switched off: the mark, the notice and the new button", async () => {
+    await open("?id=12");
+    const before = requests.length;
+    fireEvent.click(offButton());
+    fireEvent.click(within(screen.getByRole("alertdialog", { name: "Confirm switching off" })).getByRole("button", { name: "Yes, switch off" }));
+    await screen.findByText(SWITCHED_OFF_NOTICE);
+    expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/12/deactivate/", body: null }]); // one POST, and no GET after it
+    expect(items[0].is_active).toBe(false);
+    expect(screen.getByTestId("off-mark").textContent).toBe(SWITCHED_OFF);
+    expect(screen.getByTestId("off-mark").getAttribute("role")).toBe("status");
+    expect(onButton()).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("shows the server's warning when the tile switched off was the last one on in its section", async () => {
+    state.warnOff = "No item of “Why Visit” is shown now, so the app will leave that whole part out.";
+    await open("?id=12");
+    fireEvent.click(offButton());
+    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    const warning = await screen.findByText(state.warnOff);
+    expect(warning.getAttribute("role")).toBe("status");
+  });
+
+  it("keeps what was typed in the form (switching off changes the state of the tile, not its text)", async () => {
+    await open("?id=12");
+    type("Title", "Typed but not saved");
+    fireEvent.click(offButton());
+    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    await screen.findByText(SWITCHED_OFF_NOTICE);
+    expect(field("Title").value).toBe("Typed but not saved");
+    expect(save().disabled).toBe(false);
+    fireEvent.click(save());
+    await screen.findByText(SAVED_NOTICE);
+    expect(writes().map((r) => `${r.method} ${r.path}`)).toEqual(["POST /mobile-content/items/12/deactivate/", "PATCH /mobile-content/items/12/"]);
+  });
+
+  it("a tile that is off is marked as soon as the page opens, with a button to bring it back", async () => {
+    items[0].is_active = false;
+    await open("?id=12");
+    expect(screen.getByTestId("off-mark").textContent).toBe(SWITCHED_OFF);
+    expect(onButton().className).toBe("mobile-content-small-button");
+    expect(screen.queryByRole("button", { name: "Switch off" })).toBeNull();
+  });
+
+  it("brings it back with ONE POST and no question; the mark goes", async () => {
+    items[0].is_active = false;
+    await open("?id=12");
+    const before = requests.length;
+    fireEvent.click(onButton());
+    await screen.findByText(BROUGHT_BACK_NOTICE);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(requests.slice(before)).toEqual([{ method: "POST", path: "/mobile-content/items/12/reactivate/", body: null }]);
+    expect(items[0].is_active).toBe(true);
+    expect(screen.queryByTestId("off-mark")).toBeNull();
+    expect(offButton()).toBeTruthy();
+  });
+
+  it("when the server refuses, says so in its words and leaves the tile as it was", async () => {
+    const words = "Only the system admin can manage the content of the mobile app.";
+    state.failNext = { status: 403, body: { detail: words } };
+    await open("?id=12");
+    fireEvent.click(offButton());
+    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    const alert = await screen.findByText(words);
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(screen.queryByTestId("off-mark")).toBeNull();
+    expect(offButton()).toBeTruthy();
+    expect(items[0].is_active).toBe(true);
+  });
+
+  it("does not send a second request while the first is on its way", async () => {
+    await open("?id=12");
+    let release;
+    const real = global.fetch;
+    global.fetch = jest.fn((url, options = {}) => {
+      if (options.method === "POST") return new Promise((resolve) => (release = () => resolve(real(url, options))));
+      return real(url, options);
+    });
+    fireEvent.click(offButton());
+    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    await settled();
+    expect(screen.getByRole("button", { name: "Switch off" }).disabled).toBe(true);
+    release();
+    await screen.findByText(SWITCHED_OFF_NOTICE);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it("a tile of the Travel Guide is switched with the same two calls", async () => {
+    await open("?id=21");
+    fireEvent.click(offButton());
+    fireEvent.click(screen.getByRole("button", { name: "Yes, switch off" }));
+    await screen.findByText(SWITCHED_OFF_NOTICE);
+    expect(writes().map((r) => r.path)).toEqual(["/mobile-content/items/21/deactivate/"]);
   });
 });
 

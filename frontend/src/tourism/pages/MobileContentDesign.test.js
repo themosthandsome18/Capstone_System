@@ -236,13 +236,16 @@ describe("the Why Visit tab", () => {
     expect(within(card).queryByText(/Ang nakikita sa apat na kahon ay buod lamang/)).toBeNull();
   });
 
-  it("is still a list to read: nothing to type in, no Edit, no Add pillar, no Save in it", async () => {
+  it("is still a list to read: nothing to type in and no Save; the only things to press are the links to the page of a tile (since 6d)", async () => {
     await openTab("why-visit", "Paragraph");
     const card = screen.getByLabelText(PILLARS_HEADING, { selector: "section" });
     await within(card).findByRole("list", { name: PILLARS_HEADING });
     expect(within(card).getAllByRole("listitem")).toHaveLength(4); // the fixture reached the case
-    expect(card.querySelectorAll("form, input, textarea, select, button, a")).toHaveLength(0);
-    expect(within(card).queryByText(/^(Edit|Add pillar|Save)/)).toBeNull();
+    expect(card.querySelectorAll("form, input, textarea, select, button, [contenteditable]")).toHaveLength(0);
+    const links = [...card.querySelectorAll("a")];
+    expect(links).toHaveLength(5); // the fixture: four boxes with an Edit, and the Add pillar
+    links.forEach((link) => expect(link.getAttribute("href")).toMatch(/^\/mobile-content\/tile\?(id=\d+|section=why_visit)$/));
+    expect(within(card).queryByText(/^(Save|Delete|Remove)/)).toBeNull();
   });
 
   it("the four pairs of colours are the design's (line / box), and the four pillars of the database take one each", () => {
