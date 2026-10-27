@@ -2,16 +2,17 @@
 into the seed file of migration 0061 (api/migrations/seed_data/mobile_content_0061.json).
 
 Nothing is typed by hand: every text in the file is a string literal matched in
-mobile/lib/screens/tourism_screens.dart. If the Dart has a shape this script does
-not expect, it stops with an error instead of guessing.
+mobile/lib/screens/tourism_screens.dart, or, for the Welcome and the Why Visit (whose
+texts were MOVED out of the screen in Commit 9b), in mobile/lib/models/app_content_defaults.dart.
+If the Dart has a shape this script does not expect, it stops with an error instead of
+guessing.
 
     python backend/tools/extract_mobile_content_seed.py          # writes the file
     python backend/tools/extract_mobile_content_seed.py --check  # only compares
 
 What it changes on the way (and only this):
-* the greeting: Dart's  'Mabuhay, ${widget.profile.displayName}! ...'  becomes
-  'Mabuhay, {name}! ...'  (the guest form 'Mabuhay, Explorer! ...' is checked to be
-  the same text);
+* the greeting: it is stored as 'Mabuhay, {name}! ...' (the defaults file already writes it
+  so; the screen puts in the visitor's name, or the Explorer for a guest);
 * in the PORT GUIDE only: the two amounts become {fee_regular} and
   {fee_discounted}. The real amounts are filled in by the server later, from the
   one constant the reports use; they are not stored here;
@@ -30,6 +31,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 DART = os.path.join(ROOT, "mobile", "lib", "screens", "tourism_screens.dart")
+DEFAULTS = os.path.join(ROOT, "mobile", "lib", "models", "app_content_defaults.dart")
 OUT = os.path.join(ROOT, "backend", "api", "migrations", "seed_data", "mobile_content_0061.json")
 
 LIT = r"'((?:[^'\\\n]|\\.)*)'"  # one single-quoted Dart string literal on one line
@@ -76,37 +78,36 @@ def texts(chunk):
     return [unescape(m) for m in re.findall(r"Text\(\s*" + LIT, chunk)]
 
 
-def build(src):
-    # -- the welcome banner ------------------------------------------------------
-    greeting = re.search(r"widget\.profile\.isGuest\s*\?\s*" + LIT + r"\s*:\s*" + LIT, src)
-    if not greeting:
-        fail("cannot find the greeting")
-    guest, member = greeting.group(1), greeting.group(2)
-    if "${widget.profile.displayName}" not in member:
-        fail("the greeting no longer uses the display name")
-    template = member.replace("${widget.profile.displayName}", "{name}")
-    if guest.replace("Explorer", "{name}") != template:
-        fail("the guest greeting and the member greeting are no longer the same text")
-    after = src[greeting.end():]
-    welcome_sub = re.search(r"Text\(\s*" + LIT, after)
-    if not welcome_sub:
-        fail("cannot find the welcome text")
-    welcome = {"key": "welcome", "title": unescape(template.replace("{name}", "NAME")).replace("NAME", "{name}"),
-               "subtitle": unescape(welcome_sub.group(1)), "body": ""}
+def build(src, defaults):
+    """`src` is tourism_screens.dart; `defaults` is app_content_defaults.dart (the Welcome and the Why Visit)."""
 
-    # -- Why Visit: introduction and the four pillars ------------------------------
-    highlights = region(src, "class _MaubanTownHighlightsCard", "Widget _buildPillarItem")
-    head = texts(highlights)
-    if len(head) != 3:
-        fail(f"the Why Visit card has {len(head)} texts, expected 3 (title, subtitle, paragraph)")
-    why = {"key": "why_visit", "title": head[0], "subtitle": head[1], "body": head[2]}
+    def constant(name):
+        found = re.search(r"static const " + name + r" = " + LIT + ";", defaults)
+        if not found:
+            fail(f"cannot find {name} in app_content_defaults.dart")
+        return unescape(found.group(1))
 
+    # -- the welcome banner (the defaults file) -----------------------------------
+    title = constant("welcomeTitle")
+    if title.count("{name}") != 1:
+        fail("the greeting no longer has exactly one {name}")
+    welcome = {"key": "welcome", "title": title, "subtitle": constant("welcomeSubtitle"), "body": ""}
+
+    # -- Why Visit: introduction and the four pillars (the defaults file) -----------
+    why = {"key": "why_visit", "title": constant("whyVisitTitle"), "subtitle": constant("whyVisitSubtitle"),
+           "body": constant("whyVisitBody")}
     pillars = re.findall(
-        r"_buildPillarItem\(\s*icon: Icons\.(\w+),\s*title: " + LIT + r",\s*sub: " + LIT + r",\s*color: const Color\((0x[0-9A-Fa-f]+)\)",
-        highlights,
+        r"AppContentItem\(\s*id: -\d+,\s*icon: " + LIT + r",\s*title: " + LIT + r",\s*shortText: " + LIT + r",\s*\),",
+        defaults,
     )
     if len(pillars) != 4:
         fail(f"{len(pillars)} pillars found, expected 4")
+    # the defaults write the NAME that is stored, not a Dart icon: turn it back into the Dart icon the table knows
+    names = {name: dart_icon for dart_icon, name in ICONS.items()}
+    for name, _title, _sub in pillars:
+        if name not in names:
+            fail(f"a pillar with an icon name that is not stored: {name}")
+    pillars = [(names[name], t, sub, None) for name, t, sub in pillars]
 
     # -- the travel guide: heading, four guides (tiles), two notices (banners) ---------
     guide_region = region(src, "class _MaubanTownGuideSection", "class DestinationListPage")
@@ -194,7 +195,8 @@ def build(src):
 
 def main():
     src = open(DART, encoding="utf-8", newline="").read().replace("\r\n", "\n")
-    data = build(src)
+    defaults = open(DEFAULTS, encoding="utf-8", newline="").read().replace("\r\n", "\n")
+    data = build(src, defaults)
     text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
     if "--check" in sys.argv:
         # (a checkout on Windows may turn the line endings into CRLF: the text is what counts)

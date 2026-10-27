@@ -12276,6 +12276,9 @@ class ActivityLogDigestConstraintTests(_BoatFareApiBase, TestCase):
 # -- Mobile App Content, commit 1: the two tables and their seed ----------------------
 
 MOBILE_CONTENT_DART = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "screens" / "tourism_screens.dart"
+# The Welcome and the Why Visit texts were MOVED out of the screen (Commit 9b) into this file; the screen reads them from here. The Travel Guide and the
+# Port & Boat Guide are still in the screen.
+MOBILE_CONTENT_DEFAULTS = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "models" / "app_content_defaults.dart"
 # What the seed's three placeholders stand for in the Dart (the port guide is the only place).
 PORT_FEE_REGULAR = "₱80"
 PORT_FEE_DISCOUNTED = "₱64"
@@ -12430,6 +12433,7 @@ class MobileContentSeedTests(TestCase):
         self.Block.objects.all().delete()
         _mobile_content_module().add_content(django_apps, None)
         self.dart = MOBILE_CONTENT_DART.read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.defaults = MOBILE_CONTENT_DEFAULTS.read_text(encoding="utf-8").replace("\r\n", "\n")
 
     # -- helpers ---------------------------------------------------------------------
 
@@ -12460,7 +12464,19 @@ class MobileContentSeedTests(TestCase):
         ("travel_guide", "banner"): ("InfoBanner", "text"),
     }
 
+    def _dart_source(self, item):
+        """The file the item is written in: the pillars of the Why Visit moved to the defaults (9b)."""
+        return self.defaults if item.section == "why_visit" else self.dart
+
     def _dart_pattern(self, item):
+        if item.section == "why_visit":
+            return re.compile(
+                r"AppContentItem\(\s*id: -\d+,\s*icon: '(\w+)',\s*title: "
+                + re.escape(self._literal(item.title))
+                + r",\s*shortText: "
+                + re.escape(self._literal(self._fee_filled(item.short_text)))
+                + r","
+            )
         name, field = self.CONSTRUCTORS[(item.section, item.style)]
         return re.compile(
             re.escape(name)
@@ -12476,36 +12492,35 @@ class MobileContentSeedTests(TestCase):
     def test_b_every_item_is_in_the_dart_letter_for_letter_with_its_icon(self):
         self.assertEqual(self.Item.objects.count(), 10)
         for item in self.Item.objects.all():
-            match = self._dart_pattern(item).search(self.dart)
+            match = self._dart_pattern(item).search(self._dart_source(item))
             self.assertIsNotNone(match, f"{item.title!r} is not in the Dart as stored")
-            self.assertEqual(MOBILE_CONTENT_ICONS[match.group(1)], item.icon, item.title)
+            # (the defaults write the stored NAME; the screen writes a Dart icon)
+            icon = match.group(1) if item.section == "why_visit" else MOBILE_CONTENT_ICONS[match.group(1)]
+            self.assertEqual(icon, item.icon, item.title)
 
     def test_b_the_dart_has_no_item_that_is_not_stored(self):
-        self.assertEqual(len(re.findall(r"_buildPillarItem\(\s*icon: Icons\.", self.dart)), 4)
+        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", self.defaults)), 4)
         self.assertEqual(len(re.findall(r"_buildGuideTile\(\s*icon: Icons\.", self.dart)), 4)
         self.assertEqual(len(re.findall(r"InfoBanner\(\s*icon: Icons\.", self.dart)), 2)
 
     def test_b_the_welcome_banner_why_visit_and_the_heading_are_in_the_dart(self):
         welcome = self._block("welcome")
         self.assertEqual(welcome.title.count("{name}"), 1)
-        guest = welcome.title.replace("{name}", "Explorer")
-        member = welcome.title.replace("{name}", "${widget.profile.displayName}")
-        self.assertIn(f"? {self._literal(guest)}", self.dart)
-        # (the member form has Dart's own ${...} interpolation, so it is written out here)
-        self.assertIn(": '" + member + "'", self.dart)
+        # (the greeting is written once, with {name}: the screen puts in the visitor's name, or the Explorer for a guest)
+        self.assertIn(f"static const welcomeTitle = {self._literal(welcome.title)};", self.defaults)
         self.assertEqual(welcome.body, "")
-        after_greeting = self.dart[self.dart.index("'" + member + "'"):]
+        after_greeting = self.defaults[self.defaults.index("static const welcomeTitle"):]
         self.assertTrue(
-            re.match(r".*?Text\(\s*" + re.escape(self._literal(welcome.subtitle)), after_greeting, re.S),
+            re.match(r".*?static const welcomeSubtitle = " + re.escape(self._literal(welcome.subtitle)), after_greeting, re.S),
             "the welcome text is not the one that follows the greeting",
         )
         why = self._block("why_visit")
-        region = self.dart[self.dart.index("class _MaubanTownHighlightsCard"):self.dart.index("Widget _buildPillarItem")]
         self.assertTrue(
             re.search(
-                r"Text\(\s*" + re.escape(self._literal(why.title)) + r".*?Text\(\s*" + re.escape(self._literal(why.subtitle))
-                + r".*?Text\(\s*" + re.escape(self._literal(why.body)),
-                region,
+                r"static const whyVisitTitle = " + re.escape(self._literal(why.title))
+                + r".*?static const whyVisitSubtitle = " + re.escape(self._literal(why.subtitle))
+                + r".*?static const whyVisitBody = " + re.escape(self._literal(why.body)),
+                self.defaults,
                 re.S,
             ),
             "Why Visit: title, subtitle and paragraph are not in this order in the Dart",
@@ -12554,7 +12569,8 @@ class MobileContentSeedTests(TestCase):
         # tiles and pillars: the order they are written in the Dart
         for section, style in (("why_visit", "tile"), ("travel_guide", "tile"), ("travel_guide", "banner")):
             items = list(self.Item.objects.filter(section=section, style=style).order_by("display_order", "id"))
-            positions = [self.dart.index("title: " + self._literal(i.title)) for i in items]
+            source = self.defaults if section == "why_visit" else self.dart
+            positions = [source.index("title: " + self._literal(i.title)) for i in items]
             self.assertEqual(positions, sorted(positions), (section, style))
         orders = [i.display_order for i in self.Item.objects.filter(section="travel_guide").order_by("display_order")]
         self.assertEqual(len(set(orders)), 6)
