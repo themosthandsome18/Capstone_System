@@ -307,9 +307,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 10),
               Text(
-                widget.profile.isGuest
-                    ? 'Mabuhay, Explorer! 🌊'
-                    : 'Mabuhay, ${widget.profile.displayName}! 🌊',
+                state.appContent.text(
+                  'welcome',
+                  'title',
+                  AppContentDefaults.welcomeTitle,
+                  name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+                ),
                 style: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w900,
@@ -319,7 +322,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Welcome to the historic jewel of Lamon Bay — home to the white sandbars of Cagbalete Island, cascading waterfalls, and world-class Buntal weaving craftsmanship.',
+                state.appContent.text(
+                  'welcome',
+                  'subtitle',
+                  AppContentDefaults.welcomeSubtitle,
+                  name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+                ),
                 style: TextStyle(
                   color: context.brand.border,
                   fontSize: 12.5,
@@ -437,7 +445,10 @@ class _HomePageState extends State<HomePage> {
           ],
 
           // Section: Discover the Beauty & Heritage of Mauban
-          const _MaubanTownHighlightsCard(),
+          _MaubanTownHighlightsCard(
+            content: state.appContent,
+            name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+          ),
           const SizedBox(height: 24),
 
           // Section: Hidden Gems & Peaceful Stays (Promoting lesser-known resorts)
@@ -795,10 +806,15 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
 
 /// Highlight Card introducing the beauty and culture of Mauban
 class _MaubanTownHighlightsCard extends StatelessWidget {
-  const _MaubanTownHighlightsCard();
+  const _MaubanTownHighlightsCard({required this.content, required this.name});
+
+  /// The texts of the web admin, or [AppContent.none]: each part is the server's when the app can show it and the code's when it cannot.
+  final AppContent content;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
+    final pillars = content.whyVisitItems(AppContentDefaults.whyVisitItems, name: name);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -827,17 +843,17 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
                 child: Icon(Icons.stars_rounded, color: context.brand.deep, size: 22),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Why Visit Mauban, Quezon?',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                      content.text('why_visit', 'title', AppContentDefaults.whyVisitTitle, name: name),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
                     ),
                     Text(
-                      'The historic coastal sanctuary of southern Luzon',
-                      style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+                      content.text('why_visit', 'subtitle', AppContentDefaults.whyVisitSubtitle, name: name),
+                      style: const TextStyle(color: AppColors.muted, fontSize: 11.5),
                     ),
                   ],
                 ),
@@ -845,57 +861,33 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Nestled along the Pacific coast of Lamon Bay, Mauban boasts powdery white sandbars with expansive tidal ripples, centuries-old ancestral trees, cascading mountain pools, and a proud cultural identity shaped by Gat Uban and palm artisans.',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
+          Text(
+            content.text('why_visit', 'body', AppContentDefaults.whyVisitBody, name: name),
+            style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
           ),
           const SizedBox(height: 16),
-          // 4 Grid Highlight Pillars
-          Row(
-            children: [
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.beach_access,
-                  title: 'Cagbalete Island',
-                  sub: 'Pristine Sandbars',
-                  color: const Color(0xFF0284C7),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.workspace_premium,
-                  title: 'Buntal Weaving',
-                  sub: 'Artisan Hats & Crafts',
-                  color: const Color(0xFFD97706),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.water_drop,
-                  title: 'Forest Cascades',
-                  sub: 'Dahican & Alitap Falls',
-                  color: const Color(0xFF059669),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.restaurant_menu,
-                  title: 'Quezon Flavors',
-                  sub: 'Habhab & Fresh Seafood',
-                  color: const Color(0xFFDC2626),
-                ),
-              ),
-            ],
-          ),
+          // The pillars: two to a row, as many as the list has (the server decides; the code's four when it sends none). A last pillar alone
+          // takes the left half.
+          for (var i = 0; i < pillars.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _pillar(pillars[i])),
+                const SizedBox(width: 8),
+                Expanded(child: i + 1 < pillars.length ? _pillar(pillars[i + 1]) : const SizedBox.shrink()),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _pillar(AppContentItem item) {
+    final drawn = appContentIconFor(item.icon);
+    return KeyedSubtree(
+      key: ValueKey('pillar-${item.id}'),
+      child: _buildPillarItem(icon: drawn.icon, title: item.title, sub: item.shortText, color: drawn.color),
     );
   }
 

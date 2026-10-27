@@ -172,6 +172,9 @@ class TourismBootstrapState {
   List<Destination> get featuredDestinations =>
       data?.featuredDestinations ?? const [];
   List<AppNotification> get notifications => data?.notifications ?? const [];
+
+  /// The texts of the web admin; [AppContent.none] until loaded, so a screen that has none shows the texts written in the code.
+  AppContent get appContent => data?.appContent ?? AppContent.none;
 }
 
 /// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the

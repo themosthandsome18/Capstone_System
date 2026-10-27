@@ -39,6 +39,7 @@ part 'utils/helpers.dart';
 part 'utils/export_helpers.dart';
 part 'models/models.dart';
 part 'models/app_content.dart';
+part 'models/app_content_defaults.dart';
 part 'services/api.dart';
 part 'widgets/widgets.dart';
 part 'widgets/tourism_loading_screen.dart';
