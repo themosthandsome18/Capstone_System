@@ -73,12 +73,18 @@ describe("the page", () => {
     expect(screen.getByRole("tablist").getAttribute("aria-label")).toBe("Mobile app content");
   });
 
-  it("opens on the Emergency Hotlines when the address names no tab, and asks for the contacts once", async () => {
+  it("opens on the Welcome when the address names no tab, and does NOT ask for the contacts until the Hotlines tab is opened", async () => {
     render(<MobileAppContent />);
-    expect(selected().map(labelOf)).toEqual(["Emergency Hotlines"]);
-    await screen.findByRole("list");
-    expect(requests().map((r) => `${r.method} ${r.path}`)).toEqual(["GET /emergency-contacts/"]);
+    expect(selected().map(labelOf)).toEqual(["Welcome"]);
+    await screen.findByLabelText("Greeting");
+    await settled();
+    expect(blockRequests).toEqual(["GET /mobile-content/blocks/"]); // the Welcome asked for its block
+    expect(requests()).toEqual([]); // the fixture: the fake of the contacts has seen nothing
+    expect(global.fetch.mock.calls.some(([url]) => url.includes("emergency-contacts"))).toBe(false);
     expect(router.__changes()).toEqual([]); // nothing was written into the address just by opening
+    fireEvent.click(tab("Emergency Hotlines"));
+    await screen.findByRole("list");
+    expect(requests().map((r) => `${r.method} ${r.path}`)).toEqual(["GET /emergency-contacts/"]); // now, and once
   });
 
   it("marks the two tabs that are not built with Coming soon, and not the Welcome, the Why Visit or the Hotlines", async () => {
@@ -127,12 +133,13 @@ describe("the tab is in the address", () => {
     expect(selected().map(labelOf)).toEqual(["Port & Boat Guide"]);
   });
 
-  it("puts right an address that names a tab that does not exist: shows the Hotlines and corrects it in place", async () => {
+  it("puts right an address that names a tab that does not exist: shows the Welcome and corrects it in place", async () => {
     for (const bad of ["?tab=nope", "?tab=", "?tab=Hotlines", "?tab=welcome%20"]) {
       router.__setSearch(bad);
       const { unmount } = render(<MobileAppContent />);
-      expect(selected().map(labelOf)).toEqual(["Emergency Hotlines"]);
-      await waitFor(() => expect(router.__changes()).toEqual([{ search: "tab=hotlines", options: { replace: true } }]));
+      expect(selected().map(labelOf)).toEqual(["Welcome"]);
+      await waitFor(() => expect(router.__changes()).toEqual([{ search: "tab=welcome", options: { replace: true } }]));
+      await screen.findByLabelText("Greeting");
       unmount();
     }
   });
@@ -266,9 +273,11 @@ describe("the Welcome tab", () => {
     await settled();
   });
 
-  it("is not the tab the page opens on: that is still the Hotlines", async () => {
+  it("is the tab the page opens on (since 5f), and the Hotlines tab is not", async () => {
     render(<MobileAppContent />);
     await settled();
-    expect(selected().map(labelOf)).toEqual(["Emergency Hotlines"]);
+    expect(selected().map(labelOf)).toEqual(["Welcome"]);
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1); // the fixture: one tab is shown
+    expect(document.querySelector("#mobile-content-panel-hotlines")).toBeNull(); // the Hotlines are not even mounted
   });
 });

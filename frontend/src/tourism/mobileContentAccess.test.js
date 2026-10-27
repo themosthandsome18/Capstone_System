@@ -51,8 +51,9 @@ describe("Mobile App Content access and tabs", () => {
     ]);
   });
 
-  test("the tab that opens by itself is the Hotlines, and it is a tab that is built", () => {
-    expect(DEFAULT_MOBILE_CONTENT_TAB).toBe("hotlines");
+  test("the tab that opens by itself is the Welcome (since 5f), and it is a tab that is built", () => {
+    expect(DEFAULT_MOBILE_CONTENT_TAB).toBe("welcome");
+    expect(MOBILE_CONTENT_TABS[0].key).toBe("welcome"); // the first of the five
     expect(MOBILE_CONTENT_TABS.find((tab) => tab.key === DEFAULT_MOBILE_CONTENT_TAB).ready).toBe(true);
   });
 

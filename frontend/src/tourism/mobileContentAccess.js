@@ -19,9 +19,9 @@ export const MOBILE_CONTENT_TABS = [
   { key: "hotlines", label: "Emergency Hotlines", ready: true },
 ];
 
-// The tab that opens when the address names none. It is the only one that works, so it is the one the admin lands
-// on; when the first real tab is built, this moves to "welcome" (a decision of the owner).
-export const DEFAULT_MOBILE_CONTENT_TAB = "hotlines";
+// The tab that opens when the address names none: the Welcome, the first of the five (a decision of the owner, 5f). Nothing that has
+// to open the Hotlines relies on this: the old address /hotlines is sent to ?tab=hotlines (tabPath("hotlines")), tab named.
+export const DEFAULT_MOBILE_CONTENT_TAB = "welcome";
 
 export const tabPath = (key) => `${MOBILE_CONTENT_PATH}?tab=${key}`;
 
