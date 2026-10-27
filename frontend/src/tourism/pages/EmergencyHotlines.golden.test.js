@@ -10,6 +10,8 @@ import { SCENARIO_NAMES, runScenarios } from "./hotlinesGolden.helpers";
 import golden from "./golden/emergency-hotlines-before-split-552c048.json";
 import { useAuth } from "../../auth/AuthContext";
 
+const router = require("../testing/routerStub");
+
 jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual: true });
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
@@ -17,7 +19,10 @@ jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 configure({ asyncUtilTimeout: 5000 });
 const LONG = 120000;
 
-beforeEach(() => useAuth.mockReturnValue({ role: "admin" }));
+beforeEach(() => {
+  router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
+  useAuth.mockReturnValue({ role: "admin" });
+});
 
 describe("the Emergency Hotlines, as a tab of Mobile App Content, against the golden of the old page", () => {
   it("has the scenarios it was taken with, each with something recorded", () => {

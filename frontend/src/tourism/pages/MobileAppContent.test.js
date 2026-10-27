@@ -147,6 +147,7 @@ describe("the tab is in the address", () => {
 
 describe("the two tabs that are not built", () => {
   it("say it is not available yet, without the word commit, and ask the server for NOTHING", async () => {
+    router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
     await screen.findByRole("list");
     const before = requests().length;
@@ -177,6 +178,7 @@ describe("the two tabs that are not built", () => {
 
 describe("the tabs keep what they show", () => {
   it("the Hotlines are not asked for again, and a form that was open is still open with what was typed", async () => {
+    router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
     await screen.findByRole("list");
     fireEvent.click(screen.getByRole("button", { name: /Add contact/ }));
@@ -189,6 +191,7 @@ describe("the tabs keep what they show", () => {
   });
 
   it("only the shown tab is a tabpanel you can reach; the others are hidden", async () => {
+    router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
     await screen.findByRole("list");
     fireEvent.click(tab("Port & Boat Guide"));
@@ -217,6 +220,7 @@ describe("who may open it", () => {
   });
 
   it("stops showing the page when the role is lost while it is open", async () => {
+    router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     const view = render(<MobileAppContent />);
     await screen.findByRole("list");
     useAuth.mockReturnValue({ role: "tourism" });
@@ -228,6 +232,7 @@ describe("who may open it", () => {
 
 describe("the Welcome tab", () => {
   it("asks for the blocks once, when it is first opened, and never for the Hotlines", async () => {
+    router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
     await settled();
     expect(blockRequests).toEqual([]); // the page opens on the Hotlines: the Welcome has asked for nothing
