@@ -259,6 +259,13 @@ function isBackendValidationError(error) {
   return Boolean(error?.status);
 }
 
+// The id of an item as it goes into an address: a whole number from 1 up. Anything else is a mistake of the caller, not of the server.
+function itemId(id) {
+  const number = typeof id === "string" && /^[0-9]+$/.test(id) ? Number(id) : id;
+  if (!Number.isInteger(number) || number < 1) throw new TypeError("the id of an item must be a whole number from 1");
+  return number;
+}
+
 // A write of a Mobile App Content block that the server will only accept after a confirmation (it takes a fee placeholder out of
 // a text, so visitors would no longer be told that amount or where to pay it) is answered 409 with code "confirm_required" and
 // the list of the placeholders that would be dropped. This returns { dropped, message } for exactly that answer, and null for
@@ -523,10 +530,41 @@ export const tourismApi = {
     return apiRequest("/mobile-content/blocks/");
   },
 
-  // The items of one section of Mobile App Content (admin), read only here: the four pillars of Why Visit are the items of the section
-  // "why_visit". Nothing writes to them from this page yet.
+  // The items of Mobile App Content (admin): the pillars of Why Visit ("why_visit") and the cards of the Travel Guide ("travel_guide"). The list
+  // is every item of the section, the ones switched off too, in the order the app shows them; with no section, every item of both.
+  // There is no call for ONE item, and there is no delete: an item is switched off (deactivate) and brought back (reactivate).
+  // Every write answers with the item as the server now holds it, with "warnings". An edit sends only the fields that changed; one that
+  // takes a fee placeholder out of a text is refused with 409 confirm_required (see blockConfirmRequired): send it again with the list of
+  // the names in `confirmDropped`.
   async getMobileContentItems(section) {
-    return apiRequest(`/mobile-content/items/?section=${encodeURIComponent(section)}`);
+    const query = section === undefined ? "" : `?section=${encodeURIComponent(section)}`;
+    return apiRequest(`/mobile-content/items/${query}`);
+  },
+
+  // `values`: section and title and short_text (needed), and icon, full_text, display_order (the server puts the item at the end when it
+  // is left out). Only the keys that are given are sent.
+  async createMobileContentItem(values) {
+    return apiRequest("/mobile-content/items/", { method: "POST", body: JSON.stringify({ ...values }) });
+  },
+
+  async updateMobileContentItem(id, changes, confirmDropped) {
+    if (confirmDropped !== undefined && !Array.isArray(confirmDropped)) {
+      throw new TypeError("confirmDropped must be the list of placeholder names the server asked about");
+    }
+    if (changes && Object.prototype.hasOwnProperty.call(changes, "confirm_dropped")) {
+      throw new TypeError("the confirmation goes in the third argument, not among the changes");
+    }
+    const body = { ...changes };
+    if (confirmDropped !== undefined) body.confirm_dropped = [...confirmDropped];
+    return apiRequest(`/mobile-content/items/${itemId(id)}/`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  async deactivateMobileContentItem(id) {
+    return apiRequest(`/mobile-content/items/${itemId(id)}/deactivate/`, { method: "POST" });
+  },
+
+  async reactivateMobileContentItem(id) {
+    return apiRequest(`/mobile-content/items/${itemId(id)}/reactivate/`, { method: "POST" });
   },
 
   async updateMobileContentBlock(key, changes, confirmDropped) {
