@@ -9,6 +9,7 @@ import {
 } from "../mobileContentAccess";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
+import { AddCardButton, TravelGuideTab, useCards } from "./MobileContentCardsTab";
 import { PillarsView, usePillars } from "./MobileContentPillars";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
@@ -33,7 +34,7 @@ function WhyVisitTab() {
   );
 }
 
-function TabPanel({ tab }) {
+function TabPanel({ tab, cards }) {
   if (tab.key === "hotlines") return <EmergencyHotlinesPanel />;
   if (tab.key === "welcome") {
     return (
@@ -52,6 +53,7 @@ function TabPanel({ tab }) {
     );
   }
   if (tab.key === "why-visit") return <WhyVisitTab />;
+  if (tab.key === "travel-guide") return <TravelGuideTab cards={cards} />;
   // A tab whose editor does not exist yet: a message, and no request to the server.
   return (
     <div className="hotlines-notices" role="note" aria-label={`${tab.label}: not available yet`}>
@@ -69,6 +71,8 @@ export default function MobileAppContent() {
   // another is shown), so coming back to it shows what it showed: no second request, and what was typed is still there.
   const [opened, setOpened] = useState(() => new Set([tab]));
   const allowed = canManageMobileContent(role);
+  // The cards of the Travel Guide are read once, when that tab is first opened; the header (the Add button), the list and the preview share them.
+  const cards = useCards(allowed && (opened.has("travel-guide") || tab === "travel-guide"));
 
   // An address that names a tab that does not exist is put right (in place: Back does not return to it).
   useEffect(() => {
@@ -97,6 +101,7 @@ export default function MobileAppContent() {
             Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.
           </p>
         </div>
+        {tab === "travel-guide" ? <AddCardButton cards={cards} /> : null}
       </div>
 
       <div className="report-tabs mobile-content-tabs" role="tablist" aria-label="Mobile app content">
@@ -127,7 +132,7 @@ export default function MobileAppContent() {
             aria-labelledby={`mobile-content-tab-${item.key}`}
             hidden={item.key !== tab}
           >
-            <TabPanel tab={item} />
+            <TabPanel tab={item} cards={cards} />
           </div>
         ) : null
       )}

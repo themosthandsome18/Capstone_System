@@ -11,7 +11,7 @@ jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual:
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
 const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines"];
-const NOT_BUILT = ["Travel Guide & Tips", "Port & Boat Guide"]; // (the Welcome has its editor since 5b, the Why Visit since 5d)
+const NOT_BUILT = ["Port & Boat Guide"]; // (the Welcome has its editor since 5b, the Why Visit since 5d, the Travel Guide since 7a)
 const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines"];
 
 // The Welcome tab asks for the blocks; a fake answers it, and the Hotlines are answered by their own fake, as before.
@@ -87,7 +87,7 @@ describe("the page", () => {
     expect(requests().map((r) => `${r.method} ${r.path}`)).toEqual(["GET /emergency-contacts/"]); // now, and once
   });
 
-  it("marks the two tabs that are not built with Coming soon, and not the Welcome, the Why Visit or the Hotlines", async () => {
+  it("marks the tab that is not built with Coming soon, and not the Welcome, the Why Visit, the Travel Guide or the Hotlines", async () => {
     render(<MobileAppContent />);
     await settled();
     NOT_BUILT.forEach((label) => expect(tab(label).textContent).toContain("Coming soon"));
@@ -152,7 +152,7 @@ describe("the tab is in the address", () => {
   });
 });
 
-describe("the two tabs that are not built", () => {
+describe("the tab that is not built", () => {
   it("say it is not available yet, without the word commit, and ask the server for NOTHING", async () => {
     router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
@@ -170,7 +170,7 @@ describe("the two tabs that are not built", () => {
   });
 
   it("send no request at all when the page is opened on one of them", async () => {
-    for (const key of ["travel-guide", "port-guide"]) {
+    for (const key of ["port-guide"]) {
       router.__setSearch(`?tab=${key}`);
       server.requests.length = 0;
       const { unmount } = render(<MobileAppContent />);
