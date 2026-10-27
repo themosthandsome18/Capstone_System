@@ -5672,3 +5672,110 @@
 .mobile-content-page .mobile-content-tile-form .tourist-record-save:disabled {
   opacity: 0.55;
 }
+
+/* the page of a tile: the form on the left, the live preview on the right, sticky (Commit 6c) */
+.mobile-content-tile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .mobile-content-tile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-content-page .mobile-content-tile-side {
+    position: static;
+  }
+}
+
+.mobile-content-page .mobile-content-tile-side {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  min-width: 0;
+}
+
+.mobile-content-page .mobile-content-tile-preview .mobile-content-live-note {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-mock-label {
+  margin: 16px 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8fa0a8;
+}
+
+.mobile-content-home-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid #e8eff2;
+  border-radius: 13px;
+  background: var(--th-surface);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-home-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.mobile-content-home-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-content-home-body strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--th-text-main);
+}
+
+.mobile-content-home-body span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #5e6f77;
+}
+
+.mobile-content-home-chevron {
+  flex: none;
+  align-self: center;
+}
+
+.mobile-content-detail-dashed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 20px 14px;
+  border: 1px dashed #d5e2e8;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7c8a92;
+  white-space: normal;
+}

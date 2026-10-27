@@ -10,13 +10,19 @@ import MobileContentTileEditor, {
   BADGE_FILLED,
   BANNER_NOTE,
   BAD_ADDRESS,
+  FEE_NOTE,
   FULL_HINT,
+  HOME_LABEL,
   NOT_FOUND,
+  OFFICE_NOTE,
+  PREVIEW_SUBTITLE,
+  PREVIEW_TITLE,
   SAVED_NOTICE,
   SHORT_HINT,
 } from "./MobileContentTileEditor";
 import { ICON_TONES, PILLAR_ICONS } from "./MobileContentPillars";
-import { HARD_LIMITS, ICON_NAMES, ORDER_MAX, ORDER_MIN, ORDER_STEP } from "../utils/mobileContentTileRules";
+import { previewContext, previewParts, previewText } from "../utils/mobileContentPreview";
+import { HARD_LIMITS, ICON_NAMES, ORDER_MAX, ORDER_MIN } from "../utils/mobileContentTileRules";
 import { useAuth } from "../../auth/AuthContext";
 
 const router = require("../testing/routerStub");
@@ -54,7 +60,14 @@ beforeEach(() => {
     const route = url.replace(/^.*\/api/, "");
     const body = options.body ? JSON.parse(options.body) : null;
     requests.push({ method, path: route, body });
-    if (method === "GET" && route === "/mobile-content/blocks/") return reply(200, { blocks: [], fee: { regular: 80, discounted: 64 }, placeholders: FEE_NOTES });
+    if (method === "GET" && route === "/mobile-content/blocks/") {
+      const blocks = state.office ? [{ key: "fee_office", title: "", subtitle: "", body: state.office }] : [];
+      return reply(200, { blocks, ...(state.noFee ? {} : { fee: { regular: 80, discounted: 64 } }), placeholders: FEE_NOTES });
+    }
+    if (state.failCheck && method === "GET" && /^\/mobile-content\/items\/\?section=/.test(route)) {
+      state.failCheck = false;
+      return Promise.reject(new TypeError("Failed to fetch"));
+    }
     if (method === "GET" && route === "/mobile-content/items/") return reply(200, items);
     const listed = route.match(/^\/mobile-content\/items\/\?section=(\w+)$/);
     if (method === "GET" && listed) return reply(200, items.filter((candidate) => candidate.section === listed[1]));
@@ -288,7 +301,12 @@ describe("the second and the third box", () => {
     expect(screen.getByText(FULL_HINT)).toBeTruthy();
     expect(FULL_HINT).toBe("Kapag blangko ito, hindi napipindot ang tile — teksto lang, gaya ng dati. Lumalabas lang ang arrow kapag may laman.");
     expect(screen.getByTestId("full-badge").className).toBe("mobile-content-tag");
-    expect(screen.getByTestId("full-badge").getAttribute("data-detail")).toBe("yes"); // the green one
+    expect(items[0].full_text).toBe(""); // the fixture: this tile has no full text, so the badge is the neutral one (it was always green before 6c)
+    expect(screen.getByTestId("full-badge").getAttribute("data-detail")).toBe("no");
+    type(FULL, "Now there is a text.");
+    expect(screen.getByTestId("full-badge").getAttribute("data-detail")).toBe("yes"); // the green one, for a tile that can be pressed
+    type(FULL, "");
+    expect(screen.getByTestId("full-badge").getAttribute("data-detail")).toBe("no");
   });
 
   it("the badge says whether the full text has anything (a text of only spaces has nothing)", async () => {
@@ -375,15 +393,15 @@ describe("Enter", () => {
 });
 
 describe("the position (Order)", () => {
-  it("is a number box from 1 to 9999 in steps of 10, 160 wide, with the tile's own number", async () => {
+  it("is a number box from 1 to 9999 in steps of 1 (the 10 of the server is where a new tile goes, not a step of the spinner), with the tile's own number", async () => {
     await open("?id=13");
     const order = field("Order");
     expect(order.tagName).toBe("INPUT");
     expect(order.type).toBe("number");
-    expect([order.min, order.max, order.step]).toEqual([String(ORDER_MIN), String(ORDER_MAX), String(ORDER_STEP)]);
-    expect([order.min, order.max, order.step]).toEqual(["1", "9999", "10"]);
+    expect([order.min, order.max, order.step]).toEqual([String(ORDER_MIN), String(ORDER_MAX), "1"]);
+    expect([order.min, order.max, order.step]).toEqual(["1", "9999", "1"]);
     expect(order.value).toBe("20"); // the fixture: the tile's own position
-    expect(document.querySelector("form").noValidate).toBe(true); // the browser does not judge the steps (they start at 1, and 10 is a good number)
+    expect(document.querySelector("form").noValidate).toBe(true); // the page says what is wrong, in one place; the browser's own bubble would speak its own language
   });
 
   it("does not accept 0, or a number over 9999, or a fraction, or a negative one: it says so and keeps Save closed", async () => {
@@ -532,7 +550,11 @@ describe("saving an edit", () => {
     type(FULL, "A text.");
     fireEvent.click(save());
     await screen.findByText(SAVED_NOTICE);
-    expect(requests.slice(before)).toEqual([{ method: "PATCH", path: "/mobile-content/items/12/", body: { title: "Cagbalete", full_text: "A text." } }]);
+    // (since 6c the page looks once more at the items before it sends, to see whether someone else changed the tile: one GET, then the PATCH)
+    expect(requests.slice(before)).toEqual([
+      { method: "GET", path: "/mobile-content/items/?section=why_visit", body: null },
+      { method: "PATCH", path: "/mobile-content/items/12/", body: { title: "Cagbalete", full_text: "A text." } },
+    ]);
     expect(requests.some((r) => r.path.includes("emergency-contacts"))).toBe(false);
   });
 
@@ -586,7 +608,7 @@ describe("what is sent is the text as the server will clean it", () => {
     fireEvent.click(save());
     await screen.findByText(SAVED_NOTICE);
     expect(writes().map((r) => r.body)).toEqual([{ title: "spaced title", short_text: "a line here", full_text: "first\n\nsecond" }]);
-    expect(requests.length).toBe(3); // the fixture: the two GETs and this one PATCH
+    expect(requests.length).toBe(4); // the fixture: the two GETs, the look at the items, and this one PATCH
   });
 
   it("a text that only differs by spaces from the one the server holds is not a change", async () => {
@@ -794,7 +816,9 @@ describe("nothing else is asked, and nothing of the other pages is touched", () 
     expect(requests.map((r) => `${r.method} ${r.path}`)).toEqual([
       "GET /mobile-content/items/",
       "GET /mobile-content/blocks/",
-      "PATCH /mobile-content/items/12/",
+      "GET /mobile-content/items/?section=why_visit", // the look before the first PATCH
+      "PATCH /mobile-content/items/12/", // refused: it needs a confirmation
+      "GET /mobile-content/items/?section=why_visit", // and again before the PATCH that confirms
       "PATCH /mobile-content/items/12/",
     ]);
     expect(requests.some((r) => /emergency-contacts|bootstrap|reference/.test(r.path))).toBe(false);
@@ -809,6 +833,335 @@ describe("nothing else is asked, and nothing of the other pages is touched", () 
     await open("?id=13");
     const text = document.body.textContent;
     expect(text).not.toMatch(/nangyayari na|already works|sa app ngayon/i);
+  });
+});
+
+describe("someone else changed the tile while this page was open (the check before the PATCH)", () => {
+  it("looks at the items of the section once more before it sends, and sends when nobody changed what I changed", async () => {
+    await open("?id=12");
+    const before = requests.length;
+    type("Title", "Mine");
+    fireEvent.click(save());
+    await screen.findByText(SAVED_NOTICE);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual(["GET /mobile-content/items/?section=why_visit", "PATCH /mobile-content/items/12/"]);
+    expect(requests.slice(before)[1].body).toEqual({ title: "Mine" });
+  });
+
+  it("sends when the other person changed ANOTHER field than the ones I changed", async () => {
+    await open("?id=12");
+    items[0].short_text = "Changed by someone else";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    await screen.findByText(SAVED_NOTICE);
+    expect(writes().map((r) => r.body)).toEqual([{ title: "Mine" }]);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("says so, and does not send, when the other person changed what I changed: what it says now, and what mine says", async () => {
+    await open("?id=12");
+    items[0].title = "Changed elsewhere";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    const question = await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    expect(items[0].title).not.toBe("Cagbalete Island"); // the fixture: the server holds another title than the one this page opened with
+    expect(within(question).getByText(/Someone else changed the title since you opened it\. It now says: “Changed elsewhere” Yours says: “Mine”/)).toBeTruthy();
+    expect(writes()).toEqual([]);
+    expect(save().disabled).toBe(true); // Save is closed while the question is there
+    fireEvent.keyDown(field("Title"), { key: "Enter" });
+    fireEvent.submit(document.querySelector("form"));
+    await settled();
+    expect(writes()).toEqual([]);
+    expect(field("Title").value).toBe("Mine"); // what was typed stays
+  });
+
+  it("does not promise: it says the check is not a guarantee, and nothing on the page says it is", async () => {
+    await open("?id=12");
+    items[0].title = "Changed elsewhere";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    const question = await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    expect(within(question).getByText("This check is not a guarantee: it cannot see a change made at the very moment you save.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/guaranteed|garantisado|no one else|walang ibang/i);
+  });
+
+  it("names every field that clashed: the title, the position and the icon", async () => {
+    await open("?id=12");
+    items[0].title = "T2";
+    items[0].display_order = 70;
+    items[0].icon = "food";
+    type("Title", "Mine");
+    type("Order", "15");
+    fireEvent.click(screen.getByRole("radio", { name: "boat" }));
+    fireEvent.click(save());
+    const question = await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    expect(within(question).getByText(/changed the title since you opened it\. It now says: “T2” Yours says: “Mine”/)).toBeTruthy();
+    expect(within(question).getByText(/changed the position since you opened it\. It now says: “70” Yours says: “15”/)).toBeTruthy();
+    expect(within(question).getByText(/changed the icon since you opened it\. It now says: “food” Yours says: “boat”/)).toBeTruthy();
+    expect(writes()).toEqual([]);
+  });
+
+  it("Keep editing: closes the question, keeps what I changed, brings the rest up to date, and the next Save sends only mine", async () => {
+    await open("?id=12");
+    items[0].title = "Changed elsewhere";
+    items[0].short_text = "Also changed elsewhere";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    const question = await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    fireEvent.click(within(question).getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(field("Title").value).toBe("Mine");
+    expect(field(SHORT).value).toBe("Also changed elsewhere"); // not mine: it is what the server holds now
+    expect(writes()).toEqual([]);
+    expect(save().disabled).toBe(false);
+    fireEvent.click(save());
+    await screen.findByText(SAVED_NOTICE);
+    expect(writes().map((r) => r.body)).toEqual([{ title: "Mine" }]);
+  });
+
+  it("Save my text anyway: sends my change without looking again", async () => {
+    await open("?id=12");
+    items[0].title = "Changed elsewhere";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    const question = await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    const before = requests.length;
+    fireEvent.click(within(question).getByRole("button", { name: "Save my text anyway" }));
+    await screen.findByText(SAVED_NOTICE);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual(["PATCH /mobile-content/items/12/"]);
+    expect(writes().map((r) => r.body)).toEqual([{ title: "Mine" }]);
+  });
+
+  it("typing closes the question (it was about the old text)", async () => {
+    await open("?id=12");
+    items[0].title = "Changed elsewhere";
+    type("Title", "Mine");
+    fireEvent.click(save());
+    await screen.findByRole("alertdialog", { name: "Someone else changed this tile" });
+    type("Title", "Mine again");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("does not send, and says why, when the page cannot look (the server cannot be reached)", async () => {
+    await open("?id=12");
+    state.failCheck = true;
+    type("Title", "Mine");
+    fireEvent.click(save());
+    const alert = await screen.findByText(/Your change was not saved, because this page could not check whether someone else changed the tile\./);
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(writes()).toEqual([]);
+    expect(field("Title").value).toBe("Mine");
+    expect(save().disabled).toBe(false); // it can be tried again
+  });
+
+  it("says that the tile does not exist when it is gone from the list at the moment of the check", async () => {
+    await open("?id=12");
+    items.splice(0, 1);
+    expect(items.some((candidate) => candidate.id === 12)).toBe(false); // the fixture
+    type("Title", "Mine");
+    fireEvent.click(save());
+    expect(await screen.findByText(NOT_FOUND)).toBeTruthy();
+    expect(writes()).toEqual([]);
+  });
+
+  it("is not made for a new tile (nothing to compare with): one POST and no look", async () => {
+    await open("?section=why_visit");
+    const before = requests.length;
+    type("Title", "Fresh");
+    type(SHORT, "A line");
+    fireEvent.click(save());
+    await screen.findByText(ADDED_NOTICE);
+    expect(requests.slice(before).map((r) => `${r.method} ${r.path}`)).toEqual(["POST /mobile-content/items/"]);
+  });
+
+  it("a nothing-changed edit makes no look and no send", async () => {
+    await open("?id=12");
+    const before = requests.length;
+    fireEvent.submit(document.querySelector("form"));
+    await settled();
+    expect(requests.length).toBe(before);
+  });
+});
+
+describe("the live preview", () => {
+  const OFFICE = "Tourism Office, 2nd Floor, Mauban Municipal Hall";
+  const home = () => screen.getByTestId("mock-home");
+  const detail = () => screen.getByTestId("mock-detail");
+  const chevrons = () => home().querySelectorAll('[data-part="chevron"]');
+
+  it("is a column of its own on the right, sticky, with its eyebrow, its heading and the line that it changes as you type", async () => {
+    const { container } = await open();
+    const layout = container.querySelector(".mobile-content-tile-layout");
+    const side = layout.querySelector("aside.mobile-content-tile-side");
+    expect(layout.firstElementChild.tagName).toBe("FORM"); // the form first, the preview after it
+    expect(layout.lastElementChild).toBe(side);
+    expect(within(side).getByText("Live preview").className).toContain("mobile-content-eyebrow");
+    expect(within(side).getByRole("heading", { level: 2, name: PREVIEW_TITLE })).toBeTruthy();
+    expect(PREVIEW_TITLE).toBe("How it will look in the app");
+    expect(within(side).getByText(PREVIEW_SUBTITLE)).toBeTruthy();
+    expect(PREVIEW_SUBTITLE).toBe("Nagbabago habang nagta-type kayo");
+    expect(side.getAttribute("aria-label")).toBe("What the app will show");
+  });
+
+  it("the first mock: the label, the icon with its colours, the title and the short line as typed", async () => {
+    await open("?id=12");
+    expect(within(screen.getByLabelText("What the app will show")).getByText(HOME_LABEL)).toBeTruthy();
+    expect(HOME_LABEL).toBe("Home — tile");
+    const icon = home().querySelector('[data-part="icon"]');
+    expect(icon.style.background).toBe("rgb(220, 237, 248)"); // beach: blue box (#DCEDF8)
+    expect(icon.querySelector("svg").getAttribute("stroke")).toBe("#0A6AA3");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Cagbalete Island");
+    expect(home().querySelector('[data-part="line"]').textContent).toBe("Pristine Sandbars");
+    type("Title", "  Typed    title ");
+    type(SHORT, "A typed   line");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Typed title"); // as the server will clean it, while typing
+    expect(home().querySelector('[data-part="line"]').textContent).toBe("A typed line");
+  });
+
+  it("the icon of the mock follows the icon chosen, in its colours", async () => {
+    await open("?id=12");
+    fireEvent.click(screen.getByRole("radio", { name: "food" }));
+    const icon = home().querySelector('[data-part="icon"]');
+    expect(icon.style.background).toBe("rgb(251, 224, 224)"); // food: red box (#FBE0E0)
+    expect(icon.querySelector("svg").getAttribute("stroke")).toBe("#C32F2F");
+    expect([...icon.querySelectorAll("path")].map((node) => node.getAttribute("d"))).toEqual(PILLAR_ICONS.food.paths);
+    fireEvent.click(screen.getByRole("radio", { name: "info" }));
+    expect(home().querySelector('[data-part="icon"]').querySelector("svg").getAttribute("stroke")).toBe(ICON_TONES.neutral.stroke);
+  });
+
+  it("the arrow of the first mock is there only when there is a full text (it follows the text, it is not written in)", async () => {
+    await open("?id=12");
+    expect(items[0].full_text).toBe(""); // the fixture: no full text
+    expect(chevrons()).toHaveLength(0);
+    type(FULL, "   \n ");
+    expect(chevrons()).toHaveLength(0); // spaces are no text
+    type(FULL, "A text.");
+    expect(chevrons()).toHaveLength(1);
+    const arrow = chevrons()[0];
+    expect(arrow.getAttribute("width")).toBe("16");
+    expect(arrow.getAttribute("height")).toBe("16");
+    expect(arrow.getAttribute("stroke-width")).toBe("2.5");
+    expect(arrow.getAttribute("stroke")).toBe("#0A6AA3"); // the colour of the icon
+    fireEvent.click(screen.getByRole("radio", { name: "craft" }));
+    expect(chevrons()[0].getAttribute("stroke")).toBe("#B4690E"); // and it moves with the icon
+    type(FULL, "");
+    expect(chevrons()).toHaveLength(0);
+  });
+
+  it("a tile that already has a full text shows the arrow from the start", async () => {
+    await open("?id=13");
+    expect(items[1].full_text).not.toBe(""); // the fixture
+    expect(chevrons()).toHaveLength(1);
+  });
+
+  it("the second mock with a full text: the arrow to the left, the title, and the text with its new lines kept", async () => {
+    await open("?id=12");
+    type(FULL, "First line\n\nSecond paragraph");
+    const top = detail().querySelector(".mobile-content-detail-top");
+    const back = top.querySelector("svg");
+    expect(back.getAttribute("width")).toBe("16");
+    expect(back.getAttribute("stroke")).toBe("#33434B");
+    expect(back.getAttribute("stroke-width")).toBe("2.4");
+    expect(top.textContent).toBe("Cagbalete Island");
+    expect(screen.getByTestId("mock-detail-body").textContent).toBe("First line\n\nSecond paragraph");
+    expect(screen.queryByTestId("mock-detail-empty")).toBeNull();
+  });
+
+  it("the second mock without a full text: a dashed box with the two lines of the owner", async () => {
+    await open("?id=12");
+    expect(items[0].full_text).toBe(""); // the fixture
+    const empty = screen.getByTestId("mock-detail-empty");
+    expect(empty.className).toContain("mobile-content-detail-dashed");
+    expect([...empty.querySelectorAll("span")].map((node) => node.textContent)).toEqual(["Walang laman pa ang buong teksto.", "Hindi pa napipindot ang tile na ito."]);
+    expect(screen.queryByTestId("mock-detail-body")).toBeNull();
+    type(FULL, "now");
+    expect(screen.queryByTestId("mock-detail-empty")).toBeNull();
+    expect(screen.getByTestId("mock-detail-body")).toBeTruthy();
+  });
+
+  it("a new tile is drawn too, with a word for what is not written yet", async () => {
+    await open("?section=why_visit");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Walang pamagat pa.");
+    expect(home().querySelector('[data-part="line"]').textContent).toBe("Walang maikling linya pa.");
+    expect(chevrons()).toHaveLength(0);
+    expect(screen.getByTestId("mock-detail-empty")).toBeTruthy();
+    expect(detail().querySelector('[data-part="detail-name"]').textContent).toBe("Walang pamagat pa."); // the second mock too
+    type("Title", "Fresh");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Fresh");
+    expect(detail().querySelector('[data-part="detail-name"]').textContent).toBe("Fresh");
+  });
+
+  it("fills the placeholders of the fee in, in the three texts: the amounts and the place where it is paid", async () => {
+    state.office = OFFICE;
+    await open("?id=12");
+    type("Title", "Entrance {fee_regular}");
+    type(SHORT, "{fee_discounted} for children, pay at {fee_office}");
+    type(FULL, "Regular {fee_regular}, discounted {fee_discounted}. Pay at {fee_office}.");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Entrance ₱80");
+    expect(home().querySelector('[data-part="line"]').textContent).toBe(`₱64 for children, pay at ${OFFICE}`);
+    expect(detail().querySelector('[data-part="detail-name"]').textContent).toBe("Entrance ₱80");
+    expect(screen.getByTestId("mock-detail-body").textContent).toBe(`Regular ₱80, discounted ₱64. Pay at ${OFFICE}.`);
+    const filled = home().querySelector('[data-kind="filled"]');
+    expect(filled.getAttribute("title")).toBe("{fee_regular}"); // the fixture reached the case: something was filled, and its tooltip names the placeholder
+    expect(screen.queryByText(OFFICE_NOTE)).toBeNull();
+  });
+
+  it("marks a placeholder that is not on the list, and says that the place of the fee is not written yet", async () => {
+    await open("?id=12"); // no place where the fee is paid in the blocks
+    type(SHORT, "Pay at {fee_office} or {name}");
+    expect(home().querySelector('[data-part="line"]').textContent).toBe("Pay at {fee_office} or {name}");
+    expect(home().querySelector('[data-kind="unknown"]').textContent).toBe("{name}");
+    expect(home().querySelector('[data-kind="missing"]').textContent).toBe("{fee_office}");
+    expect(screen.getByText(OFFICE_NOTE)).toBeTruthy();
+    expect(OFFICE_NOTE).not.toMatch(/the app (keeps|shows|will)/i); // no word about what the app does today
+  });
+
+  it("says when the amount of the fee could not be read", async () => {
+    state.noFee = true;
+    await open("?id=12");
+    type("Title", "Entrance {fee_regular}");
+    expect(home().querySelector('[data-part="title"]').textContent).toBe("Entrance [fee not available]");
+    expect(screen.getByText(FEE_NOTE)).toBeTruthy();
+  });
+
+  it("fills the real texts the way the server does: the templates of the seed become the texts of the real appContent, word for word", async () => {
+    const root = path.join(__dirname, "..", "..", "..", "..");
+    const seed = JSON.parse(fs.readFileSync(path.join(root, "backend", "api", "migrations", "seed_data", "mobile_content_0061.json"), "utf8"));
+    const real = JSON.parse(fs.readFileSync(path.join(root, "mobile", "test", "data", "app_content_commit3.json"), "utf8"));
+    const office = seed.blocks.find((block) => block.key === "fee_office");
+    expect(office.body).not.toBe(""); // the fixture: the place where the fee is paid, as the seed holds it
+    const context = previewContext({ fee: { regular: 80, discounted: 64 }, blocks: [{ key: "fee_office", body: office.body }] });
+    let templates = 0;
+    for (const section of ["why_visit", "travel_guide"]) {
+      const seeded = seed.items.filter((candidate) => candidate.section === section);
+      expect(seeded.length).toBe(real.sections[section].length);
+      seeded.forEach((template, index) => {
+        const shown = real.sections[section][index];
+        expect(shown.title).toBe(previewText(previewParts(template.title, context, ["fee_regular", "fee_discounted", "fee_office"]).parts));
+        expect(shown.short_text).toBe(previewText(previewParts(template.short_text, context, ["fee_regular", "fee_discounted", "fee_office"]).parts));
+        expect(shown.full_text).toBe(previewText(previewParts(template.full_text, context, ["fee_regular", "fee_discounted", "fee_office"]).parts));
+        if (/\{fee_/.test(template.short_text + template.title + template.full_text)) templates += 1;
+      });
+    }
+    expect(templates).toBe(2); // the fixture reached the case: the two cards of the Travel Guide that hold {fee_office}
+  });
+
+  it("the same texts, put on the page, are drawn as the real ones", async () => {
+    const root = path.join(__dirname, "..", "..", "..", "..");
+    const seed = JSON.parse(fs.readFileSync(path.join(root, "backend", "api", "migrations", "seed_data", "mobile_content_0061.json"), "utf8"));
+    const real = JSON.parse(fs.readFileSync(path.join(root, "mobile", "test", "data", "app_content_commit3.json"), "utf8"));
+    state.office = seed.blocks.find((block) => block.key === "fee_office").body;
+    const template = seed.items.find((candidate) => candidate.title === "Environmental Fee");
+    items = [{ id: 7, ...template, tappable: false }];
+    await open("?id=7");
+    expect(template.short_text).toContain("{fee_office}"); // the fixture: the template, with the placeholder
+    const shown = real.sections.travel_guide.find((candidate) => candidate.title === "Environmental Fee");
+    expect(home().querySelector('[data-part="line"]').textContent).toBe(shown.short_text);
+  });
+
+  it("says nothing about what the app does (it does not read these texts yet)", async () => {
+    await open("?id=13");
+    const side = screen.getByLabelText("What the app will show");
+    expect(side.textContent).not.toMatch(/nangyayari na|already|sa app ngayon|the app (shows|keeps|will)/i);
   });
 });
 
@@ -830,6 +1183,58 @@ describe("the page does not touch the CSS of the pages that exist", () => {
     const selectors = part.split("\n").filter((line) => /^[.\[a-z].*[,{]$/.test(line) && !line.startsWith(" "));
     expect(selectors.length).toBeGreaterThan(15); // the fixture: the rules were found
     selectors.forEach((line) => expect(line).toMatch(/^\.mobile-content-/));
+  });
+
+  it("holds the values of the design for the preview: the column, the labels, the tile, the arrow box and the dashed box", () => {
+    expect(decl(".mobile-content-page .mobile-content-tile-side", "position")).toBe("sticky");
+    expect(decl(".mobile-content-page .mobile-content-tile-side", "top")).toBe("24px");
+    expect(decl(".mobile-content-tile-layout", "grid-template-columns")).toBe("minmax(0, 1fr) minmax(300px, 380px)");
+    expect(decl(".mobile-content-page .mobile-content-tile-preview .mobile-content-live-note", "font-size")).toBe("12.5px");
+    expect(decl(".mobile-content-page .mobile-content-tile-preview .mobile-content-live-note", "color")).toBe("var(--mc-hint)");
+    expect(decl(".mobile-content-mock-label", "font-size")).toBe("10.5px");
+    expect(decl(".mobile-content-mock-label", "text-transform")).toBe("uppercase");
+    expect(decl(".mobile-content-mock-label", "letter-spacing")).toBe("0.09em");
+    expect(decl(".mobile-content-mock-label", "font-weight")).toBe("700");
+    expect(decl(".mobile-content-mock-label", "color")).toBe("#8fa0a8");
+    expect(decl(".mobile-content-home-tile", "border")).toBe("1px solid #e8eff2");
+    expect(decl(".mobile-content-home-tile", "border-radius")).toBe("13px");
+    expect(decl(".mobile-content-home-tile", "padding")).toBe("12px");
+    expect(decl(".mobile-content-home-tile", "gap")).toBe("11px");
+    expect(decl(".mobile-content-home-tile", "align-items")).toBe("flex-start");
+    expect(decl(".mobile-content-home-tile", "background")).toBe("var(--th-surface)");
+    expect(decl(".mobile-content-home-icon", "width")).toBe("34px");
+    expect(decl(".mobile-content-home-icon", "height")).toBe("34px");
+    expect(decl(".mobile-content-home-icon", "border-radius")).toBe("9px");
+    expect(decl(".mobile-content-home-body strong", "font-size")).toBe("12.5px");
+    expect(decl(".mobile-content-home-body strong", "font-weight")).toBe("700");
+    expect(decl(".mobile-content-home-body strong", "line-height")).toBe("1.3");
+    const line = ".mobile-content-home-body span";
+    expect(decl(line, "font-size")).toBe("11.5px");
+    expect(decl(line, "color")).toBe("#5e6f77");
+    expect(decl(line, "line-height")).toBe("1.55");
+    expect(decl(line, "overflow")).toBe("hidden");
+    expect(decl(line, "text-overflow")).toBe("ellipsis");
+    expect(decl(line, "-webkit-line-clamp")).toBe("2");
+    expect(decl(".mobile-content-detail-dashed", "border")).toBe("1px dashed #d5e2e8");
+    expect(decl(".mobile-content-detail-dashed", "padding")).toBe("20px 14px");
+    expect(decl(".mobile-content-detail-dashed", "text-align")).toBe("center");
+    expect(decl(".mobile-content-detail-dashed", "font-size")).toBe("12px");
+    expect(decl(".mobile-content-detail-dashed", "color")).toBe("#7c8a92");
+  });
+
+  it("the badge: green with a full text, neutral without one (a tile without a full text cannot be pressed)", () => {
+    const tag = (selector, property) => {
+      const start = CSS.indexOf(`\n${selector} {`);
+      expect(start).toBeGreaterThan(-1);
+      return CSS.slice(start, CSS.indexOf("\n}", start)).match(new RegExp(`^\\s*${property}:\\s*(.+);$`, "m"))[1].toLowerCase();
+    };
+    expect(tag(".mobile-content-tag", "background")).toBe("#f2e8db");
+    expect(tag(".mobile-content-tag", "color")).toBe("#7a6450");
+    expect(tag('.mobile-content-tag[data-detail="yes"]', "background")).toBe("#dcf0e4");
+    expect(tag('.mobile-content-tag[data-detail="yes"]', "color")).toBe("#176b3b");
+    expect(tag(".mobile-content-tag", "border-radius")).toBe("7px");
+    expect(tag(".mobile-content-tag", "font-size")).toBe("11.5px");
+    expect(tag(".mobile-content-tag", "font-weight")).toBe("700");
   });
 
   it("holds the values of the design: the heading, the back link, the icons, the boxes and the bottom", () => {

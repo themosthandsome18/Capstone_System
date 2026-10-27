@@ -1,10 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { DEFAULT_MOBILE_CONTENT_TAB, canManageMobileContent, sectionTabPath, tabPath } from "../mobileContentAccess";
 import { blockConfirmRequired, tourismApi } from "../services/tourismApi";
 import { fitBox, withoutNewLines } from "../utils/mobileContentLineBox";
-import { insertAt, placeholderWarnings } from "../utils/mobileContentPreview";
+import { insertAt, placeholderWarnings, previewContext, previewParts } from "../utils/mobileContentPreview";
 import {
   FIELD_RULES,
   HARD_LIMITS,
@@ -13,7 +13,6 @@ import {
   ITEM_SECTIONS,
   ORDER_MAX,
   ORDER_MIN,
-  ORDER_STEP,
 } from "../utils/mobileContentTileRules";
 import { countLetters, normalizeFor } from "../utils/mobileContentText";
 import { ICON_TONES, PILLAR_ICONS } from "./MobileContentPillars";
@@ -23,6 +22,9 @@ import { ICON_TONES, PILLAR_ICONS } from "./MobileContentPillars";
 // position. It reads the items and the blocks once (the blocks only for the explanations of the placeholders), and it sends ONE request when the
 // person saves: a PATCH of what changed, or a POST for a new tile. It counts, limits and warns as the server does (mobileContentTileRules.js is a
 // copy of the server's numbers, held to it by a test), and the server stays the authority: what it refuses is shown under the field it names.
+// Before it sends an edit it reads the items once more and compares what the person changed with what the server holds now (the same check as
+// the blocks): if someone else changed it, the page says so and asks. That check is not a guarantee (a change made at the very moment of the save
+// cannot be seen), and the page does not say it is. Beside the form: what the tile will look like (6c), drawn from what is typed.
 
 export const SAVED_NOTICE = "The change was saved.";
 export const ADDED_NOTICE = "The tile was added.";
@@ -36,9 +38,22 @@ export const FULL_HINT =
 export const BADGE_FILLED = "May laman";
 export const BADGE_EMPTY = "Walang laman";
 
+// the preview (6c): the words are the owner's
+export const PREVIEW_TITLE = "How it will look in the app";
+export const PREVIEW_SUBTITLE = "Nagbabago habang nagta-type kayo";
+export const HOME_LABEL = "Home — tile";
+export const DETAIL_LABEL = "Detail view";
+export const DETAIL_EMPTY_1 = "Walang laman pa ang buong teksto.";
+export const DETAIL_EMPTY_2 = "Hindi pa napipindot ang tile na ito.";
+export const NO_TITLE_YET = "Walang pamagat pa.";
+export const NO_LINE_YET = "Walang maikling linya pa.";
+export const OFFICE_NOTE =
+  "The place where the fee is paid is not filled in yet (Port & Boat Guide tab), so this tile cannot be shown until it is. You can still save.";
+export const FEE_NOTE = "The current entrance fee could not be loaded, so [fee not available] stands where the amount will be. You can still save.";
+
 const WORDS = { title: "The title", short_text: "The short line", full_text: "The full text" };
-// the browser must not check the number itself: with min 1 and step 10 it would call 10 and 20 "not valid" (its steps start at the minimum).
-// The page says what is wrong with the position, and the server decides.
+// The browser does not check the form itself (noValidate): the page says what is wrong, in its own words and in one place (under the field), and
+// the server decides. Without it, pressing Enter in the Order box would show the browser's own bubble, in the language of the browser.
 const SHOWN_FIELDS = ["title", "short_text", "full_text", "icon", "display_order"]; // the fields that have a place on the page to show an error
 const plural = (number, one, many) => `${number} ${number === 1 ? one : many}`;
 const FEE_NAMES = ITEM_PLACEHOLDERS;
@@ -64,6 +79,21 @@ function IconDrawing({ name }) {
     </svg>
   );
 }
+
+// The parts of a text, drawn: what was filled in has a soft tint, what could not be filled in (or is not a placeholder) is marked.
+function Parts({ parts }) {
+  return parts.map((part, index) => {
+    if (part.kind === "text") return <Fragment key={index}>{part.text}</Fragment>;
+    const bad = part.kind === "missing" || part.kind === "unknown";
+    return (
+      <span key={index} className={bad ? "mobile-content-missing" : "mobile-content-filled"} title={part.token} data-kind={part.kind}>
+        {part.text}
+      </span>
+    );
+  });
+}
+
+const CLASH_WORDS = { title: "title", short_text: "short line", full_text: "full text", icon: "icon", display_order: "position" };
 
 const asValues = (item) => ({
   title: item.title ?? "",
@@ -100,6 +130,8 @@ export default function MobileContentTileEditor() {
   const [notice, setNotice] = useState("");
   const [warnings, setWarnings] = useState([]);
   const [ask, setAsk] = useState(null); // the server asks for a confirmation: { dropped, message }
+  const [conflict, setConflict] = useState(null); // someone else changed what I changed: { latest, latestValues, fields }
+  const [context, setContext] = useState(previewContext(null)); // the fee and the place where it is paid, to fill the placeholders in the preview
   const [leave, setLeave] = useState(null); // { to, replace }: the page goes back to the tab
   const inFlight = useRef(false);
   const created = useRef(null); // the id of a tile this page has just added: its address changes, and nothing is read again
@@ -119,6 +151,7 @@ export default function MobileContentTileEditor() {
       .then(([list, blocks]) => {
         if (cancelled) return;
         setNotes(blocks && blocks.placeholders && typeof blocks.placeholders === "object" ? blocks.placeholders : {});
+        setContext(previewContext(blocks));
         if (itemId === null) {
           setItem(null);
           setBaseline(BLANK);
@@ -187,12 +220,13 @@ export default function MobileContentTileEditor() {
   }
   const problems = Object.keys(FIELD_RULES).some((field) => over(field) || empty(field)) || orderBad;
   const canSave = ready && !working && !problems && (isNew || Object.keys(changes).length > 0);
-  const saveOpen = canSave && !ask;
+  const saveOpen = canSave && !ask && !conflict;
 
   function type(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setAsk(null);
+    setConflict(null);
     setNotice("");
   }
 
@@ -203,7 +237,7 @@ export default function MobileContentTileEditor() {
     type(field, put.value);
   }
 
-  async function send({ confirm } = {}) {
+  async function send({ confirm, force = false } = {}) {
     if (inFlight.current) return;
     inFlight.current = true;
     setWorking(true);
@@ -212,6 +246,7 @@ export default function MobileContentTileEditor() {
     setNotice("");
     setWarnings([]);
     setAsk(null);
+    setConflict(null);
     try {
       let answer;
       if (isNew) {
@@ -224,6 +259,29 @@ export default function MobileContentTileEditor() {
         setParams({ id: String(answer.id) }, { replace: true }); // the address now names the tile; nothing is read again
         setNotice(ADDED_NOTICE);
       } else {
+        if (!force) {
+          // Has someone else changed what I changed, since I opened it? Look again, now.
+          let latest;
+          try {
+            const looked = await tourismApi.getMobileContentItems(section);
+            latest = (Array.isArray(looked) ? looked : []).find((candidate) => candidate.id === itemId);
+          } catch (error) {
+            setActionError(
+              "Your change was not saved, because this page could not check whether someone else changed the tile. " + (error.message || "")
+            );
+            return;
+          }
+          if (!latest) {
+            setActionError(NOT_FOUND);
+            return;
+          }
+          const latestValues = asValues(latest);
+          const clashes = Object.keys(changes).filter((field) => latestValues[field] !== baseline[field]);
+          if (clashes.length) {
+            setConflict({ latest, latestValues, fields: clashes });
+            return;
+          }
+        }
         answer = await tourismApi.updateMobileContentItem(itemId, changes, confirm);
         setItem(answer);
         setNotice(SAVED_NOTICE);
@@ -248,6 +306,20 @@ export default function MobileContentTileEditor() {
       inFlight.current = false;
       setWorking(false);
     }
+  }
+
+  // "Keep editing": what I changed stays; the rest of the form is brought up to what the server holds now.
+  function keepEditing() {
+    const { latest, latestValues } = conflict;
+    const mine = (field) => {
+      if (field === "icon") return form.icon !== baseline.icon;
+      if (field === "display_order") return orderText !== baseline.display_order;
+      return cleaned[field] !== baseline[field];
+    };
+    setForm((current) => Object.fromEntries(Object.keys(BLANK).map((field) => [field, mine(field) ? current[field] : latestValues[field]])));
+    setBaseline(latestValues);
+    setItem(latest);
+    setConflict(null);
   }
 
   function submit(event) {
@@ -345,6 +417,92 @@ export default function MobileContentTileEditor() {
 
   const hasFullText = cleaned.full_text !== "";
 
+  // ---- the preview: what the tile will look like, drawn from what is typed (the texts as the server will clean them, the placeholders of the fee filled in) ----
+  const drawing = PILLAR_ICONS[form.icon] || PILLAR_ICONS.info;
+  const tone = ICON_TONES[drawing.tone];
+  const titleShown = previewParts(cleaned.title, context, FEE_NAMES);
+  const lineShown = previewParts(cleaned.short_text, context, FEE_NAMES);
+  const fullShown = previewParts(cleaned.full_text, context, FEE_NAMES);
+  const officeMissing = titleShown.officeMissing || lineShown.officeMissing || fullShown.officeMissing;
+  const feeMissing = titleShown.feeMissing || lineShown.feeMissing || fullShown.feeMissing;
+
+  const side = (
+    <aside className="mobile-content-tile-side" aria-label="What the app will show">
+      <section className="settings-card mobile-content-card mobile-content-tile-preview">
+        <div className="report-card-title">
+          <p className="mobile-content-eyebrow">Live preview</p>
+          <h2>{PREVIEW_TITLE}</h2>
+          <p className="mobile-content-live-note">{PREVIEW_SUBTITLE}</p>
+        </div>
+
+        <p className="mobile-content-mock-label">{HOME_LABEL}</p>
+        <div className="mobile-content-phone" data-testid="mock-home">
+          <div className="mobile-content-home-tile">
+            <span className="mobile-content-home-icon" data-part="icon" style={{ background: tone.background }} aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tone.stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {drawing.paths.map((d) => (
+                  <path key={d} d={d} />
+                ))}
+              </svg>
+            </span>
+            <div className="mobile-content-home-body">
+              <strong data-part="title">{cleaned.title ? <Parts parts={titleShown.parts} /> : <span className="mobile-content-muted">{NO_TITLE_YET}</span>}</strong>
+              <span data-part="line">{cleaned.short_text ? <Parts parts={lineShown.parts} /> : <span className="mobile-content-muted">{NO_LINE_YET}</span>}</span>
+            </div>
+            {hasFullText ? (
+              <svg
+                className="mobile-content-home-chevron"
+                data-part="chevron"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tone.stroke}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 5l7 7-7 7" />
+              </svg>
+            ) : null}
+          </div>
+        </div>
+
+        <p className="mobile-content-mock-label">{DETAIL_LABEL}</p>
+        <div className="mobile-content-phone" data-testid="mock-detail">
+          <div className="mobile-content-detail-top">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#33434B" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            <span data-part="detail-name">{cleaned.title ? <Parts parts={titleShown.parts} /> : <span className="mobile-content-muted">{NO_TITLE_YET}</span>}</span>
+          </div>
+          {hasFullText ? (
+            <div className="mobile-content-detail-body" data-testid="mock-detail-body">
+              <Parts parts={fullShown.parts} />
+            </div>
+          ) : (
+            <div className="mobile-content-detail-body mobile-content-detail-dashed" data-testid="mock-detail-empty">
+              <span>{DETAIL_EMPTY_1}</span>
+              <span>{DETAIL_EMPTY_2}</span>
+            </div>
+          )}
+        </div>
+
+        {officeMissing ? (
+          <p className="options-reason" role="note">
+            {OFFICE_NOTE}
+          </p>
+        ) : null}
+        {feeMissing ? (
+          <p className="options-reason" role="note">
+            {FEE_NOTE}
+          </p>
+        ) : null}
+      </section>
+    </aside>
+  );
+
   return (
     <div className="reports-page settings-page options-page mobile-content-page mobile-content-tile-page">
       <div className="reports-header">
@@ -394,6 +552,7 @@ export default function MobileContentTileEditor() {
       ) : null}
 
       {ready ? (
+        <div className="mobile-content-tile-layout">
         <form className="options-form mobile-content-tile-form" onSubmit={submit} noValidate aria-label={isNew ? "New tile" : "Edit tile"}>
           <section className="settings-card mobile-content-card mobile-content-tile-card" aria-label="Title and icon">
             <div className="settings-field settings-field-wide">
@@ -451,7 +610,7 @@ export default function MobileContentTileEditor() {
             <div className="report-card-title">
               <p className="mobile-content-eyebrow">
                 Kapag pinindot{" "}
-                <span className="mobile-content-tag" data-detail="yes" data-testid="full-badge" data-state={hasFullText ? "filled" : "empty"}>
+                <span className="mobile-content-tag" data-detail={hasFullText ? "yes" : "no"} data-testid="full-badge" data-state={hasFullText ? "filled" : "empty"}>
                   {hasFullText ? BADGE_FILLED : BADGE_EMPTY}
                 </span>
               </p>
@@ -498,6 +657,29 @@ export default function MobileContentTileEditor() {
             </div>
           ) : null}
 
+          {conflict ? (
+            <div className="options-confirm" role="alertdialog" aria-label="Someone else changed this tile">
+              {conflict.fields.map((field) => (
+                <p key={field}>
+                  Someone else changed the {CLASH_WORDS[field]} since you opened it. It now says: {"“"}
+                  {conflict.latestValues[field]}
+                  {"”"} Yours says: {"“"}
+                  {String(field === "display_order" ? changes.display_order : changes[field])}
+                  {"”"}
+                </p>
+              ))}
+              <p>This check is not a guarantee: it cannot see a change made at the very moment you save.</p>
+              <div className="options-form-actions">
+                <button type="button" className="tourist-record-cancel" onClick={keepEditing} disabled={working}>
+                  Keep editing
+                </button>
+                <button type="button" className="tourist-record-save" onClick={() => send({ force: true })} disabled={working}>
+                  {working ? "Saving..." : "Save my text anyway"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mobile-content-tile-bar">
             <div className="settings-field mobile-content-tile-order">
               <label htmlFor={orderId}>
@@ -508,7 +690,7 @@ export default function MobileContentTileEditor() {
                 type="number"
                 min={ORDER_MIN}
                 max={ORDER_MAX}
-                step={ORDER_STEP}
+                step={1}
                 inputMode="numeric"
                 value={form.display_order}
                 disabled={working}
@@ -539,6 +721,8 @@ export default function MobileContentTileEditor() {
             </div>
           </div>
         </form>
+        {side}
+        </div>
       ) : null}
     </div>
   );
