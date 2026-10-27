@@ -12,7 +12,8 @@ import Settings from "./pages/Settings";
 import RegistrationOptions from "./pages/RegistrationOptions";
 import { OPTIONS_PATH, OPTIONS_ROLES } from "./optionsAccess";
 import MobileAppContent from "./pages/MobileAppContent";
-import { MOBILE_CONTENT_PATH, MOBILE_CONTENT_ROLES, tabPath } from "./mobileContentAccess";
+import MobileContentTileEditor from "./pages/MobileContentTileEditor";
+import { MOBILE_CONTENT_PATH, MOBILE_CONTENT_ROLES, TILE_PATH, tabPath } from "./mobileContentAccess";
 import { HOTLINES_PATH, HOTLINES_ROLES } from "./hotlinesAccess";
 import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
 
@@ -80,6 +81,11 @@ export const tourismRoutes = [
     path: MOBILE_CONTENT_PATH,
     allowedRoles: MOBILE_CONTENT_ROLES,
     element: React.createElement(withErrorBoundary(MobileAppContent, "Mobile App Content")),
+  },
+  {
+    path: TILE_PATH,
+    allowedRoles: MOBILE_CONTENT_ROLES,
+    element: React.createElement(withErrorBoundary(MobileContentTileEditor, "Edit a tile")),
   },
   {
     path: HOTLINES_PATH,

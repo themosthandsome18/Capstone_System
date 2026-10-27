@@ -29,3 +29,12 @@ export const tabPath = (key) => `${MOBILE_CONTENT_PATH}?tab=${key}`;
 export function knownTab(value) {
   return MOBILE_CONTENT_TABS.some((tab) => tab.key === value) ? value : null;
 }
+
+// The page of ONE tile (a pillar of Why Visit, a card of the Travel Guide): /mobile-content/tile?id=12 to edit it, /mobile-content/tile?section=why_visit
+// to add one. The address names the tile or the section, never the tab: the tab to go back to is the tab of the section of the tile, so that it is
+// right after a refresh and when the page is opened from a link. Admin only, like the page of the tabs.
+export const TILE_PATH = "/mobile-content/tile";
+export const SECTION_TABS = { why_visit: "why-visit", travel_guide: "travel-guide" };
+export const tileEditPath = (id) => `${TILE_PATH}?id=${id}`;
+export const tileNewPath = (section) => `${TILE_PATH}?section=${section}`;
+export const sectionTabPath = (section) => tabPath(SECTION_TABS[section] || DEFAULT_MOBILE_CONTENT_TAB);

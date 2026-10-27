@@ -58,6 +58,11 @@ export const pageInfo = {
     title: "Mobile App Content",
     showAdd: false,
   },
+  // the page of one tile: it is a part of Mobile App Content, and the top bar says so
+  "/mobile-content/tile": {
+    title: "Mobile App Content",
+    showAdd: false,
+  },
   // the old address of the Emergency Hotlines: it only redirects, but the top bar must not say "Dashboard Overview" meanwhile
   "/hotlines": {
     title: "Mobile App Content",
