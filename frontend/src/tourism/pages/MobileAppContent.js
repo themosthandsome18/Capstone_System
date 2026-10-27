@@ -10,6 +10,7 @@ import {
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
 import { AddCardButton, TravelGuideTab, useCards } from "./MobileContentCardsTab";
+import MobileContentPortTab from "./MobileContentPortTab";
 import { PillarsView, usePillars } from "./MobileContentPillars";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
 
@@ -54,6 +55,7 @@ function TabPanel({ tab, cards }) {
   }
   if (tab.key === "why-visit") return <WhyVisitTab />;
   if (tab.key === "travel-guide") return <TravelGuideTab cards={cards} />;
+  if (tab.key === "port-guide") return <MobileContentPortTab />;
   // A tab whose editor does not exist yet: a message, and no request to the server.
   return (
     <div className="hotlines-notices" role="note" aria-label={`${tab.label}: not available yet`}>

@@ -1,6 +1,6 @@
 // The Mobile App Content page (Commit 4c; the Welcome tab since 5b): five tabs, the tab in the address, the tabs that are not built yet, who may
 // open it. The Emergency Hotlines inside it are held to the golden of the old page in EmergencyHotlines.golden.test.js.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import MobileAppContent, { NOT_READY_NOTICE } from "./MobileAppContent";
 import { createServer } from "./hotlinesGolden.helpers";
 import { useAuth } from "../../auth/AuthContext";
@@ -11,7 +11,7 @@ jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual:
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
 const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines"];
-const NOT_BUILT = ["Port & Boat Guide"]; // (the Welcome has its editor since 5b, the Why Visit since 5d, the Travel Guide since 7a)
+const NOT_BUILT = []; // (all five tabs are built: the Welcome since 5b, the Why Visit since 5d, the Travel Guide since 7a, the Port & Boat Guide since 8b)
 const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines"];
 
 // The Welcome tab asks for the blocks; a fake answers it, and the Hotlines are answered by their own fake, as before.
@@ -87,10 +87,11 @@ describe("the page", () => {
     expect(requests().map((r) => `${r.method} ${r.path}`)).toEqual(["GET /emergency-contacts/"]); // now, and once
   });
 
-  it("marks the tab that is not built with Coming soon, and not the Welcome, the Why Visit, the Travel Guide or the Hotlines", async () => {
+  it("marks no tab with Coming soon: all five are built", async () => {
     render(<MobileAppContent />);
     await settled();
-    NOT_BUILT.forEach((label) => expect(tab(label).textContent).toContain("Coming soon"));
+    expect(NOT_BUILT).toHaveLength(0);
+    LABELS.forEach((label) => expect(tab(label).textContent).not.toContain("Coming soon"));
     expect(tab("Emergency Hotlines").textContent).not.toContain("Coming soon");
     expect(tab("Welcome").textContent).not.toContain("Coming soon");
     expect(tab("Why Visit").textContent).not.toContain("Coming soon");
@@ -152,34 +153,18 @@ describe("the tab is in the address", () => {
   });
 });
 
-describe("the tab that is not built", () => {
-  it("say it is not available yet, without the word commit, and ask the server for NOTHING", async () => {
+describe("no tab says it is not available yet (all five are built since 8b)", () => {
+  it("none of the five tabs shows the notice of a tab that is not built", async () => {
     router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     render(<MobileAppContent />);
     await screen.findByRole("list");
-    const before = requests().length;
-    expect(before).toBe(1); // the fixture: the Hotlines did ask once
-    for (const label of NOT_BUILT) {
-      fireEvent.click(tab(label));
-      const panel = screen.getByRole("tabpanel");
-      expect(within(panel).getByRole("note").textContent).toBe(NOT_READY_NOTICE);
-    }
-    expect(NOT_READY_NOTICE).not.toMatch(/commit/i);
+    expect(NOT_READY_NOTICE).not.toMatch(/commit/i); // (the words of the notice are kept for a tab that may one day not be built)
     expect(NOT_READY_NOTICE).toMatch(/coming in an upcoming update/);
-    expect(requests().length).toBe(before); // not one request from them
-  });
-
-  it("send no request at all when the page is opened on one of them", async () => {
-    for (const key of ["port-guide"]) {
-      router.__setSearch(`?tab=${key}`);
-      server.requests.length = 0;
-      const { unmount } = render(<MobileAppContent />);
-      expect(within(screen.getByRole("tabpanel")).getByRole("note").textContent).toBe(NOT_READY_NOTICE);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(global.fetch).not.toHaveBeenCalled();
-      expect(screen.queryByRole("list")).toBeNull(); // no hotlines panel mounted
-      unmount();
+    for (const label of LABELS) {
+      fireEvent.click(tab(label));
+      expect(screen.queryByText(NOT_READY_NOTICE)).toBeNull();
     }
+    await settled();
   });
 });
 

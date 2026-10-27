@@ -15,7 +15,7 @@ export const MOBILE_CONTENT_TABS = [
   { key: "welcome", label: "Welcome", ready: true },
   { key: "why-visit", label: "Why Visit", ready: true },
   { key: "travel-guide", label: "Travel Guide & Tips", ready: true },
-  { key: "port-guide", label: "Port & Boat Guide", ready: false },
+  { key: "port-guide", label: "Port & Boat Guide", ready: true },
   { key: "hotlines", label: "Emergency Hotlines", ready: true },
 ];
 

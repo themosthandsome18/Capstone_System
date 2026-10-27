@@ -6151,3 +6151,111 @@
   padding: 0;
   list-style: none;
 }
+
+/* the Port & Boat Guide: the box of the fee that cannot be changed here, and the preview (Commit 8b) */
+.mobile-content-port-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.mobile-content-port-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.mobile-content-locked {
+  padding: 21px 22px;
+  border: 1px solid #ebd3b6;
+  border-radius: 16px;
+  background: #fdf0e2;
+}
+
+.mobile-content-locked-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-content-locked-head h2 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #6f3e11;
+}
+
+.mobile-content-locked-prices {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.mobile-content-locked-price {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #ebd3b6;
+  border-radius: 11px;
+  background: var(--th-surface);
+}
+
+.mobile-content-locked-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9b7349;
+}
+
+.mobile-content-locked-price strong {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-locked p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6b4f32;
+}
+
+.mobile-content-locked p:last-child {
+  margin-bottom: 0;
+}
+
+.mobile-content-phone.mobile-content-port-frame {
+  padding: 16px 15px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: #3c4851;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-port-title {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0a6e78;
+}
+
+.mobile-content-port-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-port-source {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8a7664;
+}
