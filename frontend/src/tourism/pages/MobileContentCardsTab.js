@@ -331,7 +331,6 @@ export function TravelGuideTab({ cards }) {
         {shown.length ? (
           <ul className="mobile-content-cards" aria-label="Cards">
             {shown.map((item) => {
-              const icon = PILLAR_ICONS[item.icon] || PILLAR_ICONS.info;
               const banner = isBanner(item);
               const detail = hasDetail(item);
               return (
