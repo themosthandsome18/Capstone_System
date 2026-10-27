@@ -12276,8 +12276,8 @@ class ActivityLogDigestConstraintTests(_BoatFareApiBase, TestCase):
 # -- Mobile App Content, commit 1: the two tables and their seed ----------------------
 
 MOBILE_CONTENT_DART = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "screens" / "tourism_screens.dart"
-# The Welcome and the Why Visit texts were MOVED out of the screen (Commit 9b) into this file; the screen reads them from here. The Travel Guide and the
-# Port & Boat Guide are still in the screen.
+# The texts of the Welcome, the Why Visit, the Travel Guide and the Port & Boat Guide were MOVED out of the screen (Commits 9b and 9c) into this file; the
+# screen reads them from here.
 MOBILE_CONTENT_DEFAULTS = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "models" / "app_content_defaults.dart"
 # What the seed's three placeholders stand for in the Dart (the port guide is the only place).
 PORT_FEE_REGULAR = "₱80"
@@ -12464,44 +12464,39 @@ class MobileContentSeedTests(TestCase):
         ("travel_guide", "banner"): ("InfoBanner", "text"),
     }
 
-    def _dart_source(self, item):
-        """The file the item is written in: the pillars of the Why Visit moved to the defaults (9b)."""
-        return self.defaults if item.section == "why_visit" else self.dart
-
     def _dart_pattern(self, item):
-        if item.section == "why_visit":
-            return re.compile(
-                r"AppContentItem\(\s*id: -\d+,\s*icon: '(\w+)',\s*title: "
-                + re.escape(self._literal(item.title))
-                + r",\s*shortText: "
-                + re.escape(self._literal(self._fee_filled(item.short_text)))
-                + r","
-            )
-        name, field = self.CONSTRUCTORS[(item.section, item.style)]
+        """The item as AppContentItem(...) in the defaults: the stored icon NAME, the title and the short line letter for letter, and the style
+        (a banner says so; a tile does not)."""
+        style = r"\s*style: AppContentStyle\.banner," if item.style == "banner" else ""
         return re.compile(
-            re.escape(name)
-            + r"\(\s*icon: Icons\.(\w+),\s*title: "
+            r"AppContentItem\(\s*id: -\d+,\s*icon: '(\w+)',\s*title: "
             + re.escape(self._literal(item.title))
-            + r",\s*"
-            + field
-            + r": "
+            + r",\s*shortText: "
             + re.escape(self._literal(self._fee_filled(item.short_text)))
             + r","
+            + style
+            + r"\s*\),"
         )
+
+    def _list(self, name, end):
+        """One list of the defaults file (whyVisitItems, travelGuideItems)."""
+        start = self.defaults.index("static const " + name)
+        return self.defaults[start:self.defaults.index(end, start)]
 
     def test_b_every_item_is_in_the_dart_letter_for_letter_with_its_icon(self):
         self.assertEqual(self.Item.objects.count(), 10)
         for item in self.Item.objects.all():
-            match = self._dart_pattern(item).search(self._dart_source(item))
+            match = self._dart_pattern(item).search(self.defaults)
             self.assertIsNotNone(match, f"{item.title!r} is not in the Dart as stored")
-            # (the defaults write the stored NAME; the screen writes a Dart icon)
-            icon = match.group(1) if item.section == "why_visit" else MOBILE_CONTENT_ICONS[match.group(1)]
-            self.assertEqual(icon, item.icon, item.title)
+            # (the defaults write the stored NAME; the screen used to write a Dart icon)
+            self.assertEqual(match.group(1), item.icon, item.title)
 
     def test_b_the_dart_has_no_item_that_is_not_stored(self):
-        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", self.defaults)), 4)
-        self.assertEqual(len(re.findall(r"_buildGuideTile\(\s*icon: Icons\.", self.dart)), 4)
-        self.assertEqual(len(re.findall(r"InfoBanner\(\s*icon: Icons\.", self.dart)), 2)
+        pillars = self._list("whyVisitItems", "static const travelGuideTitle")
+        guides = self._list("travelGuideItems", "static const portGuideTitle")
+        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", pillars)), 4)
+        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", guides)), 6)
+        self.assertEqual(len(re.findall(r"style: AppContentStyle\.banner,", guides)), 2)  # 6 items: 4 guides (tiles) and 2 notices
 
     def test_b_the_welcome_banner_why_visit_and_the_heading_are_in_the_dart(self):
         welcome = self._block("welcome")
@@ -12526,24 +12521,23 @@ class MobileContentSeedTests(TestCase):
             "Why Visit: title, subtitle and paragraph are not in this order in the Dart",
         )
         heading = self._block("travel_guide")
-        region = self.dart[self.dart.index("class _MaubanTownGuideSection"):self.dart.index("class DestinationListPage")]
-        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(heading.title)), region))
+        self.assertIn(f"static const travelGuideTitle = {self._literal(heading.title)};", self.defaults)
         self.assertEqual((heading.subtitle, heading.body), ("", ""))
 
     def test_b_the_port_guide_is_the_dart_lines_once_the_placeholders_are_filled(self):
         port = self._block("port_guide")
-        region = self.dart[self.dart.index("Widget _buildPortGuideCard"):self.dart.index("class ProfilePage")]
-        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(port.title)), region))
+        region = self._list("portGuideBullets", "];")
+        self.assertIn(f"static const portGuideTitle = {self._literal(port.title)};", self.defaults)
         lines = port.body.split("\n")
         self.assertEqual(len(lines), 4)
         for line in lines:
             filled = "• " + self._fee_filled(line)
             self.assertTrue(
-                re.search(r"Text\(\s*" + re.escape(self._literal(filled)) + r",", region),
+                re.search(re.escape(self._literal(filled)) + r",", region),
                 f"not in the Dart port guide: {filled!r}",
             )
         # and the place of the Tourism Office is the one the Dart writes
-        self.assertIn(self._block("fee_office").body, self.dart)
+        self.assertIn(self._block("fee_office").body, self.defaults)
         self.assertEqual((self._block("fee_office").title, self._block("fee_office").subtitle), ("", ""))
 
     # -- c) style, section and order are where the Dart shows them ---------------------
@@ -12569,13 +12563,12 @@ class MobileContentSeedTests(TestCase):
         # tiles and pillars: the order they are written in the Dart
         for section, style in (("why_visit", "tile"), ("travel_guide", "tile"), ("travel_guide", "banner")):
             items = list(self.Item.objects.filter(section=section, style=style).order_by("display_order", "id"))
-            source = self.defaults if section == "why_visit" else self.dart
-            positions = [source.index("title: " + self._literal(i.title)) for i in items]
+            positions = [self.defaults.index("title: " + self._literal(i.title)) for i in items]
             self.assertEqual(positions, sorted(positions), (section, style))
         orders = [i.display_order for i in self.Item.objects.filter(section="travel_guide").order_by("display_order")]
         self.assertEqual(len(set(orders)), 6)
         # the Home page builds the guides first and the notices after them
-        self.assertLess(self.dart.index("_MaubanTownGuideSection()"), self.dart.index("const InfoBanner("))
+        self.assertLess(self.dart.index("_MaubanTownGuideSection("), self.dart.index("InfoBanner("))
         tiles = self.Item.objects.filter(section="travel_guide", style="tile").order_by("-display_order").first()
         banner = self.Item.objects.filter(section="travel_guide", style="banner").order_by("display_order").first()
         self.assertLess(tiles.display_order, banner.display_order)

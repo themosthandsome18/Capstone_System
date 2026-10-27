@@ -63,6 +63,7 @@ class _MobileShellState extends State<MobileShell> {
         registerEnabled: widget.state.isLoaded,
         failure: widget.state.failure,
         onRetry: widget.onRetry,
+        content: widget.state.appContent,
         visits: _visitHistory,
         onRegisterVisit: () => _openRegistration(),
       ),
@@ -210,6 +211,14 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     // 1. Popular Resorts for the Slide Show (Top visited / featured)
     final state = widget.state;
+    // The Travel Guide: the server's tiles and notices, or the code's when it sends none it can use. The tiles go in the middle of the Home, the notices at
+    // the foot, whatever order they are in.
+    final guideItems = state.appContent.travelGuideItems(
+      AppContentDefaults.travelGuideItems,
+      name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+    );
+    final guideTiles = guideItems.where((i) => !i.isBanner).toList();
+    final guideBanners = guideItems.where((i) => i.isBanner).toList();
     final destinations = state.destinations;
     final popularResorts = state.featuredDestinations.isNotEmpty
         ? state.featuredDestinations
@@ -496,8 +505,14 @@ class _HomePageState extends State<HomePage> {
           ],
 
           // Section: Town Information & Travel Essentials
-          const _MaubanTownGuideSection(),
-          const SizedBox(height: 14),
+          if (guideTiles.isNotEmpty) ...[
+            _MaubanTownGuideSection(
+              content: state.appContent,
+              tiles: guideTiles,
+              name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+            ),
+            const SizedBox(height: 14),
+          ],
         ],
 
         // Filtered / All Destinations List Section. Not while failed: there
@@ -534,20 +549,19 @@ class _HomePageState extends State<HomePage> {
               onTap: () => widget.onOpenDestination(destination),
             ),
           ),
-        const SizedBox(height: 12),
-
-        const InfoBanner(
-          icon: Icons.event_available_outlined,
-          title: 'Upcoming: Fiesta de Mauban & Buntal Festival',
-          text: 'Celebrate the feast of San Buenaventura with colorful Buntal weaving and boat regatta.',
-          color: Color(0xffd7efff),
-        ),
-        InfoBanner(
-          icon: Icons.eco_outlined,
-          title: 'Clean Coast & Eco-Tourism Policy',
-          text: 'Please dispose of trash responsibly and support local community bangkeros and weavers.',
-          color: context.brand.tint,
-        ),
+        // The notices, at the foot of the Home. None: no gap either.
+        if (guideBanners.isNotEmpty) const SizedBox(height: 12),
+        for (final banner in guideBanners)
+          KeyedSubtree(
+            key: ValueKey('banner-${banner.id}'),
+            child: InfoBanner(
+              icon: appContentIconFor(banner.icon).icon,
+              title: banner.title,
+              text: banner.shortText,
+              // the blue of the festival notice, the theme's tint for the others (as the two notices always were)
+              color: banner.icon == 'event' ? const Color(0xffd7efff) : context.brand.tint,
+            ),
+          ),
       ],
     );
   }
@@ -1057,42 +1071,34 @@ class _HiddenGemCard extends StatelessWidget {
 
 /// Town Information & Travel Essentials Accordion / Grid
 class _MaubanTownGuideSection extends StatelessWidget {
-  const _MaubanTownGuideSection();
+  const _MaubanTownGuideSection({required this.content, required this.tiles, required this.name});
+
+  final AppContent content;
+
+  /// The tiles to draw, already told apart from the notices.
+  final List<AppContentItem> tiles;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '📖 Mauban Travel Guide & Local Tips',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+        Text(
+          content.text('travel_guide', 'title', AppContentDefaults.travelGuideTitle, name: name),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
         ),
         const SizedBox(height: 10),
-        _buildGuideTile(
-          icon: Icons.directions_boat_outlined,
-          title: 'Cagbalete Island Boat Guide',
-          desc: 'Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. The Environmental Fee is paid at the Tourism Office, 2nd Floor, Mauban Municipal Hall. The boat fare is separate and is paid to the boat operator.',
-          color: const Color(0xFF0284C7),
-        ),
-        _buildGuideTile(
-          icon: Icons.festival_outlined,
-          title: 'Maubanin Buntal Festival (May)',
-          desc: 'A week-long celebration showcasing giant woven Buntal hats, street dancing, and the historical legacy of Gat Uban.',
-          color: const Color(0xFFD97706),
-        ),
-        _buildGuideTile(
-          icon: Icons.receipt_long_outlined,
-          title: 'Environmental Fee',
-          desc: 'All tourists register at the Tourism Office, 2nd Floor, Mauban Municipal Hall. Receipts serve as your official entry pass to the island sanctuaries.',
-          color: const Color(0xFF059669),
-        ),
-        _buildGuideTile(
-          icon: Icons.delete_outline,
-          title: 'Solid Waste & Leave No Trace Policy',
-          desc: 'Help keep Cagbalete and Mauban pristine by avoiding single-use plastics and taking your trash back to mainland disposal points.',
-          color: const Color(0xFF7C3AED),
-        ),
+        for (final tile in tiles)
+          KeyedSubtree(
+            key: ValueKey('guide-${tile.id}'),
+            child: _buildGuideTile(
+              icon: appContentIconFor(tile.icon).icon,
+              title: tile.title,
+              desc: tile.shortText,
+              color: appContentIconFor(tile.icon).color,
+            ),
+          ),
       ],
     );
   }
@@ -1620,7 +1626,11 @@ class VisitPlannerPage extends StatefulWidget {
     required this.onRegisterVisit,
     this.failure,
     this.onRetry,
+    this.content = AppContent.none,
   });
+
+  /// The texts of the web admin (the Port & Boat Guide); [AppContent.none] where there are none.
+  final AppContent content;
 
   /// False until the bootstrap has loaded: the form needs its reference data.
   final bool registerEnabled;
@@ -2795,6 +2805,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
 
   // Port Guide & Boat Schedule
   Widget _buildPortGuideCard() {
+    final lines = widget.content.lines('port_guide', AppContentDefaults.portGuideLines);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2810,31 +2821,19 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               Icon(Icons.directions_boat_outlined, color: context.brand.dark, size: 22),
               SizedBox(width: 10),
               Text(
-                'Mauban Port ↔ Cagbalete Boats',
+                widget.content.text('port_guide', 'title', AppContentDefaults.portGuideTitle),
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: context.brand.dark),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            '• Standard boat departures from Mauban Port: 07:00 AM, 10:00 AM, 01:00 PM, and 04:00 PM.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Island Port Arrival: Sabang Port (during high tide) or Mappit Port (during low tide).',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Environmental Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Pay at the Tourism Office, 2nd Floor, Mauban Municipal Hall.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Boat fare is separate. You arrange and pay it directly with the boat operator; the Tourism Office does not collect it.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
+          for (var i = 0; i < lines.length; i++) ...[
+            if (i > 0) const SizedBox(height: 4),
+            Text(
+              '• ${lines[i]}',
+              style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
+            ),
+          ],
         ],
       ),
     );

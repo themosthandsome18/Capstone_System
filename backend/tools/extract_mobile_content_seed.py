@@ -2,8 +2,9 @@
 into the seed file of migration 0061 (api/migrations/seed_data/mobile_content_0061.json).
 
 Nothing is typed by hand: every text in the file is a string literal matched in
-mobile/lib/screens/tourism_screens.dart, or, for the Welcome and the Why Visit (whose
-texts were MOVED out of the screen in Commit 9b), in mobile/lib/models/app_content_defaults.dart.
+mobile/lib/models/app_content_defaults.dart, where the texts of the app were MOVED out of
+the screens (Commits 9b and 9c; the screen, tourism_screens.dart, now reads them from there
+and is looked at only for the order in which the Home builds the guides and the notices).
 If the Dart has a shape this script does not expect, it stops with an error instead of
 guessing.
 
@@ -20,7 +21,8 @@ What it changes on the way (and only this):
   Environmental Fee tile and the port guide) it becomes {fee_office}, and the one
   block `fee_office` holds the place. One source: the script stops unless it finds
   exactly three of them and no "2nd Floor" is left outside that block;
-* the leading "• " of each port guide line is dropped (the app draws it).
+* the leading "• " of each port guide line is dropped (the server sends the lines without it;
+  the app draws it).
 """
 import hashlib
 import json
@@ -93,48 +95,52 @@ def build(src, defaults):
         fail("the greeting no longer has exactly one {name}")
     welcome = {"key": "welcome", "title": title, "subtitle": constant("welcomeSubtitle"), "body": ""}
 
+    def default_items(const_name):
+        """(icon name, title, short text, style) of every AppContentItem in one list of the defaults file."""
+        chunk = region(defaults, f"static const {const_name} = <AppContentItem>[", "\n  ];")
+        found = re.findall(
+            r"AppContentItem\(\s*id: -\d+,\s*icon: " + LIT + r",\s*title: " + LIT + r",\s*shortText: " + LIT
+            + r",\s*(?:style: AppContentStyle\.(banner),\s*)?\),",
+            chunk,
+        )
+        if len(found) != chunk.count("AppContentItem("):
+            fail(f"an AppContentItem in {const_name} has a shape this script does not expect")
+        out = []
+        for name, title, short, banner in found:
+            if name not in ICONS.values():
+                fail(f"an item with an icon name that is not stored: {name}")
+            out.append((name, unescape(title), unescape(short), "banner" if banner else "tile"))
+        return out
+
     # -- Why Visit: introduction and the four pillars (the defaults file) -----------
     why = {"key": "why_visit", "title": constant("whyVisitTitle"), "subtitle": constant("whyVisitSubtitle"),
            "body": constant("whyVisitBody")}
-    pillars = re.findall(
-        r"AppContentItem\(\s*id: -\d+,\s*icon: " + LIT + r",\s*title: " + LIT + r",\s*shortText: " + LIT + r",\s*\),",
-        defaults,
-    )
-    if len(pillars) != 4:
-        fail(f"{len(pillars)} pillars found, expected 4")
-    # the defaults write the NAME that is stored, not a Dart icon: turn it back into the Dart icon the table knows
-    names = {name: dart_icon for dart_icon, name in ICONS.items()}
-    for name, _title, _sub in pillars:
-        if name not in names:
-            fail(f"a pillar with an icon name that is not stored: {name}")
-    pillars = [(names[name], t, sub, None) for name, t, sub in pillars]
+    pillars = default_items("whyVisitItems")
+    if len(pillars) != 4 or any(style != "tile" for _n, _t, _s, style in pillars):
+        fail(f"{len(pillars)} pillars found, expected 4 tiles")
 
-    # -- the travel guide: heading, four guides (tiles), two notices (banners) ---------
-    guide_region = region(src, "class _MaubanTownGuideSection", "class DestinationListPage")
-    heading = texts(guide_region)[0]
-    travel_guide = {"key": "travel_guide", "title": heading, "subtitle": "", "body": ""}
-    guides = re.findall(
-        r"_buildGuideTile\(\s*icon: Icons\.(\w+),\s*title: " + LIT + r",\s*desc: " + LIT + r",\s*color: const Color\((0x[0-9A-Fa-f]+)\)",
-        guide_region,
-    )
+    # -- the travel guide: heading, four guides (tiles), two notices (banners) (the defaults file) ---
+    travel_guide = {"key": "travel_guide", "title": constant("travelGuideTitle"), "subtitle": "", "body": ""}
+    guide_items = default_items("travelGuideItems")
+    guides = [item for item in guide_items if item[3] == "tile"]
+    banners = [item for item in guide_items if item[3] == "banner"]
     if len(guides) != 4:
         fail(f"{len(guides)} guides found, expected 4")
-    banners = re.findall(
-        r"InfoBanner\(\s*icon: Icons\.(\w+),\s*title: " + LIT + r",\s*text: " + LIT + r",\s*color: ",
-        src,
-    )
     if len(banners) != 2:
-        fail(f"{len(banners)} InfoBanner notices found, expected 2")
-    # In the Home page the guides are built BEFORE the notices: that is the order of the list.
-    if not 0 <= src.find("_MaubanTownGuideSection()") < src.find("InfoBanner("):
+        fail(f"{len(banners)} notices found, expected 2")
+    # In the list the guides come BEFORE the notices: that is the order of the list.
+    if guide_items != guides + banners:
+        fail("the notices are no longer below the guides in the list")
+    # In the Home page the guides are built BEFORE the notices (the screen, which reads the list).
+    if not 0 <= src.find("_MaubanTownGuideSection(") < src.find("InfoBanner("):
         fail("the notices are no longer below the guides in the Home page")
 
-    # -- the port guide ---------------------------------------------------------------
-    port_region = region(src, "Widget _buildPortGuideCard", "class ProfilePage")
-    port_texts = texts(port_region)
-    if len(port_texts) != 5 or not all(t.startswith("• ") for t in port_texts[1:]):
-        fail("the port guide is no longer a title and four '• ' lines")
-    bullets = [t[2:] for t in port_texts[1:]]
+    # -- the port guide (the defaults file) -----------------------------------------------
+    port_chunk = region(defaults, "static const portGuideBullets = <String>[", "\n  ];")
+    bullets_all = [unescape(m) for m in re.findall(LIT, port_chunk)]
+    if len(bullets_all) != 4 or not all(t.startswith("• ") for t in bullets_all):
+        fail("the port guide is no longer four '• ' lines")
+    bullets = [t[2:] for t in bullets_all]
     office = re.search(r"Pay at the (Tourism Office, 2nd Floor, Mauban Municipal Hall)\.", bullets[2])
     if not office:
         fail("cannot find the place of the Tourism Office in the fee line")
@@ -148,25 +154,17 @@ def build(src, defaults):
         templated.append(line)
     if any(re.search(r"₱\s?\d", line) for line in templated):
         fail("an amount of money is left in the port guide")
-    port = {"key": "port_guide", "title": port_texts[0], "subtitle": "", "body": "\n".join(templated)}
+    port = {"key": "port_guide", "title": constant("portGuideTitle"), "subtitle": "", "body": "\n".join(templated)}
     fee_office = {"key": "fee_office", "title": "", "subtitle": "", "body": office}
 
     # -- the items ---------------------------------------------------------------------
-    def icon(name):
-        if name not in ICONS:
-            fail(f"a Dart icon with no stored name: {name}")
-        return ICONS[name]
-
     items = []
-    for n, (ic, title, sub, _color) in enumerate(pillars, start=1):
-        items.append(dict(section="why_visit", icon=icon(ic), title=unescape(title), short_text=unescape(sub),
+    for n, (ic, title, sub, _style) in enumerate(pillars, start=1):
+        items.append(dict(section="why_visit", icon=ic, title=title, short_text=sub,
                           full_text="", style="tile", display_order=n * 10, is_active=True))
-    for n, (ic, title, desc, _color) in enumerate(guides, start=1):
-        items.append(dict(section="travel_guide", icon=icon(ic), title=unescape(title), short_text=unescape(desc),
-                          full_text="", style="tile", display_order=n * 10, is_active=True))
-    for n, (ic, title, text) in enumerate(banners, start=len(guides) + 1):
-        items.append(dict(section="travel_guide", icon=icon(ic), title=unescape(title), short_text=unescape(text),
-                          full_text="", style="banner", display_order=n * 10, is_active=True))
+    for n, (ic, title, desc, style) in enumerate(guide_items, start=1):
+        items.append(dict(section="travel_guide", icon=ic, title=title, short_text=desc,
+                          full_text="", style=style, display_order=n * 10, is_active=True))
 
     blocks = [welcome, why, travel_guide, port, fee_office]
 
