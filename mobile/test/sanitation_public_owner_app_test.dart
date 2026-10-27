@@ -6,12 +6,98 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/constants/colors.dart';
 import 'package:mauban_mobile_app/main_sanitation_public.dart' as public;
+import 'package:mauban_mobile_app/sanitation_public/owner_lookup_client.dart';
+import 'package:mauban_mobile_app/sanitation_public/owner_lookup_configuration.dart';
 import 'package:mauban_mobile_app/sanitation_public/owner_models.dart';
 import 'package:mauban_mobile_app/sanitation_public/owner_portal_view.dart';
 
 const input = ValueKey('owner-code-input');
 const submit = ValueKey('owner-code-submit');
 const unavailable = "This service isn't available yet. Please try again later.";
+
+class RecordingTransport implements OwnerLookupTransport, OwnerLookupOperation {
+  RecordingTransport(this.reply);
+  final OwnerLookupResponse reply;
+  final endpoints = <Uri>[];
+  final bodies = <String>[];
+  @override
+  Future<OwnerLookupResponse> get response => Future.value(reply);
+  @override
+  OwnerLookupOperation post(Uri endpoint, String body) {
+    endpoints.add(endpoint);
+    bodies.add(body);
+    return this;
+  }
+
+  @override
+  void abort() {}
+}
+
+const commonPublicFiles = {
+  'lib/main_sanitation_public.dart',
+  'lib/constants/colors.dart',
+  'lib/sanitation_public/owner_models.dart',
+  'lib/sanitation_public/owner_formatting.dart',
+  'lib/sanitation_public/owner_portal_view.dart',
+  'lib/sanitation_public/owner_lookup_configuration.dart',
+  'lib/sanitation_public/owner_lookup_client.dart',
+};
+const browserFile = 'lib/sanitation_public/owner_lookup_browser_transport.dart';
+const stubFile =
+    'lib/sanitation_public/owner_lookup_browser_transport_stub.dart';
+
+/// Inspect both selections, allowing web only through the exact guarded edge.
+Set<String> inspectPublicImports({
+  required bool browser,
+  Map<String, String> overrides = const {},
+}) {
+  final allowedFiles = {...commonPublicFiles, browser ? browserFile : stubFile};
+  final visited = <String>{};
+  void inspect(String path) {
+    if (!allowedFiles.contains(path)) {
+      throw StateError('Forbidden source: $path');
+    }
+    if (!visited.add(path)) return;
+    final source = overrides[path] ?? File(path).readAsStringSync();
+    for (final directive in RegExp(
+      r'''(?:import|export|part)\s+['"][^;]+;''',
+    ).allMatches(source)) {
+      final text = directive.group(0)!.trim();
+      final uris = RegExp(
+        r'''['"]([^'"]+)['"]''',
+      ).allMatches(text).map((match) => match.group(1)!).toList();
+      if (uris.isEmpty) throw StateError('Unrecognized directive');
+      String uri;
+      if (uris.length > 1 || text.contains('if (')) {
+        if (path != 'lib/main_sanitation_public.dart' ||
+            !RegExp(
+              r"^import\s+'sanitation_public/owner_lookup_browser_transport_stub\.dart'\s+if\s*\(dart\.library\.js_interop\)\s+'sanitation_public/owner_lookup_browser_transport\.dart'\s+as\s+browser;$",
+            ).hasMatch(text)) {
+          throw StateError('Unapproved conditional import');
+        }
+        uri = uris[browser ? 1 : 0];
+      } else {
+        uri = uris.single;
+        if (uri.endsWith('owner_lookup_browser_transport.dart')) {
+          throw StateError('Unguarded browser import');
+        }
+      }
+      if (uri.startsWith('package:flutter/')) continue;
+      if (const {'dart:async', 'dart:convert'}.contains(uri)) continue;
+      if (path == 'lib/constants/colors.dart' && uri == 'dart:ui') continue;
+      if (browser &&
+          path == browserFile &&
+          const {'dart:js_interop', 'package:web/web.dart'}.contains(uri)) {
+        continue;
+      }
+      if (uri.contains(':')) throw StateError('Forbidden import: $uri');
+      inspect(Uri.parse(path).resolve(uri).normalizePath().path);
+    }
+  }
+
+  inspect('lib/main_sanitation_public.dart');
+  return visited;
+}
 
 OwnerPermitStatus fixture() => OwnerPermitStatus.fromJson({
   'business_name': 'Synthetic Owner Fixture',
@@ -51,6 +137,92 @@ Future<void> check(WidgetTester tester, String code) async {
 }
 
 void main() {
+  for (final configuration in [
+    OwnerLookupConfiguration.resolve(),
+    OwnerLookupConfiguration.resolve(apiBase: 'http://localhost/api/'),
+    OwnerLookupConfiguration.resolve(
+      mode: 'production',
+      apiBase: 'http://localhost/api/',
+    ),
+    OwnerLookupConfiguration.resolve(
+      mode: 'local-fixture',
+      apiBase: 'https://example.invalid/api/',
+    ),
+    OwnerLookupConfiguration.resolve(mode: 'local-fixture'),
+  ].indexed) {
+    test(
+      'disabled or invalid settings ${configuration.$1} never create transport',
+      () async {
+        var creations = 0;
+        final app = public.createPublicOwnerApp(
+          configuration: configuration.$2,
+          transportFactory: () {
+            creations++;
+            throw StateError('Must not construct transport');
+          },
+        );
+        expect(creations, 0);
+        await expectLater(app.lookup('SYNTHETIC'), throwsUnsupportedError);
+        expect(app.formatError(StateError('PRIVATE')), unavailable);
+      },
+    );
+  }
+
+  test(
+    'explicit fixture constructs once and preserves client request and safe errors',
+    () async {
+      final transport = RecordingTransport(
+        const OwnerLookupResponse(404, 'PRIVATE body'),
+      );
+      var creations = 0;
+      final app = public.createPublicOwnerApp(
+        configuration: OwnerLookupConfiguration.resolve(
+          mode: 'local-fixture',
+          apiBase: 'http://127.0.0.1:8765/api/',
+        ),
+        transportFactory: () {
+          creations++;
+          return transport;
+        },
+      );
+      expect(creations, 1);
+      expect(transport.endpoints, isEmpty);
+      await expectLater(
+        app.lookup(' mbn-fixture '),
+        throwsA(isA<OwnerLookupException>()),
+      );
+      expect(
+        transport.endpoints.single.toString(),
+        'http://127.0.0.1:8765/api/mobile/sanitation/establishment-status/',
+      );
+      expect(transport.bodies, ['{"code":"MBN-FIXTURE"}']);
+      expect(
+        app.formatError(
+          const OwnerLookupException(OwnerLookupFailure.notFound),
+        ),
+        "Tracking code not found. Check the code on your Owner's Slip.",
+      );
+      expect(
+        app.formatError(StateError('PRIVATE')),
+        'Unable to connect. Check your connection and try again.',
+      );
+    },
+  );
+
+  test(
+    'VM fixture configuration stays disabled through the real platform stub',
+    () async {
+      final app = public.createPublicOwnerApp(
+        configuration: OwnerLookupConfiguration.resolve(
+          mode: 'local-fixture',
+          apiBase: 'http://localhost/api/',
+        ),
+      );
+      await expectLater(app.lookup('SYNTHETIC'), throwsUnsupportedError);
+      expect(app.formatError(StateError('PRIVATE')), unavailable);
+    },
+  );
+
   setUp(() {
     final tester = TestWidgetsFlutterBinding.ensureInitialized();
     tester.platformDispatcher.defaultRouteNameTestValue = '/';
@@ -301,44 +473,65 @@ void main() {
   });
 
   test(
-    'public entry import graph contains only the standalone UI boundary',
+    'public entry import graph enforces exact VM and guarded browser boundaries',
     () {
-      final visited = <String>{};
-      final imports = <String>[];
-      void inspect(String path) {
-        if (!visited.add(path)) return;
-        final source = File(path).readAsStringSync();
-        for (final match in RegExp(
-          r"(?:import|export|part)\s+'([^']+)'",
-        ).allMatches(source)) {
-          final uri = match.group(1)!;
-          imports.add(uri);
-          if (!uri.contains(':')) {
-            inspect(File.fromUri(File(path).absolute.uri.resolve(uri)).path);
+      expect(inspectPublicImports(browser: false), {
+        ...commonPublicFiles,
+        stubFile,
+      });
+      expect(inspectPublicImports(browser: true), {
+        ...commonPublicFiles,
+        browserFile,
+      });
+    },
+  );
+
+  test(
+    'boundary rejects web on VM and staff dependencies inside either branch',
+    () {
+      for (final browser in [false, true]) {
+        final path = browser ? browserFile : stubFile;
+        for (final forbidden in [
+          '../services/api.dart',
+          '../utils/helpers.dart',
+          '../main_sanitation.dart',
+          'package:shared_preferences/shared_preferences.dart',
+        ]) {
+          for (final separator in ['\n', ' ']) {
+            expect(
+              () => inspectPublicImports(
+                browser: browser,
+                overrides: {
+                  path:
+                      "${File(path).readAsStringSync()}${separator}import '$forbidden';",
+                },
+              ),
+              throwsStateError,
+            );
           }
         }
       }
-
-      inspect('lib/main_sanitation_public.dart');
       expect(
-        imports.where(
-          (uri) =>
-              uri.startsWith('package:') && !uri.startsWith('package:flutter/'),
+        () => inspectPublicImports(
+          browser: false,
+          overrides: {stubFile: "import 'package:web/web.dart';"},
         ),
-        isEmpty,
+        throwsStateError,
       );
+      final entry = File('lib/main_sanitation_public.dart').readAsStringSync();
+      expect(entry, contains('if (dart.library.js_interop)'));
       expect(
-        imports.where(
-          (uri) => [
-            'main.dart',
-            'main_sanitation.dart',
-            'utils/helpers.dart',
-            'services/api.dart',
-          ].contains(uri),
+        () => inspectPublicImports(
+          browser: true,
+          overrides: {
+            'lib/main_sanitation_public.dart': entry.replaceAll(
+              'dart.library.js_interop',
+              'dart.library.io',
+            ),
+          },
         ),
-        isEmpty,
+        throwsStateError,
       );
-      expect(visited, hasLength(5));
     },
   );
 

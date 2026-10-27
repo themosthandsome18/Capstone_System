@@ -1,0 +1,21 @@
+{
+  "code": "MBN-2222-2222",
+  "response": {
+    "business_name": "Sample Loopback Eatery",
+    "business_type": "Synthetic Food Establishment",
+    "barangay": "Sample Barangay",
+    "permit_number": null,
+    "permit_status": "no_permit",
+    "permit_status_label": "No Permit",
+    "permit_expiry_date": null,
+    "days_left": null,
+    "is_expired": false,
+    "renewal_notice": null,
+    "expired_notice": null,
+    "suspended_notice": null,
+    "requirements": [
+      {"name": "Synthetic Health Certificate", "submitted": null}
+    ],
+    "requirements_note": "Bring at renewal"
+  }
+}
