@@ -1,5 +1,15 @@
 # Sanitation Owner Portal Web Release
 
+## Track D source-integration closeout (2026-10-27)
+
+PR #18 merged on October 27, 2026, 22:01:26 Asia/Manila at `5fd258890f66763931c04c6026adf97c417c45f2`, from eight-commit head `b4f04dcd8b90ef8a6b95944bed7227ddde3d17b6`. Status: **MERGE COMPLETE / EXISTING-PRODUCTION ANONYMOUS SMOKE PASS / DEPLOYMENT OF MERGE SHA NOT OBSERVED**. PR #17 remained a separate open, unmerged workstream at this review.
+
+Existing React JS/CSS and login rendering passed; sanitation reporting usability is explicitly **OWNER-ATTESTED**. Anonymous `/tourist-data` correctly redirected to `/login`; authenticated Tourism functionality was not tested. Earlier HTTP 503/reporting-options failures subsequently recovered with unknown causes; no code fix is claimed, and HTTP health does not prove database health. These retained results were not rerun for this update.
+
+The historical Render observation at October 27, 2026, 23:12 Asia/Manila showed older LIVE revisions, not the merge SHA. See the [Track D audit](../PROJECT_AUDIT.md#track-d-closeout-evidence-and-accepted-recovery-limits-2026-10-27) for exact deployment IDs/SHAs, accepted backup/recovery limitations and owner responsibilities. The standalone Flutter Owner Portal remains **NOT PUBLICLY HOSTED** by the existing Render services. Source integration does not approve any production artifact: disabled-artifact approval, independent inventory verification, hosting review and explicit publication authorization remain required. The manual gate below is unchanged.
+
+The following October 26 status is historical checkpoint provenance, not the current source-publication state.
+
 Status recorded 2026-10-26: local integration on `sanitation/owner-web-combined` reached the seven-commit checkpoint `6275cd0a14d62789d25fa29fd6d2b9a7c6d0f13f`, including this runbook's documentation commit; fetched main base was `4391711995189651e1b25da8df2b9a4864506ff3`. The earlier six-commit implementation checkpoint was `d18980222fb6a8e1c54c232cc5f8bfd1c2c523a7`. A status-correction commit advances HEAD without changing these historical identities. At this checkpoint no branch push, PR, main merge or deployment had occurred. See [progress](../PROGRESS.md) and [audit](../PROJECT_AUDIT.md) for the seven commits and evidence boundaries.
 
 ## Purpose and prerequisites
