@@ -43,6 +43,9 @@ from api.serializers import (
     SanitaryStaffSerializer,
 )
 from api.services.activity import log_activity, shorten_label
+from api.services.establishment_retention import (
+    ESTABLISHMENT_RETENTION_CODE, ESTABLISHMENT_RETENTION_MESSAGE,
+)
 from api.services.enforcement import issue_enforcement_stage
 from api.services.household import build_household_dashboard_payload
 from api.services.tracking_codes import (
@@ -153,18 +156,10 @@ def sanitation_establishment_detail(request, establishment_id):
         return Response(SanitaryEstablishmentSerializer(establishment).data)
 
     if request.method == "DELETE":
-        establishment_label = establishment.business_name
-        establishment_id_value = establishment.pk
-        establishment.delete()
-        log_activity(
-            request,
-            MODULE_SANITATION,
-            ACTION_DELETE,
-            establishment,
-            label=establishment_label,
-            record_id=establishment_id_value,
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({
+            "code": ESTABLISHMENT_RETENTION_CODE,
+            "detail": ESTABLISHMENT_RETENTION_MESSAGE,
+        }, status=status.HTTP_409_CONFLICT)
 
     serializer = SanitaryEstablishmentSerializer(
         establishment,
