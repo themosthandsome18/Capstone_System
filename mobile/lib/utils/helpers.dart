@@ -17,6 +17,9 @@ String conciseError(Object error) {
   return message.length > 160 ? '${message.substring(0, 160)}...' : message;
 }
 
+/// The nine Boat Capacity and Fare tiers written in the code, with the empty "Select capacity and fare" choice first: what the booking form offers ONLY when the
+/// server gives no tiers (it failed, the key is missing, the list is empty, or every entry is broken; see BoatCapacityFares.choices). When the server gives
+/// tiers, its list replaces these. The ONLY copy; equal to the seed of backend migration 0056 (test/boat_capacity_fares_test.dart).
 const boatCapacityFareOptions = [
   '',
   '1-2 pax (One-Way P1500, Two-way P2000)',

@@ -17,6 +17,7 @@ class MobileBootstrap {
     this.theme = TourismTheme.none,
     this.appContent = AppContent.none,
     this.emergencyContacts = AppContacts.none,
+    this.boatCapacityFares = BoatCapacityFares.none,
   });
 
   final List<Destination> destinations;
@@ -42,6 +43,12 @@ class MobileBootstrap {
   /// The hotlines the web admin edits (Emergency Hotlines). Read here and drawn on the Profile page: see models/app_contacts.dart.
   final AppContacts emergencyContacts;
 
+  /// The Boat Capacity and Fare tiers the web admin edits (Registration Options). Read here and offered by the booking form: see models/boat_capacity_fares.dart.
+  final BoatCapacityFares boatCapacityFares;
+
+  /// What the "Boat Capacity & Fare" dropdown offers: the empty choice first, then the server's tiers; the written nine when the server gave none.
+  List<String> get boatCapacityFareChoices => boatCapacityFares.choices(boatCapacityFareOptions);
+
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
     return MobileBootstrap(
@@ -63,6 +70,7 @@ class MobileBootstrap {
       theme: TourismTheme.fromJson(json['theme']),
       appContent: AppContent.fromJson(json['appContent']),
       emergencyContacts: AppContacts.fromJson(json['emergencyContacts']),
+      boatCapacityFares: BoatCapacityFares.fromJson(refs['boatCapacityFares']),
     );
   }
 

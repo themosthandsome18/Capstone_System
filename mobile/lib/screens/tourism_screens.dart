@@ -3559,6 +3559,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   late RefItem _boatType;
   late RefItem _purpose;
   String _boatCapacityFare = '';
+
+  /// The tiers on offer now (the server's, or the written nine), and the chosen one only while it is still among them: the list can change under an open form.
+  List<String> get _fareChoices => widget.bootstrap.boatCapacityFareChoices;
+  String get _fare => _fareChoices.contains(_boatCapacityFare) ? _boatCapacityFare : '';
   int _visitors = 1;
   int _male = 0;
   int _female = 1;
@@ -3736,8 +3740,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         if (boatRequiresCapacityFare(_boatType))
           DropdownTile<String>(
             label: 'Boat Capacity & Fare',
-            value: _boatCapacityFare,
-            items: boatCapacityFareOptions,
+            value: _fare,
+            items: _fareChoices,
             itemLabel: boatCapacityFareLabel,
             onChanged: (item) => setState(() => _boatCapacityFare = item),
           ),
@@ -3930,7 +3934,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         boatTypeId: _boatType.id,
         boatCapacityFare: capacityFareForBoatType(
           _boatType,
-          _boatCapacityFare,
+          _fare,
         ).trim(),
         parkingSpace: _parkingSpace.text.trim(),
         visitPurposeId: _purpose.id,
