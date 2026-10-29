@@ -4534,21 +4534,16 @@
    Reads only the shell's --th-* tokens (no literal colours), so it follows the
    system colour like the Settings page it sits beside. */
 
-/* The place for the success / error message. It keeps the same height with or
-   without a message, so a message appearing or going does not move the page. */
-.options-message-area {
-  min-height: 48px;
+/* The place for the success / error message. With no message it is EMPTY and takes no
+   room at all: the page's own 24px gap is paid once, not twice around an empty box (it
+   used to keep 48px of height for the message, which was a blank band under the tabs).
+   When a message comes, it appears here and what is below moves down by its height. */
+.options-message-area:empty {
+  display: none;
 }
 
 .options-message-area .settings-status {
   margin: 0;
-}
-
-.options-intro {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--th-text-muted);
 }
 
 .options-toolbar {
@@ -4685,6 +4680,11 @@
   margin-bottom: 24px;
 }
 
+/* A message in the fare panel gets the same 24px of air under it (empty, it is not drawn at all). */
+.boat-fare-panel .options-message-area {
+  margin-bottom: 24px;
+}
+
 .options-form-actions {
   display: flex;
   justify-content: flex-end;
@@ -4736,23 +4736,6 @@
   font-size: 22px;
   color: var(--contact-color, var(--th-contact-other));
   background: color-mix(in srgb, var(--contact-color, var(--th-contact-other)) 10%, white);
-}
-
-.hotlines-notices {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-radius: 10px;
-  padding: 10px 14px;
-  background: var(--th-primary-tint);
-  color: var(--th-primary-ink);
-}
-
-.hotlines-notices p {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
 }
 
 .hotline-list {
@@ -4901,12 +4884,6 @@
   opacity: 0.45;
 }
 
-.hotline-footnote {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--th-text-muted);
-}
-
 .hotline-preview {
   flex: none;
   align-items: flex-start;
@@ -4955,9 +4932,3 @@
   font-weight: 700;
 }
 
-.hotline-save-note {
-  margin: 0;
-  align-self: center;
-  font-size: 12px;
-  color: var(--th-text-muted);
-}

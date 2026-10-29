@@ -794,15 +794,17 @@ describe("steady, with no second fetch", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("the message area keeps one place, so a message appearing does not move the page", async () => {
+  it("the message area keeps one place: it is empty (and takes no room) until a message comes, and the message comes into the same element", async () => {
     await open("Vehicle Classification");
     const area = document.querySelector(".options-message-area");
     expect(area).not.toBeNull();
     expect(area.childElementCount).toBe(0);
+    expect(area.matches(":empty")).toBe(true); // so the stylesheet draws nothing for it
 
     fireEvent.click(within(rowOf(4)).getByRole("button", { name: "Deactivate Ferry / Port Transfer" }));
     await waitFor(() => expect(within(area).getByRole("status")).toBeTruthy());
 
     expect(document.querySelectorAll(".options-message-area")).toHaveLength(1); // same element, now with a message
+    expect(area.matches(":empty")).toBe(false);
   });
 });
