@@ -1,7 +1,7 @@
 # Hotlines reader: the app reads `emergencyContacts`
 
 Status: written 2026-10-29 from `origin/main` at `77988f2` (read with `git show`), then **corrected by the owner's five decisions (D1 to D5, below)** and implemented
-on the branch `mobile/hotlines-reader` (not committed, not pushed). The live site was not touched and no live data is in this document: the four hotlines quoted by
+on the branch `mobile/hotlines-reader` (committed and pushed). The live site was not touched and no live data is in this document: the four hotlines quoted by
 name are the ones written in the app's code and in the seed (`0054_seed_emergency_contacts.py`).
 
 The goal: the four hotlines the Profile page shows today are written in the Dart code. The server already stores them (`EmergencyContact`), an admin already
@@ -119,7 +119,7 @@ No test was deleted and none weakened.
 
 - Calling a number (`tel:`), copying it, or tapping the email. The card is a read-only box.
 - Splitting the numbers (D).
-- Any change to the web page (it still draws the number in the icon colour, not the darker text colour), the admin API, the model, the serializer or a migration.
+- Any change to the web page in this step (the web number colours were matched to the app's later in the same branch, in commit `31c5aad`), the admin API, the model, the serializer or a migration.
 - Making the app list the written four in addition to the server's list (D1).
 - Verifying that the four seeded numbers are correct. They come from the app's old code; nobody confirmed them with the LGU in this work.
 - The Hotlines tab of PR #17 (open, unmerged), and anything in Sanitation.
@@ -133,7 +133,7 @@ Decisions D1 to D5 settled what was uncertain in the first version (replace or a
 2. **The description's look.** "Smaller and paler than the number": I chose 10.5 px, `AppColors.muted` (`#6B7280`, 4.83:1), line height 1.35, 3 px under the number. Not seen on a phone.
 3. **An entry with a blank number is left out** (the server requires it). If a contact with only an email should be shown, the rule changes.
 4. **The icon box position.** With an email or description it moves to the top of the card; without, it stays centred. A matter of taste; one layout for all would also work.
-5. **The darker text colours.** They keep the hue and saturation and lower the lightness; they were chosen by calculation, not by eye. `#EB1515` (a stronger red than `#EF4444`) and `#9F6D03` (a brown, for `power`) in particular have not been seen. The web page still uses the icon colour for its number text, so the web and the app now differ for six names.
+5. **The darker text colours.** They keep the hue and saturation and lower the lightness; they were chosen by calculation, not by eye. `#EB1515` (a stronger red than `#EF4444`) and `#9F6D03` (a brown, for `power`) in particular have not been seen. The web page now uses the same six darker text colours for its number (commit `31c5aad`), so the web and the app match for all twelve names.
 6. **`help_desk` text colour for other themes.** I rely on the theme code darkening `deep` to 4.5:1 on white (`_darkenToContrast`). I measured the app's own green (6.58) but not the other colours an admin can choose.
 7. **Where the new code lives.** A new `app_contacts.dart`, and the list in the existing `app_content_defaults.dart`. Other splits would also work.
 8. **Order.** The app keeps the server's order and does not sort. There is no limit on the number of contacts drawn (200 are read in a test; the page length with so many was not looked at).

@@ -55,7 +55,7 @@ lightness in steps of half a percent until it reaches 4.5:1.
 | `port` | `#65A30D` | 3.09 (fails) | `#52840B` | 4.50 |
 | `other` | `#64748B` | 4.76 | same | 4.76 |
 
-The description line under the number is `AppColors.muted` (`#6B7280`), 4.83:1. The web page still draws the number in the icon colour; it has not been changed.
+The description line under the number is `AppColors.muted` (`#6B7280`), 4.83:1. The web page draws the number in the same text colour: the six darker ones are the `--th-contact-text-*` tokens in `frontend/src/tourism/Tourism_index.css`, and for the other six it is the icon colour. A Dart test (`mobile/test/app_contacts_test.dart`) fails if a web number colour differs from this table, and tests on both sides (`app_contacts_test.dart`, `contactIcons.test.js`) hold the text colours to 4.5:1 on white.
 
 ## How an icon is drawn (the same on the web and in the app)
 
