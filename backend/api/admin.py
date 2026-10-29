@@ -4,6 +4,7 @@ from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseForbidden
 
+from .services.establishment_retention import ESTABLISHMENT_RETENTION_MESSAGE
 from .services.public_reporting import (
     PublicSubmissionDeletionProtected, RETENTION_MESSAGE, is_public_submission_digest,
 )
@@ -202,6 +203,26 @@ class SanitaryEstablishmentAdminForm(forms.ModelForm):
 class SanitaryEstablishmentAdmin(admin.ModelAdmin):
     form = SanitaryEstablishmentAdminForm
     readonly_fields = ("enforcement_stage",)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def delete_view(self, request, object_id, extra_context=None):
+        if super().has_delete_permission(request):
+            return HttpResponseForbidden(ESTABLISHMENT_RETENTION_MESSAGE)
+        return super().delete_view(request, object_id, extra_context)
+
+    def changelist_view(self, request, extra_context=None):
+        if (request.method == "POST" and request.POST.get("action") == "delete_selected"
+                and super().has_delete_permission(request)):
+            return HttpResponseForbidden(ESTABLISHMENT_RETENTION_MESSAGE)
+        return super().changelist_view(request, extra_context)
+
+    def delete_model(self, request, obj):
+        raise PermissionDenied(ESTABLISHMENT_RETENTION_MESSAGE)
+
+    def delete_queryset(self, request, queryset):
+        raise PermissionDenied(ESTABLISHMENT_RETENTION_MESSAGE)
 
     def get_readonly_fields(self, request, obj=None):
         if obj is not None and obj.enforcement_stage == "suspension":
