@@ -297,6 +297,31 @@ void main() {
       }
       expect(compared, 11);
     });
+
+    test('the web draws the same NUMBER colours: the six darker texts are equal on both sides, and the rest take the icon colour on both', () {
+      final css = read('../frontend/src/tourism/Tourism_index.css');
+      final web = read('../frontend/src/tourism/utils/contactIcons.js');
+      String tokenValue(String t) => RegExp('$t:\\s*(#[0-9a-fA-F]{6});').firstMatch(css)!.group(1)!.toUpperCase();
+      var compared = 0;
+      final darker = <String>[];
+      for (final line in web.split('\n').where((l) => l.contains('{ name: ') && l.contains('token: "'))) {
+        final name = RegExp(r'name: "(\w+)"').firstMatch(line)?.group(1) ?? 'other';
+        final drawn = appContactIcons[name]!;
+        if (drawn.color == null) {
+          expect(line, isNot(contains('textToken')), reason: 'help_desk follows the theme on both sides');
+          continue;
+        }
+        final textToken = RegExp(r'textToken: "(--[\w-]+)"').firstMatch(line)?.group(1);
+        final iconToken = RegExp(r'[^t]token: "(--[\w-]+)"').firstMatch(line)!.group(1)!;
+        final webText = tokenValue(textToken ?? iconToken);
+        expect(webText, hex(drawn.textColor ?? drawn.color!), reason: '$name: the number colour, web vs app');
+        expect(textToken != null, drawn.textColor != null, reason: '$name: both sides have a darker text, or neither does');
+        if (textToken != null) darker.add(name);
+        compared++;
+      }
+      expect(compared, 11); // the fixture: every name but help_desk was compared
+      expect(darker, ['rescue', 'coast_guard', 'fire', 'power', 'water', 'port']);
+    });
   });
 
   group('the contrast of the text on white', () {

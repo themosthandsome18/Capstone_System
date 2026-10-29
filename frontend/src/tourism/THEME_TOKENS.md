@@ -552,4 +552,16 @@ They are **fixed**: an admin's system colour does not change them (only help
 desk follows it, through `--th-primary-deep`). Classified FIXED in
 `deriveTourismTheme.test.js`. The mobile app must use the same colours: see
 `docs/MOBILE_CONTACT_ICONS.md`. The tint is `color-mix(in srgb, <colour> 10%,
-white)`. Total `:root` tokens: 53 + 11 = 64.
+white)`. Total `:root` tokens: 53 + 11 + 6 = 70.
+
+The NUMBER on the hotlines page takes the icon colour, except where that is under 4.5:1 on white. For those six it takes a darker token
+(the app's `textColor`); the icon colour does not change:
+
+| Icon name | Number token | Value | Icon colour (unchanged) |
+|---|---|---|---|
+| `rescue` | `--th-contact-text-rescue` | `#eb1515` | `#ef4444` |
+| `coast_guard` | `--th-contact-text-coast-guard` | `#0c8479` | `#0d9488` |
+| `fire` | `--th-contact-text-fire` | `#c55405` | `#f97316` |
+| `power` | `--th-contact-text-power` | `#9f6d03` | `#ca8a04` |
+| `water` | `--th-contact-text-water` | `#07819e` | `#0891b2` |
+| `port` | `--th-contact-text-port` | `#52840b` | `#65a30d` |

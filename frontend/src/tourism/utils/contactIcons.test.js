@@ -76,6 +76,51 @@ describe("the twelve contact icons", () => {
     });
   });
 
+  describe("the colour of the NUMBER (4.5:1 on white)", () => {
+    const channel = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+    const luminance = (hex) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    };
+    const onWhite = (hex) => 1.05 / (luminance(hex) + 0.05);
+    const SIX = ["rescue", "coast_guard", "fire", "power", "water", "port"];
+
+    it("is a darker token for exactly these six, and the icon colour for the rest", () => {
+      const withText = CONTACT_ICONS.filter((item) => item.textToken).map((item) => item.name);
+      expect(withText).toEqual(SIX);
+      const tokens = rootTokens();
+      SIX.forEach((name) => {
+        const item = contactIcon(name);
+        expect(tokens[item.textToken]).toMatch(/^#[0-9a-f]{6}$/);
+        expect(luminance(tokens[item.textToken])).toBeLessThan(luminance(tokens[item.token])); // darker
+        expect(contactStyle(name)["--contact-text"]).toBe(`var(${item.textToken})`);
+        expect(contactStyle(name)["--contact-color"]).toBe(`var(${item.token})`); // the icon keeps its colour
+      });
+      ["police", "hospital", "ambulance", "help_desk", "lgu_office", "other"].forEach((name) => {
+        expect(contactStyle(name)["--contact-text"]).toBeUndefined();
+      });
+    });
+
+    it("reaches 4.5:1 on white for all twelve; no list of exceptions (help_desk is the theme's, so the theme test holds it)", () => {
+      const tokens = rootTokens();
+      let measured = 0;
+      CONTACT_ICONS.forEach((item) => {
+        if (item.name === "help_desk") return; // follows --th-primary-deep, which the theme derivation keeps at 4.5:1 on white
+        const hex = tokens[item.textToken || item.token];
+        expect(onWhite(hex)).toBeGreaterThanOrEqual(4.5);
+        measured += 1;
+      });
+      expect(measured).toBe(11);
+    });
+
+    it("leaves the eleven fixed icon colours as they were", () => {
+      const tokens = rootTokens();
+      const expected = { rescue: "#ef4444", police: "#2563eb", coast_guard: "#0d9488", fire: "#f97316", hospital: "#db2777", ambulance: "#7c3aed",
+        lgu_office: "#4f46e5", power: "#ca8a04", water: "#0891b2", port: "#65a30d", other: "#64748b" };
+      Object.entries(expected).forEach(([name, hex]) => expect(tokens[contactIcon(name).token]).toBe(hex));
+    });
+  });
+
   it("show an unknown, empty or wrongly written name as 'other': never blank, never an error", () => {
     ["siren", "", null, undefined, "RESCUE", "help desk", 7, {}].forEach((bad) => {
       expect(contactIcon(bad).name).toBe("other");

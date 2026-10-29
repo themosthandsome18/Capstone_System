@@ -289,3 +289,21 @@ describe("the second line: the number and the chips side by side", () => {
     ]);
   });
 });
+
+describe("the number takes the text colour of its icon, which is darker than the icon where the icon is too pale", () => {
+  it("the number rule reads --contact-text first, then the icon colour; and a row of each kind carries the right variables", async () => {
+    const rows = [contact(1, "Fire Row", { icon: "fire" }), contact(2, "Police Row", { icon: "police" })];
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
+    );
+    render(<EmergencyHotlines />);
+    await screen.findByRole("list");
+    const all = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+    const rule = all.slice(all.indexOf("/* ================= EMERGENCY HOTLINES")).match(/\n\.hotline-number \{[^}]*\}/)[0];
+    expect(rule).toContain("color: var(--contact-text, var(--contact-color, var(--th-text-muted)));");
+    expect(rowOf(1).style.getPropertyValue("--contact-text")).toBe("var(--th-contact-text-fire)");
+    expect(rowOf(1).style.getPropertyValue("--contact-color")).toBe("var(--th-contact-fire)"); // the icon is not changed
+    expect(rowOf(2).style.getPropertyValue("--contact-text")).toBe(""); // police passes as it is
+    expect(rowOf(2).style.getPropertyValue("--contact-color")).toBe("var(--th-contact-police)");
+  });
+});
