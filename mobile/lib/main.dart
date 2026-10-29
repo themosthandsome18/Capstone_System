@@ -38,6 +38,8 @@ part 'theme/brand_theme.dart';
 part 'utils/helpers.dart';
 part 'utils/export_helpers.dart';
 part 'models/models.dart';
+part 'models/app_content.dart';
+part 'models/app_content_defaults.dart';
 part 'services/api.dart';
 part 'widgets/widgets.dart';
 part 'widgets/tourism_loading_screen.dart';
@@ -157,17 +159,21 @@ class AppBootstrap extends StatefulWidget {
     super.key,
     this.api = const TourismApi(),
     this.cache = const TourismBootstrapCache(),
+    this.now,
   });
 
   /// Injectable so tests can drive loading, failure and loaded.
   final TourismApi api;
   final TourismBootstrapCache cache;
 
+  /// For tests: the clock the quiet refresh measures its five minutes with. Defaults to the current time.
+  final DateTime Function()? now;
+
   @override
   State<AppBootstrap> createState() => _AppBootstrapState();
 }
 
-class _AppBootstrapState extends State<AppBootstrap> {
+class _AppBootstrapState extends State<AppBootstrap> with WidgetsBindingObserver {
   TourismBootstrapState _state = const TourismBootstrapState.loading();
   bool _showIntro = true;
   bool _showLogin = false;
@@ -178,7 +184,52 @@ class _AppBootstrapState extends State<AppBootstrap> {
     if (!isSanitationModule()) {
       setWebBranding(WebBrandingModule.tourism);
     }
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  DateTime _now() => (widget.now ?? DateTime.now)();
+
+  /// When the server last gave a good answer that was put on screen (launch, Try again, or a quiet refresh). Null until then.
+  DateTime? _lastGoodAnswer;
+
+  /// A quiet refresh is under way.
+  bool _quietRefreshing = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) unawaited(_refreshQuietly());
+  }
+
+  /// Back in the foreground: ask the server again, without anyone noticing. This is NOT [_apply]: when the server answers, the data is replaced (and
+  /// the new copy saved); when it does not, NOTHING changes - no failed state, no error panel, no text taken from the screen. Not when the last good
+  /// answer is younger than [tourismBootstrapQuietRefreshAfter], and never two at once.
+  Future<void> _refreshQuietly() async {
+    if (_quietRefreshing) return;
+    if (_state.isLoading || _state.refreshing) return; // the launch or a Try again is already asking
+    if (_state.isLoaded && _state.fromCache && _state.refreshFailure == null) return; // the launch's own request is still out
+    final last = _lastGoodAnswer;
+    if (last != null && _now().difference(last) < tourismBootstrapQuietRefreshAfter) return;
+    _quietRefreshing = true;
+    try {
+      final result = await _fetch();
+      if (!mounted) return;
+      final bootstrap = result.bootstrap;
+      if (bootstrap == null) return; // it did not answer: leave everything as it is
+      _lastGoodAnswer = _now();
+      _cached = null;
+      setState(() => _state = TourismBootstrapState.loaded(bootstrap));
+      _publishTheme(bootstrap);
+      unawaited(widget.cache.write(result.raw!));
+    } finally {
+      _quietRefreshing = false;
+    }
   }
 
   /// The saved copy that is on screen, if one is.
@@ -237,6 +288,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
   void _apply(_BootstrapFetch result) {
     final bootstrap = result.bootstrap;
     if (bootstrap != null) {
+      _lastGoodAnswer = _now();
       _cached = null;
       setState(() => _state = TourismBootstrapState.loaded(bootstrap));
       _publishTheme(bootstrap);
