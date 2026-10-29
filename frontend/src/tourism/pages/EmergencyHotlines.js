@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { FiArrowDown, FiArrowUp, FiMail, FiPlus } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiPlus } from "react-icons/fi";
 import { useAuth } from "../../auth/AuthContext";
 import { canManageHotlines } from "../hotlinesAccess";
 import { tourismApi } from "../services/tourismApi";
@@ -216,12 +216,24 @@ function EmergencyHotlinesPage() {
               <div className={`hotline-name ${form.name.trim() ? "" : "is-empty"}`} data-testid="preview-name">
                 {form.name.trim() || "Contact name"}
               </div>
-              <div
-                className={`hotline-number ${form.contact_numbers.trim() ? "" : "is-empty"}`}
-                data-testid="preview-number"
-              >
-                {form.contact_numbers.trim() || "Numbers"}
+              <div className="hotline-meta">
+                <div
+                  className={`hotline-box hotline-number ${form.contact_numbers.trim() ? "" : "is-empty"}`}
+                  data-testid="preview-number"
+                >
+                  {form.contact_numbers.trim() || "Numbers"}
+                </div>
+                {form.email.trim() ? (
+                  <div className="hotline-box hotline-email" data-testid="preview-email">
+                    {form.email.trim()}
+                  </div>
+                ) : null}
               </div>
+              {form.description.trim() ? (
+                <div className="hotline-note" data-testid="preview-description">
+                  {form.description.trim()}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -336,19 +348,10 @@ function EmergencyHotlinesPage() {
                         <div className="hotline-main">
                           <div className="hotline-name">{row.name}</div>
                           <div className="hotline-meta">
-                            <div className="hotline-number">{row.contact_numbers}</div>
-                            {row.email ? (
-                              <span className="hotline-chip" title={row.email}>
-                                <FiMail aria-hidden="true" />
-                                <span className="hotline-chip-text">{row.email}</span>
-                              </span>
-                            ) : null}
-                            {row.description ? (
-                              <span className="hotline-chip" title={row.description}>
-                                <span className="hotline-chip-text">{row.description}</span>
-                              </span>
-                            ) : null}
+                            <div className="hotline-box hotline-number">{row.contact_numbers}</div>
+                            {row.email ? <div className="hotline-box hotline-email">{row.email}</div> : null}
                           </div>
+                          {row.description ? <div className="hotline-note">{row.description}</div> : null}
                         </div>
                       </div>
                       <span className={`options-status ${row.is_active ? "active" : "inactive"}`}>

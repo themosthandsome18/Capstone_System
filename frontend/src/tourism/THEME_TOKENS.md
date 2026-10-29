@@ -538,15 +538,18 @@ writes a colour. The colours are tokens in `:root`:
 | `rescue` | `--th-contact-rescue` | `#ef4444` | the app's red (`0xFFEF4444`) |
 | `police` | `--th-contact-police` | `#2563eb` | the app's blue (`0xFF2563EB`) |
 | `coast_guard` | `--th-contact-coast-guard` | `#0d9488` | the app's teal (`0xFF0D9488`) |
-| `fire` | `--th-contact-fire` | `#f97316` | |
+| `fire` | `--th-contact-fire` | `#e86306` | darker than the first `#f97316` so it reaches 3:1 on its own box; same as the app |
 | `hospital` | `--th-contact-hospital` | `#db2777` | |
 | `ambulance` | `--th-contact-ambulance` | `#7c3aed` | |
 | `help_desk` | `--th-primary-deep` | follows the theme | the app's `brand.deep`; no token of its own |
 | `lgu_office` | `--th-contact-lgu-office` | `#4f46e5` | |
-| `power` | `--th-contact-power` | `#ca8a04` | |
+| `power` | `--th-contact-power` | `#bc8104` | darker than the first `#ca8a04`; same as the app |
 | `water` | `--th-contact-water` | `#0891b2` | |
-| `port` | `--th-contact-port` | `#65a30d` | |
+| `port` | `--th-contact-port` | `#619c0c` | darker than the first `#65a30d`; same as the app |
 | `other` | `--th-contact-other` | `#64748b` | what an unknown name is shown as |
+
+The number and the email are small neutral boxes and the description is a grey line (same as the app); they take nothing from the icon's colour:
+`--th-contact-box-bg` `#eff5f7`, `--th-contact-box-text` `#3c4c55` (8.09:1 on the box), `--th-contact-note-text` `#5e6f77` (5.23:1 on white).
 
 They are **fixed**: an admin's system colour does not change them (only help
 desk follows it, through `--th-primary-deep`). Classified FIXED in

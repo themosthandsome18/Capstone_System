@@ -242,7 +242,7 @@ void main() {
 
     test('the doc, the backend choices and the web module list the same twelve names, in the same order as the app', () {
       final doc = read('../docs/MOBILE_CONTACT_ICONS.md');
-      final rows = RegExp(r'^\| `(\w+)` \| `Icons\.(\w+)` \| (.+?) \| (.+?) \| .*\|$', multiLine: true).allMatches(doc).toList();
+      final rows = RegExp(r'^\| `(\w+)` \| `Icons\.(\w+)` \| (.+?) \| .*\|$', multiLine: true).allMatches(doc).toList();
       expect(rows, hasLength(12)); // the fixture: the table was read
       expect(rows.map((m) => m.group(1)), appContactIcons.keys);
       for (final row in rows) {
@@ -260,26 +260,22 @@ void main() {
       expect(webNames, appContactIcons.keys.toList());
     });
 
-    test('the doc\'s colours are the app\'s: the picture\'s and the text\'s', () {
+    test('the doc\'s colours are the app\'s: the colour of the picture, and nothing else', () {
       final doc = read('../docs/MOBILE_CONTACT_ICONS.md');
-      final rows = RegExp(r'^\| `(\w+)` \| `Icons\.\w+` \| (.+?) \| (.+?) \| .*\|$', multiLine: true).allMatches(doc).toList();
+      final rows = RegExp(r'^\| `(\w+)` \| `Icons\.\w+` \| (.+?) \| .*\|$', multiLine: true).allMatches(doc).toList();
       expect(rows, hasLength(12)); // the fixture
       for (final row in rows) {
         final name = row.group(1)!;
         final drawn = appContactIcons[name]!;
-        final iconCell = row.group(2)!;
-        final textCell = row.group(3)!;
+        final cell = row.group(2)!;
         if (drawn.color == null) {
-          expect(iconCell, contains('theme'), reason: name);
+          expect(cell, contains('theme'), reason: name);
         } else {
-          expect(iconCell, contains('(`0xFF${hex(drawn.color!).substring(1)}`)'), reason: '$name picture');
-        }
-        if (drawn.textColor == null) {
-          expect(textCell, 'same', reason: '$name text');
-        } else {
-          expect(textCell, contains('(`0xFF${hex(drawn.textColor!).substring(1)}`)'), reason: '$name text');
+          expect(cell, contains('(`0xFF${hex(drawn.color!).substring(1)}`)'), reason: '$name picture');
         }
       }
+      // the doc has no second colour any more: the text is neutral
+      expect(doc, isNot(contains('Text colour')));
     });
 
     test('the web draws the same picture colours: each token in Tourism_index.css is the app\'s colour', () {
@@ -295,29 +291,39 @@ void main() {
         expect(hex(drawn.color!), value, reason: '$name / $token');
         compared++;
       }
+      expect(compared, 11); // the fixture: every name but help_desk (the theme's colour) was compared
+    });
+
+    test('the web and the DOC match: every picture colour in the doc table is the token in Tourism_index.css (one source of truth)', () {
+      final css = read('../frontend/src/tourism/Tourism_index.css');
+      final doc = read('../docs/MOBILE_CONTACT_ICONS.md');
+      var compared = 0;
+      for (final name in appContactIcons.keys) {
+        final token = '--th-contact-${name.replaceAll('_', '-')}';
+        final row = RegExp('^\\| `$name` \\|[^\\n]*\\| `(#[0-9A-Fa-f]{6})` \\(', multiLine: true).firstMatch(doc);
+        if (name == 'help_desk') {
+          expect(row, isNull, reason: 'help_desk follows the theme: no colour of its own in the doc');
+          continue;
+        }
+        final docValue = row!.group(1)!.toUpperCase();
+        final webValue = RegExp('$token:\\s*(#[0-9a-fA-F]{6});').firstMatch(css)!.group(1)!.toUpperCase();
+        expect(webValue, docValue, reason: '$name: web token $token vs the doc');
+        compared++;
+      }
       expect(compared, 11);
+    });
+
+    test('the web draws the number and the email in the neutral box of the app and the description in its grey', () {
+      final css = read('../frontend/src/tourism/Tourism_index.css');
+      String token(String n) => RegExp('$n:\\s*(#[0-9a-fA-F]{6});').firstMatch(css)!.group(1)!.toUpperCase();
+      final card = read('lib/screens/tourism_screens.dart');
+      expect(card, contains('0xFF${token('--th-contact-box-bg').substring(1)}'));
+      expect(card, contains('0xFF${token('--th-contact-box-text').substring(1)}'));
+      expect(card, contains('0xFF${token('--th-contact-note-text').substring(1)}'));
     });
   });
 
-  group('the contrast of the text on white', () {
-    test('every text colour reaches 4.5:1; the icon colours are untouched', () {
-      var darker = 0;
-      for (final entry in appContactIcons.entries) {
-        final drawn = entry.value;
-        final text = drawn.textColor ?? drawn.color;
-        if (text == null) continue; // help_desk: the theme (see below)
-        expect(contrastOnWhite(text), greaterThanOrEqualTo(4.5), reason: '${entry.key} text ${hex(text)}');
-        if (drawn.textColor != null) {
-          darker++;
-          expect(luminance(drawn.textColor!), lessThan(luminance(drawn.color!)), reason: '${entry.key}: the text colour is the darker one');
-          expect(contrastOnWhite(drawn.color!), lessThan(4.5), reason: '${entry.key}: it is darker only because the icon colour fails');
-        } else {
-          expect(contrastOnWhite(drawn.color!), greaterThanOrEqualTo(4.5), reason: '${entry.key}: it passes as it is');
-        }
-      }
-      expect(darker, 6); // the fixture: six names needed a darker text
-    });
-
+  group('the contrast', () {
     test('the measurement is right: a few known ratios', () {
       expect(contrastOnWhite(const Color(0xFFFFFFFF)), closeTo(1.0, 0.001));
       expect(contrastOnWhite(const Color(0xFF000000)), closeTo(21.0, 0.01));
@@ -325,13 +331,54 @@ void main() {
       expect(contrastOnWhite(const Color(0xFFF97316)), closeTo(2.80, 0.01));
     });
 
-    test('help_desk follows the theme, and the theme\'s deep colour reaches 4.5:1 (the app\'s own green does)', () {
-      expect(contrastOnWhite(BrandColors.original.deep), greaterThanOrEqualTo(4.5));
-      expect(appContactIcons['help_desk']!.textColor, isNull);
+    // The picture is drawn on its OWN pale box (its colour at 10% over the white card), so that is the background it is measured against (WCAG 1.4.11: 3:1 for a graphical object).
+    Color boxOf(Color c) => Color.alphaBlend(c.withValues(alpha: 0.1), Colors.white);
+    double between(Color a, Color b) {
+      final la = luminance(a), lb = luminance(b);
+      return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+    }
+
+    test('ALL TWELVE pictures reach 3:1 against their own pale box (no list of exceptions)', () {
+      var checked = 0;
+      for (final entry in appContactIcons.entries) {
+        final color = entry.value.color ?? BrandColors.original.deep; // help_desk: the app's own green (the theme darkens the others)
+        expect(between(color, boxOf(color)), greaterThanOrEqualTo(3.0), reason: '${entry.key} ${hex(color)} on its box ${hex(boxOf(color))}');
+        checked++;
+      }
+      expect(checked, 12); // the fixture: every name was measured
     });
 
-    test('the description line (AppColors.muted) reaches 4.5:1 as well', () {
-      expect(contrastOnWhite(AppColors.muted), greaterThanOrEqualTo(4.5));
+    test('and they reach 3:1 on plain white as well', () {
+      for (final entry in appContactIcons.entries) {
+        final color = entry.value.color ?? BrandColors.original.deep;
+        expect(contrastOnWhite(color), greaterThanOrEqualTo(3.0), reason: entry.key);
+      }
+    });
+
+    test('the three that were too pale are the original colours made darker, with the same hue', () {
+      HSLColor hsl(Color c) => HSLColor.fromColor(c);
+      const original = {'fire': Color(0xFFF97316), 'power': Color(0xFFCA8A04), 'port': Color(0xFF65A30D)};
+      original.forEach((name, old) {
+        final now = appContactIcons[name]!.color!;
+        expect(between(old, boxOf(old)), lessThan(3.0), reason: '$name: the original was below 3:1 on its box'); // the fixture
+        expect(luminance(now), lessThan(luminance(old)), reason: '$name is darker');
+        expect((hsl(now).hue - hsl(old).hue).abs(), lessThan(1.0), reason: '$name keeps its hue');
+      });
+    });
+
+    test('help_desk follows the theme, and the theme\'s deep colour reaches 4.5:1 on white (the app\'s own green does)', () {
+      expect(contrastOnWhite(BrandColors.original.deep), greaterThanOrEqualTo(4.5));
+      expect(appContactIcons['help_desk']!.color, isNull);
+    });
+
+    test('the text is neutral and readable: the number and the email on their box, the description on white (4.5:1)', () {
+      double between(Color a, Color b) {
+        final la = luminance(a), lb = luminance(b);
+        return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+      }
+
+      expect(between(const Color(0xFF3C4C55), const Color(0xFFEFF5F7)), greaterThanOrEqualTo(4.5));
+      expect(contrastOnWhite(const Color(0xFF5E6F77)), greaterThanOrEqualTo(4.5));
     });
   });
 

@@ -1,7 +1,8 @@
 # Hotlines reader: the app reads `emergencyContacts`
 
-Status: written 2026-10-29 from `origin/main` at `77988f2` (read with `git show`), then **corrected by the owner's five decisions (D1 to D5, below)** and implemented
-on the branch `mobile/hotlines-reader` (not committed, not pushed). The live site was not touched and no live data is in this document: the four hotlines quoted by
+Status: written 2026-10-29 from `origin/main` at `77988f2` (read with `git show`), then **corrected by the owner's five decisions (D1 to D5, below)**, implemented
+on the branch `mobile/hotlines-reader` (commit `f2dd2e7`, not pushed), and then **the look of the card was changed to follow the design (decision A, "the artboard")**: that
+change is not committed yet. Where the two disagree, section F and the contrast section below are the current ones. The live site was not touched and no live data is in this document: the four hotlines quoted by
 name are the ones written in the app's code and in the seed (`0054_seed_emergency_contacts.py`).
 
 The goal: the four hotlines the Profile page shows today are written in the Dart code. The server already stores them (`EmergencyContact`), an admin already
@@ -16,7 +17,8 @@ read it, keeping the four written ones as the fallback, exactly as `appContent` 
 | **D2** | **Show `description`.** The card grows to hold it under the number, smaller and paler than the number. An empty description draws nothing and leaves no gap. | A, card |
 | **D3** | **The email is its own field and its own line.** It is not joined to the number. In the defaults the desk's number and email are two fields, as the server sends them. An empty email draws nothing. | A, E, card |
 | **D4** | **A slash ` / ` separates several numbers**, not a comma (the first brief said comma; that was wrong). The app does not split them yet: it shows the text whole, as today. The slash is recorded here as the right separator. | D |
-| **D5** | **Measure the contrast** of all twelve colours on white. Any below 4.5:1 gets a darker colour **for the text only**; the icon colour never changes. | C |
+| **D5** | **Measure the contrast** of all twelve colours on white. (First answer: any below 4.5:1 got a darker colour for the text only. **Superseded by decision A below:** the text is neutral, so there is no darker text colour; the picture's colour needs 3:1, and it was measured.) | C |
+| **A** | **Follow the design.** The number and the email are small neutral boxes (not coloured lines); the description is a grey line under them; the picture and its box keep their original colour. The twelve original colours are back and the six darker text colours are gone. | C, F |
 
 ## What exists (the facts this spec stands on)
 
@@ -53,33 +55,16 @@ never has a blank section** while the code has four.
 A broken entry: not a map; `id` not a whole number; `name` or `contact_numbers` not a string or blank after trimming; a repeated `id`. NOT broken: a missing, odd or blank
 `email`, `description` or `icon` (an unknown icon is drawn as `other`). The text is shown as written; no `{...}` is looked for.
 
-## C. The twelve icons, and the contrast of their text (D5)
+## C. The twelve icons and their colour (decision A; contrast measured)
 
-`appContactIcons` / `appContactIconFor(Object?)` like `appContentIcons`: an unknown name, or a non-string, is `other`. `AppContactIcon(icon, color, [textColor])`: `color` is the
-picture's colour (and its box); `null` means the theme's `context.brand.deep` (only `help_desk`). `textColor` is the colour of the number and the email, `null` meaning the same as `color`.
-**The app is the measure for the four that existed**: their icon colours are unchanged.
+`appContactIcons` / `appContactIconFor(Object?)` like `appContentIcons`: an unknown name, or a non-string, is `other`. `AppContactIcon(icon, color)`: `color` is the picture's colour and its
+box's; `null` means the theme's `context.brand.deep` (only `help_desk`). **One colour per name, and it is used for the picture only.** The twelve are the original colours, in
+`docs/MOBILE_CONTACT_ICONS.md`; the app is the measure for the four that existed.
 
-Measured 2026-10-29 (WCAG 2.x, on `#FFFFFF`). The rule is 4.5:1 for the text at 11.5 px. A colour below it gets a text colour with the same hue and saturation and a lower lightness (steps of half a percent)
-until it reaches 4.5:1.
-
-| name | `IconData` | icon colour | ratio | text colour | ratio |
-|---|---|---|---|---|---|
-| `rescue` | `Icons.local_hospital_outlined` | `#EF4444` | 3.76 **fails** | `#EB1515` | 4.52 |
-| `police` | `Icons.local_police_outlined` | `#2563EB` | 5.17 | same | 5.17 |
-| `coast_guard` | `Icons.directions_boat_outlined` | `#0D9488` | 3.74 **fails** | `#0C8479` | 4.57 |
-| `fire` | `Icons.local_fire_department_outlined` | `#F97316` | 2.80 **fails** | `#C55405` | 4.52 |
-| `hospital` | `Icons.medical_services_outlined` | `#DB2777` | 4.60 | same | 4.60 |
-| `ambulance` | `Icons.emergency_outlined` | `#7C3AED` | 5.70 | same | 5.70 |
-| `help_desk` | `Icons.support_agent_outlined` | the theme's deep (the app's own green `#0C6B3F`) | 6.58 | same | 6.58 |
-| `lgu_office` | `Icons.account_balance_outlined` | `#4F46E5` | 6.29 | same | 6.29 |
-| `power` | `Icons.bolt_outlined` | `#CA8A04` | 2.94 **fails** | `#9F6D03` | 4.50 |
-| `water` | `Icons.water_drop_outlined` | `#0891B2` | 3.68 **fails** | `#07819E` | 4.52 |
-| `port` | `Icons.anchor_outlined` | `#65A30D` | 3.09 **fails** | `#52840B` | 4.50 |
-| `other` | `Icons.phone_outlined` | `#64748B` | 4.76 | same | 4.76 |
-
-Six names failed (`rescue`, `coast_guard`, `fire`, `power`, `water`, `port`). Two of them, `rescue` and `coast_guard`, are among the four the app has today: their number text was already below 4.5:1, and
-is now the darker colour; their icons and boxes keep the colour they had. `help_desk` follows the theme, whose deep colour is already darkened to 4.5:1 on white by the theme code
-(`_darkenToContrast`). The description line is `AppColors.muted` (`#6B7280`): 4.83:1. The pale box behind the icon is the icon colour at 10%, not the text colour.
+The picture is a graphical object, so the rule is **3:1** (WCAG 1.4.11), measured **against its own box** (its colour at 10% over white), which is what it is really drawn on. The full table of the twelve (colour,
+ratio on its box, ratio on white) is in `docs/MOBILE_CONTACT_ICONS.md`. Result: nine passed as they were; `fire` (`#F97316`, 2.53 on its box), `power` (`#CA8A04`, 2.67) and `port` (`#65A30D`, 2.80) were made darker with
+the same hue to `#E86306`, `#BC8104` and `#619C0C` (3.01 each). **All twelve reach 3:1; there is no list of exceptions.** The web page uses the same three. The text needs no colour from the picture: the number and the email
+(`#3C4C55`) on their box (`#EFF5F7`) are 8.09:1, the description (`#5E6F77`) on white 5.23:1.
 
 `docs/MOBILE_CONTACT_ICONS.md` is the table the app must match; a Dart test (`mobile/test/app_contacts_test.dart`) fails if the app's map differs from that table, from
 `EmergencyContact.ICON_CHOICES` in the backend, or from the web module (names, order, and the web's colour tokens).
@@ -95,11 +80,12 @@ whole, as written. A text with no separator is shown as it is; a blank text make
 The desk's `numbers` and `email` are two fields (D3). The heading `'Emergency Hotlines & Helpdesk'` stays in the screen. Tests: each text is in `lib/` once; the four equal the seed
 (`0054_seed_emergency_contacts.py`) field by field (name, numbers, email, icon); their icons and colours are the four the screen had.
 
-## F. The card (D2, D3)
+## F. The card (decision A, from the design "Edit hotline", "How it will look in the app")
 
-`_EmergencyContactCard`: the name (bold 12.5), the number (11.5, w600, **text colour**), then **only if not empty**: the email on its own line (same style as the number), and the description
-(10.5, `AppColors.muted`, line height 1.35, 3 px under). An empty one draws nothing and leaves no gap (a card with neither is exactly as tall as the old card). With an email or a description
-the icon box sits at the top of the card; without, it stays centred, as it was.
+`_EmergencyContactCard`: the picture in its colour inside its 10% box (radius 8) at the top left; the name (bold 12.5); 6 px under it, a `Wrap` (6 px between boxes and between lines) of small boxes:
+the **number** (ONE box, even with several numbers separated by a slash) and, **only if not empty, the email**. A box: background `#EFF5F7`, text `#3C4C55`, 11 px, semi-bold, radius 7, padding 3 px 8 px; it goes to the
+next line when it does not fit. Then, **only if not empty**, the **description**: 11.5 px, `#5E6F77`, 7 px below the boxes. An empty email has no box; an empty description has no line and no gap. Nothing on the card but the picture and its box
+takes the picture's colour.
 
 ## G. The existing tests that had to change, and why
 
@@ -119,7 +105,7 @@ No test was deleted and none weakened.
 
 - Calling a number (`tel:`), copying it, or tapping the email. The card is a read-only box.
 - Splitting the numbers (D).
-- Any change to the web page (it still draws the number in the icon colour, not the darker text colour), the admin API, the model, the serializer or a migration.
+- Any change to the admin API, the model, the serializer or a migration.
 - Making the app list the written four in addition to the server's list (D1).
 - Verifying that the four seeded numbers are correct. They come from the app's old code; nobody confirmed them with the LGU in this work.
 - The Hotlines tab of PR #17 (open, unmerged), and anything in Sanitation.
@@ -129,12 +115,12 @@ No test was deleted and none weakened.
 
 Decisions D1 to D5 settled what was uncertain in the first version (replace or add; show the description; the email apart; slash or comma; the contrast). What is left:
 
-1. **The email's look.** D3 says it is its own line. How it looks was not specified. I gave it the number's style (11.5, w600, the text colour). The web preview does not show the email at all.
-2. **The description's look.** "Smaller and paler than the number": I chose 10.5 px, `AppColors.muted` (`#6B7280`, 4.83:1), line height 1.35, 3 px under the number. Not seen on a phone.
+1. **The artboard file was not opened.** `EditHotline.dc.html` could not be found on this computer. Every value of the card (colours, sizes, radius, padding, 6 px, 7 px) is the one the owner wrote in the instruction, not one read from the design.
+2. **What the instruction did not say, I chose:** the gap between the name and the first box (6 px); that the description is regular weight with the default line height; that the picture's box stays at the top of the card.
 3. **An entry with a blank number is left out** (the server requires it). If a contact with only an email should be shown, the rule changes.
-4. **The icon box position.** With an email or description it moves to the top of the card; without, it stays centred. A matter of taste; one layout for all would also work.
-5. **The darker text colours.** They keep the hue and saturation and lower the lightness; they were chosen by calculation, not by eye. `#EB1515` (a stronger red than `#EF4444`) and `#9F6D03` (a brown, for `power`) in particular have not been seen. The web page still uses the icon colour for its number text, so the web and the app now differ for six names.
-6. **`help_desk` text colour for other themes.** I rely on the theme code darkening `deep` to 4.5:1 on white (`_darkenToContrast`). I measured the app's own green (6.58) but not the other colours an admin can choose.
+4. **`fire`, `power` and `port` were made darker** (same hue) to reach 3:1 on their own box; the new hexes were chosen by calculation, not by eye, and have not been seen on a phone. The web page was changed to the same values.
+5. **`help_desk` for other themes.** I measured the app's own green; the other colours an admin can choose rely on the theme code darkening `deep`.
+6. **The web page was brought to the app's look** (neutral boxes for the number and the email, the description shown, the three darker colours) in a later step on the same branch. The up/down arrows are still there: the design's Order box needs the reorder endpoint, which is separate work.
 7. **Where the new code lives.** A new `app_contacts.dart`, and the list in the existing `app_content_defaults.dart`. Other splits would also work.
 8. **Order.** The app keeps the server's order and does not sort. There is no limit on the number of contacts drawn (200 are read in a test; the page length with so many was not looked at).
 9. **The saved copy.** A phone with no good answer for up to 7 days shows the contacts of its last good answer; the quiet refresh updates it at the next return to the app after 5 minutes. For emergency numbers, a 7-day-old copy may be wrong. No special rule was added.

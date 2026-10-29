@@ -83,14 +83,18 @@
     --th-contact-rescue: #ef4444;
     --th-contact-police: #2563eb;
     --th-contact-coast-guard: #0d9488;
-    --th-contact-fire: #f97316;
+    --th-contact-fire: #e86306;
     --th-contact-hospital: #db2777;
     --th-contact-ambulance: #7c3aed;
     --th-contact-lgu-office: #4f46e5;
-    --th-contact-power: #ca8a04;
+    --th-contact-power: #bc8104;
     --th-contact-water: #0891b2;
-    --th-contact-port: #65a30d;
+    --th-contact-port: #619c0c;
     --th-contact-other: #64748b;
+    /* The number and the email are small neutral boxes; the description is a grey line. They take nothing from the icon's colour. */
+    --th-contact-box-bg: #eff5f7;
+    --th-contact-box-text: #3c4c55;
+    --th-contact-note-text: #5e6f77;
   }
 
   * {
@@ -4776,8 +4780,7 @@
   background: var(--th-surface-alt);
 }
 
-.hotline-row.is-inactive .hotline-name,
-.hotline-row.is-inactive .hotline-number {
+.hotline-row.is-inactive .hotline-name {
   color: var(--th-text-muted);
 }
 
@@ -4806,60 +4809,38 @@
   color: var(--th-text-main);
 }
 
-.hotline-number {
-  margin-top: -6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--contact-color, var(--th-text-muted));
-}
-
-/* The SECOND LINE of a row: the number and the chips side by side. If they do
-   not all fit, a whole item (the number, or a whole chip) drops to the next
-   line; nothing is split inside. With no chip it is just the number. */
+/* The SECOND LINE of a row: the number and the email, each in a small neutral box
+   (the same as the app: 11px, semi-bold, radius 7, padding 3px 8px, 6px apart).
+   If they do not both fit, a whole box drops to the next line. Several numbers
+   written with a slash are ONE box. */
 .hotline-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 6px;
   margin-top: -6px;
 }
 
-.hotline-meta .hotline-number {
-  min-width: 0;
-  margin-top: 0;
-}
-
-/* A chip is ONE line: the icon (if any) and the text side by side, centred on
-   each other. The base stylesheet makes every svg display:block, which would
-   put an icon above its text, so the chip is a flex row and never wraps inside.
-   When there is not room for the whole chip, the second line (.hotline-meta,
-   flex-wrap) moves the whole chip to the next line. Only a text longer than a
-   full line is cut, with an ellipsis (the full text is in the chip's title). */
-.hotline-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 24px;
+.hotline-box {
   box-sizing: border-box;
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-  background: var(--th-primary-tint);
-  color: var(--th-primary-ink);
-}
-
-.hotline-chip svg {
-  flex: none;
-}
-
-.hotline-chip-text {
+  max-width: 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  background: var(--th-contact-box-bg);
+  color: var(--th-contact-box-text);
+}
+
+/* The description: under the boxes, 7px away. Not drawn at all when empty. */
+.hotline-note {
+  margin-top: 7px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--th-contact-note-text);
 }
 
 /* Small parts of the row never split their own words over two lines. */

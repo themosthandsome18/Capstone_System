@@ -551,14 +551,14 @@ describe("moving up and down", () => {
   });
 });
 
-describe("optional details are chips that appear only when there is something", () => {
-  it("a contact with no email and no description has no chip and no empty field", async () => {
+describe("optional details are boxes and a line that appear only when there is something", () => {
+  it("a contact with no email and no description has no extra box, no line and no empty field", async () => {
     await open();
     const plain = rowOf(4); // no email, no description
-    expect(plain.querySelectorAll(".hotline-chip")).toHaveLength(0);
+    expect(plain.querySelectorAll(".hotline-email, .hotline-note")).toHaveLength(0);
     // two lines only: the name, and the number (nothing else on the second line)
     const meta = plain.querySelector(".hotline-meta");
-    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-number"]);
+    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-box hotline-number"]);
     expect([...plain.querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])).toEqual([
       "hotline-name",
       "hotline-meta",
@@ -572,24 +572,27 @@ describe("optional details are chips that appear only when there is something", 
     expect(within(plain).getByText("0400-111-4444")).toBeTruthy();
   });
 
-  it("an email gives one chip, a description gives one chip, and each has its text", async () => {
+  it("an email gives one box, a description gives one line, and each has its text", async () => {
     await open();
     const withEmail = rowOf(9);
-    expect(withEmail.querySelectorAll(".hotline-chip")).toHaveLength(1);
-    expect(within(withEmail).getByText("mike@example.com").closest(".hotline-chip")).not.toBeNull();
+    expect(withEmail.querySelectorAll(".hotline-email")).toHaveLength(1);
+    expect(withEmail.querySelectorAll(".hotline-note")).toHaveLength(0);
+    expect(within(withEmail).getByText("mike@example.com").className).toContain("hotline-email");
 
     const withDescription = rowOf(2);
-    expect(withDescription.querySelectorAll(".hotline-chip")).toHaveLength(1);
-    expect(within(withDescription).getByText("Boats and sea rescue").closest(".hotline-chip")).not.toBeNull();
+    expect(withDescription.querySelectorAll(".hotline-note")).toHaveLength(1);
+    expect(withDescription.querySelectorAll(".hotline-email")).toHaveLength(0);
+    expect(within(withDescription).getByText("Boats and sea rescue").className).toContain("hotline-note");
   });
 
-  it("both together give two chips", async () => {
+  it("both together give the email box and the description line", async () => {
     answerWith = {
       match: (method, path) => method === "GET" && path === "/emergency-contacts/",
       body: [contact(3, "Both Details", "fire", 10, { email: "both@example.com", description: "Open all night" })],
     };
     await open();
-    expect(rowOf(3).querySelectorAll(".hotline-chip")).toHaveLength(2);
+    expect(rowOf(3).querySelectorAll(".hotline-email")).toHaveLength(1);
+    expect(rowOf(3).querySelectorAll(".hotline-note")).toHaveLength(1);
   });
 
   it("there is no table, no column heading and no hours anywhere", async () => {

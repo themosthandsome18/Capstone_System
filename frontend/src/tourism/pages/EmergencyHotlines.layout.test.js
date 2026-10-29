@@ -125,167 +125,150 @@ describe("the icon lines up with the first line, and does not depend on the chip
   });
 });
 
-describe("a chip is one line: the icon and the text side by side, never split inside", () => {
+const WHOLE_CSS = () => fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+// jsdom does not resolve var() from :root for this slice, so a colour is checked in two steps:
+// the rule must point at a token, and the token must hold the app's value.
+const tokenValue = (name) => {
+  const m = WHOLE_CSS().match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6});`));
+  return m ? m[1].toLowerCase() : null;
+};
+
+describe("the number and the email are small neutral boxes, as in the app", () => {
   const LONG_EMAIL = `${"very.long.address.".repeat(8)}name@a-very-long-domain-name-for-a-test.example.com`;
 
-  async function openWithChips() {
-    const rows = [
-      contact(1, "Plain Row"),
-      contact(2, "Email Row", { email: LONG_EMAIL }),
-      contact(3, "Description Row", { description: "A description that is long enough to fill a good part of the line" }),
-      contact(4, "Both Row", { email: "short@example.com", description: "Short note" }),
-    ];
+  async function openWith(rows) {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
     );
     render(<EmergencyHotlines />);
     await screen.findByRole("list");
   }
-  const chipsOf = () => [...document.querySelectorAll(".hotline-chip")];
+  const boxesOf = (row) => [...row.querySelectorAll(".hotline-box")];
 
-  it("makes every chip a centred flex row that may not wrap inside", async () => {
-    await openWithChips();
-    expect(chipsOf()).toHaveLength(4); // email, description, email, description
-    chipsOf().forEach((chip) => {
-      expect(css(chip, "display")).toBe("inline-flex");
-      expect(css(chip, "align-items")).toBe("center");
-      expect(css(chip, "white-space")).toBe("nowrap");
+  it("gives the number and the email the app's box: 11px, semi-bold, radius 7, padding 3px 8px", async () => {
+    await openWith([contact(1, "Plain Row"), contact(2, "Email Row", { email: "one@example.com" })]);
+    const boxes = [...boxesOf(rowOf(1)), ...boxesOf(rowOf(2))];
+    expect(boxes).toHaveLength(3); // number | number + email: the fixture reached both kinds
+    boxes.forEach((box) => {
+      expect(css(box, "font-size")).toBe("11px");
+      expect(css(box, "font-weight")).toBe("600");
+      expect(css(box, "border-radius")).toBe("7px");
+      expect(css(box, "padding")).toBe("3px 8px");
+      expect(css(box, "max-width")).toBe("100%");
     });
   });
 
-  it("lets the SECOND LINE wrap, so a whole chip (or the number) moves to the next line", async () => {
-    await openWithChips();
-    const lines = [...document.querySelectorAll(".hotline-meta")];
-    expect(lines).toHaveLength(4); // one per row
-    lines.forEach((line) => {
-      expect(css(line, "display")).toBe("flex");
-      expect(css(line, "flex-wrap")).toBe("wrap");
-      expect(css(line, "align-items")).toBe("center");
-    });
-    // a chip is never wider than the line
-    chipsOf().forEach((chip) => expect(css(chip, "max-width")).toBe("100%"));
+  it("paints the boxes with the neutral tokens, whose values are the app's #EFF5F7 and #3C4C55", () => {
+    const rule = WHOLE_CSS().match(/\.hotline-box \{[^}]*\}/)[0];
+    expect(rule).toContain("background: var(--th-contact-box-bg)");
+    expect(rule).toContain("color: var(--th-contact-box-text)");
+    expect(tokenValue("--th-contact-box-bg")).toBe("#eff5f7");
+    expect(tokenValue("--th-contact-box-text")).toBe("#3c4c55");
   });
 
-  it("gives every chip the same height, with the icon beside its text and not above it", async () => {
-    await openWithChips();
-    const heights = new Set(chipsOf().map((chip) => css(chip, "min-height")));
-    expect([...heights]).toEqual(["24px"]);
-    const withIcon = chipsOf().filter((chip) => chip.querySelector("svg"));
-    expect(withIcon).toHaveLength(2);
-    withIcon.forEach((chip) => {
-      // in the chip, the icon comes first and the text second, as two flex items of ONE row
-      expect([...chip.children].map((el) => el.tagName.toLowerCase())).toEqual(["svg", "span"]);
-      expect(css(chip.querySelector("svg"), "flex")).toMatch(/^(0 0 auto|none)/);
-    });
-    // the same height whether it has an icon or not
-    const descriptionChip = chipsOf().find((chip) => !chip.querySelector("svg"));
-    expect(css(descriptionChip, "min-height")).toBe("24px");
-    expect(css(descriptionChip, "display")).toBe("inline-flex");
+  it("does not take the icon's colour for the number any more, and has no chip rule left", () => {
+    const all = WHOLE_CSS();
+    const hotlines = all.slice(all.indexOf("/* ================= EMERGENCY HOTLINES"));
+    expect(hotlines).not.toContain("hotline-chip");
+    expect(hotlines).toContain(".hotline-box {"); // the fixture: the box rule is in the slice that was read
+    const numberRules = hotlines.match(/[^}]*\.hotline-number[^{]*\{[^}]*\}/g) || [];
+    numberRules.forEach((r) => expect(r).not.toContain("--contact-color"));
+    expect(hotlines.match(/\.hotline-box \{[^}]*\}/)[0]).not.toContain("--contact-color");
   });
 
-  it("does not split a very long email in two: one text, one line, cut with an ellipsis if it cannot fit", async () => {
-    await openWithChips();
-    const chip = [...document.querySelectorAll(".hotline-chip")].find((c) => c.textContent.includes("a-very-long-domain"));
-    const text = chip.querySelector(".hotline-chip-text");
-    // the whole address is ONE text, in ONE element (nothing splits it into two lines' worth of boxes)
-    expect(text.textContent).toBe(LONG_EMAIL);
-    expect(text.childNodes).toHaveLength(1);
-    expect(css(text, "white-space")).toBe("nowrap");
-    expect(css(text, "overflow")).toBe("hidden");
-    expect(css(text, "text-overflow")).toBe("ellipsis");
-    expect(css(text, "min-width")).toMatch(/^0(px)?$/);
-    // the person can still read all of it
-    expect(chip.getAttribute("title")).toBe(LONG_EMAIL);
+  it("puts the number and the email on ONE wrapping row, 6px apart, so a whole box drops to the next line", async () => {
+    await openWith([contact(4, "Both Row", { email: "two@example.com", description: "Another short note" })]);
+    const meta = rowOf(4).querySelector(".hotline-meta");
+    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-box hotline-number", "hotline-box hotline-email"]);
+    expect(css(meta, "display")).toBe("flex");
+    expect(css(meta, "flex-wrap")).toBe("wrap");
+    expect(css(meta, "gap")).toMatch(/^6px( 6px)?$/);
   });
 
-  it("keeps the other small parts of the row on one line too: the status pill and the buttons", async () => {
-    await openWithChips();
+  it("keeps several numbers separated by a slash in ONE box", async () => {
+    await openWith([contact(5, "Slash Row", { contact_numbers: "0917-111-2222 / (042) 555-0000 / 911" })]);
+    const boxes = boxesOf(rowOf(5));
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0].textContent).toBe("0917-111-2222 / (042) 555-0000 / 911");
+    expect(boxes[0].children).toHaveLength(0);
+  });
+
+  it("does not cut a very long email: one text in one box that may break inside, never wider than the line", async () => {
+    await openWith([contact(2, "Email Row", { email: LONG_EMAIL })]);
+    const box = rowOf(2).querySelector(".hotline-email");
+    expect(box.textContent).toBe(LONG_EMAIL);
+    expect(box.childNodes).toHaveLength(1);
+    expect(css(box, "overflow-wrap")).toBe("anywhere");
+    expect(css(box, "max-width")).toBe("100%");
+  });
+
+  it("has NO email box when the email is an empty text", async () => {
+    await openWith([contact(1, "Plain Row", { email: "" }), contact(2, "Email Row", { email: "one@example.com" })]);
+    expect(rowOf(2).querySelector(".hotline-email")).not.toBeNull(); // the fixture: a row WITH an email exists
+    expect(rowOf(1).querySelector(".hotline-email")).toBeNull();
+    expect(boxesOf(rowOf(1))).toHaveLength(1); // the number only
+    const meta = rowOf(1).querySelector(".hotline-meta");
+    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-box hotline-number"]);
+  });
+
+  it("has NO description line, and no gap for it, when the description is an empty text", async () => {
+    await openWith([
+      contact(1, "Plain Row", { description: "" }),
+      contact(3, "Description Row", { description: "A short note" }),
+    ]);
+    expect(rowOf(3).querySelector(".hotline-note").textContent).toBe("A short note"); // the fixture
+    expect(rowOf(1).querySelector(".hotline-note")).toBeNull();
+    expect([...rowOf(1).querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])).toEqual([
+      "hotline-name",
+      "hotline-meta",
+    ]);
+  });
+
+  it("shows the description under the boxes: 11.5px, 7px above, in the app's grey #5E6F77", async () => {
+    await openWith([contact(4, "Both Row", { email: "two@example.com", description: "Another short note" })]);
+    const main = rowOf(4).querySelector(".hotline-main");
+    expect([...main.children].map((el) => el.className.split(" ")[0])).toEqual([
+      "hotline-name",
+      "hotline-meta",
+      "hotline-note",
+    ]);
+    const note = main.querySelector(".hotline-note");
+    expect(note.textContent).toBe("Another short note");
+    expect(css(note, "font-size")).toBe("11.5px");
+    expect(css(note, "margin-top")).toBe("7px");
+    expect(WHOLE_CSS().match(/\.hotline-note \{[^}]*\}/)[0]).toContain("color: var(--th-contact-note-text)");
+    expect(tokenValue("--th-contact-note-text")).toBe("#5e6f77");
+  });
+
+  it("keeps the other small parts of the row on one line: the status pill and the buttons", async () => {
+    await openWith([contact(1, "Plain Row")]);
     const row = rowOf(1);
     expect(css(row.querySelector(".options-status"), "white-space")).toBe("nowrap");
     row.querySelectorAll(".hotline-actions button").forEach((button) => {
       expect(css(button, "white-space")).toBe("nowrap");
     });
-  });
-});
-
-describe("the second line: the number and the chips side by side", () => {
-  const rows = () => [
-    contact(1, "Plain Row"),
-    contact(2, "Email Row", { email: "one@example.com" }),
-    contact(3, "Description Row", { description: "A short note" }),
-    contact(4, "Both Row", { email: "two@example.com", description: "Another short note" }),
-  ];
-  async function open() {
-    const data = rows();
-    global.fetch = jest.fn(() =>
-      Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(data), json: async () => data })
-    );
-    render(<EmergencyHotlines />);
-    await screen.findByRole("list");
-  }
-
-  it("puts the number and the chips in ONE flex row, as neighbours (not one block under the other)", async () => {
-    await open();
-    [2, 3, 4].forEach((id) => {
-      const meta = rowOf(id).querySelector(".hotline-meta");
-      const number = meta.querySelector(".hotline-number");
-      const chips = [...meta.querySelectorAll(".hotline-chip")];
-      expect(chips.length).toBeGreaterThan(0);
-      expect(css(meta, "display")).toBe("flex");
-      expect(css(meta, "flex-direction") || "row").toMatch(/^row/);
-      // the number and every chip are direct children of that one row
-      expect(number.parentElement).toBe(meta);
-      chips.forEach((chip) => expect(chip.parentElement).toBe(meta));
-      // and the first chip comes right after the number, on the same line
-      expect(number.nextElementSibling).toBe(chips[0]);
-    });
-    // the row has exactly two lines in its text part: the name, then this one
-    expect(
-      [...rowOf(4).querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])
-    ).toEqual(["hotline-name", "hotline-meta"]);
-  });
-
-  it("gives a row with no email and no description just two lines and no chip place", async () => {
-    await open();
-    const main = rowOf(1).querySelector(".hotline-main");
-    expect([...main.children].map((el) => el.className.split(" ")[0])).toEqual(["hotline-name", "hotline-meta"]);
-    const meta = main.querySelector(".hotline-meta");
-    expect([...meta.children].map((el) => el.className)).toEqual(["hotline-number"]);
-    expect(main.querySelectorAll(".hotline-chip")).toHaveLength(0);
-    // nothing empty is standing in for a chip
-    const empties = [...main.querySelectorAll("*")].filter((el) => el.children.length === 0 && el.textContent.trim() === "" && el.tagName.toLowerCase() !== "svg" && !el.closest("svg"));
-    expect(empties).toEqual([]);
-  });
-
-  it("lets two chips wrap as WHOLE chips: the number and each chip are items of one wrapping row", async () => {
-    await open();
-    const meta = rowOf(4).querySelector(".hotline-meta");
-    expect([...meta.children].map((el) => el.className.split(" ")[0])).toEqual([
-      "hotline-number",
-      "hotline-chip",
-      "hotline-chip",
-    ]);
-    expect(css(meta, "flex-wrap")).toBe("wrap");
-    meta.querySelectorAll(".hotline-chip").forEach((chip) => {
-      expect(css(chip, "white-space")).toBe("nowrap"); // never split inside
-      expect(css(chip, "display")).toBe("inline-flex");
-      expect(css(chip, "max-width")).toBe("100%");
-    });
     // the earlier rules still hold: the icon is on the first line, the right group is in the middle
-    const row = rowOf(4);
     expect(css(row.querySelector(".hotline-body"), "align-items")).toBe("flex-start");
     expect(css(row, "align-items")).toBe("center");
   });
 
-  it("leaves the preview card alone: it has no chips, so it has no second-line row either", async () => {
-    await open();
+  it("shows the same boxes in the preview, with the email and description only when they are typed", async () => {
+    await openWith([contact(1, "Plain Row")]);
     fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
     const preview = screen.getByRole("group", { name: "Preview" });
-    expect(preview.querySelector(".hotline-meta")).toBeNull();
-    expect(preview.querySelector(".hotline-chip")).toBeNull();
     expect([...preview.querySelector(".hotline-main").children].map((el) => el.className.split(" ")[0])).toEqual([
       "hotline-name",
-      "hotline-number",
+      "hotline-meta",
     ]);
+    expect(preview.querySelector(".hotline-number").classList.contains("hotline-box")).toBe(true);
+    expect(preview.querySelector(".hotline-email")).toBeNull();
+    expect(preview.querySelector(".hotline-note")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "me@example.com" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Typed note" } });
+    expect(preview.querySelector(".hotline-email").textContent).toBe("me@example.com");
+    expect(preview.querySelector(".hotline-email").classList.contains("hotline-box")).toBe(true);
+    expect(preview.querySelector(".hotline-note").textContent).toBe("Typed note");
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "" } });
+    expect(preview.querySelector(".hotline-email")).toBeNull();
   });
 });

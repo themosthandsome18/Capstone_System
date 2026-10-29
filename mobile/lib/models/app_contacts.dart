@@ -83,34 +83,32 @@ class AppContacts {
   List<AppContact> resolve(List<AppContact> fromCode) => items.isEmpty ? fromCode : items;
 }
 
-/// The picture and the colours of an icon NAME (docs/MOBILE_CONTACT_ICONS.md). [color] is the colour of the picture and of its pale box; `null` means "the theme's
-/// own deep colour" (only `help_desk`). [textColor] is the colour of the TEXT (the number and the email), which is a darker version of [color] where [color]
-/// is too light to read at 11.5 px on white (below 4.5:1); `null` means the text has the colour of the picture.
+/// The picture of an icon NAME and its colour (docs/MOBILE_CONTACT_ICONS.md). [color] is for the picture and its pale box ONLY: the numbers and the email are in
+/// neutral boxes (see the card). `null` means "the theme's own deep colour" (only `help_desk`). Every colour reaches 3:1 against its OWN pale box (itself at 10% over
+/// white), which is what the picture is really drawn on; `fire`, `power` and `port` are the original colours made darker for that, with the same hue.
 class AppContactIcon {
-  const AppContactIcon(this.icon, this.color, [this.textColor]);
+  const AppContactIcon(this.icon, this.color);
 
   final IconData icon;
   final Color? color;
-  final Color? textColor;
 
   Color iconColorIn(BuildContext context) => color ?? context.brand.deep;
-  Color textColorIn(BuildContext context) => textColor ?? color ?? context.brand.deep;
 }
 
 const AppContactIcon appContactOtherIcon = AppContactIcon(Icons.phone_outlined, Color(0xFF64748B));
 
 const Map<String, AppContactIcon> appContactIcons = {
-  'rescue': AppContactIcon(Icons.local_hospital_outlined, Color(0xFFEF4444), Color(0xFFEB1515)),
+  'rescue': AppContactIcon(Icons.local_hospital_outlined, Color(0xFFEF4444)),
   'police': AppContactIcon(Icons.local_police_outlined, Color(0xFF2563EB)),
-  'coast_guard': AppContactIcon(Icons.directions_boat_outlined, Color(0xFF0D9488), Color(0xFF0C8479)),
-  'fire': AppContactIcon(Icons.local_fire_department_outlined, Color(0xFFF97316), Color(0xFFC55405)),
+  'coast_guard': AppContactIcon(Icons.directions_boat_outlined, Color(0xFF0D9488)),
+  'fire': AppContactIcon(Icons.local_fire_department_outlined, Color(0xFFE86306)),
   'hospital': AppContactIcon(Icons.medical_services_outlined, Color(0xFFDB2777)),
   'ambulance': AppContactIcon(Icons.emergency_outlined, Color(0xFF7C3AED)),
   'help_desk': AppContactIcon(Icons.support_agent_outlined, null),
   'lgu_office': AppContactIcon(Icons.account_balance_outlined, Color(0xFF4F46E5)),
-  'power': AppContactIcon(Icons.bolt_outlined, Color(0xFFCA8A04), Color(0xFF9F6D03)),
-  'water': AppContactIcon(Icons.water_drop_outlined, Color(0xFF0891B2), Color(0xFF07819E)),
-  'port': AppContactIcon(Icons.anchor_outlined, Color(0xFF65A30D), Color(0xFF52840B)),
+  'power': AppContactIcon(Icons.bolt_outlined, Color(0xFFBC8104)),
+  'water': AppContactIcon(Icons.water_drop_outlined, Color(0xFF0891B2)),
+  'port': AppContactIcon(Icons.anchor_outlined, Color(0xFF619C0C)),
   'other': appContactOtherIcon,
 };
 

@@ -2555,7 +2555,6 @@ class ProfilePage extends StatelessWidget {
               email: contact.email,
               description: contact.description,
               color: appContactIconFor(contact.icon).iconColorIn(context),
-              textColor: appContactIconFor(contact.icon).textColorIn(context),
             ),
           ),
         const SizedBox(height: 20),
@@ -2582,22 +2581,20 @@ class _EmergencyContactCard extends StatelessWidget {
     required this.title,
     required this.number,
     required this.color,
-    required this.textColor,
     this.email = '',
     this.description = '',
   });
 
   final IconData icon;
   final String title;
+
+  /// The numbers as ONE text, as written (several are separated by a slash; the app does not split them yet): one small box.
   final String number;
 
-  /// The colour of the picture and of its pale box.
+  /// The colour of the picture and of its pale box. Nothing else on the card takes it.
   final Color color;
 
-  /// The colour of the number and of the email: [color], or a darker one where [color] is too light to read as text on white.
-  final Color textColor;
-
-  /// '' when there is none; then nothing is drawn, and no gap is left.
+  /// '' when there is none; then there is no box, and no gap.
   final String email;
   final String description;
 
@@ -2612,7 +2609,7 @@ class _EmergencyContactCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start, // the picture's box is as tall as two lines of text, so this changes nothing for a card with only a name and a number
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -2631,39 +2628,50 @@ class _EmergencyContactCard extends StatelessWidget {
                   title,
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  number,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
+                const SizedBox(height: 6),
+                // the numbers and the email: small neutral boxes, 6 px apart, on the next line when they do not fit
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _ContactChip(number),
+                    if (email.isNotEmpty) _ContactChip(email),
+                  ],
                 ),
-                if (email.isNotEmpty)
-                  Text(
-                    email,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
+                if (description.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 7),
+                    child: Text(
+                      description,
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF5E6F77)),
                     ),
                   ),
-                if (description.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      height: 1.35,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A number or an email of a hotline: a small neutral box (never the colour of the icon).
+class _ContactChip extends StatelessWidget {
+  const _ContactChip(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF5F7),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF3C4C55)),
       ),
     );
   }
