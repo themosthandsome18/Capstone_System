@@ -1,9 +1,11 @@
 // An app already installed must not break when the server sends keys it has
 // never heard of. The server now sends referenceTables.boatCapacityFares (the
 // active "Boat Capacity and Fare" tiers as [{name}], no id) and, at the top,
-// emergencyContacts. MobileBootstrap.fromJson reads only the six keys it knows
-// and ignores the rest. The payload below has the shape the server really sends
-// (see BoatCapacityFarePayloadTests in backend/api/tests.py).
+// emergencyContacts. MobileBootstrap.fromJson READS emergencyContacts (the hotlines
+// the Profile page draws; they are tested in app_contacts_test.dart) and ignores the
+// keys it does not know (boatCapacityFares, a key of the future). The payload below
+// has the shape the server really sends (see BoatCapacityFarePayloadTests in
+// backend/api/tests.py).
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -99,6 +101,7 @@ Map<String, Object?> whatTheAppReads(MobileBootstrap b) => {
   'barangays': b.barangays.map((r) => '${r.id}:${r.name}').toList(),
   'notifications': b.notifications.map((n) => '${n.id}:${n.title}').toList(),
   'themeWebColour': b.theme.primaryColor,
+  'emergencyContacts': b.emergencyContacts.items.map((c) => '${c.id}:${c.name}:${c.numbers}:${c.icon}').toList(),
 };
 
 void main() {
@@ -116,7 +119,7 @@ void main() {
     }
   });
 
-  test('fromJson ignores the new keys: no exception, and the six known keys are read right', () {
+  test('fromJson ignores the keys it does not know: no exception, and the known keys are read right, the contacts included', () {
     final MobileBootstrap bootstrap = MobileBootstrap.fromJson(serverPayload());
 
     expect(bootstrap.destinations.map((d) => d.name), ['Sample Beach Resort']);
@@ -131,15 +134,21 @@ void main() {
     expect(bootstrap.barangays.map((b) => b.name), ['Cagsiay I']);
     expect(bootstrap.notifications.map((n) => n.title), ['Welcome']);
     expect(bootstrap.theme.primaryColor, '#EF7C1F');
+    // and the contacts the server sent are read (the one of the payload)
+    expect(bootstrap.emergencyContacts.items.map((c) => c.name), ['Mauban MDRRMO / Rescue 24/7']);
+    expect(bootstrap.emergencyContacts.items.single.icon, 'rescue');
   });
 
-  test('the answer is exactly the same with the new keys as without them', () {
+  test('the new keys change only what the app reads of them: the contacts', () {
     final withNew = whatTheAppReads(MobileBootstrap.fromJson(serverPayload()));
     final without = whatTheAppReads(MobileBootstrap.fromJson(serverPayload(withNewKeys: false)));
-    expect(withNew, without);
+    expect(withNew['emergencyContacts'], hasLength(1)); // the fixture: the contacts are read
+    expect(without['emergencyContacts'], isEmpty);
+    // everything else is exactly the same with the new keys as without them
+    expect(Map.of(withNew)..remove('emergencyContacts'), Map.of(without)..remove('emergencyContacts'));
   });
 
-  test('a new key of any odd shape is still ignored', () {
+  test('a new key of any odd shape breaks nothing, and the contacts are read as nothing', () {
     for (final odd in <Object?>[null, 'text', 5, [], [1, 2], [null], {}, {'name': 'x'}]) {
       final payload = serverPayload();
       (payload['referenceTables'] as Map<String, dynamic>)['boatCapacityFares'] = odd;
@@ -148,6 +157,8 @@ void main() {
       final bootstrap = MobileBootstrap.fromJson(payload);
       expect(bootstrap.itineraries, hasLength(2), reason: '$odd');
       expect(bootstrap.destinations, hasLength(1), reason: '$odd');
+      expect(bootstrap.emergencyContacts.items, isEmpty, reason: '$odd');
+      expect(bootstrap.emergencyContacts.resolve(AppContentDefaults.hotlines), AppContentDefaults.hotlines, reason: '$odd');
     }
   });
 

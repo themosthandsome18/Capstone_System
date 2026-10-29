@@ -72,6 +72,7 @@ class _MobileShellState extends State<MobileShell> {
         visits: _visitHistory,
         feedbackHistory: _feedbackHistory,
         onSignOut: widget.onSignOut,
+        contacts: widget.state.emergencyContacts,
       ),
     ];
 
@@ -2408,12 +2409,16 @@ class ProfilePage extends StatelessWidget {
     required this.visits,
     required this.feedbackHistory,
     this.onSignOut,
+    this.contacts = AppContacts.none,
   });
 
   final MobileUserProfile profile;
   final List<MobileVisitReceipt> visits;
   final List<MobileFeedbackReceipt> feedbackHistory;
   final VoidCallback? onSignOut;
+
+  /// The hotlines of the server ([AppContacts.none] where there are none): the written four are shown instead.
+  final AppContacts contacts;
 
   void _confirmSignOut(BuildContext context) {
     showDialog(
@@ -2539,30 +2544,20 @@ class ProfilePage extends StatelessWidget {
 
         // Emergency Hotlines & Tourist Assistance
         SectionHeader(title: 'Emergency Hotlines & Helpdesk'),
-        _EmergencyContactCard(
-          icon: Icons.local_hospital_outlined,
-          title: 'Mauban MDRRMO / Rescue 24/7',
-          number: '0998-598-8422 / (042) 784-0123',
-          color: const Color(0xFFEF4444),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.local_police_outlined,
-          title: 'Mauban Municipal Police (PNP)',
-          number: '0998-598-5777 / (042) 784-0200',
-          color: const Color(0xFF2563EB),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.directions_boat_outlined,
-          title: 'Coast Guard Sub-Station Mauban',
-          number: '0917-842-7643',
-          color: const Color(0xFF0D9488),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.support_agent_outlined,
-          title: 'Mauban Tourism Information Desk',
-          number: '(042) 784-0555 • tourism@mauban.gov.ph',
-          color: context.brand.deep,
-        ),
+        // The server's hotlines when it has any; the four written in the code (AppContentDefaults.hotlines) when it has none.
+        for (final contact in contacts.resolve(AppContentDefaults.hotlines))
+          KeyedSubtree(
+            key: ValueKey('contact-${contact.id}'),
+            child: _EmergencyContactCard(
+              icon: appContactIconFor(contact.icon).icon,
+              title: contact.name,
+              number: contact.numbers,
+              email: contact.email,
+              description: contact.description,
+              color: appContactIconFor(contact.icon).iconColorIn(context),
+              textColor: appContactIconFor(contact.icon).textColorIn(context),
+            ),
+          ),
         const SizedBox(height: 20),
 
         OutlinedButton.icon(
@@ -2587,12 +2582,24 @@ class _EmergencyContactCard extends StatelessWidget {
     required this.title,
     required this.number,
     required this.color,
+    required this.textColor,
+    this.email = '',
+    this.description = '',
   });
 
   final IconData icon;
   final String title;
   final String number;
+
+  /// The colour of the picture and of its pale box.
   final Color color;
+
+  /// The colour of the number and of the email: [color], or a darker one where [color] is too light to read as text on white.
+  final Color textColor;
+
+  /// '' when there is none; then nothing is drawn, and no gap is left.
+  final String email;
+  final String description;
 
   @override
   Widget build(BuildContext context) {
@@ -2605,6 +2612,7 @@ class _EmergencyContactCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start, // the picture's box is as tall as two lines of text, so this changes nothing for a card with only a name and a number
         children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -2629,9 +2637,29 @@ class _EmergencyContactCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    color: color,
+                    color: textColor,
                   ),
                 ),
+                if (email.isNotEmpty)
+                  Text(
+                    email,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      height: 1.35,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

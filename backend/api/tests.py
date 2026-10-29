@@ -6884,10 +6884,12 @@ class ItineraryStayFillMigrationTests(TransactionTestCase):
 
 
 # The four hotlines written in the mobile app, word for word and in its order
-# (mobile/lib/screens/tourism_screens.dart, ProfilePage). The app shows each as
-# a title and one line of "number"; the desk's line is "number • email".
+# (mobile/lib/models/app_content_defaults.dart, AppContentDefaults.hotlines; until the app began to
+# read the server's list they were four cards in mobile/lib/screens/tourism_screens.dart). Each is a name, its
+# numbers and (the desk) an email. The "line" below is the numbers and then the email after a bullet, as the old
+# app wrote the desk's; it is how the four are compared with the seed. The app now draws the email on a line of its own.
 EMERGENCY_FOUR = [
-    # (title, the line the app shows under it, icon)
+    # (title, the numbers, then the email after a bullet, icon)
     ("Mauban MDRRMO / Rescue 24/7", "0998-598-8422 / (042) 784-0123", "rescue"),
     ("Mauban Municipal Police (PNP)", "0998-598-5777 / (042) 784-0200", "police"),
     ("Coast Guard Sub-Station Mauban", "0917-842-7643", "coast_guard"),
@@ -6896,7 +6898,7 @@ EMERGENCY_FOUR = [
 
 
 def _shown_line(contact):
-    """The one line the app shows: the numbers, then the email after a bullet."""
+    """The numbers, then the email after a bullet: how the four are compared (the app draws the email on its own line)."""
     return contact.contact_numbers + (f" \u2022 {contact.email}" if contact.email else "")
 
 
@@ -7008,13 +7010,19 @@ class EmergencyContactTests(TestCase):
 
         from django.conf import settings
 
-        path = os.path.join(settings.BASE_DIR, "..", "mobile", "lib", "screens", "tourism_screens.dart")
+        path = os.path.join(settings.BASE_DIR, "..", "mobile", "lib", "models", "app_content_defaults.dart")
         if not os.path.exists(path):
             self.skipTest("the mobile source is not next to the backend here")
         source = open(path, encoding="utf-8").read()
-        cards = re.findall(r"_EmergencyContactCard\(\s*icon:[^,]+,\s*title:\s*'([^']*)',\s*number:\s*'([^']*)',", source)
+        # the four as the defaults write them: name, numbers, the email when there is one (its own field), the icon
+        found = re.findall(r"AppContact\(id: -\d+, name: '([^']*)', numbers: '([^']*)',(?: email: '([^']*)',)? icon: '(\w+)'\)", source)
+        cards = [(name, numbers + (f" \u2022 {email}" if email else "")) for name, numbers, email, _icon in found]
 
         self.assertEqual(cards, [(title, line) for title, line, _ in EMERGENCY_FOUR])
+        # and the icons are the four of the seed, in the same order
+        self.assertEqual([icon for *_rest, icon in found], [icon for _title, _line, icon in EMERGENCY_FOUR])
+        # and each is the seed's row field by field: the email is its own field, never joined to the numbers (the app draws it on its own line)
+        self.assertEqual(found, [(name, numbers, email, icon) for name, numbers, email, icon in self.module.CONTACTS])
 
     def test_running_the_seed_again_adds_nothing(self):
         self._seed_the_four()

@@ -16,6 +16,7 @@ class MobileBootstrap {
     this.isOffline = false,
     this.theme = TourismTheme.none,
     this.appContent = AppContent.none,
+    this.emergencyContacts = AppContacts.none,
   });
 
   final List<Destination> destinations;
@@ -38,6 +39,9 @@ class MobileBootstrap {
   /// The texts the web admin edits (Mobile App Content). Read here, not shown anywhere yet: see models/app_content.dart.
   final AppContent appContent;
 
+  /// The hotlines the web admin edits (Emergency Hotlines). Read here and drawn on the Profile page: see models/app_contacts.dart.
+  final AppContacts emergencyContacts;
+
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
     return MobileBootstrap(
@@ -58,6 +62,7 @@ class MobileBootstrap {
       isOffline: false,
       theme: TourismTheme.fromJson(json['theme']),
       appContent: AppContent.fromJson(json['appContent']),
+      emergencyContacts: AppContacts.fromJson(json['emergencyContacts']),
     );
   }
 
@@ -175,6 +180,9 @@ class TourismBootstrapState {
 
   /// The texts of the web admin; [AppContent.none] until loaded, so a screen that has none shows the texts written in the code.
   AppContent get appContent => data?.appContent ?? AppContent.none;
+
+  /// The hotlines; [AppContacts.none] until loaded, so a screen that has none shows the four written in the code.
+  AppContacts get emergencyContacts => data?.emergencyContacts ?? AppContacts.none;
 }
 
 /// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the
