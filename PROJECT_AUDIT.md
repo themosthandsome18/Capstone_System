@@ -1,5 +1,16 @@
 # PROJECT AUDIT: Mauban LGU Tourism & Sanitary Compliance Portal
 
+## Complaint print-slip defensive escaping (2026-10-30)
+
+- Baseline: `77988f22b85ddbb5b8918622b23724549f2a0a59`; isolated branch `sanitation/complaint-print-xss`.
+- Finding: `printFieldworkActionSlip()` inserted report text directly into generated HTML. All dynamic values are HTML text contexts, including the document title; none are attributes. Fields: complaint ID (title/reference), barangay, address, category, inspector (assignment/signature), scheduled date/time, complainant, contact, description, action taken and schedule-note fallback; generated timestamp and fixed priority label are also escaped.
+- Change: consistently apply the existing `escapeSlipText()` helper, which encodes ampersands before angle brackets and both quotes. Layout, fallback text, backend behavior, authentication and permissions remain unchanged. No dependency or schema change.
+- Verification: 26 tests passed in 3 complaint suites, including 18 new focused print tests using harmless metacharacters and markup-like strings. Existing address tests emitted React act warnings. Production build passed (react-scripts build; existing stale Browserslist/deprecation notices). Ordinary Chrome acceptance passed against the built frontend on 127.0.0.1:3097 and disposable Django on 127.0.0.1:8098: sample staff login, stored complaint display, print-button popup, correct title/reference/location/priority/category/inspector/schedule/contact/statement/notes/signatures, preserved line breaks and usable two-column layout. Full-page screenshot and browser-generated PDF retained in session outputs/ordinary-complaint-print.png and .pdf. Physical printer output was not tested.
+- Explicit limitation: pre-fix exploit execution was not reproduced. No active payload was executed during this defensive verification.
+- Isolation: independent frontend dependencies/cache; old shared junction removed without deleting its target. Disposable Django uses in-memory SQLite after fresh PostgreSQL initialization timed out. No production access.
+- Remaining P0: inspector-account administration authorization is unchanged and requires a separate task. No push, PR or deployment is authorized here.
+
+
 ## P0 establishment retention: local verification complete (2026-10-29)
 
 - **Approved policy:** temporarily reject ALL Sanitation establishment hard deletion, including unused establishments; no exceptions, soft deletion or archival.

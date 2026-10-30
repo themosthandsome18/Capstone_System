@@ -925,7 +925,7 @@ export function printFieldworkActionSlip(report) {
     <!doctype html>
     <html>
       <head>
-        <title>Fieldwork Inspection Order - ${report.complaint_id}</title>
+        <title>Fieldwork Inspection Order - ${escapeSlipText(report.complaint_id)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 30px; color: #0f172a; line-height: 1.4; }
           .header { text-align: center; border-bottom: 2px solid #047857; padding-bottom: 12px; margin-bottom: 20px; }
@@ -956,12 +956,12 @@ export function printFieldworkActionSlip(report) {
           <p>Republic of the Philippines • Province of Quezon</p>
           <h1>Municipality of Mauban</h1>
           <h2>Municipal Health Office — Sanitary Section</h2>
-          <p style="margin-top: 4px; font-size: 11px;">Document Generated: ${printedAt}</p>
+          <p style="margin-top: 4px; font-size: 11px;">Document Generated: ${escapeSlipText(printedAt)}</p>
         </div>
 
         <div class="title-strip">
           <strong>FIELDWORK INSPECTION & ACTION ORDER SLIP</strong>
-          <span>REF: ${report.complaint_id || "N/A"}</span>
+          <span>REF: ${escapeSlipText(report.complaint_id || "N/A")}</span>
         </div>
 
         <div class="grid">
@@ -976,34 +976,34 @@ export function printFieldworkActionSlip(report) {
           </div>
           <div class="box">
             <span>Inspection Urgency SLA</span>
-            <strong>${priorityLabel}</strong>
+            <strong>${escapeSlipText(priorityLabel)}</strong>
           </div>
           <div class="box">
             <span>Category</span>
-            <strong>${report.category || "General Cleanliness"}</strong>
+            <strong>${escapeSlipText(report.category || "General Cleanliness")}</strong>
           </div>
           <div class="box">
             <span>Assigned Sanitary Inspector</span>
-            <strong>${report.assigned_inspector || "Not assigned"}</strong>
+            <strong>${escapeSlipText(report.assigned_inspector || "Not assigned")}</strong>
           </div>
           <div class="box">
             <span>Scheduled Date & Time</span>
-            <strong>${report.inspection_scheduled_date || "Immediate"} ${report.inspection_scheduled_time ? "at " + report.inspection_scheduled_time : ""}</strong>
+            <strong>${escapeSlipText(report.inspection_scheduled_date || "Immediate")} ${escapeSlipText(report.inspection_scheduled_time ? "at " + report.inspection_scheduled_time : "")}</strong>
           </div>
           <div class="box">
             <span>Complainant</span>
-            <strong>${report.complainant_name || "Anonymous Resident"} ${report.contact_number ? "(" + report.contact_number + ")" : ""}</strong>
+            <strong>${escapeSlipText(report.complainant_name || "Anonymous Resident")} ${escapeSlipText(report.contact_number ? "(" + report.contact_number + ")" : "")}</strong>
           </div>
         </div>
 
         <div class="section">
           <h3>Concern Description / Resident Statement</h3>
-          <p>${report.description || "No narrative description provided."}</p>
+          <p>${escapeSlipText(report.description || "No narrative description provided.")}</p>
         </div>
 
         <div class="section">
           <h3>Dispatcher & Triage Notes</h3>
-          <p>${report.action_taken || report.inspection_schedule_note || "Conduct on-site sanitation verification, photographic evidence gathering, and issue Sanitary Notice of Violation if applicable."}</p>
+          <p>${escapeSlipText(report.action_taken || report.inspection_schedule_note || "Conduct on-site sanitation verification, photographic evidence gathering, and issue Sanitary Notice of Violation if applicable.")}</p>
         </div>
 
         <div class="fieldwork-checklist">
@@ -1013,7 +1013,7 @@ export function printFieldworkActionSlip(report) {
 
         <div class="signatures">
           <div class="sig-line">
-            <strong>${report.assigned_inspector || "Sanitary Inspector"}</strong>
+            <strong>${escapeSlipText(report.assigned_inspector || "Sanitary Inspector")}</strong>
             <small>Fieldwork Sanitary Inspector</small>
           </div>
           <div class="sig-line">
