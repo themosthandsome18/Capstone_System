@@ -8,7 +8,7 @@ import { ITEM_PLACEHOLDERS, MAX_ITEMS_PER_SECTION } from "../utils/mobileContent
 import { Parts } from "./MobileContentFilled";
 
 // The tab "Travel Guide & Tips" (Commit 7a): ONE list of cards, the guides and the notices together. A card is a tile (white, it can have a full text and
-// then an arrow) or a banner (a coloured strip, with no full text). The list reads the cards of the section once, with the blocks (for the title of the
+// then an arrow) or a banner (a coloured strip; with a full text it opens too, and has the arrow). The list reads the cards of the section once, with the blocks (for the title of the
 // section and for the fee and the place where it is paid); the filter works on what was read and asks for nothing. Each card has the doors of the page of a
 // tile (Edit) and the switch (Deactivate / Reactivate: one POST each). The page of a tile does the writing; this tab writes only the switch.
 
@@ -80,7 +80,10 @@ export function previewNotes(plan) {
   const withoutArrow = plan.tiles.filter((card) => !hasDetail(card.item));
   if (plan.tiles.length && withoutArrow.length === 0) notes.push("Lahat ng tile ay may arrow: may buong impormasyon ang bawat isa.");
   else if (withoutArrow.length) notes.push(`Walang arrow: ${names(withoutArrow)} — wala pang buong impormasyon, kaya hindi napipindot.`);
-  if (plan.banners.length) notes.push(`Ang banner (${names(plan.banners)}) ay walang arrow: hindi pa napipindot ang banner.`);
+  const bannersWithArrow = plan.banners.filter((card) => hasDetail(card.item));
+  const bannersWithout = plan.banners.filter((card) => !hasDetail(card.item));
+  if (bannersWithArrow.length) notes.push(`Ang banner (${names(bannersWithArrow)}) ay may arrow: may buong impormasyon, kaya napipindot.`);
+  if (bannersWithout.length) notes.push(`Ang banner (${names(bannersWithout)}) ay walang arrow: wala pang buong impormasyon, kaya hindi napipindot.`);
   if (plan.omitted.length) {
     notes.push(`Hindi lumalabas: ${plan.omitted.map((card) => card.item.title).join(", ")} — wala pang nakasulat na lugar ng bayad (Port & Boat Guide tab).`);
   }
@@ -218,7 +221,13 @@ function Preview({ cards, title }) {
           {plan.banners.map((card) => {
             const tone = ICON_TONES[(PILLAR_ICONS[card.item.icon] || PILLAR_ICONS.info).tone];
             return (
-              <div key={card.item.id} className="mobile-content-guide-banner" data-testid="guide-banner" style={{ background: tone.background }}>
+              <div
+                key={card.item.id}
+                className="mobile-content-guide-banner"
+                data-testid="guide-banner"
+                data-detail={hasDetail(card.item) ? "yes" : "no"}
+                style={{ background: tone.background }}
+              >
                 <IconBox name={card.item.icon} size={19} radius={0} drawing={19} />
                 <div className="mobile-content-guide-text">
                   <strong data-part="title">
@@ -228,6 +237,23 @@ function Preview({ cards, title }) {
                     <Parts parts={card.line.parts} />
                   </span>
                 </div>
+                {hasDetail(card.item) ? (
+                  <svg
+                    className="mobile-content-guide-chevron"
+                    data-part="chevron"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={tone.stroke}
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                ) : null}
               </div>
             );
           })}
@@ -351,9 +377,21 @@ export function TravelGuideTab({ cards }) {
                         Order {item.display_order}
                       </span>
                       {banner ? (
-                        <span className="mobile-content-card-tag" data-kind="banner" data-part="detail" title="A banner has no full text">
-                          {TAG_BANNER}
-                        </span>
+                        <>
+                          <span
+                            className="mobile-content-card-tag"
+                            data-kind="banner"
+                            data-part="detail"
+                            title={detail ? "A banner with a full text: it opens when it is tapped" : "A banner with no full text yet"}
+                          >
+                            {TAG_BANNER}
+                          </span>
+                          {detail ? (
+                            <span className="mobile-content-card-tag" data-kind="detail" data-part="banner-detail">
+                              Has detail
+                            </span>
+                          ) : null}
+                        </>
                       ) : (
                         <span className="mobile-content-card-tag" data-kind={detail ? "detail" : "no-detail"} data-part="detail">
                           {detail ? "Has detail" : "No detail yet"}

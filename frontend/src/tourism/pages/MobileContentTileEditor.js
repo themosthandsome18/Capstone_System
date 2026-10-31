@@ -31,7 +31,7 @@ export const ADDED_NOTICE = "The tile was added.";
 export const LOAD_ERROR_FALLBACK = "The tile could not be loaded.";
 export const NOT_FOUND = "This tile does not exist.";
 export const BAD_ADDRESS = "This address does not name a tile or a section.";
-export const BANNER_NOTE = "A banner has no full text: only a tile opens a page when it is tapped.";
+export const BANNER_NOTE = "A banner looks the same in the app. With a full text it opens when it is tapped, like a tile.";
 export const SHORT_HINT = "Ito ang nakikita agad sa Home. Panatilihing maikli — pinuputol ito ng app kapag masyadong mahaba.";
 export const FULL_HINT =
   "Kapag blangko ito, hindi napipindot ang tile — teksto lang, gaya ng dati. Lumalabas lang ang arrow kapag may laman.";
@@ -218,7 +218,7 @@ export default function MobileContentTileEditor() {
     ["title", "short_text"].forEach((field) => {
       if (cleaned[field] !== baseline[field]) changes[field] = cleaned[field];
     });
-    if (!isBanner && cleaned.full_text !== baseline.full_text) changes.full_text = cleaned.full_text;
+    if (cleaned.full_text !== baseline.full_text) changes.full_text = cleaned.full_text;
     if (form.icon !== baseline.icon) changes.icon = form.icon;
     if (!orderBad && orderNumber !== Number(baseline.display_order)) changes.display_order = orderNumber;
   }
@@ -683,19 +683,16 @@ export default function MobileContentTileEditor() {
                   controls.current.full_text = element;
                 }}
                 value={form.full_text ?? ""}
-                disabled={working || isBanner}
+                disabled={working}
                 onChange={(event) => type("full_text", event.target.value)}
               />
+              {placeholderButtons("full_text", "full text")}
+              <small className="options-hint">{FULL_HINT}</small>
               {isBanner ? (
                 <small className="options-hint" data-testid="banner-note">
                   {BANNER_NOTE}
                 </small>
-              ) : (
-                <>
-                  {placeholderButtons("full_text", "full text")}
-                  <small className="options-hint">{FULL_HINT}</small>
-                </>
-              )}
+              ) : null}
               {fieldFeedback("full_text")}
             </div>
           </section>

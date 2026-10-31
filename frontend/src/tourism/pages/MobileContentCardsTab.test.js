@@ -280,13 +280,26 @@ describe("a card", () => {
     expect(rowOf("Boat Guide").querySelector('[data-part="detail"]').textContent).toBe("No detail yet");
   });
 
-  it("a banner says Banner, and not that it has no detail yet (it can never have a full text)", async () => {
+  it("a banner without a full text says Banner, and not that it has no detail yet", async () => {
     await open();
     const row = rowOf("Upcoming: Fiesta");
     expect(row.getAttribute("data-style")).toBe("banner");
     expect(row.querySelector('[data-part="detail"]').textContent).toBe("Banner");
     expect(row.querySelector('[data-part="detail"]').getAttribute("data-kind")).toBe("banner");
     expect(rowOf("Boat Guide").getAttribute("data-style")).toBe("tile");
+    expect(row.querySelector('[data-part="banner-detail"]')).toBeNull(); // no full text: no "Has detail"
+  });
+
+  it("a banner that has a full text says Banner and Has detail", async () => {
+    items[4].full_text = "The whole notice.";
+    items[4].tappable = true;
+    await open();
+    const row = rowOf("Upcoming: Fiesta");
+    expect(items[4].style).toBe("banner"); // the fixture
+    expect(row.querySelector('[data-part="detail"]').textContent).toBe("Banner");
+    expect(row.querySelector('[data-part="banner-detail"]').textContent).toBe("Has detail");
+    expect(row.querySelector('[data-part="banner-detail"]').getAttribute("data-kind")).toBe("detail");
+    expect(rowOf("Clean Coast").querySelector('[data-part="banner-detail"]')).toBeNull(); // the other banner has none
   });
 
   it("Amount locked is on the cards that hold a placeholder of the fee in ANY of their texts, and only on those", async () => {
@@ -489,7 +502,7 @@ describe("the preview", () => {
     expect(SECTION_TITLE_FALLBACK).toBe("Mauban Travel Guide & Local Tips");
   });
 
-  it("a banner has no arrow, a colour from its icon, and its icon, title and short line", async () => {
+  it("a banner without a full text has no arrow, a colour from its icon, and its icon, title and short line", async () => {
     await open();
     const banner = banners()[0];
     expect(banner.querySelector('[data-part="chevron"]')).toBeNull();
@@ -501,11 +514,23 @@ describe("the preview", () => {
     expect(banners()[1].style.background).toBe("rgb(221, 240, 230)"); // eco: green (#DDF0E6)
   });
 
-  it("a banner keeps no arrow even when the data says it has a full text", async () => {
-    items[4].full_text = "A banner with a text (the server would not allow it).";
+  it("a banner that has a full text has the arrow, and one that has none has not", async () => {
+    items[4].full_text = "A banner with a text.";
     items[4].tappable = true;
     await open();
     expect(items[4].tappable).toBe(true); // the fixture
+    expect(banners()).toHaveLength(2);
+    expect(banners()[0].querySelector('[data-part="chevron"]')).not.toBeNull();
+    expect(banners()[0].getAttribute("data-detail")).toBe("yes");
+    expect(banners()[1].querySelector('[data-part="chevron"]')).toBeNull(); // the other banner has no text
+    expect(banners()[1].getAttribute("data-detail")).toBe("no");
+  });
+
+  it("the arrow of a banner is not drawn when the server says it does not open", async () => {
+    items[4].full_text = "A banner with a text.";
+    items[4].tappable = false;
+    await open();
+    expect(items[4].full_text).not.toBe(""); // the fixture: it has a text, and the server says no
     expect(banners()[0].querySelector('[data-part="chevron"]')).toBeNull();
   });
 
@@ -560,7 +585,17 @@ describe("the preview", () => {
     const text = notes().textContent;
     expect(text).toContain("Walang arrow: Buntal Festival (May), Environmental Fee — wala pang buong impormasyon, kaya hindi napipindot.");
     expect(text).not.toContain("Walang arrow: Boat Guide"); // the tile with a full text is not named
-    expect(text).toContain("Ang banner (Upcoming: Fiesta, Clean Coast) ay walang arrow: hindi pa napipindot ang banner.");
+    expect(text).toContain("Ang banner (Upcoming: Fiesta, Clean Coast) ay walang arrow: wala pang buong impormasyon, kaya hindi napipindot.");
+    expect(text).not.toContain("ay may arrow: may buong impormasyon, kaya napipindot."); // no banner has a text here
+  });
+
+  it("the line names the banners that have an arrow apart from those that have none", async () => {
+    items[4].full_text = "A banner with a text.";
+    items[4].tappable = true;
+    await open();
+    const text = notes().textContent;
+    expect(text).toContain("Ang banner (Upcoming: Fiesta) ay may arrow: may buong impormasyon, kaya napipindot.");
+    expect(text).toContain("Ang banner (Clean Coast) ay walang arrow: wala pang buong impormasyon, kaya hindi napipindot.");
   });
 
   it("the line changes with the data: all the tiles have an arrow, or one has none", async () => {
@@ -591,7 +626,7 @@ describe("the preview", () => {
     items.push(card(7, "boat", "Second Place Guide", "Go to {fee_office}"));
     items[0].title = "First Place Guide";
     await open();
-    expect(notes().textContent).toContain("Ang banner (Brand New Banner, Clean Coast) ay walang arrow: hindi pa napipindot ang banner.");
+    expect(notes().textContent).toContain("Ang banner (Brand New Banner, Clean Coast) ay walang arrow: wala pang buong impormasyon, kaya hindi napipindot.");
     expect(notes().textContent).toContain("Hindi lumalabas: First Place Guide, Second Place Guide — wala pang nakasulat na lugar ng bayad (Port & Boat Guide tab).");
     expect(notes().textContent).not.toContain("Upcoming: Fiesta");
   });

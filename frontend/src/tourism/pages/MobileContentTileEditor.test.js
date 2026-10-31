@@ -332,16 +332,53 @@ describe("the second and the third box", () => {
     expect(screen.getByTestId("full-badge").getAttribute("data-state")).toBe("empty");
   });
 
-  it("a banner has no full text: the box is closed, says why, and is never sent", async () => {
+  it("a banner can have a full text: the box is open, the note says it opens when tapped, and the text is sent", async () => {
     await open("?id=22");
     expect(items[3].style).toBe("banner"); // the fixture reached the case
-    expect(field(FULL).disabled).toBe(true);
+    expect(field(FULL).disabled).toBe(false);
     expect(screen.getByTestId("banner-note").textContent).toBe(BANNER_NOTE);
-    expect(within(document.body).queryByRole("group", { name: "Placeholders for the full text" })).toBeNull();
-    type("Title", "Upcoming Fiesta 2");
+    expect(BANNER_NOTE).toBe("A banner looks the same in the app. With a full text it opens when it is tapped, like a tile.");
+    expect(screen.getByText(FULL_HINT)).toBeTruthy(); // the same hint and the same placeholder buttons as a tile has
+    expect(within(document.body).getByRole("group", { name: "Placeholders for the full text" })).toBeTruthy();
+    type(FULL, "The whole notice, for a visitor who taps it.");
     fireEvent.click(save());
     await screen.findByText(SAVED_NOTICE);
-    expect(writes().map((r) => r.body)).toEqual([{ title: "Upcoming Fiesta 2" }]);
+    expect(writes().map((r) => r.body)).toEqual([{ full_text: "The whole notice, for a visitor who taps it." }]);
+  });
+
+  it("a tile does not have the note of a banner", async () => {
+    await open("?id=12");
+    expect(items[0].style).toBe("tile"); // the fixture
+    expect(screen.queryByTestId("banner-note")).toBeNull();
+    expect(screen.queryByText(BANNER_NOTE)).toBeNull();
+  });
+
+  it("a banner whose full text is cleared is sent as an empty text, and a banner left alone sends nothing about it", async () => {
+    items[3].full_text = "A text to clear.";
+    await open("?id=22");
+    expect(items[3].style).toBe("banner"); // the fixture
+    expect(field(FULL).value).toBe("A text to clear.");
+    type("Title", "Upcoming Fiesta 4");
+    fireEvent.click(save());
+    await screen.findByText(SAVED_NOTICE);
+    expect(writes().map((r) => r.body)).toEqual([{ title: "Upcoming Fiesta 4" }]); // untouched: not sent
+    type(FULL, "");
+    fireEvent.click(save());
+    await waitFor(() => expect(writes()).toHaveLength(2));
+    expect(writes()[1].body).toEqual({ full_text: "" });
+  });
+
+  it("the preview of a banner shows its detail: the arrow, and the page with the text, as it is typed", async () => {
+    await open("?id=22");
+    expect(items[3].style).toBe("banner"); // the fixture
+    expect(items[3].full_text).toBe(""); // and it has no text yet
+    expect(screen.getByTestId("mock-home").querySelector('[data-part="chevron"]')).toBeNull();
+    expect(screen.queryByTestId("mock-detail-body")).toBeNull();
+    type(FULL, "Detail of the notice.");
+    expect(screen.getByTestId("mock-home").querySelector('[data-part="chevron"]')).not.toBeNull();
+    expect(screen.getByTestId("mock-detail-body").textContent).toBe("Detail of the notice.");
+    type(FULL, "");
+    expect(screen.getByTestId("mock-home").querySelector('[data-part="chevron"]')).toBeNull();
   });
 });
 
@@ -632,15 +669,15 @@ describe("what is sent is the text as the server will clean it", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("a banner whose stored full text is not in the cleaned form still never has it sent", async () => {
+  it("a banner is cleaned like a tile: a stored full text that is not in the cleaned form goes with the next change, cleaned", async () => {
     items[3].full_text = "Old   text  \n\n\n\nhere";
     await open("?id=22");
     expect(items[3].style).toBe("banner"); // the fixture: a banner that holds a text
-    expect(field(FULL).disabled).toBe(true);
+    expect(field(FULL).disabled).toBe(false);
     type("Title", "Upcoming Fiesta 3");
     fireEvent.click(save());
     await screen.findByText(SAVED_NOTICE);
-    expect(writes().map((r) => r.body)).toEqual([{ title: "Upcoming Fiesta 3" }]);
+    expect(writes().map((r) => r.body)).toEqual([{ title: "Upcoming Fiesta 3", full_text: "Old   text\n\nhere" }]);
   });
 });
 
