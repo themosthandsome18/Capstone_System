@@ -109,7 +109,7 @@ afterEach(() => {
 
 // tab label, the row to edit (a name that is not locked), and its edit control
 const FOUR = [
-  ["Travel Itinerary", "6 Nights"],
+  ["Length of Stay", "6 Nights"],
   ["Vehicle Classification", "Public Bus"],
   ["Boat Classification", "Passenger Boat"],
   ["Visit Purpose", "Vacation"],
@@ -263,7 +263,7 @@ describe("g) the four reference tabs still rename as they did", () => {
   it.each(FOUR)("%s: confirm and save sends the name and the server's count, the row shows the server's answer, and the fare endpoints are never touched", async (tab, rowName) => {
     await open();
     await goTo(tab, rowName);
-    const kind = { "Travel Itinerary": "itinerary", "Vehicle Classification": "travel-mode", "Boat Classification": "boat-type", "Visit Purpose": "visit-purpose" }[tab];
+    const kind = { "Length of Stay": "itinerary", "Vehicle Classification": "travel-mode", "Boat Classification": "boat-type", "Visit Purpose": "visit-purpose" }[tab];
     const target = lists[kind].find((o) => o.name === rowName);
     fireEvent.click(screen.getByRole("button", { name: `Edit ${rowName}` }));
     fireEvent.change(screen.getByLabelText("Option name"), { target: { value: `${rowName} renamed` } });

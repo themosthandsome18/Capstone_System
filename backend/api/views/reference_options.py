@@ -35,7 +35,7 @@ from api.services.activity import LABEL_MAX, count_of, log_activity, shorten_lab
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
 
 KINDS = {
-    "itinerary": {"model": Itinerary, "fk": "itinerary", "label": "Travel itinerary", "lock": 7100001},
+    "itinerary": {"model": Itinerary, "fk": "itinerary", "label": "Length of stay", "lock": 7100001},
     "travel-mode": {"model": TravelMode, "fk": "travel_mode", "label": "Vehicle classification", "lock": 7100002},
     "boat-type": {"model": BoatType, "fk": "boat_type", "label": "Boat classification", "lock": 7100003},
     "visit-purpose": {"model": VisitPurpose, "fk": "visit_purpose", "label": "Visit purpose", "lock": 7100004},

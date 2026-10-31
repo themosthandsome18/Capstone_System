@@ -537,7 +537,7 @@ function BookingManagement() {
         if (requiresLocation && !form.region_id) return "Region is required.";
         if (requiresLocation && !form.province_id) return "Province is required.";
         if (!form.resort_id) return "Resort is required.";
-        if (!form.itinerary_id) return "Travel Itinerary is required.";
+        if (!form.itinerary_id) return "Length of Stay is required.";
         return "";
       case 3:
         if (!form.travel_mode_id) return "Vehicle Classification is required.";
@@ -859,7 +859,7 @@ function BookingManagement() {
       "Province",
       "Pax",
       "Arrival",
-      "Travel Itinerary",
+      "Length of Stay",
       "Resort",
       "Status",
     ];
@@ -1088,7 +1088,7 @@ function BookingManagement() {
                   "Country",
                   "Pax",
                   "Arrival",
-                  "Travel Itinerary",
+                  "Length of Stay",
                   "Resort",
                   "Status",
                   "Actions",
@@ -1409,12 +1409,12 @@ function BookingManagement() {
                         ))}
                       </select>
                     </WizardField>
-                    <WizardField label="Travel Itinerary" required>
+                    <WizardField label="Length of Stay" required>
                       <select
                         value={form.itinerary_id}
                         onChange={(e) => updateField("itinerary_id", e.target.value)}
                       >
-                        <option value="">Select itinerary</option>
+                        <option value="">Select length of stay</option>
                         {choicesFor(referenceTables.itineraries, editingRecord?.itinerary_id).map((i) => (
                           <option key={i.id} value={i.id}>{i.label}</option>
                         ))}
@@ -1565,7 +1565,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Region" value={resolveLabel(referenceTables.regions, form.region_id)} />
                       <WizardReviewItem label="Province" value={resolveLabel(referenceTables.provinces, form.province_id)} />
                       <WizardReviewItem label="Resort" value={resolveLabel(referenceTables.resorts, form.resort_id, "resort_id", "resort_name")} />
-                      <WizardReviewItem label="Itinerary" value={resolveLabel(referenceTables.itineraries, form.itinerary_id)} />
+                      <WizardReviewItem label="Length of Stay" value={resolveLabel(referenceTables.itineraries, form.itinerary_id)} />
                     </WizardReviewSection>
                     <WizardReviewSection title="Travel Details" onEdit={() => jumpToStep(3)}>
                       <WizardReviewItem label="Travel Mode" value={resolveLabel(referenceTables.travelModes, form.travel_mode_id)} />

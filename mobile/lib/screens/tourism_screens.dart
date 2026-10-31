@@ -3849,7 +3849,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         // ── 3. Travel Details ──
         const FormSectionTitle('3. Travel Details'),
         DropdownTile<RefItem>(
-          label: 'Travel Itinerary *',
+          label: 'Length of Stay *',
           value: _itinerary,
           items: _itineraryOptions,
           itemLabel: (item) => item.name,

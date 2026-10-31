@@ -170,7 +170,7 @@ describe("the four lists", () => {
   it("has the four reference tabs (each asking the server for its own list) and the fare tab", async () => {
     await open();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
-      "Travel Itinerary",
+      "Length of Stay",
       "Vehicle Classification",
       "Boat Classification",
       "Visit Purpose",
@@ -520,7 +520,7 @@ describe("deactivating and bringing back", () => {
 describe("there is no way to delete", () => {
   it("has no delete or remove button in any tab, and sends no DELETE", async () => {
     await open();
-    for (const name of ["Travel Itinerary", "Vehicle Classification", "Boat Classification", "Visit Purpose"]) {
+    for (const name of ["Length of Stay", "Vehicle Classification", "Boat Classification", "Visit Purpose"]) {
       fireEvent.click(screen.getByRole("tab", { name }));
       await waitFor(() => expect(screen.getByRole("tab", { name }).getAttribute("aria-selected")).toBe("true"));
       await screen.findByRole("table");
@@ -578,7 +578,7 @@ describe("steady, with no second fetch", () => {
     expect(screen.getByText("Loading...")).toBeTruthy(); // another tab, never opened
     await screen.findByText("Public Bus");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Travel Itinerary" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Length of Stay" }));
     expect(screen.queryByText("Loading...")).toBeNull(); // already has its list
     expect(screen.getByText("Overnight")).toBeTruthy();
     expect(count("itinerary")).toBe(1);

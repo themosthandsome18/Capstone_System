@@ -138,7 +138,7 @@ const labelsOf = (select) => Array.from(select.querySelectorAll("option")).map((
 const shown = (select) => select.options[select.selectedIndex]?.textContent;
 
 const PLACEHOLDERS = {
-  itinerary: "Select itinerary",
+  itinerary: "Select length of stay",
   mode: "Select mode",
   boat: "Select boat",
   purpose: "Select purpose",
@@ -176,7 +176,7 @@ describe("a NEW record offers only active options", () => {
     fireEvent.change(screen.getByPlaceholderText("email@example.com"), { target: { value: "nora@example.test" } });
     fireEvent.change(screen.getByPlaceholderText("9XXXXXXXXX"), { target: { value: "9170000000" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    await screen.findByText("Select itinerary", { selector: "option" });
+    await screen.findByText("Select length of stay", { selector: "option" });
     fireEvent.change(selectWith("Select region"), { target: { value: "4" } });
     fireEvent.change(selectWith("Select province"), { target: { value: "7" } });
     fireEvent.change(selectWith("Select resort"), { target: { value: "3" } });
@@ -184,7 +184,7 @@ describe("a NEW record offers only active options", () => {
 
   it("the itinerary list has the active ones only, with no mark", async () => {
     await openAddAtLocation();
-    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
+    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select length of stay", ...ACTIVE.itinerary]);
   });
 
   it("all four lists have the active ones only, and no inactive name appears in them", async () => {
@@ -209,7 +209,7 @@ describe("EDITING an old record that uses an inactive option", () => {
     openLocation();
     const itinerary = selectWith(PLACEHOLDERS.itinerary);
     expect(labelsOf(itinerary)).toEqual([
-      "Select itinerary",
+      "Select length of stay",
       "Weekend Trail",
       `Lantern Circuit${INACTIVE_MARK}`,
       "Sunset Run",
@@ -237,7 +237,7 @@ describe("EDITING an old record that uses an inactive option", () => {
   it("record B, a different record, shows ITS inactive options, not record A's", async () => {
     await openEdit("SV-B");
     openLocation();
-    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
+    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select length of stay", ...ACTIVE.itinerary]);
     openTravelDetails();
     const mode = selectWith(PLACEHOLDERS.mode);
     expect(labelsOf(mode)).toEqual(["Select mode", "Jeepney Ride", `Horse Cart${INACTIVE_MARK}`, "Pedicab"]);
@@ -254,7 +254,7 @@ describe("EDITING an old record that uses an inactive option", () => {
   it("a record with only active options sees no inactive option and no mark", async () => {
     await openEdit("SV-C");
     openLocation();
-    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select itinerary", ...ACTIVE.itinerary]);
+    expect(labelsOf(selectWith(PLACEHOLDERS.itinerary))).toEqual(["Select length of stay", ...ACTIVE.itinerary]);
     openTravelDetails();
     expect(labelsOf(selectWith(PLACEHOLDERS.mode))).toEqual(["Select mode", ...ACTIVE.mode]);
     expect(labelsOf(selectWith(PLACEHOLDERS.boat))).toEqual(["Select boat", ...ACTIVE.boat]);

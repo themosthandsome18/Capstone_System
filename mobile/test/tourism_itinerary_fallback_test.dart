@@ -42,7 +42,7 @@ Future<DropdownTile<RefItem>> itineraryTile(
   await tester.pump();
   return tester.widget<DropdownTile<RefItem>>(
     find.byWidgetPredicate(
-      (w) => w is DropdownTile<RefItem> && w.label == 'Travel Itinerary *',
+      (w) => w is DropdownTile<RefItem> && w.label == 'Length of Stay *',
     ),
   );
 }

@@ -6127,7 +6127,7 @@ class ReferenceOptionApiTests(TestCase):
     def test_the_label_of_the_worst_rename_is_within_the_column_and_the_rename_is_kept(self):
         old, new = self._name120("Alpha"), self._name120("Bravo")
         option = self._make("itinerary", 9960, old, uses=2, stay_nights=1)
-        naive = f"Travel itinerary option renamed: '{old}' to '{new}'; stay length of '{new}' changed from 1 to 3 (2 records)"
+        naive = f"Length of stay option renamed: '{old}' to '{new}'; stay length of '{new}' changed from 1 to 3 (2 records)"
         self.assertGreater(len(naive), 255)  # the fixture: written in full this label is NOT within the column
         ask = self.admin.patch(self._url("itinerary", option.id), {"name": new, "stay_nights": 3}, format="json")
         self.assertEqual((ask.status_code, ask.json()["record_count"]), (409, 2))  # (it asks first, with the real number)
@@ -6138,7 +6138,7 @@ class ReferenceOptionApiTests(TestCase):
         self.assertEqual(Itinerary.objects.get(pk=option.id).name, new)  # the rename itself was NOT lost to its label
         label = ActivityLog.objects.get().record_label
         self.assertLessEqual(len(label), ActivityLog._meta.get_field("record_label").max_length)  # explicitly: SQLite accepts any length
-        self.assertTrue(label.startswith("Travel itinerary option renamed: '"), label)
+        self.assertTrue(label.startswith("Length of stay option renamed: '"), label)
         # what the label exists to say, how many records the change touched, is whole: each name was shortened instead
         self.assertTrue(label.endswith(" (2 records)"), label)
         self.assertIn("; stay length of '", label)  # the second half of the label is there too
@@ -6169,7 +6169,7 @@ class ReferenceOptionApiTests(TestCase):
         )
         self.assertEqual(done.status_code, 200, done.content)
         label = ActivityLog.objects.get().record_label
-        self.assertEqual(label, f"Travel itinerary option stay length of '{name}' changed from 1 to 2 (2 records)")  # one name: it fits, untouched
+        self.assertEqual(label, f"Length of stay option stay length of '{name}' changed from 1 to 2 (2 records)")  # one name: it fits, untouched
         self.assertLessEqual(len(label), 255)
 
     def test_a_name_in_the_label_always_gets_at_least_20_letters_of_room(self):
@@ -6204,7 +6204,7 @@ class ReferenceOptionApiTests(TestCase):
         self.admin.patch(self._url("itinerary", option.id), {"name": "Short Trail 2", "confirm_affected_records": 1}, format="json")
         self.assertEqual(
             ActivityLog.objects.get().record_label,
-            "Travel itinerary option renamed: 'Short Trail' to 'Short Trail 2' (1 record)",
+            "Length of stay option renamed: 'Short Trail' to 'Short Trail 2' (1 record)",
         )
 
     def test_the_label_of_a_rename_says_1_record_not_record_s(self):
@@ -6233,7 +6233,7 @@ class ReferenceOptionApiTests(TestCase):
         self.assertEqual((log.user_id, log.module, log.action), (admin_user.pk, "tourism", "create"))
         self.assertEqual((log.record_type, log.record_id), ("Itinerary", str(created["id"])))
         self.assertIn("Logged New", log.record_label)
-        self.assertIn("Travel itinerary", log.record_label)
+        self.assertIn("Length of stay", log.record_label)
 
         self.admin.patch(
             self._url("itinerary", option.id), {"name": "Trace Trail 2", "confirm_affected_records": 2}, format="json"

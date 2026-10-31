@@ -75,7 +75,7 @@ export const ARRIVAL_EXPORT_HEADERS = [
   "Group/Guest",
   "Male",
   "Female",
-  "Travel Itinerary",
+  "Length of Stay",
   "Overnight",
   "Same Day",
   "Resort",

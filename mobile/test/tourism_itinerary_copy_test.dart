@@ -1,7 +1,7 @@
 // The "Curated Mauban Itineraries" section of My Visit was REMOVED: its routes had exact times and stops that nobody had verified, and it was shown as a guide
 // in a system real visitors use. This file used to hold the guard of one of its texts ("Day Tour" was renamed "Same Day" in the data, 2026-10-03: no itinerary
 // card on My Visit said "Day Tour"). The guard stays, and says more now: My Visit has no "Day Tour" and no "Same Day (Town Proper)" anywhere, because there is
-// no itinerary card left to say them. (The "Travel Itinerary" choice of the registration form is another thing, from the database, and has its own tests.)
+// no itinerary card left to say them. (The "Length of Stay" choice of the registration form is another thing, from the database, and has its own tests.)
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';

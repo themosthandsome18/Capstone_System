@@ -77,7 +77,7 @@ const width = (el) => window.getComputedStyle(el).getPropertyValue("width");
 const boxSizing = (el) => window.getComputedStyle(el).getPropertyValue("box-sizing");
 
 const FIVE = [
-  ["Travel Itinerary", "6 Nights", "New option name", "Option name", /add option/i],
+  ["Length of Stay", "6 Nights", "New option name", "Option name", /add option/i],
   ["Vehicle Classification", "Public Bus", "New option name", "Option name", /add option/i],
   ["Boat Classification", "Passenger Boat", "New option name", "Option name", /add option/i],
   ["Visit Purpose", "Vacation", "New option name", "Option name", /add option/i],
@@ -125,7 +125,7 @@ describe("d) the name / tier-text box takes the whole width of its form, in all 
   });
 
   it("the stay-length box of the itinerary keeps its own width: only the name boxes changed", async () => {
-    await open("Travel Itinerary", "6 Nights");
+    await open("Length of Stay", "6 Nights");
     fireEvent.click(screen.getByRole("button", { name: "Edit 6 Nights" }));
     const stay = screen.getByLabelText("Stay length in nights");
     expect(width(stay)).toBe("160px");
@@ -133,7 +133,7 @@ describe("d) the name / tier-text box takes the whole width of its form, in all 
   });
 
   it("the filter box and every other input of the page keep theirs", async () => {
-    await open("Travel Itinerary", "6 Nights");
+    await open("Length of Stay", "6 Nights");
     expect(screen.getByLabelText("Filter by status").closest("label").className).not.toContain("settings-field-wide");
   });
 

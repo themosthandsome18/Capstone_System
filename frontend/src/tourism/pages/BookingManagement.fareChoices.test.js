@@ -373,12 +373,12 @@ describe("a NEW record", () => {
     fireEvent.change(screen.getByPlaceholderText("email@example.com"), { target: { value: "nora@example.test" } });
     fireEvent.change(screen.getByPlaceholderText("9XXXXXXXXX"), { target: { value: "9170000000" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    await screen.findByText("Select itinerary", { selector: "option" });
+    await screen.findByText("Select length of stay", { selector: "option" });
     const selectWith = (text) => screen.getByText(text, { selector: "option" }).closest("select");
     fireEvent.change(selectWith("Select region"), { target: { value: "4" } });
     fireEvent.change(selectWith("Select province"), { target: { value: "7" } });
     fireEvent.change(selectWith("Select resort"), { target: { value: "3" } });
-    fireEvent.change(selectWith("Select itinerary"), { target: { value: "11" } });
+    fireEvent.change(selectWith("Select length of stay"), { target: { value: "11" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     await screen.findByText(PLACEHOLDER, { selector: "option" });
   }
