@@ -13583,6 +13583,17 @@ class MobileContentItemCreateTests(_ItemApiBase, TestCase):
     def test_a_banner_can_be_created_in_the_travel_guide_without_a_full_text(self):
         body = self._ok("post", self.LIST, self._new(style="banner"), expect=201)
         self.assertEqual(body["style"], "banner")
+        self.assertEqual((body["full_text"], body["tappable"]), ("", False))  # no full text: nothing opens
+
+    def test_a_banner_with_a_full_text_is_accepted_and_opens(self):
+        body = self._ok("post", self.LIST, self._new(title="Banner with detail", style="banner", full_text="The whole notice."), expect=201)
+        self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", "The whole notice.", True))
+        row = _Item.objects.get(pk=body["id"])
+        self.assertEqual((row.style, row.full_text), ("banner", "The whole notice."))  # and it is what was stored
+
+    def test_a_banner_with_a_blank_full_text_does_not_open(self):
+        body = self._ok("post", self.LIST, self._new(title="Banner, blank detail", style="banner", full_text="  \n "), expect=201)
+        self.assertEqual((body["style"], body["tappable"]), ("banner", False))
 
     def test_a_position_given_is_used_when_it_is_free(self):
         self.assertFalse(_Item.objects.filter(section="travel_guide", display_order=35).exists())  # (free)
@@ -13611,7 +13622,8 @@ class MobileContentItemCreateTests(_ItemApiBase, TestCase):
             {"icon": "unknown"}, {"icon": "Beach"}, {"icon": ""}, {"icon": 3},
             {"style": "card"}, {"style": ""}, {"style": 1},
             {"section": "why_visit", "style": "banner"},
-            {"style": "banner", "full_text": "Banners have none."},
+            {"style": "banner", "full_text": 7},  # a banner's full text is still checked: it must be a text
+            {"style": "banner", "full_text": "f" * 5001},  # ... and not too long
             {"display_order": 0}, {"display_order": 10000}, {"display_order": -5}, {"display_order": "abc"},
             {"display_order": 1.5}, {"display_order": True}, {"display_order": ""},
             {"title": "bad\x07title"}, {"short_text": "bad\x00line"}, {"full_text": "bad\x1btext"},
@@ -13823,15 +13835,34 @@ class MobileContentItemEditTests(_ItemApiBase, TestCase):
             (self.boat, {"display_order": 0}), (self.boat, {"display_order": "x"}), (self.boat, {"title": "Environmental Fee"}),
             (self.boat, {"title": "bad\x07"}), (self.boat, {"short_text": "{hindi_kilala}"}), (self.boat, {"short_text": "Pay P80"}),
             (self.pillars[0], {"style": "banner"}), (self.pillars[0], {"title": "t" * 61}), (self.pillars[0], {"short_text": "s" * 81}),
-            (self.notice, {"full_text": "A banner has none"}),
-            (self.festival, {"style": "banner"}),  # the tile that HAS a full text cannot become a banner
+            (self.notice, {"full_text": 7}),  # a banner's full text is still checked: it must be a text
+            (self.notice, {"full_text": "f" * 5001}),  # ... and not too long
+            (self.notice, {"full_text": "{hindi_kilala}"}),  # ... and its placeholders are still checked
         ]
-        self.assertTrue(self.festival.full_text)  # (the fixture: Festival has a full text, so the last case is the real one)
         for item, change in cases:
             self._refuse("patch", self._url(item), change)
 
-    def test_the_tile_that_has_a_full_text_becomes_a_banner_once_the_full_text_is_cleared_in_the_same_edit(self):
+    def test_the_tile_that_has_a_full_text_becomes_a_banner_and_keeps_it(self):
+        self.assertTrue(self.festival.full_text)  # the fixture: the tile has a full text
+        text = self.festival.full_text
+        body = self._ok("patch", self._url(self.festival), {"style": "banner"})
+        self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", text, True))
+
+    def test_the_tile_that_has_a_full_text_becomes_a_banner_with_the_full_text_cleared_in_the_same_edit(self):
         body = self._ok("patch", self._url(self.festival), {"style": "banner", "full_text": ""})
+        self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", "", False))
+
+    def test_a_banner_can_have_a_full_text_and_stays_a_banner(self):
+        self.assertEqual(self.notice.style, "banner")  # the fixture
+        self.assertEqual(self.notice.full_text, "")
+        body = self._ok("patch", self._url(self.notice), {"full_text": "Now it opens."})
+        self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", "Now it opens.", True))
+        row = _Item.objects.get(pk=self.notice.pk)
+        self.assertEqual((row.style, row.full_text), ("banner", "Now it opens."))
+
+    def test_a_banner_that_has_a_full_text_can_lose_it_and_stops_opening(self):
+        self._ok("patch", self._url(self.notice), {"full_text": "Now it opens."})
+        body = self._ok("patch", self._url(self.notice), {"full_text": ""})
         self.assertEqual((body["style"], body["full_text"], body["tappable"]), ("banner", "", False))
 
     def test_a_banner_becomes_a_tile_and_can_then_have_a_full_text(self):
