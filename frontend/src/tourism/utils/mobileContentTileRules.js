@@ -26,7 +26,7 @@ export const HARD_LIMITS = Object.freeze({
   travel_guide: Object.freeze({ title: 160, short_text: 400, full_text: 5000 }),
 });
 export const ADVISED_LIMITS = Object.freeze({
-  why_visit: Object.freeze({ title: 24, short_text: 28 }),
+  why_visit: Object.freeze({ title: 24 }),
   travel_guide: Object.freeze({ short_text: 300 }),
 });
 

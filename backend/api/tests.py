@@ -13768,10 +13768,14 @@ class MobileContentItemCreateTests(_ItemApiBase, TestCase):
 
     # -- warnings -----------------------------------------------------------------------------------------------------------------
 
-    def test_a_pillar_that_is_longer_than_a_line_is_accepted_with_a_warning(self):
+    def test_a_pillar_with_a_long_title_is_accepted_with_a_warning_and_a_long_short_line_with_none(self):
+        # the short line of a tile may run to two lines in the app: only the title is advised against (24), the short line is not
         body = self._ok("post", self.LIST, {"section": "why_visit", "title": "T" * 30, "short_text": "S" * 40}, expect=201)
-        self.assertEqual(len(body["warnings"]), 2)
-        self.assertTrue(all("cut it off" in w for w in body["warnings"]))
+        self.assertEqual(len(body["warnings"]), 1)
+        self.assertIn("The title", body["warnings"][0])
+        self.assertIn("cut it off", body["warnings"][0])
+        long_line = self._ok("post", self.LIST, {"section": "why_visit", "title": "Roomy", "short_text": "S" * 80}, expect=201)
+        self.assertEqual(long_line["warnings"], [])
         quiet = self._ok("post", self.LIST, {"section": "why_visit", "title": "Short", "short_text": "Short too"}, expect=201)
         self.assertEqual(quiet["warnings"], [])
 

@@ -316,7 +316,7 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(eyebrow, "text-transform")).toBe("uppercase");
     expect(decl(eyebrow, "letter-spacing")).toBe("0.1em");
     expect(decl(eyebrow, "font-weight")).toBe("700");
-    expect(decl(eyebrow, "color")).toBe("#2e7d74");
+    expect(decl(eyebrow, "color")).toBe("var(--th-primary-ink)"); // the theme, not a colour written here
   });
 
   it("the tab bar and the tabs", () => {
@@ -331,8 +331,10 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(tab, "padding")).toBe("10px 16px");
     expect(decl(tab, "border-radius")).toBe("9px");
     expect(decl(tab, "color")).toBe("#65564a");
-    expect(decl(`${tab}.active`, "background")).toBe("#2e7d74");
-    expect(decl(`${tab}.active`, "color")).toBe("#ffffff");
+    expect(decl(`${tab}.active`, "background")).toBe("var(--th-primary)"); // the colour the admin chose, not a green written here
+    expect(decl(`${tab}.active`, "color")).toBe("var(--th-text-inverse)"); // white, like the active item of the sidebar (which is `white`), not the derived dark contrast
+    expect(decl(`${tab}.active`, "color")).not.toBe("var(--th-primary-contrast)");
+    expect(decl(tab, "color")).toBe("#65564a"); // the tab that is not active is untouched
     expect(decl(`${tab}.active`, "font-weight")).toBe("700");
   });
 
@@ -350,7 +352,7 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(input, "min-height")).toBe("42px");
     expect(decl(input, "padding")).toBe("10px 13px");
     expect(decl(input, "font-size")).toBe("14px");
-    expect(decl(`${input}:focus`, "outline")).toBe("2px solid #2e7d74");
+    expect(decl(`${input}:focus`, "outline")).toBe("2px solid var(--th-primary)");
     const hint = ".mobile-content-page .mobile-content-card .options-hint";
     expect(decl(hint, "font-size")).toBe("12.5px");
     expect(decl(hint, "color")).toBe("#8a7664");
@@ -361,10 +363,27 @@ describe("the CSS holds the values of the design", () => {
     expect(CSS).not.toMatch(/mobile-content-note/);
     expect(CSS).not.toMatch(/--mc-note/);
     const button = ".mobile-content-page .mobile-content-card .tourist-record-save";
-    expect(decl(button, "background")).toBe("#8a5a33");
+    expect(decl(button, "background")).toBe("var(--th-primary-deep)");
     expect(decl(button, "color")).toBe("#ffffff");
     expect(decl(button, "border-radius")).toBe("9px");
     expect(decl(button, "min-height")).toBe("38px");
+  });
+
+  it("nothing that means \"the theme\" is a colour written in the CSS of the page (the teal and the brown are gone)", () => {
+    expect(variables["--mc-teal"]).toBeUndefined();
+    expect(variables["--mc-brown"]).toBeUndefined();
+    const start = CSS.indexOf("MOBILE APP CONTENT: THE DESIGN");
+    expect(start).toBeGreaterThan(-1); // the fixture: the block was found
+    const block = CSS.slice(start);
+    expect(block).not.toMatch(/#2e7d74|#8a5a33|--mc-teal|--mc-brown/i);
+    // the places that follow the theme, each one named (the active tab is above, the eyebrow and the box to type in are above)
+    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "border")).toBe("2px solid var(--th-primary)");
+    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "background")).toBe("var(--th-primary-tint)");
+    expect(decl(".mobile-content-icon-choice:focus-visible", "outline")).toBe("2px solid var(--th-primary)");
+    expect(decl(".mobile-content-page .mobile-content-tile-order input:focus", "border-color")).toBe("var(--th-primary)");
+    expect(decl(".mobile-content-page .mobile-content-card .settings-field-wide textarea:focus", "border-color")).toBe("var(--th-primary)");
+    expect(decl(".mobile-content-page .mobile-content-card .mobile-content-eyebrow", "color")).toBe("var(--th-primary-ink)");
+    expect(decl(".mobile-content-page .mobile-content-tile-form .tourist-record-save", "background")).toBe("var(--th-primary-deep)");
   });
 
   it("the heading of the page", () => {

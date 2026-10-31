@@ -64,7 +64,7 @@ const orderMessage = `The position must be a whole number from ${ORDER_MIN} to $
 
 function Chevron() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8A5A33" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 5l-7 7 7 7" />
     </svg>
   );

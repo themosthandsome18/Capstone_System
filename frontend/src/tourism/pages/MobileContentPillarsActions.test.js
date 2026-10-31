@@ -225,7 +225,7 @@ describe("the CSS of the doors", () => {
   it("the Add pillar button is the size of the other main buttons", () => {
     const add = ".mobile-content-page .mobile-content-add";
     expect(decl(add, "min-height")).toBe("38px");
-    expect(decl(add, "background")).toBe("var(--mc-brown)");
+    expect(decl(add, "background")).toBe("var(--th-primary-deep)");
     expect(decl(add, "color")).toBe("#ffffff");
     expect(decl(add, "border-radius")).toBe("9px");
     expect(decl(".mobile-content-page .mobile-content-pillars-head", "justify-content")).toBe("space-between");

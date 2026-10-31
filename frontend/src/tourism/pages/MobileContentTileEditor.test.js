@@ -215,7 +215,7 @@ describe("the top of the page", () => {
     const chevron = back.querySelector("svg");
     expect(chevron.getAttribute("width")).toBe("15");
     expect(chevron.getAttribute("height")).toBe("15");
-    expect(chevron.getAttribute("stroke")).toBe("#8A5A33");
+    expect(chevron.getAttribute("stroke")).toBe("currentColor"); // it follows the text of the button, which follows the theme on hover
     expect(chevron.getAttribute("stroke-width")).toBe("2.4");
   });
 
@@ -1452,6 +1452,15 @@ describe("the page does not touch the CSS of the pages that exist", () => {
     expect(decl(".mobile-content-tile-page .reports-header h1", "letter-spacing")).toBe("-0.02em");
     expect(decl(".mobile-content-back", "font-size")).toBe("13px");
     expect(decl(".mobile-content-back", "font-weight")).toBe("600");
+    // it is a secondary button now: a size, a padding, round corners, a border, and a hover (not a plain link)
+    expect(decl(".mobile-content-back", "min-height")).toBe("32px");
+    expect(decl(".mobile-content-back", "padding")).toBe("0 14px 0 10px");
+    expect(decl(".mobile-content-back", "border-radius")).toBe("9px");
+    expect(decl(".mobile-content-back", "border")).toBe("1px solid var(--th-border-strong)");
+    expect(decl(".mobile-content-back", "background")).toBe("var(--th-surface)");
+    expect(decl(".mobile-content-back:hover", "border-color")).toBe("var(--th-primary)");
+    expect(decl(".mobile-content-back:hover", "background")).toBe("var(--th-primary-tint)");
+    expect(decl(".mobile-content-back:focus-visible", "outline")).toBe("2px solid var(--th-primary)");
     expect(decl(".mobile-content-page .mobile-content-tile-card", "padding")).toBe("22px 24px");
     expect(decl(".mobile-content-icons", "grid-template-columns")).toBe("repeat(auto-fit, minmax(min(52px, 100%), 1fr))");
     expect(decl(".mobile-content-icons", "gap")).toBe("9px");
@@ -1463,8 +1472,8 @@ describe("the page does not touch the CSS of the pages that exist", () => {
     expect(decl(".mobile-content-icon-choice", "background")).toBe("var(--th-surface)");
     expect(decl(".mobile-content-icon-choice:hover", "background")).toBe("#fbf4ec");
     expect(decl(".mobile-content-icon-choice:hover", "border-color")).toBe("#cdb295");
-    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "border")).toBe("2px solid var(--mc-teal)");
-    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "background")).toBe("#eaf3f1");
+    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "border")).toBe("2px solid var(--th-primary)");
+    expect(decl('.mobile-content-icon-choice[data-selected="true"]', "background")).toBe("var(--th-primary-tint)");
     expect(decl(".mobile-content-page .mobile-content-tile-order", "width")).toBe("160px");
     expect(decl(".mobile-content-page .mobile-content-tile-order input", "width")).toBe("160px");
   });
