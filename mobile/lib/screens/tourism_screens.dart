@@ -63,6 +63,7 @@ class _MobileShellState extends State<MobileShell> {
         registerEnabled: widget.state.isLoaded,
         failure: widget.state.failure,
         onRetry: widget.onRetry,
+        content: widget.state.appContent,
         visits: _visitHistory,
         onRegisterVisit: () => _openRegistration(),
       ),
@@ -210,6 +211,14 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     // 1. Popular Resorts for the Slide Show (Top visited / featured)
     final state = widget.state;
+    // The Travel Guide: the server's tiles and notices, or the code's when it sends none it can use. The tiles go in the middle of the Home, the notices at
+    // the foot, whatever order they are in.
+    final guideItems = state.appContent.travelGuideItems(
+      AppContentDefaults.travelGuideItems,
+      name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+    );
+    final guideTiles = guideItems.where((i) => !i.isBanner).toList();
+    final guideBanners = guideItems.where((i) => i.isBanner).toList();
     final destinations = state.destinations;
     final popularResorts = state.featuredDestinations.isNotEmpty
         ? state.featuredDestinations
@@ -307,9 +316,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 10),
               Text(
-                widget.profile.isGuest
-                    ? 'Mabuhay, Explorer! 🌊'
-                    : 'Mabuhay, ${widget.profile.displayName}! 🌊',
+                state.appContent.text(
+                  'welcome',
+                  'title',
+                  AppContentDefaults.welcomeTitle,
+                  name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+                ),
                 style: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w900,
@@ -319,7 +331,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Welcome to the historic jewel of Lamon Bay — home to the white sandbars of Cagbalete Island, cascading waterfalls, and world-class Buntal weaving craftsmanship.',
+                state.appContent.text(
+                  'welcome',
+                  'subtitle',
+                  AppContentDefaults.welcomeSubtitle,
+                  name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+                ),
                 style: TextStyle(
                   color: context.brand.border,
                   fontSize: 12.5,
@@ -437,7 +454,10 @@ class _HomePageState extends State<HomePage> {
           ],
 
           // Section: Discover the Beauty & Heritage of Mauban
-          const _MaubanTownHighlightsCard(),
+          _MaubanTownHighlightsCard(
+            content: state.appContent,
+            name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+          ),
           const SizedBox(height: 24),
 
           // Section: Hidden Gems & Peaceful Stays (Promoting lesser-known resorts)
@@ -485,8 +505,14 @@ class _HomePageState extends State<HomePage> {
           ],
 
           // Section: Town Information & Travel Essentials
-          const _MaubanTownGuideSection(),
-          const SizedBox(height: 14),
+          if (guideTiles.isNotEmpty) ...[
+            _MaubanTownGuideSection(
+              content: state.appContent,
+              tiles: guideTiles,
+              name: visitorName(isGuest: widget.profile.isGuest, displayName: widget.profile.displayName),
+            ),
+            const SizedBox(height: 14),
+          ],
         ],
 
         // Filtered / All Destinations List Section. Not while failed: there
@@ -523,20 +549,19 @@ class _HomePageState extends State<HomePage> {
               onTap: () => widget.onOpenDestination(destination),
             ),
           ),
-        const SizedBox(height: 12),
-
-        const InfoBanner(
-          icon: Icons.event_available_outlined,
-          title: 'Upcoming: Fiesta de Mauban & Buntal Festival',
-          text: 'Celebrate the feast of San Buenaventura with colorful Buntal weaving and boat regatta.',
-          color: Color(0xffd7efff),
-        ),
-        InfoBanner(
-          icon: Icons.eco_outlined,
-          title: 'Clean Coast & Eco-Tourism Policy',
-          text: 'Please dispose of trash responsibly and support local community bangkeros and weavers.',
-          color: context.brand.tint,
-        ),
+        // The notices, at the foot of the Home. None: no gap either.
+        if (guideBanners.isNotEmpty) const SizedBox(height: 12),
+        for (final banner in guideBanners)
+          KeyedSubtree(
+            key: ValueKey('banner-${banner.id}'),
+            child: InfoBanner(
+              icon: appContentIconFor(banner.icon).icon,
+              title: banner.title,
+              text: banner.shortText,
+              // the blue of the festival notice, the theme's tint for the others (as the two notices always were)
+              color: banner.icon == 'event' ? const Color(0xffd7efff) : context.brand.tint,
+            ),
+          ),
       ],
     );
   }
@@ -795,10 +820,15 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
 
 /// Highlight Card introducing the beauty and culture of Mauban
 class _MaubanTownHighlightsCard extends StatelessWidget {
-  const _MaubanTownHighlightsCard();
+  const _MaubanTownHighlightsCard({required this.content, required this.name});
+
+  /// The texts of the web admin, or [AppContent.none]: each part is the server's when the app can show it and the code's when it cannot.
+  final AppContent content;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
+    final pillars = content.whyVisitItems(AppContentDefaults.whyVisitItems, name: name);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -827,17 +857,17 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
                 child: Icon(Icons.stars_rounded, color: context.brand.deep, size: 22),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Why Visit Mauban, Quezon?',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                      content.text('why_visit', 'title', AppContentDefaults.whyVisitTitle, name: name),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
                     ),
                     Text(
-                      'The historic coastal sanctuary of southern Luzon',
-                      style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+                      content.text('why_visit', 'subtitle', AppContentDefaults.whyVisitSubtitle, name: name),
+                      style: const TextStyle(color: AppColors.muted, fontSize: 11.5),
                     ),
                   ],
                 ),
@@ -845,57 +875,33 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Nestled along the Pacific coast of Lamon Bay, Mauban boasts powdery white sandbars with expansive tidal ripples, centuries-old ancestral trees, cascading mountain pools, and a proud cultural identity shaped by Gat Uban and palm artisans.',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
+          Text(
+            content.text('why_visit', 'body', AppContentDefaults.whyVisitBody, name: name),
+            style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
           ),
           const SizedBox(height: 16),
-          // 4 Grid Highlight Pillars
-          Row(
-            children: [
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.beach_access,
-                  title: 'Cagbalete Island',
-                  sub: 'Pristine Sandbars',
-                  color: const Color(0xFF0284C7),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.workspace_premium,
-                  title: 'Buntal Weaving',
-                  sub: 'Artisan Hats & Crafts',
-                  color: const Color(0xFFD97706),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.water_drop,
-                  title: 'Forest Cascades',
-                  sub: 'Dahican & Alitap Falls',
-                  color: const Color(0xFF059669),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPillarItem(
-                  icon: Icons.restaurant_menu,
-                  title: 'Quezon Flavors',
-                  sub: 'Habhab & Fresh Seafood',
-                  color: const Color(0xFFDC2626),
-                ),
-              ),
-            ],
-          ),
+          // The pillars: two to a row, as many as the list has (the server decides; the code's four when it sends none). A last pillar alone
+          // takes the left half.
+          for (var i = 0; i < pillars.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _pillar(pillars[i])),
+                const SizedBox(width: 8),
+                Expanded(child: i + 1 < pillars.length ? _pillar(pillars[i + 1]) : const SizedBox.shrink()),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _pillar(AppContentItem item) {
+    final drawn = appContentIconFor(item.icon);
+    return KeyedSubtree(
+      key: ValueKey('pillar-${item.id}'),
+      child: _buildPillarItem(icon: drawn.icon, title: item.title, sub: item.shortText, color: drawn.color),
     );
   }
 
@@ -1065,42 +1071,34 @@ class _HiddenGemCard extends StatelessWidget {
 
 /// Town Information & Travel Essentials Accordion / Grid
 class _MaubanTownGuideSection extends StatelessWidget {
-  const _MaubanTownGuideSection();
+  const _MaubanTownGuideSection({required this.content, required this.tiles, required this.name});
+
+  final AppContent content;
+
+  /// The tiles to draw, already told apart from the notices.
+  final List<AppContentItem> tiles;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '📖 Mauban Travel Guide & Local Tips',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+        Text(
+          content.text('travel_guide', 'title', AppContentDefaults.travelGuideTitle, name: name),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
         ),
         const SizedBox(height: 10),
-        _buildGuideTile(
-          icon: Icons.directions_boat_outlined,
-          title: 'Cagbalete Island Boat Guide',
-          desc: 'Passenger pumpboats depart daily from Mauban Port to Sabang & Daungan. The Environmental Fee is paid at the Tourism Office, 2nd Floor, Mauban Municipal Hall. The boat fare is separate and is paid to the boat operator.',
-          color: const Color(0xFF0284C7),
-        ),
-        _buildGuideTile(
-          icon: Icons.festival_outlined,
-          title: 'Maubanin Buntal Festival (May)',
-          desc: 'A week-long celebration showcasing giant woven Buntal hats, street dancing, and the historical legacy of Gat Uban.',
-          color: const Color(0xFFD97706),
-        ),
-        _buildGuideTile(
-          icon: Icons.receipt_long_outlined,
-          title: 'Environmental Fee',
-          desc: 'All tourists register at the Tourism Office, 2nd Floor, Mauban Municipal Hall. Receipts serve as your official entry pass to the island sanctuaries.',
-          color: const Color(0xFF059669),
-        ),
-        _buildGuideTile(
-          icon: Icons.delete_outline,
-          title: 'Solid Waste & Leave No Trace Policy',
-          desc: 'Help keep Cagbalete and Mauban pristine by avoiding single-use plastics and taking your trash back to mainland disposal points.',
-          color: const Color(0xFF7C3AED),
-        ),
+        for (final tile in tiles)
+          KeyedSubtree(
+            key: ValueKey('guide-${tile.id}'),
+            child: _buildGuideTile(
+              icon: appContentIconFor(tile.icon).icon,
+              title: tile.title,
+              desc: tile.shortText,
+              color: appContentIconFor(tile.icon).color,
+            ),
+          ),
       ],
     );
   }
@@ -1628,7 +1626,11 @@ class VisitPlannerPage extends StatefulWidget {
     required this.onRegisterVisit,
     this.failure,
     this.onRetry,
+    this.content = AppContent.none,
   });
+
+  /// The texts of the web admin (the Port & Boat Guide); [AppContent.none] where there are none.
+  final AppContent content;
 
   /// False until the bootstrap has loaded: the form needs its reference data.
   final bool registerEnabled;
@@ -1652,8 +1654,6 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
     'Power Bank & Waterproof Phone Pouch': false,
     'Trash Bag / Eco-Pouch (Leave No Trace)': false,
   };
-
-  int _selectedItineraryIndex = 0;
 
   void _showAddPackingItemDialog() {
     final controller = TextEditingController();
@@ -1829,7 +1829,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
         // Page Title
         const PageTitle(
           title: 'My Visit & Travel Wallet',
-          subtitle: 'Active passes, smart itinerary, and island guide',
+          subtitle: 'Active passes and island guide',
         ),
         const SizedBox(height: 6),
 
@@ -1878,12 +1878,7 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
 
         const SizedBox(height: 24),
 
-        // SECTION 3: CURATED MAUBAN ITINERARIES
-        _buildItinerarySection(),
-
-        const SizedBox(height: 24),
-
-        // SECTION 4: MAUBAN PORT BOAT SCHEDULE & GUIDE
+        // SECTION 3: MAUBAN PORT BOAT SCHEDULE & GUIDE
         _buildPortGuideCard(),
 
         if (widget.visits.length > 1) ...[
@@ -2369,440 +2364,9 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
     );
   }
 
-  // Curated Itineraries Section (Spacious Modern Timeline)
-  Widget _buildItinerarySection() {
-    final itineraries = [
-      {
-        'title': '🏝️ Cagbalete Island & Sandbars Loop',
-        'duration': '1 to 2 Days',
-        'badge': 'Top Recommended',
-        'highlight': 'Yang-in Sandbar, Bonsai Island, Balete Tree',
-        'stops': [
-          {
-            'time': '07:00 AM',
-            'title': 'Port Departure to Cagbalete',
-            'description':
-                'Board public or private boat from Mauban Port to Sabang/Mappit Port.',
-            'icon': Icons.directions_boat_outlined,
-          },
-          {
-            'time': '09:00 AM',
-            'title': 'Yang-in Sandbar Walk & Swimming',
-            'description':
-                'Witness the vast low-tide white sand ripples and shallow crystal emerald waters.',
-            'icon': Icons.water_outlined,
-          },
-          {
-            'time': '01:00 PM',
-            'title': 'Beachfront Seafood Feast',
-            'description':
-                'Enjoy fresh fish, squid, and grilled local delicacies at the beachfront resort.',
-            'icon': Icons.restaurant_outlined,
-          },
-          {
-            'time': '03:30 PM',
-            'title': 'Bonsai Island Exploration',
-            'description':
-                'Unique dwarf mangrove trees and ancient coral rock formations ideal for photography.',
-            'icon': Icons.park_outlined,
-          },
-          {
-            'time': '05:30 PM',
-            'title': 'Golden Hour by Balete Tree',
-            'description':
-                'Century-old mystical Balete tree sunset photography session with sea breeze.',
-            'icon': Icons.wb_twilight_outlined,
-          },
-        ],
-      },
-      {
-        'title': '🌿 Eco-Waterfalls & Heritage Trail',
-        'duration': 'Same Day (Town Proper)',
-        'badge': 'Nature & Culture',
-        'highlight': 'Dahican Falls, Rizal Hill, Spanish Bath',
-        'stops': [
-          {
-            'time': '08:00 AM',
-            'title': 'Dahican Cascading Falls',
-            'description':
-                'Cool off and swim in crystal-clear freshwater pools surrounded by lush forest.',
-            'icon': Icons.pool_outlined,
-          },
-          {
-            'time': '11:30 AM',
-            'title': 'Rizal Hill Park Panoramic View',
-            'description':
-                'Overlooking scenic Lamon Bay and the historic town landscape from the gazebo.',
-            'icon': Icons.landscape_outlined,
-          },
-          {
-            'time': '01:00 PM',
-            'title': 'Authentic Habhab Experience',
-            'description':
-                'Traditional leaf-wrapped Pansit Habhab dining along historic Quezon Street.',
-            'icon': Icons.lunch_dining_outlined,
-          },
-          {
-            'time': '02:30 PM',
-            'title': '17th-Century Spanish Public Bath',
-            'description':
-                'Historical landmark visit and authentic Buntal handicraft souvenir shopping.',
-            'icon': Icons.account_balance_outlined,
-          },
-        ],
-      },
-      {
-        'title': '🍲 Quezon Food & Local Delicacies',
-        'duration': 'Half-Day Trail',
-        'badge': 'Culinary Tour',
-        'highlight': 'Pansit Habhab, Tikoy Mauban, Fresh Fish',
-        'stops': [
-          {
-            'time': '07:30 AM',
-            'title': 'Mauban Fish Port Market',
-            'description':
-                'Fresh morning catch direct from Lamon Bay local fishermen.',
-            'icon': Icons.set_meal_outlined,
-          },
-          {
-            'time': '09:00 AM',
-            'title': 'Tikoy & Buntal Craft Workshop',
-            'description':
-                'Taste warm, authentic sweet Tikoy Mauban and watch master local weavers.',
-            'icon': Icons.bakery_dining_outlined,
-          },
-          {
-            'time': '12:00 PM',
-            'title': 'Longganisa Heritage Lunch',
-            'description':
-                'Savory garlicky local longganisa served with hot native garlic rice.',
-            'icon': Icons.dinner_dining_outlined,
-          },
-        ],
-      },
-    ];
-
-    final current = itineraries[_selectedItineraryIndex];
-    final stops = current['stops'] as List<Map<String, dynamic>>;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.map_outlined,
-                  size: 22,
-                  color: Color(0xFF0284C7),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Curated Mauban Itineraries',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 17,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Handpicked routes and schedules by local guides',
-                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-
-          // Itinerary Segment Filter Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: List.generate(itineraries.length, (idx) {
-                  final isSelected = _selectedItineraryIndex == idx;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: FilterChip(
-                      label: Text(
-                        idx == 0
-                            ? '🏝️ Cagbalete Loop'
-                            : idx == 1
-                            ? '🌿 Waterfalls & Heritage'
-                            : '🍲 Food & Culture',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.w900 : FontWeight.w600,
-                          color:
-                              isSelected ? Colors.white : const Color(0xFF334155),
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedColor: context.brand.deep,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      checkmarkColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onSelected:
-                          (_) => setState(() => _selectedItineraryIndex = idx),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // Header Card for Active Itinerary
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [context.brand.light, context.brand.tint],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.brand.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.brand.ink,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        current['badge'] as String,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 15,
-                            color: context.brand.ink,
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              current['duration'] as String,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: context.brand.ink,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  current['title'] as String,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16.5,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Highlights: ${current['highlight']}',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: Color(0xFF334155),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Spacious Modern Timeline (Hindi na Siksikan)
-          Column(
-            children: List.generate(stops.length, (idx) {
-              final stop = stops[idx];
-              final isLast = idx == stops.length - 1;
-
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Timeline indicator column
-                    SizedBox(
-                      width: 40,
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: context.brand.light,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: context.brand.primary,
-                                width: 2,
-                              ),
-                            ),
-                            child: Icon(
-                              stop['icon'] as IconData,
-                              size: 18,
-                              color: context.brand.ink,
-                            ),
-                          ),
-                          if (!isLast)
-                            Expanded(
-                              child: Container(
-                                width: 2,
-                                color: const Color(0xFFCBD5E1),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-
-                    // Content Card
-                    Expanded(
-                      child: Container(
-                        margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE2E8F0),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    stop['time'] as String,
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  'Stop ${idx + 1}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              stop['title'] as String,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              stop['description'] as String,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                color: Color(0xFF475569),
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Port Guide & Boat Schedule
   Widget _buildPortGuideCard() {
+    final lines = widget.content.lines('port_guide', AppContentDefaults.portGuideLines);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2818,31 +2382,19 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
               Icon(Icons.directions_boat_outlined, color: context.brand.dark, size: 22),
               SizedBox(width: 10),
               Text(
-                'Mauban Port ↔ Cagbalete Boats',
+                widget.content.text('port_guide', 'title', AppContentDefaults.portGuideTitle),
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: context.brand.dark),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            '• Standard boat departures from Mauban Port: 07:00 AM, 10:00 AM, 01:00 PM, and 04:00 PM.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Island Port Arrival: Sabang Port (during high tide) or Mappit Port (during low tide).',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Environmental Fee: ₱80 per visitor. Children aged 7 and below, senior citizens aged 60 and above, and visitors with special needs pay ₱64. Pay at the Tourism Office, 2nd Floor, Mauban Municipal Hall.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• Boat fare is separate. You arrange and pay it directly with the boat operator; the Tourism Office does not collect it.',
-            style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
-          ),
+          for (var i = 0; i < lines.length; i++) ...[
+            if (i > 0) const SizedBox(height: 4),
+            Text(
+              '• ${lines[i]}',
+              style: TextStyle(fontSize: 12.5, color: context.brand.ink, height: 1.4),
+            ),
+          ],
         ],
       ),
     );

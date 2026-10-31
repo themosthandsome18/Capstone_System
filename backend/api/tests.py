@@ -12276,6 +12276,9 @@ class ActivityLogDigestConstraintTests(_BoatFareApiBase, TestCase):
 # -- Mobile App Content, commit 1: the two tables and their seed ----------------------
 
 MOBILE_CONTENT_DART = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "screens" / "tourism_screens.dart"
+# The texts of the Welcome, the Why Visit, the Travel Guide and the Port & Boat Guide were MOVED out of the screen (Commits 9b and 9c) into this file; the
+# screen reads them from here.
+MOBILE_CONTENT_DEFAULTS = Path(__file__).resolve().parents[2] / "mobile" / "lib" / "models" / "app_content_defaults.dart"
 # What the seed's three placeholders stand for in the Dart (the port guide is the only place).
 PORT_FEE_REGULAR = "₱80"
 PORT_FEE_DISCOUNTED = "₱64"
@@ -12430,6 +12433,7 @@ class MobileContentSeedTests(TestCase):
         self.Block.objects.all().delete()
         _mobile_content_module().add_content(django_apps, None)
         self.dart = MOBILE_CONTENT_DART.read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.defaults = MOBILE_CONTENT_DEFAULTS.read_text(encoding="utf-8").replace("\r\n", "\n")
 
     # -- helpers ---------------------------------------------------------------------
 
@@ -12461,74 +12465,79 @@ class MobileContentSeedTests(TestCase):
     }
 
     def _dart_pattern(self, item):
-        name, field = self.CONSTRUCTORS[(item.section, item.style)]
+        """The item as AppContentItem(...) in the defaults: the stored icon NAME, the title and the short line letter for letter, and the style
+        (a banner says so; a tile does not)."""
+        style = r"\s*style: AppContentStyle\.banner," if item.style == "banner" else ""
         return re.compile(
-            re.escape(name)
-            + r"\(\s*icon: Icons\.(\w+),\s*title: "
+            r"AppContentItem\(\s*id: -\d+,\s*icon: '(\w+)',\s*title: "
             + re.escape(self._literal(item.title))
-            + r",\s*"
-            + field
-            + r": "
+            + r",\s*shortText: "
             + re.escape(self._literal(self._fee_filled(item.short_text)))
             + r","
+            + style
+            + r"\s*\),"
         )
+
+    def _list(self, name, end):
+        """One list of the defaults file (whyVisitItems, travelGuideItems)."""
+        start = self.defaults.index("static const " + name)
+        return self.defaults[start:self.defaults.index(end, start)]
 
     def test_b_every_item_is_in_the_dart_letter_for_letter_with_its_icon(self):
         self.assertEqual(self.Item.objects.count(), 10)
         for item in self.Item.objects.all():
-            match = self._dart_pattern(item).search(self.dart)
+            match = self._dart_pattern(item).search(self.defaults)
             self.assertIsNotNone(match, f"{item.title!r} is not in the Dart as stored")
-            self.assertEqual(MOBILE_CONTENT_ICONS[match.group(1)], item.icon, item.title)
+            # (the defaults write the stored NAME; the screen used to write a Dart icon)
+            self.assertEqual(match.group(1), item.icon, item.title)
 
     def test_b_the_dart_has_no_item_that_is_not_stored(self):
-        self.assertEqual(len(re.findall(r"_buildPillarItem\(\s*icon: Icons\.", self.dart)), 4)
-        self.assertEqual(len(re.findall(r"_buildGuideTile\(\s*icon: Icons\.", self.dart)), 4)
-        self.assertEqual(len(re.findall(r"InfoBanner\(\s*icon: Icons\.", self.dart)), 2)
+        pillars = self._list("whyVisitItems", "static const travelGuideTitle")
+        guides = self._list("travelGuideItems", "static const portGuideTitle")
+        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", pillars)), 4)
+        self.assertEqual(len(re.findall(r"AppContentItem\(\s*id: -\d+,\s*icon: '", guides)), 6)
+        self.assertEqual(len(re.findall(r"style: AppContentStyle\.banner,", guides)), 2)  # 6 items: 4 guides (tiles) and 2 notices
 
     def test_b_the_welcome_banner_why_visit_and_the_heading_are_in_the_dart(self):
         welcome = self._block("welcome")
         self.assertEqual(welcome.title.count("{name}"), 1)
-        guest = welcome.title.replace("{name}", "Explorer")
-        member = welcome.title.replace("{name}", "${widget.profile.displayName}")
-        self.assertIn(f"? {self._literal(guest)}", self.dart)
-        # (the member form has Dart's own ${...} interpolation, so it is written out here)
-        self.assertIn(": '" + member + "'", self.dart)
+        # (the greeting is written once, with {name}: the screen puts in the visitor's name, or the Explorer for a guest)
+        self.assertIn(f"static const welcomeTitle = {self._literal(welcome.title)};", self.defaults)
         self.assertEqual(welcome.body, "")
-        after_greeting = self.dart[self.dart.index("'" + member + "'"):]
+        after_greeting = self.defaults[self.defaults.index("static const welcomeTitle"):]
         self.assertTrue(
-            re.match(r".*?Text\(\s*" + re.escape(self._literal(welcome.subtitle)), after_greeting, re.S),
+            re.match(r".*?static const welcomeSubtitle = " + re.escape(self._literal(welcome.subtitle)), after_greeting, re.S),
             "the welcome text is not the one that follows the greeting",
         )
         why = self._block("why_visit")
-        region = self.dart[self.dart.index("class _MaubanTownHighlightsCard"):self.dart.index("Widget _buildPillarItem")]
         self.assertTrue(
             re.search(
-                r"Text\(\s*" + re.escape(self._literal(why.title)) + r".*?Text\(\s*" + re.escape(self._literal(why.subtitle))
-                + r".*?Text\(\s*" + re.escape(self._literal(why.body)),
-                region,
+                r"static const whyVisitTitle = " + re.escape(self._literal(why.title))
+                + r".*?static const whyVisitSubtitle = " + re.escape(self._literal(why.subtitle))
+                + r".*?static const whyVisitBody = " + re.escape(self._literal(why.body)),
+                self.defaults,
                 re.S,
             ),
             "Why Visit: title, subtitle and paragraph are not in this order in the Dart",
         )
         heading = self._block("travel_guide")
-        region = self.dart[self.dart.index("class _MaubanTownGuideSection"):self.dart.index("class DestinationListPage")]
-        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(heading.title)), region))
+        self.assertIn(f"static const travelGuideTitle = {self._literal(heading.title)};", self.defaults)
         self.assertEqual((heading.subtitle, heading.body), ("", ""))
 
     def test_b_the_port_guide_is_the_dart_lines_once_the_placeholders_are_filled(self):
         port = self._block("port_guide")
-        region = self.dart[self.dart.index("Widget _buildPortGuideCard"):self.dart.index("class ProfilePage")]
-        self.assertTrue(re.search(r"Text\(\s*" + re.escape(self._literal(port.title)), region))
+        region = self._list("portGuideBullets", "];")
+        self.assertIn(f"static const portGuideTitle = {self._literal(port.title)};", self.defaults)
         lines = port.body.split("\n")
         self.assertEqual(len(lines), 4)
         for line in lines:
             filled = "• " + self._fee_filled(line)
             self.assertTrue(
-                re.search(r"Text\(\s*" + re.escape(self._literal(filled)) + r",", region),
+                re.search(re.escape(self._literal(filled)) + r",", region),
                 f"not in the Dart port guide: {filled!r}",
             )
         # and the place of the Tourism Office is the one the Dart writes
-        self.assertIn(self._block("fee_office").body, self.dart)
+        self.assertIn(self._block("fee_office").body, self.defaults)
         self.assertEqual((self._block("fee_office").title, self._block("fee_office").subtitle), ("", ""))
 
     # -- c) style, section and order are where the Dart shows them ---------------------
@@ -12554,12 +12563,12 @@ class MobileContentSeedTests(TestCase):
         # tiles and pillars: the order they are written in the Dart
         for section, style in (("why_visit", "tile"), ("travel_guide", "tile"), ("travel_guide", "banner")):
             items = list(self.Item.objects.filter(section=section, style=style).order_by("display_order", "id"))
-            positions = [self.dart.index("title: " + self._literal(i.title)) for i in items]
+            positions = [self.defaults.index("title: " + self._literal(i.title)) for i in items]
             self.assertEqual(positions, sorted(positions), (section, style))
         orders = [i.display_order for i in self.Item.objects.filter(section="travel_guide").order_by("display_order")]
         self.assertEqual(len(set(orders)), 6)
         # the Home page builds the guides first and the notices after them
-        self.assertLess(self.dart.index("_MaubanTownGuideSection()"), self.dart.index("const InfoBanner("))
+        self.assertLess(self.dart.index("_MaubanTownGuideSection("), self.dart.index("InfoBanner("))
         tiles = self.Item.objects.filter(section="travel_guide", style="tile").order_by("-display_order").first()
         banner = self.Item.objects.filter(section="travel_guide", style="banner").order_by("display_order").first()
         self.assertLess(tiles.display_order, banner.display_order)

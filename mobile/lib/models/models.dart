@@ -15,6 +15,7 @@ class MobileBootstrap {
     required this.notifications,
     this.isOffline = false,
     this.theme = TourismTheme.none,
+    this.appContent = AppContent.none,
   });
 
   final List<Destination> destinations;
@@ -33,6 +34,9 @@ class MobileBootstrap {
   /// The colour setting from the web admin. Read here, not applied anywhere
   /// yet: see theme/brand_theme.dart.
   final TourismTheme theme;
+
+  /// The texts the web admin edits (Mobile App Content). Read here, not shown anywhere yet: see models/app_content.dart.
+  final AppContent appContent;
 
   factory MobileBootstrap.fromJson(Map<String, dynamic> json) {
     final refs = json['referenceTables'] as Map<String, dynamic>? ?? {};
@@ -53,6 +57,7 @@ class MobileBootstrap {
       notifications: parseList(json['notifications'], AppNotification.fromJson),
       isOffline: false,
       theme: TourismTheme.fromJson(json['theme']),
+      appContent: AppContent.fromJson(json['appContent']),
     );
   }
 
@@ -167,6 +172,9 @@ class TourismBootstrapState {
   List<Destination> get featuredDestinations =>
       data?.featuredDestinations ?? const [];
   List<AppNotification> get notifications => data?.notifications ?? const [];
+
+  /// The texts of the web admin; [AppContent.none] until loaded, so a screen that has none shows the texts written in the code.
+  AppContent get appContent => data?.appContent ?? AppContent.none;
 }
 
 /// Staff records from `/mobile/sanitation/staff-bootstrap/` layered over the

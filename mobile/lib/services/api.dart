@@ -26,6 +26,10 @@ const tourismBootstrapSavedAtKey = 'tourism_bootstrap_saved_at';
 /// server cannot be reached (notices are time-sensitive).
 const tourismBootstrapCacheMaxAge = Duration(days: 7);
 
+/// When the app comes back to the foreground it asks the server again, quietly, but not if the last good answer is younger than this (so that switching
+/// between apps does not become a request each time).
+const tourismBootstrapQuietRefreshAfter = Duration(minutes: 5);
+
 /// Reads bootstrap JSON text into the model. Anything that is not a JSON
 /// object the model can read is an [ApiException], whoever it came from.
 MobileBootstrap parseBootstrapRaw(String raw) {

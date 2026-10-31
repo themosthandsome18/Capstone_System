@@ -4,6 +4,9 @@ import 'package:web/web.dart' as web;
 
 import 'owner_lookup_client.dart';
 
+OwnerLookupTransport? createOwnerLookupTransport() =>
+    const OwnerLookupBrowserTransport();
+
 /// Browser-only transport. Never import into the Android application library.
 class OwnerLookupBrowserTransport implements OwnerLookupTransport {
   const OwnerLookupBrowserTransport();
