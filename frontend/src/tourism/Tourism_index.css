@@ -5040,14 +5040,13 @@
 }
 
 /* ================= MOBILE APP CONTENT: THE DESIGN (Commit 5e) =================
-   Looks only. The palette is the design's own and is written ONCE, here, as --mc-* on the page. It does not follow the theme of the app (the design
-   is warm, the theme is green), except where a theme token says the same thing: white is --th-surface, the main text is --th-text-main.
+   Looks only. The warm neutrals (the page background, the card, the lines, the labels and the hints) are the design's own and are written ONCE, here,
+   as --mc-* on the page. Every colour that MEANS "this is the theme" (the active tab, the eyebrow, the focus of a box, the chosen icon, the buttons
+   that save and add) is a theme token (--th-primary...), so it follows the colour the admin chose; white is --th-surface, the main text --th-text-main.
    The font is the admin's own, Public Sans: no font is added for one page. Everything is scoped to .mobile-content-page / .mobile-content-card, so the
    Hotlines panel and the other pages of the app look as they did. */
 .mobile-content-page {
   --mc-font: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
-  --mc-teal: #2e7d74;
-  --mc-brown: #8a5a33;
   --mc-card: #fffdfb;
   --mc-line: #efe1d1;
   --mc-input-line: #e0cdb7;
@@ -5072,7 +5071,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--mc-teal);
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-page .reports-header h1 {
@@ -5113,8 +5112,9 @@
 }
 
 .mobile-content-page .mobile-content-tabs button.active {
-  background: var(--mc-teal);
-  color: #ffffff;
+  background: var(--th-primary);
+  /* white, as the active item of the sidebar */
+  color: var(--th-text-inverse);
   font-weight: 700;
   border: 0;
   box-shadow: none;
@@ -5147,7 +5147,7 @@
   margin: 0;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--mc-teal);
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-page .mobile-content-card .report-card-title > p:not(.mobile-content-eyebrow) {
@@ -5190,9 +5190,9 @@
 }
 
 .mobile-content-page .mobile-content-card .settings-field-wide textarea:focus {
-  outline: 2px solid var(--mc-teal);
+  outline: 2px solid var(--th-primary);
   outline-offset: 0;
-  border-color: var(--mc-teal);
+  border-color: var(--th-primary);
 }
 
 .mobile-content-page .mobile-content-card .settings-field-wide textarea:disabled {
@@ -5203,9 +5203,9 @@
 .mobile-content-page .mobile-content-card .tourist-record-save {
   min-height: 38px;
   padding: 0 18px;
-  border: 1px solid var(--mc-brown);
+  border: 1px solid var(--th-primary-deep);
   border-radius: 9px;
-  background: var(--mc-brown);
+  background: var(--th-primary-deep);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
@@ -5510,15 +5510,29 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 32px;
   margin-bottom: 14px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--th-border-strong);
+  border-radius: 9px;
+  background: var(--th-surface);
   font-size: 13px;
   font-weight: 600;
-  color: var(--mc-brown);
+  color: var(--th-text-main);
   text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .mobile-content-back:hover {
-  text-decoration: underline;
+  border-color: var(--th-primary);
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.mobile-content-back:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: 2px;
 }
 
 .mobile-content-page .mobile-content-tile-form {
@@ -5575,12 +5589,12 @@
 }
 
 .mobile-content-icon-choice[data-selected="true"] {
-  border: 2px solid var(--mc-teal);
-  background: #eaf3f1;
+  border: 2px solid var(--th-primary);
+  background: var(--th-primary-tint);
 }
 
 .mobile-content-icon-choice:focus-visible {
-  outline: 2px solid var(--mc-teal);
+  outline: 2px solid var(--th-primary);
   outline-offset: 2px;
 }
 
@@ -5626,9 +5640,9 @@
 }
 
 .mobile-content-page .mobile-content-tile-order input:focus {
-  outline: 2px solid var(--mc-teal);
+  outline: 2px solid var(--th-primary);
   outline-offset: 0;
-  border-color: var(--mc-teal);
+  border-color: var(--th-primary);
 }
 
 .mobile-content-page .mobile-content-tile-order input:disabled {
@@ -5638,9 +5652,9 @@
 .mobile-content-page .mobile-content-tile-form .tourist-record-save {
   min-height: 38px;
   padding: 0 18px;
-  border: 1px solid var(--mc-brown);
+  border: 1px solid var(--th-primary-deep);
   border-radius: 9px;
-  background: var(--mc-brown);
+  background: var(--th-primary-deep);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
@@ -5772,9 +5786,9 @@
   justify-content: center;
   min-height: 38px;
   padding: 0 18px;
-  border: 1px solid var(--mc-brown);
+  border: 1px solid var(--th-primary-deep);
   border-radius: 9px;
-  background: var(--mc-brown);
+  background: var(--th-primary-deep);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;

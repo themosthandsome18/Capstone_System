@@ -52,7 +52,9 @@ describe("the limits of the lengths", () => {
   it("the advised limits are the server's (ADVISED)", () => {
     const server = dictOfDicts("ADVISED");
     expect(Object.keys(server).length).toBeGreaterThan(0); // the fixture
-    expect(server.why_visit.short_text).toBeGreaterThan(0);
+    expect(server.why_visit.title).toBeGreaterThan(0);
+    expect(server.why_visit.short_text).toBeUndefined(); // the tile shows two lines: the short line of a pillar is no longer advised against
+    expect(server.travel_guide.short_text).toBeGreaterThan(0);
     expect(JSON.parse(JSON.stringify(ADVISED_LIMITS))).toEqual(server);
   });
 

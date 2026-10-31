@@ -50,14 +50,14 @@ STYLES = {code for code, _label in MobileContentItem.STYLE_CHOICES}
 ICONS = set(MobileContentItem.ICON_NAMES)
 EDITABLE = ("title", "short_text", "full_text", "icon", "style", "display_order")  # (also the order of the log label)
 
-# What the app can show. "hard" is refused; "advised" is accepted with a warning (the app cuts
-# a pillar to one line with an ellipsis, which is ugly but does not break anything).
+# What the app can show. "hard" is refused; "advised" is accepted with a warning (the app cuts a title
+# to one line with an ellipsis, which is ugly but does not break anything).
 HARD = {
     "why_visit": {"title": 60, "short_text": 80, "full_text": 5000},
     "travel_guide": {"title": 160, "short_text": 400, "full_text": 5000},
 }
 ADVISED = {
-    "why_visit": {"title": 24, "short_text": 28},
+    "why_visit": {"title": 24},
     "travel_guide": {"short_text": 300},
 }
 WORDS = {  # what the person sees, never the name of a field
@@ -271,10 +271,7 @@ def _warnings(section, values):
     if "title" in advised and len(values["title"]) > advised["title"]:
         out.append(f"The title is longer than about {advised['title']} letters, so the app may cut it off with “…”.")
     if "short_text" in advised and len(values["short_text"]) > advised["short_text"]:
-        if section == "why_visit":
-            out.append(f"The short line is longer than about {advised['short_text']} letters, so the app may cut it off with “…”.")
-        else:
-            out.append(f"The short line is long (over {advised['short_text']} letters). A shorter line reads better on the card.")
+        out.append(f"The short line is long (over {advised['short_text']} letters). A shorter line reads better on the card.")
     for field in ("title", "short_text", "full_text"):
         if ANY_PESO.search(values[field]):
             out.append(
