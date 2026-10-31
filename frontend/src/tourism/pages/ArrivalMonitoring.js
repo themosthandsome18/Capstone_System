@@ -486,7 +486,7 @@ function ArrivalMonitoring() {
                 <th>Group/Guest</th>
                 <th>Male</th>
                 <th>Female</th>
-                <th>Travel Itinerary</th>
+                <th>Length of Stay</th>
                 <th>Overnight</th>
                 <th>Same Day</th>
                 <th>Resort</th>

@@ -13,7 +13,7 @@ import BoatCapacityFarePanel from "./BoatCapacityFarePanel";
 // so it has its own panel and its own endpoints (BoatCapacityFarePanel).
 export const FARE_KIND = "boat-capacity-fare";
 export const OPTION_TABS = [
-  { kind: "itinerary", label: "Travel Itinerary" },
+  { kind: "itinerary", label: "Length of Stay" },
   { kind: "travel-mode", label: "Vehicle Classification" },
   { kind: "boat-type", label: "Boat Classification" },
   { kind: "visit-purpose", label: "Visit Purpose" },

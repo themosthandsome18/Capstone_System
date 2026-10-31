@@ -896,7 +896,7 @@ describe("h) the four existing tabs are as they were", () => {
     render(<RegistrationOptions />);
     await screen.findByRole("table");
     const expected = [
-      ["Travel Itinerary", "itinerary", ["Overnight", "Same Day"], ["3 records", "5 records"]],
+      ["Length of Stay", "itinerary", ["Overnight", "Same Day"], ["3 records", "5 records"]],
       ["Vehicle Classification", "travel-mode", ["Private Vehicle", "Public Bus"], ["10 records", "6 records"]],
       ["Boat Classification", "boat-type", ["Tourist Boat", "Passenger Boat"], ["11 records", "7 records"]],
       ["Visit Purpose", "visit-purpose", ["Leisure", "Vacation"], ["4 records", "9 records"]],
@@ -927,7 +927,7 @@ describe("h) the four existing tabs are as they were", () => {
 
   it("switching away from the fare tab shows the reference lists again", async () => {
     await openFareTab();
-    fireEvent.click(screen.getByRole("tab", { name: "Travel Itinerary" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Length of Stay" }));
     await waitFor(() => expect(screen.getByText("Overnight")).toBeTruthy());
     expect(screen.getByLabelText("Filter by status")).toBeTruthy();
     expect(screen.getByRole("button", { name: /add option/i })).toBeTruthy();
@@ -944,11 +944,11 @@ describe("only the admin", () => {
 });
 
 describe("no tab of Registration Options has a reminder line", () => {
-  it("not Travel Itinerary, Vehicle Classification, Boat Classification, Visit Purpose, nor Boat Capacity and Fare", async () => {
+  it("not Length of Stay, Vehicle Classification, Boat Classification, Visit Purpose, nor Boat Capacity and Fare", async () => {
     render(<RegistrationOptions />);
     await screen.findByRole("table");
     const tabs = [
-      ["Travel Itinerary", "Overnight"],
+      ["Length of Stay", "Overnight"],
       ["Vehicle Classification", "Private Vehicle"],
       ["Boat Classification", "Tourist Boat"],
       ["Visit Purpose", "Leisure"],
