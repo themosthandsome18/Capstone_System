@@ -1,6 +1,6 @@
-// A pillar of the Why Visit and a tile of the Travel Guide that have a full text open it in a bottom sheet; every other one is exactly what it has always been, and a
-// banner never opens. What the sheet shows is the text of the SERVER: the code writes none. Every test that has a fixture asserts, inside the test, that the fixture
-// reached the case it is for.
+// A pillar of the Why Visit, and a tile or a banner of the Travel Guide, that have a full text open it in a dialog in the middle of the screen; every other one is
+// exactly what it has always been (a banner is drawn as it always was, and opens only when it has a full text). What the dialog shows is the text of the SERVER: the
+// code writes none. Every test that has a fixture asserts, inside the test, that the fixture reached the case it is for.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -76,8 +76,8 @@ Future<void> showHome(WidgetTester tester, TourismBootstrapState state, {MobileU
 Finder pillar(int id) => find.byKey(ValueKey('pillar-$id'));
 Finder tile(int id) => find.byKey(ValueKey('guide-$id'));
 Finder banner(int id) => find.byKey(ValueKey('banner-$id'));
-Finder sheet() => find.byKey(const ValueKey('item-detail'));
-Finder inSheet(Finder what) => find.descendant(of: sheet(), matching: what);
+Finder detail() => find.byKey(const ValueKey('item-detail'));
+Finder inDetail(Finder what) => find.descendant(of: detail(), matching: what);
 
 /// The small sign that a pillar or a tile opens.
 Finder chevronIn(Finder card) => find.descendant(of: card, matching: find.byIcon(Icons.chevron_right_rounded));
@@ -128,19 +128,19 @@ void main() {
   group('a pillar of the Why Visit', () {
     const story = 'THE WHOLE STORY OF PILLAR ONE, written by the LGU and found nowhere in the code.';
 
-    testWidgets('with a full text opens a sheet with its icon, its title and the server\'s text, and the sheet closes', (tester) async {
+    testWidgets('with a full text opens a dialog with its icon, its title and the server\'s text, and the dialog closes', (tester) async {
       await showHome(tester, loaded(content(why: [item(1, full: story, icon: 'beach'), item(2)])));
       expect(chevronIn(pillar(1)), findsOneWidget); // the quiet sign
-      expect(sheet(), findsNothing); // the fixture: nothing is open yet
+      expect(detail(), findsNothing); // the fixture: nothing is open yet
       await open(tester, pillar(1));
-      expect(sheet(), findsOneWidget);
-      expect(inSheet(find.text(story)), findsOneWidget);
-      expect(inSheet(find.text('Item 1')), findsOneWidget);
-      expect(inSheet(find.byIcon(appContentIconFor('beach').icon)), findsOneWidget);
+      expect(detail(), findsOneWidget);
+      expect(inDetail(find.text(story)), findsOneWidget);
+      expect(inDetail(find.text('Item 1')), findsOneWidget);
+      expect(inDetail(find.byIcon(appContentIconFor('beach').icon)), findsOneWidget);
       expect(find.byKey(const ValueKey('item-detail-close')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('item-detail-close')));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('the text is the SERVER\'s: the code has none to show', (tester) async {
@@ -148,9 +148,9 @@ void main() {
       expect(AppContentDefaults.whyVisitItems.every((i) => !i.fullText.contains('PILLAR ONE')), isTrue);
       await showHome(tester, loaded(content(why: [item(1, full: story)])));
       await open(tester, pillar(1));
-      expect(inSheet(find.text(story)), findsOneWidget);
-      // and a different text from the server is a different text on the sheet
-      expect(inSheet(find.text('A DIFFERENT TEXT')), findsNothing);
+      expect(inDetail(find.text(story)), findsOneWidget);
+      // and a different text from the server is a different text in the dialog
+      expect(inDetail(find.text('A DIFFERENT TEXT')), findsNothing);
     });
 
     testWidgets('without a full text does not open, and has no sign that it does', (tester) async {
@@ -160,7 +160,7 @@ void main() {
       await tester.ensureVisible(pillar(2));
       await tester.tap(pillar(2));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('the server decides: marked "no" with a text, or "yes" with a blank text, does not open', (tester) async {
@@ -174,14 +174,14 @@ void main() {
         await tester.ensureVisible(pillar(id));
         await tester.tap(pillar(id));
         await tester.pumpAndSettle();
-        expect(sheet(), findsNothing, reason: 'pillar $id');
+        expect(detail(), findsNothing, reason: 'pillar $id');
       }
     });
 
     testWidgets('`{name}` in the full text is the visitor\'s name', (tester) async {
       await showHome(tester, loaded(content(why: [item(1, full: 'Welcome, {name}. Here is the whole story.')])), profile: ana);
       await open(tester, pillar(1));
-      expect(inSheet(find.text('Welcome, Ana Cruz. Here is the whole story.')), findsOneWidget);
+      expect(inDetail(find.text('Welcome, Ana Cruz. Here is the whole story.')), findsOneWidget);
     });
 
     testWidgets('a full text that still has a `{...}` is not offered, and the pillar stays', (tester) async {
@@ -191,12 +191,12 @@ void main() {
       await tester.ensureVisible(pillar(1));
       await tester.tap(pillar(1));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
-    testWidgets('a long text scrolls inside the sheet, to its last line', (tester) async {
+    testWidgets('a long text scrolls inside the dialog, to its last line', (tester) async {
       final lines = [for (var i = 1; i <= 120; i++) 'Line $i of the long story.'];
-      // a tall phone screen: the pillar is on it, and the text is still longer than the sheet
+      // a tall phone screen: the pillar is on it, and the text is still longer than the dialog
       await showHome(tester, loaded(content(why: [item(1, full: lines.join('\n'))])), height: 1100);
       await open(tester, pillar(1));
       expect(find.text(lines.join('\n')), findsOneWidget);
@@ -205,34 +205,34 @@ void main() {
       final before = tester.getTopLeft(text).dy;
       await tester.drag(scroller, const Offset(0, -3000));
       await tester.pumpAndSettle();
-      expect(tester.getTopLeft(text).dy, lessThan(before)); // it moved: the text is longer than the sheet
+      expect(tester.getTopLeft(text).dy, lessThan(before)); // it moved: the text is longer than the dialog
       expect(tester.takeException(), isNull);
-      // the sheet never grows past the screen
-      expect(tester.getSize(sheet()).height, lessThanOrEqualTo(1100 * 0.8 + 0.1));
+      // the dialog never grows past the screen
+      expect(tester.getSize(detail()).height, lessThanOrEqualTo(1100 * 0.8 + 0.1));
     });
 
     testWidgets('opens only the pillar that was pressed', (tester) async {
       await showHome(tester, loaded(content(why: [item(1, full: 'Text of one.'), item(2, full: 'Text of two.')])));
       await open(tester, pillar(2));
-      expect(inSheet(find.text('Text of two.')), findsOneWidget);
-      expect(inSheet(find.text('Text of one.')), findsNothing);
+      expect(inDetail(find.text('Text of two.')), findsOneWidget);
+      expect(inDetail(find.text('Text of one.')), findsNothing);
     });
   });
 
   group('a tile of the Travel Guide', () {
     const guideStory = 'THE WHOLE GUIDE OF TILE ONE, written by the LGU and found nowhere in the code.';
 
-    testWidgets('with a full text opens a sheet with its icon, its title and the server\'s text, and the sheet closes', (tester) async {
+    testWidgets('with a full text opens a dialog with its icon, its title and the server\'s text, and the dialog closes', (tester) async {
       await showHome(tester, loaded(content(guide: [item(1, full: guideStory, icon: 'boat'), item(2)])));
       expect(chevronIn(tile(1)), findsOneWidget);
       await open(tester, tile(1));
-      expect(sheet(), findsOneWidget);
-      expect(inSheet(find.text(guideStory)), findsOneWidget);
-      expect(inSheet(find.text('Item 1')), findsOneWidget);
-      expect(inSheet(find.byIcon(appContentIconFor('boat').icon)), findsOneWidget);
+      expect(detail(), findsOneWidget);
+      expect(inDetail(find.text(guideStory)), findsOneWidget);
+      expect(inDetail(find.text('Item 1')), findsOneWidget);
+      expect(inDetail(find.byIcon(appContentIconFor('boat').icon)), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('item-detail-close')));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('without a full text does not open, and has no sign that it does', (tester) async {
@@ -242,7 +242,7 @@ void main() {
       await tester.ensureVisible(tile(2));
       await tester.tap(tile(2));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('the server decides: marked "no" with a text, or "yes" with a blank text, does not open', (tester) async {
@@ -256,7 +256,7 @@ void main() {
         await tester.ensureVisible(tile(id));
         await tester.tap(tile(id));
         await tester.pumpAndSettle();
-        expect(sheet(), findsNothing, reason: 'tile $id');
+        expect(detail(), findsNothing, reason: 'tile $id');
       }
     });
 
@@ -264,7 +264,7 @@ void main() {
       expect(AppContentDefaults.travelGuideItems.every((i) => i.fullText.isEmpty), isTrue); // the fixture
       await showHome(tester, loaded(content(guide: [item(1, full: guideStory)])));
       await open(tester, tile(1));
-      expect(inSheet(find.text(guideStory)), findsOneWidget);
+      expect(inDetail(find.text(guideStory)), findsOneWidget);
     });
   });
 
@@ -276,15 +276,15 @@ void main() {
       expect(banner(2), findsOneWidget); // the fixture: the banner is on the screen
       expect(chevronIn(banner(2)), findsOneWidget);
       expect(find.descendant(of: banner(2), matching: find.byType(GestureDetector)), findsOneWidget); // and it is a button
-      expect(sheet(), findsNothing); // the fixture: nothing is open yet
+      expect(detail(), findsNothing); // the fixture: nothing is open yet
       await open(tester, banner(2));
-      expect(sheet(), findsOneWidget);
+      expect(detail(), findsOneWidget);
       expect(find.byType(Dialog), findsOneWidget);
-      expect(inSheet(find.text('Notice 2')), findsOneWidget);
-      expect(inSheet(find.text(notice)), findsOneWidget);
+      expect(inDetail(find.text('Notice 2')), findsOneWidget);
+      expect(inDetail(find.text(notice)), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('item-detail-close')));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('its dialog has NO short line, as the Travel Guide has none, and no gap for one', (tester) async {
@@ -292,8 +292,8 @@ void main() {
       expect(find.descendant(of: banner(2), matching: find.text('About 2')), findsOneWidget); // the fixture: the banner shows its short text itself
       await open(tester, banner(2));
       expect(find.byKey(const ValueKey('item-detail-short')), findsNothing);
-      expect(inSheet(find.text('About 2')), findsNothing);
-      final column = tester.widget<Column>(find.ancestor(of: inSheet(find.text('Notice 2')), matching: find.byType(Column)).first);
+      expect(inDetail(find.text('About 2')), findsNothing);
+      final column = tester.widget<Column>(find.ancestor(of: inDetail(find.text('Notice 2')), matching: find.byType(Column)).first);
       expect(column.children, hasLength(1));
     });
 
@@ -306,7 +306,7 @@ void main() {
       await tester.ensureVisible(banner(2));
       await tester.tap(banner(2));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('the server decides: marked "no" with a text, or "yes" with a blank text, does not open', (tester) async {
@@ -320,7 +320,7 @@ void main() {
         await tester.ensureVisible(banner(id));
         await tester.tap(banner(id));
         await tester.pumpAndSettle();
-        expect(sheet(), findsNothing, reason: 'banner $id');
+        expect(detail(), findsNothing, reason: 'banner $id');
       }
     });
 
@@ -348,7 +348,7 @@ void main() {
       await openFirstPillar(tester);
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.byType(BottomSheet), findsNothing);
-      expect(inSheet(find.text(story)), findsOneWidget);
+      expect(inDetail(find.text(story)), findsOneWidget);
     });
 
     testWidgets('is in the middle, with a margin at the sides, and as tall as its content', (tester) async {
@@ -371,9 +371,9 @@ void main() {
 
     testWidgets('keeps its icon, its title, the whole text and the X', (tester) async {
       await openFirstPillar(tester);
-      expect(inSheet(find.text('Item 1')), findsOneWidget);
-      expect(inSheet(find.byIcon(appContentIconFor('beach').icon)), findsOneWidget);
-      expect(inSheet(find.text(story)), findsOneWidget);
+      expect(inDetail(find.text('Item 1')), findsOneWidget);
+      expect(inDetail(find.byIcon(appContentIconFor('beach').icon)), findsOneWidget);
+      expect(inDetail(find.text(story)), findsOneWidget);
       expect(find.byKey(const ValueKey('item-detail-close')), findsOneWidget);
     });
 
@@ -575,15 +575,15 @@ void main() {
     AppContentItem built({String shortText = 'The short line.', String title = 'The title'}) =>
         AppContentItem(id: 9, icon: 'beach', title: title, shortText: shortText, fullText: 'The whole text of the item.', tappable: true);
 
-    Finder titleIn(String title) => inSheet(find.text(title));
+    Finder titleIn(String title) => inDetail(find.text(title));
     Finder shortKey() => find.byKey(const ValueKey('item-detail-short'));
 
     testWidgets('the short text is right under the title, before the full text', (tester) async {
       await openDirectly(tester, built());
       final title = tester.getRect(titleIn('The title'));
       final short = tester.getRect(shortKey());
-      final full = tester.getRect(inSheet(find.text('The whole text of the item.')));
-      expect(inSheet(find.text('The short line.')), findsOneWidget);
+      final full = tester.getRect(inDetail(find.text('The whole text of the item.')));
+      expect(inDetail(find.text('The short line.')), findsOneWidget);
       expect(short.top, greaterThanOrEqualTo(title.bottom));
       expect(short.top - title.bottom, lessThanOrEqualTo(8)); // right under it
       expect(short.left, title.left);
@@ -597,19 +597,19 @@ void main() {
         loaded(content(why: [{...item(1, full: story), 'short_text': 'Short words from the LGU'}, item(2)])),
       );
       await open(tester, pillar(1));
-      expect(inSheet(find.text('Short words from the LGU')), findsOneWidget);
-      expect(inSheet(find.text(story)), findsOneWidget);
+      expect(inDetail(find.text('Short words from the LGU')), findsOneWidget);
+      expect(inDetail(find.text(story)), findsOneWidget);
     });
 
     testWidgets('with no short text there is no line and no gap for it', (tester) async {
       for (final blank in ['', '   ']) {
         await openDirectly(tester, built(shortText: blank));
         expect(shortKey(), findsNothing, reason: 'short text "$blank"');
-        expect(inSheet(find.text('')), findsNothing, reason: 'no empty line');
+        expect(inDetail(find.text('')), findsNothing, reason: 'no empty line');
         // the column that holds the title holds only the title: no space is left for the short line
         final column = tester.widget<Column>(find.ancestor(of: titleIn('The title'), matching: find.byType(Column)).first);
         expect(column.children, hasLength(1), reason: 'short text "$blank"');
-        expect(inSheet(find.text('The whole text of the item.')), findsOneWidget); // the dialog itself is there
+        expect(inDetail(find.text('The whole text of the item.')), findsOneWidget); // the dialog itself is there
         await tester.tap(find.byKey(const ValueKey('item-detail-close')));
         await tester.pumpAndSettle();
       }
@@ -625,10 +625,10 @@ void main() {
       await showHome(tester, loaded(content(guide: [item(1, full: 'The whole guide.')])));
       expect(find.descendant(of: tile(1), matching: find.text('About 1')), findsOneWidget); // the fixture: the tile has a short text, and shows it
       await open(tester, tile(1));
-      expect(sheet(), findsOneWidget);
+      expect(detail(), findsOneWidget);
       expect(shortKey(), findsNothing);
-      expect(inSheet(find.text('About 1')), findsNothing);
-      expect(inSheet(find.text('The whole guide.')), findsOneWidget);
+      expect(inDetail(find.text('About 1')), findsNothing);
+      expect(inDetail(find.text('The whole guide.')), findsOneWidget);
       // the title goes straight to the line: the column of the title holds only the title, and the line comes 16 px under the icon box
       final column = tester.widget<Column>(find.ancestor(of: titleIn('Item 1'), matching: find.byType(Column)).first);
       expect(column.children, hasLength(1));
@@ -640,7 +640,7 @@ void main() {
     testWidgets('a pillar of the Why Visit has its short text in its dialog (the same item, the other section)', (tester) async {
       await showHome(tester, loaded(content(why: [item(1, full: 'The whole story.')])));
       await open(tester, pillar(1));
-      expect(inSheet(find.text('About 1')), findsOneWidget);
+      expect(inDetail(find.text('About 1')), findsOneWidget);
       expect(shortKey(), findsOneWidget);
     });
 
@@ -670,7 +670,7 @@ void main() {
       await openDirectly(tester, built());
       final line = tester.getRect(find.byKey(const ValueKey('item-detail-divider')));
       final iconBox = tester.getRect(find.byKey(const ValueKey('item-detail-icon')));
-      final full = tester.getRect(inSheet(find.text('The whole text of the item.')));
+      final full = tester.getRect(inDetail(find.text('The whole text of the item.')));
       expect(line.height, lessThanOrEqualTo(1));
       // it is a drawn line, thin, in a pale colour (not an empty space of the same height)
       final drawn = tester.widget<Divider>(find.byKey(const ValueKey('item-detail-divider')));
@@ -682,7 +682,7 @@ void main() {
 
     testWidgets('the full text has a line spacing of 1.45', (tester) async {
       await openDirectly(tester, built());
-      final full = tester.widget<Text>(inSheet(find.text('The whole text of the item.')));
+      final full = tester.widget<Text>(inDetail(find.text('The whole text of the item.')));
       expect(full.style!.height, 1.45);
     });
 
@@ -718,7 +718,7 @@ void main() {
       await tester.ensureVisible(pillar(pillars.first.id));
       await tester.tap(pillar(pillars.first.id));
       await tester.pumpAndSettle();
-      expect(sheet(), findsNothing);
+      expect(detail(), findsNothing);
     });
 
     testWidgets('a server whose items have no full text: the same, pillar by pillar', (tester) async {
