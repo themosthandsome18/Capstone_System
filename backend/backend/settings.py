@@ -330,3 +330,15 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Separate opt-in read-only foundation. Never inherits public-media credentials,
+# URL settings or filesystem fallback. Private bucket status is owner-attested.
+SANITATION_PRIVATE_PHOTOS = {
+    "enabled": config("SANITATION_PRIVATE_PHOTOS_ENABLED", default=False, cast=bool),
+    "private_bucket_confirmed": config("SANITATION_PRIVATE_PHOTOS_BUCKET_CONFIRMED_PRIVATE", default=False, cast=bool),
+    "endpoint_url": config("SANITATION_PRIVATE_PHOTOS_ENDPOINT", default=""),
+    "bucket": config("SANITATION_PRIVATE_PHOTOS_BUCKET", default=""),
+    "region": config("SANITATION_PRIVATE_PHOTOS_REGION", default=""),
+    "access_key": config("SANITATION_PRIVATE_PHOTOS_ACCESS_KEY", default=""),
+    "secret_key": config("SANITATION_PRIVATE_PHOTOS_SECRET_KEY", default=""),
+}
