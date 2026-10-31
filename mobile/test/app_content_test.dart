@@ -67,7 +67,7 @@ void main() {
       expect(content.blocks['port_guide']!.body!.split('\n'), hasLength(4));
     });
 
-    test('the full text and the "tappable" are read and ready: nothing is open yet', () {
+    test('the full text and the "tappable" are read: the real content has none, and a text or a mark that the server sends is kept as it is', () {
       expect(AppContent.fromJson(realContent()).whyVisit.every((i) => !i.tappable && i.fullText.isEmpty), isTrue);
       final read = withItems([item(7, full: 'The whole story.', tappable: true), item(8, full: 'Has a text', tappable: 'yes'), item(9, tappable: false)]);
       expect(read.whyVisit, hasLength(3)); // the fixture

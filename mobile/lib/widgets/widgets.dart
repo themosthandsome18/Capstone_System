@@ -1786,6 +1786,7 @@ class InfoBanner extends StatelessWidget {
     required this.title,
     required this.text,
     required this.color,
+    this.onTap,
   });
 
   final IconData icon;
@@ -1793,9 +1794,12 @@ class InfoBanner extends StatelessWidget {
   final String text;
   final Color color;
 
+  /// Set only for a banner that has a full text to open: then it is tappable and ends with a quiet sign. Null: the banner is exactly what it has always been.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(top: 10),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
@@ -1828,12 +1832,15 @@ class InfoBanner extends StatelessWidget {
               ],
             ),
           ),
+          // the quiet sign that it opens; nothing at all when it does not
+          if (onTap != null) Icon(Icons.chevron_right_rounded, color: AppColors.muted.withValues(alpha: 0.8), size: 16),
         ],
       ),
         ),
       ),
       ),
     );
+    return onTap == null ? card : _Tappable(onTap: onTap!, child: card);
   }
 }
 

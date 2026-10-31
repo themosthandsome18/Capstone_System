@@ -176,6 +176,24 @@ class AppContentWhichItemsTests(AppContentBase):
             self.assertEqual(row["tappable"], tappable, repr(text))
             self.assertEqual(row["full_text"], text)  # the text itself is sent as it is, so the app can open it
 
+    def test_a_banner_with_a_full_text_is_tappable_and_stays_a_banner_in_the_bootstrap(self):
+        banner = MobileContentItem.objects.get(title="Clean Coast & Eco-Tourism Policy")
+        self.assertEqual(banner.style, "banner")  # the fixture
+        rows = lambda: {r["title"]: r for r in self.content()["sections"]["travel_guide"]}
+        self.assertEqual((rows()[banner.title]["style"], rows()[banner.title]["tappable"]), ("banner", False))  # the seed: nothing opens
+        for text, tappable in (("The whole policy.", True), ("", False), ("   \n\t ", False), ("x", True)):
+            MobileContentItem.objects.filter(pk=banner.pk).update(full_text=text)
+            row = rows()[banner.title]
+            self.assertEqual((row["style"], row["tappable"]), ("banner", tappable), repr(text))
+            self.assertEqual(row["full_text"], text)  # the text itself is sent as it is, so the app can open it
+
+    def test_a_full_text_written_for_a_banner_through_the_admin_api_is_tappable_in_the_very_next_bootstrap(self):
+        banner = MobileContentItem.objects.get(title="Clean Coast & Eco-Tourism Policy")
+        response = self.admin().patch(f"/api/mobile-content/items/{banner.pk}/", {"full_text": "The whole policy, written by the LGU."}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)  # (it was refused with a 400 before)
+        row = {r["id"]: r for r in self.content()["sections"]["travel_guide"]}[banner.pk]
+        self.assertEqual((row["style"], row["tappable"], row["full_text"]), ("banner", True, "The whole policy, written by the LGU."))
+
     def test_an_edit_through_the_admin_api_is_in_the_very_next_bootstrap(self):
         client = self.admin()
         item = MobileContentItem.objects.get(title="Forest Cascades")

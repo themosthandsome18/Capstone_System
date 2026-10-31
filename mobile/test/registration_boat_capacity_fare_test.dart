@@ -13,12 +13,12 @@ import 'package:mauban_mobile_app/main.dart';
 const capacityLabel = 'Boat Capacity & Fare';
 const boatLabel = 'Boat Classification *';
 
-MobileBootstrap bootstrapWithBoats(List<Map<String, Object?>> boats) {
+MobileBootstrap bootstrapWithBoats(List<Map<String, Object?>> boats, {List<Object?>? fares}) {
   return MobileBootstrap.fromJson({
     'destinations': [
       {'resort_id': 7, 'resort_name': 'Sample Beach 1', 'type': 'Beach Resort'},
     ],
-    'referenceTables': {'boatTypes': boats},
+    'referenceTables': {'boatTypes': boats, 'boatCapacityFares': ?fares},
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
   });
@@ -254,6 +254,93 @@ void main() {
 
       final body = await submit(tester);
       expect(body['boat_type_id'], 2);
+      expect(body['boat_capacity_fare'], '');
+    });
+  });
+
+  group('the tiers come from the server, and the written nine are the floor', () {
+    List<String> offered(WidgetTester tester) => tester
+        .widget<DropdownTile<String>>(
+          find.byWidgetPredicate((w) => w is DropdownTile<String> && w.label == capacityLabel),
+        )
+        .items;
+
+    testWidgets('the tiers of the server are what the dropdown offers, and the one chosen is what is sent', (tester) async {
+      await pumpForm(
+        tester,
+        bootstrapWithBoats([touristBoat], fares: [
+          {'name': 'Server tier one'},
+          {'name': 'Server tier two'},
+        ]),
+      );
+      expect(capacityShown(), isTrue); // the fixture: the field is on the form
+      expect(offered(tester), ['', 'Server tier one', 'Server tier two']);
+      await chooseFare(tester, 'Server tier two');
+
+      final body = await submit(tester);
+      expect(body['boat_capacity_fare'], 'Server tier two');
+    });
+
+    testWidgets('a server that sent no tiers: the dropdown offers the written nine, and one can be chosen and is sent', (tester) async {
+      await pumpForm(tester, bootstrapWithBoats([touristBoat]));
+      expect(offered(tester), boatCapacityFareOptions);
+      await chooseFare(tester, fare);
+
+      final body = await submit(tester);
+      expect(body['boat_capacity_fare'], fare);
+    });
+
+    testWidgets('every entry broken: the written nine', (tester) async {
+      await pumpForm(
+        tester,
+        bootstrapWithBoats([touristBoat], fares: [
+          {'name': ''},
+          5,
+          null,
+        ]),
+      );
+      expect(offered(tester), boatCapacityFareOptions);
+    });
+
+    testWidgets('a chosen tier that the list no longer has is not kept: the field shows the empty choice and nothing stale is sent', (tester) async {
+      final older = bootstrapWithBoats([touristBoat], fares: [
+        {'name': 'Tier that will go'},
+        {'name': 'Tier that stays'},
+      ]);
+      await pumpForm(tester, older);
+      await chooseFare(tester, 'Tier that will go');
+      DropdownTile<String> tile() => tester.widget<DropdownTile<String>>(
+        find.byWidgetPredicate((w) => w is DropdownTile<String> && w.label == capacityLabel),
+      );
+      expect(tile().value, 'Tier that will go'); // the fixture: it was chosen
+
+      // the LGU removed it: the same form, a newer list
+      final newer = MobileBootstrap(
+        destinations: older.destinations,
+        featuredDestinations: older.featuredDestinations,
+        countries: older.countries,
+        regions: older.regions,
+        provinces: older.provinces,
+        itineraries: older.itineraries,
+        travelModes: older.travelModes,
+        boatTypes: older.boatTypes,
+        visitPurposes: older.visitPurposes,
+        barangays: older.barangays,
+        notifications: older.notifications,
+        boatCapacityFares: BoatCapacityFares.fromJson([
+          {'name': 'Tier that stays'},
+        ]),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TouristRegistrationPage(api: const TourismApi(), bootstrap: newer, initialDestination: older.destinations.first),
+        ),
+      );
+      await tester.pump();
+      expect(tile().items, ['', 'Tier that stays']);
+      expect(tile().value, '');
+
+      final body = await submit(tester);
       expect(body['boat_capacity_fare'], '');
     });
   });

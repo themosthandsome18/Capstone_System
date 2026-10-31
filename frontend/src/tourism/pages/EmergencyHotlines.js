@@ -12,15 +12,7 @@ export const FILTERS = [
   { value: "inactive", label: "Inactive" },
 ];
 
-// Always on screen. The first one stops an admin from thinking that visitors
-// see a change at once; the second says why an empty list is safe.
-export const NEXT_VERSION_NOTICE =
-  "Changes here reach the mobile app only when the next version of the app is released.";
-export const EMPTY_LIST_NOTICE =
-  "If no contact is active, the app falls back to its own built-in list, so the emergency numbers are never missing — even with no internet.";
-
 export const ICON_NOTE = "Only these twelve exist in the app — a new one needs a new release.";
-export const SAVE_NOTE = "Saved changes reach the app with its next release.";
 export const NUMBERS_HINT =
   "To give more than one number, separate them with a slash ( / ). The app shows the line exactly as it is written here.";
 export const OPTIONAL_HINT = "Leave it empty and it will not appear in the app.";
@@ -181,11 +173,6 @@ function EmergencyHotlinesPage() {
         </div>
       </div>
 
-      <div className="hotlines-notices" role="note" aria-label="About these changes">
-        <p>{NEXT_VERSION_NOTICE}</p>
-        <p>{EMPTY_LIST_NOTICE}</p>
-      </div>
-
       <div className="options-message-area">
         {notice ? (
           <p className="settings-status success" role="status">
@@ -283,7 +270,6 @@ function EmergencyHotlinesPage() {
             <button type="submit" className="tourist-record-save" disabled={working || !canSave}>
               {working ? "Saving..." : formFor === "new" ? "Save new contact" : "Save changes"}
             </button>
-            <p className="hotline-save-note">{SAVE_NOTE}</p>
           </div>
         </form>
       ) : null}
@@ -427,9 +413,6 @@ function EmergencyHotlinesPage() {
             ) : (
               <p className="options-empty">No contacts to show for this filter.</p>
             )}
-            <p className="hotline-footnote">
-              A contact that is deactivated is no longer sent to the app. Contacts are never deleted.
-            </p>
           </>
         ) : null}
       </section>

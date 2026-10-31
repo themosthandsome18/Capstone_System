@@ -15,7 +15,7 @@ stored, so that when it does reach them it cannot break what they see:
 * the entrance fee amounts are not typed (they come from the one constant the reports
   use); taking a fee placeholder OUT of a text needs a confirmation, because the visitor
   would no longer be told that amount, or where to pay it;
-* a banner has no full text yet (only a tile opens a page when it is tapped);
+* a full text may be written for a tile and for a banner alike (a banner is drawn as it always was; with a full text it opens when it is tapped);
 * two items of a section cannot have the same position, and the refusal says who holds it
   and which numbers are free.
 
@@ -357,12 +357,6 @@ def mobile_content_item_list(request):
         full_text = _text(data, "full_text", section, False, False)
         for field, value in (("title", title), ("short_text", short_text), ("full_text", full_text)):
             _check_placeholders(value, field, allowed)
-        if style == MobileContentItem.STYLE_BANNER and full_text:
-            _refuse(
-                "A banner has no full text yet: only a tile opens a page when it is tapped. "
-                "Clear the full text, or make this item a tile.",
-                "full_text",
-            )
         values = {"title": title, "short_text": short_text, "full_text": full_text}
 
         with transaction.atomic():
@@ -440,12 +434,6 @@ def mobile_content_item_detail(request, item_id):
             for field in ("title", "short_text", "full_text"):
                 if field in data:
                     _check_placeholders(new[field], field, FEE_PLACEHOLDERS)
-            if new["style"] == MobileContentItem.STYLE_BANNER and new["full_text"]:
-                _refuse(
-                    "A banner has no full text yet: only a tile opens a page when it is tapped. "
-                    "Clear the full text, or make this item a tile.",
-                    "full_text",
-                )
             if "title" in data and name_key(new["title"]) != name_key(item.title):
                 taken = MobileContentItem.objects.filter(section=section).exclude(pk=item.pk)
                 if any(name_key(other.title) == name_key(new["title"]) for other in taken):

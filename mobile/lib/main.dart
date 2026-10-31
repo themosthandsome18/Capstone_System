@@ -40,6 +40,8 @@ part 'utils/export_helpers.dart';
 part 'models/models.dart';
 part 'models/app_content.dart';
 part 'models/app_content_defaults.dart';
+part 'models/app_contacts.dart';
+part 'models/boat_capacity_fares.dart';
 part 'services/api.dart';
 part 'widgets/widgets.dart';
 part 'widgets/tourism_loading_screen.dart';

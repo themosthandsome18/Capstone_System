@@ -72,6 +72,7 @@ class _MobileShellState extends State<MobileShell> {
         visits: _visitHistory,
         feedbackHistory: _feedbackHistory,
         onSignOut: widget.onSignOut,
+        contacts: widget.state.emergencyContacts,
       ),
     ];
 
@@ -560,6 +561,8 @@ class _HomePageState extends State<HomePage> {
               text: banner.shortText,
               // the blue of the festival notice, the theme's tint for the others (as the two notices always were)
               color: banner.icon == 'event' ? const Color(0xffd7efff) : context.brand.tint,
+              // a banner that has a full text opens it, like a tile of the Travel Guide (no short line in the dialog); any other is as it has always been
+              onTap: banner.opensDetail ? () => showItemDetail(context, banner, withShortText: false) : null,
             ),
           ),
       ],
@@ -884,12 +887,15 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
           // takes the left half.
           for (var i = 0; i < pillars.length; i += 2) ...[
             if (i > 0) const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _pillar(pillars[i])),
-                const SizedBox(width: 8),
-                Expanded(child: i + 1 < pillars.length ? _pillar(pillars[i + 1]) : const SizedBox.shrink()),
-              ],
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _pillar(context, pillars[i])),
+                  const SizedBox(width: 8),
+                  Expanded(child: i + 1 < pillars.length ? _pillar(context, pillars[i + 1]) : const SizedBox.shrink()),
+                ],
+              ),
             ),
           ],
         ],
@@ -897,11 +903,18 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
     );
   }
 
-  Widget _pillar(AppContentItem item) {
+  Widget _pillar(BuildContext context, AppContentItem item) {
     final drawn = appContentIconFor(item.icon);
     return KeyedSubtree(
       key: ValueKey('pillar-${item.id}'),
-      child: _buildPillarItem(icon: drawn.icon, title: item.title, sub: item.shortText, color: drawn.color),
+      child: _buildPillarItem(
+        icon: drawn.icon,
+        title: item.title,
+        sub: item.shortText,
+        color: drawn.color,
+        // only a pillar that has a full text opens; any other is exactly what it has always been
+        onTap: item.opensDetail ? () => showItemDetail(context, item, withShortText: true) : null,
+      ),
     );
   }
 
@@ -910,40 +923,48 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
     required String title,
     required String sub,
     required Color color,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    final card = Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
-      child: Row(
+      // The icon on top, and the text under it using the WHOLE width of the box (not what is left beside an icon). The sign that it opens is at the top right,
+      // level with the icon: small and quiet, and nothing at all when the pillar does not open.
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5, color: color),
-                ),
-                Text(
-                  sub,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
-                ),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 20),
+              if (onTap != null) Icon(Icons.chevron_right_rounded, color: color.withValues(alpha: 0.7), size: 12),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // what the LGU writes is read in full: it goes to a second line, and only a text longer than two lines is cut
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            sub,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
           ),
         ],
       ),
     );
+    return onTap == null ? card : _Tappable(onTap: onTap, child: card);
   }
 }
 
@@ -1097,6 +1118,7 @@ class _MaubanTownGuideSection extends StatelessWidget {
               title: tile.title,
               desc: tile.shortText,
               color: appContentIconFor(tile.icon).color,
+              onTap: tile.opensDetail ? () => showItemDetail(context, tile, withShortText: false) : null,
             ),
           ),
       ],
@@ -1108,8 +1130,9 @@ class _MaubanTownGuideSection extends StatelessWidget {
     required String title,
     required String desc,
     required Color color,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1145,10 +1168,124 @@ class _MaubanTownGuideSection extends StatelessWidget {
               ],
             ),
           ),
+          // the quiet sign that it opens; nothing at all when it does not
+          if (onTap != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 2, top: 2),
+              child: Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 14),
+            ),
         ],
       ),
     );
+    return onTap == null ? card : _Tappable(onTap: onTap, child: card);
   }
+}
+
+/// Makes a card tappable without changing how it looks: a button for the screen reader, and the tap. (No ripple: the card paints its own background.)
+class _Tappable extends StatelessWidget {
+  const _Tappable({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
+    );
+  }
+}
+
+/// Opens the full text of a pillar or a tile in a dialog in the MIDDLE of the screen. The head: the icon in a box of its own colour (48 px), the title, and
+/// under it, for a pillar of the Why Visit only, the short text (so that what a pillar cuts is still read here; nothing at all when there is none or for the Travel Guide); the X is at the top right. A thin line, then the
+/// WHOLE full text with a loose line spacing (it scrolls when it is long; the head stays). The dialog is as tall as its content and no taller than 80% of the
+/// screen, with rounded corners and a margin at the sides, and it closes with the X or a tap outside. What it shows is the item's own texts, that is, the
+/// server's: the code writes none.
+Future<void> showItemDetail(BuildContext context, AppContentItem item, {required bool withShortText}) {
+  final drawn = appContentIconFor(item.icon);
+  // The short text under the title is for a pillar of the Why Visit only (a tile cuts it, so the dialog gives it back). A tile of the Travel Guide shows the
+  // title, and the line and the full text come straight after it: no short line and no gap for one.
+  final shortText = withShortText ? item.shortText.trim() : '';
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) => Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(dialogContext).size.height * 0.8),
+        child: Padding(
+          key: const ValueKey('item-detail'),
+          padding: const EdgeInsets.fromLTRB(24, 22, 12, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    key: const ValueKey('item-detail-icon'),
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(color: drawn.color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(drawn.icon, color: drawn.color, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, height: 1.2, color: Color(0xFF0F172A)),
+                          ),
+                          if (shortText.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              shortText,
+                              key: const ValueKey('item-detail-short'),
+                              style: const TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('item-detail-close'),
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.only(right: 12),
+                child: Divider(key: ValueKey('item-detail-divider'), height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  key: const ValueKey('item-detail-text'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Text(item.fullText, style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569), height: 1.45)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class DestinationListPage extends StatefulWidget {
@@ -2408,12 +2545,16 @@ class ProfilePage extends StatelessWidget {
     required this.visits,
     required this.feedbackHistory,
     this.onSignOut,
+    this.contacts = AppContacts.none,
   });
 
   final MobileUserProfile profile;
   final List<MobileVisitReceipt> visits;
   final List<MobileFeedbackReceipt> feedbackHistory;
   final VoidCallback? onSignOut;
+
+  /// The hotlines of the server ([AppContacts.none] where there are none): the written four are shown instead.
+  final AppContacts contacts;
 
   void _confirmSignOut(BuildContext context) {
     showDialog(
@@ -2539,30 +2680,20 @@ class ProfilePage extends StatelessWidget {
 
         // Emergency Hotlines & Tourist Assistance
         SectionHeader(title: 'Emergency Hotlines & Helpdesk'),
-        _EmergencyContactCard(
-          icon: Icons.local_hospital_outlined,
-          title: 'Mauban MDRRMO / Rescue 24/7',
-          number: '0998-598-8422 / (042) 784-0123',
-          color: const Color(0xFFEF4444),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.local_police_outlined,
-          title: 'Mauban Municipal Police (PNP)',
-          number: '0998-598-5777 / (042) 784-0200',
-          color: const Color(0xFF2563EB),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.directions_boat_outlined,
-          title: 'Coast Guard Sub-Station Mauban',
-          number: '0917-842-7643',
-          color: const Color(0xFF0D9488),
-        ),
-        _EmergencyContactCard(
-          icon: Icons.support_agent_outlined,
-          title: 'Mauban Tourism Information Desk',
-          number: '(042) 784-0555 • tourism@mauban.gov.ph',
-          color: context.brand.deep,
-        ),
+        // The server's hotlines when it has any; the four written in the code (AppContentDefaults.hotlines) when it has none.
+        for (final contact in contacts.resolve(AppContentDefaults.hotlines))
+          KeyedSubtree(
+            key: ValueKey('contact-${contact.id}'),
+            child: _EmergencyContactCard(
+              icon: appContactIconFor(contact.icon).icon,
+              title: contact.name,
+              number: contact.numbers,
+              email: contact.email,
+              description: contact.description,
+              color: appContactIconFor(contact.icon).iconColorIn(context),
+              textColor: appContactIconFor(contact.icon).textColorIn(context),
+            ),
+          ),
         const SizedBox(height: 20),
 
         OutlinedButton.icon(
@@ -2587,12 +2718,24 @@ class _EmergencyContactCard extends StatelessWidget {
     required this.title,
     required this.number,
     required this.color,
+    required this.textColor,
+    this.email = '',
+    this.description = '',
   });
 
   final IconData icon;
   final String title;
   final String number;
+
+  /// The colour of the picture and of its pale box.
   final Color color;
+
+  /// The colour of the number and of the email: [color], or a darker one where [color] is too light to read as text on white.
+  final Color textColor;
+
+  /// '' when there is none; then nothing is drawn, and no gap is left.
+  final String email;
+  final String description;
 
   @override
   Widget build(BuildContext context) {
@@ -2605,6 +2748,7 @@ class _EmergencyContactCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start, // the picture's box is as tall as two lines of text, so this changes nothing for a card with only a name and a number
         children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -2629,9 +2773,29 @@ class _EmergencyContactCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    color: color,
+                    color: textColor,
                   ),
                 ),
+                if (email.isNotEmpty)
+                  Text(
+                    email,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      height: 1.35,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -3531,6 +3695,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   late RefItem _boatType;
   late RefItem _purpose;
   String _boatCapacityFare = '';
+
+  /// The tiers on offer now (the server's, or the written nine), and the chosen one only while it is still among them: the list can change under an open form.
+  List<String> get _fareChoices => widget.bootstrap.boatCapacityFareChoices;
+  String get _fare => _fareChoices.contains(_boatCapacityFare) ? _boatCapacityFare : '';
   int _visitors = 1;
   int _male = 0;
   int _female = 1;
@@ -3708,8 +3876,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         if (boatRequiresCapacityFare(_boatType))
           DropdownTile<String>(
             label: 'Boat Capacity & Fare',
-            value: _boatCapacityFare,
-            items: boatCapacityFareOptions,
+            value: _fare,
+            items: _fareChoices,
             itemLabel: boatCapacityFareLabel,
             onChanged: (item) => setState(() => _boatCapacityFare = item),
           ),
@@ -3902,7 +4070,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         boatTypeId: _boatType.id,
         boatCapacityFare: capacityFareForBoatType(
           _boatType,
-          _boatCapacityFare,
+          _fare,
         ).trim(),
         parkingSpace: _parkingSpace.text.trim(),
         visitPurposeId: _purpose.id,

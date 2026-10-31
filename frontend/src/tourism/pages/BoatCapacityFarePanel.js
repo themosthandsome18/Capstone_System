@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FiArrowDown, FiArrowUp, FiPlus } from "react-icons/fi";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FiArrowDown, FiArrowUp } from "react-icons/fi";
 import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
 
@@ -14,12 +14,6 @@ export const FARE_FILTERS = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
-
-// Always on screen.
-export const TEXT_NOTE =
-  "The chosen tier is saved as text on each record. Renaming or retiring a tier does NOT change old records — they keep the text they already hold, and that text will appear in the record's own dropdown marked (inactive) or (not in the list).";
-export const OLD_APP_NOTE =
-  "Visitors using an older version of the app may still send the old wording until a new app version is released.";
 
 // Only when no tier is active and a boat type still asks for the field.
 export const NO_ACTIVE_WARNING =
@@ -54,7 +48,11 @@ function confirmationCount(error) {
   return null;
 }
 
-export default function BoatCapacityFarePanel() {
+// The fare tab's "Add option" button is in the PAGE header (RegistrationOptions), like "Add option" on the
+// other tabs and "Add contact" on Emergency Hotlines. It reaches the panel through this ref
+// (toggleAdd), and the panel tells the page when it is busy (onWorkingChange), so the button is
+// disabled during a write as it was when it was inside the panel.
+const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWorkingChange }, ref) {
   const { referenceTables, refreshReferenceTables } = useTourismData();
   // undefined until the first load: only then does the panel say "Loading...".
   const [rows, setRows] = useState(undefined);
@@ -62,6 +60,10 @@ export default function BoatCapacityFarePanel() {
   const [retry, setRetry] = useState(0);
   const [filter, setFilter] = useState("all");
   const [working, setWorking] = useState(false);
+  // A layout effect: the page learns of it in the same commit, so its button is never a render behind.
+  useLayoutEffect(() => {
+    if (onWorkingChange) onWorkingChange(working);
+  }, [working, onWorkingChange]);
   const [actionError, setActionError] = useState("");
   // The message of the add / edit form, shown INSIDE that form: one message, where
   // the eye is, and not a second one at the top of the page.
@@ -236,40 +238,22 @@ export default function BoatCapacityFarePanel() {
     );
   }
 
+  useImperativeHandle(ref, () => ({
+    toggleAdd() {
+      setAdding((open) => !open);
+      stopEdit();
+      setActionError("");
+      setNotice("");
+    },
+  }));
+
   return (
     <div className="boat-fare-panel" aria-label="Boat Capacity and Fare tiers">
-      <div className="options-form-actions">
-        <button
-          type="button"
-          className="green"
-          onClick={() => {
-            setAdding((open) => !open);
-            stopEdit();
-            setActionError("");
-            setNotice("");
-          }}
-          disabled={working}
-        >
-          <FiPlus />
-          Add tier
-        </button>
-      </div>
-
-      <div className="hotlines-notices" role="note" aria-label="About the Boat Capacity and Fare tiers">
-        <p>{TEXT_NOTE}</p>
-        <p>{OLD_APP_NOTE}</p>
-      </div>
-
       {showNoActiveWarning ? (
         <p className="options-reason" role="alert">
           {NO_ACTIVE_WARNING}
         </p>
       ) : null}
-
-      <p className="options-intro">
-        A tier that is deactivated is no longer offered for new records. It stays on the records that already hold
-        it. Tiers are never deleted.
-      </p>
 
       <div className="options-message-area">
         {notice ? (
@@ -523,4 +507,6 @@ export default function BoatCapacityFarePanel() {
       </section>
     </div>
   );
-}
+});
+
+export default BoatCapacityFarePanel;

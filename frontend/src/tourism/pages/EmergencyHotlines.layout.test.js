@@ -289,3 +289,59 @@ describe("the second line: the number and the chips side by side", () => {
     ]);
   });
 });
+
+describe("the number takes the text colour of its icon, which is darker than the icon where the icon is too pale", () => {
+  it("the number rule reads --contact-text first, then the icon colour; and a row of each kind carries the right variables", async () => {
+    const rows = [contact(1, "Fire Row", { icon: "fire" }), contact(2, "Police Row", { icon: "police" })];
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
+    );
+    render(<EmergencyHotlines />);
+    await screen.findByRole("list");
+    const all = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+    const rule = all.slice(all.indexOf("/* ================= EMERGENCY HOTLINES")).match(/\n\.hotline-number \{[^}]*\}/)[0];
+    expect(rule).toContain("color: var(--contact-text, var(--contact-color, var(--th-text-muted)));");
+    expect(rowOf(1).style.getPropertyValue("--contact-text")).toBe("var(--th-contact-text-fire)");
+    expect(rowOf(1).style.getPropertyValue("--contact-color")).toBe("var(--th-contact-fire)"); // the icon is not changed
+    expect(rowOf(2).style.getPropertyValue("--contact-text")).toBe(""); // police passes as it is
+    expect(rowOf(2).style.getPropertyValue("--contact-color")).toBe("var(--th-contact-police)");
+  });
+});
+
+describe("no blank band is left under the title and the tabs where the notices were", () => {
+  const all = () => fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8").replace(/\r\n/g, "\n");
+
+  it("draws the empty message area as nothing", () => {
+    expect(all()).toContain(".options-message-area:empty {\n  display: none;\n}");
+  });
+
+  it("gives the message area no height of its own: no rule reserves room for a message that is not there", () => {
+    expect(all()).not.toMatch(/\.options-message-area\s*\{[^}]*min-height/);
+    expect(all()).not.toMatch(/\.options-message-area\s*\{[^}]*height/);
+    expect(all()).not.toMatch(/\n\.options-message-area \{\n  min-height/);
+  });
+
+  it("keeps the 24px of air under a message in the fare panel, whose pieces are not in the page's column", () => {
+    expect(all()).toContain(".boat-fare-panel .options-message-area {\n  margin-bottom: 24px;\n}");
+  });
+
+  it("is empty with no message on the Emergency Hotlines page, so that rule hides it", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, status: 200, text: async () => "[]", json: async () => [] })
+    );
+    render(<EmergencyHotlines />);
+    await screen.findByText(/No contacts to show/);
+    const area = document.querySelector(".options-message-area");
+    expect(area).not.toBeNull();
+    expect(area.matches(":empty")).toBe(true);
+  });
+});
+
+describe("the stylesheet keeps no rule for the notice boxes and the reminder lines that were removed", () => {
+  it("has no .hotlines-notices, .options-intro, .hotline-footnote or .hotline-save-note anywhere", () => {
+    const all = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
+    expect(all.indexOf("/* ================= EMERGENCY HOTLINES")).toBeGreaterThan(0); // the fixture: the page's section is there
+    expect(all).not.toContain("hotlines-notices");
+    ["options-intro", "hotline-footnote", "hotline-save-note"].forEach((name) => expect(all).not.toContain(name));
+  });
+});

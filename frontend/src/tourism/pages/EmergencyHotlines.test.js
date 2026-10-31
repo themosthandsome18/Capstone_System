@@ -1,11 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import EmergencyHotlines, {
-  EMPTY_LIST_NOTICE,
   ICON_NOTE,
-  NEXT_VERSION_NOTICE,
   NUMBERS_HINT,
   OPTIONAL_HINT,
-  SAVE_NOTE,
 } from "./EmergencyHotlines";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -187,21 +184,33 @@ describe("the list", () => {
     expect(shownOrder()).toEqual(["30", "20", "10"]);
   });
 
-  it("shows both notices, all the time", async () => {
+  it("has NO yellow box of notices: neither the 'next version' line nor the 'built-in list' line is on the page", async () => {
     await open();
-    expect(screen.getByText(NEXT_VERSION_NOTICE)).toBeTruthy();
-    expect(screen.getByText(EMPTY_LIST_NOTICE)).toBeTruthy();
-    expect(NEXT_VERSION_NOTICE).toBe(
-      "Changes here reach the mobile app only when the next version of the app is released."
-    );
-    expect(EMPTY_LIST_NOTICE).toBe(
-      "If no contact is active, the app falls back to its own built-in list, so the emergency numbers are never missing — even with no internet."
-    );
-    // still there after an action and after a failure
+    expect(document.querySelector(".hotlines-notices")).toBeNull();
+    expect(screen.queryByRole("note", { name: "About these changes" })).toBeNull();
+    expect(screen.queryByText(/next version of the app is released/i)).toBeNull();
+    expect(screen.queryByText(/falls back to its own built-in list/i)).toBeNull();
+    // the page itself did load: the fixture reached the list
+    expect(screen.getByRole("list")).toBeTruthy();
+    expect(within(rowOf(4)).getByText("Zulu Rescue Base")).toBeTruthy();
+  });
+
+  it("has NONE of the reminder lines: nothing about a contact being deactivated or never deleted, and nothing about the next release", async () => {
+    await open();
+    expect(within(rowOf(4)).getByText("Zulu Rescue Base")).toBeTruthy(); // the fixture: the list was drawn
+    expect(document.querySelector(".hotline-footnote")).toBeNull();
+    expect(screen.queryByText(/never deleted/i)).toBeNull();
+    expect(screen.queryByText(/no longer sent to the app/i)).toBeNull();
+    expect(screen.queryByText(/next release/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Deactivate Zulu Rescue Base" }));
     await screen.findByText("Zulu Rescue Base was deactivated.");
-    expect(screen.getByText(NEXT_VERSION_NOTICE)).toBeTruthy();
-    expect(screen.getByText(EMPTY_LIST_NOTICE)).toBeTruthy();
+    expect(screen.queryByText(/never deleted/i)).toBeNull();
+    // and the form has none either, beside Save
+    fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
+    expect(screen.getByRole("button", { name: "Save new contact" })).toBeTruthy();
+    expect(document.querySelector(".hotline-save-note")).toBeNull();
+    expect(screen.queryByText(/Saved changes reach the app/i)).toBeNull();
+    expect(screen.queryByText(/next release/i)).toBeNull();
   });
 
   it("offers no delete anywhere", async () => {
@@ -318,7 +327,6 @@ describe("deactivate and reactivate", () => {
     expect(writes()).toHaveLength(3);
     expect(document.querySelectorAll(".options-status.active")).toHaveLength(0);
     expect(document.querySelectorAll(".options-status.inactive")).toHaveLength(4);
-    expect(screen.getByText(EMPTY_LIST_NOTICE)).toBeTruthy();
   });
 
   it("when the server refuses, the row does not change and the message is shown", async () => {
@@ -715,11 +723,6 @@ describe("the form", () => {
     expect(screen.getByText("Description \u2014 optional")).toBeTruthy();
     expect(screen.getAllByText(OPTIONAL_HINT)).toHaveLength(2);
     expect(OPTIONAL_HINT).toMatch(/will not appear in the app/);
-    // beside Save
-    expect(SAVE_NOTE).toBe("Saved changes reach the app with its next release.");
-    const note = screen.getByText(SAVE_NOTE);
-    const save = screen.getByRole("button", { name: "Save new contact" });
-    expect(note.parentElement).toBe(save.parentElement);
   });
 });
 
@@ -735,20 +738,5 @@ describe("the layout of the list", () => {
     expect(edit.parentElement).toBe(deactivate.parentElement);
     expect(up.parentElement).not.toBe(edit.parentElement);
     expect(up.parentElement.getAttribute("role")).toBe("group");
-  });
-
-  it("puts the 'never deleted' line small, under the list", async () => {
-    await open();
-    const list = screen.getByRole("list");
-    const line = screen.getByText(/Contacts are never deleted\./);
-    expect(line.className).toContain("hotline-footnote");
-    expect(list.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("keeps both notices in ONE block", async () => {
-    await open();
-    const block = screen.getByRole("note", { name: "About these changes" });
-    expect(within(block).getByText(NEXT_VERSION_NOTICE)).toBeTruthy();
-    expect(within(block).getByText(EMPTY_LIST_NOTICE)).toBeTruthy();
   });
 });
