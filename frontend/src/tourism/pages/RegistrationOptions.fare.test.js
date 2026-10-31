@@ -274,9 +274,9 @@ describe("the fare tab's 'Add option' is the same button as the other tabs' 'Add
     expect(screen.queryByRole("note")).toBeNull();
   });
 
-  it("matches the header of Emergency Hotlines: the same structure and the same button class (read from that page's source)", () => {
+  it("matches the Add contact button of Emergency Hotlines (now at the top of its panel): the same button class and icon (read from that file's source)", () => {
     const hotlines = fs.readFileSync(path.join(__dirname, "EmergencyHotlines.js"), "utf8");
-    expect(hotlines).toMatch(/<div className="reports-header">[\s\S]*?<div className="reports-actions">\s*<button type="button" className="green"[^>]*>\s*<FiPlus \/>\s*Add contact/);
+    expect(hotlines).toMatch(/<div className="options-form-actions">\s*<div className="reports-actions">\s*<button type="button" className="green"[^>]*>\s*<FiPlus \/>\s*Add contact/);
     const options = fs.readFileSync(path.join(__dirname, "RegistrationOptions.js"), "utf8");
     expect(options).toMatch(/<div className="reports-actions">[\s\S]*?<button type="button" className="green" onClick=\{\(\) => fareRef\.current\?\.toggleAdd\(\)\} disabled=\{fareWorking\}>\s*<FiPlus \/>\s*Add option/);
   });

@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
 import { FiArrowDown, FiArrowUp, FiMail, FiPlus } from "react-icons/fi";
-import { useAuth } from "../../auth/AuthContext";
-import { canManageHotlines } from "../hotlinesAccess";
 import { tourismApi } from "../services/tourismApi";
 import { CONTACT_ICONS, ContactIcon, contactIcon, contactStyle } from "../utils/contactIcons";
 
@@ -25,7 +22,10 @@ function inOrder(list) {
   return [...list].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
 }
 
-function EmergencyHotlinesPage() {
+// The Emergency Hotlines, as a tab of the Mobile App Content page (it used to be a page of its own): the
+// messages, the form and the list, and the "Add contact" button at the top. The page that mounts it has already
+// checked the role (the panel itself asks the server for the contacts as soon as it is shown).
+export function EmergencyHotlinesPanel() {
   // undefined until the first load: only then does the page say "Loading...".
   const [rows, setRows] = useState(undefined);
   const [loadError, setLoadError] = useState("");
@@ -158,13 +158,9 @@ function EmergencyHotlinesPage() {
   const canReorder = filter === "all";
 
   return (
-    <div className="reports-page settings-page options-page hotlines-page">
-      <div className="reports-header">
-        <div>
-          <h1>Emergency Hotlines</h1>
-          <p>The hotlines and help desks the mobile app lists for visitors</p>
-        </div>
-
+    <div className="mobile-content-panel">
+      {/* The button that used to be in the header of the page: the same button, now at the top of the panel. */}
+      <div className="options-form-actions">
         <div className="reports-actions">
           <button type="button" className="green" onClick={openAdd} disabled={working}>
             <FiPlus />
@@ -418,14 +414,4 @@ function EmergencyHotlinesPage() {
       </section>
     </div>
   );
-}
-
-// The page itself refuses anyone but the admin (the route and the sidebar do
-// too): a person who is sent here by a stale link is sent away.
-export default function EmergencyHotlines() {
-  const { role } = useAuth();
-  if (!canManageHotlines(role)) {
-    return <Navigate to="/" replace />;
-  }
-  return <EmergencyHotlinesPage />;
 }

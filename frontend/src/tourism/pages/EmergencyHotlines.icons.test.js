@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import EmergencyHotlines from "./EmergencyHotlines";
+import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { useAuth } from "../../auth/AuthContext";
 
 // ONE SOURCE. The list of rows, the icon grid of the form and the preview must
@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 it("draws the list, the grid and the preview from the module, and from nowhere else", async () => {
-  render(<EmergencyHotlines />);
+  render(<EmergencyHotlinesPanel />);
   await screen.findByRole("list");
 
   // the list

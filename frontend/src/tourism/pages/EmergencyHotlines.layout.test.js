@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import EmergencyHotlines from "./EmergencyHotlines";
+import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { useAuth } from "../../auth/AuthContext";
 
 jest.mock(
@@ -49,7 +49,7 @@ const rowOf = (id) => screen.getByTestId(`hotline-row-${id}`);
 
 describe("the icon lines up with the first line, and does not depend on the chips", () => {
   async function open() {
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
 
@@ -138,7 +138,7 @@ describe("a chip is one line: the icon and the text side by side, never split in
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
   const chipsOf = () => [...document.querySelectorAll(".hotline-chip")];
@@ -220,7 +220,7 @@ describe("the second line: the number and the chips side by side", () => {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(data), json: async () => data })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
   }
 
@@ -296,7 +296,7 @@ describe("the number takes the text colour of its icon, which is darker than the
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => JSON.stringify(rows), json: async () => rows })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByRole("list");
     const all = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8");
     const rule = all.slice(all.indexOf("/* ================= EMERGENCY HOTLINES")).match(/\n\.hotline-number \{[^}]*\}/)[0];
@@ -325,11 +325,11 @@ describe("no blank band is left under the title and the tabs where the notices w
     expect(all()).toContain(".boat-fare-panel .options-message-area {\n  margin-bottom: 24px;\n}");
   });
 
-  it("is empty with no message on the Emergency Hotlines page, so that rule hides it", async () => {
+  it("is empty with no message on the Emergency Hotlines panel, so that rule hides it", async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, text: async () => "[]", json: async () => [] })
     );
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByText(/No contacts to show/);
     const area = document.querySelector(".options-message-area");
     expect(area).not.toBeNull();

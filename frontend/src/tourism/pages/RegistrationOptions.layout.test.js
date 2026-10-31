@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import RegistrationOptions from "./RegistrationOptions";
-import EmergencyHotlines from "./EmergencyHotlines";
+import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { useAuth } from "../../auth/AuthContext";
 import { useTourismData } from "../context/TourismDataContext";
 
@@ -138,7 +138,7 @@ describe("d) the name / tier-text box takes the whole width of its form, in all 
   });
 
   it("the Emergency Hotlines forms, which share the same classes, are NOT changed", async () => {
-    render(<EmergencyHotlines />);
+    render(<EmergencyHotlinesPanel />);
     await screen.findByText(/No contacts to show|Contacts, in the order/);
     fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
     const input = screen.getByLabelText("Contact name");

@@ -4932,3 +4932,1307 @@
   font-weight: 700;
 }
 
+/* ================= MOBILE APP CONTENT (Commit 4) =================
+   The body of a tab of the Mobile App Content page. It spaces its children as
+   .reports-page spaces the children of a page (24px, one column), so a panel that
+   used to be a whole page looks the same inside a tab. */
+.mobile-content-panel {
+  @apply flex flex-col gap-6;
+}
+
+/* The "Coming soon" tag on a tab of the Mobile App Content page whose editor has not been built yet. */
+.mobile-content-soon {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--th-text-muted);
+}
+
+/* The editor of a block of Mobile App Content with its preview and the app's built-in text beside it (Commit 5c). Only the shell's
+   --th-* tokens are used; on a narrow screen the three parts are one under the other. */
+.mobile-content-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.mobile-content-main,
+.mobile-content-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .mobile-content-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mobile-content-insert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* What the system filled in (an amount, the place where the fee is paid, the visitor's name) has a soft tint behind it. It must NOT look like a
+   link, so it has no underline; the placeholder it came from is still in its title (the tooltip). */
+.mobile-content-filled {
+  background: var(--th-primary-tint-strong);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+
+.mobile-content-missing {
+  font-weight: 700;
+  text-decoration: underline wavy;
+  text-underline-offset: 3px;
+}
+
+.mobile-content-muted {
+  color: var(--th-text-muted);
+}
+
+.mobile-content-preview-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-builtin-use {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* A text of ONE line in the editor of Mobile App Content is held in a box that grows with its text and wraps it (Commit 5c-fix); it stays one
+   line (the page stops Enter and turns a pasted new line into a space). It looks like the boxes of the other forms. */
+.options-form .settings-field-wide textarea.mobile-content-line {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid var(--th-border-strong);
+  border-radius: 8px;
+  background: var(--th-surface);
+  padding: 9px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.options-form .settings-field-wide textarea.mobile-content-line:focus {
+  border-color: var(--th-primary);
+}
+
+.options-form .settings-field-wide textarea.mobile-content-line:disabled {
+  background: var(--th-surface-alt);
+  cursor: not-allowed;
+}
+
+/* ================= MOBILE APP CONTENT: THE DESIGN (Commit 5e) =================
+   Looks only. The palette is the design's own and is written ONCE, here, as --mc-* on the page. It does not follow the theme of the app (the design
+   is warm, the theme is green), except where a theme token says the same thing: white is --th-surface, the main text is --th-text-main.
+   The font is the admin's own, Public Sans: no font is added for one page. Everything is scoped to .mobile-content-page / .mobile-content-card, so the
+   Hotlines panel and the other pages of the app look as they did. */
+.mobile-content-page {
+  --mc-font: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --mc-teal: #2e7d74;
+  --mc-brown: #8a5a33;
+  --mc-card: #fffdfb;
+  --mc-line: #efe1d1;
+  --mc-input-line: #e0cdb7;
+  --mc-label: #8a6e55;
+  --mc-hint: #8a7664;
+  --mc-tab: #65564a;
+  font-family: var(--mc-font);
+  background: linear-gradient(165deg, #f8e9d8, #f0d7be);
+  border-radius: 20px;
+  padding: 28px;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-page {
+    padding: 16px;
+  }
+}
+
+.mobile-content-page .mobile-content-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mc-teal);
+}
+
+.mobile-content-page .reports-header h1 {
+  margin: 4px 0 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-page .reports-header p.mobile-content-lead {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+/* the tab bar: a white box with the tabs in it */
+.mobile-content-page .mobile-content-tabs {
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 13px;
+  background: var(--th-surface);
+}
+
+.mobile-content-page .mobile-content-tabs button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--mc-tab);
+  background: transparent;
+  box-shadow: none;
+}
+
+.mobile-content-page .mobile-content-tabs button.active {
+  background: var(--mc-teal);
+  color: #ffffff;
+  font-weight: 700;
+  border: 0;
+  box-shadow: none;
+}
+
+.mobile-content-page .mobile-content-tabs .mobile-content-soon {
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* the boxes (cards) of the editor, the preview, the built-in text and the pillars */
+.mobile-content-page .mobile-content-card {
+  background: var(--mc-card);
+  border: 1px solid var(--mc-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05);
+  padding: 20px;
+}
+
+.mobile-content-page .mobile-content-card h2,
+.mobile-content-page .mobile-content-card h3 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-page .mobile-content-card .mobile-content-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mc-teal);
+}
+
+.mobile-content-page .mobile-content-card .report-card-title > p:not(.mobile-content-eyebrow) {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-page .mobile-content-card .settings-field > label span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mc-label);
+}
+
+.mobile-content-page .mobile-content-card .options-hint {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 10px;
+  background: var(--th-surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea:focus {
+  outline: 2px solid var(--mc-teal);
+  outline-offset: 0;
+  border-color: var(--mc-teal);
+}
+
+.mobile-content-page .mobile-content-card .settings-field-wide textarea:disabled {
+  background: var(--th-surface-alt);
+}
+
+/* the main button of a card */
+.mobile-content-page .mobile-content-card .tourist-record-save {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--mc-brown);
+  border-radius: 9px;
+  background: var(--mc-brown);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-content-page .mobile-content-card .tourist-record-save:disabled {
+  opacity: 0.55;
+}
+
+/* the live preview: the banner of the app, in a frame */
+.mobile-content-phone {
+  padding: 14px 13px;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  background: #f7fafb;
+}
+
+.mobile-content-banner {
+  padding: 17px 16px;
+  border-radius: 15px;
+  background: #6b3410;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-banner .mobile-content-preview-field {
+  gap: 0;
+}
+
+.mobile-content-banner p {
+  margin: 0;
+}
+
+.mobile-content-banner .mobile-content-banner-title p {
+  margin: 12px 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.mobile-content-banner .mobile-content-banner-subtitle p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #f3d8be;
+}
+
+.mobile-content-banner .mobile-content-muted {
+  color: #f3d8be;
+}
+
+.mobile-content-banner .mobile-content-filled {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mobile-content-banner .options-hint {
+  color: #f3d8be;
+}
+
+/* a name for a screen reader only */
+.mobile-content-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* the pillars: small boxes in a grid; a list to read */
+.mobile-content-pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(248px, 100%), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-pillar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid var(--mc-line);
+  border-radius: 13px;
+  background: var(--th-surface);
+  min-width: 0;
+}
+
+.mobile-content-pillar[data-active="false"] {
+  opacity: 0.7;
+}
+
+.mobile-content-pillar-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.mobile-content-pillar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-pillar-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.mobile-content-pillar-top strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-pillar-text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-tag {
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #f2e8db;
+  color: #7a6450;
+}
+
+.mobile-content-tag[data-detail="yes"] {
+  background: #dcf0e4;
+  color: #176b3b;
+}
+
+/* the live preview of the Why Visit: the tiles as the app draws them, and the page that opens (Commit 5g). Inside a .mobile-content-phone frame. */
+.mobile-content-card .mobile-content-phone + .mobile-content-phone {
+  margin-top: 12px;
+}
+
+.mobile-content-sheet {
+  padding: 14px;
+  border: 1px solid #e8eff2;
+  border-radius: 14px;
+  background: var(--th-surface);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-sheet .mobile-content-preview-field {
+  gap: 0;
+}
+
+.mobile-content-sheet p {
+  margin: 0;
+}
+
+.mobile-content-sheet .mobile-content-sheet-title p {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-sheet .mobile-content-sheet-subtitle p {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #6e7b82;
+}
+
+.mobile-content-sheet .mobile-content-sheet-body p {
+  margin: 6px 0 12px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #44525b;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-content-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-content-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.mobile-content-tile[data-tone="blue"] {
+  background: #eaf4fb;
+  color: #0a6aa3;
+}
+
+.mobile-content-tile[data-tone="amber"] {
+  background: #fbf0dd;
+  color: #a5620d;
+}
+
+.mobile-content-tile[data-tone="green"] {
+  background: #e4f3ea;
+  color: #14784c;
+}
+
+.mobile-content-tile[data-tone="red"] {
+  background: #fbe7e7;
+  color: #b52e2e;
+}
+
+.mobile-content-tile[data-tone="neutral"] {
+  background: #eef2f4;
+  color: #44525b;
+}
+
+.mobile-content-tile strong {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.mobile-content-tile[data-detail="yes"] strong {
+  padding-right: 16px;
+}
+
+.mobile-content-tile span {
+  font-size: 10.5px;
+  color: #6e7b82;
+}
+
+.mobile-content-tile .mobile-content-chevron {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+}
+
+.mobile-content-foot {
+  margin: 10px 2px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8fa0a8;
+}
+
+.mobile-content-sheet .mobile-content-foot {
+  margin: 0;
+}
+
+.mobile-content-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-detail-body {
+  padding: 14px;
+  border: 1px solid #e8eff2;
+  border-radius: 13px;
+  background: var(--th-surface);
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: #44525b;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-detail-empty,
+.mobile-content-detail-none {
+  font-style: italic;
+}
+
+/* ================= MOBILE APP CONTENT: THE PAGE OF A TILE (Commit 6b) ================= */
+.mobile-content-tile-page .reports-header h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mobile-content-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mc-brown);
+  text-decoration: none;
+}
+
+.mobile-content-back:hover {
+  text-decoration: underline;
+}
+
+.mobile-content-page .mobile-content-tile-form {
+  gap: 24px;
+}
+
+.mobile-content-page .mobile-content-tile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+}
+
+.mobile-content-page .mobile-content-tile-card .mobile-content-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mc-label);
+}
+
+.mobile-content-page .mobile-content-eyebrow .mobile-content-tag {
+  margin-left: 6px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.mobile-content-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(52px, 100%), 1fr));
+  gap: 9px;
+  max-width: 460px;
+}
+
+.mobile-content-icon-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid #e8dbcb;
+  border-radius: 11px;
+  background: var(--th-surface);
+  cursor: pointer;
+}
+
+.mobile-content-icon-choice:hover {
+  background: #fbf4ec;
+  border-color: #cdb295;
+}
+
+.mobile-content-icon-choice[data-selected="true"] {
+  border: 2px solid var(--mc-teal);
+  background: #eaf3f1;
+}
+
+.mobile-content-icon-choice:focus-visible {
+  outline: 2px solid var(--mc-teal);
+  outline-offset: 2px;
+}
+
+.mobile-content-icon-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mobile-content-tile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mobile-content-page .mobile-content-tile-order {
+  width: 160px;
+}
+
+.mobile-content-page .mobile-content-tile-order > label span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mc-label);
+}
+
+.mobile-content-page .mobile-content-tile-order input {
+  box-sizing: border-box;
+  width: 160px;
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 10px;
+  background: var(--th-surface);
+  font: inherit;
+  font-size: 14px;
+  color: var(--th-text-main);
+  outline: none;
+}
+
+.mobile-content-page .mobile-content-tile-order input:focus {
+  outline: 2px solid var(--mc-teal);
+  outline-offset: 0;
+  border-color: var(--mc-teal);
+}
+
+.mobile-content-page .mobile-content-tile-order input:disabled {
+  background: var(--th-surface-alt);
+}
+
+.mobile-content-page .mobile-content-tile-form .tourist-record-save {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--mc-brown);
+  border-radius: 9px;
+  background: var(--mc-brown);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-content-page .mobile-content-tile-form .tourist-record-save:disabled {
+  opacity: 0.55;
+}
+
+/* the page of a tile: the form on the left, the live preview on the right, sticky (Commit 6c) */
+.mobile-content-tile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .mobile-content-tile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-content-page .mobile-content-tile-side {
+    position: static;
+  }
+}
+
+.mobile-content-page .mobile-content-tile-side {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  min-width: 0;
+}
+
+.mobile-content-page .mobile-content-tile-preview .mobile-content-live-note {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--mc-hint);
+}
+
+.mobile-content-mock-label {
+  margin: 16px 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8fa0a8;
+}
+
+.mobile-content-home-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid #e8eff2;
+  border-radius: 13px;
+  background: var(--th-surface);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-home-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.mobile-content-home-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-content-home-body strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--th-text-main);
+}
+
+.mobile-content-home-body span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #5e6f77;
+}
+
+.mobile-content-home-chevron {
+  flex: none;
+  align-self: center;
+}
+
+.mobile-content-detail-dashed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 20px 14px;
+  border: 1px dashed #d5e2e8;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7c8a92;
+  white-space: normal;
+}
+
+/* the doors to the page of a tile, and switching a tile off (Commit 6d) */
+.mobile-content-page .mobile-content-pillars-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-content-page .mobile-content-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--mc-brown);
+  border-radius: 9px;
+  background: var(--mc-brown);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mobile-content-page .mobile-content-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mobile-content-pillar-edit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: var(--th-surface);
+  color: #453931;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mobile-content-pillar-edit:hover {
+  background: #fbf4ec;
+}
+
+.mobile-content-tile-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.mobile-content-small-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: var(--th-surface);
+  color: #453931;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mobile-content-small-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mobile-content-off-mark {
+  padding: 4px 10px;
+  border: 1px dashed #7a6450;
+  border-radius: 7px;
+  background: #f2e8db;
+  color: #7a6450;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-content-off-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #453931;
+}
+
+.mobile-content-off-line {
+  font-size: 12px;
+  color: #8a7664;
+}
+
+/* the tab of the Travel Guide: the list of cards, and its preview (Commit 7a) */
+.mobile-content-cards-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mobile-content-cards-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-content-cards-count {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-cards-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-content-cards-filter span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mc-label);
+}
+
+.mobile-content-cards-filter select {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: var(--th-surface);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--th-text-main);
+}
+
+.mobile-content-cards-hint,
+.mobile-content-cards-locked {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #8a7664;
+}
+
+.mobile-content-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-page .mobile-content-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 17px 19px;
+}
+
+.mobile-content-page .mobile-content-card-row[data-active="false"] {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.mobile-content-card-left {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-content-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.mobile-content-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-card-tag {
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: #f2e8db;
+  color: #7a6450;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-content-card-tag[data-kind="order"] {
+  background: #e4edeb;
+  color: #2e6b64;
+}
+
+.mobile-content-card-tag[data-kind="detail"] {
+  background: #dcf0e4;
+  color: #176b3b;
+}
+
+.mobile-content-card-tag[data-kind="no-detail"] {
+  background: #f2e8db;
+  color: #7a6450;
+}
+
+.mobile-content-card-tag[data-kind="locked"] {
+  background: #fbeadb;
+  color: #8a4f16;
+}
+
+.mobile-content-card-tag[data-kind="banner"] {
+  background: #e8eef3;
+  color: #44525b;
+}
+
+.mobile-content-card-line {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6e5c4c;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-card-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.mobile-content-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1c6b3c;
+}
+
+.mobile-content-card-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2e9655;
+}
+
+.mobile-content-card-status[data-state="off"] {
+  color: #7a6450;
+}
+
+.mobile-content-card-status[data-state="off"] .mobile-content-card-dot {
+  box-sizing: border-box;
+  border: 1.5px solid #7a6450;
+  background: transparent;
+}
+
+.mobile-content-card-ask {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #453931;
+}
+
+.mobile-content-guide-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mobile-content-guide-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-content-guide-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.mobile-content-guide-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e8eff2;
+  border-radius: 12px;
+  background: var(--th-surface);
+}
+
+.mobile-content-guide-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-guide-text strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-guide-text span {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #5e6f77;
+}
+
+.mobile-content-guide-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #1e2b31;
+}
+
+.mobile-content-guide-chevron {
+  flex: none;
+  align-self: center;
+}
+
+/* the two parts of the Home that the cards go to: the guide in the middle, the reminders at the bottom (Commit 7b) */
+.mobile-content-guide-where {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8fa0a8;
+}
+
+.mobile-content-guide-where[data-where="bottom"] {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed #d5e2e8;
+}
+
+/* a text of lines in a preview: the app puts a bullet in front of every line (Commit 8a) */
+.mobile-content-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* the Port & Boat Guide: the box of the fee that cannot be changed here, and the preview (Commit 8b) */
+.mobile-content-port-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.mobile-content-port-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.mobile-content-locked {
+  padding: 21px 22px;
+  border: 1px solid #ebd3b6;
+  border-radius: 16px;
+  background: #fdf0e2;
+}
+
+.mobile-content-locked-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-content-locked-head h2 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #6f3e11;
+}
+
+.mobile-content-locked-prices {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.mobile-content-locked-price {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #ebd3b6;
+  border-radius: 11px;
+  background: var(--th-surface);
+}
+
+.mobile-content-locked-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9b7349;
+}
+
+.mobile-content-locked-price strong {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--th-text-main);
+}
+
+.mobile-content-locked p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6b4f32;
+}
+
+.mobile-content-locked p:last-child {
+  margin-bottom: 0;
+}
+
+.mobile-content-phone.mobile-content-port-frame {
+  padding: 16px 15px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: #3c4851;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-port-title {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0a6e78;
+}
+
+.mobile-content-port-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-port-source {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8a7664;
+}

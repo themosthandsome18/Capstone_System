@@ -4,13 +4,14 @@ import { useAuth } from "../auth/AuthContext";
 import Sidebar from "./components/layout/Sidebar";
 import { pageInfo } from "./components/layout/AppShell";
 import { tourismRoutes } from "./tourismRoutes";
-import { HOTLINES_PATH, HOTLINES_ROLES, canManageHotlines } from "./hotlinesAccess";
+import { HOTLINES_PATH, HOTLINES_ROLES } from "./hotlinesAccess";
+import { MOBILE_CONTENT_PATH, MOBILE_CONTENT_ROLES } from "./mobileContentAccess";
 
 // react-router-dom v7 is ESM that CRA's Jest cannot load; stub what is used.
 jest.mock(
   "react-router-dom",
   () => ({
-    Navigate: ({ to }) => <div data-testid="redirect" data-to={to} />,
+    Navigate: ({ to, replace }) => <div data-testid="redirect" data-to={to} data-replace={String(Boolean(replace))} />,
     Outlet: () => <div data-testid="outlet" />,
     NavLink: ({ to, children }) => <a href={to}>{children}</a>,
     useLocation: () => ({ pathname: "/hotlines" }),
@@ -28,19 +29,22 @@ jest.mock("react-leaflet", () => ({}));
 jest.mock("leaflet", () => ({ __esModule: true, default: { DivIcon: class {} }, DivIcon: class {} }));
 jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
 
-describe("Emergency Hotlines access", () => {
-  test("only the system admin may manage the hotlines", () => {
+describe("Emergency Hotlines access (the old address, now a redirect to a tab of Mobile App Content)", () => {
+  test("the old address keeps the admin-only rule", () => {
     expect(HOTLINES_PATH).toBe("/hotlines");
     expect(HOTLINES_ROLES).toEqual(["admin"]);
-    expect(canManageHotlines("admin")).toBe(true);
-    ["tourism", "sanitation", "tourist", "", undefined].forEach((role) => expect(canManageHotlines(role)).toBe(false));
+    expect(HOTLINES_ROLES).toEqual(MOBILE_CONTENT_ROLES);
   });
 
-  test("the page is in the route list, declared admin-only", () => {
+  test("the old address is still in the route list, declared admin-only, and it redirects in place to its tab", () => {
     const route = tourismRoutes.find((item) => item.path === HOTLINES_PATH);
     expect(route).toBeDefined();
     expect(route.allowedRoles).toEqual(["admin"]);
     expect(route.element).toBeTruthy();
+    render(route.element);
+    const redirect = screen.getByTestId("redirect");
+    expect(redirect.getAttribute("data-to")).toBe("/mobile-content?tab=hotlines");
+    expect(redirect.getAttribute("data-replace")).toBe("true");
   });
 
   test("the route guard sends a tourism user away from the page", () => {
@@ -56,17 +60,20 @@ describe("Emergency Hotlines access", () => {
     expect(screen.getByTestId("outlet")).toBeTruthy();
   });
 
-  test("the admin sees the link under Administration", () => {
+  test("the admin sees ONE link under Administration, to Mobile App Content, and no Emergency Hotlines link", () => {
     useAuth.mockReturnValue({ role: "admin" });
     render(<Sidebar />);
-    const link = screen.getByRole("link", { name: "Emergency Hotlines" });
-    expect(link.getAttribute("href")).toBe("/hotlines");
+    const link = screen.getByRole("link", { name: "Mobile App Content" });
+    expect(link.getAttribute("href")).toBe(MOBILE_CONTENT_PATH);
     expect(screen.getByText("Administration")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Emergency Hotlines" })).toBeNull();
+    expect(screen.queryAllByRole("link").filter((item) => /hotlines/i.test(item.getAttribute("href")))).toHaveLength(0);
   });
 
   test("the top bar knows the page: without an entry it would say Dashboard Overview", () => {
-    expect(pageInfo[HOTLINES_PATH]).toBeDefined();
-    expect(pageInfo[HOTLINES_PATH].title).toBe("Emergency Hotlines");
+    expect(pageInfo[MOBILE_CONTENT_PATH]).toBeDefined();
+    expect(pageInfo[MOBILE_CONTENT_PATH].title).toBe("Mobile App Content");
+    expect(pageInfo[HOTLINES_PATH].title).toBe("Mobile App Content"); // the old address, while it redirects
     // and so does every other route of the module
     tourismRoutes
       .filter((route) => route.path && route.path !== "*")
@@ -76,6 +83,7 @@ describe("Emergency Hotlines access", () => {
   test("a tourism user does not see the link", () => {
     useAuth.mockReturnValue({ role: "tourism" });
     render(<Sidebar />);
+    expect(screen.queryByRole("link", { name: "Mobile App Content" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Emergency Hotlines" })).toBeNull();
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
   });
