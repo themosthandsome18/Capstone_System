@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import { createServer, runScenarios } from "./hotlinesGolden.helpers";
-import golden from "./golden/emergency-hotlines-before-split-552c048.json";
+import golden from "./golden/emergency-hotlines-golden.json";
 import { useAuth } from "../../auth/AuthContext";
 
 jest.mock("react-router-dom", () => ({ Navigate: ({ to }) => <div data-testid="redirect" data-to={to} /> }), { virtual: true });
@@ -60,7 +60,9 @@ describe("the panel alone", () => {
     const panel = container.firstElementChild;
     expect(panel.className).toBe("mobile-content-panel");
     expect(panel.firstElementChild.querySelector("button").textContent).toBe("Add contact");
-    expect(panel.children[1].className).toBe("hotlines-notices"); // right after the button row
+    expect(panel.children[1].className).toBe("options-message-area"); // right after the button row (the box of notices that was here is gone)
+    expect(panel.querySelector(".hotlines-notices")).toBeNull();
+    expect(panel.children[1].children).toHaveLength(0); // and the place for a message is empty until there is one
   });
 });
 

@@ -67,8 +67,7 @@ class AppContentBlock {
   }
 }
 
-/// One pillar, tile or banner of a section. [fullText] and [tappable] are READ (so that they are ready) and not used yet: the app does not open a
-/// tile in this step.
+/// One pillar, tile or banner of a section. [fullText] and [tappable] are READ; an item that has a full text opens it (see [opensDetail]).
 class AppContentItem {
   const AppContentItem({
     required this.id,
@@ -91,6 +90,10 @@ class AppContentItem {
   final bool tappable;
 
   bool get isBanner => style == AppContentStyle.banner;
+
+  /// Whether the visitor can open this item to read its full text: the server marked it [tappable], and it really has a text to show. The two together, so that
+  /// an item is never offered that would open an empty dialog. Whatever the look: a banner opens like a tile, and is drawn as it always was.
+  bool get opensDetail => tappable && fullText.trim().isNotEmpty;
 
   /// The item, or null when it is broken: not a map, no whole-number id, no title or no short text. A missing or odd icon is NOT broken (it is "info").
   static AppContentItem? tryParse(Object? json) {

@@ -81,7 +81,7 @@ const FIVE = [
   ["Vehicle Classification", "Public Bus", "New option name", "Option name", /add option/i],
   ["Boat Classification", "Passenger Boat", "New option name", "Option name", /add option/i],
   ["Visit Purpose", "Vacation", "New option name", "Option name", /add option/i],
-  ["Boat Capacity and Fare", "Oscar 1-2 pax (One-Way P1000, Two-way P1400)", "New tier text", "Tier text", /add tier/i],
+  ["Boat Capacity and Fare", "Oscar 1-2 pax (One-Way P1000, Two-way P1400)", "New tier text", "Tier text", /add option/i],
 ];
 
 async function open(tab, rowName) {
@@ -176,7 +176,7 @@ describe("space between the edit form and the list", () => {
 
   it("fare tab: the ADD form has the same 24px below it as the edit form", async () => {
     await open("Boat Capacity and Fare", FIVE[4][1]);
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     const form = screen.getByRole("form", { name: "Add a tier" });
     expect(window.getComputedStyle(form).getPropertyValue("margin-bottom")).toBe("24px");
     expect(form.parentElement.className).toContain("boat-fare-panel");
@@ -202,7 +202,7 @@ describe("space between the edit form and the list", () => {
   it("the space between the add or edit form and the list is the same 24px in all five tabs: a margin in the fare tab, the page's gap in the four others", async () => {
     // fare tab: the margin
     await open("Boat Capacity and Fare", FIVE[4][1]);
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     const fareGap = window.getComputedStyle(screen.getByRole("form", { name: "Add a tier" })).getPropertyValue("margin-bottom");
     expect(fareGap).toBe("24px");
     // the four others: gap-6 of the page, which is 1.5rem = 24px in the stylesheet's own words

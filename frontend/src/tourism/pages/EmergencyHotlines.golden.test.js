@@ -1,13 +1,21 @@
 // The golden: the Emergency Hotlines page as it was on origin/main (552c048), BEFORE it was split into a panel and moved
 // into the Mobile App Content page (Commit 4). Since 4c the screen is held to the golden THROUGH THE NEW PAGE, opened on its
-// Hotlines tab. golden/emergency-hotlines-before-split-552c048.json holds, for 15 scenarios, the
+// Hotlines tab. golden/emergency-hotlines-golden.json holds, for 15 scenarios, the
 // outer HTML of what is on the screen after each step (notices, messages, form, list, and the page header) and every
 // request that was sent (method, path, body). It was taken from the old page before a line of the split was written,
 // and two runs gave the same record.
+//
+// RE-RECORDED on 2026-10-31 (the four places only: notices, messages, form, list), because PR #23 changed the page on purpose. 63 lines of
+// the file changed, and nothing else: (a) the box of two notices ("Changes here reach the mobile app only when the next version of the app
+// is released" and "If no contact is active, the app falls back…") is gone: `notices` is null in all 29 snapshots; (b) the line "Saved changes
+// reach the app with its next release." beside Save is gone from the form (7 snapshots); (c) the footnote "A contact that is deactivated is no
+// longer sent to the app. Contacts are never deleted." is gone from the list (27 snapshots); (d) the six icons whose text is darker than the
+// icon (rescue, coast guard, fire, power, water, port) carry a second custom property, `--contact-text`, on their row, preview and icon button.
+// The requests of all 15 scenarios are identical to the first recording; the old header (`chrome`) is kept as it was taken.
 import { configure, render } from "@testing-library/react";
 import MobileAppContent from "./MobileAppContent";
 import { SCENARIO_NAMES, runScenarios } from "./hotlinesGolden.helpers";
-import golden from "./golden/emergency-hotlines-before-split-552c048.json";
+import golden from "./golden/emergency-hotlines-golden.json";
 import { useAuth } from "../../auth/AuthContext";
 
 const router = require("../testing/routerStub");

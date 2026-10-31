@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import RegistrationOptions from "./RegistrationOptions";
-import { NO_ACTIVE_WARNING, OLD_APP_NOTE, RENAME_NOTE, TEXT_NOTE, renameQuestion } from "./BoatCapacityFarePanel";
+import { NO_ACTIVE_WARNING, RENAME_NOTE, renameQuestion } from "./BoatCapacityFarePanel";
 import { REFERENCE_RENAME_EFFECT } from "./RegistrationOptions";
 import { useAuth } from "../../auth/AuthContext";
 import { useTourismData } from "../context/TourismDataContext";
@@ -202,38 +202,128 @@ describe("the tab and what it lists", () => {
     expect(rowOf(41).className).toContain("options-row-inactive");
   });
 
-  it("shows the explanations all the time, in English", async () => {
+  it("has NO yellow box of notices: neither the 'saved as text' paragraph nor the 'older version of the app' paragraph is on the tab", async () => {
     await openFareTab();
-    expect(TEXT_NOTE).toBe(
-      "The chosen tier is saved as text on each record. Renaming or retiring a tier does NOT change old records — they keep the text they already hold, and that text will appear in the record's own dropdown marked (inactive) or (not in the list)."
-    );
-    expect(OLD_APP_NOTE).toBe(
-      "Visitors using an older version of the app may still send the old wording until a new app version is released."
-    );
-    expect(screen.getByText(TEXT_NOTE)).toBeTruthy();
-    expect(screen.getByText(OLD_APP_NOTE)).toBeTruthy();
-    // and still there after an action and after a refusal
-    fireEvent.click(screen.getByRole("button", { name: /^Deactivate Tango/ }));
-    await within(rowOf(5)).findByText("Inactive");
-    expect(screen.getByText(TEXT_NOTE)).toBeTruthy();
-    expect(screen.getByText(OLD_APP_NOTE)).toBeTruthy();
+    expect(document.querySelector(".hotlines-notices")).toBeNull();
+    expect(screen.queryByRole("note", { name: /about the boat capacity and fare tiers/i })).toBeNull();
+    expect(screen.queryByText(/saved as text on each record/i)).toBeNull();
+    expect(screen.queryByText(/older version of the app/i)).toBeNull();
+    // the tab itself did load: the fixture reached the table
+    expect(screen.getByTestId("fare-row-12")).toBeTruthy();
   });
 
-  it("has its own 'Add tier' button, and the shell's 'Add option' is not shown on this tab", async () => {
+  it("has NO reminder line either: nothing about a tier being deactivated or never deleted", async () => {
+    await openFareTab();
+    expect(screen.getByTestId("fare-row-12")).toBeTruthy(); // the fixture: the tab is drawn
+    expect(document.querySelector(".options-intro")).toBeNull();
+    expect(screen.queryByText(/no longer offered/i)).toBeNull();
+    expect(screen.queryByText(/never deleted/i)).toBeNull();
+    // and no blank band: the place for a message is empty, so the stylesheet draws nothing for it
+    expect(document.querySelector(".boat-fare-panel .options-message-area").matches(":empty")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /^Deactivate Tango/ }));
+    await within(rowOf(5)).findByText("Inactive");
+    expect(screen.queryByText(/never deleted/i)).toBeNull();
+    expect(document.querySelector(".hotlines-notices")).toBeNull();
+  });
+
+  it("this tab has exactly ONE 'Add option' button, in the page header, and it is the fare tab's own: it opens the TIER form, not the shell's option form", async () => {
     render(<RegistrationOptions />);
     await screen.findByRole("table");
-    expect(screen.getByRole("button", { name: /add option/i })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /add option/i })).toHaveLength(1); // the fixture: the first tab has its own
     fireEvent.click(screen.getByRole("tab", { name: FARE_TAB }));
     await screen.findByTestId("fare-row-12");
-    expect(screen.queryByRole("button", { name: /add option/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /add tier/i })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /add option/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    expect(screen.getByLabelText("New tier text")).toBeTruthy();
+    expect(screen.queryByLabelText("New option name")).toBeNull();
+  });
+});
+
+describe("the fare tab's 'Add option' is the same button as the other tabs' 'Add option' and 'Add contact': in the header, to the right of the title", () => {
+  const fs = require("fs");
+  const path = require("path");
+
+  it("is a direct child of .reports-actions inside .reports-header, with the class and the icon of 'Add option', and not inside the panel", async () => {
+    render(<RegistrationOptions />);
+    await screen.findByRole("table");
+    const optionButton = screen.getByRole("button", { name: /add option/i });
+    fireEvent.click(screen.getByRole("tab", { name: FARE_TAB }));
+    await screen.findByTestId("fare-row-12");
+
+    const button = screen.getByRole("button", { name: /add option/i });
+    expect(button.parentElement.className).toBe("reports-actions");
+    expect(button.parentElement.parentElement.className).toBe("reports-header");
+    expect(button.className).toBe("green");
+    expect(optionButton.className).toBe("green"); // the fixture: the class is that of the button of the other tabs
+    expect(button.querySelector("svg")).not.toBeNull(); // the + icon
+    expect(button.closest(".boat-fare-panel")).toBeNull();
+    expect(document.querySelector(".boat-fare-panel").querySelectorAll(".options-form-actions")).toHaveLength(0);
+
+    // to the right of the title: the header holds the title block first, then the actions
+    const header = button.closest(".reports-header");
+    expect([...header.children].map((el) => el.className || el.tagName.toLowerCase())).toEqual(["div", "reports-actions"]);
+    expect(within(header.firstElementChild).getByRole("heading", { name: "Registration Options" })).toBeTruthy();
+  });
+
+  it("comes before the table in the page, and nothing is drawn over it", async () => {
+    await openFareTab();
+    const button = screen.getByRole("button", { name: /add option/i });
+    const table = screen.getByRole("table");
+    expect(button.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(table.contains(button)).toBe(false);
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("matches the Add contact button of Emergency Hotlines (now at the top of its panel): the same button class and icon (read from that file's source)", () => {
+    const hotlines = fs.readFileSync(path.join(__dirname, "EmergencyHotlines.js"), "utf8");
+    expect(hotlines).toMatch(/<div className="options-form-actions">\s*<div className="reports-actions">\s*<button type="button" className="green"[^>]*>\s*<FiPlus \/>\s*Add contact/);
+    const options = fs.readFileSync(path.join(__dirname, "RegistrationOptions.js"), "utf8");
+    expect(options).toMatch(/<div className="reports-actions">[\s\S]*?<button type="button" className="green" onClick=\{\(\) => fareRef\.current\?\.toggleAdd\(\)\} disabled=\{fareWorking\}>\s*<FiPlus \/>\s*Add option/);
+  });
+
+  it("opens and closes the add form (a second click closes it), and the form is not the button's job", async () => {
+    await openFareTab();
+    expect(screen.queryByLabelText("New tier text")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    expect(screen.getByLabelText("New tier text")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    expect(screen.queryByLabelText("New tier text")).toBeNull();
+  });
+
+  it("closes an edit form that is open: only one form at a time", async () => {
+    await openFareTab();
+    fireEvent.click(screen.getByRole("button", { name: /^Edit Sierra/ }));
+    expect(screen.getByRole("form", { name: /^Edit Sierra/ })).toBeTruthy(); // the fixture: the edit form is open
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    expect(screen.queryByRole("form", { name: /^Edit Sierra/ })).toBeNull();
+    expect(screen.getByLabelText("New tier text")).toBeTruthy();
+  });
+
+  it("is disabled while a write is in flight, and enabled again after the answer", async () => {
+    await openFareTab();
+    const button = screen.getByRole("button", { name: /add option/i });
+    expect(button.disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /^Deactivate Tango/ }));
+    await waitFor(() => expect(button.disabled).toBe(true));
+    await within(rowOf(5)).findByText("Inactive");
+    await waitFor(() => expect(button.disabled).toBe(false));
+  });
+
+  it("on the other tabs the 'Add option' button is the shell's own: one button, and it opens the option form, not the tier form", async () => {
+    await openFareTab();
+    fireEvent.click(screen.getByRole("tab", { name: "Visit Purpose" }));
+    await screen.findByLabelText("Filter by status");
+    expect(screen.getAllByRole("button", { name: /add option/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    expect(screen.getByLabelText("New option name")).toBeTruthy();
+    expect(screen.queryByLabelText("New tier text")).toBeNull();
   });
 });
 
 describe("each action: what is shown afterwards AND what was sent", () => {
   it("add: sends only the text, then shows the row the server made, last", async () => {
     await openFareTab();
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "  Whiskey 9-10 pax (One-Way P5000)  " } });
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("Whiskey 9-10 pax (One-Way P5000)");
@@ -251,7 +341,7 @@ describe("each action: what is shown afterwards AND what was sent", () => {
       status: 201,
       body: tier(60, "Name As The Server Kept It", 5, 4),
     };
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "typed text" } });
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("Name As The Server Kept It");
@@ -343,7 +433,7 @@ describe("no second fetch, no Loading... after the first open", () => {
     await waitFor(() => expect(within(rowOf(12)).getByText("Active")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: /^Move Tango .* up$/ }));
     await waitFor(() => expect(shownOrder()).toEqual([5, 12, 41, 7]));
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "One more" } });
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("One more");
@@ -395,7 +485,7 @@ describe("a failed write", () => {
   it("changes nothing in the list and shows the server's words", async () => {
     await openFareTab();
     failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "Mike 1-2 pax (One-Way P1000, Two-way P1400)" } });
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     expect(await screen.findByText(/already has this name/)).toBeTruthy();
@@ -638,7 +728,7 @@ describe("d) ONE message, in the form", () => {
   it("a refused ADD shows its words once, inside the add form", async () => {
     await openFareTab();
     failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "Dup" } });
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText(/already has this name/);
@@ -740,7 +830,7 @@ describe("d) there is no delete", () => {
     await within(rowOf(12)).findByText("Inactive");
     fireEvent.click(screen.getByRole("button", { name: /^Edit Sierra/ }));
     expect(screen.queryByRole("button", { name: /delete|remove/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /add tier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     expect(screen.queryByRole("button", { name: /delete|remove/i })).toBeNull();
     expect(requests.filter((r) => r.method === "DELETE")).toEqual([]);
     expect(new Set(requests.map((r) => r.method))).toEqual(new Set(["GET", "POST"]));
@@ -818,8 +908,8 @@ describe("h) the four existing tabs are as they were", () => {
       counts.forEach((count) => expect(screen.getByText(count)).toBeTruthy());
       expect(screen.getByRole("button", { name: /add option/i })).toBeTruthy(); // the shell's own button
       expect(screen.getByLabelText("Filter by status")).toBeTruthy();
-      expect(screen.queryByText(TEXT_NOTE)).toBeNull(); // the fare notes do not leak into the others
-      expect(screen.queryByRole("button", { name: /add tier/i })).toBeNull();
+      expect(screen.queryByText(/no longer offered|never deleted/i)).toBeNull(); // no reminder line on this tab
+      expect(screen.getAllByRole("button", { name: /add option/i })).toHaveLength(1); // one, not two: the fare tab's button is not here
     }
     expect(requests.filter((r) => r.path.startsWith("/boat-capacity-fares/"))).toHaveLength(0);
   });
@@ -850,5 +940,31 @@ describe("only the admin", () => {
     render(<RegistrationOptions />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("no tab of Registration Options has a reminder line", () => {
+  it("not Travel Itinerary, Vehicle Classification, Boat Classification, Visit Purpose, nor Boat Capacity and Fare", async () => {
+    render(<RegistrationOptions />);
+    await screen.findByRole("table");
+    const tabs = [
+      ["Travel Itinerary", "Overnight"],
+      ["Vehicle Classification", "Private Vehicle"],
+      ["Boat Classification", "Tourist Boat"],
+      ["Visit Purpose", "Leisure"],
+      [FARE_TAB, null],
+    ];
+    let looked = 0;
+    for (const [tab, firstRow] of tabs) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      if (firstRow) await screen.findByText(firstRow);
+      else await screen.findByTestId("fare-row-12");
+      expect(document.querySelector(".options-intro")).toBeNull();
+      expect(screen.queryByText(/no longer offered/i)).toBeNull();
+      expect(screen.queryByText(/never deleted/i)).toBeNull();
+      expect(screen.queryByText(/It stays on the records/i)).toBeNull();
+      looked += 1;
+    }
+    expect(looked).toBe(5); // the fixture: all five tabs were opened
   });
 });

@@ -96,4 +96,14 @@ abstract final class AppContentDefaults {
 
   /// The same lines without the bullet, which is how the server sends them (the screen draws the bullet).
   static final portGuideLines = <String>[for (final bullet in portGuideBullets) bullet.substring(2)];
+
+  /// The four hotlines the Profile page had written in its code, in their order: what it shows when the server's list gives it nothing to show (the server failed,
+  /// the key is missing, the list is empty, or every entry is broken). MOVED here from the screen, not copied. The desk's number and email are kept apart, as the server
+  /// sends them. The ids are negative: never an id of the server.
+  static const hotlines = <AppContact>[
+    AppContact(id: -1, name: 'Mauban MDRRMO / Rescue 24/7', numbers: '0998-598-8422 / (042) 784-0123', icon: 'rescue'),
+    AppContact(id: -2, name: 'Mauban Municipal Police (PNP)', numbers: '0998-598-5777 / (042) 784-0200', icon: 'police'),
+    AppContact(id: -3, name: 'Coast Guard Sub-Station Mauban', numbers: '0917-842-7643', icon: 'coast_guard'),
+    AppContact(id: -4, name: 'Mauban Tourism Information Desk', numbers: '(042) 784-0555', email: 'tourism@mauban.gov.ph', icon: 'help_desk'),
+  ];
 }

@@ -1515,7 +1515,8 @@ class MobileContentItem(models.Model):
     `icon` is the NAME of an icon (the app and the web page own the picture and
     the colour of each name), as for EmergencyContact. `short_text` is the line the
     app shows on the item; `full_text` is the long explanation that opens when the
-    item is tapped. With no `full_text` the item is not tappable and has no arrow.
+    item is tapped, whether the item is a tile or a banner. With no `full_text` the
+    item is not tappable and has no arrow.
     Nothing here is ever deleted: an item is made inactive.
     """
 

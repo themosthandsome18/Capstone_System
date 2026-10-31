@@ -68,6 +68,8 @@ const FIXED = [
   "--th-contact-rescue", "--th-contact-police", "--th-contact-coast-guard", "--th-contact-fire",
   "--th-contact-hospital", "--th-contact-ambulance", "--th-contact-lgu-office", "--th-contact-power",
   "--th-contact-water", "--th-contact-port", "--th-contact-other",
+  "--th-contact-text-rescue", "--th-contact-text-coast-guard", "--th-contact-text-fire",
+  "--th-contact-text-power", "--th-contact-text-water", "--th-contact-text-port",
 ];
 
 // ---- tests ----------------------------------------------------------------

@@ -1,9 +1,11 @@
 // An app already installed must not break when the server sends keys it has
 // never heard of. The server now sends referenceTables.boatCapacityFares (the
 // active "Boat Capacity and Fare" tiers as [{name}], no id) and, at the top,
-// emergencyContacts. MobileBootstrap.fromJson reads only the six keys it knows
-// and ignores the rest. The payload below has the shape the server really sends
-// (see BoatCapacityFarePayloadTests in backend/api/tests.py).
+// emergencyContacts. MobileBootstrap.fromJson READS BOTH: emergencyContacts (the hotlines
+// the Profile page draws; tested in app_contacts_test.dart) and boatCapacityFares (the
+// tiers the booking form offers; tested in boat_capacity_fares_test.dart), and ignores the
+// keys it does not know (someFutureKey). The payload below has the shape the server really
+// sends (see BoatCapacityFarePayloadTests in backend/api/tests.py).
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -99,6 +101,8 @@ Map<String, Object?> whatTheAppReads(MobileBootstrap b) => {
   'barangays': b.barangays.map((r) => '${r.id}:${r.name}').toList(),
   'notifications': b.notifications.map((n) => '${n.id}:${n.title}').toList(),
   'themeWebColour': b.theme.primaryColor,
+  'emergencyContacts': b.emergencyContacts.items.map((c) => '${c.id}:${c.name}:${c.numbers}:${c.icon}').toList(),
+  'boatCapacityFares': b.boatCapacityFares.names,
 };
 
 void main() {
@@ -116,7 +120,7 @@ void main() {
     }
   });
 
-  test('fromJson ignores the new keys: no exception, and the six known keys are read right', () {
+  test('fromJson ignores the keys it does not know: no exception, and the known keys are read right, the contacts included', () {
     final MobileBootstrap bootstrap = MobileBootstrap.fromJson(serverPayload());
 
     expect(bootstrap.destinations.map((d) => d.name), ['Sample Beach Resort']);
@@ -131,15 +135,28 @@ void main() {
     expect(bootstrap.barangays.map((b) => b.name), ['Cagsiay I']);
     expect(bootstrap.notifications.map((n) => n.title), ['Welcome']);
     expect(bootstrap.theme.primaryColor, '#EF7C1F');
+    // and the contacts the server sent are read (the one of the payload)
+    expect(bootstrap.emergencyContacts.items.map((c) => c.name), ['Mauban MDRRMO / Rescue 24/7']);
+    expect(bootstrap.emergencyContacts.items.single.icon, 'rescue');
+    // and the tiers the server sent are read (the two of the payload), in its order
+    expect(bootstrap.boatCapacityFares.names, ['1-2 pax (One-Way P1500, Two-way P2000)', '21-25 pax (One-Way P6,000, Two-way P6,500)']);
   });
 
-  test('the answer is exactly the same with the new keys as without them', () {
+  test('the new keys change only what the app reads of them: the contacts and the tiers', () {
     final withNew = whatTheAppReads(MobileBootstrap.fromJson(serverPayload()));
     final without = whatTheAppReads(MobileBootstrap.fromJson(serverPayload(withNewKeys: false)));
-    expect(withNew, without);
+    expect(withNew['emergencyContacts'], hasLength(1)); // the fixture: the contacts are read
+    expect(without['emergencyContacts'], isEmpty);
+    expect(withNew['boatCapacityFares'], hasLength(2)); // the fixture: the tiers are read
+    expect(without['boatCapacityFares'], isEmpty);
+    // everything else is exactly the same with the new keys as without them
+    expect(
+      Map.of(withNew)..remove('emergencyContacts')..remove('boatCapacityFares'),
+      Map.of(without)..remove('emergencyContacts')..remove('boatCapacityFares'),
+    );
   });
 
-  test('a new key of any odd shape is still ignored', () {
+  test('a new key of any odd shape breaks nothing, and the contacts and the tiers are read as nothing', () {
     for (final odd in <Object?>[null, 'text', 5, [], [1, 2], [null], {}, {'name': 'x'}]) {
       final payload = serverPayload();
       (payload['referenceTables'] as Map<String, dynamic>)['boatCapacityFares'] = odd;
@@ -148,12 +165,22 @@ void main() {
       final bootstrap = MobileBootstrap.fromJson(payload);
       expect(bootstrap.itineraries, hasLength(2), reason: '$odd');
       expect(bootstrap.destinations, hasLength(1), reason: '$odd');
+      expect(bootstrap.emergencyContacts.items, isEmpty, reason: '$odd');
+      expect(bootstrap.boatCapacityFares.names, isEmpty, reason: '$odd');
+      expect(bootstrap.boatCapacityFareChoices, boatCapacityFareOptions, reason: '$odd'); // the form still offers the written nine
+      expect(bootstrap.emergencyContacts.resolve(AppContentDefaults.hotlines), AppContentDefaults.hotlines, reason: '$odd');
     }
   });
 
-  test('the written list of tiers is still what the form offers: nine, after the empty choice', () {
+  test('the written list of tiers is what the form offers when the server gives none: nine, after the empty choice', () {
     expect(boatCapacityFareOptions.first, '');
     expect(boatCapacityFareOptions.skip(1), hasLength(9));
     expect(boatCapacityFareOptions[1], '1-2 pax (One-Way P1500, Two-way P2000)');
+    expect(MobileBootstrap.fromJson(serverPayload(withNewKeys: false)).boatCapacityFareChoices, boatCapacityFareOptions);
+  });
+
+  test('and when the server gives tiers, the form offers THEM: the empty choice, then the two of the payload', () {
+    final choices = MobileBootstrap.fromJson(serverPayload()).boatCapacityFareChoices;
+    expect(choices, ['', '1-2 pax (One-Way P1500, Two-way P2000)', '21-25 pax (One-Way P6,000, Two-way P6,500)']);
   });
 }

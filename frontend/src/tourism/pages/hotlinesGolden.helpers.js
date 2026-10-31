@@ -3,8 +3,11 @@
 // Each scenario mounts the page, drives it the way a person does (through the real tourismApi and a fake
 // fetch), and records two things: what is ON THE SCREEN (the outer HTML of the notices, the message area,
 // the form and the list) and every REQUEST that was sent (method, path, body). The golden file was taken from
-// the old page (origin/main, 552c048) BEFORE the page was split into a panel and a page; the same scenarios run
-// on the new code and must give the same record, except for a short, written list of differences.
+// the old page (origin/main, 552c048) BEFORE the page was split into a panel and a page, and the same scenarios were run on
+// the new code, which had to give the same record except for a short, written list of differences. The four places were
+// RE-RECORDED once, on 2026-10-31, when PR #23 changed the page on purpose (see EmergencyHotlines.golden.test.js); the helper
+// has no record mode of its own: the golden file is written from what runScenarios returns, and the header (`chrome`) of
+// the old page stays as it was taken.
 //
 // This is a helper, not a test: it needs the Jest globals (jest, expect) of the test that calls it.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";

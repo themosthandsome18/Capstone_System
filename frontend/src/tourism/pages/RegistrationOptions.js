@@ -113,6 +113,8 @@ function RegistrationOptionsPage() {
   const rows = lists[kind];
   const loading = rows === undefined && !loadError;
   const isFare = kind === FARE_KIND;
+  const fareRef = useRef(null);
+  const [fareWorking, setFareWorking] = useState(false);
   // The fare panel is mounted the first time its tab is opened and then stays
   // mounted (hidden when another tab is open), so coming back to it shows the
   // list as it was: no second fetch, no "Loading...".
@@ -282,7 +284,13 @@ function RegistrationOptionsPage() {
         </div>
 
         <div className="reports-actions">
-          {isFare ? null : (
+          {isFare ? (
+            // Same button, same place as the other tabs' "Add option" and Emergency Hotlines' "Add contact".
+            <button type="button" className="green" onClick={() => fareRef.current?.toggleAdd()} disabled={fareWorking}>
+              <FiPlus />
+              Add option
+            </button>
+          ) : (
             <button
               type="button"
               className="green"
@@ -318,18 +326,13 @@ function RegistrationOptionsPage() {
 
       {fareOpened ? (
         <div hidden={!isFare}>
-          <BoatCapacityFarePanel />
+          <BoatCapacityFarePanel ref={fareRef} onWorkingChange={setFareWorking} />
         </div>
       ) : null}
 
       {!isFare ? (
         <>
-            <p className="options-intro">
-              An option that is deactivated is no longer offered for new registrations. It stays on the records
-              that already use it, and in the reports. Options are never deleted.
-            </p>
-
-            {/* Always the same height, so a message appearing does not move the page. */}
+            {/* Empty (and not drawn) until there is a message. */}
             <div className="options-message-area">
               {notice ? (
                 <p className="settings-status success" role="status">
