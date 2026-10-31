@@ -1,3 +1,5 @@
+from functools import wraps
+
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q
@@ -23,7 +25,7 @@ from api.models import (
     SanitaryPermitRenewal,
     UserProfile,
 )
-from api.permissions import get_user_role, module_required
+from api.permissions import module_required
 from api.services.public_reporting import PublicSubmissionDeletionProtected, RETENTION_MESSAGE
 from api.seeders import (
     ensure_initial_barangays,
@@ -668,8 +670,29 @@ def sanitation_inspector_list(request):
     )
 
 
+def _inspector_account_access_required(view):
+    """Account writes require an application admin or superuser, never is_staff."""
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        # Read the stored role without provisioning a profile on a denied request.
+        role = UserProfile.objects.filter(user=request.user).values_list("role", flat=True).first()
+        if request.user.is_superuser or role == ROLE_ADMIN:
+            return view(request, *args, **kwargs)
+        if request.method == "GET" and role == ROLE_SANITATION:
+            return view(request, *args, **kwargs)
+        action = "create" if request.method == "POST" else "modify"
+        detail = (
+            "You do not have access to this module."
+            if request.method == "GET"
+            else f"Administrator privileges are required to {action} inspector accounts."
+        )
+        return Response({"detail": detail}, status=status.HTTP_403_FORBIDDEN)
+
+    return wrapped
+
+
 @api_view(["GET", "POST"])
-@module_required("sanitation")
+@_inspector_account_access_required
 def sanitation_staff_list(request):
     if request.method == "GET":
         staff_users = (
@@ -681,13 +704,6 @@ def sanitation_staff_list(request):
         return Response(serializer.data)
 
     # POST: Create a new Sanitary Inspector
-    user_role = get_user_role(request.user)
-    if not (request.user.is_staff or request.user.is_superuser or user_role == ROLE_ADMIN):
-        return Response(
-            {"detail": "Administrator privileges are required to create inspector accounts."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
     first_name = (request.data.get("first_name") or "").strip()
     last_name = (request.data.get("last_name") or "").strip()
     username = (request.data.get("username") or "").strip()
@@ -764,7 +780,7 @@ def sanitation_staff_list(request):
 
 
 @api_view(["GET", "PATCH", "PUT"])
-@module_required("sanitation")
+@_inspector_account_access_required
 def sanitation_staff_detail(request, user_id):
     staff_user = get_object_or_404(
         User.objects.select_related("profile"),
@@ -774,13 +790,6 @@ def sanitation_staff_detail(request, user_id):
 
     if request.method == "GET":
         return Response(SanitaryStaffSerializer(staff_user).data)
-
-    user_role = get_user_role(request.user)
-    if not (request.user.is_staff or request.user.is_superuser or user_role == ROLE_ADMIN):
-        return Response(
-            {"detail": "Administrator privileges are required to modify inspector accounts."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
 
     # Prevent deactivating own account
     if "is_active" in request.data:
