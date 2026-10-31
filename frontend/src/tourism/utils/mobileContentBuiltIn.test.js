@@ -2,14 +2,17 @@
 // fails loudly if either is missing or differs by one character:
 //   1. the seed of the content tables, backend/api/migrations/seed_data/mobile_content_0061.json (itself held to the Dart file by
 //      backend/tools/extract_mobile_content_seed.py --check and a backend test);
-//   2. the Dart file itself, mobile/lib/screens/tourism_screens.dart, where the strings are written.
+//   2. the Dart files themselves, where the strings are written: mobile/lib/models/app_content_defaults.dart (the texts, and `welcomeTitle`,
+//      the greeting as a TEMPLATE with {name} in it) and mobile/lib/models/app_content.dart (`guestVisitorName`, the word used for a visitor
+//      with no name). The app fills {name} in; it no longer has the two greetings written out.
 const fs = require("fs");
 const path = require("path");
 const { BUILT_IN_BLOCKS, GUEST_NAME } = require("./mobileContentBuiltIn");
 
 const ROOT = path.join(__dirname, "..", "..", "..", "..");
 const SEED = path.join(ROOT, "backend", "api", "migrations", "seed_data", "mobile_content_0061.json");
-const DART = path.join(ROOT, "mobile", "lib", "screens", "tourism_screens.dart");
+const DART = path.join(ROOT, "mobile", "lib", "models", "app_content_defaults.dart");
+const DART_CONTENT = path.join(ROOT, "mobile", "lib", "models", "app_content.dart");
 
 const SHOWN = { welcome: ["title", "subtitle"], why_visit: ["title", "subtitle", "body"] };
 
@@ -22,8 +25,16 @@ function read(file) {
   return fs.readFileSync(file, "utf8");
 }
 
-// -> the list of every way `copy` differs from the seed and from the Dart source. Empty when it is the same text.
-function differences(copy, seedText, dartSource) {
+// The value of a Dart string constant, exactly as written between its quotes; undefined when the constant is not there.
+const dartConstant = (source, declaration) => {
+  const found = source.match(new RegExp(declaration + " = '((?:[^'\\\\]|\\\\.)*)';"));
+  return found ? found[1] : undefined;
+};
+const templateOf = (defaultsSource) => dartConstant(defaultsSource, "static const welcomeTitle");
+const guestWordOf = (contentSource) => dartConstant(contentSource, "const String guestVisitorName");
+
+// -> the list of every way `copy` differs from the seed and from the Dart sources. Empty when it is the same text.
+function differences(copy, seedText, dartSource, contentSource) {
   const found = [];
   const seed = JSON.parse(seedText);
   const rows = Object.fromEntries(seed.blocks.map((block) => [block.key, block]));
@@ -42,11 +53,15 @@ function differences(copy, seedText, dartSource) {
     }
   }
   if (copy.welcome && typeof copy.welcome.title === "string") {
-    const guest = `'${copy.welcome.title.replace("{name}", GUEST_NAME)}'`;
-    const named = `'${copy.welcome.title.replace("{name}", "${widget.profile.displayName}")}'`;
-    if (!dartSource.includes(guest)) found.push("welcome.title: the Dart source does not greet a guest with this text");
-    if (!dartSource.includes(named)) found.push("welcome.title: the Dart source does not greet a named visitor with this text");
+    // the greeting is ONE template in the Dart; the web's copy must be that template, letter for letter
+    const template = templateOf(dartSource);
+    if (template === undefined) found.push("welcome.title: the Dart source has no welcomeTitle");
+    else if (template !== copy.welcome.title) found.push("welcome.title: the copy differs from the welcomeTitle template of the Dart source");
   }
+  // and the word for a visitor with no name is the Dart's, letter for letter
+  const guestWord = guestWordOf(contentSource);
+  if (guestWord === undefined) found.push("guest word: the Dart source has no guestVisitorName");
+  else if (guestWord !== GUEST_NAME) found.push("guest word: the web's word for a visitor with no name differs from guestVisitorName of the Dart source");
   for (const key of Object.keys(copy)) if (!SHOWN[key]) found.push(`${key}: a block the copy should not have`);
   return found;
 }
@@ -54,9 +69,10 @@ function differences(copy, seedText, dartSource) {
 describe("the built-in text is the text the app really has", () => {
   const seedText = read(SEED);
   const dartSource = read(DART);
+  const contentSource = read(DART_CONTENT);
 
   it("is, letter for letter, the seed and the Dart source", () => {
-    expect(differences(BUILT_IN_BLOCKS, seedText, dartSource)).toEqual([]);
+    expect(differences(BUILT_IN_BLOCKS, seedText, dartSource, contentSource)).toEqual([]);
   });
 
   it("has exactly the fields the app shows for each block, and the seed leaves the others empty", () => {
@@ -77,26 +93,29 @@ describe("the built-in text is the text the app really has", () => {
     expect(BUILT_IN_BLOCKS.welcome.title).toBe("Mabuhay, {name}! \u{1F30A}");
   });
 
-  it("is what the guest sees: {name} is the word the app uses for a guest", () => {
+  it("is what the guest sees: {name} is the word the app uses for a guest, and both are the Dart's, letter for letter", () => {
     expect(GUEST_NAME).toBe("Explorer");
     expect(BUILT_IN_BLOCKS.welcome.title.replace("{name}", GUEST_NAME)).toBe("Mabuhay, Explorer! \u{1F30A}");
-    expect(dartSource).toContain("'Mabuhay, Explorer! \u{1F30A}'");
+    // the template and the word are read out of the Dart, not written again here
+    expect(templateOf(dartSource)).toBe(BUILT_IN_BLOCKS.welcome.title);
+    expect(guestWordOf(contentSource)).toBe(GUEST_NAME);
   });
 });
 
 describe("the check itself: it catches a copy that has drifted", () => {
   const seedText = fs.readFileSync(SEED, "utf8");
   const dartSource = fs.readFileSync(DART, "utf8");
+  const contentSource = fs.readFileSync(DART_CONTENT, "utf8");
   const clone = () => JSON.parse(JSON.stringify(BUILT_IN_BLOCKS));
 
   it("sees one letter changed, in every shown field", () => {
-    expect(differences(clone(), seedText, dartSource)).toEqual([]); // the fixture: the unchanged copy passes
+    expect(differences(clone(), seedText, dartSource, contentSource)).toEqual([]); // the fixture: the unchanged copy passes
     for (const [key, fields] of Object.entries(SHOWN)) {
       for (const field of fields) {
         const copy = clone();
         copy[key][field] = copy[key][field].replace(/[a-z]/, (letter) => (letter === "z" ? "y" : "z")); // one letter
         expect(copy[key][field]).not.toBe(BUILT_IN_BLOCKS[key][field]); // the fixture: it really changed
-        expect(differences(copy, seedText, dartSource).filter((line) => line.startsWith(`${key}.${field}`)).length).toBeGreaterThan(0);
+        expect(differences(copy, seedText, dartSource, contentSource).filter((line) => line.startsWith(`${key}.${field}`)).length).toBeGreaterThan(0);
       }
     }
   });
@@ -113,20 +132,34 @@ describe("the check itself: it catches a copy that has drifted", () => {
     for (const [label, change] of Object.entries(cases)) {
       const copy = clone();
       change(copy);
-      expect({ label, found: differences(copy, seedText, dartSource).length > 0 }).toEqual({ label, found: true });
+      expect({ label, found: differences(copy, seedText, dartSource, contentSource).length > 0 }).toEqual({ label, found: true });
     }
   });
 
   it("sees the seed or the Dart source drift away from a copy that did not change", () => {
     const drifted = seedText.replace("Nestled along", "Nestled across");
     expect(drifted).not.toBe(seedText); // the fixture
-    expect(differences(BUILT_IN_BLOCKS, drifted, dartSource).some((line) => line.startsWith("why_visit.body"))).toBe(true);
+    expect(differences(BUILT_IN_BLOCKS, drifted, dartSource, contentSource).some((line) => line.startsWith("why_visit.body"))).toBe(true);
     const driftedDart = dartSource.replace("The historic coastal sanctuary of southern Luzon", "The historic coastal sanctuary of Luzon");
     expect(driftedDart).not.toBe(dartSource); // the fixture
-    expect(differences(BUILT_IN_BLOCKS, seedText, driftedDart).some((line) => line.startsWith("why_visit.subtitle"))).toBe(true);
-    const driftedGreeting = dartSource.replace("'Mabuhay, Explorer! \u{1F30A}'", "'Mabuhay, Explorer!'");
-    expect(driftedGreeting).not.toBe(dartSource); // the fixture
-    expect(differences(BUILT_IN_BLOCKS, seedText, driftedGreeting).some((line) => line.includes("greet a guest"))).toBe(true);
+    expect(differences(BUILT_IN_BLOCKS, seedText, driftedDart, contentSource).some((line) => line.startsWith("why_visit.subtitle"))).toBe(true);
+    // one letter changed in the template of the Dart (the emoji kept), and one in the Dart's word for a visitor with no name
+    const driftedTemplate = dartSource.replace("'Mabuhay, {name}! \u{1F30A}'", "'Mabuhay, {name}! \u{1F30A}.'");
+    expect(driftedTemplate).not.toBe(dartSource); // the fixture
+    expect(differences(BUILT_IN_BLOCKS, seedText, driftedTemplate, contentSource).some((line) => line.includes("welcomeTitle"))).toBe(true);
+    const oneLetter = dartSource.replace("'Mabuhay, {name}!", "'Mabuhay, {nome}!");
+    expect(oneLetter).not.toBe(dartSource); // the fixture: a single letter
+    expect(differences(BUILT_IN_BLOCKS, seedText, oneLetter, contentSource).some((line) => line.includes("welcomeTitle"))).toBe(true);
+    const driftedWord = contentSource.replace("guestVisitorName = 'Explorer'", "guestVisitorName = 'Explorar'");
+    expect(driftedWord).not.toBe(contentSource); // the fixture: a single letter
+    expect(differences(BUILT_IN_BLOCKS, seedText, dartSource, driftedWord).some((line) => line.startsWith("guest word"))).toBe(true);
+    // and the same on the web's side: one letter of the template, one letter of the word
+    const copy = clone();
+    copy.welcome.title = copy.welcome.title.replace("{name}", "{nome}");
+    expect(differences(copy, seedText, dartSource, contentSource).some((line) => line.includes("welcomeTitle"))).toBe(true);
+    // a Dart source that has lost the constants is also caught, never skipped
+    expect(differences(BUILT_IN_BLOCKS, seedText, dartSource.replace("welcomeTitle", "greetingTitle"), contentSource).some((line) => line.includes("no welcomeTitle"))).toBe(true);
+    expect(differences(BUILT_IN_BLOCKS, seedText, dartSource, contentSource.replace("guestVisitorName =", "guestName =")).some((line) => line.includes("no guestVisitorName"))).toBe(true);
   });
 });
 
