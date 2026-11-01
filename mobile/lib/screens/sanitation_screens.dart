@@ -2067,6 +2067,14 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             ),
             const SizedBox(height: 8),
             ListTile(
+              leading: const Icon(Icons.person_outline, color: AppColors.deepGreen),
+              title: const Text('Profile'),
+              onTap: () {
+                Navigator.of(context).pop();
+                setState(() => _index = 4);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.fact_check_outlined, color: AppColors.deepGreen),
               title: const Text('New Establishment Inspection', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -2142,6 +2150,12 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         onOpenComplaints: _openComplaints,
         onOpenNotifications: _openNotifications,
         onOpenEstablishments: () => _filterEstablishments(),
+        onOpenProfile: () => setState(() => _index = 4),
+        onOpenDueInspections: _openDueInspections,
+        onOpenPendingComplaints: () => _openComplaints(pendingOnly: true),
+        onOpenHouseholdsThisMonth: _openHouseholdsThisMonth,
+        onOpenViolations: () => _filterEstablishments(status: 'violation'),
+        onOpenPermitFollowUp: () => _filterEstablishments(permit: 'renewal_due'),
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2220,7 +2234,69 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     );
   }
 
-  Future<void> _openComplaints() async {
+  Future<void> _openDashboardList(
+    String title,
+    Widget Function(Future<void> Function() refresh) buildList,
+  ) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
+      StatefulBuilder(builder: (routeContext, update) {
+        Future<void> refresh() async {
+          final pending = _refreshBootstrap();
+          update(() {});
+          await pending;
+          if (routeContext.mounted) update(() {});
+        }
+        return Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: _dashboard.data == null
+            ? Center(child: Text(_dashboard.status == SanitationDashboardStatus.loading
+                ? 'Loading records...' : 'Records unavailable. Return to Home and refresh to retry.'))
+            : buildList(refresh),
+        );
+      }),
+    ));
+  }
+
+  Future<void> _openDueInspections() => _openDashboardList(
+    'Due for inspection',
+    (refresh) {
+      final ids = _dashboard.data!.dueInspections.map((item) => item.establishmentId).toSet();
+      return SanitationEstablishmentsPage(
+        establishments: _bootstrap.establishments.where((item) => ids.contains(item.id)).toList(),
+        onOpenInspection: _openInspection,
+        onRefresh: refresh,
+        refreshing: _refreshing,
+      );
+    },
+  );
+
+  Future<void> _openHouseholdsThisMonth() => _openDashboardList(
+    'Households this month',
+    (refresh) {
+      final now = DateTime.now();
+      final latest = <String, HouseholdSanitationItem>{};
+      for (final item in _bootstrap.householdRecords) {
+        final date = sanitationDashboardDate(item.surveyDate);
+        if (date == null) continue;
+        final key = '${item.surveyValues?['id'] ?? item.householdCode}';
+        final previous = latest[key];
+        if (previous == null || date.isAfter(sanitationDashboardDate(previous.surveyDate)!)) {
+          latest[key] = item;
+        }
+      }
+      return SanitationHouseholdsPage(
+        householdRecords: latest.values.where((item) {
+          final date = sanitationDashboardDate(item.surveyDate)!;
+          return date.year == now.year && date.month == now.month;
+        }).toList(),
+        onOpenHouseholdSurvey: () => _openHouseholdSurvey(),
+        onRefresh: refresh,
+        refreshing: _refreshing,
+      );
+    },
+  );
+
+  Future<void> _openComplaints({bool pendingOnly = false}) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => StatefulBuilder(
@@ -2237,13 +2313,20 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             }
 
             return Scaffold(
-              appBar: AppBar(title: const Text('Complaints')),
+              appBar: AppBar(title: Text(pendingOnly ? 'Pending complaints' : 'Complaints')),
               body: RefreshIndicator(
                 onRefresh: () => runAndRefresh(_refreshBootstrap),
-                child: SanitationReportsPage(
+                child: pendingOnly && _dashboard.data == null
+                  ? ListView(children: [Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_dashboard.status == SanitationDashboardStatus.loading
+                        ? 'Loading pending complaints...' : 'Pending complaints unavailable. Refresh to retry.'),
+                    )])
+                  : SanitationReportsPage(
+                  complaintsOnly: pendingOnly,
                   reports: _reports,
                   drafts: _drafts,
-                  complaints: _bootstrap.complaints,
+                  complaints: pendingOnly ? (_dashboard.data?.newComplaints ?? []) : _bootstrap.complaints,
                   householdRecords: _bootstrap.householdRecords,
                   onOpenReport: () => runAndRefresh(_openReport),
                   onEditDraft: (draft) => runAndRefresh(() => _editReportDraft(draft)),
@@ -2453,6 +2536,12 @@ class SanitationDashboardPage extends StatelessWidget {
     required this.onOpenComplaints,
     required this.onOpenNotifications,
     required this.onOpenEstablishments,
+    this.onOpenDueInspections,
+    this.onOpenPendingComplaints,
+    this.onOpenHouseholdsThisMonth,
+    this.onOpenProfile,
+    this.onOpenViolations,
+    this.onOpenPermitFollowUp,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -2465,31 +2554,46 @@ class SanitationDashboardPage extends StatelessWidget {
   final VoidCallback onOpenComplaints;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenEstablishments;
+  final VoidCallback? onOpenDueInspections;
+  final VoidCallback? onOpenPendingComplaints;
+  final VoidCallback? onOpenHouseholdsThisMonth;
+  final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenViolations;
+  final VoidCallback? onOpenPermitFollowUp;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
-  Widget _card(Widget child, {Key? key}) => Container(
+  Widget _card(Widget child, {Key? key}) => Material(
     key: key,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: _sanitationHomeBorder),
+    color: Colors.white,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: _sanitationHomeBorder),
       borderRadius: BorderRadius.circular(18),
     ),
-    child: child,
+    clipBehavior: Clip.antiAlias,
+    child: Padding(padding: const EdgeInsets.all(16), child: child),
   );
 
-  Widget _stat(String label, int? value, IconData icon, {VoidCallback? onTap}) {
+  Widget _stat(BuildContext context, String label, int? value, IconData icon, {VoidCallback? onTap}) {
     final text = switch (dashboard.status) {
       SanitationDashboardStatus.loading => 'Loading',
       SanitationDashboardStatus.unavailable => 'Unavailable',
       SanitationDashboardStatus.loaded => '$value',
     };
-    return _card(
-      InkWell(
+    return Material(
+      key: ValueKey('dashboard-stat-$label'),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: _sanitationHomeBorder),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: onTap,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, color: _sanitationHomePrimary),
           const SizedBox(height: 10),
           // Fixed slots keep every metric aligned, including loading/error states.
@@ -2506,14 +2610,14 @@ class SanitationDashboardPage extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           SizedBox(
-            height: 40,
+            height: 40 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
             width: double.infinity,
-            child: Text(label, maxLines: 2, style: const TextStyle(
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(
               color: _sanitationHomeDark, fontSize: 14, height: 1.4)),
           ),
         ]),
+        ),
       ),
-      key: ValueKey('dashboard-stat-$label'),
     );
   }
 
@@ -2545,6 +2649,10 @@ class SanitationDashboardPage extends StatelessWidget {
             Expanded(child: Text('Good day, ${identity.name}',
               style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800,
                 color: _sanitationHomeDark))),
+            IconButton(tooltip: 'Profile', onPressed: onOpenProfile,
+              icon: const Icon(Icons.person_outline, color: _sanitationHomePrimary)),
+          ]),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             IconButton(tooltip: 'Refresh', onPressed: refreshing ? null : onRefresh,
               icon: const Icon(Icons.refresh, color: _sanitationHomePrimary)),
             IconButton(tooltip: 'Notifications', onPressed: onOpenNotifications,
@@ -2552,20 +2660,47 @@ class SanitationDashboardPage extends StatelessWidget {
           ]),
           const SizedBox(height: 16),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _stat('Establishments', data?.establishmentsCount,
+            Expanded(child: _stat(context, 'Establishments', data?.establishmentsCount,
               Icons.apartment_outlined, onTap: onOpenEstablishments)),
             const SizedBox(width: 12),
-            Expanded(child: _stat('Due for inspection', data?.dueForInspectionCount,
-              Icons.fact_check_outlined)),
+            Expanded(child: _stat(context, 'Due for inspection', data?.dueForInspectionCount,
+              Icons.fact_check_outlined, onTap: data == null ? null : onOpenDueInspections)),
           ]),
           const SizedBox(height: 12),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _stat('New complaints', data?.newComplaintsCount,
-              Icons.flag_outlined)),
+            Expanded(child: _stat(context, 'New complaints', data?.newComplaintsCount,
+              Icons.flag_outlined, onTap: data == null ? null : onOpenPendingComplaints)),
             const SizedBox(width: 12),
-            Expanded(child: _stat('Households this month', data?.householdsThisMonthCount,
-              Icons.home_work_outlined)),
+            Expanded(child: _stat(context, 'Households this month', data?.householdsThisMonthCount,
+              Icons.home_work_outlined, onTap: data == null ? null : onOpenHouseholdsThisMonth)),
           ]),
+          _heading('Status Shortcuts'),
+          _card(Column(children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text('Due Inspections'),
+              subtitle: const Text('Due for inspection'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenDueInspections,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: const Text('Violations'),
+              subtitle: const Text('Establishments with violation status'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenViolations,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_repeat_outlined),
+              title: const Text('Permit Follow-up'),
+              subtitle: const Text('Renewal due permits'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenPermitFollowUp,
+            ),
+          ])),
           Row(children: [
             Expanded(child: _heading('New complaints from residents')),
             TextButton(onPressed: onOpenComplaints,
@@ -2723,6 +2858,7 @@ class _SanitationEstablishmentsPageState
         SanitationTopBar(
           title: 'Establishments',
           onMenuTap: widget.onOpenMenu,
+          showMenu: widget.onOpenMenu != null,
           onRefresh: widget.onRefresh,
           refreshing: widget.refreshing,
         ),
@@ -2775,8 +2911,10 @@ class _SanitationEstablishmentsPageState
               item == 'All Permits' ? item : permitStatusLabel(item),
           onChanged: (item) => setState(() => _permit = item),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
           children: [
             Text(
               '${filtered.length} establishment(s) found',
@@ -3240,6 +3378,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
         SanitationTopBar(
           title: 'Households',
           onMenuTap: onOpenMenu,
+          showMenu: onOpenMenu != null,
           onRefresh: onRefresh,
           refreshing: refreshing,
         ),
@@ -3274,6 +3413,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
 class SanitationReportsPage extends StatelessWidget {
   const SanitationReportsPage({
     super.key,
+    this.complaintsOnly = false,
     required this.reports,
     required this.drafts,
     required this.complaints,
@@ -3288,6 +3428,7 @@ class SanitationReportsPage extends StatelessWidget {
     required this.refreshing,
   });
 
+  final bool complaintsOnly;
   final List<MobileSanitationReceipt> reports;
   final List<SanitationReportDraft> drafts;
   final List<SanitationComplaintItem> complaints;
@@ -3307,11 +3448,13 @@ class SanitationReportsPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         SanitationTopBar(
-          title: 'Community Reports',
+          title: complaintsOnly ? 'Pending complaints' : 'Community Reports',
           onMenuTap: onOpenMenu,
+          showMenu: onOpenMenu != null,
           onRefresh: onRefresh,
           refreshing: refreshing,
         ),
+        if (!complaintsOnly) ...[
         DataSourceBanner(
           icon: Icons.home_work_outlined,
           title: 'Household + community sanitation',
@@ -3350,15 +3493,16 @@ class SanitationReportsPage extends StatelessWidget {
           )
         else
           ...reports.map((item) => SanitationReceiptCard(receipt: item)),
-        SectionHeader(title: 'Violations & Alerts'),
+        ],
+        SectionHeader(title: complaintsOnly ? 'Pending complaints' : 'Violations & Alerts'),
+        if (complaintsOnly) Text('Showing ${complaints.length} loaded pending complaint(s). The server may limit this list.'),
         if (complaints.isEmpty)
           const EmptyState(
             icon: Icons.notifications_none_outlined,
             title: 'No complaint alerts loaded',
           )
         else
-          ...complaints
-              .take(20)
+          ...(complaintsOnly ? complaints : complaints.take(20))
               .map(
                 (item) => SanitationAlertCard(
                   title: item.category,
@@ -3931,8 +4075,10 @@ class SanitationTopBar extends StatelessWidget {
     this.refreshing = false,
     this.onNotifications,
     this.onMenuTap,
+    this.showMenu = true,
   });
 
+  final bool showMenu;
   final String title;
   final Future<void> Function()? onRefresh;
   final bool refreshing;
@@ -3948,14 +4094,14 @@ class SanitationTopBar extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 14),
         child: Row(
           children: [
-            IconButton(
+            if (showMenu) IconButton(
               icon: const Icon(Icons.menu, color: AppColors.deepGreen),
               onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               tooltip: 'Menu',
             ),
-            const SizedBox(width: 8),
+            if (showMenu) const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,

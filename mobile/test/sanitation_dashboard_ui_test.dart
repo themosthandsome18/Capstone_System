@@ -134,9 +134,6 @@ void main() {
       count('New complaints', '7');
       count('Households this month', '0');
       for (final label in [
-        'Inspections',
-        'Violations',
-        'Permit Follow-up',
         'Urgent Alerts',
         'Recent Activity',
         'Quick Actions',
@@ -178,6 +175,7 @@ void main() {
     tester,
   ) async {
     await pumpHome(tester, DashboardUiApi());
+    await tester.ensureVisible(find.text('See all'));
     await tester.tap(find.text('See all'));
     await tester.pumpAndSettle();
     expect(find.byType(SanitationReportsPage), findsOneWidget);
@@ -190,6 +188,7 @@ void main() {
     expect(find.text('Due Store'), findsOneWidget);
     expect(find.text('Water Refilling Station'), findsOneWidget);
     expect(find.text('Due: 9/1/2026'), findsOneWidget);
+    await tester.ensureVisible(find.text('Inspect'));
     await tester.tap(find.text('Inspect'));
     await tester.pumpAndSettle();
     final form = tester.widget<SanitationInspectionPage>(
