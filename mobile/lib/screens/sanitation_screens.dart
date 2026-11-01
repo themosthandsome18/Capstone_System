@@ -2959,6 +2959,25 @@ class _SanitationEstablishmentsPageState
   }
 }
 
+// Map-only presentation: never derive compliance from permit state or inspection dates.
+const sanitationEstablishmentMapStatuses = <String, ({String label, Color color})>{
+  'good_standing': (label: 'Good Standing', color: AppColors.green),
+  'upcoming': (label: 'Upcoming', color: AppColors.amber),
+  'for_completion': (label: 'For Completion', color: Color(0xFFEF6C00)),
+  'violation': (label: 'Violation', color: Color(0xFFF44336)),
+  'no_permit': (label: 'No Permit', color: Color(0xFF7B1FA2)),
+  'not_yet_inspected': (label: 'Not Yet Inspected', color: AppColors.muted),
+};
+
+({String label, Color color}) sanitationEstablishmentMapStatus(String status) =>
+    sanitationEstablishmentMapStatuses[status] ??
+    (label: status.isEmpty ? 'Unknown status' : status, color: AppColors.muted);
+
+bool _sanitationMapCoordinates(double latitude, double longitude) =>
+    latitude.isFinite && longitude.isFinite &&
+    latitude.abs() > 0.001 && latitude.abs() <= 90 &&
+    longitude.abs() > 0.001 && longitude.abs() <= 180;
+
 class SanitationMapPage extends StatefulWidget {
   const SanitationMapPage({
     super.key,
@@ -3031,6 +3050,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
   Future<void> _loadGeoJson() async {
     try {
       final jsonString = await rootBundle.loadString('assets/mauban_barangays.json');
+      if (!mounted) return;
       final data = jsonDecode(jsonString);
       final features = data['features'] as List;
       
@@ -3074,6 +3094,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
         _isLoadingGeoJson = false;
       });
     } catch (e) {
+      if (!mounted) return;
       debugPrint("Error loading GeoJSON: $e");
       setState(() => _isLoadingGeoJson = false);
     }
@@ -3110,11 +3131,13 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
 
   @override
   Widget build(BuildContext context) {
+    bool matchesBarangay(String name) => _selectedBarangay == null ||
+        _normalizeBgyName(name) == _normalizeBgyName(_selectedBarangay);
     final establishmentPins = widget.establishments
-        .where((item) => item.hasCoordinates)
+        .where((item) => _sanitationMapCoordinates(item.latitude, item.longitude) && matchesBarangay(item.barangay))
         .toList();
     final householdPins = widget.householdRecords
-        .where((item) => item.hasCoordinates)
+        .where((item) => _sanitationMapCoordinates(item.latitude, item.longitude) && matchesBarangay(item.barangay))
         .toList();
     final pinCount = _showHouseholds
         ? householdPins.length
@@ -3175,7 +3198,19 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           ],
           selected: {_showHouseholds},
           onSelectionChanged: (value) =>
-              setState(() => _showHouseholds = value.first),
+              setState(() {
+                _showHouseholds = value.first;
+                _selectedBarangay = null;
+              }),
+        ),
+        if (_selectedBarangay != null) Align(
+          alignment: Alignment.centerLeft,
+          child: InputChip(
+            label: Text('Barangay: $_selectedBarangay'),
+            onSelected: (_) => setState(() => _selectedBarangay = null),
+            onDeleted: () => setState(() => _selectedBarangay = null),
+            deleteButtonTooltipMessage: 'Clear barangay filter',
+          ),
         ),
         const SizedBox(height: 12),
         DataSourceBanner(
@@ -3183,7 +3218,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           title: '$pinCount mapped records',
           text: _showHouseholds
               ? 'Household survey coordinates are displayed separately from establishments.'
-              : 'Establishment inspection records are displayed separately from household surveys.',
+              : 'Establishment compliance statuses use valid stored coordinates only.',
           warning: pinCount == 0,
         ),
         const SizedBox(height: 12),
@@ -3240,9 +3275,11 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                               ),
                               width: 42,
                               height: 42,
-                              child: MapPin(
-                                color: sanitationStatusColor(
-                                  item.complianceStatus,
+                              child: Tooltip(
+                                message: '${item.businessName} · ${sanitationEstablishmentMapStatus(item.complianceStatus).label} · ${item.barangay}',
+                                child: MapPin(
+                                  key: ValueKey('establishment-map-pin-${item.id}'),
+                                  color: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                                 ),
                               ),
                             ),
@@ -3278,19 +3315,15 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                 spacing: 16,
                 runSpacing: 6,
                 children: [
-                  _buildLegendItem(AppColors.green, 'Good Standing'),
-                  _buildLegendItem(
-                    const Color(0xffd59b00),
-                    _showHouseholds
-                        ? 'For Compliance'
-                        : 'Upcoming / For Completion',
-                  ),
-                  _buildLegendItem(
-                    AppColors.red,
-                    _showHouseholds
-                        ? 'Needs Assistance'
-                        : 'Violation / No Permit',
-                  ),
+                  if (_showHouseholds) ...[
+                    for (final status in ['good_standing', 'for_completion', 'violation'])
+                      _buildLegendItem(sanitationStatusColor(status), householdStatusLabel(status)),
+                  ] else ...[
+                    for (final entry in sanitationEstablishmentMapStatuses.entries)
+                      _buildLegendItem(entry.value.color, entry.value.label, key: ValueKey('establishment-map-legend-${entry.key}')),
+                    if (establishmentPins.any((item) => !sanitationEstablishmentMapStatuses.containsKey(item.complianceStatus)))
+                      _buildLegendItem(AppColors.muted, 'Other / Unknown'),
+                  ],
                 ],
               ),
             ],
@@ -3302,8 +3335,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
               : 'Mapped Establishments',
         ),
         if (_showHouseholds)
-          ...widget.householdRecords
-              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
+          ...householdPins
               .take(20)
               .map(
                 (item) => GestureDetector(
@@ -3313,27 +3345,29 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                     title: item.householdHead,
                     subtitle: '${item.householdCode} - ${item.barangay}',
                     trailing: householdStatusLabel(item.status),
+                    statusColor: sanitationStatusColor(item.status),
                   ),
                 ),
               )
         else
-          ...widget.establishments
-              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
+          ...establishmentPins
               .take(20)
               .map(
                 (item) => SimpleInfoCard(
                   icon: Icons.apartment_outlined,
                   title: item.businessName,
                   subtitle: '${item.businessTypeName} - ${item.barangay}',
-                  trailing: item.statusLabel,
+                  trailing: sanitationEstablishmentMapStatus(item.complianceStatus).label,
+                  statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
               ),
       ],
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(Color color, String label, {Key? key}) {
     return Row(
+      key: key,
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
@@ -3345,10 +3379,10 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
+        Flexible(child: Text(
           label,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
+        )),
       ],
     );
   }
@@ -4365,12 +4399,14 @@ class SimpleInfoCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.trailing,
+    this.statusColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String trailing;
+  final Color? statusColor;
 
   @override
   Widget build(BuildContext context) {
@@ -4379,10 +4415,24 @@ class SimpleInfoCard extends StatelessWidget {
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: Icon(icon, color: AppColors.green),
+        leading: Icon(icon, color: statusColor ?? AppColors.green),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle),
-        trailing: StatusPill(text: trailing),
+        subtitle: statusColor == null ? Text(subtitle) : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(subtitle),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor!.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(trailing, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        trailing: statusColor == null ? StatusPill(text: trailing) : null,
       ),
     );
   }
