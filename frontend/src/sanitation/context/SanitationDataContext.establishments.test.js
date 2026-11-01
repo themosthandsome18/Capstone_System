@@ -11,7 +11,7 @@ function Probe() {
 beforeEach(() => {
   jest.resetAllMocks();
   api.fetchSanitationBootstrap.mockResolvedValue({ establishments: [{ id: 1, business_name: "Synthetic" }] });
-  api.fetchHouseholdBootstrap.mockResolvedValue({});
+  api.fetchHouseholdBootstrap.mockResolvedValue({ barangays: [], householdRecords: [], householdDashboardData: {} });
   api.fetchSanitationReports.mockResolvedValue({});
 });
 test.each(["create", "update"])("%s stays local throughout mutation and bootstrap refresh", async (operation) => {
@@ -134,18 +134,17 @@ test.each([false, true])("background refresh failure=%s cannot clear a concurren
   expect(context.householdRecords).toEqual([{ id: 4 }]);
 });
 
-test("deferred household failure retains the existing warning-only contract without changing core readiness", async () => {
-  const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+test("deferred household failure is explicit without changing core readiness", async () => {
   api.fetchHouseholdBootstrap.mockRejectedValueOnce(new Error("Households offline"));
-  try {
-    render(<SanitationDataProvider><Probe /></SanitationDataProvider>);
-    await waitFor(() => expect(context.loading).toBe(false));
-    expect(context.error).toBe("");
-    expect(context.householdRecords).toEqual([]);
-    expect(context.householdDashboardData).toBeNull();
-    expect(context.establishments).toHaveLength(1);
-    expect(warning).toHaveBeenCalledWith("Deferred household bootstrap warning:", expect.any(Error));
-  } finally { warning.mockRestore(); }
+  render(<SanitationDataProvider><Probe /></SanitationDataProvider>);
+  await waitFor(() => expect(context.loading).toBe(false));
+  expect(context.error).toBe("");
+  expect(context.householdStatus).toBe("error");
+  expect(context.householdReady).toBe(false);
+  expect(context.householdError).toBe("Households offline");
+  expect(context.householdRecords).toEqual([]);
+  expect(context.householdDashboardData).toBeNull();
+  expect(context.establishments).toHaveLength(1);
 });
 
 test("optional analytics prefetch failure does not convert a successful bootstrap into a connection error", async () => {
