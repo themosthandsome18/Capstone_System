@@ -1261,7 +1261,8 @@ def mobile_sanitation_inspection_submit(request):
     ensure_initial_sanitation_data()
 
     data = copy_request_fields(request)
-    data["inspector_name"] = data.get("inspector_name") or data.get("inspector") or ""
+    # Attribution belongs to the authenticated account, never a client-supplied name.
+    data["inspector_name"] = request.user.get_full_name().strip() or request.user.username
     data["inspection_date"] = (
         data.get("inspection_date") or timezone.localdate().isoformat()
     )
