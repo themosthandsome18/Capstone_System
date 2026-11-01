@@ -262,7 +262,9 @@ def sanitation_inspection_list(request):
         ).prefetch_related("checklist_items")
         return Response(SanitaryInspectionSerializer(inspections, many=True).data)
 
-    serializer = SanitaryInspectionCreateSerializer(data=request.data)
+    data = request.data.copy()
+    data["inspector_name"] = staff_display_name(request.user)
+    serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
     apply_default_next_due_date(inspection)
@@ -309,6 +311,8 @@ def sanitation_inspection_detail(request, inspection_id):
         data=request.data,
         partial=request.method == "PATCH",
     )
+    # Ordinary edits retain the original author, including legacy stored names.
+    serializer.fields["inspector_name"].read_only = True
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
     apply_default_next_due_date(inspection)
