@@ -1238,9 +1238,12 @@ def advance_renewal_stage(renewal):
 
     renewal.progress = RENEWAL_STAGE_PROGRESS.get(renewal.stage, renewal.progress)
     if renewal.stage == RENEWAL_STAGE_RELEASED:
-        renewal.payment_status = RENEWAL_PAYMENT_PAID
         renewal.released_at = timezone.localdate()
-    renewal.save()
+    fields = ["stage", "progress", "updated_at"]
+    if renewal.stage == RENEWAL_STAGE_RELEASED:
+        fields.append("released_at")
+    renewal.save(update_fields=fields)
+    renewal.refresh_from_db(fields=["payment_status", "renewal_fee"])
 
     if renewal.stage == RENEWAL_STAGE_RELEASED:
         sync_establishment_after_renewal_release(renewal)
@@ -1286,7 +1289,8 @@ def resolve_overdue_renewal(renewal):
         (renewal.remarks or "").strip()
         + f"\n[Overdue Cleared & Validity Extended to {renewal.expiration_date} on {today}]"
     ).strip()
-    renewal.save()
+    renewal.save(update_fields=["expiration_date", "stage", "progress", "remarks", "updated_at"])
+    renewal.refresh_from_db(fields=["payment_status", "renewal_fee"])
 
     establishment = renewal.establishment
     establishment.permit_expiry_date = renewal.expiration_date
@@ -1305,10 +1309,13 @@ def sync_renewal_progress(renewal):
     renewal.progress = RENEWAL_STAGE_PROGRESS.get(renewal.stage, renewal.progress)
 
     if renewal.stage == RENEWAL_STAGE_RELEASED:
-        renewal.payment_status = RENEWAL_PAYMENT_PAID
         renewal.released_at = renewal.released_at or timezone.localdate()
 
-    renewal.save()
+    fields = ["stage", "progress", "updated_at"]
+    if renewal.stage == RENEWAL_STAGE_RELEASED:
+        fields.append("released_at")
+    renewal.save(update_fields=fields)
+    renewal.refresh_from_db(fields=["payment_status", "renewal_fee"])
 
     if renewal.stage == RENEWAL_STAGE_RELEASED:
         sync_establishment_after_renewal_release(renewal)

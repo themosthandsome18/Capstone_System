@@ -127,7 +127,7 @@ class SuspensionProtectionTests(IssuanceFixture, TestCase):
                 self.assertEqual(self.record.permit_expiry_date.year, 2027)
                 if "stage" in payload or payload.get("action") in ("mark_released", "advance_stage"):
                     self.assertEqual(renewal.stage, "released")
-                    self.assertEqual(renewal.payment_status, "paid")
+                    self.assertEqual(renewal.payment_status, "unpaid")
                     self.assertIsNotNone(renewal.released_at)
 
     def test_general_put_patch_explicit_errors_and_unrelated_edits(self):
