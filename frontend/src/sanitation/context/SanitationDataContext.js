@@ -54,8 +54,8 @@ export function SanitationDataProvider({ children }) {
   const [error, setError] = useState("");
 
   async function loadSanitationData(options = {}) {
-    const { includeHouseholds = true } = options;
-    setLoading(true);
+    const { includeHouseholds = true, background = false } = options;
+    if (!background) setLoading(true);
     setError("");
 
     try {
@@ -84,7 +84,7 @@ export function SanitationDataProvider({ children }) {
       }));
 
       // Release loading screen immediately so user can interact with the app right away
-      setLoading(false);
+      if (!background) setLoading(false);
 
       // When household data finishes in background, merge smoothly into state
       householdPromise.then((householdData) => {
@@ -99,8 +99,11 @@ export function SanitationDataProvider({ children }) {
         }
       });
     } catch (requestError) {
-      setError(requestError.message || "Unable to load sanitation data.");
-      setLoading(false);
+      const message = requestError.message || "Unable to load sanitation data.";
+      setError(background
+        ? `Establishment saved, but related data could not be refreshed. ${message}`
+        : message);
+      if (!background) setLoading(false);
     } finally {
       // Preload reportData in background so "Report & Analytics" page loads instantly
       fetchSanitationReports()
@@ -263,26 +266,28 @@ export function SanitationDataProvider({ children }) {
     return householdRecords;
   }
 
+  // Establishment forms own their pending state. A post-save refresh must not
+  // unmount the modal or activate the shell's connection/loading screens.
   async function createEstablishment(payload) {
-    setActionLoading(true);
-    try {
-      const created = await createSanitationEstablishment(payload);
-      await loadSanitationData({ includeHouseholds: false });
-      return created;
-    } finally {
-      setActionLoading(false);
-    }
+    const created = await createSanitationEstablishment(payload);
+    setState((current) => ({
+      ...current,
+      establishments: [...current.establishments, created],
+    }));
+    await loadSanitationData({ includeHouseholds: false, background: true });
+    return created;
   }
 
   async function updateEstablishment(id, payload) {
-    setActionLoading(true);
-    try {
-      const updated = await updateSanitationEstablishment(id, payload);
-      await loadSanitationData({ includeHouseholds: false });
-      return updated;
-    } finally {
-      setActionLoading(false);
-    }
+    const updated = await updateSanitationEstablishment(id, payload);
+    setState((current) => ({
+      ...current,
+      establishments: current.establishments.map((item) =>
+        item.id === id ? { ...item, ...updated } : item
+      ),
+    }));
+    await loadSanitationData({ includeHouseholds: false, background: true });
+    return updated;
   }
 
   async function deleteEstablishment(id) {

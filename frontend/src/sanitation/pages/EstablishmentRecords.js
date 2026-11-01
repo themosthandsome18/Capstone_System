@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   FiAlertTriangle,
@@ -32,6 +32,7 @@ import {
   CLIENT_BUSINESS_TYPE_CATEGORIES,
   businessTypeDisplayLabel,
 } from "../utils/businessTypeLabels";
+import "./EstablishmentRegistration.css";
 import { QRCodeSVG } from "qrcode.react";
 
 export const OFFICIAL_MAUBAN_BARANGAYS = [
@@ -364,6 +365,7 @@ function EstablishmentRecords() {
   const [selectedEstablishment, setSelectedEstablishment] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [formError, setFormError] = useState("");
   const complaintRows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const renewalRows = useMemo(() => renewalData?.rows || [], [renewalData]);
@@ -524,7 +526,8 @@ function EstablishmentRecords() {
     }
   }
 
-  function closeModal() {
+  function closeModal(force = false) {
+    if (saving && force !== true) return;
     setShowModal(false);
     setEditingEstablishment(null);
     setForm(initialForm);
@@ -663,6 +666,7 @@ function EstablishmentRecords() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (saving) return;
 
     const values = toApiValues(form);
     const validationError = validatePayload(values);
@@ -692,7 +696,8 @@ function EstablishmentRecords() {
         await createEstablishment(buildCreatePayload(values));
       }
 
-      closeModal();
+      setSaveMessage(`${values.business_name} ${editingEstablishment ? "updated" : "registered"} successfully.`);
+      closeModal(true);
     } catch (requestError) {
       setFormError(getErrorMessage(requestError));
     } finally {
@@ -756,7 +761,7 @@ function EstablishmentRecords() {
 
   if (loading) {
     return (
-      <div className="establishment-page">
+      <div className="establishment-page establishment-records-page">
         <div className="sanitation-loading">
           <div className="sanitation-spinner" />
           <p className="sanitation-loading-text">Loading establishments...</p>
@@ -766,7 +771,8 @@ function EstablishmentRecords() {
   }
 
   return (
-    <div className="establishment-page">
+    <div className="establishment-page establishment-records-page">
+      {saveMessage ? <p className="registration-success" role="status">{saveMessage}</p> : null}
       <div className="establishment-header">
         <div className="establishment-header-left">
           <button
@@ -1351,6 +1357,28 @@ function RegisterEstablishmentModal({
   onClose,
   onSubmit,
 }) {
+  const modalRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    modalRef.current?.querySelector("input")?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  function handleModalKeyDown(event) {
+    if (event.key === "Escape" && !saving) onClose();
+    if (event.key !== "Tab") return;
+    const controls = [...modalRef.current.querySelectorAll("button, input, select, textarea, a[href], [tabindex='0']")]
+      .filter((element) => !element.matches(":disabled") && element.getClientRects().length);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
   const isEditing = Boolean(editingEstablishment);
   const { groups, unmapped } = groupBusinessTypesByCategory(businessTypes);
 
@@ -1367,21 +1395,22 @@ function RegisterEstablishmentModal({
 
   return (
     <div className="establishment-modal-backdrop">
-      <form className="establishment-modal" onSubmit={onSubmit}>
-        <button type="button" className="modal-close-btn" onClick={onClose}>
+      <form ref={modalRef} onKeyDown={handleModalKeyDown} className="establishment-modal registration-form" onSubmit={onSubmit} role="dialog" aria-modal="true" aria-labelledby="registration-title" aria-describedby="registration-intro" aria-busy={saving}>
+        <button type="button" className="modal-close-btn" onClick={onClose} disabled={saving} aria-label="Close establishment form">
           <FiX />
         </button>
 
-        <h2>{isEditing ? "Edit Establishment" : "Register New Establishment"}</h2>
+        <h2 id="registration-title">{isEditing ? "Edit Establishment" : "Register New Establishment"}</h2>
 
+        <p id="registration-intro" className="establishment-form-hint">Complete the details below, add any supporting information, then review before saving. Business name, owner, business type, barangay and complete address are required.</p>
+        <fieldset className="registration-fields" disabled={saving}>
         <section className="establishment-form-section">
-          <h3>Establishment Profile</h3>
+          <h3><span className="registration-step">1</span> Establishment Details</h3>
 
           <label className="modal-field full">
             <span>Business Name</span>
             <input
               type="text"
-              placeholder="e.g. Cagbalete Bay Resort & Restaurant"
               value={form.business_name}
               onChange={(event) =>
                 onChange("business_name", toTitleCase(event.target.value))
@@ -1394,7 +1423,6 @@ function RegisterEstablishmentModal({
               <span>Owner / Proprietor</span>
               <input
                 type="text"
-                placeholder="e.g. Juan C. Dela Cruz"
                 value={form.owner_name}
                 onChange={(event) =>
                   onChange("owner_name", toTitleCase(event.target.value))
@@ -1464,7 +1492,6 @@ function RegisterEstablishmentModal({
             <span>Complete Address</span>
             <input
               type="text"
-              placeholder="e.g. Gomez St., Brgy. Daungan, Mauban, Quezon"
               value={form.address}
               onChange={(event) =>
                 onChange("address", toTitleCase(event.target.value))
@@ -1486,7 +1513,8 @@ function RegisterEstablishmentModal({
         </section>
 
         <section className="establishment-form-section">
-          <h3>Location / Reference</h3>
+          <h3><span className="registration-step">2</span> Additional Information</h3>
+          <p className="establishment-form-hint">Location / Reference</p>
           <LocationPicker
             label="Establishment Map Pin"
             latitude={form.latitude}
@@ -1696,7 +1724,6 @@ function RegisterEstablishmentModal({
               <span>Sanitary Permit Number</span>
               <input
                 type="text"
-                placeholder="e.g. SP-2026-001"
                 value={form.permit_number}
                 onChange={(event) => onChange("permit_number", event.target.value)}
               />
@@ -1736,7 +1763,21 @@ function RegisterEstablishmentModal({
           </section>
         )}
 
-        {formError ? <p className="sanitation-error-text">{formError}</p> : null}
+        <section className="establishment-form-section registration-review" aria-label="Review & Save">
+          <h3><span className="registration-step">3</span> Review &amp; Save</h3>
+          <dl>
+            <div><dt>Establishment</dt><dd>{form.business_name || "Not entered"}</dd></div>
+            <div><dt>Proprietor</dt><dd>{form.owner_name || "Not entered"}</dd></div>
+            <div><dt>Type</dt><dd>{businessTypes.find((type) => String(type.id) === String(form.business_type))?.name || "Not selected"}</dd></div>
+            <div><dt>Location</dt><dd>{[form.barangay, form.address].filter(Boolean).join(" / ") || "Not entered"}</dd></div>
+            <div><dt>Contact</dt><dd>{form.contact_number || "Not recorded"}</dd></div>
+            <div><dt>Permit</dt><dd>{form.permit_number || "No permit recorded"}</dd></div>
+          </dl>
+          <p className="establishment-form-hint">Check the information above. You can change any field before saving.</p>
+        </section>
+        </fieldset>
+        {saving ? <p role="status" className="registration-saving">Saving establishment. Please wait...</p> : null}
+        {formError ? <p role="alert" className="sanitation-error-text">{formError}</p> : null}
 
         <div className="modal-actions">
           <button
