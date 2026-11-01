@@ -90,6 +90,10 @@ const establishmentStatusFilters = [
   { value: "no_permit", label: "No Permit" },
 ];
 
+function formatEstablishmentStatus(status) {
+  return establishmentStatusFilters.slice(1).find((entry) => entry.value === status)?.label || "Unknown status";
+}
+
 const householdStatusFilters = [
   { value: "all", label: "All Households" },
   { value: "not_yet_inspected", label: "Not Yet Inspected" },
@@ -126,7 +130,7 @@ function getCategoryMeta(category) {
 }
 
 function parseCoordinate(value) {
-  if (value === null || value === undefined || value === "") return null;
+  if (value === null || value === undefined || typeof value === "boolean" || String(value).trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -157,7 +161,7 @@ function getMapPosition(item, allowFallback = true) {
     }
   }
 
-  // Households without usable stored coordinates remain unmapped.
+  // Establishments and households without usable stored coordinates remain unmapped.
   if (!allowFallback) return null;
 
   // Fallback: derive realistic coordinates from barangay center
@@ -300,7 +304,7 @@ function SanitaryGISMap() {
 
     return source.map((item) => ({
       ...item,
-      position: getMapPosition(item, !isHouseholdMode),
+      position: getMapPosition(item, isCommunityMode),
     }));
   }, [establishments, householdRecords, complaintData, isHouseholdMode, isCommunityMode]);
 
@@ -362,9 +366,9 @@ function SanitaryGISMap() {
 
   const tileLayer = tileLayers[mapLayer] || tileLayers.street;
 
+  const visibleListItems = isHouseholdMode || isCommunityMode ? filteredItems : sortedItems;
   const selectedItem =
-    filteredItems.find((item) => item.id === selectedItemId) ||
-    filteredItems[0];
+    visibleListItems.find((item) => item.id === selectedItemId) || visibleListItems[0];
 
   function handleModeChange(nextMode) {
     setMapMode(nextMode);
@@ -390,11 +394,15 @@ function SanitaryGISMap() {
       });
     }
 
-    sourceItems.forEach((item) => {
+    const aggregateItems = isHouseholdMode || isCommunityMode ? sourceItems : filteredSourceItems;
+    aggregateItems.forEach((item) => {
       const bgy = normalizeBgy(item.barangay);
       if (!aggregates[bgy]) aggregates[bgy] = { total: 0, high: 0, medium: 0, low: 0 };
 
       aggregates[bgy].total += 1;
+      const status = item.compliance_status;
+      aggregates[bgy].statuses ||= {};
+      aggregates[bgy].statuses[status] = (aggregates[bgy].statuses[status] || 0) + 1;
 
       let risk = "low";
       if (isHouseholdMode) {
@@ -417,7 +425,7 @@ function SanitaryGISMap() {
     });
 
     return aggregates;
-  }, [sourceItems, isHouseholdMode, isCommunityMode]);
+  }, [filteredSourceItems, sourceItems, isHouseholdMode, isCommunityMode]);
 
   // GeoJSON boundary styles: prominent line and subtle tint when selected
   const geoJsonStyle = (feature) => {
@@ -478,7 +486,7 @@ function SanitaryGISMap() {
         } else if (isCommunityMode) {
           tooltipContent += `Pending: ${agg.high} • In Review: ${agg.medium}`;
         } else {
-          tooltipContent += `Good Standing: ${agg.low} • Violations: ${agg.high}`;
+          tooltipContent += establishmentStatusFilters.slice(1).map(({ value, label }) => `${label}: ${agg.statuses?.[value] || 0}`).join(" • ");
         }
       } else {
         tooltipContent += `Click to isolate Brgy. ${bgyName}`;
@@ -526,14 +534,22 @@ function SanitaryGISMap() {
               ? `${item.complaint_id} • Brgy. ${item.barangay}`
               : `${item.business_type_name || "Establishment"} • Brgy. ${item.barangay}`}
           </small>
+          {!isHouseholdMode && !isCommunityMode ? (
+            <small>
+              {formatEstablishmentStatus(item.compliance_status)}
+              {!item.position ? " • Missing or unusable coordinates — not mapped" : ""}
+            </small>
+          ) : null}
         </div>
       </button>
     );
   };
 
   if (loading) {
-    return <div className="sanitary-gis-page">Loading Sanitary GIS map...</div>;
+    return <div className="sanitary-gis-page" role="status">Loading Sanitary GIS map...</div>;
   }
+
+  if (error) return <div className="sanitary-gis-page" role="alert">Unable to load Sanitary GIS map: {error}</div>;
 
   return (
     <div className="sanitary-gis-page">
@@ -544,8 +560,6 @@ function SanitaryGISMap() {
           community concerns across Mauban
         </p>
       </div>
-
-      {error ? <p className="sanitation-error-text">{error}</p> : null}
 
       <div className="gis-mode-toggle">
         <button
@@ -575,9 +589,10 @@ function SanitaryGISMap() {
 
       <div className="gis-toolbar">
         <div className="gis-left-controls">
-          <label>Status:</label>
+          <label htmlFor="gis-status">Status:</label>
 
           <select
+            id="gis-status"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
@@ -593,9 +608,10 @@ function SanitaryGISMap() {
             ))}
           </select>
 
-          <label>Barangay:</label>
+          <label htmlFor="gis-barangay">Barangay:</label>
 
           <select
+            id="gis-barangay"
             value={barangayFilter}
             onChange={(event) => setBarangayFilter(event.target.value)}
           >
@@ -611,7 +627,7 @@ function SanitaryGISMap() {
           <button
             type="button"
             className="gis-reset-btn"
-            title="Reset map view to whole Mauban center"
+            title="Reset filters and map view"
             onClick={handleResetView}
           >
             <FiRefreshCw style={{ marginRight: "4px" }} /> Reset View
@@ -662,21 +678,10 @@ function SanitaryGISMap() {
             </>
           ) : (
             <>
-              <span>
-                <i style={{ background: "#16a34a" }} /> Good Standing
-              </span>
-              <span>
-                <i style={{ background: "#f59e0b" }} /> Upcoming
-              </span>
-              <span>
-                <i style={{ background: "#ea580c" }} /> For Completion
-              </span>
-              <span>
-                <i style={{ background: "#dc2626" }} /> Violation
-              </span>
-              <span>
-                <i style={{ background: "#991b1b" }} /> No Permit
-              </span>
+              {establishmentStatusFilters.slice(1).map(({ value, label }) => (
+                <span key={value}><i style={{ background: getPinColor({ compliance_status: value }, "establishments") }} />{label}</span>
+              ))}
+              <span><i style={{ background: "#0f766e" }} />Unknown status</span>
             </>
           )}
         </div>
@@ -727,34 +732,14 @@ function SanitaryGISMap() {
           </>
         ) : (
           <>
-            <MapSummaryCard label="Total Establishments" value={filteredItems.length} color="#3b82f6" />
-            <MapSummaryCard
-              label="Good Standing"
-              value={filteredItems.filter((i) => i.compliance_status === "good_standing").length}
-              color="#16a34a"
-            />
-            <MapSummaryCard
-              label="Upcoming / Renewal"
-              value={
-                filteredItems.filter(
-                  (i) =>
-                    i.compliance_status === "upcoming" ||
-                    i.compliance_status === "for_completion"
-                ).length
-              }
-              color="#f59e0b"
-            />
-            <MapSummaryCard
-              label="Violations / No Permit"
-              value={
-                filteredItems.filter(
-                  (i) =>
-                    i.compliance_status === "violation" ||
-                    i.compliance_status === "no_permit"
-                ).length
-              }
-              color="#dc2626"
-            />
+            <MapSummaryCard label="Total Establishments" value={sortedItems.length} color="#3b82f6" />
+            <MapSummaryCard label="Mapped" value={filteredItems.length} />
+            <MapSummaryCard label="Missing or unusable coordinates" value={sortedItems.length - filteredItems.length} />
+            {establishmentStatusFilters.slice(1).map(({ value, label }) => (
+              <MapSummaryCard key={value} label={label} value={sortedItems.filter((i) => i.compliance_status === value).length}
+                color={getPinColor({ compliance_status: value }, "establishments")} />
+            ))}
+            <MapSummaryCard label="Unknown status" value={sortedItems.filter((i) => !establishmentStatusFilters.slice(1).some((s) => s.value === i.compliance_status)).length} color="#0f766e" />
           </>
         )}
       </div>
@@ -778,7 +763,7 @@ function SanitaryGISMap() {
 
             {/* GeoJSON Boundary Layer across all modes */}
             <GeoJSON
-              key={`geojson-${mapMode}-${barangayFilter}-${statusFilter}`}
+              key={`geojson-${mapMode}-${barangayFilter}-${statusFilter}-${JSON.stringify(barangayAggregates)}`}
               data={maubanBarangaysGeoJSON}
               style={geoJsonStyle}
               onEachFeature={onEachFeature}
@@ -794,6 +779,7 @@ function SanitaryGISMap() {
               return (
                 <Marker
                   key={`${mapMode}-marker-${item.id}`}
+                  title={`${item.business_name || item.household_head || item.complaint_id}: ${isHouseholdMode ? formatHouseholdStatus(item.status) : isCommunityMode ? formatReportStatus(item.status) : formatEstablishmentStatus(item.compliance_status)}`}
                   position={item.position}
                   icon={pinIcon}
                   eventHandlers={{
@@ -882,10 +868,10 @@ function SanitaryGISMap() {
                         <div className="gis-popup-header">
                           <span
                             className={`status-pill ${statusClass(
-                              item.compliance_status_label || item.compliance_status
+                              formatEstablishmentStatus(item.compliance_status)
                             )}`}
                           >
-                            {item.compliance_status_label || item.compliance_status}
+                            {formatEstablishmentStatus(item.compliance_status)}
                           </span>
                           <span className="gis-popup-code">
                             {item.permit_number || "NO PERMIT"}
@@ -920,9 +906,9 @@ function SanitaryGISMap() {
           </MapContainer>
 
           {!filteredItems.length ? (
-            <div className="gis-map-empty-overlay">
+            <div className="gis-map-empty-overlay" role="status">
               <FiMapPin style={{ marginRight: "6px" }} />
-              No records match the current status and barangay filters.
+              {sortedItems.length ? "Matching records have missing or unusable coordinates; no markers can be shown." : "No records match the current status and barangay filters."}
             </div>
           ) : null}
 
@@ -974,21 +960,21 @@ function SanitaryGISMap() {
                     ? formatHouseholdStatus(selectedItem.status)
                     : isCommunityMode
                     ? formatReportStatus(selectedItem.status)
-                    : selectedItem.compliance_status_label || selectedItem.compliance_status
+                    : formatEstablishmentStatus(selectedItem.compliance_status)
                 )}`}
               >
                 {isHouseholdMode
                   ? formatHouseholdStatus(selectedItem.status)
                   : isCommunityMode
                   ? formatReportStatus(selectedItem.status)
-                  : selectedItem.compliance_status_label || selectedItem.compliance_status}
+                  : formatEstablishmentStatus(selectedItem.compliance_status)}
               </span>
             </div>
           ) : null}
 
           <div className="gis-list">
-            {filteredItems.length ? (
-              filteredItems.map(renderGisItem)
+            {visibleListItems.length ? (
+              visibleListItems.map(renderGisItem)
             ) : (
               <p className="gis-empty">
                 No records found matching the active filters.
@@ -1014,11 +1000,6 @@ function FitMapToItems({ items, selectedItemId, barangayFilter, resetKey }) {
   const map = useMap();
 
   useEffect(() => {
-    if (resetKey > 0) {
-      map.flyTo(maubanCenter, 13.5, { duration: 0.6 });
-      return;
-    }
-
     if (selectedItemId) {
       const selected = items.find((i) => i.id === selectedItemId);
       if (selected && selected.position) {
