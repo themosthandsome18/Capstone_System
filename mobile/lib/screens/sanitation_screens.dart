@@ -2971,7 +2971,7 @@ const sanitationEstablishmentMapStatuses = <String, ({String label, Color color}
 
 ({String label, Color color}) sanitationEstablishmentMapStatus(String status) =>
     sanitationEstablishmentMapStatuses[status] ??
-    (label: status.isEmpty ? 'Unknown status' : status, color: AppColors.muted);
+    (label: status.trim().isEmpty ? 'Status unavailable' : status, color: AppColors.muted);
 
 bool _sanitationMapCoordinates(double latitude, double longitude) =>
     latitude.isFinite && longitude.isFinite &&
@@ -4177,8 +4177,9 @@ class SanitationEstablishmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = sanitationStatusColor(establishment.complianceStatus);
-    final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
+    final presentation = sanitationEstablishmentMapStatus(establishment.complianceStatus);
+    final statusColor = presentation.color;
+    final statusLabel = presentation.label;
     final isViolation = establishment.complianceStatus == 'violation';
     final isForCompletion = establishment.complianceStatus == 'for_completion';
 

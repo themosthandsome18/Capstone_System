@@ -154,7 +154,7 @@ void main() {
         .setMockMessageHandler('flutter/assets', null);
   });
   test(
-    'omitted or null compliance status loses provenance in the existing shared decoder',
+    'omitted and null compliance remain unavailable instead of becoming Upcoming',
     () {
       final base = <String, dynamic>{
         'id': 1,
@@ -171,15 +171,17 @@ void main() {
         ...base,
         'compliance_status': 'upcoming',
       });
-      // Dependency outside this screen-only batch: retaining missing-status
-      // provenance requires a shared decoder/API contract change. The map must
-      // not guess a different status from permit values or display labels.
-      expect(omitted.toJson(), explicit.toJson());
-      expect(nullStatus.toJson(), explicit.toJson());
-      expect(omitted.complianceStatus, 'upcoming');
+      expect(omitted.complianceStatus, isEmpty);
+      expect(nullStatus.complianceStatus, isEmpty);
+      expect(omitted.toJson().containsKey('compliance_status'), isFalse);
+      expect(explicit.complianceStatus, 'upcoming');
+      expect(sanitationEstablishmentMapStatus(omitted.complianceStatus), (
+        label: 'Status unavailable',
+        color: AppColors.muted,
+      ));
       expect(
-        sanitationEstablishmentMapStatus(omitted.complianceStatus),
-        sanitationEstablishmentMapStatus(explicit.complianceStatus),
+        sanitationEstablishmentMapStatus(explicit.complianceStatus).label,
+        'Upcoming',
       );
     },
   );
@@ -192,7 +194,7 @@ void main() {
         'compliance_status': 'future_status',
       });
       expect(sanitationEstablishmentMapStatus(blank.complianceStatus), (
-        label: 'Unknown status',
+        label: 'Status unavailable',
         color: AppColors.muted,
       ));
       expect(sanitationEstablishmentMapStatus(unknown.complianceStatus), (

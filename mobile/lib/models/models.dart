@@ -584,8 +584,11 @@ class SanitationEstablishment {
       'address': address,
       'permit_number': permitNumber,
       'permit_expiry_date': permitExpiryDate,
-      'compliance_status': complianceStatus,
-      'compliance_status_label': statusLabel,
+      // Unavailable compliance is a read-side state, never a status update.
+      if (complianceStatus.trim().isNotEmpty) ...{
+        'compliance_status': complianceStatus,
+        'compliance_status_label': statusLabel,
+      },
       'permit_status': permitStatus,
       'permit_status_label': permitStatusLabel,
       'latitude': latitude,
@@ -595,6 +598,21 @@ class SanitationEstablishment {
   }
 
   factory SanitationEstablishment.fromJson(Map<String, dynamic> json) {
+    final rawStatus = json['compliance_status'];
+    final status = rawStatus is String && rawStatus.trim().isNotEmpty
+        ? rawStatus
+        : '';
+    final rawLabel = json['compliance_status_label'];
+    final fallbackLabel = switch (status) {
+      'good_standing' || 'upcoming' || 'for_completion' || 'violation' ||
+      'no_permit' || 'not_yet_inspected' => sanitationStatusLabel(status),
+      _ => status,
+    };
+    final label = status.isEmpty
+        ? 'Status unavailable'
+        : rawLabel is String && rawLabel.trim().isNotEmpty
+        ? rawLabel
+        : fallbackLabel;
     return SanitationEstablishment(
       id: jsonInt(json['id']),
       businessName: '${json['business_name'] ?? 'Establishment'}',
@@ -606,8 +624,8 @@ class SanitationEstablishment {
       address: '${json['address'] ?? ''}',
       permitNumber: '${json['permit_number'] ?? ''}',
       permitExpiryDate: '${json['permit_expiry_date'] ?? ''}',
-      complianceStatus: '${json['compliance_status'] ?? 'upcoming'}',
-      statusLabel: '${json['compliance_status_label'] ?? 'Upcoming'}',
+      complianceStatus: status,
+      statusLabel: label,
       permitStatus: '${json['permit_status'] ?? 'renewal_due'}',
       permitStatusLabel: '${json['permit_status_label'] ?? 'Renewal Due'}',
       latitude: jsonDouble(json['latitude']),
@@ -628,8 +646,8 @@ class SanitationEstablishment {
       address: '',
       permitNumber: '',
       permitExpiryDate: '',
-      complianceStatus: 'upcoming',
-      statusLabel: 'Upcoming',
+      complianceStatus: '',
+      statusLabel: 'Status unavailable',
       permitStatus: 'renewal_due',
       permitStatusLabel: 'Renewal Due',
       latitude: 0,
