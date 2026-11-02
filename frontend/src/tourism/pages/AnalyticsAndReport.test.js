@@ -477,7 +477,7 @@ const KEY_INSIGHTS = [
     visual: { type: "share", label: "August 2026", value: 12, total: 20, percentage: 60.0 } },
   { id: "classification", answer: "Domestic (Filipino): 13, Foreign (International): 7.",
     visual: { type: "split", items: [{ label: "Domestic (Filipino)", value: 13 }, { label: "Foreign (International)", value: 7 }] } },
-  { id: "stay_type", answer: "Same-day visitors: 0; overnight or multi-day visitors: 20.",
+  { id: "stay_type", answer: "Same day: 0; Overnight: 20.",
     visual: { type: "split", items: [{ label: "Same Day", value: 0 }, { label: "Overnight / multi-day", value: 20 }] } },
   { id: "overnight_resort", answer: "Dona Choleng Camping Resort has the highest overnight demand with 13 visitors.",
     visual: { type: "ranking", items: [{ label: "Dona Choleng Camping Resort", value: 13 }, { label: "Aquazul Hotel and Resort", value: 7 }] } },

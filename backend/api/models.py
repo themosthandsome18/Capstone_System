@@ -352,10 +352,11 @@ class Province(NamedReference):
 
 class Itinerary(NamedReference, ActiveOption):
     # How long the stay is.
-    #   None = not set yet: the reports fall back to reading the NAME ("day" or
-    #          "same" in it is same day, "2".."5" are nights, else 1 night).
+    #   None = not set yet: the reports count it as 0 nights. The NAME is never read.
     #   0    = same day.
     #   N    = N nights.
+    # Overnight = nights * people, Same Day = (nights + 1) * people
+    # (services/tourism.py stay_counts).
     stay_nights = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta(NamedReference.Meta):
