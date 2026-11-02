@@ -9087,7 +9087,7 @@ class VisitorDemographicsVisualTests(TestCase):
                            {"type": "share", "label": "August 2026", "value": 12, "total": 20, "percentage": 60.0}),
             # 20 people, all on 1 night (Overnight): 20 nights, 40 days
             "stay_type": ("Same day: 40; Overnight: 20.",
-                          {"type": "split", "items": [{"label": "Same Day", "value": 40}, {"label": "Overnight / multi-day", "value": 20}]}),
+                          {"type": "split", "items": [{"label": "Same Day", "value": 40}, {"label": "Overnight", "value": 20}]}),
             "overnight_resort": ("Dona Choleng Camping Resort has the highest overnight demand with 13 overnight.",
                                  {"type": "ranking", "items": [{"label": "Dona Choleng Camping Resort", "value": 13}, {"label": "Aquazul Hotel and Resort", "value": 7}]}),
             "average_stay": ("The estimated average stay is 1.0 night(s) per visitor, from each Length of Stay's nights.",

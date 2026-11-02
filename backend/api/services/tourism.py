@@ -1344,7 +1344,7 @@ def build_tourism_question_answers(params=None):
                 "type": "split",
                 "items": [
                     {"label": "Same Day", "value": same_day},
-                    {"label": "Overnight / multi-day", "value": overnight},
+                    {"label": "Overnight", "value": overnight},
                 ],
             },
         },
