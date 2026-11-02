@@ -204,10 +204,35 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool _locationConfirmed = false;
   bool _consentConfirmed = false;
   String? _editIncompatibility;
+  late final Future<void> _sessionReady;
+  SharedPreferences? _sessionPrefs;
+  String? _sessionToken;
+  bool _sessionInvalid = false;
+
+  Future<void> _captureHouseholdSession() async {
+    _sessionPrefs = await SharedPreferences.getInstance();
+    _sessionToken = _sessionPrefs!.getString(staffAuthTokenKey);
+  }
+
+  bool _checkHouseholdSession() {
+    if (!_sessionInvalid &&
+        _sessionToken != null &&
+        _sessionToken!.isNotEmpty &&
+        _sessionPrefs?.getString(staffAuthTokenKey) == _sessionToken) {
+      return true;
+    }
+    _sessionInvalid = true;
+    if (mounted) {
+      showAppMessage(context,
+          'Staff session changed. Reopen and review the household form under the current account.');
+    }
+    return false;
+  }
 
   @override
   void initState() {
     super.initState();
+    _sessionReady = _captureHouseholdSession();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
       _editIncompatibility = widget.household!.editIncompatibility;
@@ -437,6 +462,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
+    await _sessionReady;
+    if (!mounted || _submitting || !_checkHouseholdSession()) return;
     if (_editIncompatibility != null) return;
     if (_head.text.trim().isEmpty) {
       showAppMessage(context, 'Household head is required.');
@@ -483,6 +511,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       final finalWaterSource = _waterSourceSelection;
 
       final response = await widget.api.submitHouseholdSurvey(
+        expectedSessionToken: _sessionToken!,
         originalHousehold: widget.household,
         householdCode: widget.household?.householdCode,
         householdHead: stored != null && _head.text == stored['household_head']
@@ -507,6 +536,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         longitude: _longitude.text.trim(),
       );
 
+      if (!mounted || !_checkHouseholdSession()) return;
       if (mounted) {
         await showSubmissionDialog(
           context,
@@ -520,6 +550,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
           ],
         );
+        if (!mounted || !_checkHouseholdSession()) return;
         final receipt = MobileHouseholdSurveyReceipt.fromResponse(
           response,
           head: formatProperName(_head.text),
@@ -531,12 +562,16 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       }
     } catch (error) {
       if (!mounted) return;
+      if (!_checkHouseholdSession()) return;
       if (error is ApiException && error.isUnauthorized) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
-        await prefs.remove(staffAuthRoleKey);
-        await prefs.remove(staffAuthUsernameKey);
-        if (!mounted) return;
+        final prefs = _sessionPrefs!;
+        // Clear only the validated session before yielding, as in inspections.
+        await Future.wait([
+          prefs.remove(staffAuthTokenKey),
+          prefs.remove(staffAuthRoleKey),
+          prefs.remove(staffAuthUsernameKey),
+        ]);
+        if (!mounted || prefs.getString(staffAuthTokenKey) != null) return;
         Navigator.of(context).pop();
         if (widget.onSessionExpired != null) {
           widget.onSessionExpired!();

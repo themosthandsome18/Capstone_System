@@ -17,6 +17,7 @@ class SurveyApi extends TourismApi {
 
   @override
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    String? expectedSessionToken,
     HouseholdSanitationItem? originalHousehold,
     String? householdCode,
     String? septicTankType,
@@ -128,7 +129,7 @@ Future<void> submit(WidgetTester tester) async {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() => SharedPreferences.setMockInitialValues({staffAuthTokenKey: 'test-session'}));
 
   test('parser retains backend toilet and septic fields', () {
     for (final toilet in [
