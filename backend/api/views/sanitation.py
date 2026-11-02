@@ -262,7 +262,9 @@ def sanitation_inspection_list(request):
         ).prefetch_related("checklist_items")
         return Response(SanitaryInspectionSerializer(inspections, many=True).data)
 
-    serializer = SanitaryInspectionCreateSerializer(data=request.data)
+    data = request.data.copy()
+    data["inspector_name"] = staff_display_name(request.user)
+    serializer = SanitaryInspectionCreateSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
     apply_default_next_due_date(inspection)
@@ -309,6 +311,8 @@ def sanitation_inspection_detail(request, inspection_id):
         data=request.data,
         partial=request.method == "PATCH",
     )
+    # Ordinary edits retain the original author, including legacy stored names.
+    serializer.fields["inspector_name"].read_only = True
     serializer.is_valid(raise_exception=True)
     inspection = serializer.save()
     apply_default_next_due_date(inspection)
@@ -384,41 +388,43 @@ def sanitation_renewal_detail(request, renewal_id):
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    action = request.data.get("action")
-    if action == "advance_stage":
-        renewal = advance_renewal_stage(renewal)
-    elif action == "mark_released":
-        renewal.stage = "released"
-        renewal = sync_renewal_progress(renewal)
-    elif action == "mark_paid":
-        renewal = mark_renewal_paid(
-            renewal,
-            payment_method=request.data.get("payment_method", ""),
-            or_number=request.data.get("or_number", ""),
-        )
-    elif action == "mark_unpaid":
-        renewal = mark_renewal_unpaid(renewal)
-    elif action in ["resolve_overdue", "extend_validity"]:
-        renewal = resolve_overdue_renewal(renewal)
-    else:
-        serializer = SanitaryPermitRenewalSerializer(
-            renewal,
-            data=request.data,
-            partial=True,
-        )
-        serializer.is_valid(raise_exception=True)
-        renewal = serializer.save()
-        sync_renewal_progress(renewal)
+    # Commit the PATCH's renewal/establishment writes and required audit together.
+    with transaction.atomic():
+        action = request.data.get("action")
+        if action == "advance_stage":
+            renewal = advance_renewal_stage(renewal)
+        elif action == "mark_released":
+            renewal.stage = "released"
+            renewal = sync_renewal_progress(renewal)
+        elif action == "mark_paid":
+            renewal = mark_renewal_paid(
+                renewal,
+                payment_method=request.data.get("payment_method", ""),
+                or_number=request.data.get("or_number", ""),
+            )
+        elif action == "mark_unpaid":
+            renewal = mark_renewal_unpaid(renewal)
+        elif action in ["resolve_overdue", "extend_validity"]:
+            renewal = resolve_overdue_renewal(renewal)
+        else:
+            serializer = SanitaryPermitRenewalSerializer(
+                renewal,
+                data=request.data,
+                partial=True,
+            )
+            serializer.is_valid(raise_exception=True)
+            renewal = serializer.save()
+            sync_renewal_progress(renewal)
 
-    log_activity(
-        request,
-        MODULE_SANITATION,
-        ACTION_UPDATE,
-        renewal,
-        label=renewal.establishment.business_name,
-        record_id=renewal.renewal_id,
-    )
-    return Response(SanitaryPermitRenewalSerializer(renewal).data)
+        log_activity(
+            request,
+            MODULE_SANITATION,
+            ACTION_UPDATE,
+            renewal,
+            label=renewal.establishment.business_name,
+            record_id=renewal.renewal_id,
+        )
+        return Response(SanitaryPermitRenewalSerializer(renewal).data)
 
 
 @api_view(["GET", "POST"])

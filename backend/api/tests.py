@@ -846,7 +846,7 @@ class MobilePublicApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(
             SanitaryInspection.objects.filter(
-                inspector_name="Mobile Inspector",
+                inspector_name=self.sanitation_user.get_full_name().strip() or self.sanitation_user.username,
                 establishment=establishment,
             ).exists()
         )
@@ -1823,7 +1823,9 @@ class MobileSanitationAuthTests(TestCase):
         self.assertEqual(resp_insp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(SanitaryInspection.objects.count(), initial_inspections + 1)
         self.assertTrue(
-            SanitaryInspection.objects.filter(inspector_name="Inspector Auth").exists()
+            SanitaryInspection.objects.filter(
+                inspector_name=self.sanitation_user.get_full_name().strip() or self.sanitation_user.username,
+            ).exists()
         )
 
         # 2. Household survey endpoint
