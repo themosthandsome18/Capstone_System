@@ -393,12 +393,13 @@ REFERENCE_TABLES = {
         {"id": 5, "name": "Cavite"},
     ],
     "itineraries": [
-        {"id": 1, "name": "Overnight"},
-        {"id": 2, "name": "Same Day"},
-        {"id": 3, "name": "2 Nights"},
-        {"id": 4, "name": "3 Nights"},
-        {"id": 5, "name": "4 Nights"},
-        {"id": 6, "name": "5 Nights and above"},
+        # stay_nights as migration 0052 sets them on a database that already has the rows
+        {"id": 1, "name": "Overnight", "stay_nights": 1},
+        {"id": 2, "name": "Same Day", "stay_nights": 0},
+        {"id": 3, "name": "2 Nights", "stay_nights": 2},
+        {"id": 4, "name": "3 Nights", "stay_nights": 3},
+        {"id": 5, "name": "4 Nights", "stay_nights": 4},
+        {"id": 6, "name": "5 Nights and above", "stay_nights": 5},
     ],
     "travel_modes": [
         {"id": 1, "name": "Private Vehicle"},

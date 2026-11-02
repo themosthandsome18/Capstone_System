@@ -369,44 +369,27 @@ def filter_arrival_records(params=None):
     return records.select_related("itinerary", "resort"), filters, active_date, today_iso
 
 
-def itinerary_stay(name, stay_nights=None):
-    """How long a stay is, for the reports: (same_day, nights).
+def stay_counts(stay_nights, male, female):
+    """Overnight and Same Day for one record: (overnight, same_day).
 
-    The itinerary's own stay_nights wins when it has one (0 = same day,
-    N = N nights). Only when it is None (not set yet) is the NAME read, exactly
-    as every report did before: "day" or "same" in it is same day, "2".."5"
-    in it are that many nights (the first of them in that order), anything
-    else is 1 night. Reading the name alone makes "Weekend 2 Days" a same-day
-    stay, which is why the field exists.
+    The one place these are worked out; every report calls it.
+      nights    = the Length of Stay's stay_nights (not set = 0; the NAME is
+                  never read)
+      days      = nights + 1
+      people    = male + female
+      overnight = nights * people
+      same_day  = days * people
     """
-    if stay_nights is not None:
-        return stay_nights == 0, stay_nights
-
-    text = (name or "").lower()
-    if "day" in text or "same" in text:
-        return True, 0
-    if "2" in text:
-        return False, 2
-    if "3" in text:
-        return False, 3
-    if "4" in text:
-        return False, 4
-    if "5" in text:
-        return False, 5
-    return False, 1
+    nights = stay_nights or 0
+    people = (male or 0) + (female or 0)
+    return nights * people, (nights + 1) * people
 
 
 def arrival_row(val):
     """One Arrival Monitoring row from a record's ARRIVAL_ROW_FIELDS values."""
-    is_same_day, _ = itinerary_stay(
-        val["itinerary__name"], val.get("itinerary__stay_nights")
+    overnight, same_day = stay_counts(
+        val.get("itinerary__stay_nights"), val["total_male"], val["total_female"]
     )
-    if is_same_day:
-        overnight = 0
-        same_day = val["total_visitors"]
-    else:
-        overnight = val["total_visitors"]
-        same_day = 0
 
     return {
         "survey_id": val["survey_id"],
@@ -746,16 +729,14 @@ def build_dashboard_payload(params=None):
     day_tour = 0
     overnight = 0
     for item in (
-        arrived_records.values("itinerary__name", "itinerary__stay_nights")
-        .annotate(total=Sum("total_visitors"))
+        arrived_records.values("itinerary__stay_nights")
+        .annotate(male=Sum("total_male"), female=Sum("total_female"))
     ):
-        is_same_day, _ = itinerary_stay(
-            item["itinerary__name"], item["itinerary__stay_nights"]
+        item_overnight, item_same_day = stay_counts(
+            item["itinerary__stay_nights"], item["male"], item["female"]
         )
-        if is_same_day:
-            day_tour += item["total"] or 0
-        else:
-            overnight += item["total"] or 0
+        day_tour += item_same_day
+        overnight += item_overnight
 
     duplicate_contacts = (
         all_records.exclude(contact_number="")
@@ -1269,30 +1250,21 @@ def build_tourism_question_answers(params=None):
     overnight_by_resort = {}
 
     for val in arrived.values(
-        "itinerary__name", "itinerary__stay_nights", "total_visitors", "resort__resort_name"
+        "itinerary__stay_nights", "total_male", "total_female", "resort__resort_name"
     ):
-        is_same_day, nights = itinerary_stay(
-            val["itinerary__name"], val["itinerary__stay_nights"]
+        record_overnight, record_same_day = stay_counts(
+            val["itinerary__stay_nights"], val["total_male"], val["total_female"]
         )
-        # This record's head count. The year total stays in total_visitors,
-        # which the answers below divide by.
-        record_visitors = val["total_visitors"] or 0
-
-        if is_same_day:
-            record_overnight = 0
-            record_same_day = record_visitors
-        else:
-            record_overnight = record_visitors
-            record_same_day = 0
 
         same_day += record_same_day
         overnight += record_overnight
-        stay_nights_total += nights * record_visitors
+        # nights * people, so dividing by total_visitors below is nights per person
+        stay_nights_total += record_overnight
 
-        if nights > 0:
+        if record_overnight > 0:
             resort_name = val["resort__resort_name"] or "Unspecified"
             overnight_by_resort[resort_name] = (
-                overnight_by_resort.get(resort_name, 0) + record_visitors
+                overnight_by_resort.get(resort_name, 0) + record_overnight
             )
 
     top_overnight_resort = max(
@@ -1366,13 +1338,13 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "stay_type",
-            "question": "How many tourists are same-day visitors compared to overnight or multi-day visitors?",
-            "answer": f"Same-day visitors: {same_day}; overnight or multi-day visitors: {overnight}.",
+            "question": "How do Same Day and Overnight compare?",
+            "answer": f"Same day: {same_day}; Overnight: {overnight}.",
             "visual": {
                 "type": "split",
                 "items": [
                     {"label": "Same Day", "value": same_day},
-                    {"label": "Overnight / multi-day", "value": overnight},
+                    {"label": "Overnight", "value": overnight},
                 ],
             },
         },
@@ -1381,7 +1353,7 @@ def build_tourism_question_answers(params=None):
             "question": "Which resort or destination records the highest number of overnight stays?",
             "answer": (
                 f"{top_overnight_resort[0]} has the highest overnight demand with "
-                f"{top_overnight_resort[1]} visitors."
+                f"{top_overnight_resort[1]} overnight."
                 if top_overnight_resort[0]
                 else "No overnight stays are recorded yet."
             ),
@@ -1396,7 +1368,7 @@ def build_tourism_question_answers(params=None):
         {
             "id": "average_stay",
             "question": "What is the average length of stay of tourists based on recorded arrival and stay data?",
-            "answer": f"The estimated average stay is {average_stay} night(s) per visitor based on itinerary labels.",
+            "answer": f"The estimated average stay is {average_stay} night(s) per visitor, from each Length of Stay's nights.",
             "visual": {
                 "type": "metric",
                 "label": "Average stay",

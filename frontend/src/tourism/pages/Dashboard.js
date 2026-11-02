@@ -431,13 +431,13 @@ function Dashboard() {
                 color={twoSeries[0]}
                 title="Same Day"
                 value={formatNumber(stayType.dayTour)}
-                percentage="Backend computed"
+                caption="Days counted per person"
               />
               <StayBox
                 color={twoSeries[1]}
                 title="Overnight"
                 value={formatNumber(stayType.overnight)}
-                percentage="Backend computed"
+                caption="Nights counted per person"
               />
             </div>
           </div>
@@ -521,7 +521,7 @@ function LegendRow({ color, label, value }) {
   );
 }
 
-function StayBox({ color, title, value, percentage }) {
+function StayBox({ color, title, value, caption }) {
   return (
     <div className="stay-box">
       <div className="stay-label">
@@ -530,7 +530,7 @@ function StayBox({ color, title, value, percentage }) {
       </div>
 
       <h3>{value}</h3>
-      <p>{percentage} of tourists</p>
+      <p>{caption}</p>
     </div>
   );
 }

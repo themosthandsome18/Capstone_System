@@ -100,7 +100,7 @@ export default function MobileAppContent() {
           <p className="mobile-content-eyebrow">Mauban Tourism App</p>
           <h1>Mobile App Content</h1>
           <p className="mobile-content-lead">
-            Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.
+            Everything a visitor reads inside the app. Change it here and the app picks it up.
           </p>
         </div>
         {tab === "travel-guide" ? <AddCardButton cards={cards} /> : null}
