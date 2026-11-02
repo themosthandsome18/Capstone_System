@@ -274,6 +274,22 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "last_survey_date",
 ];
 
+// The backend stores these as PositiveIntegerField (not PositiveBigIntegerField).
+const MAX_MEMBER_COUNT = 2147483647;
+const MEMBER_COUNT_ERROR = "Enter a whole number from 0 to 2147483647.";
+
+function parseMemberCount(value) {
+  if ((typeof value !== "string" && typeof value !== "number") || !/^[0-9]+$/.test(String(value))) {
+    return null;
+  }
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count <= MAX_MEMBER_COUNT ? count : null;
+}
+
+function hasInvalidMemberCounts(form) {
+  return parseMemberCount(form.male_count) === null || parseMemberCount(form.female_count) === null;
+}
+
 export function buildHouseholdEditPayload(form, snapshot) {
   const payload = {};
   for (const field of EDITABLE_HOUSEHOLD_FIELDS) {
@@ -631,6 +647,10 @@ function HouseholdRecords() {
   }
 
   async function handleSaveAdd() {
+    if (hasInvalidMemberCounts(form)) {
+      setFormError("Check the household member counts.");
+      return;
+    }
     let finalHead = form.household_head.trim();
     if (form.last_name.trim() && form.first_name.trim()) {
       finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
@@ -664,8 +684,8 @@ function HouseholdRecords() {
       const payload = {
         ...form,
         household_head: finalHead,
-        male_count: Number(form.male_count) || 0,
-        female_count: Number(form.female_count) || 0,
+        male_count: parseMemberCount(form.male_count),
+        female_count: parseMemberCount(form.female_count),
         last_survey_date: form.last_survey_date || null,
       };
       if (!isSepticApplicable(form.toilet_type)) {
@@ -681,6 +701,10 @@ function HouseholdRecords() {
   }
 
   async function handleSaveEdit() {
+    if (hasInvalidMemberCounts(form)) {
+      setFormError("Check the household member counts.");
+      return;
+    }
     let finalHead = form.household_head.trim();
     if (form.last_name.trim() && form.first_name.trim()) {
       finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
@@ -1284,6 +1308,8 @@ function HouseholdRecords() {
 
 /* ── Reusable form matching groupmate's exact UI design ── */
 function HouseholdForm({ form, updateField, formError, isEditing = false }) {
+  const maleCount = parseMemberCount(form.male_count);
+  const femaleCount = parseMemberCount(form.female_count);
   return (
     <div className="hh-form-grid">
       {formError && <p className="hh-form-error">{formError}</p>}
@@ -1362,20 +1388,21 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
 
       <fieldset className="hh-members-row" aria-label="Household Members">
         <legend>Household Members</legend>
-        <div className="hh-form-group">
-          <label htmlFor="hh-male">Male</label>
-          <input id="hh-male" type="number" min="0" value={form.male_count}
-            onChange={(e) => updateField("male_count", parseInt(e.target.value, 10) || 0)} />
-        </div>
-        <div className="hh-form-group">
-          <label htmlFor="hh-female">Female</label>
-          <input id="hh-female" type="number" min="0" value={form.female_count}
-            onChange={(e) => updateField("female_count", parseInt(e.target.value, 10) || 0)} />
-        </div>
+        {[["male", "Male", maleCount], ["female", "Female", femaleCount]].map(([key, label, count]) => (
+          <div className="hh-form-group" key={key}>
+            <label htmlFor={`hh-${key}`}>{label}</label>
+            <input id={`hh-${key}`} type="text" inputMode="numeric" pattern="[0-9]+"
+              value={form[`${key}_count`]}
+              aria-invalid={count === null}
+              aria-describedby={count === null ? `hh-${key}-error` : undefined}
+              onChange={(e) => updateField(`${key}_count`, e.target.value)} />
+            {count === null && <p id={`hh-${key}-error`} className="hh-form-error">{MEMBER_COUNT_ERROR}</p>}
+          </div>
+        ))}
         <div className="hh-form-group">
           <label htmlFor="hh-total">Total</label>
           <output id="hh-total" htmlFor="hh-male hh-female" aria-live="polite">
-            {(Number(form.male_count) || 0) + (Number(form.female_count) || 0)}
+            {maleCount === null || femaleCount === null ? "—" : maleCount + femaleCount}
           </output>
         </div>
       </fieldset>
