@@ -33,6 +33,7 @@ import {
   businessTypeDisplayLabel,
 } from "../utils/businessTypeLabels";
 import "./EstablishmentRegistration.css";
+import "./EstablishmentVerification.css";
 import { QRCodeSVG } from "qrcode.react";
 
 export const OFFICIAL_MAUBAN_BARANGAYS = [
@@ -1072,6 +1073,7 @@ function EstablishmentDetailModal({
   onPrintOwnerSlip,
   slipError = "",
 }) {
+  const qrContainer = useRef(null);
   const displayLabel = businessTypeDisplayLabel(establishment.business_type_name);
   const hasCoordinates =
     optionalNumber(establishment.latitude) !== null &&
@@ -1096,7 +1098,7 @@ function EstablishmentDetailModal({
   return (
     <div className="establishment-modal-backdrop">
       <section
-        className="establishment-detail-modal"
+        className="establishment-detail-modal establishment-details-view"
         role="dialog"
         aria-modal="true"
         aria-label={`${establishment.business_name} establishment details`}
@@ -1132,7 +1134,7 @@ function EstablishmentDetailModal({
               type="button"
               className="sanitation-export-btn"
               onClick={() => {
-                const qrSvgEl = document.getElementById("establishment-detail-qr-svg");
+                const qrSvgEl = qrContainer.current?.querySelector("svg");
                 const qrSvgHtml = qrSvgEl ? qrSvgEl.outerHTML : "";
                 printEstablishmentReport(establishment, timeline, qrSvgHtml);
               }}
@@ -1237,11 +1239,13 @@ function EstablishmentDetailModal({
 
         <div className="establishment-detail-qr-card">
           {verifyPath ? (
-            <div className="qr-box">
+            <div className="qr-box" ref={qrContainer}>
               <QRCodeSVG
                 id="establishment-detail-qr-svg"
+                role="img"
+                aria-label={`Permit verification QR for ${establishment.permit_number}`}
                 value={`${window.location.origin}${verifyPath}`}
-                size={130}
+                size={224}
                 level="H"
                 includeMargin={true}
               />
@@ -1263,8 +1267,7 @@ function EstablishmentDetailModal({
               <p>
                 This code links to permit {establishment.permit_number}. Scanning
                 it with the Mauban Mobile App or any smartphone camera opens the
-                public verification page, which confirms the permit and its
-                validity dates.
+                public verification page, which shows permit status and validity dates.
               </p>
             ) : (
               <p>
@@ -2031,12 +2034,14 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
             justify-content: center;
           }
           .print-qr-code svg, .print-qr-code img {
-            width: 115px;
-            height: 115px;
+            width: 128px;
+            height: 128px;
             display: block;
           }
           .print-qr-details {
             flex: 1;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
           .print-qr-tag {
             font-size: 11px;
@@ -2080,6 +2085,7 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
           @media print {
             body { margin: 24px; }
             .signatures { margin-top: 24px; break-inside: avoid; page-break-inside: avoid; }
+            .print-qr-banner { break-inside: avoid; page-break-inside: avoid; }
           }
         </style>
       </head>
@@ -2095,20 +2101,16 @@ function printEstablishmentReport(establishment, timeline, qrSvgHtml = "") {
         <h2>Sanitary Establishment Record</h2>
 
         <div class="print-qr-banner">
-          <div class="print-qr-code">
-            ${
-              // Rendered locally only: the verification URL carries the permit
-              // number, so it is never sent to a third-party QR service.
-              verifyUrl ? qrSvgHtml : ""
-            }
-          </div>
+          ${verifyUrl && qrSvgHtml ? `<div class="print-qr-code">${qrSvgHtml}</div>` : ""}
           <div class="print-qr-details">
-            <div class="print-qr-tag">Official Sanitary Verification QR Code</div>
+            <div class="print-qr-tag">Sanitary Permit Verification</div>
             <div class="print-qr-title">${escapeHtml(establishment.business_name)}</div>
             <div class="print-qr-permit">
               Permit Number: <strong>${escapeHtml(printedPermitNumber)}</strong>
             </div>
-            <p>Scan with any mobile phone camera or the Mauban Citizen Mobile App to inspect real-time sanitary validity and official compliance records.</p>
+            ${verifyUrl ? `<p>${qrSvgHtml
+              ? "Scan with a phone camera to open the public verification page for permit status and validity dates."
+              : "QR image unavailable. Open the verification URL below for permit status and validity dates."}</p>` : ""}
             <div class="print-qr-url">${escapeHtml(
               verifyUrl || "No permit number recorded; no verification QR."
             )}</div>
