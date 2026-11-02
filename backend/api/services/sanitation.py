@@ -110,18 +110,18 @@ RENEWAL_STAGE_ORDER = [
     RENEWAL_STAGE_APPLICATION_FILED,
     RENEWAL_STAGE_REQUIREMENTS_REVIEW,
     RENEWAL_STAGE_INSPECTION_SCHEDULED,
-    RENEWAL_STAGE_PAYMENT_PENDING,
     RENEWAL_STAGE_APPROVED,
     RENEWAL_STAGE_RELEASED,
 ]
 
 RENEWAL_STAGE_PROGRESS = {
-    RENEWAL_STAGE_NOTICE_SENT: 14,
-    RENEWAL_STAGE_APPLICATION_FILED: 29,
-    RENEWAL_STAGE_REQUIREMENTS_REVIEW: 43,
-    RENEWAL_STAGE_INSPECTION_SCHEDULED: 57,
+    RENEWAL_STAGE_NOTICE_SENT: 17,
+    RENEWAL_STAGE_APPLICATION_FILED: 33,
+    RENEWAL_STAGE_REQUIREMENTS_REVIEW: 50,
+    RENEWAL_STAGE_INSPECTION_SCHEDULED: 67,
+    # Retain the legacy stage's stored meaning; it is not an active step.
     RENEWAL_STAGE_PAYMENT_PENDING: 71,
-    RENEWAL_STAGE_APPROVED: 86,
+    RENEWAL_STAGE_APPROVED: 83,
     RENEWAL_STAGE_RELEASED: 100,
     RENEWAL_STAGE_LAPSED: 8,
 }
@@ -1232,13 +1232,15 @@ def build_combined_geographic_hotspots(establishments, households):
 def advance_renewal_stage(renewal):
     if renewal.stage == RENEWAL_STAGE_LAPSED:
         renewal.stage = RENEWAL_STAGE_APPLICATION_FILED
+    elif renewal.stage == RENEWAL_STAGE_PAYMENT_PENDING:
+        renewal.stage = RENEWAL_STAGE_APPROVED
     elif renewal.stage in RENEWAL_STAGE_ORDER:
         index = RENEWAL_STAGE_ORDER.index(renewal.stage)
         renewal.stage = RENEWAL_STAGE_ORDER[min(index + 1, len(RENEWAL_STAGE_ORDER) - 1)]
 
     renewal.progress = RENEWAL_STAGE_PROGRESS.get(renewal.stage, renewal.progress)
     if renewal.stage == RENEWAL_STAGE_RELEASED:
-        renewal.released_at = timezone.localdate()
+        renewal.released_at = renewal.released_at or timezone.localdate()
     fields = ["stage", "progress", "updated_at"]
     if renewal.stage == RENEWAL_STAGE_RELEASED:
         fields.append("released_at")

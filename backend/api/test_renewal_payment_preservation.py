@@ -118,17 +118,22 @@ class RenewalPaymentPreservationTests(TestCase):
         saved = SanitaryPermitRenewal.objects.get(pk=stale.pk)
         self.assertEqual((saved.payment_status, saved.renewal_fee), ("partial", Decimal("999.99")))
 
-    def test_active_stage_order_and_explicit_payment_actions_remain(self):
+    def test_payment_neutral_stage_order_and_explicit_payment_actions_remain(self):
         renewal = self.renewal(stage="inspection_scheduled")
         self.assertEqual(self.request(renewal, {"action": "advance_stage"}).status_code, 200)
         renewal.refresh_from_db()
-        self.assertEqual((renewal.stage, renewal.payment_status), ("payment_pending", "unpaid"))
+        self.assertEqual((renewal.stage, renewal.payment_status), ("approved", "unpaid"))
         response = self.request(renewal, {"action": "mark_paid", "payment_method": "Cash", "or_number": "SYN-OR"})
         self.assertEqual(response.status_code, 200)
         renewal.refresh_from_db()
         self.assertEqual((renewal.stage, renewal.payment_status), ("approved", "paid"))
         self.assertIn("OR-LEGACY", renewal.remarks)
         self.assertIn("SYN-OR", renewal.remarks)
+
+        legacy = self.renewal("SYN-LEGACY-PAID", stage="payment_pending")
+        self.assertEqual(self.request(legacy, {"action": "mark_paid"}).status_code, 200)
+        legacy.refresh_from_db()
+        self.assertEqual((legacy.stage, legacy.payment_status, legacy.progress), ("approved", "paid", 83))
 
     def test_invalid_and_unauthorized_requests_preserve_all_columns_and_audits(self):
         renewal = self.renewal(stage="released", payment="partial")
