@@ -1,0 +1,60 @@
+.household-report-page > *,
+.household-report-page .household-report-card,
+.household-report-page .sanitary-question-item { min-width: 0; }
+.household-report-page .household-report-header,
+.household-report-page .household-report-actions,
+.household-report-page .infra-card-header { flex-wrap: wrap; gap: 12px; }
+.household-report-page .hh-filter-left { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.household-report-page .hh-filter-left select { max-width: 100%; min-width: 0; }
+.household-report-page .hh-filter-badge { flex-wrap: wrap; border-radius: 12px; }
+.household-report-page .household-report-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.household-report-page .household-insights-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.household-report-page .infra-table td { overflow-wrap: anywhere; }
+@media screen and (max-width: 700px) {
+  .household-report-page { padding: 12px; }
+  .household-report-page .household-report-chart-grid,
+  .household-report-page .household-insights-grid { grid-template-columns: minmax(0, 1fr); }
+  .household-report-page .household-report-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .household-report-page .household-report-actions button { height: auto; min-height: 38px; padding: 8px 12px; }
+}
+@media print {
+  .household-report-page .infra-table { min-width: 0; font-size: 10px; }
+  .household-report-page .infra-table th,
+  .household-report-page .infra-table td { padding: 5px; }
+  .household-report-page .infra-table-container { overflow: visible; }
+  .household-report-page .hh-view-all-btn { display: none; }
+  .household-report-page .household-report-card,
+  .household-report-page .sanitary-question-item { break-inside: avoid; }
+}
+/* The fixed desktop shell otherwise leaves only 66px for this report at 390px. */
+@media screen and (max-width: 700px) {
+  .sanitation-layout:has(.household-report-page) { flex-direction: column; }
+  .sanitation-layout:has(.household-report-page) .sanitation-sidebar {
+    position: static; width: 100%; min-width: 0; max-width: none;
+    height: auto; max-height: 220px;
+  }
+  .sanitation-main:has(.household-report-page) { margin-left: 0; width: 100%; min-width: 0; }
+  .sanitation-main:has(.household-report-page) .sanitation-topbar {
+    height: auto; flex-wrap: wrap; gap: 12px; padding: 12px;
+  }
+  .sanitation-main:has(.household-report-page) .sanitation-top-actions { flex-wrap: wrap; min-width: 0; }
+  .sanitation-main:has(.household-report-page) .admin { min-width: 0; }
+  .sanitation-main:has(.household-report-page) .admin-text { overflow-wrap: anywhere; }
+  .sanitation-main:has(.household-report-page) .sanitation-content { padding: 8px; min-width: 0; }
+}
+@media screen and (max-width: 700px) {
+  .household-report-page .household-report-stat-card { height: auto; min-height: 110px; align-items: flex-start; }
+  .household-report-page .infra-card-header { height: auto; padding: 16px; }
+}
+@media print {
+  .household-report-page .infra-table th { font-size: 9px; }
+  .household-report-page .household-status {
+    display: inline-block; white-space: normal; max-width: 100%;
+    box-sizing: border-box; padding: 2px 4px; font-size: 9px;
+  }
+}
+.household-report-page .household-report-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
