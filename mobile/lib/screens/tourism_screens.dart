@@ -2768,8 +2768,9 @@ class _EmergencyContactCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  number,
+                // Each number can be tapped to open the dialer; the email below is plain text.
+                ContactNumbers(
+                  numbers: number,
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,

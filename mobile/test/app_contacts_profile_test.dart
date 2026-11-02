@@ -46,7 +46,10 @@ AppContacts server(List<Object?> list) => AppContacts.fromJson(list);
 
 Finder card(int id) => find.byKey(ValueKey('contact-$id'));
 Finder cardText(int id) => find.descendant(of: card(id), matching: find.byType(Text));
-List<String> cardTexts(int id) => [for (final e in cardText(id).evaluate()) (e.widget as Text).data!];
+List<String> cardTexts(int id) => [for (final e in cardText(id).evaluate()) _plain(e.widget as Text)];
+
+/// The words of a Text, whether it was given as a string or as spans (the number is spans, so that each of its numbers can be tapped).
+String _plain(Text text) => text.data ?? text.textSpan!.toPlainText();
 Text textIn(int id, String data) => find.descendant(of: card(id), matching: find.text(data)).evaluate().single.widget as Text;
 bool shows(String text) => find.text(text).evaluate().isNotEmpty;
 List<String> allCardKeys() => [for (final e in find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('contact-')).evaluate()) (e.widget.key! as ValueKey<String>).value];
