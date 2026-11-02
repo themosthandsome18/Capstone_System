@@ -480,15 +480,16 @@ describe("Establishment Records table", () => {
 /* ================================================================== */
 
 describe("Register New Establishment", () => {
-  test("is organised as Establishment Profile, Location / Reference, then an optional permit", () => {
+  test("presents establishment details, additional information and review in order", () => {
     const form = openCreateForm();
     const headings = [...form.querySelectorAll(".establishment-form-section h3")].map(
       (h) => h.textContent
     );
     expect(headings).toEqual([
-      "Establishment Profile",
-      "Location / Reference",
+      "1 Establishment Details",
+      "2 Additional Information",
       "Sanitary Permit (optional)",
+      "3 Review & Save",
     ]);
     expect(within(form).getByText(/Leave it blank if it has none yet/)).toBeTruthy();
   });
@@ -1172,5 +1173,37 @@ describe("verification QR", () => {
     expect(
       within(modal).getByText(/No permit number is recorded, so there is no verification QR yet/)
     ).toBeTruthy();
+  });
+});
+
+describe("registration presentation and local feedback", () => {
+  test("presents three sections and preserves required address without example placeholders", () => {
+    const form = openCreateForm();
+    expect(within(form).getByRole("heading", { name: /1 Establishment Details/ })).toBeTruthy();
+    expect(within(form).getByRole("heading", { name: /2 Additional Information/ })).toBeTruthy();
+    expect(within(form).getByRole("heading", { name: /3 Review & Save/ })).toBeTruthy();
+    expect(form.querySelector('[placeholder^="e.g."]')).toBeNull();
+    expect(field(form, "Complete Address")).toBeTruthy();
+    submit(form);
+    expect(within(form).getByRole("alert").textContent).toBe("Business name is required.");
+    expect(mockCtx.createEstablishment).not.toHaveBeenCalled();
+  });
+
+  test("keeps pending edits and failed input, then reports a successful retry", async () => {
+    let rejectSave;
+    mockCtx.updateEstablishment.mockImplementationOnce(() => new Promise((resolve, reject) => { rejectSave = reject; }));
+    const form = openEditForm(501);
+    setField(form, "Contact Number", "09170000000");
+    submit(form);
+    expect(within(form).getByRole("status").textContent).toMatch(/Saving establishment/);
+    expect(within(form).getByRole("button", { name: "Close establishment form" }).disabled).toBe(true);
+    expect(field(form, "Contact Number").matches(":disabled")).toBe(true);
+    rejectSave(new Error("Cannot connect to server. Please retry."));
+    await waitFor(() => expect(within(form).getByRole("alert").textContent).toMatch(/Cannot connect/));
+    expect(field(form, "Contact Number").value).toBe("09170000000");
+    mockCtx.updateEstablishment.mockResolvedValueOnce({});
+    submit(form);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Existing Bakery updated successfully/));
+    expect(document.querySelector("form.establishment-modal")).toBeNull();
   });
 });

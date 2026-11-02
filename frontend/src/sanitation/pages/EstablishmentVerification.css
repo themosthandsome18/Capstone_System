@@ -1,0 +1,11 @@
+/* Only the Establishment Records View dialog; shared modal styles stay intact. */
+.establishment-details-view .qr-info { min-width: 0; overflow-wrap: anywhere; }
+.establishment-details-view .establishment-info-tile strong { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .establishment-details-view { padding: 20px 16px; max-height: calc(100dvh - 20px); }
+  .establishment-details-view .establishment-detail-header { flex-direction: column; }
+  .establishment-details-view .establishment-detail-header h2 { overflow-wrap: anywhere; }
+  .establishment-details-view .establishment-detail-actions { flex-wrap: wrap; max-width: 100%; }
+  .establishment-details-view .establishment-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .establishment-details-view .establishment-detail-qr-card { flex-direction: column; align-items: flex-start; padding: 16px; }
+}

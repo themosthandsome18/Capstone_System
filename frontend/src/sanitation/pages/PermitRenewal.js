@@ -15,6 +15,9 @@ import { useSanitationData } from "../context/SanitationDataContext";
 import LoadingOverlay from "../../shared/LoadingOverlay";
 
 function getNextStageLabel(currentStage) {
+  // The current backend still has a legacy intermediate stage. Request one
+  // transition without presenting payment as an action the applicant must take.
+  if (currentStage === "inspection_scheduled") return "Advance to next recorded stage";
   const idx = stageOptions.findIndex((s) => s.value === currentStage);
   if (idx >= 0 && idx < stageOptions.length - 2) {
     return `Proceed to: ${stageOptions[idx + 1].label}`;
@@ -27,22 +30,20 @@ const stageOptions = [
   { value: "application_filed", label: "Application Filed" },
   { value: "requirements_review", label: "Requirements Review" },
   { value: "inspection_scheduled", label: "Inspection Scheduled" },
-  { value: "payment_pending", label: "Payment Pending" },
+  { value: "payment_pending", label: "Payment Pending (legacy workflow)" },
   { value: "approved", label: "Approved" },
   { value: "released", label: "Released" },
   { value: "lapsed", label: "Lapsed" },
 ];
 
-const paymentOptions = [
-  { value: "paid", label: "Paid" },
-  { value: "unpaid", label: "Unpaid" },
-  { value: "partial", label: "Partial" },
-];
+function getStageLabel(stage, recordedLabel) {
+  if (stage === "payment_pending") return "Payment Pending (legacy workflow)";
+  return recordedLabel || stageOptions.find((item) => item.value === stage)?.label || stage;
+}
 
 const initialForm = {
   establishment: "",
   permit_type: "Sanitary Permit",
-  renewal_fee: "500",
   submitted_requirements: [],
   remarks: "",
   photo_documentation: "",
@@ -70,13 +71,13 @@ function PermitRenewal() {
     stage: "all",
     business_type_id: "all",
     barangay: "all",
-    payment_status: "all",
   });
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const formRequirementOptions = useMemo(
     () =>
@@ -117,9 +118,7 @@ function PermitRenewal() {
           String(
             establishments.find((item) => item.id === row.establishment)?.business_type
           ) === filters.business_type_id) &&
-        (filters.barangay === "all" || row.barangay === filters.barangay) &&
-        (filters.payment_status === "all" ||
-          row.payment_status === filters.payment_status)
+        (filters.barangay === "all" || row.barangay === filters.barangay)
       );
     });
   }, [establishments, filters, rows]);
@@ -174,8 +173,6 @@ function PermitRenewal() {
         expiration_date:
           establishment.permit_expiry_date || new Date().toISOString().slice(0, 10),
         stage: "application_filed",
-        renewal_fee: Number(form.renewal_fee || 0),
-        payment_status: "unpaid",
         submitted_requirements: form.submitted_requirements,
         remarks: form.remarks,
         photo_documentation: form.photo_documentation,
@@ -192,12 +189,15 @@ function PermitRenewal() {
 
   async function handleAdvance(row) {
     setSaving(true);
+    setActionError("");
     try {
       const updated = await updateRenewal(row.id, { action: "advance_stage" });
       if (updated) {
         setDetail((current) => (current && current.id === row.id ? { ...current, ...updated } : updated));
       }
       await refreshRenewalData(filters);
+    } catch (requestError) {
+      setActionError(requestError.message || "Unable to advance renewal.");
     } finally {
       setSaving(false);
     }
@@ -205,6 +205,7 @@ function PermitRenewal() {
 
   async function handleRelease(row) {
     setSaving(true);
+    setActionError("");
     try {
       const updated = await updateRenewal(row.id, { action: "mark_released" });
       if (updated) {
@@ -215,44 +216,8 @@ function PermitRenewal() {
         );
       }
       await refreshRenewalData(filters);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleMarkPaid(row, paymentMethod, orNumber) {
-    setSaving(true);
-    try {
-      const updated = await updateRenewal(row.id, {
-        action: "mark_paid",
-        payment_method: paymentMethod,
-        or_number: orNumber,
-      });
-      if (updated) {
-        setDetail((current) =>
-          current && current.id === row.id
-            ? { ...current, ...updated, payment_status: "paid", payment_status_label: "Paid" }
-            : updated
-        );
-      }
-      await refreshRenewalData(filters);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleMarkUnpaid(row) {
-    setSaving(true);
-    try {
-      const updated = await updateRenewal(row.id, { action: "mark_unpaid" });
-      if (updated) {
-        setDetail((current) =>
-          current && current.id === row.id
-            ? { ...current, ...updated, payment_status: "unpaid", payment_status_label: "Unpaid" }
-            : updated
-        );
-      }
-      await refreshRenewalData(filters);
+    } catch (requestError) {
+      setActionError(requestError.message || "Unable to release renewal.");
     } finally {
       setSaving(false);
     }
@@ -308,7 +273,7 @@ function PermitRenewal() {
       <div className="renewal-header">
         <div>
           <h1>Sanitary Permit Renewal</h1>
-          <p>Track permit renewals, review requirements, schedule inspection, process payments, and release renewed permits.</p>
+          <p>Track permit renewals, review requirements, follow inspection stages, and release renewed permits.</p>
         </div>
 
         <button type="button" className="renewal-new-btn" onClick={() => setIsNewOpen(true)}>
@@ -318,6 +283,7 @@ function PermitRenewal() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {actionError && !detail ? <p role="alert" className="sanitation-error-text">{actionError}</p> : null}
 
       <div className="renewal-stat-grid">
         <RenewalStat label="Total Renewals" value={summary.totalRenewals || 0} icon={<FiFileText />} />
@@ -358,12 +324,6 @@ function PermitRenewal() {
           ))}
         </select>
 
-        <select value={filters.payment_status} onChange={(event) => updateFilter("payment_status", event.target.value)}>
-          <option value="all">All payment status</option>
-          {paymentOptions.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
-          ))}
-        </select>
       </div>
 
       <section className="renewal-pipeline-card">
@@ -376,7 +336,7 @@ function PermitRenewal() {
               className={`renewal-stage-tile ${filters.stage === item.stage ? "active" : ""}`}
               onClick={() => updateFilter("stage", item.stage)}
             >
-              <span>{item.label}</span>
+              <span>{getStageLabel(item.stage, item.label)}</span>
               <strong>{item.count}</strong>
               <small>applications</small>
             </button>
@@ -397,8 +357,6 @@ function PermitRenewal() {
               <th>Days Left</th>
               <th>Stage</th>
               <th>Progress</th>
-              <th>Fee</th>
-              <th>Payment</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -413,16 +371,14 @@ function PermitRenewal() {
                   <td>{row.barangay}</td>
                   <td>{formatDate(row.expiration_date)}</td>
                   <td className={getDaysLeft(row.expiration_date) < 0 ? "days-late" : ""}>{formatDaysLeft(row.expiration_date)}</td>
-                  <td><span className={`renewal-stage-pill ${row.stage}`}>{row.stage_label}</span></td>
+                  <td><span className={`renewal-stage-pill ${row.stage}`}>{getStageLabel(row.stage, row.stage_label)}</span></td>
                   <td>
                     <div className="renewal-progress"><b style={{ width: `${row.progress || 0}%` }} /></div>
                     <small>{row.progress || 0}%</small>
                   </td>
-                  <td>{formatMoney(row.renewal_fee)}</td>
-                  <td><span className={`renewal-payment ${row.payment_status}`}>{row.payment_status_label}</span></td>
                   <td>
                     <div className="renewal-actions">
-                      <button type="button" onClick={() => setDetail(row)} title="View Full Details" disabled={saving}><FiEye /></button>
+                      <button type="button" onClick={() => { setActionError(""); setDetail(row); }} title="View Full Details" disabled={saving}><FiEye /></button>
                       <button type="button" onClick={() => handleAdvance(row)} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
                       <button type="button" onClick={() => handleRelease(row)} title="Mark as Released" disabled={saving}><FiPackage /></button>
                     </div>
@@ -431,7 +387,7 @@ function PermitRenewal() {
               ))
             ) : (
               <tr>
-                <td colSpan="12" className="renewal-empty">No renewal records found.</td>
+                <td colSpan="10" className="renewal-empty">No renewal records found.</td>
               </tr>
             )}
           </tbody>
@@ -466,10 +422,6 @@ function PermitRenewal() {
                   <option>Sanitary Permit</option>
                   <option>Health Permit</option>
                 </select>
-              </label>
-              <label className="renewal-field">
-                <span>Renewal Fee (P)</span>
-                <input type="number" min="0" value={form.renewal_fee} onChange={(event) => updateForm("renewal_fee", event.target.value)} />
               </label>
             </div>
 
@@ -525,11 +477,10 @@ function PermitRenewal() {
           onClose={() => setDetail(null)}
           onAdvance={() => handleAdvance(detail)}
           onRelease={() => handleRelease(detail)}
-          onMarkPaid={(r, method, or) => handleMarkPaid(r, method, or)}
-          onMarkUnpaid={(r) => handleMarkUnpaid(r)}
           onResolveOverdue={(r) => handleResolveOverdue(r)}
           onToggleRequirement={(r, req) => handleToggleRequirementInDetail(r, req)}
           saving={saving}
+          actionError={actionError}
         />
       ) : null}
     </div>
@@ -555,15 +506,11 @@ function RenewalDetailModal({
   onClose,
   onAdvance,
   onRelease,
-  onMarkPaid,
-  onMarkUnpaid,
   onResolveOverdue,
   onToggleRequirement,
   saving,
+  actionError,
 }) {
-  const [paymentMethod, setPaymentMethod] = useState("Cash (Treasury)");
-  const [orNumber, setOrNumber] = useState("");
-
   const daysLeft = getDaysLeft(row.expiration_date);
   const isOverdue = daysLeft < 0 || row.stage === "lapsed";
 
@@ -583,9 +530,6 @@ function RenewalDetailModal({
   const progressPercent = allRequirements.length
     ? Math.round((compliedCount / allRequirements.length) * 100)
     : 100;
-
-  const isPaid = row.payment_status === "paid";
-  const isPartial = row.payment_status === "partial";
 
   return (
     <div className="renewal-modal-backdrop" onClick={onClose}>
@@ -653,6 +597,13 @@ function RenewalDetailModal({
         </div>
 
         {/* TIMELINE */}
+        {row.stage === "payment_pending" ? (
+          <p role="note">
+            Recorded stage: Payment Pending (legacy workflow). No payment entry or
+            confirmation is required here. Advance once to request the next stage
+            from the server.
+          </p>
+        ) : null}
         <div
           style={{
             display: "flex",
@@ -736,83 +687,6 @@ function RenewalDetailModal({
           })}
         </div>
 
-        {/* PAYMENT & OFFICIAL RECEIPT CARD */}
-        <div className="renewal-payment-card">
-          <div className="renewal-payment-header">
-            <strong>💳 Renewal Fee &amp; Payment Processing</strong>
-            <span
-              className={`renewal-payment-status-tag ${
-                isPaid ? "paid" : isPartial ? "partial" : "unpaid"
-              }`}
-            >
-              {isPaid ? "✅ Paid" : isPartial ? "🟡 Partial" : "🔴 Unpaid"}
-            </span>
-          </div>
-
-          <div className="renewal-payment-inputs-grid">
-            <div className="renewal-pay-field">
-              <span>Renewal Fee</span>
-              <input type="text" readOnly value={formatMoney(row.renewal_fee)} />
-            </div>
-            <div className="renewal-pay-field">
-              <span>Payment Method</span>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                disabled={isPaid}
-              >
-                <option value="Cash (Treasury)">Cash (Treasury Cashier)</option>
-                <option value="GCash / E-Wallet">GCash / E-Wallet</option>
-                <option value="Landbank / Online">Landbank / Online</option>
-                <option value="Bank Deposit">Direct Bank Deposit</option>
-              </select>
-            </div>
-            <div className="renewal-pay-field">
-              <span>Official Receipt (O.R. #)</span>
-              <input
-                type="text"
-                placeholder="e.g. OR-2026-0034"
-                value={orNumber}
-                onChange={(e) => setOrNumber(e.target.value)}
-                disabled={isPaid}
-              />
-            </div>
-          </div>
-
-          <div className="renewal-payment-actions">
-            {!isPaid ? (
-              <button
-                type="button"
-                className="renewal-pay-btn"
-                onClick={() => onMarkPaid(row, paymentMethod, orNumber)}
-                disabled={saving}
-              >
-                <FiCheckCircle /> Confirm Payment &amp; Mark as Paid
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="renewal-unpay-btn"
-                onClick={() => onMarkUnpaid(row)}
-                disabled={saving}
-              >
-                ↩️ Revert to Unpaid
-              </button>
-            )}
-            <span
-              style={{
-                fontSize: "12px",
-                color: "#64748b",
-                marginLeft: "auto",
-              }}
-            >
-              {isPaid
-                ? "Payment verified. Status is updated in records."
-                : "Awaiting payment settlement from applicant."}
-            </span>
-          </div>
-        </div>
-
         {/* REMARKS */}
         {row.remarks ? (
           <label className="renewal-field full" style={{ marginTop: "14px" }}>
@@ -822,6 +696,7 @@ function RenewalDetailModal({
         ) : null}
 
         {/* MODAL FOOTER ACTIONS */}
+        {actionError ? <p role="alert" className="sanitation-error-text">{actionError}</p> : null}
         <div className="renewal-modal-actions" style={{ marginTop: "20px" }}>
           <button type="button" className="renewal-cancel" onClick={onClose}>
             Close
@@ -941,14 +816,6 @@ function formatDaysLeft(value) {
   const days = getDaysLeft(value);
   if (days < 0) return `${Math.abs(days)}d overdue`;
   return `${days}d`;
-}
-
-function formatMoney(value) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
 }
 
 export default PermitRenewal;

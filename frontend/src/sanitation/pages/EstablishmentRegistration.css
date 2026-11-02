@@ -1,0 +1,66 @@
+.registration-form { width: 880px; border-top: 6px solid #157347; border-radius: 14px; box-shadow: 0 24px 70px #102d2440; }
+.registration-form h2 { color: #145638; margin: 0 38px 12px 0; font-size: 24px; line-height: 1.3; }
+.registration-form .registration-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.registration-form .establishment-form-section { border: 1px solid #dce8e0; border-radius: 10px; padding: 20px; margin: 20px 0; }
+.registration-form .establishment-form-section h3 { display: flex; align-items: center; gap: 10px; color: #145638; font-size: 17px; margin: 0 0 20px; }
+.registration-form .registration-step { display: inline-grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; color: white; background: #157347; font-size: 14px; }
+.registration-form .modal-field { min-width: 0; margin-bottom: 16px; }
+.registration-form .modal-field input, .registration-form .modal-field select { width: 100%; box-sizing: border-box; min-height: 44px; font-size: 15px; }
+.registration-form .establishment-form-hint { font-size: 14px; line-height: 1.6; color: #52635a; }
+.registration-form .registration-review { background: #f2f8f4; }
+.registration-review dl { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0; }
+.registration-review dt { color: #52635a; font-size: 13px; }
+.registration-review dd { margin: 5px 0 0; color: #183d29; font-weight: 600; overflow-wrap: anywhere; }
+.registration-form .modal-actions { position: sticky; bottom: -28px; background: white; border-top: 1px solid #dce8e0; padding: 16px 0; gap: 12px; }
+.registration-form .modal-actions button { min-height: 44px; height: auto; padding: 10px 14px; white-space: nowrap; font-size: 14px; }
+.registration-form :focus-visible { outline: 3px solid #4a9970; outline-offset: 3px; }
+.registration-form :disabled { cursor: wait; opacity: .7; }
+.registration-saving, .registration-success { padding: 12px 16px; color: #145638; background: #e7f5ec; border: 1px solid #a8d6b9; border-radius: 8px; }
+@media (max-width: 600px) {
+  .registration-form { max-width: calc(100vw - 20px); max-height: calc(100dvh - 20px); padding: 20px 14px; }
+  .registration-form h2 { font-size: 21px; }
+  .registration-form .establishment-form-section { padding: 14px; }
+  .registration-form .modal-two-grid, .registration-form .registration-review dl { grid-template-columns: minmax(0, 1fr); }
+  .registration-form .modal-actions { bottom: -20px; display: flex; flex-wrap: wrap; }
+  .registration-form .modal-actions button { flex: 1; }
+}
+
+/* Establishment Records only: keep navigation available above the page on
+   narrow screens, and confine the wide records table to its own scroll area. */
+@media (max-width: 760px) {
+  .sanitation-layout:has(.establishment-records-page) { flex-direction: column; }
+  .sanitation-layout:has(.establishment-records-page) > .sanitation-sidebar {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    max-height: 240px;
+  }
+  .sanitation-main:has(.establishment-records-page) {
+    margin-left: 0;
+    width: 100%;
+    min-width: 0;
+  }
+  .sanitation-main:has(.establishment-records-page) .sanitation-topbar {
+    height: auto;
+    min-height: 70px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px;
+  }
+  .sanitation-main:has(.establishment-records-page) .topbar-title { flex-basis: 100%; }
+  .sanitation-main:has(.establishment-records-page) .sanitation-top-actions { width: 100%; min-width: 0; gap: 12px; }
+  .sanitation-main:has(.establishment-records-page) .admin { flex: 1; min-width: 0; }
+  .sanitation-main:has(.establishment-records-page) .admin-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+  .sanitation-main:has(.establishment-records-page) .admin-avatar,
+  .sanitation-main:has(.establishment-records-page) .sanitation-logout-btn { flex-shrink: 0; }
+  .sanitation-content:has(.establishment-records-page) { min-width: 0; }
+  .establishment-records-page { min-width: 0; padding: 14px; }
+  .establishment-records-page .establishment-header-left { flex-wrap: wrap; }
+  .establishment-records-page .sanitation-header-actions { flex-wrap: wrap; }
+  .establishment-records-page .establishment-table-card { min-width: 0; padding: 12px; }
+  .establishment-records-page .establishment-tools { padding: 10px; }
+  .establishment-records-page .establishment-search { min-width: 0; box-sizing: border-box; }
+  .establishment-records-page .establishment-tools select { width: 100%; min-width: 0; }
+}
