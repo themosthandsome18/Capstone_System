@@ -1,0 +1,177 @@
+{
+  "establishments": [
+    {
+      "id": 1,
+      "business_name": "SYNTHETIC SHARED BUSINESS",
+      "owner_name": "Owner <script>window.__unsafe=1</script>",
+      "business_type_name": "Recorded Store",
+      "barangay": "Bagong Bayan",
+      "address": "Synthetic address A",
+      "contact_number": "",
+      "has_permit": true,
+      "permit_number": "PERMIT-A",
+      "permit_size": "sp",
+      "permit_status": "active",
+      "permit_status_label": "Active",
+      "permit_issued_date": "2026-01-01",
+      "permit_expiry_date": "2026-12-31",
+      "expiration_date": "2099-12-31"
+    },
+    {
+      "id": 2,
+      "business_name": "SYNTHETIC SHARED BUSINESS",
+      "owner_name": "Synthetic owner B",
+      "barangay": "Abo-abo",
+      "address": "Synthetic address B",
+      "has_permit": false,
+      "permit_number": "PERMIT-B",
+      "permit_status": "no_permit",
+      "permit_status_label": "No Permit",
+      "permit_expiry_date": null
+    },
+    {
+      "id": 3,
+      "business_name": "SYNTHETIC EMPTY RECORD",
+      "barangay": "Empty Barangay",
+      "has_permit": null
+    }
+  ],
+  "inspections": [
+    {
+      "id": 12,
+      "establishment": 1,
+      "is_draft": false,
+      "inspection_date": "2026-02-01",
+      "next_due_date": "2026-05-01",
+      "inspector_name": "Recorded Inspector A",
+      "status_after_inspection": "violation",
+      "status_after_inspection_label": "Violation",
+      "findings": "Recorded deficiency A",
+      "remarks": "Recorded follow-up note A",
+      "checklist_items": [
+        {
+          "id": 201,
+          "requirement_name": "Recorded requirement A",
+          "is_complied": false,
+          "notes": "Recorded checklist note A"
+        },
+        {
+          "id": 202,
+          "requirement_name": "Unknown checklist finding",
+          "is_complied": null,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "establishment": "1",
+      "is_draft": false,
+      "inspection_date": "2026-01-01",
+      "inspector_name": "",
+      "status_after_inspection": "legacy_unknown_result",
+      "findings": "",
+      "remarks": "Literal <img src=x onerror=\"window.__unsafe=2\">",
+      "checklist_items": []
+    },
+    {
+      "id": 10,
+      "establishment": 1,
+      "is_draft": false,
+      "inspection_date": "2026-01-01",
+      "inspector_name": "Recorded Inspector Earlier",
+      "status_after_inspection": "good_standing",
+      "status_after_inspection_label": "Good Standing",
+      "findings": "Recorded earlier finding A",
+      "remarks": "Separate earlier remark A",
+      "checklist_items": [
+        {
+          "id": 200,
+          "requirement_name": "Recorded earlier requirement",
+          "is_complied": true,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "establishment": 1,
+      "is_draft": false,
+      "inspection_date": null,
+      "updated_at": "2000-01-01T00:00:00Z",
+      "findings": "Undated recorded inspection",
+      "checklist_items": []
+    },
+    {
+      "id": 14,
+      "establishment": 1,
+      "is_draft": true,
+      "inspection_date": "2025-01-01",
+      "findings": "DRAFT NOT FINAL"
+    },
+    {
+      "id": 15,
+      "establishment": 1,
+      "inspection_date": "2025-01-02",
+      "findings": "FINALIZATION UNKNOWN"
+    },
+    {
+      "id": 22,
+      "establishment": 2,
+      "is_draft": false,
+      "inspection_date": "2026-01-02",
+      "inspector_name": "Inspector B",
+      "findings": "OTHER ESTABLISHMENT FINDING",
+      "checklist_items": []
+    }
+  ],
+  "renewals": {
+    "rows": [
+      {
+        "id": 91,
+        "establishment": 1,
+        "renewal_id": "RNW-A-SECOND",
+        "permit_number": "PERMIT-A",
+        "permit_type": "Sanitary Permit",
+        "stage": "released",
+        "stage_label": "Released",
+        "created_at": "2026-01-01T03:00:00Z",
+        "updated_at": "2026-04-01T04:00:00Z",
+        "released_at": "2026-04-01",
+        "expiration_date": "2027-04-01",
+        "payment_status": "paid",
+        "renewal_fee": "500.00",
+        "remarks": "Recorded renewal note A"
+      },
+      {
+        "id": 90,
+        "establishment": 1,
+        "renewal_id": "RNW-A-FIRST",
+        "permit_number": "PERMIT-A",
+        "stage": "application_filed",
+        "stage_label": "Application Filed",
+        "created_at": "2026-01-01T03:00:00Z",
+        "updated_at": "2026-01-03T03:00:00Z",
+        "expiration_date": "2026-12-31",
+        "remarks": ""
+      },
+      {
+        "id": 92,
+        "establishment": 1,
+        "renewal_id": "RNW-A-UNDATED",
+        "stage": "notice_sent",
+        "created_at": null,
+        "updated_at": "1999-01-01T00:00:00Z",
+        "expiration_date": "2025-01-01"
+      },
+      {
+        "id": 101,
+        "establishment": 2,
+        "renewal_id": "OTHER-RNW",
+        "stage": "released",
+        "created_at": "2025-01-01T00:00:00Z",
+        "expiration_date": "2026-01-01"
+      }
+    ]
+  }
+}

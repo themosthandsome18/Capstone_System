@@ -13,7 +13,6 @@ import { Bar, Doughnut } from "react-chartjs-2";
 import {
   FiAlertTriangle,
   FiCalendar,
-  FiCheckCircle,
   FiDownload,
   FiFileText,
   FiFilter,
@@ -26,6 +25,7 @@ import {
 import { useSanitationData } from "../context/SanitationDataContext";
 import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
 import PageLoader from "../../shared/PageLoader";
+import EstablishmentHistoryReport from "./EstablishmentHistoryReport";
 
 ChartJS.register(
   CategoryScale,
@@ -102,7 +102,6 @@ function SanitaryReportAnalytics() {
   const [reportLoading, setReportLoading] = useState(false);
   const [filterError, setFilterError] = useState("");
   const [activeQuestionGroup, setActiveQuestionGroup] = useState("establishment");
-  const [selectedEstId, setSelectedEstId] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -142,12 +141,6 @@ function SanitaryReportAnalytics() {
     [appliedFilters, establishments]
   );
 
-  const selectedEstablishment = useMemo(() => {
-    if (selectedEstId) {
-      return establishments.find((e) => String(e.id) === String(selectedEstId)) || null;
-    }
-    return establishments[0] || null;
-  }, [establishments, selectedEstId]);
   const summary = reportData?.summary || buildLocalSummary(localEstablishments);
   const byType = reportData?.byType || buildLocalByType(localEstablishments);
   const questionAnswers = useMemo(
@@ -518,139 +511,7 @@ function SanitaryReportAnalytics() {
         </section>
       </div>
 
-      {/* ── Specific Establishment Compliance & Standing Audit Report Section ── */}
-      <section className="specific-establishment-audit-card">
-        <div className="audit-card-top">
-          <div className="audit-title-left">
-            <FiShield className="shield-icon" />
-            <div>
-              <h3>Specific Establishment Compliance &amp; Standing Audit</h3>
-              <p>Verify individual business sanitary standing, permit validity, compliance history, and requirements status</p>
-            </div>
-          </div>
-
-          <div className="audit-selector-wrap">
-            <label htmlFor="establishment-picker">Select Business:</label>
-            <select
-              id="establishment-picker"
-              value={selectedEstablishment?.id || ""}
-              onChange={(e) => setSelectedEstId(e.target.value)}
-            >
-              {establishments.map((est) => (
-                <option key={est.id} value={est.id}>
-                  {est.business_name} ({est.barangay} • Permit: {est.permit_number || "No Permit"})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {selectedEstablishment ? (
-          <div className="establishment-profile-content">
-            {/* Standing Banner */}
-            <div className={`establishment-standing-banner ${selectedEstablishment.compliance_status || "good_standing"}`}>
-              <div className="standing-badge-info">
-                <span className="standing-pill">
-                  {selectedEstablishment.compliance_status === "good_standing" && "⭐ EXCELLENT / GOOD STANDING"}
-                  {selectedEstablishment.compliance_status === "upcoming" && "🕒 UPCOMING REGULAR INSPECTION"}
-                  {selectedEstablishment.compliance_status === "for_completion" && "⚠️ FOR COMPLIANCE (PENDING ITEMS)"}
-                  {selectedEstablishment.compliance_status === "violation" && "🔴 NEEDS ATTENTION / DELINQUENT STANDING"}
-                  {selectedEstablishment.compliance_status === "no_permit" && "❌ NO SANITARY PERMIT RECORD"}
-                </span>
-                <strong>{selectedEstablishment.business_name}</strong>
-                <p>
-                  {selectedEstablishment.compliance_status === "good_standing" &&
-                    "Consistently compliant with municipal sanitary codes, passed routine inspections, and active permit."}
-                  {selectedEstablishment.compliance_status === "for_completion" &&
-                    "Conditionally operating — has pending sanitation requirements or corrective actions to complete."}
-                  {selectedEstablishment.compliance_status === "violation" &&
-                    "Sanitary deficiencies or customer complaints reported — priority for immediate reinspection."}
-                  {selectedEstablishment.compliance_status === "upcoming" &&
-                    "Standard standing — next routine inspection cycle scheduled."}
-                  {selectedEstablishment.compliance_status === "no_permit" &&
-                    "Unregistered or expired sanitary permit — subject to immediate closure warning or compliance notice."}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="print-establishment-audit-btn"
-                onClick={() => window.print()}
-                title="Print official establishment sanitary standing audit"
-              >
-                <FiPrinter /> Print Business Profile
-              </button>
-            </div>
-
-            {/* Business Key Info Grid */}
-            <div className="establishment-details-grid">
-              <div className="audit-detail-item">
-                <span>Owner / Manager</span>
-                <strong>{selectedEstablishment.owner_name || "Unspecified"}</strong>
-                <small>{selectedEstablishment.contact_number || "No contact info"}</small>
-              </div>
-
-              <div className="audit-detail-item">
-                <span>Location &amp; Barangay</span>
-                <strong>{selectedEstablishment.barangay || "Mauban, Quezon"}</strong>
-                <small>{selectedEstablishment.address || selectedEstablishment.complete_address || `Brgy. ${selectedEstablishment.barangay}`}</small>
-              </div>
-
-              <div className="audit-detail-item">
-                <span>Business Type &amp; Category</span>
-                <strong>{selectedEstablishment.business_type_name || "Food / Service Establishment"}</strong>
-                <small>Permit Class: {selectedEstablishment.permit_size || "SP (Standard)"}</small>
-              </div>
-
-              <div className="audit-detail-item">
-                <span>Sanitary Permit Number</span>
-                <strong>{selectedEstablishment.permit_number || "NO PERMIT"}</strong>
-                <small>
-                  {selectedEstablishment.expiration_date
-                    ? `Expires: ${selectedEstablishment.expiration_date}`
-                    : "No expiration record"}
-                </small>
-              </div>
-
-              <div className="audit-detail-item">
-                <span>Inspection Frequency</span>
-                <strong>{selectedEstablishment.inspection_frequency || "Quarterly"}</strong>
-                <small>
-                  Status After Latest Inspection:{" "}
-                  <b style={{ color: "#0f7a45" }}>{selectedEstablishment.status_after_inspection || "Passed"}</b>
-                </small>
-              </div>
-
-              <div className="audit-detail-item">
-                <span>Compliance Standing Score</span>
-                <strong>
-                  {selectedEstablishment.compliance_status === "good_standing" ? "100% (Fully Compliant)" : "Under Monitoring"}
-                </strong>
-                <small>Assigned Sanitary Inspector: MHO Team</small>
-              </div>
-            </div>
-
-            {/* Requirements Checklist */}
-            <div className="audit-requirements-box">
-              <h4>Sanitary Requirements &amp; Clearance Verification</h4>
-              <div className="requirements-badges-list">
-                {(selectedEstablishment.submitted_requirements || [
-                  "Health Certificate of Food Handlers",
-                  "Water Potability Bacteriological Test",
-                  "Proper Waste Segregation Bins",
-                  "Sanitary Toilet Facility",
-                ]).map((req, idx) => (
-                  <span key={idx} className="req-pill complied">
-                    <FiCheckCircle /> {req}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="submission-empty">No establishment selected.</p>
-        )}
-      </section>
+      <EstablishmentHistoryReport />
 
       <div className="sanitary-question-title-row" style={{ marginTop: "24px", marginBottom: "16px" }}>
         <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0f7a45" }}>Administrative & Community Insights</h3>
