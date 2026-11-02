@@ -16,7 +16,7 @@ jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual:
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
 // ---- the words of the design (written here once, as the owner gave them) ----
-const LEAD = "Everything a visitor reads inside the app. Change it here, and it reaches the app in its next version.";
+const LEAD = "Everything a visitor reads inside the app. Change it here and the app picks it up.";
 const GREETING_HINT = "Ang {name} ay papalitan ng app ng pangalan ng bisita. Kung aalisin ninyo ito, pare-pareho ang makikita ng lahat.";
 const FEE = ["fee_regular", "fee_discounted", "fee_office"];
 
@@ -102,6 +102,9 @@ describe("the header of the page", () => {
     expect(within(header).getByRole("heading", { level: 1 }).textContent).toBe("Mobile App Content");
     expect(within(header).getByText(LEAD)).toBeTruthy();
     expect(header.textContent).not.toMatch(/without a new app version/i);
+    // the old sentence said a change reached the app only in its next version
+    expect(header.textContent).not.toMatch(/next version/i);
+    expect(screen.queryByText(/reaches the app in its next version/)).toBeNull();
     expect(within(header).queryAllByRole("button")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /cancel|save changes/i })).toBeNull();
   });
