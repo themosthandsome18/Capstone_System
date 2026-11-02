@@ -906,6 +906,14 @@ class MobileUserProfile {
   }
 }
 
+/// What a destination says when nobody has reviewed it yet, and when nobody has arrived this month.
+const noRatingsLabel = 'No ratings yet';
+const noArrivalsLabel = 'None recorded yet';
+
+/// A rating as it is written: one decimal, or [noRatingsLabel] when it is 0 (the server sends 0 for a destination without a counted review).
+String ratingText(double rating) =>
+    rating > 0 ? rating.toStringAsFixed(1) : noRatingsLabel;
+
 class Destination {
   const Destination({
     required this.id,
@@ -940,8 +948,12 @@ class Destination {
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
   String get permitLabel =>
       hasMayorPermit ? 'Mayor\'s permit verified' : 'Permit not verified';
-  String get visitorsLabel =>
-      '${formatCount(monthlyArrivals)} visitor arrivals';
+  String get visitorsLabel => monthlyArrivals > 0
+      ? '${formatCount(monthlyArrivals)} visitor arrivals'
+      : noArrivalsLabel;
+
+  /// The rating is the average of the reviews, so a destination with none has no rating to show: not "0.0".
+  String get ratingLabel => ratingText(rating);
 
   factory Destination.fromJson(Map<String, dynamic> json) {
     final name = cleanDestinationName('${json['resort_name'] ?? 'Destination'}');

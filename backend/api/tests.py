@@ -613,9 +613,17 @@ class MobilePublicApiTests(TestCase):
         destinations = response.json()["destinations"]
         names = [destination["resort_name"] for destination in destinations]
 
-        self.assertLessEqual(len(destinations), 10)
+        # Every destination reaches the app, but the names that are left out (and any "Kwebang"): there was a cut at 10 before.
+        from .views.mobile import MOBILE_EXCLUDED_DESTINATION_NAMES
+
+        expected = {
+            resort.resort_id
+            for resort in Resort.objects.all()
+            if resort.resort_name not in MOBILE_EXCLUDED_DESTINATION_NAMES and "kwebang" not in resort.resort_name.lower()
+        }
+        self.assertGreater(len(expected), 10)  # the fixture reaches its case: more than the old cut
+        self.assertEqual({destination["resort_id"] for destination in destinations}, expected)
         self.assertIn("Dona Choleng Camping Resort", names)
-        self.assertLess(len(destinations), Resort.objects.count())
         self.assertTrue(all(not name.endswith("(") for name in names))
 
     def test_mobile_bootstrap_prioritizes_high_visitor_destinations(self):
@@ -646,7 +654,8 @@ class MobilePublicApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         first_destination = response.json()["destinations"][0]
         self.assertEqual(first_destination["resort_name"], "Orlan Beach Resort")
-        self.assertEqual(first_destination["monthly_arrivals"], 1)
+        # one record of 5000 people: the arrivals are people, so 5000 (it said 1, the number of records)
+        self.assertEqual(first_destination["monthly_arrivals"], 5000)
 
     def test_mobile_tourist_registration_creates_booking_record(self):
         response = self.client.post(

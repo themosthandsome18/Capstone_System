@@ -4,6 +4,11 @@ The fixed world below is built the same way on every run (explicit ids, fixed da
 so the bootstrap it produces is byte for byte the same on every run. The golden file next to it,
 `bootstrap_golden/before_appcontent_5ded035.json`, is what the bootstrap of THIS world was on origin/main
 (5ded035), BEFORE this key existed. It was taken from the old code before a line of the new code was written.
+
+Regenerated once, for the destination-accuracy change: the fixed world's bootstrap now carries every destination
+(15, not the first 10) and three more keys on each resort (`yearly_arrivals`, `review_count`, and `is_active`, which is
+true for every resort of the world). Nothing else in it moved: the first ten destinations, the featured six and every
+resort in referenceTables are the old ones apart from those keys, and barangays, notifications, theme, emergencyContacts and the other reference tables are byte for byte the same.
 """
 from datetime import datetime, timezone as dt_timezone
 

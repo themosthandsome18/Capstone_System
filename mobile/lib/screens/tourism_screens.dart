@@ -720,7 +720,7 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
                                   const Icon(Icons.star, size: 14, color: Color(0xFFFFD700)),
                                   const SizedBox(width: 4),
                                   Text(
-                                    destination.rating.toStringAsFixed(1),
+                                    destination.ratingLabel,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,

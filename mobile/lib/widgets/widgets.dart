@@ -1257,7 +1257,7 @@ class HeroCard extends StatelessWidget {
                     const Icon(Icons.star, size: 14, color: Color(0xFFFFD700)),
                     const SizedBox(width: 4),
                     Text(
-                      destination.rating.toStringAsFixed(1),
+                      destination.ratingLabel,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -1483,7 +1483,7 @@ class DestinationTile extends StatelessWidget {
                       const Icon(Icons.star, size: 12, color: Color(0xFFFFD700)),
                       const SizedBox(width: 3),
                       Text(
-                        destination.rating.toStringAsFixed(1),
+                        destination.ratingLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10.5,
@@ -1647,7 +1647,7 @@ class RatingPill extends StatelessWidget {
           const Icon(Icons.star, size: 14, color: Color(0xffe6a100)),
           const SizedBox(width: 3),
           Text(
-            rating.toStringAsFixed(1),
+            ratingText(rating),
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
           ),
         ],
