@@ -1423,7 +1423,7 @@ function buildFallbackVisual(item) {
       type: "split",
       items: [
         { label: "Same Day", value: numbers[0] || 0 },
-        { label: "Overnight / multi-day", value: numbers[1] || 0 },
+        { label: "Overnight", value: numbers[1] || 0 },
       ],
     };
   }

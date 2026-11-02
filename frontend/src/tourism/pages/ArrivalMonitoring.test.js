@@ -249,6 +249,26 @@ describe("Arrival Monitoring export", () => {
     expect(csvRows).toHaveLength(350);
   });
 
+  it("writes the Overnight and Same Day the screen shows", async () => {
+    // 3 Nights, 6 people: 3 x 6 nights, 4 x 6 days
+    const counted = { ...row(1), male: 4, female: 2, overnight: 18, sameDay: 24 };
+    tourismApi.getArrivalMonitoringExport.mockResolvedValue({ rowCount: 1, rows: [counted] });
+    setup({ date: "2026-09-22" }, { rows: [counted], rowCount: 1 });
+
+    const cells = Array.from(screen.getByText("Group 1").closest("tr").querySelectorAll("td")).map(
+      (cell) => cell.textContent
+    );
+    const [, headers, csvRows] = await exportView();
+
+    for (const header of ["Overnight", "Same Day"]) {
+      // the table's columns are the export's columns, in the same order
+      const at = headers.indexOf(header);
+      expect(String(csvRows[0][at])).toBe(cells[at]);
+    }
+    expect(csvRows[0][headers.indexOf("Overnight")]).toBe(18);
+    expect(csvRows[0][headers.indexOf("Same Day")]).toBe(24);
+  });
+
   it("shows how many rows the capped table holds", () => {
     const rows = Array.from({ length: 300 }, (_, index) => row(index));
     setup({ date: "all" }, { rows, rowCount: 350 });

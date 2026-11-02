@@ -5052,14 +5052,14 @@ class ReferenceOptionSchemaTests(TestCase):
 
         self.assertIn(row.id, ids)
 
-    def test_the_reports_read_stay_nights_before_the_name(self):
+    def test_the_reports_read_stay_nights_and_never_the_name(self):
         from .services.tourism import (
             build_arrival_monitoring_payload,
             build_tourism_question_answers,
         )
 
         # Opposite on purpose: the name says same day, stay_nights says 5; the
-        # name says nights, stay_nights says 0. Since commit 3 stay_nights wins.
+        # name says nights, stay_nights says 0. Only stay_nights counts.
         day_name = Itinerary.objects.create(id=9400, name="Weekend 2 Days", stay_nights=5)
         night_name = Itinerary.objects.create(id=9401, name="Camp Out", stay_nights=0)
         quezon = Province.objects.get(name="Quezon")
@@ -5083,14 +5083,12 @@ class ReferenceOptionSchemaTests(TestCase):
             row["survey_id"]: row
             for row in build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]
         }
-        self.assertEqual((rows["SCH-0001"]["sameDay"], rows["SCH-0001"]["overnight"]), (0, 4))
+        # 5 nights x 4 people, 6 days x 4 people; 0 nights x 6 people, 1 day x 6 people
+        self.assertEqual((rows["SCH-0001"]["sameDay"], rows["SCH-0001"]["overnight"]), (24, 20))
         self.assertEqual((rows["SCH-0002"]["sameDay"], rows["SCH-0002"]["overnight"]), (6, 0))
 
         answers = {a["id"]: a for a in build_tourism_question_answers({"year": "2026"})}
-        self.assertEqual(
-            answers["stay_type"]["answer"],
-            "Same-day visitors: 6; overnight or multi-day visitors: 4.",
-        )
+        self.assertEqual(answers["stay_type"]["answer"], "Same day: 30; Overnight: 20.")
 
     def test_the_model_has_no_change_without_a_migration(self):
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
@@ -5459,111 +5457,179 @@ def _stay_report_numbers():
     }
 
 
-def _old_name_parse(name):
-    """The name reading every report used before itinerary_stay existed, copied
-    from the old code as the oracle: (same_day, nights)."""
-    text = (name or "").lower()
-    if "day" in text or "same" in text:
-        return True, 0
-    if "2" in text:
-        return False, 2
-    if "3" in text:
-        return False, 3
-    if "4" in text:
-        return False, 4
-    if "5" in text:
-        return False, 5
-    return False, 1
+def _stay_case(stay_nights, male, female, survey_id="CASE-01", itinerary_id=9800, name="Stay Case"):
+    """One arrived record on a Length of Stay with `stay_nights`, and what the
+    reports say about it: the Arrival Monitoring row and summary, the Dashboard's
+    Stay Type, and the Reports' Same Day / Overnight answer."""
+    from .services.tourism import (
+        build_arrival_monitoring_payload,
+        build_dashboard_payload,
+        build_tourism_question_answers,
+    )
+
+    ensure_test_reference_tables()
+    quezon = Province.objects.get(name="Quezon")
+    people = male + female
+    itinerary = Itinerary.objects.create(id=itinerary_id, name=name, stay_nights=stay_nights)
+    TouristRecord.objects.create(
+        survey_id=survey_id, full_name="Group", contact_number="09170000000",
+        country=Country.objects.get(name="Philippines"), region=quezon.region, province=quezon,
+        arrival_date="2026-04-02", resort=Resort.objects.order_by("resort_id").first(),
+        itinerary=itinerary, travel_mode=TravelMode.objects.first(),
+        boat_type=BoatType.objects.first(), visit_purpose=VisitPurpose.objects.first(),
+        total_visitors=people, filipino_count=people, total_male=male, total_female=female,
+        age_8_59=people, status="arrived",
+    )
+    arrival = build_arrival_monitoring_payload({"date": "2026-04-02"})
+    answers = {a["id"]: a for a in build_tourism_question_answers({"year": "2026"})}
+    return {
+        "row": arrival["rows"][0],
+        "summary": arrival["summary"],
+        "dashboard": dict(build_dashboard_payload({"year": "2026"})["stayType"]),
+        "answer": answers["stay_type"]["answer"],
+    }
 
 
 class ItineraryStayTests(TestCase):
-    """Reports read an itinerary's stay_nights, and the NAME only when it is None."""
+    """Overnight = nights x people, Same Day = (nights + 1) x people.
 
-    # What the old code gave for each of the 12 live names: (same_day, nights).
-    # Written out, not computed: if any of these moved, an LGU number moved.
-    LIVE_EXPECTED = {
-        "Overnight": (False, 1),
-        "Same Day": (True, 0),
-        "2 Nights": (False, 2),
-        "3 Nights": (False, 3),
-        "4 Nights": (False, 4),
-        "5 Nights and above": (False, 5),
-        "6 Nights": (False, 1),  # the old reading missed the 6; the name says 6
-        "Que": (False, 1),
-        "Island Hopping Circuit": (False, 1),
-        "Beach and Resort Day Tour": (True, 0),
-        "Heritage and Lighthouse Stop": (False, 1),
-        "Eco Adventure Trail": (False, 1),
-    }
+    nights is the Length of Stay's stay_nights (not set = 0; the NAME is never
+    read) and people is male + female.
+    """
 
-    # The reports on the fixture with every stay_nights None, taken from the OLD
-    # code before it was replaced (the same fixture, run on the old code).
+    # The reports on the fixture with every stay_nights None: 0 nights, so every
+    # record is its people x 1 day and there is no overnight.
     GOLDEN_WITH_NULLS = {
         "arrival_rows": {
-            "STY-01": (0, 1), "STY-02": (2, 0), "STY-03": (0, 3), "STY-04": (0, 5),
-            "STY-05": (0, 7), "STY-06": (0, 11), "STY-07": (0, 13), "STY-08": (0, 17),
-            "STY-09": (0, 19), "STY-10": (23, 0), "STY-11": (0, 29), "STY-12": (0, 31),
+            "STY-01": (1, 0), "STY-02": (2, 0), "STY-03": (3, 0), "STY-04": (5, 0),
+            "STY-05": (7, 0), "STY-06": (11, 0), "STY-07": (13, 0), "STY-08": (17, 0),
+            "STY-09": (19, 0), "STY-10": (23, 0), "STY-11": (29, 0), "STY-12": (31, 0),
         },
-        "dashboard_stay_type": {"dayTour": 25, "overnight": 136},
-        "stay_type_answer": "Same-day visitors: 25; overnight or multi-day visitors: 136.",
-        "overnight_resort_answer": "Aquazul Hotel and Resort has the highest overnight demand with 96 visitors.",
-        "average_stay_answer": "The estimated average stay is 1.3 night(s) per visitor based on itinerary labels.",
+        "dashboard_stay_type": {"dayTour": 161, "overnight": 0},
+        "stay_type_answer": "Same day: 161; Overnight: 0.",
+        "overnight_resort_answer": "No overnight stays are recorded yet.",
+        "average_stay_answer": "The estimated average stay is 0.0 night(s) per visitor, from each Length of Stay's nights.",
     }
 
-    # -- the helper --------------------------------------------------------
+    # -- the worked examples, one test each --------------------------------
 
-    def test_the_twelve_live_names_read_exactly_as_the_old_code_did(self):
-        from .services.tourism import itinerary_stay
+    def _check(self, stay_nights, male, female, overnight, same_day):
+        case = _stay_case(stay_nights, male, female)
+        self.assertEqual((case["row"]["overnight"], case["row"]["sameDay"]), (overnight, same_day))
+        self.assertEqual((case["summary"]["overnight"], case["summary"]["sameDay"]), (overnight, same_day))
+        self.assertEqual(case["dashboard"], {"dayTour": same_day, "overnight": overnight})
+        self.assertEqual(case["answer"], f"Same day: {same_day}; Overnight: {overnight}.")
 
-        self.assertEqual(sorted(self.LIVE_EXPECTED), sorted(LIVE_ITINERARY_NAMES))
-        for name, expected in self.LIVE_EXPECTED.items():
+    def test_3_nights_and_6_people_is_overnight_18_and_same_day_24(self):
+        self._check(3, 4, 2, overnight=18, same_day=24)
+
+    def test_2_nights_and_4_people_is_overnight_8_and_same_day_12(self):
+        self._check(2, 1, 3, overnight=8, same_day=12)
+
+    def test_1_night_and_1_person_is_overnight_1_and_same_day_2(self):
+        self._check(1, 0, 1, overnight=1, same_day=2)
+
+    def test_overnight_and_7_people_is_overnight_7_and_same_day_14(self):
+        self._check(1, 3, 4, overnight=7, same_day=14)
+
+    def test_same_day_and_3_people_is_overnight_0_and_same_day_3(self):
+        self._check(0, 2, 1, overnight=0, same_day=3)
+
+    # -- not set ------------------------------------------------------------
+
+    def test_not_set_is_0_nights_and_the_name_is_never_read(self):
+        # Names that the old reading took as 1 night, same day, and 2 nights.
+        for name in ["Overnight", "Same Day", "Weekend 2 Days", "3 Nights"]:
             with self.subTest(name=name):
-                self.assertEqual(itinerary_stay(name, None), expected)
-                self.assertEqual(itinerary_stay(name), expected)  # None is the default
-                self.assertEqual(itinerary_stay(name, None), _old_name_parse(name))
+                TouristRecord.objects.filter(survey_id__startswith="CASE-").delete()
+                Itinerary.objects.filter(id=9800).delete()
+                case = _stay_case(None, 3, 2, itinerary_id=9800, name=name)
+                self.assertEqual((case["row"]["overnight"], case["row"]["sameDay"]), (0, 5))
 
-    def test_the_name_reading_matches_the_old_code_on_tricky_names(self):
-        from .services.tourism import itinerary_stay
+    def test_zero_is_a_value_and_not_set_is_the_same_count(self):
+        from .services.tourism import stay_counts
 
-        # "2 or 5 nights": the old chain took the 2 first. "Same trip": only
-        # "same" makes it same day. None and "" are 1 night.
-        for name in ["2 or 5 nights", "2 and 3 nights", "Same trip", "Sameday", "Day 4", "Holiday", "25 nights",
-                     "3-4 nights", "", None, "Friday Night", "Weekend 2 Days", "Trip 5", "A 4 B 3"]:
-            with self.subTest(name=name):
-                self.assertEqual(itinerary_stay(name, None), _old_name_parse(name))
-        self.assertEqual(itinerary_stay("2 or 5 nights", None), (False, 2))
-        self.assertEqual(itinerary_stay("Same trip", None), (True, 0))
+        self.assertEqual(stay_counts(0, 2, 3), (0, 5))
+        self.assertEqual(stay_counts(None, 2, 3), (0, 5))
 
-    def test_weekend_2_days_with_two_nights_is_two_nights_not_same_day(self):
-        # The bug this field exists for: "day" in the name made it a same-day stay.
-        from .services.tourism import itinerary_stay
+    def test_the_helper_works_from_male_and_female(self):
+        from .services.tourism import stay_counts
 
-        self.assertEqual(itinerary_stay("Weekend 2 Days", None), (True, 0))  # the old, wrong, reading
-        self.assertEqual(itinerary_stay("Weekend 2 Days", 2), (False, 2))
-
-    def test_stay_nights_wins_over_the_name_both_ways(self):
-        from .services.tourism import itinerary_stay
-
-        self.assertEqual(itinerary_stay("Same Day", 3), (False, 3))
-        self.assertEqual(itinerary_stay("2 Nights", 0), (True, 0))
-        self.assertEqual(itinerary_stay("Overnight", 7), (False, 7))
-
-    def test_zero_is_a_value_and_none_is_not_set(self):
-        from .services.tourism import itinerary_stay
-
-        # 0 must NOT fall through to the name: "Overnight" with 0 is same day.
-        self.assertEqual(itinerary_stay("Overnight", 0), (True, 0))
-        self.assertEqual(itinerary_stay("Overnight", None), (False, 1))
+        self.assertEqual(stay_counts(3, 4, 2), (18, 24))
+        self.assertEqual(stay_counts(3, None, 2), (6, 8))
+        self.assertEqual(stay_counts(3, 0, 0), (0, 0))
 
     def test_the_old_helpers_are_gone(self):
         import api.services.tourism as tourism
 
-        self.assertFalse(hasattr(tourism, "get_stay_counts"))
-        self.assertFalse(hasattr(tourism, "estimate_stay_nights"))
+        for name in ("itinerary_stay", "get_stay_counts", "estimate_stay_nights"):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(tourism, name))
+
+    # -- what does not change -------------------------------------------------
+
+    def test_total_arrivals_and_fees_collected_do_not_move_with_the_nights(self):
+        from .services.tourism import (
+            build_arrival_monitoring_payload,
+            build_dashboard_payload,
+            entrance_fee,
+        )
+
+        _stay_case(3, 4, 2, survey_id="TOT-01", itinerary_id=9810, name="Three")
+        itinerary = Itinerary.objects.get(pk=9810)
+        TouristRecord.objects.filter(survey_id="TOT-01").update(discounted_count=2)
+        _stay_case(0, 1, 2, survey_id="TOT-02", itinerary_id=9811, name="Zero")
+
+        def figures():
+            summary = build_arrival_monitoring_payload({"date": "2026-04-02"})["summary"]
+            dashboard = build_dashboard_payload({"year": "2026"})["metrics"]
+            return (
+                summary["totalArrivals"], summary["feesCollected"], summary["totalMale"],
+                summary["totalFemale"], dashboard["totalRevenueCollected"],
+            )
+
+        expected = (
+            9, entrance_fee(6, 2) + entrance_fee(3, 0), 5, 4, entrance_fee(9, 2),
+        )
+        at_3_nights = figures()
+        itinerary.stay_nights = 0
+        itinerary.save()
+        at_0_nights = figures()
+        itinerary.stay_nights = None
+        itinerary.save()
+        not_set = figures()
+
+        self.assertEqual(at_3_nights, expected)
+        self.assertEqual(at_0_nights, expected)
+        self.assertEqual(not_set, expected)
+
+    # -- Export CSV is the screen ------------------------------------------
+
+    def test_the_export_has_the_same_numbers_as_the_screen(self):
+        from .services.tourism import (
+            build_arrival_monitoring_export,
+            build_arrival_monitoring_payload,
+        )
+
+        _stay_case(3, 4, 2, survey_id="EXP-01", itinerary_id=9820, name="Three")
+        _stay_case(2, 1, 3, survey_id="EXP-02", itinerary_id=9821, name="Two")
+        _stay_case(None, 2, 2, survey_id="EXP-03", itinerary_id=9822, name="Unset")
+        params = {"date": "2026-04-02"}
+
+        screen = build_arrival_monitoring_payload(params)
+        export = build_arrival_monitoring_export(params)
+
+        by_id = lambda rows: {r["survey_id"]: r for r in rows}
+        self.assertEqual(by_id(export["rows"]), by_id(screen["rows"]))
+        self.assertEqual(export["rowCount"], screen["rowCount"])
+        # and the screen's totals are the sum of those rows
+        self.assertEqual(sum(r["overnight"] for r in export["rows"]), screen["summary"]["overnight"])
+        self.assertEqual(sum(r["sameDay"] for r in export["rows"]), screen["summary"]["sameDay"])
+        self.assertEqual((screen["summary"]["overnight"], screen["summary"]["sameDay"]), (18 + 8, 24 + 12 + 4))
 
     # -- the reports, on real data -----------------------------------------
 
-    def test_with_every_stay_nights_none_the_reports_are_what_they_were(self):
+    def test_with_every_stay_nights_none_every_record_is_0_nights(self):
         _stay_fixture()
         self.assertFalse(Itinerary.objects.exclude(stay_nights=None).filter(id__gte=9701).exists())
 
@@ -5571,9 +5637,8 @@ class ItineraryStayTests(TestCase):
 
     def test_the_reports_use_stay_nights_where_it_is_set(self):
         _stay_fixture()
-        # Three set, nine still None. Eco Adventure Trail (31): None read as
-        # 1 night -> same day. Beach and Resort Day Tour (23): same day ->
-        # 3 nights. 6 Nights (13): read as 1 -> 6.
+        # Three set, nine still None (0 nights). Eco Adventure Trail (31) 0 nights,
+        # Beach and Resort Day Tour (23) 3 nights, 6 Nights (13) 6 nights.
         Itinerary.objects.filter(name="Eco Adventure Trail").update(stay_nights=0)
         Itinerary.objects.filter(name="Beach and Resort Day Tour").update(stay_nights=3)
         Itinerary.objects.filter(name="6 Nights").update(stay_nights=6)
@@ -5582,25 +5647,35 @@ class ItineraryStayTests(TestCase):
 
         rows = numbers["arrival_rows"]
         self.assertEqual(rows["STY-12"], (31, 0))
-        self.assertEqual(rows["STY-10"], (0, 23))
-        self.assertEqual(rows["STY-07"], (0, 13))
-        self.assertEqual(rows["STY-02"], (2, 0))   # a None still reads its name
-        self.assertEqual(rows["STY-03"], (0, 3))
-        self.assertEqual(numbers["dashboard_stay_type"], {"dayTour": 33, "overnight": 128})
-        self.assertEqual(
-            numbers["stay_type_answer"],
-            "Same-day visitors: 33; overnight or multi-day visitors: 128.",
-        )
-        # nights: 214 before; 6 Nights 13 x 1 -> 13 x 6 (+65); Day Tour 0 -> 23 x 3 (+69);
-        # Eco 31 x 1 -> 0 (-31): 317 over 161 visitors.
+        self.assertEqual(rows["STY-10"], (92, 69))   # 4 days x 23, 3 nights x 23
+        self.assertEqual(rows["STY-07"], (91, 78))   # 7 days x 13, 6 nights x 13
+        self.assertEqual(rows["STY-02"], (2, 0))     # a None is 0 nights
+        self.assertEqual(rows["STY-03"], (3, 0))
+        # nights 69 + 78 = 147; days 161 + 147 = 308
+        self.assertEqual(numbers["dashboard_stay_type"], {"dayTour": 308, "overnight": 147})
+        self.assertEqual(numbers["stay_type_answer"], "Same day: 308; Overnight: 147.")
+        # 147 nights over 161 visitors
         self.assertEqual(
             numbers["average_stay_answer"],
-            "The estimated average stay is 2.0 night(s) per visitor based on itinerary labels.",
+            "The estimated average stay is 0.9 night(s) per visitor, from each Length of Stay's nights.",
         )
+        top = Resort.objects.order_by("resort_id").first().resort_name  # holds the 6 Nights record
         self.assertEqual(
             numbers["overnight_resort_answer"],
-            "Aquazul Hotel and Resort has the highest overnight demand with 88 visitors.",
+            f"{top} has the highest overnight demand with 78 overnight.",
         )
+
+    def test_the_seed_sets_stay_nights_as_migration_0052_does(self):
+        import importlib
+
+        migration = importlib.import_module("api.migrations.0052_set_itinerary_stay_nights")
+        approved = {pk: (name, nights) for pk, name, nights in migration.MAPPING}
+
+        seeded = REFERENCE_TABLES["itineraries"]
+        self.assertEqual([row["id"] for row in seeded], [1, 2, 3, 4, 5, 6])
+        for row in seeded:
+            with self.subTest(id=row["id"]):
+                self.assertEqual((row["name"], row["stay_nights"]), approved[row["id"]])
 
     def test_a_set_stay_nights_does_not_change_the_name_shown(self):
         _stay_fixture()
@@ -5610,7 +5685,8 @@ class ItineraryStayTests(TestCase):
 
         rows = {r["survey_id"]: r for r in build_arrival_monitoring_payload({"date": "2026-04-02"})["rows"]}
         self.assertEqual(rows["STY-02"]["itinerary"], "Same Day")
-        self.assertEqual((rows["STY-02"]["sameDay"], rows["STY-02"]["overnight"]), (0, 2))
+        # 2 people: 2 nights x 2, 3 days x 2
+        self.assertEqual((rows["STY-02"]["sameDay"], rows["STY-02"]["overnight"]), (6, 4))
 
 
 class ReferenceOptionApiTests(TestCase):
@@ -5764,7 +5840,8 @@ class ReferenceOptionApiTests(TestCase):
         modes = self.admin.get(self._url("travel-mode")).json()
 
         self.assertEqual(itineraries[9814]["stay_nights"], 2)
-        self.assertIsNone(itineraries[min(itineraries)]["stay_nights"])
+        self.assertEqual(itineraries[1]["stay_nights"], 1)  # "Overnight", from the seed
+        self.assertEqual(itineraries[2]["stay_nights"], 0)  # "Same Day"
         self.assertIs(boats[9815]["requires_capacity_fare"], True)
         self.assertNotIn("stay_nights", modes[0])
         self.assertNotIn("requires_capacity_fare", modes[0])
@@ -6359,11 +6436,12 @@ class ReferenceOptionProtectedNameTests(TestCase):
                 option = self._option_named(model, name)
                 self._with_records(option, kind, 2)
                 stored_name = option.name
+                stored_stay = getattr(option, "stay_nights", None)  # the seed sets it
 
                 # even with the right count, even with a stay length: the name wins
                 response = self.admin.patch(
                     self._url(kind, option.id),
-                    {"name": f"{name} Renamed", "confirm_affected_records": 2, "stay_nights": 1}
+                    {"name": f"{name} Renamed", "confirm_affected_records": 2, "stay_nights": 9}
                     if kind == "itinerary" else {"name": f"{name} Renamed", "confirm_affected_records": 2},
                     format="json",
                 )
@@ -6374,7 +6452,7 @@ class ReferenceOptionProtectedNameTests(TestCase):
                 option.refresh_from_db()
                 self.assertEqual(option.name, stored_name)  # the database is unchanged
                 if kind == "itinerary":
-                    self.assertIsNone(option.stay_nights)  # and nothing else was saved
+                    self.assertEqual(option.stay_nights, stored_stay)  # and nothing else was saved
 
     def test_a_protected_name_is_protected_in_any_dress(self):
         # stored as "private vehicle" (lower case, extra space): still protected
@@ -6614,7 +6692,20 @@ class ItineraryStayFillTests(TestCase):
     def _values(self):
         return {i.id: i.stay_nights for i in Itinerary.objects.filter(id__lte=12).order_by("id")}
 
-    # -- the gate: does any live number move? ------------------------------
+    def _approved_nights(self, itinerary_id):
+        return self.APPROVED[itinerary_id][1] or 0  # not set = 0 nights
+
+    def _expected_rows(self, filled):
+        """Every arrived record's (same day, overnight), worked out from the rule
+        by hand here, not by the code under test."""
+        rows = {}
+        for record in TouristRecord.objects.filter(status="arrived"):
+            nights = self._approved_nights(record.itinerary_id) if filled else 0
+            people = record.total_male + record.total_female
+            rows[record.survey_id] = ((nights + 1) * people, nights * people)
+        return rows
+
+    # -- the gate: what the fill changes in the reports --------------------
 
     def test_the_fixture_is_the_live_split(self):
         self.assertEqual(_live_like_fixture(), 19)
@@ -6631,32 +6722,47 @@ class ItineraryStayFillTests(TestCase):
             "4 Nights": (2, 4), "5 Nights and above": (1, 2), "Eco Adventure Trail": (1, 4),
         })
 
-    def test_no_number_of_the_live_reports_moves_when_the_fill_runs(self):
+    def test_the_reports_count_every_row_as_0_nights_until_the_fill_runs(self):
         _live_like_fixture()
+
         before = _stay_report_numbers()
+
+        # nothing is set: 0 nights, so the 31 arrived people are 31 days and no nights
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 31, "overnight": 0})
+        self.assertEqual(before["stay_type_answer"], "Same day: 31; Overnight: 0.")
+        self.assertIn("0.0 night(s)", before["average_stay_answer"])
+        self.assertEqual(before["arrival_rows"], self._expected_rows(filled=False))
+
+    def test_the_fill_moves_the_reports_by_exactly_the_rule(self):
+        _live_like_fixture()
 
         self._fill()
         after = _stay_report_numbers()
 
-        # the live figures the baseline shows
-        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
-        self.assertEqual(before["stay_type_answer"], "Same-day visitors: 5; overnight or multi-day visitors: 26.")
-        self.assertIn("1.8 night(s)", before["average_stay_answer"])
-        # and not one of them is different afterwards
-        self.assertEqual(after, before)
-        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 5, "overnight": 26})
-        self.assertIn("1.8 night(s)", after["average_stay_answer"])
+        # nights x people: Overnight 1x4 + 2 Nights 2x(6+4) + 3 Nights 3x4 + 4 Nights 4x(3+1) = 52
+        # days x people: 31 + 52 = 83. Eco Adventure Trail stays "not set" = 0 nights.
+        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 83, "overnight": 52})
+        self.assertEqual(after["stay_type_answer"], "Same day: 83; Overnight: 52.")
+        self.assertIn("1.7 night(s)", after["average_stay_answer"])  # 52 / 31
+        self.assertEqual(after["arrival_rows"], self._expected_rows(filled=True))
         # the fill really ran
         self.assertEqual(self._values()[3], 2)
 
-    def test_the_arrival_rows_of_every_record_stay_the_same(self):
+    def test_the_fill_changes_neither_total_arrivals_nor_fees(self):
+        from .services.tourism import build_arrival_monitoring_payload
+
         _live_like_fixture()
-        before = _stay_report_numbers()["arrival_rows"]
-        self.assertEqual(len(before), 8)  # the 8 arrived records
+        params = {"date": "2026-04-02"}
+        before = build_arrival_monitoring_payload(params)["summary"]
 
         self._fill()
+        after = build_arrival_monitoring_payload(params)["summary"]
 
-        self.assertEqual(_stay_report_numbers()["arrival_rows"], before)
+        self.assertEqual(before["totalArrivals"], 31)
+        for key in ("totalArrivals", "totalMale", "totalFemale", "feesCollected"):
+            with self.subTest(key=key):
+                self.assertEqual(after[key], before[key])
+        self.assertNotEqual((after["overnight"], after["sameDay"]), (before["overnight"], before["sameDay"]))
 
     # -- what the fill sets ------------------------------------------------
 
@@ -6764,19 +6870,19 @@ class ItineraryStayFillTests(TestCase):
 
     # -- what the fix is for -----------------------------------------------
 
-    def test_six_nights_is_six_nights_after_the_fill_and_was_one_before(self):
-        from .services.tourism import itinerary_stay
+    def test_six_nights_is_six_nights_after_the_fill_and_none_before(self):
+        from .services.tourism import stay_counts
 
         _live_like_fixture()
-        itinerary = Itinerary.objects.get(pk=7)
-        before = itinerary_stay(itinerary.name, itinerary.stay_nights)
+        before = Itinerary.objects.get(pk=7).stay_nights
 
         self._fill()
-        itinerary.refresh_from_db()
-        after = itinerary_stay(itinerary.name, itinerary.stay_nights)
+        after = Itinerary.objects.get(pk=7).stay_nights
 
-        self.assertEqual(before, (False, 1))  # the name reading missed the 6
-        self.assertEqual(after, (False, 6))
+        self.assertIsNone(before)  # not set: 0 nights, whatever the name says
+        self.assertEqual(after, 6)
+        self.assertEqual(stay_counts(before, 3, 0), (0, 3))
+        self.assertEqual(stay_counts(after, 3, 0), (18, 21))
 
     def test_a_new_six_nights_record_counts_six_nights_in_the_average_stay(self):
         _live_like_fixture()
@@ -6797,11 +6903,11 @@ class ItineraryStayFillTests(TestCase):
         self._fill()
         after = _stay_report_numbers()
 
-        # 31 + 3 = 34 visitors; nights 56 + 3 x 1 = 59 before, 56 + 3 x 6 = 74 after
-        self.assertIn("1.7 night(s)", before["average_stay_answer"])  # 59 / 34
-        self.assertIn("2.2 night(s)", after["average_stay_answer"])  # 74 / 34
-        # still an overnight stay either way
-        self.assertEqual(before["dashboard_stay_type"], after["dashboard_stay_type"])
+        # 31 + 3 = 34 visitors; nights 0 before; 52 + 3 x 6 = 70 after
+        self.assertIn("0.0 night(s)", before["average_stay_answer"])
+        self.assertIn("2.1 night(s)", after["average_stay_answer"])  # 70 / 34
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 34, "overnight": 0})
+        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 83 + 21, "overnight": 70})
 
     def test_a_new_record_on_the_beach_and_resort_day_tour_is_same_day_before_and_after(self):
         _live_like_fixture()
@@ -6818,21 +6924,23 @@ class ItineraryStayFillTests(TestCase):
         self._fill()
         after = _stay_report_numbers()
 
-        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 12, "overnight": 26})
-        self.assertEqual(after, before)
+        # 0 nights either way (not set, then set to 0): 7 people, 1 day, no nights
+        self.assertEqual(before["arrival_rows"]["LV-NEW-10"], (7, 0))
+        self.assertEqual(after["arrival_rows"]["LV-NEW-10"], (7, 0))
+        self.assertEqual(before["dashboard_stay_type"], {"dayTour": 31 + 7, "overnight": 0})
+        self.assertEqual(after["dashboard_stay_type"], {"dayTour": 83 + 7, "overnight": 52})
 
-    def test_the_rows_left_not_set_read_their_name_with_the_same_result(self):
-        from .services.tourism import itinerary_stay
-
+    def test_the_rows_left_not_set_count_0_nights_and_their_name_is_never_read(self):
         _live_like_fixture()
-        names = {pk: Itinerary.objects.get(pk=pk).name for pk in (8, 9, 11, 12)}
-        before = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+        eco = TouristRecord.objects.get(itinerary_id=12)  # "Eco Adventure Trail", 4 people, arrived
 
+        before = _stay_report_numbers()["arrival_rows"][eco.survey_id]
         self._fill()
+        after = _stay_report_numbers()["arrival_rows"][eco.survey_id]
 
-        after = {pk: itinerary_stay(name, Itinerary.objects.get(pk=pk).stay_nights) for pk, name in names.items()}
+        self.assertIsNone(Itinerary.objects.get(pk=12).stay_nights)
+        self.assertEqual(before, (4, 0))  # 4 people x 1 day, 4 x 0 nights; the old name reading gave 1 night
         self.assertEqual(after, before)
-        self.assertEqual(set(after.values()), {(False, 1)})
 
     def test_the_migration_is_data_only(self):
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
@@ -8977,11 +9085,12 @@ class VisitorDemographicsVisualTests(TestCase):
                               {"type": "comparison", "items": [{"label": "August 2026", "value": 12}, {"label": "September 2026", "value": 3}]}),
             "peak_month": ("August 2026 leads with 12 visitors, equal to 60.0% of the selected total.",
                            {"type": "share", "label": "August 2026", "value": 12, "total": 20, "percentage": 60.0}),
-            "stay_type": ("Same-day visitors: 0; overnight or multi-day visitors: 20.",
-                          {"type": "split", "items": [{"label": "Same Day", "value": 0}, {"label": "Overnight / multi-day", "value": 20}]}),
-            "overnight_resort": ("Dona Choleng Camping Resort has the highest overnight demand with 13 visitors.",
+            # 20 people, all on 1 night (Overnight): 20 nights, 40 days
+            "stay_type": ("Same day: 40; Overnight: 20.",
+                          {"type": "split", "items": [{"label": "Same Day", "value": 40}, {"label": "Overnight", "value": 20}]}),
+            "overnight_resort": ("Dona Choleng Camping Resort has the highest overnight demand with 13 overnight.",
                                  {"type": "ranking", "items": [{"label": "Dona Choleng Camping Resort", "value": 13}, {"label": "Aquazul Hotel and Resort", "value": 7}]}),
-            "average_stay": ("The estimated average stay is 1.0 night(s) per visitor based on itinerary labels.",
+            "average_stay": ("The estimated average stay is 1.0 night(s) per visitor, from each Length of Stay's nights.",
                              {"type": "metric", "label": "Average stay", "value": 1.0, "unit": "night(s)"}),
             "top_origin": ("Quezon leads with 13 visitors, equal to 65.0% of the selected total.",
                            {"type": "ranking", "items": [{"label": "Quezon", "value": 13}, {"label": "United States", "value": 7}]}),
