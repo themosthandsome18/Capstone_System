@@ -102,7 +102,153 @@ jest.mock("../context/SanitationDataContext", () => ({
 }));
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  mockCtx.renewalData = { rows: [AMBULANT_ROW], summary: {}, stageCounts: [], barangays: [] };
+  mockCtx.loading = false;
+  mockCtx.error = "";
+  mockCtx.refreshRenewalData.mockReset().mockResolvedValue(undefined);
+  mockCtx.createRenewal.mockReset().mockResolvedValue({});
+  mockCtx.updateRenewal.mockReset().mockResolvedValue({});
+});
+
+describe("payment-neutral renewal workflow", () => {
+  const history = "Keep original note\n[Payment Confirmed: Method: Cash, OR#: LEGACY-42 on 2025-01-03]";
+  const legacy = { ...AMBULANT_ROW, stage: "payment_pending", stage_label: "Payment Pending", progress: 71, remarks: history };
+  function openDetail(row = legacy) {
+    mockCtx.renewalData = { rows: [row], summary: {}, barangays: [], stageCounts: [{ stage: row.stage, label: row.stage_label, count: 1 }] };
+    render(<PermitRenewal />);
+    fireEvent.click(screen.getByTitle("View Full Details"));
+    return document.querySelector(".renewal-detail-modal");
+  }
+  function expectNoPaymentPayload(payload) {
+    ["renewal_fee", "payment_status", "payment_method", "or_number"].forEach(key => expect(payload).not.toHaveProperty(key));
+    expect(["mark_paid", "mark_unpaid"]).not.toContain(payload.action);
+  }
+
+  test("removes fee/payment columns, filter, inputs and mutation controls", () => {
+    const detail = openDetail();
+    expect(screen.queryByRole("columnheader", { name: /^(Fee|Payment)$/ })).toBeNull();
+    expect(screen.queryByText("All payment status")).toBeNull();
+    expect(within(detail).queryByText(/Renewal Fee|Payment Method|Official Receipt|Confirm Payment|Revert to Unpaid/)).toBeNull();
+    expect(detail.querySelector(".renewal-payment-card")).toBeNull();
+    expect(screen.queryByText(/process payments/i)).toBeNull();
+    expect(mockCtx.updateRenewal).not.toHaveBeenCalled();
+  });
+
+  test("new applications omit every payment field and retain selected requirements and remarks", async () => {
+    const form = openNewRenewal();
+    selectEstablishment(form, WATER_EST.id);
+    expect(within(form).queryByLabelText(/fee|payment|receipt/i)).toBeNull();
+    fireEvent.click(within(checklist(form)).getByText("Water Potability Certificate"));
+    fireEvent.change(within(form).getByLabelText("Remarks"), { target: { value: history } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(mockCtx.createRenewal).toHaveBeenCalledTimes(1));
+    const payload = mockCtx.createRenewal.mock.calls[0][0];
+    expectNoPaymentPayload(payload);
+    expect(payload).toMatchObject({ establishment: WATER_EST.id, stage: "application_filed", permit_number: WATER_EST.permit_number, submitted_requirements: ["Water Potability Certificate"], remarks: history });
+  });
+
+  test("failed filing preserves input and can be retried without payment fields", async () => {
+    mockCtx.createRenewal.mockRejectedValueOnce(new Error("Synthetic filing failed")).mockResolvedValueOnce({});
+    const form = openNewRenewal();
+    selectEstablishment(form, WATER_EST.id);
+    fireEvent.change(within(form).getByLabelText("Remarks"), { target: { value: history } });
+    fireEvent.submit(form);
+    await screen.findByText("Synthetic filing failed");
+    expect(within(form).getByLabelText("Remarks").value).toBe(history);
+    expect(within(form).getByLabelText("Establishment").value).toBe(String(WATER_EST.id));
+    fireEvent.submit(form);
+    await waitFor(() => expect(mockCtx.createRenewal).toHaveBeenCalledTimes(2));
+    mockCtx.createRenewal.mock.calls.forEach(([payload]) => expectNoPaymentPayload(payload));
+    await waitFor(() => expect(document.querySelector(".renewal-form-modal")).toBeNull());
+  });
+
+  test("keeps the actual legacy stage, counts and original receipt-bearing remarks without mutation", () => {
+    const detail = openDetail();
+    expect(within(detail).getByRole("note").textContent).toMatch(/Recorded stage: Payment Pending.*No payment entry or confirmation is required here/s);
+    expect(document.querySelector(".renewal-stage-pill.payment_pending").textContent).toBe("Payment Pending (legacy workflow)");
+    expect(document.querySelector(".renewal-stage-tile strong").textContent).toBe("1");
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+    expect(mockCtx.updateRenewal).not.toHaveBeenCalled();
+  });
+
+  test("legacy advancement requests exactly one server transition and uses the returned stage", async () => {
+    mockCtx.updateRenewal.mockResolvedValueOnce({ ...legacy, stage: "approved", stage_label: "Approved", progress: 86 });
+    const detail = openDetail();
+    fireEvent.click(within(detail).getByRole("button", { name: "Proceed to: Approved" }));
+    await waitFor(() => expect(mockCtx.refreshRenewalData).toHaveBeenCalledTimes(1));
+    expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
+    expect(mockCtx.updateRenewal).toHaveBeenCalledWith(legacy.id, { action: "advance_stage" });
+    expect(within(detail).queryByRole("note")).toBeNull();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+    expect(mockCtx.refreshRenewalData.mock.calls[0][0]).not.toHaveProperty("payment_status");
+  });
+
+  test("inspection advancement does not skip or silently approve the legacy intermediate stage", async () => {
+    mockCtx.updateRenewal.mockResolvedValueOnce(legacy);
+    const detail = openDetail({ ...legacy, stage: "inspection_scheduled", stage_label: "Inspection Scheduled", progress: 57 });
+    fireEvent.click(within(detail).getByRole("button", { name: "Advance to next recorded stage" }));
+    await within(detail).findByRole("note");
+    expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
+    expect(mockCtx.updateRenewal).toHaveBeenCalledWith(legacy.id, { action: "advance_stage" });
+  });
+
+  test.each(["unpaid", "partial", "paid", undefined])("release remains available with %s payment metadata", async payment_status => {
+    const row = { ...legacy, payment_status };
+    mockCtx.updateRenewal.mockResolvedValueOnce({ ...row, stage: "released", stage_label: "Released", released_at: "2026-11-02" });
+    const detail = openDetail(row);
+    fireEvent.click(within(detail).getByRole("button", { name: "Mark as Released" }));
+    await waitFor(() => expect(mockCtx.refreshRenewalData).toHaveBeenCalledTimes(1));
+    expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
+    expect(mockCtx.updateRenewal).toHaveBeenCalledWith(row.id, { action: "mark_released" });
+    expect(within(detail).queryByRole("button", { name: "Mark as Released" })).toBeNull();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+  });
+
+  test.each([["Proceed to: Approved", "advance_stage"], ["Mark as Released", "mark_released"]])("failed %s preserves legacy state and supports an explicit retry", async (label, action) => {
+    mockCtx.updateRenewal.mockRejectedValueOnce(new Error("Synthetic action failed")).mockResolvedValueOnce(legacy);
+    const detail = openDetail();
+    fireEvent.click(within(detail).getByRole("button", { name: label }));
+    expect((await within(detail).findByRole("alert")).textContent).toContain("Synthetic action failed");
+    expect(within(detail).getByRole("note")).toBeTruthy();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+    fireEvent.click(within(detail).getByRole("button", { name: label }));
+    await waitFor(() => expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(2));
+    expect(mockCtx.updateRenewal.mock.calls.map(([id, payload]) => [id, payload])).toEqual([[legacy.id, { action }], [legacy.id, { action }]]);
+    await waitFor(() => expect(within(detail).queryByRole("alert")).toBeNull());
+  });
+
+  test("records without payment metadata render with no fabricated payment status", () => {
+    const { payment_status, payment_status_label, renewal_fee, ...row } = legacy;
+    const detail = openDetail(row);
+    expect(within(detail).getByRole("note")).toBeTruthy();
+    expect(screen.queryByText(/Unpaid|Partial|✅ Paid|Awaiting payment settlement/)).toBeNull();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+  });
+
+  test("empty table spans only the remaining ten columns", () => {
+    mockCtx.renewalData.rows = [];
+    render(<PermitRenewal />);
+    expect(screen.getByText("No renewal records found.").colSpan).toBe(10);
+  });
+
+  test("retains pending state until the single stage request finishes", async () => {
+    let finish;
+    mockCtx.updateRenewal.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const detail = openDetail();
+    fireEvent.click(within(detail).getByRole("button", { name: "Proceed to: Approved" }));
+    expect(within(detail).getByRole("button", { name: "Advancing..." }).disabled).toBe(true);
+    expect(within(detail).getByRole("button", { name: "Mark as Released" }).disabled).toBe(true);
+    expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
+    finish({ ...legacy, stage: "approved", stage_label: "Approved" });
+    await waitFor(() => expect(within(detail).getByRole("button", { name: "Proceed to: Released" }).disabled).toBe(false));
+  });
+
+  test("still validates the establishment before filing", async () => {
+    const form = openNewRenewal();
+    fireEvent.submit(form);
+    await screen.findByText("Please select an establishment.");
+    expect(mockCtx.createRenewal).not.toHaveBeenCalled();
+  });
 });
 afterEach(cleanup);
 
