@@ -646,10 +646,9 @@ function SanitaryReportAnalytics() {
 
       <section className="sanitary-insight-card">
         <h3>Renewal Alerts</h3>
-        <div className="renewal-alert-columns">
+        <div className="renewal-alert-columns" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
           <RenewalAlertList title="Expiring Soon" rows={renewalAlerts.expiringSoon || []} />
           <RenewalAlertList title="Expired" rows={renewalAlerts.expired || []} />
-          <RenewalAlertList title="Payment Pending" rows={renewalAlerts.paymentPending || []} />
         </div>
       </section>
 
