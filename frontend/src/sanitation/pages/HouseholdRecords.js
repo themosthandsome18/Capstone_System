@@ -274,13 +274,6 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "last_survey_date",
 ];
 
-function normalizeComparable(value) {
-  if (value === null || value === undefined) return null;
-  if (value === "") return "";
-  const number = Number(value);
-  return Number.isFinite(number) && String(value).trim() !== "" ? number : value;
-}
-
 export function buildHouseholdEditPayload(form, snapshot) {
   const payload = {};
   for (const field of EDITABLE_HOUSEHOLD_FIELDS) {
@@ -308,7 +301,9 @@ export function buildHouseholdEditPayload(form, snapshot) {
     if (field === "last_survey_date" && (current === "" || current === null) && (original === "" || original === null || original === undefined)) {
       continue;
     }
-    if (normalizeComparable(current) !== normalizeComparable(original)) {
+    // Only member counts above are numeric. Preserve exact text, including
+    // leading zeros and whitespace, while retaining null/undefined equivalence.
+    if ((current ?? null) !== (original ?? null)) {
       payload[field] = field === "last_survey_date" && current === "" ? null : current;
     }
   }
