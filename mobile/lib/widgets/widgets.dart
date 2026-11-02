@@ -2297,23 +2297,6 @@ class FactRow extends StatelessWidget {
   }
 }
 
-class AmenityChip extends StatelessWidget {
-  const AmenityChip({super.key, required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-      backgroundColor: context.brand.tint,
-      side: BorderSide.none,
-    );
-  }
-}
-
 class FormPageScaffold extends StatelessWidget {
   const FormPageScaffold({
     super.key,

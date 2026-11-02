@@ -3109,12 +3109,6 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   ],
                   SectionHeader(title: 'Tourism Record'),
                   DestinationFactsPanel(destination: widget.destination),
-                  SectionHeader(title: 'Amenities & Facilities'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _buildAmenityChips(widget.destination),
-                  ),
                   SectionHeader(title: 'Location & Map'),
                   LocationCard(destination: widget.destination),
                   const SizedBox(height: 24),
@@ -3323,53 +3317,6 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
         ),
       ),
     );
-  }
-
-  List<Widget> _buildAmenityChips(Destination destination) {
-    final type = destination.type.toLowerCase();
-    final List<Map<String, dynamic>> items = [];
-
-    if (type.contains('beach') || type.contains('island') || type.contains('cagbalete')) {
-      items.addAll([
-        {'icon': Icons.beach_access, 'label': 'White Sand Beach'},
-        {'icon': Icons.pool, 'label': 'Swimming / Snorkeling'},
-        {'icon': Icons.directions_boat, 'label': 'Boat Island Hop'},
-        {'icon': Icons.cabin, 'label': 'Cottages & Huts'},
-        {'icon': Icons.wifi, 'label': 'Wi-Fi Area'},
-        {'icon': Icons.restaurant, 'label': 'Food & Drinks'},
-        {'icon': Icons.shower, 'label': 'Clean Restrooms'},
-      ]);
-    } else if (type.contains('camp') || type.contains('resort')) {
-      items.addAll([
-        {'icon': Icons.cabin, 'label': 'Glamping & Tents'},
-        {'icon': Icons.local_fire_department, 'label': 'Bonfire Area'},
-        {'icon': Icons.wifi, 'label': 'Wi-Fi Available'},
-        {'icon': Icons.local_parking, 'label': 'Vehicle Parking'},
-        {'icon': Icons.restaurant, 'label': 'Grill / Dining'},
-        {'icon': Icons.solar_power, 'label': '24/7 Electricity'},
-      ]);
-    } else if (type.contains('falls') || type.contains('nature')) {
-      items.addAll([
-        {'icon': Icons.water_drop, 'label': 'Freshwater Pool'},
-        {'icon': Icons.hiking, 'label': 'Eco Trail Trek'},
-        {'icon': Icons.photo_camera, 'label': 'Scenic Views'},
-        {'icon': Icons.table_restaurant, 'label': 'Picnic Sheds'},
-      ]);
-    } else {
-      items.addAll([
-        {'icon': Icons.account_balance, 'label': 'Historical Marker'},
-        {'icon': Icons.camera_alt, 'label': 'Photo Spot'},
-        {'icon': Icons.directions_walk, 'label': 'Walking Tour'},
-        {'icon': Icons.info_outline, 'label': 'Tourism Guide'},
-      ]);
-    }
-
-    return items
-        .map((item) => AmenityChip(
-              icon: item['icon'] as IconData,
-              label: item['label'] as String,
-            ))
-        .toList();
   }
 }
 
