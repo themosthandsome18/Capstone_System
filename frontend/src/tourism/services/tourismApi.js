@@ -255,10 +255,6 @@ function mergeBootstrapData(remote = {}) {
   };
 }
 
-function isBackendValidationError(error) {
-  return Boolean(error?.status);
-}
-
 // The id of an item as it goes into an address: a whole number from 1 up. Anything else is a mistake of the caller, not of the server.
 function itemId(id) {
   const number = typeof id === "string" && /^[0-9]+$/.test(id) ? Number(id) : id;
