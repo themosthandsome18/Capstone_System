@@ -128,7 +128,8 @@ function ArrivalMonitoring() {
   async function openRecordOf(row, event) {
     if (recordRequested.current) return; // one request for one click, however many times it is pressed
     recordRequested.current = true;
-    recordTrigger.current = event.currentTarget;
+    // The focus goes back to the name of the row whichever part of it was pressed: it is the one thing in a row that can take it.
+    recordTrigger.current = event.currentTarget.closest("tr")?.querySelector(".arrival-record-link") || event.currentTarget;
     setRecordError("");
     try {
       setOpenRecord(await tourismApi.getTouristRecord(row.survey_id));
@@ -536,13 +537,17 @@ function ArrivalMonitoring() {
             <tbody>
               {rows.length ? (
                 rows.map((row) => (
-                  <tr key={row.survey_id} className="arrival-row">
+                  <tr key={row.survey_id} className="arrival-row" onClick={(event) => openRecordOf(row, event)}>
                     <td>{formatDate(row.date)}</td>
                     <td className="guest-name">
                       <button
                         type="button"
                         className="arrival-record-link"
-                        onClick={(event) => openRecordOf(row, event)}
+                        onClick={(event) => {
+                          // The press is the button's own: it must not go on up to the row, which would ask for the record a second time.
+                          event.stopPropagation();
+                          openRecordOf(row, event);
+                        }}
                       >
                         {row.group || row.survey_id}
                       </button>

@@ -2,12 +2,13 @@
  * Arrival Monitoring: the name of a row opens the modal of that arrival. The table itself (its columns, its numbers, its totals) is as it was.
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { readFileSync } from "fs";
 import { join } from "path";
 import ArrivalMonitoring from "./ArrivalMonitoring";
 import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
-import { normalised, expectedNorm } from "../testing/cssRules";
+import { normalised, expectedNorm, rule } from "../testing/cssRules";
 
 const mockNavigate = jest.fn();
 jest.mock("react-router-dom", () => ({ useNavigate: () => mockNavigate }), { virtual: true });
@@ -160,6 +161,167 @@ describe("the name of a row", () => {
       fireEvent.click(screen.getByRole("button", { name: "SURV-3" }));
     });
     expect(screen.getByRole("dialog").textContent).not.toMatch(/undefined|null|NaN/);
+  });
+});
+
+describe("the whole row opens it, not only the name", () => {
+  const firstRow = () => table().querySelector("tbody tr.arrival-row");
+
+  // the cells of a row, by what they are: date, name, male, female, length of stay, overnight, same day, resort, fee, the chevron
+  it.each([
+    ["the date", 0],
+    ["the male count", 2],
+    ["the length of stay", 4],
+    ["the resort", 7],
+    ["the fee", 8],
+    ["the chevron", 9],
+  ])("pressing %s opens the modal of that row, asking the server once", async (_label, column) => {
+    setup();
+
+    await act(async () => {
+      fireEvent.click(firstRow().children[column]);
+    });
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledTimes(1);
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledWith("SURV-1");
+  });
+
+  it("another row's cell asks for that row's record", async () => {
+    setup();
+    const second = table().querySelectorAll("tbody tr.arrival-row")[1];
+
+    await act(async () => {
+      fireEvent.click(second.children[7]);
+    });
+
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledWith("SURV-2");
+  });
+
+  it("pressing the name itself asks for the record exactly once, not twice (the press does not go on up to the row)", async () => {
+    setup();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Ana Reyes" }));
+    });
+
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("the press of the name is stopped there: it does not go on up to the row", () => {
+    setup();
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    const stop = jest.spyOn(event, "stopPropagation");
+
+    screen.getByRole("button", { name: "Ana Reyes" }).dispatchEvent(event);
+
+    expect(stop).toHaveBeenCalled();
+    stop.mockRestore();
+  });
+
+  it("the Enter key on the name opens it, with the keyboard alone", async () => {
+    setup();
+    const button = screen.getByRole("button", { name: "Ana Reyes" });
+    button.focus();
+
+    await act(async () => {
+      userEvent.keyboard("{enter}");
+    });
+
+    expect(button.tagName).toBe("BUTTON");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledTimes(1);
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledWith("SURV-1");
+  });
+
+  it("the Space key on the name opens it too", async () => {
+    setup();
+    screen.getByRole("button", { name: "Ben Cruz" }).focus();
+
+    await act(async () => {
+      userEvent.keyboard("{space}");
+    });
+
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledTimes(1);
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledWith("SURV-2");
+  });
+
+  it("the name is still a real button, and it is the only thing in the row that can take the focus", () => {
+    setup();
+    const row = firstRow();
+    const focusable = row.querySelectorAll('button, a[href], input, select, textarea, [tabindex]');
+    expect(Array.from(focusable).map((el) => el.tagName)).toEqual(["BUTTON"]);
+    expect(row.getAttribute("role")).toBeNull();
+    expect(row.getAttribute("tabindex")).toBeNull();
+    expect(screen.getByRole("button", { name: "Ana Reyes" }).tagName).toBe("BUTTON");
+  });
+
+  it("after a press on another part of the row, closing it gives the focus to the name", async () => {
+    setup();
+    await act(async () => {
+      fireEvent.click(firstRow().children[7]);
+    });
+
+    fireEvent.click(document.querySelector(".arm-footer button")); // the Close of the footer
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ana Reyes" }));
+  });
+
+  it("a second row pressed while the first is still being asked for is ignored: one request at a time", async () => {
+    let finish;
+    tourismApi.getTouristRecord.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    setup();
+    const rows = table().querySelectorAll("tbody tr.arrival-row");
+
+    await act(async () => {
+      fireEvent.click(rows[0].children[0]);
+      fireEvent.click(rows[1].children[0]);
+    });
+
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledTimes(1);
+    expect(tourismApi.getTouristRecord).toHaveBeenCalledWith("SURV-1");
+    await act(async () => finish(RECORD));
+  });
+
+  it("the TOTAL row does not open anything: no request, no modal, whichever cell is pressed", async () => {
+    setup();
+    const total = table().querySelector("tr.daily-total");
+    expect(total.classList.contains("arrival-row")).toBe(false);
+
+    for (const cell of Array.from(total.children)) {
+      await act(async () => {
+        fireEvent.click(cell);
+      });
+    }
+    await act(async () => {
+      fireEvent.click(total);
+    });
+
+    expect(tourismApi.getTouristRecord).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the message row of an empty table does not open anything either", async () => {
+    setup([]);
+    const message = table().querySelector("tbody td[colspan]").parentElement;
+
+    await act(async () => {
+      fireEvent.click(message);
+      fireEvent.click(message.firstElementChild);
+    });
+
+    expect(tourismApi.getTouristRecord).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the pointer is the whole row's: the stylesheet gives tr.arrival-row cursor: pointer, and not the total row", () => {
+    setup();
+    expect(rule("tr.arrival-row").cursor).toBe("pointer");
+    expect(table().querySelectorAll("tr.arrival-row")).toHaveLength(3);
+    expect(table().querySelector("tr.daily-total").matches("tr.arrival-row")).toBe(false);
+    expect(table().querySelector("thead tr").matches("tr.arrival-row")).toBe(false);
   });
 });
 

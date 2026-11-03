@@ -5358,6 +5358,10 @@
   outline-offset: 3px;
 }
 
+tr.arrival-row {
+  cursor: pointer;
+}
+
 tr.arrival-row:hover > td {
   background: #fdf5ec;
 }
