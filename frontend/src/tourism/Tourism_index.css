@@ -1405,6 +1405,35 @@
   pointer-events: none;
 }
 
+/* The rows-per-page choice of a table paged in the browser (components/TablePagination.js), in the same row as the two buttons. */
+.pagination-actions.table-pagination-actions {
+  align-items: center;
+}
+
+.table-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.table-pagination-size select {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--th-primary);
+  background: #ffffff;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.table-pagination-size select:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: 2px;
+}
+
 /* =============================================================== ARRIVAL MONITORING PAGE ============================================== */
 
 .arrival-page {

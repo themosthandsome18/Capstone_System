@@ -25,6 +25,7 @@ import { formatNumber } from "../utils/format";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ArrivalRecordModal from "./ArrivalRecordModal";
+import TablePagination, { usePagination } from "../components/TablePagination";
 
 const currentReportingYear = String(new Date().getFullYear());
 
@@ -157,6 +158,9 @@ function ArrivalMonitoring() {
     () => referenceTables?.resorts || [],
     [referenceTables?.resorts]
   );
+  // The table is paged in the browser, over the rows received. The cards, the TOTAL row and Export CSV are not: they are the server's
+  // figures for every arrival of the view. Back to the first page when the view or any filter of the loaded data changes.
+  const pagination = usePagination(rows, JSON.stringify(arrivalMonitoring.filters || {}));
 
   // What the data on screen is for: the filters of the loaded response, not
   // the controls' pending selection. Every label is built from this, so the
@@ -536,7 +540,7 @@ function ArrivalMonitoring() {
 
             <tbody>
               {rows.length ? (
-                rows.map((row) => (
+                pagination.visibleRows.map((row) => (
                   <tr key={row.survey_id} className="arrival-row" onClick={(event) => openRecordOf(row, event)}>
                     <td>{formatDate(row.date)}</td>
                     <td className="guest-name">
@@ -596,6 +600,8 @@ function ArrivalMonitoring() {
           </table>
         </div>
       </div>
+
+      <TablePagination pagination={pagination} idPrefix="arrival" />
 
       {openRecord ? (
         <ArrivalRecordModal
