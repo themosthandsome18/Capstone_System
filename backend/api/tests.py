@@ -5372,17 +5372,28 @@ class ReferenceOptionPayloadTests(TestCase):
         self.assertFalse(self._ids(mobile, "itineraries") & set(self.ITINERARY_RETIRED))
         self.assertFalse(self._ids(mobile, "visitPurposes") & set(self.PURPOSE_RETIRED))
 
-    def test_the_cache_holds_the_full_lists_under_v2(self):
+    def test_reference_responses_ignore_stale_mutable_rows_under_v2(self):
         from django.core.cache import cache
         from .services.tourism import build_reference_tables_payload
 
-        build_reference_tables_payload(active_only=True)
+        stale = build_reference_tables_payload()
+        cache.set(self.CACHE_KEY, stale, timeout=900)
+        option = Itinerary.objects.filter(is_active=True).first()
+        option.is_active = False
+        option.stay_nights = 4
+        option.save(update_fields=["is_active", "stay_nights"])
 
-        cached = cache.get(self.CACHE_KEY)
-        self.assertIsNotNone(cached)
+        web = build_reference_tables_payload()
+        mobile = build_reference_tables_payload(active_only=True)
         self.assertTrue(
-            {i["id"] for i in cached["itineraries"]} >= set(self.ITINERARY_RETIRED)
+            self._ids(web, "itineraries") >= set(self.ITINERARY_RETIRED)
         )
+        row = next(item for item in web["itineraries"] if item["id"] == option.pk)
+        self.assertIs(row["is_active"], False)
+        self.assertEqual(row["stay_nights"], 4)
+        self.assertNotIn(option.pk, self._ids(mobile, "itineraries"))
+        self.assertTrue(all(set(item) == {"id", "name"} for item in mobile["itineraries"]))
+        self.assertEqual(cache.get(self.CACHE_KEY), stale)
         self.assertIsNone(cache.get("mobile_reference_tables_v1"))
 
     def test_an_entry_of_the_old_shape_under_v1_is_ignored(self):
@@ -6152,49 +6163,61 @@ class ReferenceOptionApiTests(TestCase):
     # -- the cache ---------------------------------------------------------
 
     def test_every_write_shows_in_the_next_payload(self):
-        from django.core.cache import cache
-
         # POST
-        self._payload()  # warms the cache
-        self.assertIsNotNone(cache.get(self.CACHE_KEY))
-        created = self.admin.post(self._url("visit-purpose"), {"name": "Cache Purpose"}, format="json").json()
-        self.assertIsNone(cache.get(self.CACHE_KEY))
+        before_ids = self._ids("visit-purpose")
+        response = self.admin.post(self._url("visit-purpose"), {"name": "Cache Purpose"}, format="json")
+        self.assertEqual(response.status_code, 201)
+        created = response.json()
+        self.assertEqual(self._ids("visit-purpose"), before_ids | {created["id"]})
         self.assertIn(created["id"], self._ids("visit-purpose"))
         self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
 
         # PATCH
         self._payload()
-        self.admin.patch(
+        renamed = self.admin.patch(
             self._url("visit-purpose", created["id"]),
             {"name": "Cache Purpose Renamed", "confirm_affected_records": 0}, format="json",
         )
-        self.assertIsNone(cache.get(self.CACHE_KEY))
+        self.assertEqual(renamed.status_code, 200)
         names = {i["id"]: i["name"] for i in self._payload()["visitPurposes"]}
         self.assertEqual(names[created["id"]], "Cache Purpose Renamed")
 
         # deactivate
         self._payload(active_only=True)
-        self.admin.post(self._url("visit-purpose", created["id"], "deactivate"))
-        self.assertIsNone(cache.get(self.CACHE_KEY))
+        retired = self.admin.post(self._url("visit-purpose", created["id"], "deactivate"))
+        self.assertEqual(retired.status_code, 200)
         self.assertNotIn(created["id"], self._ids("visit-purpose", active_only=True))
         self.assertIn(created["id"], self._ids("visit-purpose"))
+        self.assertIs(
+            next(item for item in self._payload()["visitPurposes"] if item["id"] == created["id"])["is_active"],
+            False,
+        )
 
         # reactivate
         self._payload(active_only=True)
-        self.admin.post(self._url("visit-purpose", created["id"], "reactivate"))
-        self.assertIsNone(cache.get(self.CACHE_KEY))
+        active = self.admin.post(self._url("visit-purpose", created["id"], "reactivate"))
+        self.assertEqual(active.status_code, 200)
         self.assertIn(created["id"], self._ids("visit-purpose", active_only=True))
+        self.assertIs(
+            next(item for item in self._payload()["visitPurposes"] if item["id"] == created["id"])["is_active"],
+            True,
+        )
 
-    def test_a_refused_write_leaves_the_cache_alone(self):
-        from django.core.cache import cache
-
+    def test_a_refused_write_preserves_the_reference_payload(self):
         option = self._make("travel-mode", 9880, "Held", uses=1)
-        self._payload()
+        before = self._payload()["travelModes"]
+        logs = ActivityLog.objects.count()
+        count = TravelMode.objects.count()
 
-        self.admin.patch(self._url("travel-mode", option.id), {"name": "Held 2"}, format="json")  # 409
-        self.admin.post(self._url("travel-mode"), {"name": ""}, format="json")  # 400
+        refused = self.admin.patch(self._url("travel-mode", option.id), {"name": "Held 2"}, format="json")
+        invalid = self.admin.post(self._url("travel-mode"), {"name": ""}, format="json")
 
-        self.assertIsNotNone(cache.get(self.CACHE_KEY))
+        self.assertEqual((refused.status_code, invalid.status_code), (409, 400))
+        option.refresh_from_db()
+        self.assertEqual(option.name, "Held")
+        self.assertEqual(TravelMode.objects.count(), count)
+        self.assertEqual(ActivityLog.objects.count(), logs)
+        self.assertEqual(self._payload()["travelModes"], before)
 
     # -- the trace ---------------------------------------------------------
 
@@ -7953,9 +7976,16 @@ class BoatCapacityFarePayloadTests(TestCase):
 
     def test_a_change_shows_in_the_very_next_bootstrap_even_with_the_cache_warm(self):
         from django.core.cache import cache
+        from .services.tourism import STATIC_REFERENCE_TABLE_SERIALIZERS, build_reference_tables_payload
 
         self._nine()
-        # warm everything that is cached, as a first visit would
+        # A legacy worker may have left a warm v2 entry; fare reads stay fresh.
+        legacy = build_reference_tables_payload()
+        cache.set(
+            self.CACHE_KEY,
+            {key: legacy[key] for key in STATIC_REFERENCE_TABLE_SERIALIZERS},
+            timeout=900,
+        )
         self.assertEqual(len(self._mobile()), 9)
         self.assertEqual(len(self._web()), 9)
         self.assertIsNotNone(cache.get(self.CACHE_KEY))
@@ -7977,18 +8007,22 @@ class BoatCapacityFarePayloadTests(TestCase):
         self.assertEqual(mobile[-1], "Renamed first tier")
         self.assertNotIn(self.seed.TIERS[0], mobile)
 
-    def test_the_list_is_not_in_the_cache_and_the_cache_key_is_still_v2(self):
+    def test_fares_stay_fresh_with_a_legacy_reference_cache_entry(self):
         from django.core.cache import cache
-
-        from .services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
+        from .services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY, build_reference_tables_payload
 
         self._nine()
-        self._mobile()
-        self._web()
+        stale = build_reference_tables_payload()
+        stale["boatCapacityFares"] = [{"name": "Stale fare"}]
+        cache.set(self.CACHE_KEY, stale, timeout=900)
+        BoatCapacityFare.objects.filter(display_order=10).update(is_active=False)
+        mobile = self._mobile()
+        web = self._web()
         self.assertEqual(MOBILE_REFERENCE_TABLES_CACHE_KEY, "mobile_reference_tables_v2")
-        cached = cache.get(self.CACHE_KEY)
-        self.assertIsNotNone(cached)
-        self.assertNotIn("boatCapacityFares", cached)
+        self.assertEqual(mobile, [{"name": name} for name in self.seed.TIERS[1:]])
+        self.assertEqual([item["name"] for item in web], self.seed.TIERS)
+        self.assertIs(web[0]["is_active"], False)
+        self.assertNotIn("Stale fare", [item["name"] for item in web])
 
     # -- nothing else moved ----------------------------------------------------
 
@@ -8020,17 +8054,20 @@ class BoatCapacityFarePayloadTests(TestCase):
             for item in with_nine_mobile[key]:
                 self.assertEqual(set(item), keys)
 
-    def test_the_cached_lists_are_not_touched_by_adding_the_key(self):
+    def test_fare_requests_preserve_reference_contracts_and_unrelated_cache(self):
         from django.core.cache import cache
 
         self._nine()
-        self._web()
-        cached_before = {key: list(value) for key, value in cache.get(self.CACHE_KEY).items()}
+        before = self.staff.get(self.WEB_TABLES).json()
+        cache.set("synthetic-unrelated-reference-check", {"sentinel": "keep"}, timeout=900)
+        self.addCleanup(cache.delete, "synthetic-unrelated-reference-check")
         self._mobile()
         self._web()
-        cached_after = cache.get(self.CACHE_KEY)
-        self.assertEqual(set(cached_before), set(cached_after))
-        self.assertEqual(cached_before, {key: list(value) for key, value in cached_after.items()})
+        after = self.staff.get(self.WEB_TABLES).json()
+        for key in self.OLD_LISTS:
+            self.assertEqual(before[key], after[key])
+        self.assertEqual(set(before), set(after))
+        self.assertEqual(cache.get("synthetic-unrelated-reference-check"), {"sentinel": "keep"})
 
     def test_adding_the_key_changes_no_stored_data(self):
         self._nine()

@@ -1,5 +1,13 @@
 # Project Progress & Status Tracker
 
+## Reference-option freshness repair — Wave 1 integration (2026-11-03; local)
+
+- Defect: the process-local `mobile_reference_tables_v2` cache could retain stale mutable reference rows for up to 900 seconds after Django Admin changes. The inactive-itinerary failure and warm-cache test-order dependency reproduced on both incoming main `c93e8b82b13390908ba75f469e32c5de4d461ef3` and the reconciliation, establishing a pre-existing application defect.
+- Correction: `build_reference_tables_payload()` reads all seven mutable reference lists from authoritative database state on every request. Existing fields, IDs, metadata and ordering remain; web lists include inactive history and mobile options remain active-only. No schema, configuration, frontend or Flutter changes.
+- RED to GREEN: the unchanged four-test regression module went from one pass/three failures to four passes; original and reverse test orders each passed both tests. Two persistent Django workers observed committed changes without restarting. Real local HTTP with DEBUG=False, synthetic Admin accounts and disposable migrated SQLite passed (18 HTTP 200 responses and three expected redirects).
+- Broader GREEN: regular backend 1,120 passed, zero failures/errors, nine existing PostgreSQL-specific skips; separate owned PostgreSQL owner-throttle runner 15 passed. Disposable migration rehearsal applied 84 migrations with none pending and no model drift. Initial discovery evidence is retained: one obsolete implicit cache-warmup failure was corrected by explicitly seeding its legacy fixture without removing assertions; the guarded PostgreSQL module was run through its required runner after ordinary discovery refused it.
+- Query tradeoff: previous builder cold/warm 8/1 SELECTs, now 8/8 (seven additional warm SELECTs), bounded across tested reference-list sizes with no observed N+1 growth. The nine skipped PostgreSQL concurrency/database checks remain unverified; the owner-throttle pass does not cover them. Local evidence is not deployment, production-capacity validation or full integrated-system acceptance. No push or deployment.
+
 ## Payment-neutral renewal stages — Backend Phase 2 (2026-11-02; local, uncommitted)
 
 - Verified clean Workstream A at `3d68e15ed9f60acd4d70b9127c2d40e1a97cf119`, branch `sanitation/wave1-a-backend-integrity`. Scope is automatic active progression, not complete payment-feature removal. Earlier payment-preservation and PATCH-atomicity checkpoints below remain historical evidence.
