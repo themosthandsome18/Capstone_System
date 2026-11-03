@@ -15,12 +15,11 @@ import { useSanitationData } from "../context/SanitationDataContext";
 import LoadingOverlay from "../../shared/LoadingOverlay";
 
 function getNextStageLabel(currentStage) {
-  // The current backend still has a legacy intermediate stage. Request one
-  // transition without presenting payment as an action the applicant must take.
-  if (currentStage === "inspection_scheduled") return "Advance to next recorded stage";
-  const idx = stageOptions.findIndex((s) => s.value === currentStage);
-  if (idx >= 0 && idx < stageOptions.length - 2) {
-    return `Proceed to: ${stageOptions[idx + 1].label}`;
+  if (currentStage === "payment_pending") return "Proceed to: Approved";
+  if (currentStage === "lapsed") return "Proceed to: Application Filed";
+  const idx = activeStageOptions.findIndex((s) => s.value === currentStage);
+  if (idx >= 0 && idx < activeStageOptions.length - 1) {
+    return `Proceed to: ${activeStageOptions[idx + 1].label}`;
   }
   return "Advance to Next Stage";
 }
@@ -36,9 +35,18 @@ const stageOptions = [
   { value: "lapsed", label: "Lapsed" },
 ];
 
+// Historical/special states remain filterable but are not required active steps.
+const activeStageOptions = stageOptions.filter(
+  (item) => item.value !== "payment_pending" && item.value !== "lapsed"
+);
+
+function hasRecordedProgress(progress) {
+  return typeof progress === "number" && Number.isFinite(progress) && progress >= 0 && progress <= 100;
+}
+
 function getStageLabel(stage, recordedLabel) {
   if (stage === "payment_pending") return "Payment Pending (legacy workflow)";
-  return recordedLabel || stageOptions.find((item) => item.value === stage)?.label || stage;
+  return recordedLabel || stageOptions.find((item) => item.value === stage)?.label || stage || "Stage not recorded";
 }
 
 const initialForm = {
@@ -373,13 +381,17 @@ function PermitRenewal() {
                   <td className={getDaysLeft(row.expiration_date) < 0 ? "days-late" : ""}>{formatDaysLeft(row.expiration_date)}</td>
                   <td><span className={`renewal-stage-pill ${row.stage}`}>{getStageLabel(row.stage, row.stage_label)}</span></td>
                   <td>
-                    <div className="renewal-progress"><b style={{ width: `${row.progress || 0}%` }} /></div>
-                    <small>{row.progress || 0}%</small>
+                    <div className="renewal-progress">
+                      {hasRecordedProgress(row.progress) ? <b style={{ width: `${row.progress}%` }} /> : null}
+                    </div>
+                    <small>{hasRecordedProgress(row.progress) ? `${row.progress}%` : "Not recorded"}</small>
                   </td>
                   <td>
                     <div className="renewal-actions">
                       <button type="button" onClick={() => { setActionError(""); setDetail(row); }} title="View Full Details" disabled={saving}><FiEye /></button>
-                      <button type="button" onClick={() => handleAdvance(row)} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
+                      {row.stage !== "released" ? (
+                        <button type="button" onClick={() => handleAdvance(row)} title={getNextStageLabel(row.stage)} disabled={saving}><FiSend /></button>
+                      ) : null}
                       <button type="button" onClick={() => handleRelease(row)} title="Mark as Released" disabled={saving}><FiPackage /></button>
                     </div>
                   </td>
@@ -513,6 +525,7 @@ function RenewalDetailModal({
 }) {
   const daysLeft = getDaysLeft(row.expiration_date);
   const isOverdue = daysLeft < 0 || row.stage === "lapsed";
+  const currentStageIndex = activeStageOptions.findIndex((item) => item.value === row.stage);
 
   const submitted = row.submitted_requirements || [];
   const baseRequirements = getEstablishmentRequirements(
@@ -614,19 +627,21 @@ function RenewalDetailModal({
         >
           <h3 style={{ margin: 0 }}>Renewal Pipeline Timeline</h3>
           <span style={{ fontSize: "12px", fontWeight: "700", color: "#047857" }}>
-            Stage {stageOptions.findIndex((s) => s.value === row.stage) + 1} of{" "}
-            {stageOptions.length - 1}
+            {currentStageIndex >= 0
+              ? `Stage ${currentStageIndex + 1} of ${activeStageOptions.length}`
+              : row.stage === "payment_pending"
+                ? "Legacy workflow state"
+                : row.stage === "lapsed"
+                  ? "Lapsed — outside active workflow"
+                  : getStageLabel(row.stage, row.stage_label)}
           </span>
         </div>
         <ol className="renewal-timeline">
-          {stageOptions.map((stage, index) => {
-            const currentIndex = stageOptions.findIndex(
-              (item) => item.value === row.stage
-            );
+          {activeStageOptions.map((stage, index) => {
             return (
               <li
                 key={stage.value}
-                className={index <= currentIndex ? "done" : ""}
+                className={currentStageIndex >= 0 && index <= currentStageIndex ? "done" : ""}
               >
                 <span>{index + 1}</span>
                 {stage.label}

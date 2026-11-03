@@ -172,7 +172,7 @@ describe("payment-neutral renewal workflow", () => {
   });
 
   test("legacy advancement requests exactly one server transition and uses the returned stage", async () => {
-    mockCtx.updateRenewal.mockResolvedValueOnce({ ...legacy, stage: "approved", stage_label: "Approved", progress: 86 });
+    mockCtx.updateRenewal.mockResolvedValueOnce({ ...legacy, stage: "approved", stage_label: "Approved", progress: 83 });
     const detail = openDetail();
     fireEvent.click(within(detail).getByRole("button", { name: "Proceed to: Approved" }));
     await waitFor(() => expect(mockCtx.refreshRenewalData).toHaveBeenCalledTimes(1));
@@ -183,11 +183,12 @@ describe("payment-neutral renewal workflow", () => {
     expect(mockCtx.refreshRenewalData.mock.calls[0][0]).not.toHaveProperty("payment_status");
   });
 
-  test("inspection advancement does not skip or silently approve the legacy intermediate stage", async () => {
-    mockCtx.updateRenewal.mockResolvedValueOnce(legacy);
-    const detail = openDetail({ ...legacy, stage: "inspection_scheduled", stage_label: "Inspection Scheduled", progress: 57 });
-    fireEvent.click(within(detail).getByRole("button", { name: "Advance to next recorded stage" }));
-    await within(detail).findByRole("note");
+  test("inspection advancement applies the backend Approved response without a payment step", async () => {
+    mockCtx.updateRenewal.mockResolvedValueOnce({ ...legacy, stage: "approved", stage_label: "Approved", progress: 83 });
+    const detail = openDetail({ ...legacy, stage: "inspection_scheduled", stage_label: "Inspection Scheduled", progress: 67 });
+    fireEvent.click(within(detail).getByRole("button", { name: "Proceed to: Approved" }));
+    await within(detail).findByText("Stage 5 of 6");
+    expect(within(detail).queryByRole("note")).toBeNull();
     expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
     expect(mockCtx.updateRenewal).toHaveBeenCalledWith(legacy.id, { action: "advance_stage" });
   });
@@ -379,5 +380,138 @@ describe("Renewal detail", () => {
       expect(within(detail).queryByText(name)).toBeNull()
     );
     expect(mockCtx.updateRenewal).not.toHaveBeenCalled();
+  });
+});
+
+describe("six-stage backend timeline compatibility", () => {
+  const activeLabels = [
+    "Notice Sent", "Application Filed", "Requirements Review",
+    "Inspection Scheduled", "Approved", "Released",
+  ];
+  const history = "Recorded inspection note\n[Payment Confirmed: Method: Cash, OR#: LEGACY-42 on 2025-01-03]";
+
+  function openTimeline(stage, progress, stage_label) {
+    const row = { ...AMBULANT_ROW, stage, progress, stage_label, remarks: history };
+    mockCtx.renewalData = { rows: [row], summary: {}, stageCounts: [], barangays: [] };
+    render(<PermitRenewal />);
+    fireEvent.click(screen.getByTitle("View Full Details"));
+    const detail = document.querySelector(".renewal-detail-modal");
+    const timeline = within(detail).getByRole("list");
+    console.info("TIMELINE_OBSERVATION", JSON.stringify({
+      stage: stage ?? null, progress: progress ?? null,
+      items: within(timeline).getAllByRole("listitem").map(item => ({
+        text: item.textContent, markedDone: item.classList.contains("done"),
+      })),
+      counter: within(detail).queryByText(/Stage\s+\d+\s+of\s+\d+/)?.textContent || null,
+      progressText: document.querySelector(".renewal-progress")?.nextElementSibling?.textContent,
+    }));
+    return { detail, timeline, row };
+  }
+
+  test("renders exactly the six active backend stages without special states", () => {
+    const { timeline } = openTimeline("notice_sent", 17, "Notice Sent");
+    expect(within(timeline).getAllByRole("listitem").map(item => item.textContent.replace(/^\d+/, "")))
+      .toEqual(activeLabels);
+  });
+
+  test("inspection offers Approved directly and applies the authoritative response in one request", async () => {
+    const approved = { ...AMBULANT_ROW, stage: "approved", stage_label: "Approved", progress: 83, remarks: history };
+    mockCtx.updateRenewal.mockResolvedValueOnce(approved);
+    const { detail, row } = openTimeline("inspection_scheduled", 67, "Inspection Scheduled");
+    fireEvent.click(within(detail).getByRole("button", { name: "Proceed to: Approved" }));
+    await waitFor(() => expect(mockCtx.refreshRenewalData).toHaveBeenCalledTimes(1));
+    expect(mockCtx.updateRenewal).toHaveBeenCalledTimes(1);
+    expect(mockCtx.updateRenewal).toHaveBeenCalledWith(row.id, { action: "advance_stage" });
+    expect(within(detail).getByText("Stage 5 of 6")).toBeTruthy();
+    expect(within(detail).queryByRole("note")).toBeNull();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+  });
+
+  test("Approved is stage 5 of 6 and displays backend progress 83 percent", () => {
+    const { detail } = openTimeline("approved", 83, "Approved");
+    expect(within(screen.getByRole("table")).getByText("83%")).toBeTruthy();
+    expect(document.querySelector(".renewal-progress b").style.width).toBe("83%");
+    expect(within(detail).getByText("Stage 5 of 6")).toBeTruthy();
+  });
+
+  test("Approved never marks a Payment Pending step as completed", () => {
+    const { timeline } = openTimeline("approved", 83, "Approved");
+    expect([...timeline.querySelectorAll("li.done")].some(item => /Payment Pending/.test(item.textContent))).toBe(false);
+    expect(within(timeline).queryByText(/Payment Pending/)).toBeNull();
+  });
+
+  test("Released is terminal stage 6 of 6 with backend progress 100 percent", () => {
+    const { detail } = openTimeline("released", 100, "Released");
+    expect(within(screen.getByRole("table")).getByText("100%")).toBeTruthy();
+    expect(within(detail).queryByRole("button", { name: /Proceed to:|Advance to/ })).toBeNull();
+    expect(within(detail).queryByRole("button", { name: "Mark as Released" })).toBeNull();
+    expect(within(detail).getByText("Stage 6 of 6")).toBeTruthy();
+  });
+
+  test("Released does not offer a misleading advance action in the records table", () => {
+    openTimeline("released", 100, "Released");
+    expect(within(screen.getByRole("table")).queryByTitle("Advance to Next Stage")).toBeNull();
+    expect(mockCtx.updateRenewal).not.toHaveBeenCalled();
+  });
+
+  test("legacy Payment Pending stays readable outside the required active timeline", () => {
+    const { detail, timeline } = openTimeline("payment_pending", 71, "Payment Pending");
+    expect(within(detail).getByRole("note").textContent).toMatch(/Payment Pending.*legacy workflow.*No payment entry or confirmation is required/s);
+    expect(within(screen.getByRole("table")).getByText("71%")).toBeTruthy();
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+    expect(within(timeline).queryByText(/Payment Pending/)).toBeNull();
+    expect(within(detail).queryByText(/Stage\s+\d+\s+of\s+\d+/)).toBeNull();
+    expect(mockCtx.updateRenewal).not.toHaveBeenCalled();
+  });
+
+  test("Lapsed is a special state with no impossible active-stage count", () => {
+    const { detail, timeline } = openTimeline("lapsed", 8, "Lapsed");
+    expect(within(screen.getByRole("table")).getByText("8%")).toBeTruthy();
+    expect(within(detail).queryByText(/Stage\s+\d+\s+of\s+\d+/)).toBeNull();
+    expect(within(timeline).queryByText("Lapsed")).toBeNull();
+    expect(timeline.querySelectorAll("li.done")).toHaveLength(0);
+    expect(within(detail).getByRole("button", { name: /Clear Overdue/ })).toBeTruthy();
+  });
+
+  test.each([
+    ["future_stage", "Future recorded state"],
+    [undefined, undefined],
+  ])("unknown or missing stage %s has a safe display without invented stage completion", (stage, label) => {
+    const { detail, timeline } = openTimeline(stage, undefined, label);
+    expect(timeline.querySelectorAll("li.done")).toHaveLength(0);
+    expect(within(detail).queryByText(/Stage\s+\d+\s+of\s+\d+/)).toBeNull();
+    expect(document.querySelector(".renewal-stage-pill").textContent.trim()).not.toBe("");
+    expect(within(detail).queryByRole("button", { name: "Proceed to: Released" })).toBeNull();
+  });
+
+  test.each([41, 0])("keeps authoritative progress %s instead of recomputing it from the stage", progress => {
+    openTimeline("approved", progress, "Approved");
+    expect(within(screen.getByRole("table")).getByText(`${progress}%`)).toBeTruthy();
+    expect(document.querySelector(".renewal-progress b").style.width).toBe(`${progress}%`);
+  });
+
+  test.each([null, undefined, "not-a-number"])("missing or malformed backend progress %s is not fabricated as zero", progress => {
+    openTimeline("future_stage", progress, "Future recorded state");
+    const progressCell = document.querySelector(".renewal-progress").closest("td");
+    expect(progressCell.textContent).not.toMatch(/\d+%|not-a-number/);
+    expect(progressCell.textContent.trim()).not.toBe("");
+  });
+
+  test("requirements, historical remarks and payment-neutral release controls remain usable", async () => {
+    const row = { ...AMBULANT_ROW, establishment: WATER_EST.id, business_type_id: WATER_STATION.id,
+      business_type_name: WATER_STATION.name, stage: "approved", stage_label: "Approved", progress: 83,
+      submitted_requirements: ["Historical submitted requirement"], remarks: history };
+    mockCtx.renewalData.rows = [row];
+    render(<PermitRenewal />);
+    fireEvent.click(screen.getByTitle("View Full Details"));
+    const detail = document.querySelector(".renewal-detail-modal");
+    expect(within(detail).getByText("Historical submitted requirement")).toBeTruthy();
+    fireEvent.click(within(detail).getByText("Water Potability Certificate"));
+    await waitFor(() => expect(mockCtx.updateRenewal).toHaveBeenCalledWith(row.id, {
+      submitted_requirements: ["Historical submitted requirement", "Water Potability Certificate"],
+    }));
+    expect(within(detail).getByLabelText("Remarks & Audit Log").value).toBe(history);
+    expect(within(detail).getByRole("button", { name: "Mark as Released" }).disabled).toBe(false);
+    expect(within(detail).queryByText(/Confirm Payment|Official Receipt/)).toBeNull();
   });
 });
