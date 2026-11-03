@@ -5336,6 +5336,237 @@
   }
 }
 
+/* Arrival Monitoring: the name as a button, the row on hover, the last column, and the modal of one arrival. */
+.arrival-record-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: #241e1a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.arrival-record-link:hover {
+  color: #8a4310;
+  text-decoration: underline;
+}
+
+.arrival-record-link:focus-visible {
+  outline: 2px solid #e0701a;
+  outline-offset: 3px;
+}
+
+tr.arrival-row {
+  cursor: pointer;
+}
+
+tr.arrival-row:hover > td {
+  background: #fdf5ec;
+}
+
+.arrival-chevron-col,
+.arrival-chevron {
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  text-align: center;
+}
+
+.arrival-chevron {
+  color: #c2ae98;
+}
+
+tr.arrival-row:hover > .arrival-chevron {
+  color: #8a4310;
+}
+
+.arm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--th-scrim);
+}
+
+.arm-modal {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fffdfb;
+  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+}
+
+.arm-band {
+  position: relative;
+  flex: none;
+  height: 96px;
+  background-color: #6e5a46;
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 60%);
+}
+
+.arm-chips {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: flex;
+  gap: 7px;
+}
+
+.arm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 12px;
+  font-weight: 700;
+  color: #3f3a35;
+}
+
+.arm-chip.status {
+  background: #1c7a42;
+  color: #ffffff;
+}
+
+.arm-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, 0.72);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.arm-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+
+.arm-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #241e1a;
+}
+
+.arm-sub {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: #7a6755;
+}
+
+.arm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.arm-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #453931;
+  cursor: pointer;
+}
+
+.arm-btn.primary {
+  border-color: #e0701a;
+  background: #e0701a;
+  color: #ffffff;
+}
+
+.arm-btn.primary:hover:not(:disabled) {
+  border-color: #be5b11;
+  background: #be5b11;
+}
+
+.arm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.arm-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #efe2d3;
+}
+
+.arm-group h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.arm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 18px;
+  align-items: start;
+}
+
+.arm-label {
+  margin: 0 0 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6e55;
+}
+
+.arm-value {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #241e1a;
+  overflow-wrap: anywhere;
+}
+
+.arm-unit {
+  font-weight: 500;
+  color: #7a6755;
+}
+
+.arm-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12.5px;
+  color: #87705c;
+}
+
+.arm-footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: 14px 22px;
+  border-top: 1px solid #efe2d3;
+}
+
 /* ================= MOBILE APP CONTENT (Commit 4) =================
    The body of a tab of the Mobile App Content page. It spaces its children as
    .reports-page spaces the children of a page (24px, one column), so a panel that

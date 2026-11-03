@@ -47,6 +47,7 @@ from api.services.tourism import (
     build_tourist_records_payload,
     read_tourism_theme,
     ReportParameterError,
+    tourist_record_computed,
 )
 from api.services.upload import (
     StorageServiceError,
@@ -164,10 +165,13 @@ def tourist_record_list(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @module_required("tourism")
 def tourist_record_detail(request, survey_id):
-    record = get_object_or_404(TouristRecord, survey_id=survey_id)
+    record = get_object_or_404(TouristRecord.objects.select_related("itinerary"), survey_id=survey_id)
 
     if request.method == "GET":
-        return Response(TouristRecordSerializer(record).data)
+        # The record as it was, and what is worked out from it (Overnight and Same Day by sex, the fee): see tourist_record_computed.
+        data = dict(TouristRecordSerializer(record).data)
+        data["computed"] = tourist_record_computed(record)
+        return Response(data)
 
     if request.method == "DELETE":
         if get_user_role(request.user) != ROLE_ADMIN:

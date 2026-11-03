@@ -370,6 +370,7 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             "parking_space",
             "visit_purpose_id",
             "status",
+            "created_at",
         ]
 
     def validate(self, attrs):

@@ -281,6 +281,18 @@ function DestinationManagement({ initialTab }) {
     }
   }, [initialTab, location.pathname]);
 
+  // "Open destination" of an arrival (Arrival Monitoring) comes here with the id of the resort: open its Details, once for that visit.
+  const openedFromVisit = useRef(null);
+  useEffect(() => {
+    const wanted = location.state?.openResortId;
+    if (wanted === null || wanted === undefined || openedFromVisit.current === location.key) return;
+    const found = destinations.find((destination) => String(destination.resort_id) === String(wanted));
+    if (!found) return;
+    openedFromVisit.current = location.key;
+    setActiveTab("destinations");
+    setSelectedResortDetail(found);
+  }, [location.state, location.key, destinations]);
+
   const filteredDestinations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) {
