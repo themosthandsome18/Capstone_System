@@ -7,7 +7,7 @@ from django.db.models import Count, IntegerField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from ..models import BOOKING_STATUS_ARRIVED, FeedbackEntry, TouristRecord
+from ..models import BOOKING_STATUS_ARRIVED, FeedbackEntry, Resort, TouristRecord
 
 
 def _people(**when):
@@ -44,3 +44,30 @@ def annotate_destination_figures(queryset, today=None):
         yearly_total=_people(arrival_date__year=today.year),
         review_total=_reviews(),
     )
+
+
+def destination_map_figures(today=None):
+    """The four boxes under the GIS map that are not a count of the map's own list, worked out from yearly_total.
+
+    activeCount of totalCount: the destinations a tourist sees (is_active) out of all of them.
+    arrivalsThisYear: people who arrived this year in every destination (every record has one), so it is the Year view's total of
+    Arrival Monitoring. mostVisited: the destination with the most people this year, the smallest resort_id when two are level,
+    and None when nobody has arrived (the screen says "None yet"; a name with 0 would be a guess).
+    """
+    today = today or timezone.localdate()
+    rows = list(
+        annotate_destination_figures(Resort.objects.all(), today).values(
+            "resort_id", "resort_name", "is_active", "yearly_total"
+        )
+    )
+    visited = [row for row in rows if row["yearly_total"] > 0]
+    top = min(visited, key=lambda row: (-row["yearly_total"], row["resort_id"])) if visited else None
+    return {
+        "year": today.year,
+        "activeCount": sum(1 for row in rows if row["is_active"]),
+        "totalCount": len(rows),
+        "arrivalsThisYear": sum(row["yearly_total"] for row in rows),
+        "mostVisited": (
+            {"resort_id": top["resort_id"], "name": top["resort_name"], "arrivals": top["yearly_total"]} if top else None
+        ),
+    }

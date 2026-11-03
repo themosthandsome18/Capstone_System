@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FiLayers, FiMapPin, FiStar } from "react-icons/fi";
 import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
 import { useTourismData } from "../context/TourismDataContext";
+import { tourismApi } from "../services/tourismApi";
 
 const OFFICIAL_DESTINATION_LIMIT = 15;
 
@@ -68,20 +69,21 @@ function GISMap() {
   }, [mapDestinations, selectedDestination]);
 
   const totalLocations = mapDestinations.length;
-  const beachCount = mapDestinations.filter((item) =>
-    item.type.includes("Beach")
-  ).length;
-  const islandCount = mapDestinations.filter((item) =>
-    item.type.includes("Island")
-  ).length;
-  const averageRating = totalLocations
-    ? (
-        mapDestinations.reduce(
-          (sum, item) => sum + Number(item.tourism_rating || 0),
-          0
-        ) / totalLocations
-      ).toFixed(1)
-    : "0.0";
+  // The three figures after Total Locations come from the server as they are; nothing here adds them up.
+  const [figures, setFigures] = useState(null);
+
+  useEffect(() => {
+    let current = true;
+    tourismApi
+      .getDestinationFigures()
+      .then((payload) => current && setFigures(payload))
+      .catch(() => current && setFigures(null));
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const mostVisited = figures?.mostVisited;
 
   return (
     <div className="gis-page">
@@ -204,19 +206,27 @@ function GISMap() {
 
       <div className="gis-bottom-stats">
         <StatBox title="Total Locations" value={totalLocations} />
-        <StatBox title="Beach Destinations" value={beachCount} />
-        <StatBox title="Island Destinations" value={islandCount} />
-        <StatBox title="Average Rating" value={averageRating} />
+        <StatBox
+          title="Active in the app"
+          value={figures ? `${figures.activeCount} of ${figures.totalCount}` : "—"}
+        />
+        <StatBox title="Arrivals this year" value={figures ? figures.arrivalsThisYear : "—"} />
+        <StatBox
+          title="Most visited this year"
+          value={!figures ? "—" : mostVisited ? mostVisited.name : "None yet"}
+          note={mostVisited ? `${mostVisited.arrivals} arrivals` : null}
+        />
       </div>
     </div>
   );
 }
 
-function StatBox({ title, value }) {
+function StatBox({ title, value, note }) {
   return (
     <div className="gis-stat-box">
       <p>{title}</p>
       <h2>{value}</h2>
+      {note ? <p>{note}</p> : null}
     </div>
   );
 }

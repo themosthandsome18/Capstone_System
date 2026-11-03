@@ -34,6 +34,7 @@ from api.serializers import (
     TouristRecordSerializer,
 )
 from api.services.activity import log_activity
+from api.services.destination_figures import destination_map_figures
 from api.services.online_booking import (
     import_online_booking_workbook,
     preview_online_booking_workbook,
@@ -84,6 +85,14 @@ def arrival_monitoring_export(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
     return report_response(build_arrival_monitoring_export, request.query_params)
+
+
+@api_view(["GET"])
+@module_required("tourism")
+def destination_figures(request):
+    # The boxes under the GIS map; every number is worked out here (services/destination_figures.py), the web only writes them.
+    ensure_initial_reference_data()
+    return Response(destination_map_figures())
 
 
 @api_view(["GET"])
