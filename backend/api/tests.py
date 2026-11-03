@@ -5784,7 +5784,7 @@ class ReferenceOptionApiTests(TestCase):
         for method, url in calls:
             with self.subTest(who="nobody", method=method, url=url):
                 self.assertEqual(getattr(self._client(), method)(url, {}, format="json").status_code, 401)
-            for role in (ROLE_TOURISM, ROLE_SANITATION, ROLE_TOURIST):
+            for role in (ROLE_SANITATION, ROLE_TOURIST):  # the Tourism Office is let in since the administration pages opened to it
                 with self.subTest(who=role, method=method, url=url):
                     client = self._client(role, f"u_{role}_{method}_{url[-12:-1].replace('/', '')}")
                     self.assertEqual(getattr(client, method)(url, {}, format="json").status_code, 403)
@@ -6349,7 +6349,7 @@ class ReferenceOptionApiTests(TestCase):
 
         self.admin.patch(self._url("travel-mode", option.id), {"name": "Refused 2"}, format="json")  # no count
         self.admin.post(self._url("travel-mode"), {"name": "refused"}, format="json")  # same name
-        self._client(ROLE_TOURISM, "tourism_try").post(self._url("travel-mode"), {"name": "Nope"}, format="json")
+        self._client(ROLE_TOURIST, "tourist_try").post(self._url("travel-mode"), {"name": "Nope"}, format="json")
 
         self.assertEqual(ActivityLog.objects.count(), before)
 
@@ -7346,7 +7346,7 @@ class EmergencyContactApiTests(TestCase):
 
     def test_a_logged_in_non_admin_is_refused_on_any_endpoint(self):
         before = list(EmergencyContact.objects.values_list("id", "name", "is_active", "display_order"))
-        for role in (ROLE_TOURISM, ROLE_TOURIST):
+        for role in (ROLE_SANITATION, ROLE_TOURIST):
             client = self._client(role, f"ec_{role}")
             for method, url in self._all_calls():
                 response = getattr(client, method)(url, {"name": "Intruder"}, format="json")
@@ -8146,7 +8146,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
 
     def _non_admin_is_refused(self, method, url):
         before, held, logs = self._stored(), self._held(), self._logs().count()
-        for role in (ROLE_TOURISM, ROLE_TOURIST):
+        for role in (ROLE_SANITATION, ROLE_TOURIST):
             client = self._make_client(role, f"bf_{role}_{method}_{abs(hash(url)) % 1000}")
             response = getattr(client, method)(url, {"name": "Intruder", "ids": []}, format="json")
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, (role, method, url))
@@ -12180,10 +12180,17 @@ class TourismThemeApiTests(TestCase):
     def test_anonymous_put_is_forbidden(self):
         self.assertEqual(self._put(self.anon).status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_tourism_staff_cannot_write_even_with_is_staff(self):
-        _, client = self._client_for("tourism_staff", ROLE_TOURISM, is_staff=True)
+    def test_a_tourist_cannot_write_even_with_is_staff(self):
+        _, client = self._client_for("tourist_staff", ROLE_TOURIST, is_staff=True)
         self.assertEqual(self._put(client).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.anon.get(self.URL).json()["primary_color"], "#2FA34A")
+
+    def test_the_tourism_office_can_write_and_updated_by_is_set(self):
+        from .models import TourismThemeSetting
+
+        office, client = self._client_for("tourism_office", ROLE_TOURISM, is_staff=True)
+        self.assertEqual(self._put(client).status_code, status.HTTP_200_OK)
+        self.assertEqual(TourismThemeSetting.load().updated_by, office)
 
     def test_sanitation_staff_cannot_write(self):
         _, client = self._client_for("sanitation_staff", ROLE_SANITATION, is_staff=True)
@@ -13632,9 +13639,6 @@ class MobileContentItemAccessTests(_ItemApiBase, TestCase):
     def test_anonymous_is_401_on_every_operation(self):
         self._check(self.anonymous, status.HTTP_401_UNAUTHORIZED)
 
-    def test_the_tourism_role_is_403_on_every_operation(self):
-        self._check(self.tourism, status.HTTP_403_FORBIDDEN)
-
     def test_a_tourist_is_403_on_every_operation(self):
         self._check(self.tourist, status.HTTP_403_FORBIDDEN)
 
@@ -14469,9 +14473,6 @@ class MobileContentBlockAccessTests(_BlockApiBase, TestCase):
 
     def test_anonymous_is_401(self):
         self._check(APIClient(), status.HTTP_401_UNAUTHORIZED)
-
-    def test_the_tourism_role_is_403(self):
-        self._check(self.tourism, status.HTTP_403_FORBIDDEN)
 
     def test_a_tourist_is_403(self):
         self._check(self.tourist, status.HTTP_403_FORBIDDEN)

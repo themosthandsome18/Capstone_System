@@ -34,11 +34,12 @@ jest.mock("react-router-dom", () => ({
 }), { virtual: true });
 
 describe("Mobile App Content access and tabs", () => {
-  test("the address, and only the system admin", () => {
+  test("the address, and only the Tourism Office and the system admin", () => {
     expect(MOBILE_CONTENT_PATH).toBe("/mobile-content");
-    expect(MOBILE_CONTENT_ROLES).toEqual(["admin"]);
+    expect(MOBILE_CONTENT_ROLES).toEqual(["admin", "tourism"]);
     expect(canManageMobileContent("admin")).toBe(true);
-    ["tourism", "sanitation", "tourist", "", undefined, null].forEach((role) => expect(canManageMobileContent(role)).toBe(false));
+    expect(canManageMobileContent("tourism")).toBe(true);
+    ["tourist", "sanitation", "establishment", "auditor", "", undefined, null].forEach((role) => expect(canManageMobileContent(role)).toBe(false));
   });
 
   test("five tabs, in this order, and all five are built (the Welcome since 5b, the Why Visit since 5d, the Travel Guide since 7a, the Port & Boat Guide since 8b)", () => {
@@ -63,22 +64,27 @@ describe("Mobile App Content access and tabs", () => {
     expect(tabPath("hotlines")).toBe("/mobile-content?tab=hotlines");
   });
 
-  test("the page is in the route list, admin-only", () => {
+  test("the page is in the route list, for the Tourism Office and the system admin", () => {
     const route = tourismRoutes.find((item) => item.path === MOBILE_CONTENT_PATH);
     expect(route).toBeDefined();
-    expect(route.allowedRoles).toEqual(["admin"]);
+    expect(route.allowedRoles).toEqual(["admin", "tourism"]);
     expect(route.element).toBeTruthy();
     expect(tourismRoutes.filter((item) => item.path === MOBILE_CONTENT_PATH)).toHaveLength(1);
   });
 
-  test("the route guard sends a tourism user away, and lets the admin through", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "tourism" });
-    const first = render(<ProtectedRoute allowedRoles={MOBILE_CONTENT_ROLES} />);
-    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
-    first.unmount();
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "admin" });
-    render(<ProtectedRoute allowedRoles={MOBILE_CONTENT_ROLES} />);
-    expect(screen.getByTestId("outlet")).toBeTruthy();
+  test("the route guard sends a tourist, a sanitation user and an unknown role away, and lets the Tourism Office and the admin through", () => {
+    for (const role of ["tourist", "sanitation", "auditor"]) {
+      useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
+      const sent = render(<ProtectedRoute allowedRoles={MOBILE_CONTENT_ROLES} />);
+      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
+      sent.unmount();
+    }
+    for (const role of ["tourism", "admin"]) {
+      useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
+      const through = render(<ProtectedRoute allowedRoles={MOBILE_CONTENT_ROLES} />);
+      expect(screen.getByTestId("outlet")).toBeTruthy();
+      through.unmount();
+    }
   });
 
   test("the sidebar has exactly ONE item for all of this, under Administration, and it is not the old one", () => {

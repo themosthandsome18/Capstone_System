@@ -15,19 +15,29 @@ jest.mock(
 );
 jest.mock("../../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
-describe("Sidebar administration section", () => {
-  test.each(["tourism", "sanitation", ""])("is hidden from the %s role", (role) => {
-    useAuth.mockReturnValue({ role });
-    render(<Sidebar />);
-    expect(screen.queryByText("Administration")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
-  });
+const THREE = ["Settings", "Registration Options", "Mobile App Content"];
 
-  test("shows Settings under Administration to the admin", () => {
-    useAuth.mockReturnValue({ role: "admin" });
+describe("Sidebar administration section", () => {
+  test.each(["admin", "tourism"])("shows Settings, Registration Options and Mobile App Content under Administration to the %s role", (role) => {
+    useAuth.mockReturnValue({ role });
     render(<Sidebar />);
     expect(screen.getByText("Administration")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
+    expect(screen.getByRole("link", { name: "Registration Options" }).getAttribute("href")).toBe("/options");
+    expect(screen.getByRole("link", { name: "Mobile App Content" }).getAttribute("href")).toBe("/mobile-content");
+  });
+
+  test.each(["tourist", "sanitation", "establishment", "auditor", ""])("is hidden from the %s role (a tourist, sanitation-only, an unknown role, no role)", (role) => {
+    useAuth.mockReturnValue({ role });
+    render(<Sidebar />);
+    expect(screen.queryByText("Administration")).toBeNull();
+    THREE.forEach((name) => expect(screen.queryByRole("link", { name })).toBeNull());
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
+  });
+
+  test("a user with no role at all sees none of the three", () => {
+    useAuth.mockReturnValue({ role: undefined });
+    render(<Sidebar />);
+    THREE.forEach((name) => expect(screen.queryByRole("link", { name })).toBeNull());
   });
 });

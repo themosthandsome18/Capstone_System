@@ -189,8 +189,8 @@ describe("the address", () => {
     await screen.findByLabelText("Title");
   });
 
-  it("sends anyone but the admin away, and asks the server for nothing", async () => {
-    for (const role of ["tourism", "sanitation", "", undefined]) {
+  it("sends anyone but the Tourism Office and the admin away, and asks the server for nothing", async () => {
+    for (const role of ["tourist", "sanitation", "establishment", "auditor", "", undefined]) {
       useAuth.mockReturnValue({ role });
       router.__setSearch("?id=12");
       const { unmount } = render(<MobileContentTileEditor />);
