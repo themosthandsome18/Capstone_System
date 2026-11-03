@@ -2580,10 +2580,6 @@
   @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-blue-100 text-xs font-bold text-blue-500;
 }
 
-.destination-delete-btn {
-  @apply flex h-8 w-11 items-center justify-center rounded-md bg-red-100 text-red-500;
-}
-
 /* ================= DESTINATION FOOTER ================= */
 
 .destination-footer {
