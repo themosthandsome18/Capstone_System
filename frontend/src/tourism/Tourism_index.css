@@ -5567,37 +5567,6 @@ tr.arrival-row:hover > .arrival-chevron {
   border-top: 1px solid #efe2d3;
 }
 
-@media print {
-  body * {
-    visibility: hidden;
-  }
-
-  .arm-modal,
-  .arm-modal * {
-    visibility: visible;
-  }
-
-  .arm-backdrop {
-    position: static;
-    padding: 0;
-    background: none;
-  }
-
-  .arm-modal {
-    position: absolute;
-    top: 0;
-    left: 0;
-    max-height: none;
-    box-shadow: none;
-  }
-
-  .arm-close,
-  .arm-actions,
-  .arm-footer {
-    display: none;
-  }
-}
-
 /* ================= MOBILE APP CONTENT (Commit 4) =================
    The body of a tab of the Mobile App Content page. It spaces its children as
    .reports-page spaces the children of a page (24px, one column), so a panel that

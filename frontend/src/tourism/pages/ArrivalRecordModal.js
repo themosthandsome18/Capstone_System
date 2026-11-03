@@ -55,9 +55,6 @@ function ArrivalRecordModal({ record, referenceTables, onClose, onOpenDestinatio
             >
               Open destination
             </button>
-            <button type="button" className="arm-btn" onClick={() => window.print()}>
-              Print record
-            </button>
           </div>
 
           {view.groups.map((group) => (

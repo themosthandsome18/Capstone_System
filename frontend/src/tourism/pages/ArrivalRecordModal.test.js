@@ -97,13 +97,22 @@ describe("the modal", () => {
     expect(document.querySelector(".arm-sub").textContent).toBe("Aquazul Hotel and Resort · arrived Apr 2, 2026");
   });
 
-  it("the buttons are Open destination, then Print record; the footer has a Close", () => {
+  it("the button under the name is Open destination, and the footer has a Close", () => {
     draw();
     const actions = Array.from(document.querySelectorAll(".arm-actions button"));
-    expect(actions.map((b) => b.textContent)).toEqual(["Open destination", "Print record"]);
+    expect(actions.map((b) => b.textContent)).toEqual(["Open destination"]);
     expect(actions[0].classList.contains("primary")).toBe(true);
-    expect(actions[1].classList.contains("primary")).toBe(false);
     expect(document.querySelector(".arm-footer button").textContent).toBe("Close");
+  });
+
+  it("there is no Print record in the modal: not as a button, not as text, and nothing in it calls window.print", () => {
+    const print = jest.spyOn(window, "print").mockImplementation(() => {});
+    draw();
+    expect(screen.queryByRole("button", { name: /print/i })).toBeNull();
+    expect(modal().textContent).not.toMatch(/print/i);
+    for (const button of Array.from(modal().querySelectorAll("button"))) fireEvent.click(button);
+    expect(print).not.toHaveBeenCalled();
+    print.mockRestore();
   });
 
   it("has seven groups, in this order, and none of them has an Edit", () => {
@@ -371,14 +380,6 @@ describe("the buttons", () => {
   it("Open destination is off when the resort is not known", () => {
     draw({ ...RECORD, resort_id: 99 });
     expect(screen.getByRole("button", { name: "Open destination" }).disabled).toBe(true);
-  });
-
-  it("Print record prints", () => {
-    const print = jest.spyOn(window, "print").mockImplementation(() => {});
-    draw();
-    fireEvent.click(screen.getByRole("button", { name: "Print record" }));
-    expect(print).toHaveBeenCalledTimes(1);
-    print.mockRestore();
   });
 
   it("the Close of the band has the focus when it opens", () => {

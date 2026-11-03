@@ -86,7 +86,7 @@ describe("the body", () => {
     has(".arm-btn", { "font-size": "13px", "font-weight": "600", "min-height": "38px", padding: "0 14px", "border-radius": "9px" });
   });
 
-  it("Print record is white with a 1px #E0CDB7 border and #453931", () => {
+  it("a button that is not the main one (the Close of the footer) is white with a 1px #E0CDB7 border and #453931", () => {
     has(".arm-btn", { background: "#FFFFFF", border: "1px solid #E0CDB7", color: "#453931" });
   });
 
@@ -175,8 +175,16 @@ describe("where the rules are", () => {
     expect(tourismCss.indexOf(".arm-modal {")).toBeLessThan(tourismCss.indexOf(".mobile-content"));
   });
 
-  it("printing shows the modal and hides the rest", () => {
-    expect(tourismCss).toMatch(/@media print\s*\{[^@]*body \*\s*\{\s*visibility:\s*hidden/);
-    expect(tourismCss).toMatch(/\.arm-modal \*\s*\{\s*visibility:\s*visible/);
+  it("there is no print-only rule for this modal: no @media print block of the stylesheet names an .arm- class", () => {
+    // every @media print block of the file (they have no braces nested deeper than one rule), and what is in each
+    const blocks = Array.from(tourismCss.matchAll(/@media\s+print\s*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/g)).map((m) => m[1]);
+    expect(blocks.length).toBeGreaterThan(0); // the file has print rules for other pages: the check reads real blocks
+    for (const block of blocks) {
+      expect(block).not.toMatch(/\.arm-/);
+    }
+  });
+
+  it("and nothing in the stylesheet hides the rest of the page to print the modal", () => {
+    expect(tourismCss).not.toMatch(/\.arm-modal \*\s*\{[^}]*visibility/);
   });
 });
