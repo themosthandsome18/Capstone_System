@@ -5127,6 +5127,68 @@
   color: #8a4310;
 }
 
+/* The fields of the Edit modal. The old rules (.tourist-record-field) made a white input with a transparent border for a green panel;
+   here the card is white, so the fields get their own border and the labels their own look. Everything is under .dest-edit. */
+.dest-edit .tourist-record-field {
+  gap: 0;
+}
+
+.dest-edit .tourist-record-field > span {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6e55;
+}
+
+.dest-edit .tourist-record-field input,
+.dest-edit .tourist-record-field select,
+.dest-edit .tourist-record-field textarea,
+.dest-edit .location-picker-search input {
+  height: auto;
+  min-height: 40px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #241e1a;
+}
+
+.dest-edit .tourist-record-field textarea {
+  min-height: 96px;
+}
+
+.dest-edit .tourist-record-field input:focus,
+.dest-edit .tourist-record-field select:focus,
+.dest-edit .tourist-record-field textarea:focus,
+.dest-edit .location-picker-search input:focus {
+  border-color: #e0cdb7;
+  box-shadow: none;
+  outline: 2px solid #e0701a;
+  outline-offset: -1px;
+}
+
+/* "Apply pin" is a second-rank button here, not the green one of the picker (which the sanitation page keeps). */
+.dest-edit .location-picker-search button {
+  height: auto;
+  min-height: 40px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #453931;
+}
+
+/* The Latitude / Longitude row sits 16px above the map. The picker's own sheet gives the map no space above it. */
+.dest-edit .location-picker > .dest-row-2 {
+  margin-bottom: 16px;
+}
+
 /* ---- Details modal ---- */
 .dest-hero-chips {
   position: absolute;

@@ -1733,6 +1733,7 @@ function DestinationManagement({ initialTab }) {
                 <p className="dest-group-sub">The paragraph under the name in the app.</p>
                 <TextAreaField
                   label="Description"
+                  showLabel={false}
                   value={form.short_description}
                   onChange={(value) => updateField("short_description", value)}
                   required
@@ -1858,14 +1859,17 @@ function TextField({
   );
 }
 
-function TextAreaField({ label, value, onChange, required = false }) {
+// showLabel={false} is for a field whose group already carries the same word as its title: the label is then only for assistive
+// technology (aria-label) and the box is not given the word as a placeholder, so it is said once on the screen.
+function TextAreaField({ label, value, onChange, required = false, showLabel = true }) {
   return (
     <label className="tourist-record-field">
-      <span>{label}</span>
+      {showLabel ? <span>{label}</span> : null}
       <textarea
         value={value}
         required={required}
-        placeholder={label}
+        placeholder={showLabel ? label : ""}
+        aria-label={showLabel ? undefined : label}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
