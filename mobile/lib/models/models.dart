@@ -906,6 +906,20 @@ class MobileUserProfile {
   }
 }
 
+/// What a destination says when nobody has reviewed it yet, and when nobody has arrived this month.
+const noRatingsLabel = 'No ratings yet';
+const noArrivalsLabel = 'None recorded yet';
+
+/// A rating as it is written: one decimal, or [noRatingsLabel] when there is nothing to show.
+///
+/// The decision is the number of reviews behind it: with none (0) there is no rating, whatever number is stored in the column. A server that does
+/// not send the count (an older one: [reviewCount] is null) is read as before, by the rating itself: above 0 is a rating. This is the one place
+/// that decides it.
+String ratingText(double rating, {int? reviewCount}) {
+  final hasRating = reviewCount != null ? reviewCount > 0 : rating > 0;
+  return hasRating ? rating.toStringAsFixed(1) : noRatingsLabel;
+}
+
 class Destination {
   const Destination({
     required this.id,
@@ -921,6 +935,7 @@ class Destination {
     required this.latitude,
     required this.longitude,
     this.images = const [],
+    this.reviewCount,
   });
 
   final int id;
@@ -929,6 +944,9 @@ class Destination {
   final String location;
   final String description;
   final double rating;
+
+  /// How many reviews the rating is the average of (`review_count`); null when the server does not say (an older one).
+  final int? reviewCount;
   final String imageKey;
   final int monthlyArrivals;
   final bool hasMayorPermit;
@@ -940,8 +958,12 @@ class Destination {
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
   String get permitLabel =>
       hasMayorPermit ? 'Mayor\'s permit verified' : 'Permit not verified';
-  String get visitorsLabel =>
-      '${formatCount(monthlyArrivals)} visitor arrivals';
+  String get visitorsLabel => monthlyArrivals > 0
+      ? '${formatCount(monthlyArrivals)} visitor arrivals'
+      : noArrivalsLabel;
+
+  /// The rating is the average of the reviews, so a destination with none has no rating to show: not "0.0".
+  String get ratingLabel => ratingText(rating, reviewCount: reviewCount);
 
   factory Destination.fromJson(Map<String, dynamic> json) {
     final name = cleanDestinationName('${json['resort_name'] ?? 'Destination'}');
@@ -955,6 +977,7 @@ class Destination {
       location: '${json['location'] ?? 'Mauban, Quezon'}',
       description: '${json['short_description'] ?? ''}',
       rating: jsonDouble(json['tourism_rating'], 4.5),
+      reviewCount: json['review_count'] is num ? (json['review_count'] as num).toInt() : null,
       imageKey: imageKey,
       monthlyArrivals: jsonInt(json['monthly_arrivals']),
       hasMayorPermit: jsonBool(json['with_mayors_permit']),

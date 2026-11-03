@@ -191,10 +191,15 @@ class VisitPurposeSerializer(NamedReferenceSerializer):
 class ResortSerializer(serializers.ModelSerializer):
     coordinates = serializers.SerializerMethodField()
     resort_name = serializers.SerializerMethodField()
+    # The three below are worked out, never written: people (not records) who arrived this month and this year, and the
+    # reviews that count in the rating. A client that sends them is ignored; the rating is read-only too (the reviews set it).
     monthly_arrivals = serializers.SerializerMethodField()
+    yearly_arrivals = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Resort
+        read_only_fields = ["tourism_rating"]
         fields = [
             "resort_id",
             "resort_name",
@@ -206,7 +211,10 @@ class ResortSerializer(serializers.ModelSerializer):
             "access",
             "itinerary_ids",
             "image_key",
+            "is_active",
             "monthly_arrivals",
+            "yearly_arrivals",
+            "review_count",
             "latitude",
             "longitude",
             "coordinates",
@@ -222,23 +230,22 @@ class ResortSerializer(serializers.ModelSerializer):
     def get_resort_name(self, obj):
         return clean_resort_display_name(obj.resort_name)
 
-    def get_monthly_arrivals(self, obj):
-        visitor_total = getattr(obj, "visitor_total", None)
-        if visitor_total is not None:
-            return visitor_total
+    def _figures(self, obj):
+        # Annotated by the list that built this (services/destination_figures); worked out for the one object when it was not.
+        if getattr(obj, "visitor_total", None) is None:
+            from api.services.destination_figures import annotate_destination_figures
 
-        from api.models import TouristRecord
-        from django.utils import timezone
-        
-        today = timezone.localdate()
-        total = TouristRecord.objects.filter(
-            resort=obj,
-            status="arrived",
-            arrival_date__year=today.year,
-            arrival_date__month=today.month
-        ).count()
-        
-        return total
+            obj = annotate_destination_figures(Resort.objects.filter(pk=obj.pk)).get()
+        return obj
+
+    def get_monthly_arrivals(self, obj):
+        return self._figures(obj).visitor_total
+
+    def get_yearly_arrivals(self, obj):
+        return self._figures(obj).yearly_total
+
+    def get_review_count(self, obj):
+        return self._figures(obj).review_total
 
 
 def clean_resort_display_name(name):

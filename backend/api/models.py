@@ -389,6 +389,9 @@ class Resort(models.Model):
     itinerary_ids = models.JSONField(default=list)
     image_key = models.CharField(max_length=80, blank=True)
     monthly_arrivals = models.PositiveIntegerField(default=0)
+    # Whether the app offers this destination (its list and the registration form). An inactive one stays on the web and in every
+    # record that names it; it is never deleted by being inactive.
+    is_active = models.BooleanField(default=True)
     latitude = models.FloatField()
     longitude = models.FloatField()
     images = models.JSONField(default=list, blank=True)

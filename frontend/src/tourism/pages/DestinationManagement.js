@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiChevronLeft,
+  FiCheck,
   FiChevronRight,
-  FiCompass,
   FiDownload,
   FiEdit2,
   FiExternalLink,
@@ -18,7 +18,6 @@ import {
   FiThumbsUp,
   FiTrash2,
   FiUploadCloud,
-  FiUsers,
   FiX,
 } from "react-icons/fi";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
@@ -29,21 +28,53 @@ import { useTourismData } from "../context/TourismDataContext";
 
 const initialForm = {
   resort_name: "",
+  is_active: true,
   with_mayors_permit: true,
   type: "",
   location: "",
   short_description: "",
-  tourism_rating: "0",
   access: "",
-  itinerary_ids: "",
+  itinerary_ids: [],
   image_key: "",
   images: [],
-  monthly_arrivals: "0",
   latitude: "",
   longitude: "",
 };
 
 const emptyDestinations = [];
+const emptyOptions = [];
+
+// The rating is the average of the reviews that count, so until there is one there is nothing to show: not 0.0.
+export const NO_RATINGS = "No ratings yet";
+export const NONE_RECORDED = "None recorded yet";
+
+// How many reviews stand behind the rating. An older server does not say; then a rating above 0 means there is at least one.
+export function reviewCountOf(destination, fallback) {
+  const given = destination?.review_count;
+  if (given !== undefined && given !== null) return Number(given);
+  if (fallback !== undefined) return fallback;
+  return Number(destination?.tourism_rating || 0) > 0 ? 1 : 0;
+}
+
+export function ratingOf(destination) {
+  return reviewCountOf(destination) > 0 ? Number(destination.tourism_rating).toFixed(1) : NO_RATINGS;
+}
+
+export function ratingSummary(destination, reviews) {
+  const count = reviewCountOf(destination, reviews);
+  if (count <= 0) return NO_RATINGS;
+  return `${Number(destination.tourism_rating).toFixed(1)} from ${count} ${count === 1 ? "review" : "reviews"}`;
+}
+
+// Arrivals are people, written as visitors.
+export function visitorsText(value) {
+  const people = Number(value || 0);
+  return `${people.toLocaleString()} ${people === 1 ? "visitor" : "visitors"}`;
+}
+
+export function reviewsText(count) {
+  return `${count} ${count === 1 ? "review" : "reviews"}`;
+}
 
 const gmapsMarkerIcon = new L.DivIcon({
   className: "gmaps-custom-marker",
@@ -273,12 +304,27 @@ function DestinationManagement({ initialTab }) {
     });
   }, [destinations, search]);
 
-  const averageRating = (
-    filteredDestinations.reduce(
-      (sum, item) => sum + Number(item.tourism_rating || 0),
-      0
-    ) / Math.max(filteredDestinations.length, 1)
-  ).toFixed(1);
+  // Only the destinations that have a review: one with none is not a 0.0 to average in.
+  const ratedDestinations = filteredDestinations.filter((item) => reviewCountOf(item) > 0);
+  const averageRating = ratedDestinations.length
+    ? (
+        ratedDestinations.reduce((sum, item) => sum + Number(item.tourism_rating || 0), 0) /
+        ratedDestinations.length
+      ).toFixed(1)
+    : NO_RATINGS;
+
+  // The Length of Stay options an admin can pick for a destination: the active ones, and any already picked that was retired.
+  const itineraryOptions = referenceTables.itineraries || emptyOptions;
+  const stayChoices = useMemo(() => {
+    const picked = new Set(form.itinerary_ids || []);
+    const known = new Set(itineraryOptions.map((option) => Number(option.id)));
+    const shown = itineraryOptions
+      .filter((option) => option.is_active !== false || picked.has(Number(option.id)))
+      .map((option) => ({ id: Number(option.id), name: option.name }));
+    // An id the options no longer list stays visible, so saving does not drop it without anyone seeing it.
+    const unknown = [...picked].filter((id) => !known.has(id)).map((id) => ({ id, name: `Option ${id}` }));
+    return [...shown, ...unknown];
+  }, [itineraryOptions, form.itinerary_ids]);
 
   // Feedback calculation & filtering.
   //
@@ -368,6 +414,24 @@ function DestinationManagement({ initialTab }) {
   const selectedResortHiddenCount =
     selectedResortAllFeedback.length - selectedResortFeedback.length;
 
+  // The photos the slideshow really has (the card's "PHOTOS" shows 1 for none, for its placeholder; this is the real count).
+  const selectedResortPhotoCount = selectedResortDetail
+    ? Array.isArray(selectedResortDetail.images) && selectedResortDetail.images.length > 0
+      ? selectedResortDetail.images.length
+      : selectedResortDetail.image
+      ? 1
+      : 0
+    : 0;
+
+  // The names of the Length of Stay options this destination offers, for the chips in Details.
+  const selectedResortStays = useMemo(() => {
+    const ids = Array.isArray(selectedResortDetail?.itinerary_ids) ? selectedResortDetail.itinerary_ids : [];
+    return ids.map((id) => {
+      const found = itineraryOptions.find((option) => Number(option.id) === Number(id));
+      return { id: Number(id), name: found ? found.name : `Option ${id}` };
+    });
+  }, [selectedResortDetail, itineraryOptions]);
+
   const selectedResortCoordinates = useMemo(() => {
     return getResortCoordinates(selectedResortDetail);
   }, [selectedResortDetail]);
@@ -396,18 +460,17 @@ function DestinationManagement({ initialTab }) {
 
     setForm({
       resort_name: destination.resort_name || "",
+      is_active: destination.is_active !== false,
       with_mayors_permit: Boolean(destination.with_mayors_permit),
       type: destination.type || "",
       location: destination.location || "",
       short_description: destination.short_description || "",
-      tourism_rating: String(destination.tourism_rating || 0),
       access: destination.access || "",
       itinerary_ids: Array.isArray(destination.itinerary_ids)
-        ? destination.itinerary_ids.join(", ")
-        : "",
+        ? destination.itinerary_ids.map(Number).filter((id) => !Number.isNaN(id))
+        : [],
       image_key: destination.image_key || "",
       images: existingImages,
-      monthly_arrivals: String(destination.monthly_arrivals || 0),
       latitude: String(destination.latitude || destination.coordinates?.lat || ""),
       longitude: String(destination.longitude || destination.coordinates?.lng || ""),
     });
@@ -456,27 +519,31 @@ function DestinationManagement({ initialTab }) {
     }));
   }
 
-  function parseItineraryIds(value) {
-    if (!value.trim()) return [];
-    return value
-      .split(",")
-      .map((item) => Number(item.trim()))
-      .filter((item) => !Number.isNaN(item));
+  function toggleItinerary(id) {
+    setForm((current) => {
+      const picked = current.itinerary_ids || [];
+      return {
+        ...current,
+        itinerary_ids: picked.includes(id)
+          ? picked.filter((item) => item !== id)
+          : [...picked, id].sort((a, b) => a - b),
+      };
+    });
   }
 
+  // The rating and the arrivals are worked out by the server, so they are not sent.
   function buildPayload() {
     return {
       resort_name: form.resort_name.trim(),
+      is_active: Boolean(form.is_active),
       with_mayors_permit: Boolean(form.with_mayors_permit),
       type: form.type.trim(),
       location: form.location.trim(),
       short_description: form.short_description.trim(),
-      tourism_rating: Number(form.tourism_rating || 0),
       access: form.access.trim(),
-      itinerary_ids: parseItineraryIds(form.itinerary_ids),
+      itinerary_ids: form.itinerary_ids || [],
       image_key: form.image_key.trim(),
       images: form.images || [],
-      monthly_arrivals: Number(form.monthly_arrivals || 0),
       latitude: Number(form.latitude || 0),
       longitude: Number(form.longitude || 0),
     };
@@ -751,8 +818,8 @@ function DestinationManagement({ initialTab }) {
                     />
 
                     <span className="destination-rating">
-                      <FiStar />
-                      {destination.tourism_rating}
+                      {reviewCountOf(destination) > 0 ? <FiStar /> : null}
+                      {ratingOf(destination)}
                     </span>
                   </div>
 
@@ -768,10 +835,10 @@ function DestinationManagement({ initialTab }) {
 
                       <span
                         className={`destination-status ${
-                          destination.with_mayors_permit ? "active" : "maintenance"
+                          destination.is_active === false ? "maintenance" : "active"
                         }`}
                       >
-                        {destination.with_mayors_permit ? "Active" : "No Permit"}
+                        {destination.is_active === false ? "Inactive" : "Active"}
                       </span>
                     </div>
 
@@ -835,7 +902,7 @@ function DestinationManagement({ initialTab }) {
             </p>
 
             <p>
-              Average Ratings: <FiStar /> <strong>{averageRating}</strong>
+              Average Ratings: {ratedDestinations.length ? <FiStar /> : null} <strong>{averageRating}</strong>
             </p>
           </div>
         </>
@@ -1093,72 +1160,44 @@ function DestinationManagement({ initialTab }) {
                     : []
                 }
                 resortName={selectedResortDetail.resort_name}
-                height="240px"
+                height="100%"
               />
               <div className="gmaps-modal-hero-overlay" />
 
+              <div className="dest-hero-chips">
+                <span
+                  className={`dest-chip-status${selectedResortDetail.is_active === false ? " inactive" : ""}`}
+                >
+                  {selectedResortDetail.is_active === false ? null : <FiCheck size={13} aria-hidden="true" />}
+                  {selectedResortDetail.is_active === false ? "Inactive" : "Active"}
+                </span>
+                <span className="dest-chip-category">{selectedResortDetail.type}</span>
+              </div>
+
               <button
                 type="button"
-                className="gmaps-close-btn"
+                className="dest-close-round"
                 onClick={() => setSelectedResortDetail(null)}
                 aria-label="Close details"
               >
-                <FiX size={18} />
+                <FiX size={16} />
               </button>
-
-              <div className="gmaps-hero-badges">
-                <span
-                  className={`gmaps-permit-badge ${
-                    selectedResortDetail.with_mayors_permit ? "active" : "unverified"
-                  }`}
-                >
-                  {selectedResortDetail.with_mayors_permit
-                    ? "✓ Verified Mayor's Permit"
-                    : "No Mayor's Permit"}
-                </span>
-                <span className="gmaps-type-badge">{selectedResortDetail.type}</span>
-              </div>
             </div>
 
             {/* Modal Body */}
-            <div className="gmaps-modal-content">
-              {/* Title & Stars */}
-              <div className="gmaps-title-section">
-                <h2>{selectedResortDetail.resort_name}</h2>
-                <div className="gmaps-rating-row">
-                  <div className="gmaps-stars">
-                    <span className="gmaps-rating-num">
-                      {selectedResortDetail.tourism_rating || "0.0"}
-                    </span>
-                    <div className="gmaps-star-icons">
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <FiStar
-                          key={i}
-                          className={
-                            i < Math.round(Number(selectedResortDetail.tourism_rating || 0))
-                              ? "star-gold"
-                              : "star-gray"
-                          }
-                          size={14}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <span className="gmaps-review-count">
-                    ({selectedResortFeedback.length} tourist reviews)
-                  </span>
-                  <span className="gmaps-access-tag">
-                    • Access: {selectedResortDetail.access}
-                  </span>
-                </div>
-              </div>
+            <div className="gmaps-modal-content dest-details-body">
+              <h2 className="dest-details-name">{selectedResortDetail.resort_name}</h2>
+              <p className="dest-details-sub">
+                {String(selectedResortDetail.location || "").split(",")[0].trim() || "Mauban"}
+                {" · "}
+                {selectedResortDetail.with_mayors_permit ? "Mayor's permit verified" : "No Mayor's permit"}
+              </p>
 
-              {/* Quick Actions Bar */}
               <div className="gmaps-quick-actions">
                 {selectedResortCoordinates ? (
                   <button
                     type="button"
-                    className="gmaps-action-btn primary"
+                    className="gmaps-action-btn primary dest-btn-orange"
                     onClick={() => {
                       const url = `https://www.google.com/maps/search/?api=1&query=${selectedResortCoordinates.lat},${selectedResortCoordinates.lng}`;
                       window.open(url, "_blank", "noopener,noreferrer");
@@ -1188,55 +1227,77 @@ function DestinationManagement({ initialTab }) {
                     openEditDestination(toEdit);
                   }}
                 >
-                  <FiEdit2 /> Edit / Add Photos
+                  <FiEdit2 /> Edit / Add photos
                 </button>
               </div>
 
-              {/* Info Items List */}
-              <div className="gmaps-info-list">
-                <div className="gmaps-info-item">
-                  <FiMapPin className="gmaps-info-icon" />
-                  <div>
-                    <p className="gmaps-info-label">Address & Location</p>
-                    <p className="gmaps-info-val">{selectedResortDetail.location}</p>
+              <section className="dest-detail-group">
+                <h3>What the records say</h3>
+                <div className="dest-facts">
+                  <div className="dest-fact">
+                    <span className="dest-label">Tourist rating</span>
+                    <span className="dest-value">
+                      {ratingSummary(selectedResortDetail, selectedResortFeedback.length)}
+                    </span>
+                  </div>
+                  <div className="dest-fact">
+                    <span className="dest-label">Arrivals this month</span>
+                    <span className="dest-value">{visitorsText(selectedResortDetail.monthly_arrivals)}</span>
+                  </div>
+                  <div className="dest-fact">
+                    <span className="dest-label">Arrivals this year</span>
+                    <span className="dest-value">{visitorsText(selectedResortDetail.yearly_arrivals)}</span>
+                  </div>
+                  <div className="dest-fact">
+                    <span className="dest-label">Photos in slideshow</span>
+                    <span className="dest-value">{selectedResortPhotoCount}</span>
                   </div>
                 </div>
+              </section>
 
-                <div className="gmaps-info-item">
-                  <FiCompass className="gmaps-info-icon" />
-                  <div>
-                    <p className="gmaps-info-label">Coordinates</p>
-                    <p className="gmaps-info-val">
-                      {selectedResortCoordinates
-                        ? `${selectedResortCoordinates.lat.toFixed(5)}° N, ${selectedResortCoordinates.lng.toFixed(5)}° E`
-                        : "Coordinates not specified"}
-                    </p>
+              <section className="dest-detail-group">
+                <h3>How a visitor gets here</h3>
+                <div className="dest-facts two">
+                  <div className="dest-fact">
+                    <span className="dest-label">Access</span>
+                    <span className="dest-value">{selectedResortDetail.access || "Not specified"}</span>
+                  </div>
+                  <div className="dest-fact">
+                    <span className="dest-label">Address</span>
+                    <span className="dest-value">{selectedResortDetail.location || "Not specified"}</span>
                   </div>
                 </div>
-
-                <div className="gmaps-info-item">
-                  <FiUsers className="gmaps-info-icon" />
-                  <div>
-                    <p className="gmaps-info-label">Monthly Tourist Arrivals</p>
-                    <p className="gmaps-info-val">
-                      {Number(selectedResortDetail.monthly_arrivals || 0).toLocaleString()} tourists
-                    </p>
+                <div className="dest-fact">
+                  <span className="dest-label">Length of stay offered</span>
+                  <div className="dest-chip-row">
+                    {selectedResortStays.length ? (
+                      selectedResortStays.map((stay) => (
+                        <span key={stay.id} className="dest-chip-static">
+                          {stay.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="dest-value">None chosen yet</span>
+                    )}
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Description */}
-              <div className="gmaps-section">
-                <h3>About This Destination</h3>
-                <p className="gmaps-description">
+              <section className="dest-detail-group">
+                <h3>About this destination</h3>
+                <p className="dest-about">
                   {selectedResortDetail.short_description || "No description provided for this destination."}
                 </p>
-              </div>
+              </section>
 
-              {/* Interactive Mini-Map Preview */}
-              {selectedResortCoordinates ? (
-                <div className="gmaps-section">
-                  <h3>Location Map Preview</h3>
+              <section className="dest-detail-group">
+                <h3>On the map</h3>
+                <p className="dest-coords">
+                  {selectedResortCoordinates
+                    ? `${selectedResortCoordinates.lat.toFixed(5)}° N, ${selectedResortCoordinates.lng.toFixed(5)}° E`
+                    : "Coordinates not specified"}
+                </p>
+                {selectedResortCoordinates ? (
                   <div className="gmaps-map-preview-wrap">
                     <MapContainer
                       center={[selectedResortCoordinates.lat, selectedResortCoordinates.lng]}
@@ -1256,14 +1317,14 @@ function DestinationManagement({ initialTab }) {
                       </Marker>
                     </MapContainer>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </section>
 
               {/* Ratings & Reviews for this resort */}
-              <div className="gmaps-section" id="gmaps-resort-reviews">
-                <div className="gmaps-reviews-header">
+              <div className="dest-detail-group" id="gmaps-resort-reviews">
+                <div className="dest-detail-group-head">
                   <h3>
-                    Visitor Reviews ({selectedResortFeedback.length})
+                    Visitor reviews ({selectedResortFeedback.length})
                     {selectedResortHiddenCount ? (
                       <span className="gmaps-review-hidden-count">
                         {" "}
@@ -1456,79 +1517,146 @@ function DestinationManagement({ initialTab }) {
       {isFormOpen ? (
         <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
           <form
-            className="tourist-record-form w-full max-w-[720px]"
+            className="dest-edit"
             onSubmit={handleSubmit}
+            aria-label={editingDestination ? "Edit destination" : "Add destination"}
           >
-            <h2 className="mb-6 text-xl font-extrabold text-black">
-              {editingDestination ? "Edit Destination & Images" : "Add Destination"}
-            </h2>
+            <header className="dest-edit-header">
+              <div>
+                <h2>{editingDestination ? "Edit destination" : "Add destination"}</h2>
+                <p>{editingDestination ? editingDestination.resort_name : "A new destination"}</p>
+              </div>
+              <button
+                type="button"
+                className="dest-edit-close"
+                aria-label="Close"
+                disabled={saving || uploadingImages}
+                onClick={() => setIsFormOpen(false)}
+              >
+                <FiX size={16} />
+              </button>
+            </header>
 
-            <div className="tourist-record-grid">
-              <TextField
-                label="Destination Name"
-                value={form.resort_name}
-                onChange={(value) => updateField("resort_name", value)}
-                required
-              />
+            <div className="dest-edit-body">
+              {editingDestination ? (
+                <div className="dest-readonly" aria-label="Worked out by the system">
+                  <div className="dest-readonly-facts">
+                    <div>
+                      <span className="dest-label">Tourist rating</span>
+                      <strong className="dest-readonly-value">{ratingOf(editingDestination)}</strong>
+                      <small className="dest-hint">{reviewsText(reviewCountOf(editingDestination))}</small>
+                    </div>
+                    <div>
+                      <span className="dest-label">Arrivals this month</span>
+                      <strong className="dest-readonly-value">{visitorsText(editingDestination.monthly_arrivals)}</strong>
+                      <small className="dest-hint">
+                        {Number(editingDestination.yearly_arrivals || 0).toLocaleString()} this year
+                      </small>
+                    </div>
+                  </div>
+                  <p className="dest-hint">
+                    Both come from the records. They were fields you could type into, and the server threw the typing
+                    away.
+                  </p>
+                </div>
+              ) : null}
 
-              <SelectBooleanField
-                label="Mayor's Permit"
-                value={form.with_mayors_permit}
-                onChange={(value) => updateField("with_mayors_permit", value)}
-              />
+              <section className="dest-group">
+                <h3>Name and category</h3>
+                <p className="dest-group-sub">What the visitor sees first.</p>
+                <TextField
+                  label="Destination name"
+                  value={form.resort_name}
+                  onChange={(value) => updateField("resort_name", value)}
+                  required
+                />
+                <div className="dest-row-2">
+                  <TextField
+                    label="Category"
+                    placeholder="Island Resort, Beach Resort, Heritage Site"
+                    value={form.type}
+                    onChange={(value) => updateField("type", value)}
+                    required
+                  />
+                  <TextField
+                    label="Location"
+                    value={form.location}
+                    onChange={(value) => updateField("location", value)}
+                    required
+                  />
+                </div>
+              </section>
 
-              <TextField
-                label="Type"
-                placeholder="Island Resort, Beach Resort, Heritage Site"
-                value={form.type}
-                onChange={(value) => updateField("type", value)}
-                required
-              />
+              <section className="dest-group">
+                <h3>Status</h3>
+                <p className="dest-group-sub">Whether the app offers this destination at all.</p>
+                <div className="dest-seg" role="group" aria-label="Status">
+                  <button
+                    type="button"
+                    className={`dest-seg-btn${form.is_active ? " selected" : ""}`}
+                    aria-pressed={Boolean(form.is_active)}
+                    onClick={() => updateField("is_active", true)}
+                  >
+                    Active
+                  </button>
+                  <button
+                    type="button"
+                    className={`dest-seg-btn${form.is_active ? "" : " selected"}`}
+                    aria-pressed={!form.is_active}
+                    onClick={() => updateField("is_active", false)}
+                  >
+                    Inactive
+                  </button>
+                </div>
+                <p className="dest-hint">
+                  Inactive takes it out of the app's destination list and out of the registration form. Records that
+                  already name it keep it, and it is never deleted.
+                </p>
+                <SelectBooleanField
+                  label="Mayor's permit"
+                  value={form.with_mayors_permit}
+                  onChange={(value) => updateField("with_mayors_permit", value)}
+                />
+                <p className="dest-hint">A badge on the visitor's screen. It does not hide the destination.</p>
+              </section>
 
-              <TextField
-                label="Access"
-                placeholder="Boat Access, Road Access"
-                value={form.access}
-                onChange={(value) => updateField("access", value)}
-                required
-              />
+              <section className="dest-group">
+                <h3>How a visitor gets here</h3>
+                <p className="dest-group-sub">Both of these appear in the app and in the registration form.</p>
+                <TextField
+                  label="Access"
+                  placeholder="Boat Access, Road Access"
+                  value={form.access}
+                  onChange={(value) => updateField("access", value)}
+                  required
+                />
+                <span className="dest-label">Length of stay offered</span>
+                <div className="dest-stay-options" role="group" aria-label="Length of stay offered">
+                  {stayChoices.map((option) => {
+                    const picked = (form.itinerary_ids || []).includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`dest-chip${picked ? " selected" : ""}`}
+                        aria-pressed={picked}
+                        onClick={() => toggleItinerary(option.id)}
+                      >
+                        {option.name}
+                      </button>
+                    );
+                  })}
+                  {stayChoices.length === 0 ? (
+                    <span className="dest-hint">No Length of Stay options are set up yet.</span>
+                  ) : null}
+                </div>
+                <p className="dest-hint">By name. This used to be a box asking for "Itinerary IDs: 1, 2".</p>
+              </section>
 
-              <TextField
-                label="Location"
-                value={form.location}
-                onChange={(value) => updateField("location", value)}
-                required
-              />
-
-              <TextField
-                label="Tourism Rating"
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.tourism_rating}
-                onChange={(value) => updateField("tourism_rating", value)}
-              />
-
-              <TextField
-                label="Monthly Arrivals"
-                type="number"
-                min="0"
-                value={form.monthly_arrivals}
-                onChange={(value) => updateField("monthly_arrivals", value)}
-              />
-
-              <TextField
-                label="Image Key"
-                placeholder="dona-choleng-camping-resort, aquazul-hotel-and-resort"
-                value={form.image_key}
-                onChange={(value) => updateField("image_key", value)}
-              />
-
-              {/* Upload Multiple Resort Images (Slideshow) */}
-              <div className="col-span-full">
-                <span className="block mb-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Resort Slideshow Images ({form.images?.length || 0})
-                </span>
+              <section className="dest-group">
+                <h3>Photos</h3>
+                <p className="dest-group-sub">These rotate in the app's slideshow.</p>
+                <span className="dest-label">Slideshow images ({form.images?.length || 0})</span>
 
                 <label className="image-upload-dropzone">
                   <FiUploadCloud size={28} className="text-[var(--th-primary)] mb-1" />
@@ -1565,53 +1693,69 @@ function DestinationManagement({ initialTab }) {
                     ))}
                   </div>
                 ) : null}
+              </section>
+
+              <section className="dest-group">
+                <h3>Where it is</h3>
+                <p className="dest-group-sub">Paste a Google Maps link and the pin follows it.</p>
+                <LocationPicker
+                  label="Destination map pin"
+                  latitude={form.latitude}
+                  longitude={form.longitude}
+                  onChange={updateField}
+                  hideHeader
+                  applyLabel="Apply pin"
+                  beforeMap={
+                    <div className="dest-row-2">
+                      <TextField
+                        label="Latitude"
+                        type="number"
+                        step="any"
+                        value={form.latitude}
+                        onChange={(value) => updateField("latitude", value)}
+                        required
+                      />
+                      <TextField
+                        label="Longitude"
+                        type="number"
+                        step="any"
+                        value={form.longitude}
+                        onChange={(value) => updateField("longitude", value)}
+                        required
+                      />
+                    </div>
+                  }
+                />
+              </section>
+
+              <section className="dest-group">
+                <h3>Description</h3>
+                <p className="dest-group-sub">The paragraph under the name in the app.</p>
+                <TextAreaField
+                  label="Description"
+                  showLabel={false}
+                  value={form.short_description}
+                  onChange={(value) => updateField("short_description", value)}
+                  required
+                />
+              </section>
+
+              <div className="dest-image-key">
+                <TextField
+                  label="Image key"
+                  placeholder="dona-choleng-camping-resort, aquazul-hotel-and-resort"
+                  value={form.image_key}
+                  onChange={(value) => updateField("image_key", value)}
+                />
+                <p className="dest-hint">
+                  Finds the built-in photo. Leave it unless you know what it points to.
+                </p>
               </div>
 
-              <TextField
-                label="Latitude"
-                type="number"
-                step="any"
-                value={form.latitude}
-                onChange={(value) => updateField("latitude", value)}
-                required
-              />
-
-              <TextField
-                label="Longitude"
-                type="number"
-                step="any"
-                value={form.longitude}
-                onChange={(value) => updateField("longitude", value)}
-                required
-              />
-
-              <LocationPicker
-                label="Destination Map Pin"
-                latitude={form.latitude}
-                longitude={form.longitude}
-                onChange={updateField}
-              />
-
-              <TextField
-                label="Itinerary IDs"
-                placeholder="1, 2"
-                value={form.itinerary_ids}
-                onChange={(value) => updateField("itinerary_ids", value)}
-              />
-
-              <TextAreaField
-                label="Short Description"
-                value={form.short_description}
-                onChange={(value) => updateField("short_description", value)}
-                required
-              />
+              {formError ? <p className="tourist-record-error">{formError}</p> : null}
             </div>
 
-            {formError ? (
-              <p className="tourist-record-error">{formError}</p>
-            ) : null}
-
-            <div className="tourist-record-actions">
+            <footer className="dest-edit-footer">
               <button
                 type="button"
                 className="tourist-record-cancel"
@@ -1626,9 +1770,9 @@ function DestinationManagement({ initialTab }) {
                 className="tourist-record-save"
                 disabled={saving || uploadingImages}
               >
-                {saving ? "Saving..." : "Save Destination"}
+                {saving ? "Saving..." : "Save destination"}
               </button>
-            </div>
+            </footer>
           </form>
         </div>
       ) : null}
@@ -1715,14 +1859,17 @@ function TextField({
   );
 }
 
-function TextAreaField({ label, value, onChange, required = false }) {
+// showLabel={false} is for a field whose group already carries the same word as its title: the label is then only for assistive
+// technology (aria-label) and the box is not given the word as a placeholder, so it is said once on the screen.
+function TextAreaField({ label, value, onChange, required = false, showLabel = true }) {
   return (
     <label className="tourist-record-field">
-      <span>{label}</span>
+      {showLabel ? <span>{label}</span> : null}
       <textarea
         value={value}
         required={required}
-        placeholder={label}
+        placeholder={showLabel ? label : ""}
+        aria-label={showLabel ? undefined : label}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>

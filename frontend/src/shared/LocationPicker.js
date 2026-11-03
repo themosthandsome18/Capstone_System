@@ -93,7 +93,17 @@ function RecenterMap({ position }) {
   return null;
 }
 
-function LocationPicker({ latitude, longitude, onChange, label = "Map Pin" }) {
+// hideHeader, beforeMap and applyLabel are for a page that wants the paste-a-link row first, its own fields before the map, and its own
+// wording; left alone, the picker is as it was.
+function LocationPicker({
+  latitude,
+  longitude,
+  onChange,
+  label = "Map Pin",
+  hideHeader = false,
+  beforeMap = null,
+  applyLabel = "Apply Pin",
+}) {
   const [mapsInput, setMapsInput] = useState("");
   const [error, setError] = useState("");
   const position = useMemo(() => getPosition(latitude, longitude), [latitude, longitude]);
@@ -126,7 +136,7 @@ function LocationPicker({ latitude, longitude, onChange, label = "Map Pin" }) {
 
   return (
     <div className="location-picker">
-      <div className="location-picker-header">
+      {hideHeader ? null : <div className="location-picker-header">
         <div>
           <span>{label}</span>
           <small>
@@ -146,7 +156,7 @@ function LocationPicker({ latitude, longitude, onChange, label = "Map Pin" }) {
             Open Google Maps
           </a>
         ) : null}
-      </div>
+      </div>}
 
       <div className="location-picker-search">
         <input
@@ -156,11 +166,13 @@ function LocationPicker({ latitude, longitude, onChange, label = "Map Pin" }) {
           onChange={(event) => setMapsInput(event.target.value)}
         />
         <button type="button" onClick={applyMapsInput}>
-          Apply Pin
+          {applyLabel}
         </button>
       </div>
 
       {error ? <p className="location-picker-error">{error}</p> : null}
+
+      {beforeMap}
 
       <div className="location-picker-map">
         <MapContainer center={center} zoom={position ? 15 : DEFAULT_ZOOM} scrollWheelZoom>

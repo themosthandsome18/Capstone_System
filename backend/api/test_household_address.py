@@ -154,3 +154,7 @@ class HouseholdAddressMigrationTests(TransactionTestCase):
             self.assertEqual((upgraded.house_number, upgraded.sitio), ("", ""))
         finally:
             MigrationExecutor(connection).migrate(new)
+            # and on to the latest, so the tests after this one find every column of every later migration
+            executor = MigrationExecutor(connection)
+            executor.loader.build_graph()
+            executor.migrate(executor.loader.graph.leaf_nodes())

@@ -20,6 +20,7 @@ from ..models import (
     TravelMode,
     VisitPurpose,
 )
+from .destination_figures import annotate_destination_figures
 from ..serializers import (
     BoatTypeSerializer,
     CountrySerializer,
@@ -212,19 +213,7 @@ def build_reference_tables_payload(resorts=None, active_only=False):
     if resorts is not None:
         payload["resorts"] = ResortSerializer(resorts, many=True).data
     else:
-        from django.db.models import Count, Q
-        from django.utils import timezone
-        today = timezone.localdate()
-        queryset = Resort.objects.annotate(
-            visitor_total=Count(
-                "tourist_records",
-                filter=Q(
-                    tourist_records__status="arrived",
-                    tourist_records__arrival_date__year=today.year,
-                    tourist_records__arrival_date__month=today.month,
-                ),
-            )
-        )
+        queryset = annotate_destination_figures(Resort.objects.all())
         payload["resorts"] = ResortSerializer(queryset, many=True).data
 
     return payload

@@ -196,6 +196,10 @@ class PublicDigestMigrationTests(TransactionTestCase):
         # application models remain subject to the deletion guards.
         self.Log.objects.filter(record_type=FINGERPRINT_RECORD_TYPE).delete()
         self.upgrade()
+        # and on to the latest, so the tests after this one find every column of every later migration
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
 
     def test_duplicate_preflight_fails_without_data_or_schema_changes(self):
