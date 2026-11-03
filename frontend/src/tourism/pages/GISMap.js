@@ -208,12 +208,22 @@ function GISMap() {
         <StatBox title="Total Locations" value={totalLocations} />
         <StatBox
           title="Active in the app"
-          value={figures ? `${figures.activeCount} of ${figures.totalCount}` : "—"}
+          value={
+            figures ? (
+              <>
+                {figures.activeCount}
+                <span className="gis-stat-of"> of {figures.totalCount}</span>
+              </>
+            ) : (
+              "—"
+            )
+          }
         />
         <StatBox title="Arrivals this year" value={figures ? figures.arrivalsThisYear : "—"} />
         <StatBox
           title="Most visited this year"
           value={!figures ? "—" : mostVisited ? mostVisited.name : "None yet"}
+          isName={Boolean(figures)}
           note={mostVisited ? `${mostVisited.arrivals} arrivals` : null}
         />
       </div>
@@ -221,12 +231,18 @@ function GISMap() {
   );
 }
 
-function StatBox({ title, value, note }) {
+function StatBox({ title, value, note, isName = false }) {
   return (
     <div className="gis-stat-box">
       <p>{title}</p>
-      <h2>{value}</h2>
-      {note ? <p>{note}</p> : null}
+      {isName ? (
+        <h2 className="gis-stat-name" title={value}>
+          {value}
+        </h2>
+      ) : (
+        <h2>{value}</h2>
+      )}
+      {note ? <p className="gis-stat-note">{note}</p> : null}
     </div>
   );
 }

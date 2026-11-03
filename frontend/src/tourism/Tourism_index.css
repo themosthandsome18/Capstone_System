@@ -3681,6 +3681,34 @@
   @apply mt-3 text-[34px] font-extrabold text-black;
 }
 
+/* The four boxes are as tall as the tallest, whether the name of the most visited takes one line or two. */
+.gis-bottom-stats {
+  align-items: stretch;
+}
+
+/* "15 of 15": the " of 15" is smaller than the number it belongs to. */
+.gis-stat-box h2 .gis-stat-of {
+  font-size: 17px;
+  font-weight: 600;
+  color: #7A6755;
+}
+
+/* The name of the most visited is text, not a number: smaller, at most two lines, cut with an ellipsis. */
+.gis-stat-box h2.gis-stat-name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gis-stat-box p.gis-stat-note {
+  font-size: 12.5px;
+  color: #87705C;
+}
+
 /* ================= RESPONSIVE ================= */
 
 @media (max-width: 1200px) {
