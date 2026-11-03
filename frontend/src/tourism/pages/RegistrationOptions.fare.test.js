@@ -934,9 +934,9 @@ describe("h) the four existing tabs are as they were", () => {
   });
 });
 
-describe("only the admin", () => {
+describe("only the Tourism Office and the admin", () => {
   it("sends anyone else away and asks the server for nothing", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<RegistrationOptions />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(global.fetch).not.toHaveBeenCalled();

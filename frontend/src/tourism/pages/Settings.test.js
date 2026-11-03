@@ -71,8 +71,8 @@ beforeEach(() => {
 });
 
 describe("Settings access", () => {
-  test("a non-admin is sent away and never sees the page", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  test("a tourist is sent away and never sees the page", () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<Shell initialTheme={savedTheme()} onSave={jest.fn()} />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByLabelText("System colour", { selector: "input" })).toBeNull();

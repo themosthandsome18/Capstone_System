@@ -157,8 +157,8 @@ async function open(tabName = null) {
 }
 
 describe("who may open it", () => {
-  it("sends anyone but the admin away, and asks the server for nothing", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  it("sends anyone but the Tourism Office and the admin away, and asks the server for nothing", () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<RegistrationOptions />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByRole("tab")).toBeNull();

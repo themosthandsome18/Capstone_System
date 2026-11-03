@@ -42,29 +42,32 @@ jest.mock("leaflet", () => ({ __esModule: true, default: { DivIcon: class {} }, 
 jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
 
 describe("the route of the page of a tile", () => {
-  test("is /mobile-content/tile, one route, admin only (the same roles as the page of the tabs)", () => {
+  test("is /mobile-content/tile, one route, for the same roles as the page of the tabs", () => {
     expect(TILE_PATH).toBe("/mobile-content/tile");
     const routes = tourismRoutes.filter((route) => route.path === TILE_PATH);
     expect(routes).toHaveLength(1);
-    expect(routes[0].allowedRoles).toEqual(["admin"]);
+    expect(routes[0].allowedRoles).toEqual(["admin", "tourism"]);
     expect(routes[0].allowedRoles).toEqual(MOBILE_CONTENT_ROLES);
     expect(routes[0].element).toBeTruthy();
     // the page of the tabs is still there, with its own address
-    expect(tourismRoutes.find((route) => route.path === MOBILE_CONTENT_PATH).allowedRoles).toEqual(["admin"]);
+    expect(tourismRoutes.find((route) => route.path === MOBILE_CONTENT_PATH).allowedRoles).toEqual(["admin", "tourism"]);
   });
 
-  test("the route guard sends a tourism user and a sanitation user away, and lets the admin through", () => {
+  test("the route guard sends a tourist and a sanitation user away, and lets the Tourism Office and the admin through", () => {
     const route = tourismRoutes.find((item) => item.path === TILE_PATH);
-    for (const [role, home] of [["tourism", "/"], ["sanitation", "/sanitation"]]) {
+    for (const [role, home] of [["tourist", "/"], ["sanitation", "/sanitation"]]) {
       useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
       const { unmount } = render(<ProtectedRoute allowedRoles={route.allowedRoles} />);
       expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(home); // each goes to its own home, not to this page
       expect(screen.queryByTestId("outlet")).toBeNull();
       unmount();
     }
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "admin" });
-    render(<ProtectedRoute allowedRoles={route.allowedRoles} />);
-    expect(screen.getByTestId("outlet")).toBeTruthy();
+    for (const role of ["tourism", "admin"]) {
+      useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
+      const { unmount } = render(<ProtectedRoute allowedRoles={route.allowedRoles} />);
+      expect(screen.getByTestId("outlet")).toBeTruthy();
+      unmount();
+    }
   });
 
   test("the top bar knows the page, and says Mobile App Content (without an entry it would say Dashboard Overview)", () => {

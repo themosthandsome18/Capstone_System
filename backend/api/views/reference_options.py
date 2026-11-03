@@ -8,7 +8,6 @@ the dropdown of new registrations but stays on old records and in the reports.
 Every change is written to the ActivityLog, the opposite of the no-show sweep
 that changes records and leaves no trace.
 """
-from functools import wraps
 
 from django.core.cache import cache
 from django.db import IntegrityError, connection, transaction
@@ -22,14 +21,13 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     MODULE_TOURISM,
-    ROLE_ADMIN,
     BoatType,
     Itinerary,
     TouristRecord,
     TravelMode,
     VisitPurpose,
 )
-from api.permissions import get_user_role
+from api.permissions import administration_required
 from api.services import online_booking
 from api.services.activity import LABEL_MAX, count_of, log_activity, shorten_label
 from api.services.tourism import MOBILE_REFERENCE_TABLES_CACHE_KEY
@@ -46,20 +44,10 @@ STAY_NIGHTS_MAX = 60  # a sanity bound; the column itself takes up to 32767
 ID_RETRIES = 5
 
 
-def admin_required(view):
-    """Only the system admin. Not the tourism role: these choices decide what
-    the reports count, so they are not for every staff member."""
-
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can manage registration options."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return view(request, *args, **kwargs)
-
-    return wrapped
+# Named admin_required as before; it lets the Tourism Office in as well as the system admin (permissions.ADMINISTRATION_ROLES).
+admin_required = administration_required(
+    "Only the Tourism Office and the system admin can manage registration options."
+)
 
 
 def _kind(kind):

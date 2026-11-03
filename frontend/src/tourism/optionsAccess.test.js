@@ -28,29 +28,30 @@ jest.mock("leaflet", () => ({ __esModule: true, default: { DivIcon: class {} }, 
 jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
 
 describe("Registration Options access", () => {
-  test("only the system admin may manage the options", () => {
+  test("the Tourism Office and the system admin may manage the options, nobody else", () => {
     expect(OPTIONS_PATH).toBe("/options");
-    expect(OPTIONS_ROLES).toEqual(["admin"]);
+    expect(OPTIONS_ROLES).toEqual(["admin", "tourism"]);
     expect(canManageOptions("admin")).toBe(true);
-    ["tourism", "sanitation", "", undefined].forEach((role) => expect(canManageOptions(role)).toBe(false));
+    expect(canManageOptions("tourism")).toBe(true);
+    ["tourist", "sanitation", "establishment", "auditor", "", undefined, null].forEach((role) => expect(canManageOptions(role)).toBe(false));
   });
 
-  test("the page is in the route list, declared admin-only", () => {
+  test("the page is in the route list, declared for the Tourism Office and the system admin", () => {
     const route = tourismRoutes.find((item) => item.path === OPTIONS_PATH);
     expect(route).toBeDefined();
-    expect(route.allowedRoles).toEqual(["admin"]);
+    expect(route.allowedRoles).toEqual(["admin", "tourism"]);
     expect(route.element).toBeTruthy();
   });
 
-  test("the route guard sends a tourism user away from the page", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "tourism" });
+  test.each(["tourist", "sanitation", "establishment", "auditor"])("the route guard sends the %s role away from the page", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={OPTIONS_ROLES} />);
-    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
+    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
     expect(screen.queryByTestId("outlet")).toBeNull();
   });
 
-  test("the route guard lets the admin through", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "admin" });
+  test.each(["admin", "tourism"])("the route guard lets the %s role through", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={OPTIONS_ROLES} />);
     expect(screen.getByTestId("outlet")).toBeTruthy();
   });
@@ -64,8 +65,8 @@ describe("Registration Options access", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
-  test("a tourism user sees neither the link nor the Administration heading", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  test.each(["tourist", "sanitation", "establishment", "auditor"])("the %s role sees neither the link nor the Administration heading", (role) => {
+    useAuth.mockReturnValue({ role });
     render(<Sidebar />);
     expect(screen.queryByRole("link", { name: "Registration Options" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();

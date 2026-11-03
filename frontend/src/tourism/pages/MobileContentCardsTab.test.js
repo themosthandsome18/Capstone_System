@@ -144,8 +144,8 @@ describe("the tab and its requests", () => {
     expect(router.__clicks().length).toBeGreaterThan(5); // the fixture: the links really were pressed
   });
 
-  it("sends anyone but the admin away, with no request", async () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  it("sends anyone but the Tourism Office and the admin away, with no request", async () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<MobileAppContent />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     await settled();

@@ -19,7 +19,7 @@ from api.models import (
     TourismThemeSetting,
     TouristRecord,
 )
-from api.permissions import get_user_role, module_required
+from api.permissions import administration_required, get_user_role, module_required
 from api.seeders import (
     ensure_initial_reference_data,
     ensure_initial_tourism_data,
@@ -498,13 +498,8 @@ def tourism_theme(request):
 
 
 @module_required("tourism")
+@administration_required("Only the Tourism Office and the system admin can change the tourism theme.")
 def update_tourism_theme(request):
-    if get_user_role(request.user) != ROLE_ADMIN:
-        return Response(
-            {"detail": "Only the system admin can change the tourism theme."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
     serializer = TourismThemeWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
