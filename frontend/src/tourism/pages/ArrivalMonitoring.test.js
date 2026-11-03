@@ -4,6 +4,7 @@ import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 
+jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }), { virtual: true });
 jest.mock("../context/TourismDataContext", () => ({ useTourismData: jest.fn() }));
 jest.mock("../services/tourismApi", () => ({
   tourismApi: { getArrivalMonitoringExport: jest.fn() },

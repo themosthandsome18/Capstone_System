@@ -331,6 +331,12 @@ export const tourismApi = {
     return { rowCount: payload?.rowCount || 0, rows: payload?.rows || [] };
   },
 
+  // One tourist record, with what the server works out from it (`computed`: Overnight and Same Day by sex, and the fee).
+  // The foreign keys come back as ids; the names are the web's referenceTables.
+  async getTouristRecord(surveyId) {
+    return apiRequest(`/tourist-records/${encodeURIComponent(surveyId)}/`);
+  },
+
   async getDashboardData(params = {}) {
     const query = buildQueryString({
       year: params.year,

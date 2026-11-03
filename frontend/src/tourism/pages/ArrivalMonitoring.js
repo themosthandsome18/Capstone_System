@@ -22,7 +22,9 @@ import {
   viewFromFilters,
 } from "../utils/arrivalView";
 import { formatNumber } from "../utils/format";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ArrivalRecordModal from "./ArrivalRecordModal";
 
 const currentReportingYear = String(new Date().getFullYear());
 
@@ -85,6 +87,12 @@ function ArrivalMonitoring() {
   const reportingYearOptions = buildReportingYearOptions(reportingYears, selectedYear);
   const [exporting, setExporting] = useState(false);
   const [arrivalError, setArrivalError] = useState("");
+  // The modal of one arrival: the record the server sent for the name that was clicked.
+  const navigate = useNavigate();
+  const [openRecord, setOpenRecord] = useState(null);
+  const [recordError, setRecordError] = useState("");
+  const recordTrigger = useRef(null);
+  const recordRequested = useRef(false); // a ref, not a state: a second press in the same instant must already see the first
   const [refreshing, setRefreshing] = useState(false);
   // A record changed since arrival data was last loaded: refetch on open, never show stale.
   const [staleLoading, setStaleLoading] = useState(() =>
@@ -116,6 +124,30 @@ function ArrivalMonitoring() {
       active = false;
     };
   }, [isComputedDataStale, refreshArrivalMonitoringIfStale]);
+
+  async function openRecordOf(row, event) {
+    if (recordRequested.current) return; // one request for one click, however many times it is pressed
+    recordRequested.current = true;
+    recordTrigger.current = event.currentTarget;
+    setRecordError("");
+    try {
+      setOpenRecord(await tourismApi.getTouristRecord(row.survey_id));
+    } catch (requestError) {
+      setRecordError(requestError.message || "Unable to load this arrival.");
+    } finally {
+      recordRequested.current = false;
+    }
+  }
+
+  const closeRecord = useCallback(() => {
+    setOpenRecord(null);
+    recordTrigger.current?.focus();
+  }, []);
+
+  function openDestination(resortId) {
+    setOpenRecord(null);
+    navigate("/destinations", { state: { openResortId: resortId } });
+  }
 
   const summary = arrivalMonitoring.summary || {};
   const rows = arrivalMonitoring.rows || [];
@@ -476,6 +508,12 @@ function ArrivalMonitoring() {
         </div>
       ) : null}
 
+      {recordError ? (
+        <p className="tourist-record-error" role="alert">
+          {recordError}
+        </p>
+      ) : null}
+
       {/* Table */}
       <div className="arrival-table-card">
         <div className="table-responsive overflow-x-auto">
@@ -491,15 +529,24 @@ function ArrivalMonitoring() {
                 <th>Same Day</th>
                 <th>Resort</th>
                 <th>Fee Paid</th>
+                <th aria-hidden="true" className="arrival-chevron-col" />
               </tr>
             </thead>
 
             <tbody>
               {rows.length ? (
                 rows.map((row) => (
-                  <tr key={row.survey_id}>
+                  <tr key={row.survey_id} className="arrival-row">
                     <td>{formatDate(row.date)}</td>
-                    <td className="guest-name">{row.group}</td>
+                    <td className="guest-name">
+                      <button
+                        type="button"
+                        className="arrival-record-link"
+                        onClick={(event) => openRecordOf(row, event)}
+                      >
+                        {row.group || row.survey_id}
+                      </button>
+                    </td>
                     <td>{row.male}</td>
                     <td>{row.female}</td>
                     <td>{row.itinerary || "--"}</td>
@@ -507,11 +554,14 @@ function ArrivalMonitoring() {
                     <td>{displayCount(row.sameDay)}</td>
                     <td>{row.resort}</td>
                     <td className="fee">{formatCurrency(row.feePaid)}</td>
+                    <td aria-hidden="true" className="arrival-chevron">
+                      ›
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
+                  <td colSpan="10" className="text-center" style={{ padding: "32px" }}>
                     {loadedView.view === VIEW_DAY
                       ? `No arrivals recorded for ${formatDate(loadedView.date)} at ${activeResortName}.`
                       : `No arrived tourist records found for ${viewDescription} at ${activeResortName}.`}
@@ -535,11 +585,21 @@ function ArrivalMonitoring() {
                 <td>{dailyTotals.sameDay || 0}</td>
                 <td />
                 <td className="fee">{formatCurrency(dailyTotals.feesCollected || 0)}</td>
+                <td aria-hidden="true" />
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
+      {openRecord ? (
+        <ArrivalRecordModal
+          record={openRecord}
+          referenceTables={referenceTables}
+          onClose={closeRecord}
+          onOpenDestination={openDestination}
+        />
+      ) : null}
     </div>
   );
 }
