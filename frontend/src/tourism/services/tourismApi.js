@@ -317,6 +317,11 @@ export const tourismApi = {
     );
   },
 
+  // The figures under the GIS map, as the server worked them out (activeCount, totalCount, arrivalsThisYear, mostVisited).
+  async getDestinationFigures() {
+    return apiRequest("/destination-figures/");
+  },
+
   // Every row of an Arrival Monitoring view, in date order, for Export CSV.
   // Same parameters as getArrivalMonitoringData; the on-screen table is capped.
   async getArrivalMonitoringExport(params = {}) {
