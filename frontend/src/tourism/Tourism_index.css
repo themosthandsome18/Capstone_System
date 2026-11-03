@@ -3709,6 +3709,31 @@
   color: #87705C;
 }
 
+/* ── ACTIVITY LOGS: the brand colour follows the theme ──
+   shared/pages/ActivityLogsPage.css is the page of Sanitation too, with its own fixed green (#0f6b42), and it is loaded
+   with the rest of the shared CSS, so these are scoped to the tourism shell (one more class of specificity, as with
+   .sortable-th above): Sanitation keeps its rules. The meaningful colours stay as they are there: Created green, Updated
+   blue, Deleted red (the summary cards' left border and the action badges). */
+.tourism-layout .activity-refresh {
+  background: var(--th-primary);
+}
+
+.tourism-layout .activity-title {
+  color: var(--th-primary-ink);
+}
+
+.tourism-layout .activity-table-card th {
+  background: var(--th-primary-tint);
+}
+
+.tourism-layout .activity-summary-card {
+  box-shadow: 0 10px 20px rgba(var(--th-shadow-rgb), 0.12);
+}
+
+.tourism-layout .activity-table-card {
+  box-shadow: 0 8px 18px rgba(var(--th-shadow-rgb), 0.12);
+}
+
 /* ================= RESPONSIVE ================= */
 
 @media (max-width: 1200px) {
