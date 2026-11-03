@@ -608,18 +608,4 @@ export const tourismApi = {
     return addResortImage(updated);
   },
 
-  async deleteResort(id) {
-    try {
-      await apiRequest(`/resorts/${encodeURIComponent(id)}/`, {
-        method: "DELETE",
-      });
-      return { id };
-    } catch (error) {
-      if (isBackendValidationError(error)) {
-        throw error;
-      }
-
-      throw error;
-    }
-  },
 };

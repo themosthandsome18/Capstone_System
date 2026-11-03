@@ -1,6 +1,5 @@
 import time
 from django.core.files.storage import default_storage
-from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -252,38 +251,27 @@ def resort_list(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+DESTINATION_DELETE_REFUSED = (
+    "Destinations are never deleted. Set the destination to Inactive instead."
+)
+
+
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @module_required("tourism")
 def resort_detail(request, resort_id):
+    # A destination is never deleted: Inactive is its end. This is answered before the destination is even looked up, so nothing
+    # reaches resort.delete(): not for a destination with no records, and not for one with records (which PROTECT would have
+    # refused only afterwards, with a 409).
+    if request.method == "DELETE":
+        return Response(
+            {"detail": DESTINATION_DELETE_REFUSED},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
     resort = get_object_or_404(Resort, resort_id=resort_id)
 
     if request.method == "GET":
         return Response(ResortSerializer(resort).data)
-
-    if request.method == "DELETE":
-        resort_label = resort.resort_name
-        resort_id_value = resort.resort_id
-        try:
-            resort.delete()
-        except ProtectedError:
-            return Response(
-                {
-                    "detail": (
-                        "This destination is linked to tourist records and cannot "
-                        "be deleted."
-                    )
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        log_activity(
-            request,
-            MODULE_TOURISM,
-            ACTION_DELETE,
-            resort,
-            label=resort_label,
-            record_id=resort_id_value,
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     data = request.data.copy()
     data["resort_id"] = resort.resort_id

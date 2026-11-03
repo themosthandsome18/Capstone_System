@@ -73,7 +73,6 @@ function setup(entries = fixtures(), extra = {}) {
     unhideFeedbackEntry: jest.fn().mockResolvedValue({}),
     createResort: jest.fn(),
     updateResort: jest.fn(),
-    deleteResort: jest.fn(),
     uploadResortImage: jest.fn(),
     ...extra,
   };

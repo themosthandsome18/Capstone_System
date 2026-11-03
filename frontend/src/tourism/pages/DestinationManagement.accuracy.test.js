@@ -87,7 +87,6 @@ function setup(resorts = [BEACH, COVE], feedbackEntries = [], extra = {}) {
     unhideFeedbackEntry: jest.fn(),
     createResort: jest.fn().mockResolvedValue({}),
     updateResort: jest.fn().mockResolvedValue({ ...BEACH }),
-    deleteResort: jest.fn(),
     uploadResortImage: jest.fn(),
     ...extra,
   };

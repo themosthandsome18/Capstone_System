@@ -16,7 +16,6 @@ import {
   FiStar,
   FiThumbsDown,
   FiThumbsUp,
-  FiTrash2,
   FiUploadCloud,
   FiX,
 } from "react-icons/fi";
@@ -232,7 +231,6 @@ function DestinationManagement({ initialTab }) {
     referenceTables,
     createResort,
     updateResort,
-    deleteResort,
     uploadResortImage,
     feedbackEntries = [],
     updateFeedbackEntry,
@@ -257,8 +255,6 @@ function DestinationManagement({ initialTab }) {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteError, setDeleteError] = useState("");
 
   // Google Maps Style Detail Modal State
   const [selectedResortDetail, setSelectedResortDetail] = useState(null);
@@ -608,25 +604,6 @@ function DestinationManagement({ initialTab }) {
     }
   }
 
-  async function confirmDeleteDestination() {
-    if (!deleteTarget) return;
-
-    setSaving(true);
-    setDeleteError("");
-
-    try {
-      await deleteResort(deleteTarget.resort_id);
-      if (selectedResortDetail?.resort_id === deleteTarget.resort_id) {
-        setSelectedResortDetail(null);
-      }
-      setDeleteTarget(null);
-    } catch (error) {
-      setDeleteError(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function openReply(entry) {
     setReplyingId(entry.id);
     setReplyText(entry.reply || "");
@@ -875,18 +852,6 @@ function DestinationManagement({ initialTab }) {
                       >
                         <FiEdit2 />
                         Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="destination-delete-btn"
-                        onClick={() => {
-                          setDeleteTarget(destination);
-                          setDeleteError("");
-                        }}
-                        title="Delete Destination"
-                      >
-                        <FiTrash2 />
                       </button>
                     </div>
                   </div>
@@ -1774,47 +1739,6 @@ function DestinationManagement({ initialTab }) {
               </button>
             </footer>
           </form>
-        </div>
-      ) : null}
-
-      {/* Delete Destination Modal */}
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
-          <div className="delete-record-confirm w-full max-w-[420px]">
-            <p>
-              Are you sure you want to delete{" "}
-              <strong>{deleteTarget.resort_name}</strong>?
-            </p>
-
-            <p className="mt-2 text-xs text-slate-500">
-              If this destination is already linked to tourist records, the backend
-              will prevent deletion.
-            </p>
-
-            {deleteError ? (
-              <p className="tourist-record-error">{deleteError}</p>
-            ) : null}
-
-            <div className="delete-record-actions">
-              <button
-                type="button"
-                className="tourist-record-cancel"
-                disabled={saving}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="delete-record-confirm-btn"
-                disabled={saving}
-                onClick={confirmDeleteDestination}
-              >
-                {saving ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
         </div>
       ) : null}
     </div>

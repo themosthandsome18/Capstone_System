@@ -545,25 +545,6 @@ export function TourismDataProvider({ children }) {
     }
   }
 
-  async function deleteResort(resortId) {
-    setActionLoading(true);
-    try {
-      await tourismApi.deleteResort(resortId);
-      setBootstrap((current) => ({
-        ...current,
-        referenceTables: {
-          ...current.referenceTables,
-          resorts: current.referenceTables.resorts.filter(
-            (resort) => resort.resort_id !== resortId
-          ),
-        },
-      }));
-      await refreshReportData(bootstrap.reportData.filters);
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
   async function updateFeedbackEntry(feedbackId, payload) {
     setActionLoading(true);
     try {
@@ -641,7 +622,6 @@ export function TourismDataProvider({ children }) {
         pollBookingList,
         createResort,
         updateResort,
-        deleteResort,
         uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
         refreshReferenceTables,

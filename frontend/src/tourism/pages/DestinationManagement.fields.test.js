@@ -132,7 +132,6 @@ function openEdit() {
     unhideFeedbackEntry: jest.fn(),
     createResort: jest.fn(),
     updateResort: jest.fn(),
-    deleteResort: jest.fn(),
     uploadResortImage: jest.fn(),
   });
   render(<DestinationManagement initialTab="destinations" />);
