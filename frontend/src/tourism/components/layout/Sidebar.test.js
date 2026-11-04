@@ -15,14 +15,14 @@ jest.mock(
 );
 jest.mock("../../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
-const THREE = ["Settings", "Registration Options", "Mobile App Content"];
+const THREE = ["Appearance", "Registration Options", "Mobile App Content"];
 
 describe("Sidebar administration section", () => {
-  test.each(["admin", "tourism"])("shows Settings, Registration Options and Mobile App Content under Administration to the %s role", (role) => {
+  test.each(["admin", "tourism"])("shows Appearance, Registration Options and Mobile App Content under Administration to the %s role", (role) => {
     useAuth.mockReturnValue({ role });
     render(<Sidebar />);
     expect(screen.getByText("Administration")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
+    expect(screen.getByRole("link", { name: "Appearance" }).getAttribute("href")).toBe("/settings");
     expect(screen.getByRole("link", { name: "Registration Options" }).getAttribute("href")).toBe("/options");
     expect(screen.getByRole("link", { name: "Mobile App Content" }).getAttribute("href")).toBe("/mobile-content");
   });

@@ -70,7 +70,7 @@ export const tourismRoutes = [
   {
     path: SETTINGS_PATH,
     allowedRoles: SETTINGS_ROLES,
-    element: React.createElement(withErrorBoundary(Settings, "Settings")),
+    element: React.createElement(withErrorBoundary(Settings, "Appearance")),
   },
   {
     path: OPTIONS_PATH,
