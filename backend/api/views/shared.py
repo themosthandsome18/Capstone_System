@@ -1,3 +1,4 @@
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -5,6 +6,9 @@ from rest_framework.response import Response
 from api.models import (
     MODULE_SANITATION,
     MODULE_TOURISM,
+    ROLE_ADMIN,
+    ROLE_SANITATION,
+    ROLE_TOURISM,
     ActivityLog,
     FeedbackEntry,
 )
@@ -34,15 +38,30 @@ def health_check(request):
     return Response({"status": "ok"})
 
 
+# Whose logs each staff role may read: its own module's, and the system admin's all of them (None = no cut). A role that is not a key here
+# (the tourist, the establishment owner, one not defined yet) is refused: the default is no, not yes.
+ACTIVITY_LOG_MODULES = {
+    ROLE_ADMIN: None,
+    ROLE_TOURISM: MODULE_TOURISM,
+    ROLE_SANITATION: MODULE_SANITATION,
+}
+
+
 @api_view(["GET"])
 def activity_log_list(request):
     role = get_user_role(request.user)
+
+    if role not in ACTIVITY_LOG_MODULES:
+        return Response(
+            {"detail": "Only staff can read the activity logs."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     logs = ActivityLog.objects.select_related("user").all()
 
-    if role == MODULE_TOURISM:
-        logs = logs.filter(module=MODULE_TOURISM)
-    elif role == MODULE_SANITATION:
-        logs = logs.filter(module=MODULE_SANITATION)
+    own_module = ACTIVITY_LOG_MODULES[role]
+    if own_module:
+        logs = logs.filter(module=own_module)
 
     module_filter = request.query_params.get("module")
     action_filter = request.query_params.get("action")
