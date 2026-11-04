@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
   MapContainer,
@@ -271,6 +271,8 @@ function SanitaryGISMap() {
     loading,
     error,
     refreshComplaintData,
+    householdRecords,
+    householdStatus,
   } = useSanitationData();
 
   const [mapMode, setMapMode] = useState(location.state?.mode || "establishments");
@@ -300,19 +302,48 @@ function SanitaryGISMap() {
 
   const isHouseholdMode = mapMode === "households";
   const isCommunityMode = mapMode === "community_reports";
+  const householdSnapshotFailed = householdStatus === "error";
 
   useEffect(() => {
     if (!isHouseholdMode) return undefined;
     let active = true;
-    setHouseholdGis({ rows: [], loading: true, error: "" });
-    fetchHouseholdRecords().then((rows) => {
-      if (!Array.isArray(rows)) throw new Error("Unexpected household records response.");
-      if (active) setHouseholdGis({ rows, loading: false, error: "" });
-    }).catch((requestError) => {
-      if (active) setHouseholdGis({ rows: [], loading: false, error: requestError.message || "Unable to load household records." });
-    });
-    return () => { active = false; };
-  }, [isHouseholdMode, householdRequestKey]);
+    let pending = false;
+    // Each effect owns one generation. Provider invalidation supersedes even an
+    // in-flight activation request; old responses cannot restore stale rows.
+    const refresh = async () => {
+      if (!active || pending) return;
+      pending = true;
+      setHouseholdGis({ rows: [], loading: true, error: "" });
+      try {
+        const rows = await fetchHouseholdRecords();
+        if (!Array.isArray(rows)) throw new Error("Unexpected household records response.");
+        if (active) setHouseholdGis({ rows, loading: false, error: "" });
+      } catch (requestError) {
+        if (active) setHouseholdGis({ rows: [], loading: false, error: requestError?.message || "Unable to load household records." });
+      } finally {
+        pending = false;
+      }
+    };
+    // Coalesce focus + visibilitychange from the same activation, without polling.
+    let activationTimer;
+    const activate = () => {
+      if (document.visibilityState === "hidden" || pending || activationTimer !== undefined) return;
+      activationTimer = setTimeout(() => {
+        activationTimer = undefined;
+        refresh();
+      }, 0);
+    };
+    refresh();
+    window.addEventListener("focus", activate);
+    document.addEventListener("visibilitychange", activate);
+    return () => {
+      active = false;
+      clearTimeout(activationTimer);
+      window.removeEventListener("focus", activate);
+      document.removeEventListener("visibilitychange", activate);
+    };
+    // Provider records are an invalidation signal only, never the GIS dataset.
+  }, [isHouseholdMode, householdRequestKey, householdRecords, householdSnapshotFailed]);
 
   useEffect(() => {
     if (isCommunityMode && !complaintData) {
@@ -1041,10 +1072,14 @@ function MapSummaryCard({ label, value, color }) {
 
 function FitMapToItems({ items, selectedItemId, barangayFilter, resetKey, preferItemBounds, ready }) {
   const map = useMap();
+  const fittedHouseholdView = useRef(null);
 
   useEffect(() => {
     if (!ready) return undefined;
+    const viewKey = JSON.stringify([items.map(({ id, position }) => [id, position]), selectedItemId, barangayFilter, resetKey]);
+    if (preferItemBounds && fittedHouseholdView.current === viewKey) return undefined;
     const fitView = () => {
+      fittedHouseholdView.current = preferItemBounds ? viewKey : null;
       if (selectedItemId) {
         const selected = items.find((i) => i.id === selectedItemId);
         if (selected && selected.position) {
