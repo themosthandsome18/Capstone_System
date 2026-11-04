@@ -3380,7 +3380,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                     title: item.householdHead,
                     subtitle: '${item.householdCode} - ${item.barangay}',
                     trailing: householdStatusLabel(item.status),
-                    statusColor: sanitationStatusColor(item.status),
+                    statusColor: householdStatusColor(item.status),
                   ),
                 ),
               )
@@ -3472,6 +3472,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
                 if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
               ].join(' - '),
               trailing: householdStatusLabel(item.status),
+              statusColor: householdStatusColor(item.status),
             ),
           ),
       ],

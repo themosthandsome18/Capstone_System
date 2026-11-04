@@ -734,6 +734,13 @@ class SanitationComplaintItem {
   }
 }
 
+// Only authoritative household states may imply compliance.
+String householdComplianceStatus(Object? value) {
+  return const {'good_standing', 'for_completion', 'violation'}.contains(value)
+      ? value as String
+      : '';
+}
+
 class HouseholdSanitationItem {
   const HouseholdSanitationItem({
     required this.householdCode,
@@ -853,7 +860,7 @@ class HouseholdSanitationItem {
       householdCode: '${json['household_code'] ?? ''}',
       householdHead: '${json['household_head'] ?? 'Household'}',
       barangay: '${json['barangay'] ?? 'Unspecified'}',
-      status: '${json['status'] ?? 'good_standing'}',
+      status: householdComplianceStatus(json['status']),
       latitude: jsonDouble(json['latitude']),
       longitude: jsonDouble(json['longitude']),
       surveyDate: '${json['last_survey_date'] ?? ''}',
@@ -1507,7 +1514,7 @@ class MobileHouseholdSurveyReceipt {
       householdCode: '${json['household_code'] ?? 'HH-SAVED'}',
       householdHead: head,
       barangay: barangay,
-      status: '${json['status'] ?? 'good_standing'}',
+      status: householdComplianceStatus(json['status']),
       inspectionDate: dateStr,
       waterSource: waterSource,
       toiletType: toiletType,

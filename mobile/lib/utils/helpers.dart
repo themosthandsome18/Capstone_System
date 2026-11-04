@@ -353,9 +353,12 @@ String householdStatusLabel(String value) {
     case 'violation':
       return 'Violation';
     default:
-      return value.isEmpty ? 'Good Standing' : value;
+      return 'Unknown';
   }
 }
+
+Color householdStatusColor(String value) =>
+    sanitationStatusColor(householdComplianceStatus(value));
 
 Color sanitationStatusColor(String value) {
   switch (value) {

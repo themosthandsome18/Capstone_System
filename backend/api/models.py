@@ -914,8 +914,6 @@ class SanitaryEstablishment(models.Model):
                     # stale instance's stage or proposed permit reactivation.
                     self.enforcement_stage = "suspension"
                     self.permit_status = PERMIT_STATUS_SUSPENDED
-            if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
-                self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
             super().save(*args, **kwargs)
 
     @property
