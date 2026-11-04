@@ -605,6 +605,9 @@ def mobile_feedback_submit(request):
     # *string*, so a list of photo URLs put in it becomes "['https://...']" (invalid JSON) and is
     # rejected with "photos: Value must be valid JSON". Use a plain dict so the list stays a list.
     data = request.data.dict() if hasattr(request.data, "dict") else dict(request.data)
+    # The tourism office's reply is the staff's to write (feedback_detail): the public form has no such field, and a sender must not be
+    # able to put words in the office's mouth, which the app then shows under the review.
+    data.pop("reply", None)
     destination_id = (
         data.get("destinationId")
         or data.get("destination_id")
