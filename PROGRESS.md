@@ -1,5 +1,12 @@
 # Project Progress & Status Tracker
 
+## Household remarks exact preservation — Wave 1 local correction (2026-11-04)
+
+- Confirmed DRF defect: shared Web/Mobile household serializer trimmed submitted remarks (" 1 " became "1"). A remarks-only Meta.extra_kwargs trim_whitespace=False override now preserves intentional outer spaces, internal whitespace/newlines and approved whitespace-only values. Existing optional, blank, null and omitted-update semantics remain; other fields retain their normalization. No schema, authorization or concurrency change.
+- RED to GREEN: all five original failures resolved; 12 remarks regressions and two existing mobile remarks controls passed. The approved whitespace-only expectation was explicitly updated; other original assertions remain unchanged. Full regular backend: 1,132 passed, zero failures/errors, nine existing PostgreSQL-specific skips. Frontend readiness/edit-preservation: 38 passed; React production build passed. Disposable migration rehearsal applied 84 migrations with none pending and no model drift. Final review matched committed-intended source/test hashes to this GREEN evidence; tests were not rerun for documentation-only review.
+- Real React + disposable Django verified POST 201 and PATCH 200 responses, database readback and reload preserving exact submitted remarks. An unrelated count edit omitted remarks and preserved them. Authenticated Mobile API create/upsert returned 201 with exact outer/whitespace-only CRLF text retained; this is HTTP contract verification, not Flutter-client acceptance. Browser/servers stopped and disposable databases removed.
+- Remaining limits: Django Admin independently trims remarks and is outside this correction. Server-side optimistic concurrency remains unimplemented. Nine PostgreSQL-specific checks remain skipped; this does not establish the complete PostgreSQL matrix. No deployment, production-capacity validation or final full-system acceptance is claimed.
+
 ## Household GIS freshness — Wave 1 local correction (2026-11-04)
 
 - Confirmed defect: an already-mounted household GIS retained old address/green Good Standing after Django saved a violation. GIS now refetches its independent complete endpoint on browser reactivation and relevant existing provider snapshot changes. Duplicate activation requests coalesce; superseded responses cannot overwrite newer success/error. Failed refresh hides old markers and exposes error/Retry. Filters, selection, stored-coordinate handling and practical viewport remain; establishment GIS is unchanged.

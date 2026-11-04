@@ -1078,6 +1078,7 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HouseholdSanitationRecord
+        extra_kwargs = {"remarks": {"trim_whitespace": False}}
         fields = [
             "id",
             "household_code",
