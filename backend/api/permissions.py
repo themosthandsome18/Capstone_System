@@ -18,14 +18,23 @@ ADMINISTRATION_ROLES = frozenset({ROLE_ADMIN, ROLE_TOURISM})
 
 
 def get_user_role(user):
+    """The stored role of the user, "" for no role.
+
+    An account that has no profile has NO role, and no role reaches no module: it is not made a member of the tourism staff. The one
+    exception is the superuser, who is the system admin by definition. Nothing is created for an account that is refused.
+    """
     if not user or not user.is_authenticated:
         return ""
 
-    profile, _ = UserProfile.objects.get_or_create(
-        user=user,
-        defaults={"role": ROLE_ADMIN if user.is_superuser else ROLE_TOURISM},
-    )
-    return profile.role
+    role = UserProfile.objects.filter(user=user).values_list("role", flat=True).first()
+    if role is not None:
+        return role
+
+    if user.is_superuser:
+        profile, _ = UserProfile.objects.get_or_create(user=user, defaults={"role": ROLE_ADMIN})
+        return profile.role
+
+    return ""
 
 
 def has_module_access(user, module):
