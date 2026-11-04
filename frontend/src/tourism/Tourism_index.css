@@ -4733,6 +4733,13 @@
   color: var(--th-text-muted);
 }
 
+/* Above the table of a list that has fixed names, once: a hint on its own line, not a warning. */
+.options-fixed-note {
+  margin: 0 0 12px;
+  max-width: 720px;
+  line-height: 1.5;
+}
+
 .options-form {
   display: flex;
   flex-direction: column;
