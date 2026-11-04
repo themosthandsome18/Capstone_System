@@ -94,7 +94,7 @@ describe("Mobile App Content access and tabs", () => {
     expect(links.filter(([, href]) => href === "/mobile-content")).toEqual([["Mobile App Content", "/mobile-content"]]);
     expect(links.filter(([text]) => /hotlines/i.test(text))).toEqual([]);
     expect(links.filter(([, href]) => /hotlines/.test(href))).toEqual([]);
-    expect(links.map(([text]) => text).slice(-3)).toEqual(["Settings", "Registration Options", "Mobile App Content"]); // where Hotlines used to be
+    expect(links.map(([text]) => text).slice(-3)).toEqual(["Appearance", "Registration Options", "Mobile App Content"]); // where Hotlines used to be
   });
 
   test("the top bar has a title for the new address and for the old one", () => {

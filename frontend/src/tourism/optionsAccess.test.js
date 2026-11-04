@@ -56,20 +56,20 @@ describe("Registration Options access", () => {
     expect(screen.getByTestId("outlet")).toBeTruthy();
   });
 
-  test("the admin sees the link under Administration, next to Settings", () => {
+  test("the admin sees the link under Administration, next to Appearance", () => {
     useAuth.mockReturnValue({ role: "admin" });
     render(<Sidebar />);
     const link = screen.getByRole("link", { name: "Registration Options" });
     expect(link.getAttribute("href")).toBe("/options");
     expect(screen.getByText("Administration")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Appearance" })).toBeTruthy();
   });
 
   test.each(["tourist", "sanitation", "establishment", "auditor"])("the %s role sees neither the link nor the Administration heading", (role) => {
     useAuth.mockReturnValue({ role });
     render(<Sidebar />);
     expect(screen.queryByRole("link", { name: "Registration Options" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Appearance" })).toBeNull();
     expect(screen.queryByText("Administration")).toBeNull();
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy(); // the rest of the menu is there
   });

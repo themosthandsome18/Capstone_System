@@ -47,7 +47,7 @@ export const pageInfo = {
     showAdd: false,
   },
   "/settings": {
-    title: "Settings",
+    title: "Appearance",
     showAdd: false,
   },
   "/options": {
