@@ -35,8 +35,11 @@ jest.mock("react-leaflet", () => ({
 jest.mock("../services/sanitationApi", () => ({ fetchHouseholdRecords: jest.fn() }));
 jest.mock("../context/SanitationDataContext", () => ({
   useSanitationData: () => ({
+    householdStatus: "success", householdReady: true, householdHasData: true, householdError: "",
+    reloadHouseholds: jest.fn(),
     householdRecords: mockHouseholds, establishments: mockEstablishments,
-    barangays: [], householdDashboardData: null, loading: mockLoading, error: mockError,
+    barangays: [], householdDashboardData: { summary: { totalHouseholds: mockHouseholds.length }, riskByBarangay: [] },
+    loading: mockLoading, error: mockError,
     refreshData: jest.fn(), refreshComplaintData: jest.fn(),
     createHousehold: jest.fn(), updateHousehold: mockUpdate,
   }),

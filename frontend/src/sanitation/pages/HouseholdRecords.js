@@ -328,8 +328,10 @@ export function buildHouseholdEditPayload(form, snapshot) {
 
 function HouseholdRecords() {
   const navigate = useNavigate();
-  const { barangays, householdRecords, householdDashboardData, loading, error, createHousehold, updateHousehold } =
+  const { barangays, householdRecords, householdDashboardData, householdStatus, householdReady,
+    householdHasData, householdError, reloadHouseholds, error, createHousehold, updateHousehold } =
     useSanitationData();
+  const householdPending = householdStatus === "idle" || householdStatus === "loading";
 
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -532,6 +534,7 @@ function HouseholdRecords() {
   );
 
   function handleExport() {
+    if (!householdReady) return;
     const headers = [
       "Household Code",
       "Household Head",
@@ -573,6 +576,7 @@ function HouseholdRecords() {
   }
 
   function openAdd() {
+    if (!householdReady) return;
     setForm(emptyForm);
     setEditSnapshot(null);
     setFormError("");
@@ -580,6 +584,7 @@ function HouseholdRecords() {
   }
 
   function openEdit(record) {
+    if (!householdReady) return;
     let firstName = "";
     let lastName = "";
     if (record.household_head) {
@@ -647,6 +652,10 @@ function HouseholdRecords() {
   }
 
   async function handleSaveAdd() {
+    if (!householdReady) {
+      setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
+      return;
+    }
     if (hasInvalidMemberCounts(form)) {
       setFormError("Check the household member counts.");
       return;
@@ -701,6 +710,10 @@ function HouseholdRecords() {
   }
 
   async function handleSaveEdit() {
+    if (!householdReady) {
+      setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
+      return;
+    }
     if (hasInvalidMemberCounts(form)) {
       setFormError("Check the household member counts.");
       return;
@@ -746,7 +759,19 @@ function HouseholdRecords() {
           ? editSnapshot.household_head ?? ""
           : finalHead,
     };
-    const payload = buildHouseholdEditPayload(nextForm, editSnapshot);
+    const currentRecord = householdRecords.find((record) => String(record.id) === String(editRecord.id));
+    if (!currentRecord) {
+      setFormError("This household is no longer in the current data. Review the latest records before saving; your draft is retained.");
+      return;
+    }
+    const draftChanges = buildHouseholdEditPayload(nextForm, editSnapshot);
+    const refreshedChanges = buildHouseholdEditPayload(currentRecord, editSnapshot);
+    const payload = buildHouseholdEditPayload(draftChanges, currentRecord);
+    const conflicts = Object.keys(payload).filter((field) => Object.prototype.hasOwnProperty.call(refreshedChanges, field));
+    if (conflicts.length) {
+      setFormError(`This household has changed in ${conflicts.join(", ")}. Review the latest record before saving; your draft is retained.`);
+      return;
+    }
     if (!Object.keys(payload).length) {
       closeModals();
       return;
@@ -763,8 +788,22 @@ function HouseholdRecords() {
     }
   }
 
-  if (loading) {
-    return <div className="household-page">Loading household records...</div>;
+  const householdNotice = !householdReady ? (
+    <div role={householdPending ? "status" : "alert"}>
+      <p>{householdPending
+        ? householdHasData ? "Refreshing household records... Last successful snapshot is stale and unverified." : "Loading household records..."
+        : `${householdError || "Household data is unavailable."}${householdHasData ? " Showing the last successful snapshot; it is stale and unverified." : ""}`}</p>
+      <button type="button" onClick={() => reloadHouseholds()} disabled={householdPending}>
+        Retry household data
+      </button>
+    </div>
+  ) : null;
+  const householdRefresh = householdReady ? (
+    <button type="button" onClick={() => reloadHouseholds()}>Refresh household data</button>
+  ) : null;
+
+  if (!householdHasData && !householdReady) {
+    return <div className="household-page"><h1>Household Records</h1>{householdNotice}</div>;
   }
 
   return (
@@ -780,6 +819,7 @@ function HouseholdRecords() {
             type="button"
             className="sanitation-export-btn"
             onClick={handleExport}
+            disabled={!householdReady}
           >
             <FiDownload /> Export CSV
           </button>
@@ -788,6 +828,7 @@ function HouseholdRecords() {
             className="sanitation-export-btn"
             style={{ background: "#16a34a", color: "white", borderColor: "#16a34a" }}
             onClick={openAdd}
+            disabled={!householdReady}
           >
             <FiPlus /> Add Household
           </button>
@@ -795,6 +836,8 @@ function HouseholdRecords() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {householdNotice}
+      {householdRefresh}
 
       {/* ── Barangay Filter Selector Toolbar ── */}
       <div className="household-barangay-filter-bar">
@@ -1149,6 +1192,7 @@ function HouseholdRecords() {
                           className="establishment-icon-btn edit"
                           title="Edit Household Record"
                           onClick={() => openEdit(row)}
+                          disabled={!householdReady}
                         >
                           <FiEdit2 />
                         </button>
@@ -1159,7 +1203,7 @@ function HouseholdRecords() {
               ) : (
                 <tr>
                   <td colSpan="8" className="household-empty">
-                    No household records found.
+                    {householdReady ? "No household records found." : "The last successful snapshot has no matching records; current household data is unverified."}
                   </td>
                 </tr>
               )}
@@ -1199,7 +1243,8 @@ function HouseholdRecords() {
                   type="button"
                   className="hh-modal-close"
                   style={{ color: "#065f46" }}
-                  onClick={() => printHouseholdProfile(viewRecord)}
+                  onClick={() => { if (householdReady) printHouseholdProfile(viewRecord); }}
+                  disabled={!householdReady}
                   title="Print Household Sanitation Profile Slip"
                 >
                   <FiPrinter />
@@ -1211,6 +1256,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <div className="hh-detail-grid">
                 <HHDetailItem label="Household Code" value={viewRecord.household_code} />
                 <HHDetailItem label="Barangay" value={viewRecord.barangay} />
@@ -1249,6 +1296,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <HouseholdForm
                 form={form}
                 updateField={updateField}
@@ -1260,7 +1309,7 @@ function HouseholdRecords() {
               <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="hh-btn-save" onClick={handleSaveAdd} disabled={saving}>
+              <button type="button" className="hh-btn-save" onClick={handleSaveAdd} disabled={saving || !householdReady}>
                 {saving ? "Saving..." : "Save Household"}
               </button>
             </div>
@@ -1283,6 +1332,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <HouseholdForm
                 form={form}
                 updateField={updateField}
@@ -1295,7 +1346,7 @@ function HouseholdRecords() {
               <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="hh-btn-save" onClick={handleSaveEdit} disabled={saving}>
+              <button type="button" className="hh-btn-save" onClick={handleSaveEdit} disabled={saving || !householdReady}>
                 {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>

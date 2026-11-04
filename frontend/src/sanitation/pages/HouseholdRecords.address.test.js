@@ -14,6 +14,8 @@ const stored = {
 };
 jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }), { virtual: true });
 jest.mock("../context/SanitationDataContext", () => ({ useSanitationData: () => ({
+    householdStatus: "success", householdReady: true, householdHasData: true, householdError: "",
+    reloadHouseholds: jest.fn(),
  barangays: [], householdRecords: mockRecords, householdDashboardData: null, loading: false,
  error: null, createHousehold: mockCreate, updateHousehold: mockUpdate,
 }) }));
