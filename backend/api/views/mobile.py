@@ -1335,8 +1335,15 @@ def mobile_household_survey_submit(request):
         data.get("household_head") or data.get("head") or data.get("full_name") or ""
     )
     data["barangay"] = data.get("barangay") or "Unspecified"
-    data["male_count"] = parse_mobile_int(data.get("male_count"), 0)
-    data["female_count"] = parse_mobile_int(data.get("female_count"), 0)
+    # Preserve the mobile POST/upsert's omitted-count zero defaults, but never
+    # truncate or replace a supplied invalid count. PositiveIntegerField's
+    # portable database range is 0..2147483647 (independent of SQLite storage).
+    count_field = serializers.IntegerField(min_value=0, max_value=2147483647)
+    for field in ("male_count", "female_count"):
+        try:
+            data[field] = count_field.run_validation(data.get(field, 0))
+        except serializers.ValidationError as error:
+            raise serializers.ValidationError({field: error.detail})
     data["toilet_type"] = data.get("toilet_type") or "water_sealed"
     data["water_level"] = data.get("water_level") or "level_3"
     data["waste_disposal"] = data.get("waste_disposal") or "collected"
