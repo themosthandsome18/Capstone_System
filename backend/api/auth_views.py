@@ -7,14 +7,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from django.db import OperationalError, connection
-from .models import ROLE_ADMIN, ROLE_TOURIST, ROLE_TOURISM, UserProfile
+from .models import ROLE_ADMIN, ROLE_TOURIST, UserProfile
 from .serializers import AuthUserSerializer
 
 
 def get_or_create_profile(user):
+    # An account that has no profile gets the one role that reaches no module (the tourist), never the staff's: the superuser alone is
+    # the system admin by definition.
     profile, _ = UserProfile.objects.get_or_create(
         user=user,
-        defaults={"role": ROLE_ADMIN if user.is_superuser else ROLE_TOURISM},
+        defaults={"role": ROLE_ADMIN if user.is_superuser else ROLE_TOURIST},
     )
     return profile
 
