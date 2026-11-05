@@ -216,7 +216,7 @@ class _LoginPageState extends State<LoginPage> {
               Image.asset('assets/tourism_logo.png', width: 80, height: 80),
               const SizedBox(height: 16),
               const Text(
-                'Welcome to Mauban',
+                'Mabuhay Mauban',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 23,
