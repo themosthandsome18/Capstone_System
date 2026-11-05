@@ -1,3 +1,4 @@
+import math
 import random
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -966,6 +967,13 @@ class SanitaryPermitRenewal(models.Model):
         return f"{self.renewal_id} - {self.establishment.business_name}"
 
 
+def complaint_coordinates_usable(latitude, longitude):
+    """Use the existing nonzero location convention; never infer provenance."""
+    return all(isinstance(value, (int, float)) and not isinstance(value, bool)
+               and math.isfinite(value) and 0.001 <= abs(value) <= bound
+               for value, bound in ((latitude, 90), (longitude, 180)))
+
+
 class SanitaryComplaint(models.Model):
     complaint_id = models.CharField(max_length=40, unique=True)
     establishment = models.ForeignKey(
@@ -1001,6 +1009,11 @@ class SanitaryComplaint(models.Model):
     photo_documentation = models.TextField(blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    location_source = models.CharField(
+        max_length=24, default="unknown", editable=False,
+        choices=[("unknown", "Unknown"), ("reporter_provided", "Reporter-provided"),
+                 ("staff_provided", "Staff-provided"), ("barangay_approximate", "Barangay approximation")],
+    )
     assigned_inspector = models.CharField(max_length=160, blank=True)
     inspection_scheduled_date = models.DateField(null=True, blank=True)
     inspection_scheduled_time = models.TimeField(null=True, blank=True)
@@ -1025,9 +1038,27 @@ class SanitaryComplaint(models.Model):
         target = self.establishment.business_name if self.establishment_id else self.barangay
         return f"{self.complaint_id} - {target}"
 
+    @property
+    def map_location_eligible(self):
+        return (self.location_source in {"reporter_provided", "staff_provided"}
+                and complaint_coordinates_usable(self.latitude, self.longitude))
+
     def save(self, *args, **kwargs):
-        if self.latitude is None or self.longitude is None or abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001:
+        coordinate_write = self._state.adding
+        update_fields = kwargs.get("update_fields")
+        if not coordinate_write and (update_fields is None or
+                                     {"latitude", "longitude"}.intersection(update_fields)):
+            using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+            previous = type(self).objects.using(using).filter(pk=self.pk).values_list(
+                "latitude", "longitude").first()
+            coordinate_write = previous is not None and previous != (self.latitude, self.longitude)
+        # Never manufacture a new location during an unrelated legacy edit.
+        if coordinate_write and (self.latitude is None or self.longitude is None or
+                                 abs(self.latitude) < 0.001 or abs(self.longitude) < 0.001):
             self.latitude, self.longitude = resolve_barangay_coordinates(self.barangay)
+            self.location_source = "barangay_approximate"
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"latitude", "longitude", "location_source"}
         super().save(*args, **kwargs)
 
 

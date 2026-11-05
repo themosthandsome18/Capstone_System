@@ -1,4 +1,5 @@
 from collections import Counter
+import math
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
@@ -27,6 +28,7 @@ from .models import (
     SanitaryInspectionChecklistItem,
     SanitaryPermitRenewal,
     SanitaryComplaint,
+    complaint_coordinates_usable,
     HouseholdSanitationRecord,
     Notification,
     UserProfile,
@@ -807,6 +809,24 @@ class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
         return instance
 
 
+def validate_complaint_location(data):
+    supplied = [key in data for key in ("latitude", "longitude")]
+    if not any(supplied):
+        return data
+    if not all(supplied):
+        raise serializers.ValidationError({"coordinates": "Supply both latitude and longitude, or omit both."})
+    lat, lng = data["latitude"], data["longitude"]
+    if lat is None and lng is None:
+        return data
+    if lat is None or lng is None:
+        raise serializers.ValidationError({"coordinates": "A complete coordinate pair is required."})
+    if not math.isfinite(lat) or not math.isfinite(lng):
+        raise serializers.ValidationError({"coordinates": "Finite coordinates are required."})
+    if (abs(lat) < 0.001) != (abs(lng) < 0.001):
+        raise serializers.ValidationError({"coordinates": "A partial or placeholder coordinate pair is not a report location."})
+    return data
+
+
 class PublicSanitaryComplaintSubmissionSerializer(serializers.Serializer):
     """Only resident-supplied data; never use the staff serializer for input."""
 
@@ -855,16 +875,14 @@ class PublicSanitaryComplaintSubmissionSerializer(serializers.Serializer):
                         values[key] = data[alias]
                         break
         for key in ("latitude", "longitude"):
+            if isinstance(values.get(key), bool):
+                raise serializers.ValidationError({key: "A numeric coordinate is required, not a boolean."})
             if values.get(key) in ("", "null", "undefined"):
                 values[key] = None
         return super().to_internal_value(values)
 
     def validate(self, data):
-        import math
-        for key in ("latitude", "longitude"):
-            if data.get(key) is not None and not math.isfinite(data[key]):
-                raise serializers.ValidationError({key: "A finite coordinate is required."})
-        return data
+        return validate_complaint_location(data)
 
     def validate_contact_number(self, value):
         from .services.public_reporting import normalize_contact
@@ -893,6 +911,40 @@ class PublicSanitaryComplaintSubmissionSerializer(serializers.Serializer):
 
 
 class SanitaryComplaintSerializer(serializers.ModelSerializer):
+    location_source = serializers.CharField(read_only=True)
+    map_location_eligible = serializers.BooleanField(read_only=True)
+    latitude = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
+
+    def to_internal_value(self, data):
+        if hasattr(data, "keys"):
+            protected = {"location_source", "map_location_eligible"}.intersection(data.keys())
+            if protected:
+                raise serializers.ValidationError({key: "This field is server-controlled." for key in protected})
+            for key in ("latitude", "longitude"):
+                if isinstance(data.get(key), bool):
+                    raise serializers.ValidationError({key: "A numeric coordinate is required, not a boolean."})
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        return validate_complaint_location(attrs)
+
+    def _location_origin(self, attrs):
+        if not complaint_coordinates_usable(attrs.get("latitude"), attrs.get("longitude")):
+            return "unknown"  # The model labels an actual generated fallback.
+        return ("reporter_provided" if self.context.get("complaint_location_origin") == "reporter_provided"
+                else "staff_provided")
+
+    def create(self, validated_data):
+        validated_data["location_source"] = self._location_origin(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "latitude" in validated_data and (validated_data["latitude"], validated_data["longitude"]) != (
+                instance.latitude, instance.longitude):
+            validated_data["location_source"] = self._location_origin(validated_data)
+        return super().update(instance, validated_data)
+
     establishment_name = serializers.CharField(
         source="establishment.business_name",
         read_only=True,
@@ -930,6 +982,11 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        # PostgreSQL can contain legacy NaN/Infinity values. Do not render
+        # non-JSON numbers or promote them to eligible map locations.
+        for key in ("latitude", "longitude"):
+            if data[key] is not None and not math.isfinite(data[key]):
+                data[key] = None
         raw = data.get("photo_documentation") or ""
         if raw.strip():
             request = self.context.get("request")
@@ -964,6 +1021,8 @@ class SanitaryComplaintSerializer(serializers.ModelSerializer):
             "photo_documentation",
             "latitude",
             "longitude",
+            "location_source",
+            "map_location_eligible",
             "assigned_inspector",
             "inspection_scheduled_date",
             "inspection_scheduled_time",
