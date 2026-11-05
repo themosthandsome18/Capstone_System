@@ -2,12 +2,17 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
-from .models import SanitaryEstablishment
+from .models import SanitaryEstablishment, SanitaryRequirement
 from .test_sanitation_enforcement_issuance import IssuanceFixture
 
 
 @override_settings(USE_SEED_DATA=False)
 class ViolationPermitPreservationTests(IssuanceFixture, TestCase):
+    def setUp(self):
+        super().setUp()
+        SanitaryRequirement.objects.create(business_type=self.record.business_type,
+            permit_size=self.record.permit_size, requirement_name="Synthetic requirement")
+
     def payload(self, **changes):
         return {
             "establishment": self.record.pk, "inspector_name": "Synthetic inspector",

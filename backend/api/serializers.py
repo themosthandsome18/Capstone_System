@@ -1,3 +1,5 @@
+from collections import Counter
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -1007,7 +1009,11 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
             getattr(self.instance, "is_draft", False),
         )
 
-        if not is_draft and not attrs.get("status_after_inspection"):
+        result_status = attrs.get("status_after_inspection",
+                                  getattr(self.instance, "status_after_inspection", None))
+        finalizing = self.instance is not None and self.instance.is_draft and not is_draft
+        if not is_draft and (not result_status or
+                             (finalizing and not attrs.get("status_after_inspection"))):
             raise serializers.ValidationError(
                 {
                     "status_after_inspection": (
@@ -1015,6 +1021,40 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+        establishment = attrs.get("establishment", getattr(self.instance, "establishment", None))
+        # Metadata-only edits preserve recorded historical evidence. Revalidate
+        # any evidence/classification/result change and every draft finalization.
+        needs_evidence_check = (
+            self.instance is None
+            or "checklist_items" in attrs
+            or (establishment and establishment.pk != self.instance.establishment_id)
+            or is_draft != self.instance.is_draft
+            or "status_after_inspection" in attrs
+        )
+        if establishment is not None and needs_evidence_check:
+            names = SanitaryRequirement.objects.filter(
+                business_type_id=establishment.business_type_id,
+                permit_size=establishment.permit_size,
+            ).values_list("requirement_name", flat=True)
+            # Match the existing CharField whitespace normalization, retaining
+            # case and multiplicity instead of merging same-name catalogue IDs.
+            applicable = Counter(name.strip() for name in names)
+            items = attrs.get("checklist_items")
+            if items is None:
+                items = (list(self.instance.checklist_items.values("requirement_name"))
+                         if self.instance is not None else [])
+            observed = Counter(item["requirement_name"].strip() for item in items)
+            if observed - applicable:
+                raise serializers.ValidationError({"checklist_items": (
+                    "Observations contain unknown, inapplicable or excess duplicate requirements. "
+                    "Reload requirements for this establishment and permit size."
+                )})
+            if not is_draft and applicable and not observed:
+                raise serializers.ValidationError({"checklist_items": (
+                    "Record at least one applicable requirements observation before finalizing."
+                )})
+            # No required-item coverage, compliance threshold or automatic status.
 
         return attrs
 

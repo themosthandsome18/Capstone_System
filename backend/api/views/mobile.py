@@ -1225,6 +1225,7 @@ def date_to_iso(value):
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def mobile_sanitation_inspection_submit(request):
     if not request.user or not request.user.is_authenticated:
         return Response(
