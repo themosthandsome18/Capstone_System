@@ -20,6 +20,7 @@ from ..models import (
     TravelMode,
     VisitPurpose,
 )
+from .destination_figures import annotate_destination_figures
 from ..serializers import (
     BoatTypeSerializer,
     CountrySerializer,
@@ -204,19 +205,7 @@ def build_reference_tables_payload(resorts=None, active_only=False):
     if resorts is not None:
         payload["resorts"] = ResortSerializer(resorts, many=True).data
     else:
-        from django.db.models import Count, Q
-        from django.utils import timezone
-        today = timezone.localdate()
-        queryset = Resort.objects.annotate(
-            visitor_total=Count(
-                "tourist_records",
-                filter=Q(
-                    tourist_records__status="arrived",
-                    tourist_records__arrival_date__year=today.year,
-                    tourist_records__arrival_date__month=today.month,
-                ),
-            )
-        )
+        queryset = annotate_destination_figures(Resort.objects.all())
         payload["resorts"] = ResortSerializer(queryset, many=True).data
 
     return payload
@@ -375,6 +364,40 @@ def stay_counts(stay_nights, male, female):
     nights = stay_nights or 0
     people = (male or 0) + (female or 0)
     return nights * people, (nights + 1) * people
+
+
+def tourist_record_computed(record):
+    """What a record's detail adds to its fields, worked out from the record: Overnight and Same Day by sex, and the entrance fee.
+
+    Nothing is counted here. The Overnight and Same Day figures come from stay_counts, the one place that works them out: called for the men
+    alone, the women alone, and both, so the three always agree with the figures of the Arrival Monitoring rows. The fee comes from
+    entrance_fee, with the two rates it uses. The record's Length of Stay must be loaded (select_related("itinerary")) to spare a query.
+    """
+    nights = record.itinerary.stay_nights
+    male, female = record.total_male, record.total_female
+
+    overnight_male, same_day_male = stay_counts(nights, male, 0)
+    overnight_female, same_day_female = stay_counts(nights, 0, female)
+    overnight_total, same_day_total = stay_counts(nights, male, female)
+
+    discounted = record.discounted_count or 0
+    regular = (record.total_visitors or 0) - discounted
+
+    return {
+        "overnight": {"male": overnight_male, "female": overnight_female, "total": overnight_total},
+        "sameDay": {"male": same_day_male, "female": same_day_female, "total": same_day_total},
+        "fee": {
+            "total": entrance_fee(record.total_visitors, record.discounted_count),
+            "regularCount": regular,
+            "regularRate": REGULAR_ENTRANCE_FEE,
+            # What each line comes to, from the same entrance_fee, so a screen that writes "4 x P80 = P320" has the P320 from here
+            # and does not multiply it itself.
+            "regularTotal": entrance_fee(regular, 0),
+            "discountedCount": discounted,
+            "discountedRate": DISCOUNTED_ENTRANCE_FEE,
+            "discountedTotal": entrance_fee(discounted, discounted),
+        },
+    }
 
 
 def arrival_row(val):

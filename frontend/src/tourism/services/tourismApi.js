@@ -255,10 +255,6 @@ function mergeBootstrapData(remote = {}) {
   };
 }
 
-function isBackendValidationError(error) {
-  return Boolean(error?.status);
-}
-
 // The id of an item as it goes into an address: a whole number from 1 up. Anything else is a mistake of the caller, not of the server.
 function itemId(id) {
   const number = typeof id === "string" && /^[0-9]+$/.test(id) ? Number(id) : id;
@@ -321,6 +317,11 @@ export const tourismApi = {
     );
   },
 
+  // The figures under the GIS map, as the server worked them out (activeCount, totalCount, arrivalsThisYear, mostVisited).
+  async getDestinationFigures() {
+    return apiRequest("/destination-figures/");
+  },
+
   // Every row of an Arrival Monitoring view, in date order, for Export CSV.
   // Same parameters as getArrivalMonitoringData; the on-screen table is capped.
   async getArrivalMonitoringExport(params = {}) {
@@ -333,6 +334,12 @@ export const tourismApi = {
     });
     const payload = await apiRequest(`/arrival-monitoring/export/${query}`);
     return { rowCount: payload?.rowCount || 0, rows: payload?.rows || [] };
+  },
+
+  // One tourist record, with what the server works out from it (`computed`: Overnight and Same Day by sex, and the fee).
+  // The foreign keys come back as ids; the names are the web's referenceTables.
+  async getTouristRecord(surveyId) {
+    return apiRequest(`/tourist-records/${encodeURIComponent(surveyId)}/`);
   },
 
   async getDashboardData(params = {}) {
@@ -608,18 +615,4 @@ export const tourismApi = {
     return addResortImage(updated);
   },
 
-  async deleteResort(id) {
-    try {
-      await apiRequest(`/resorts/${encodeURIComponent(id)}/`, {
-        method: "DELETE",
-      });
-      return { id };
-    } catch (error) {
-      if (isBackendValidationError(error)) {
-        throw error;
-      }
-
-      throw error;
-    }
-  },
 };

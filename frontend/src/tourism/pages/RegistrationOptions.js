@@ -30,6 +30,14 @@ export const FILTERS = [
 // thing that is locked, never replaced by a hidden or missing button.
 export const PROTECTED_REASON =
   "This name is created by the Excel import. If it were renamed, the next import would create a new option under the old name and the reports would be split between the two.";
+// A name the online booking import matches is marked "Fixed name" in its row (the badge keeps the reason as its title, for a mouse), and the
+// reason is on the page ONCE, above the table of every list that has such a name: someone looking for a way to edit a name has to be able to
+// read why there is none, and six copies, one under each name, are too much to read. Not a warning: a hint, like the others on the page.
+export const FIXED_NAME_BADGE = "Fixed name";
+export const FIXED_NAME_HINT =
+  "The online booking import matches this name. Renaming it would make the next import create a second option with the old name, and the reports would be split in two.";
+export const FIXED_NAMES_NOTE =
+  "Some names are fixed: the online booking import matches on them. Renaming one would make the next import create a second option with the old name, and the reports would be split in two.";
 export const STAY_NOT_SET_REASON =
   "The name cannot be changed yet. The reports still work out how long this stay is from its name, so renaming it would change the Same Day / Overnight and average-stay figures. Set the stay length first.";
 // What a rename means for the four reference lists: the records point at the option,
@@ -513,6 +521,10 @@ function RegistrationOptionsPage() {
                 </label>
               </div>
 
+              {!loading && !loadError && rows.some((row) => row.rename_protected) ? (
+                <p className="options-hint options-fixed-note">{FIXED_NAMES_NOTE}</p>
+              ) : null}
+
               {loading ? <p className="options-empty">Loading...</p> : null}
               {loadError ? (
                 <p className="settings-status error" role="alert">
@@ -548,8 +560,8 @@ function RegistrationOptionsPage() {
                             <td>
                               {row.name}
                               {row.rename_protected ? (
-                                <span className="options-tag" title={PROTECTED_REASON}>
-                                  Name set by the import
+                                <span className="options-tag" title={FIXED_NAME_HINT}>
+                                  {FIXED_NAME_BADGE}
                                 </span>
                               ) : null}
                             </td>

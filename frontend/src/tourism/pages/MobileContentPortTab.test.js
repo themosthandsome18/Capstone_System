@@ -621,8 +621,8 @@ describe("requests and the other tabs", () => {
     expect(document.querySelector(".mobile-content-note")).toBeNull();
   });
 
-  it("sends anyone but the admin away, with no request", async () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  it("sends anyone but the Tourism Office and the admin away, with no request", async () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<MobileAppContent />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     await settled();

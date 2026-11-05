@@ -17,7 +17,7 @@ const navigation = [
 
 // Shown only to roles that may open them; the routes are guarded too.
 const administration = [
-  { to: SETTINGS_PATH, label: "Settings", allowed: canOpenSettings },
+  { to: SETTINGS_PATH, label: "Appearance", allowed: canOpenSettings },
   { to: OPTIONS_PATH, label: "Registration Options", allowed: canManageOptions },
   { to: MOBILE_CONTENT_PATH, label: "Mobile App Content", allowed: canManageMobileContent },
 ];

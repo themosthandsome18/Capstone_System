@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiActivity, FiRefreshCw } from "react-icons/fi";
 
 import { apiRequest, buildQueryString } from "../apiClient";
+import TablePagination, { usePagination } from "../../tourism/components/TablePagination";
 import "./ActivityLogsPage.css";
 
 
@@ -20,6 +21,11 @@ function ActivityLogsPage({ module }) {
   const [error, setError] = useState("");
 
   const moduleLabel = module === "sanitation" ? "Sanitation" : "Tourism";
+
+  // Only the tourism page is paged (Sanitation shows every row, as it did). The cards below count ALL the logs, not the page.
+  const paged = module !== "sanitation";
+  const pagination = usePagination(logs, `${module}|${action}`);
+  const shownLogs = paged ? pagination.visibleRows : logs;
 
   const summary = useMemo(() => {
     return logs.reduce(
@@ -116,7 +122,7 @@ function ActivityLogsPage({ module }) {
                   </td>
                 </tr>
               ) : logs.length ? (
-                logs.map((log) => (
+                shownLogs.map((log) => (
                   <tr key={log.id}>
                     <td>{formatDateTime(log.created_at)}</td>
                     <td>
@@ -145,6 +151,8 @@ function ActivityLogsPage({ module }) {
             </tbody>
           </table>
         </div>
+
+        {paged ? <TablePagination pagination={pagination} idPrefix="activity" /> : null}
       </section>
     </div>
   );

@@ -62,7 +62,20 @@ FutureOr<String> Function() ok(String raw) => () => raw;
 FutureOr<String> Function() fails(Object error) =>
     () => Future<String>.error(error);
 
-var clock = DateTime(2026, 10, 28, 12);
+// The test's own clock. Its day can be chosen at the command line to show that no result depends on today's date:
+//   flutter test --dart-define=TEST_CLOCK=2027-06-01T12:00:00 test/app_content_resume_test.dart
+final baseClock = DateTime.parse(const String.fromEnvironment('TEST_CLOCK', defaultValue: '2026-10-28T12:00:00'));
+var clock = baseClock;
+
+/// The app's cache with the age of the saved copy measured against [clock], as the app's other clock (the five minutes of the quiet refresh)
+/// already is. The app itself reads the cache with the real clock: `widget.cache.read()` with no `now`, and that is not changed. Without this,
+/// a copy saved "a day before the test's clock" was measured against today, and the test stopped passing when today was 7 days past it.
+class ClockedCache extends TourismBootstrapCache {
+  const ClockedCache();
+
+  @override
+  Future<CachedBootstrap?> read({DateTime? now}) => super.read(now: now ?? clock);
+}
 
 void ignoreOverflow() {
   final previous = FlutterError.onError;
@@ -74,7 +87,7 @@ void ignoreOverflow() {
   addTearDown(() => FlutterError.onError = previous);
 }
 
-Future<void> openHome(WidgetTester tester, TourismApi api, {TourismBootstrapCache cache = const TourismBootstrapCache()}) async {
+Future<void> openHome(WidgetTester tester, TourismApi api, {TourismBootstrapCache cache = const ClockedCache()}) async {
   ignoreOverflow();
   tester.view.physicalSize = const Size(411, 3500);
   tester.view.devicePixelRatio = 1.0;
@@ -133,7 +146,7 @@ const greetingB = 'SERVER B Mabuhay, Explorer! 🌊';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    clock = DateTime(2026, 10, 28, 12);
+    clock = baseClock;
   });
 
   group('the server does NOT answer: nothing changes', () {
@@ -218,7 +231,7 @@ void main() {
       await tester.pumpWidget(
         TourismThemeScope(
           notifier: notifier,
-          child: MaterialApp(home: AppBootstrap(api: api, now: () => clock)),
+          child: MaterialApp(home: AppBootstrap(api: api, cache: const ClockedCache(), now: () => clock)),
         ),
       );
       await tester.pump();

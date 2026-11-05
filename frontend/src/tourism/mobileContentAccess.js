@@ -1,9 +1,11 @@
 // The Mobile App Content page: its address, who may open it, and its tabs. One rule, used by the route guard, the
-// sidebar and the page itself. Only the system admin (ROLE_ADMIN in backend/api/models.py): the server refuses
+// sidebar and the page itself. The Tourism Office and the system admin (administrationAccess.js): the server refuses
 // everyone else (admin_required on the content endpoints and on the emergency contacts), so the UI must not
 // offer it to them.
+import { ADMINISTRATION_ROLES } from "./administrationAccess";
+
 export const MOBILE_CONTENT_PATH = "/mobile-content";
-export const MOBILE_CONTENT_ROLES = ["admin"];
+export const MOBILE_CONTENT_ROLES = ADMINISTRATION_ROLES;
 
 export function canManageMobileContent(role) {
   return MOBILE_CONTENT_ROLES.includes(role);
@@ -32,7 +34,7 @@ export function knownTab(value) {
 
 // The page of ONE tile (a pillar of Why Visit, a card of the Travel Guide): /mobile-content/tile?id=12 to edit it, /mobile-content/tile?section=why_visit
 // to add one. The address names the tile or the section, never the tab: the tab to go back to is the tab of the section of the tile, so that it is
-// right after a refresh and when the page is opened from a link. Admin only, like the page of the tabs.
+// right after a refresh and when the page is opened from a link. Open to the same roles as the page of the tabs.
 export const TILE_PATH = "/mobile-content/tile";
 export const SECTION_TABS = { why_visit: "why-visit", travel_guide: "travel-guide" };
 export const tileEditPath = (id) => `${TILE_PATH}?id=${id}`;

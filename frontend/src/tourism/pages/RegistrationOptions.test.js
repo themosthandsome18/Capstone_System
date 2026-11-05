@@ -157,8 +157,8 @@ async function open(tabName = null) {
 }
 
 describe("who may open it", () => {
-  it("sends anyone but the admin away, and asks the server for nothing", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  it("sends anyone but the Tourism Office and the admin away, and asks the server for nothing", () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<RegistrationOptions />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByRole("tab")).toBeNull();
@@ -416,7 +416,7 @@ describe("the locks a person can see", () => {
     expect(screen.getByText(PROTECTED_REASON).textContent).toContain("Excel import");
     expect(screen.getByText(PROTECTED_REASON).textContent).toContain("split");
     // it is also marked in the list
-    expect(within(rowOf(1)).getByText("Name set by the import")).toBeTruthy();
+    expect(within(rowOf(1)).getByText("Fixed name")).toBeTruthy();
   });
 
   it("a name that is not made by the import: the field works and no reason is shown", async () => {
@@ -424,7 +424,7 @@ describe("the locks a person can see", () => {
     fireEvent.click(within(rowOf(3)).getByRole("button", { name: /^Edit / }));
     expect(screen.getByLabelText("Option name").disabled).toBe(false);
     expect(screen.queryByText(PROTECTED_REASON)).toBeNull();
-    expect(within(rowOf(3)).queryByText("Name set by the import")).toBeNull();
+    expect(within(rowOf(3)).queryByText("Fixed name")).toBeNull();
   });
 
   it("an itinerary with no stay length: the name is locked, the reason is on screen and says what to do", async () => {
@@ -719,7 +719,7 @@ describe("steady, with no second fetch", () => {
 
     await waitFor(() => expect(screen.getByText(/as the server holds it/)).toBeTruthy());
     expect(within(rowOf(3)).getByText("99 records")).toBeTruthy(); // not the 6 the page knew
-    expect(within(rowOf(3)).getByText("Name set by the import")).toBeTruthy(); // the server's flag
+    expect(within(rowOf(3)).getByText("Fixed name")).toBeTruthy(); // the server's flag
     expect(screen.queryByText("Public Bus Line", { exact: true })).toBeNull(); // not the typed name
   });
 

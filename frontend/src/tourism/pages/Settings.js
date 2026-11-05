@@ -237,7 +237,7 @@ function AppearanceSettings() {
     <div className="reports-page settings-page">
       <div className="reports-header">
         <div>
-          <h1>Settings</h1>
+          <h1>Appearance</h1>
           <p>How the tourism system looks</p>
         </div>
 
@@ -268,7 +268,7 @@ function AppearanceSettings() {
         </p>
       ) : null}
 
-      <div className="report-tabs" role="tablist" aria-label="Settings sections">
+      <div className="report-tabs" role="tablist" aria-label="Appearance sections">
         <button type="button" role="tab" aria-selected="true" className="active">
           Appearance
         </button>

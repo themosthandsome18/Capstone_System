@@ -30,16 +30,16 @@ jest.mock("leaflet", () => ({ __esModule: true, default: { DivIcon: class {} }, 
 jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
 
 describe("Emergency Hotlines access (the old address, now a redirect to a tab of Mobile App Content)", () => {
-  test("the old address keeps the admin-only rule", () => {
+  test("the old address keeps the rule of the page it redirects to", () => {
     expect(HOTLINES_PATH).toBe("/hotlines");
-    expect(HOTLINES_ROLES).toEqual(["admin"]);
+    expect(HOTLINES_ROLES).toEqual(["admin", "tourism"]);
     expect(HOTLINES_ROLES).toEqual(MOBILE_CONTENT_ROLES);
   });
 
-  test("the old address is still in the route list, declared admin-only, and it redirects in place to its tab", () => {
+  test("the old address is still in the route list, declared for the same roles, and it redirects in place to its tab", () => {
     const route = tourismRoutes.find((item) => item.path === HOTLINES_PATH);
     expect(route).toBeDefined();
-    expect(route.allowedRoles).toEqual(["admin"]);
+    expect(route.allowedRoles).toEqual(["admin", "tourism"]);
     expect(route.element).toBeTruthy();
     render(route.element);
     const redirect = screen.getByTestId("redirect");
@@ -47,15 +47,15 @@ describe("Emergency Hotlines access (the old address, now a redirect to a tab of
     expect(redirect.getAttribute("data-replace")).toBe("true");
   });
 
-  test("the route guard sends a tourism user away from the page", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "tourism" });
+  test.each(["tourist", "sanitation", "auditor"])("the route guard sends the %s role away from the page", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={HOTLINES_ROLES} />);
-    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
+    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
     expect(screen.queryByTestId("outlet")).toBeNull();
   });
 
-  test("the route guard lets the admin through", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "admin" });
+  test.each(["admin", "tourism"])("the route guard lets the %s role through", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={HOTLINES_ROLES} />);
     expect(screen.getByTestId("outlet")).toBeTruthy();
   });
@@ -80,8 +80,8 @@ describe("Emergency Hotlines access (the old address, now a redirect to a tab of
       .forEach((route) => expect(pageInfo[route.path]).toBeDefined());
   });
 
-  test("a tourism user does not see the link", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  test.each(["tourist", "sanitation", "auditor"])("the %s role does not see the link", (role) => {
+    useAuth.mockReturnValue({ role });
     render(<Sidebar />);
     expect(screen.queryByRole("link", { name: "Mobile App Content" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Emergency Hotlines" })).toBeNull();

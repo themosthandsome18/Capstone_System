@@ -11,7 +11,6 @@ own code, which is the right behaviour: emergency numbers must not disappear.
 The mobile bootstrap reads the contacts on every request (they are not cached),
 so nothing here has to clear a cache.
 """
-from functools import wraps
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
@@ -26,10 +25,9 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     MODULE_TOURISM,
-    ROLE_ADMIN,
     EmergencyContact,
 )
-from api.permissions import get_user_role
+from api.permissions import administration_required
 from api.services.activity import LABEL_MAX, NAME_SHARE, log_activity, moved_ids, reorder_note, shorten_label
 from api.views.reference_options import clean_name, name_key
 
@@ -40,19 +38,10 @@ LIMITS = {"name": 160, "contact_numbers": 300, "email": 254}
 EDITABLE = ("name", "contact_numbers", "email", "description", "icon")
 
 
-def admin_required(view):
-    """Only the system admin. Not the tourism role."""
-
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can manage emergency contacts."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return view(request, *args, **kwargs)
-
-    return wrapped
+# Named admin_required as before; it lets the Tourism Office in as well as the system admin (permissions.ADMINISTRATION_ROLES).
+admin_required = administration_required(
+    "Only the Tourism Office and the system admin can manage emergency contacts."
+)
 
 
 def _error(detail, http_status=status.HTTP_400_BAD_REQUEST, **extra):

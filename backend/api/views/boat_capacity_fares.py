@@ -33,7 +33,6 @@ That state is allowed on purpose.
 
 NOTHING HERE WRITES TO TouristRecord. Records are only counted.
 """
-from functools import wraps
 
 from django.db import connection, transaction
 from django.db.models import Count, IntegerField, Max, OuterRef, Subquery
@@ -47,11 +46,10 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     MODULE_TOURISM,
-    ROLE_ADMIN,
     BoatCapacityFare,
     TouristRecord,
 )
-from api.permissions import get_user_role
+from api.permissions import administration_required
 from api.services.activity import LABEL_MAX, count_of, log_activity, moved_ids, reorder_note, shorten_label
 from api.views.reference_options import _parse_confirmation, clean_name, name_key
 
@@ -60,19 +58,10 @@ ORDER_STEP = 10
 NAME_MAX_LENGTH = BoatCapacityFare._meta.get_field("name").max_length  # 160, as on a record
 
 
-def admin_required(view):
-    """Only the system admin. Not the tourism role."""
-
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can manage boat capacity and fare tiers."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return view(request, *args, **kwargs)
-
-    return wrapped
+# Named admin_required as before; it lets the Tourism Office in as well as the system admin (permissions.ADMINISTRATION_ROLES).
+admin_required = administration_required(
+    "Only the Tourism Office and the system admin can manage boat capacity and fare tiers."
+)
 
 
 def _error(detail, http_status=status.HTTP_400_BAD_REQUEST, **extra):

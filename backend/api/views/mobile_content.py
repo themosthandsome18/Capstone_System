@@ -24,7 +24,6 @@ through shorten_label (the column is 255). An edit that changes nothing writes n
 """
 import difflib
 import re
-from functools import wraps
 
 from django.db import connection, transaction
 from django.db.models import Max
@@ -33,8 +32,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from api.models import ACTION_CREATE, ACTION_UPDATE, MODULE_TOURISM, ROLE_ADMIN, MobileContentBlock, MobileContentItem
-from api.permissions import get_user_role
+from api.models import ACTION_CREATE, ACTION_UPDATE, MODULE_TOURISM, MobileContentBlock, MobileContentItem
+from api.permissions import administration_required
 from api.services import tourism as tourism_services
 from api.services.mobile_content import FEE_PLACEHOLDERS, PLACEHOLDER  # one definition, shared with what the bootstrap fills in
 from api.services.activity import NAME_SHARE, count_of, log_activity, shorten_label
@@ -80,19 +79,10 @@ ANY_PESO = re.compile(r"(?:₱|PHP|Php|php)\s?\d")
 CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 
 
-def admin_required(view):
-    """Only the system admin. Not the tourism role."""
-
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can manage the content of the mobile app."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return view(request, *args, **kwargs)
-
-    return wrapped
+# Named admin_required as before; it lets the Tourism Office in as well as the system admin (permissions.ADMINISTRATION_ROLES).
+admin_required = administration_required(
+    "Only the Tourism Office and the system admin can manage the content of the mobile app."
+)
 
 
 def _error(detail, http_status=status.HTTP_400_BAD_REQUEST, **extra):

@@ -71,8 +71,8 @@ beforeEach(() => {
 });
 
 describe("Settings access", () => {
-  test("a non-admin is sent away and never sees the page", () => {
-    useAuth.mockReturnValue({ role: "tourism" });
+  test("a tourist is sent away and never sees the page", () => {
+    useAuth.mockReturnValue({ role: "tourist" });
     render(<Shell initialTheme={savedTheme()} onSave={jest.fn()} />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByLabelText("System colour", { selector: "input" })).toBeNull();
@@ -262,5 +262,18 @@ describe("Settings: contrast warning", () => {
     expect(screen.getByTestId("contrast-message").className).toMatch(/fair/);
     pick(ORANGE);
     expect(screen.getByTestId("contrast-message").className).toMatch(/poor/);
+  });
+});
+
+describe("the page is called Appearance", () => {
+  test("its title is Appearance and the word Settings is not on the page for a person", () => {
+    const { container } = render(<Shell initialTheme={savedTheme()} onSave={jest.fn()} />);
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Appearance");
+    expect(screen.getByText("How the tourism system looks")).toBeTruthy();
+    expect(container.textContent).not.toMatch(/\bSettings\b/);
+    // nor the labels a screen reader reads
+    const labels = Array.from(container.querySelectorAll("[aria-label]")).map((el) => el.getAttribute("aria-label"));
+    expect(labels.filter((label) => /\bSettings\b/.test(label))).toEqual([]);
   });
 });

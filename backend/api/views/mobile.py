@@ -105,6 +105,7 @@ from api.services.sanitation import (
     with_establishment_rollups,
 )
 from api.services.mobile_content import build_app_content
+from api.services.destination_figures import annotate_destination_figures
 from api.services.tourism import build_reference_tables_payload, read_tourism_theme
 from api.services.upload import (
     StorageServiceError,
@@ -159,23 +160,12 @@ def _app_content_or_nothing():
 def mobile_tourism_bootstrap(request):
     ensure_mobile_reference_data(include_barangays=True)
 
-    today = timezone.localdate()
-    all_resorts = list(
-        Resort.objects.annotate(
-            visitor_total=Count(
-                "tourist_records",
-                filter=Q(
-                    tourist_records__status="arrived",
-                    tourist_records__arrival_date__year=today.year,
-                    tourist_records__arrival_date__month=today.month,
-                ),
-            )
-        )
-    )
+    all_resorts = list(annotate_destination_figures(Resort.objects.all()))
 
     filtered_destinations = [
         r for r in all_resorts
-        if r.resort_name not in MOBILE_EXCLUDED_DESTINATION_NAMES
+        if r.is_active
+        and r.resort_name not in MOBILE_EXCLUDED_DESTINATION_NAMES
         and "kwebang" not in (r.resort_name or "").lower()
     ]
     filtered_destinations.sort(
@@ -186,13 +176,14 @@ def mobile_tourism_bootstrap(request):
             r.resort_name or "",
         )
     )
-    destinations = filtered_destinations[:10]
+    # Every destination that is not excluded above reaches the app (it was cut at 10 before); the featured list is still its first six.
+    destinations = filtered_destinations
     top_destination = destinations[0] if destinations else None
 
     return Response(
         {
             "referenceTables": build_reference_tables_payload(
-                resorts=all_resorts, active_only=True
+                resorts=[r for r in all_resorts if r.is_active], active_only=True
             ),
             "destinations": ResortSerializer(destinations, many=True).data,
             "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
@@ -335,29 +326,20 @@ MOBILE_EXCLUDED_DESTINATION_NAMES = {
 
 
 def get_mobile_destination_queryset():
-    from django.db.models import Count, Q
-    from django.utils import timezone
-    today = timezone.localdate()
-    return Resort.objects.exclude(
-        resort_name__in=MOBILE_EXCLUDED_DESTINATION_NAMES,
-    ).exclude(resort_name__icontains="Kwebang").annotate(
-        visitor_total=Count(
-            "tourist_records",
-            filter=Q(
-                tourist_records__status="arrived",
-                tourist_records__arrival_date__year=today.year,
-                tourist_records__arrival_date__month=today.month
-            )
-        )
+    return annotate_destination_figures(
+        Resort.objects.filter(is_active=True).exclude(
+            resort_name__in=MOBILE_EXCLUDED_DESTINATION_NAMES,
+        ).exclude(resort_name__icontains="Kwebang")
     )
 
 
-def get_mobile_top_destinations(limit=10):
+def get_mobile_top_destinations(limit=None):
+    """The destinations the app shows, best first: every one of them, or only the first `limit`."""
     destinations = (
         get_mobile_destination_queryset()
         .order_by("-visitor_total", "-monthly_arrivals", "-tourism_rating", "resort_name")
     )
-    return list(destinations[:limit])
+    return list(destinations if limit is None else destinations[:limit])
 
 
 @api_view(["POST"])
@@ -623,6 +605,9 @@ def mobile_feedback_submit(request):
     # *string*, so a list of photo URLs put in it becomes "['https://...']" (invalid JSON) and is
     # rejected with "photos: Value must be valid JSON". Use a plain dict so the list stays a list.
     data = request.data.dict() if hasattr(request.data, "dict") else dict(request.data)
+    # The tourism office's reply is the staff's to write (feedback_detail): the public form has no such field, and a sender must not be
+    # able to put words in the office's mouth, which the app then shows under the review.
+    data.pop("reply", None)
     destination_id = (
         data.get("destinationId")
         or data.get("destination_id")

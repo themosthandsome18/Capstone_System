@@ -1405,6 +1405,35 @@
   pointer-events: none;
 }
 
+/* The rows-per-page choice of a table paged in the browser (components/TablePagination.js), in the same row as the two buttons. */
+.pagination-actions.table-pagination-actions {
+  align-items: center;
+}
+
+.table-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.table-pagination-size select {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--th-primary);
+  background: #ffffff;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.table-pagination-size select:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: 2px;
+}
+
 /* =============================================================== ARRIVAL MONITORING PAGE ============================================== */
 
 .arrival-page {
@@ -2106,16 +2135,19 @@
 
 .gmaps-modal-hero {
   position: relative;
-  height: 240px;
+  height: 200px;
   width: 100%;
   overflow: hidden;
   background: #e2e8f0;
 }
 
+/* The picture fills the whole hero: nothing of the background shows under it. */
 .gmaps-modal-hero img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
 .gmaps-modal-fallback {
@@ -2575,10 +2607,6 @@
 
 .destination-edit-btn {
   @apply flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-blue-100 text-xs font-bold text-blue-500;
-}
-
-.destination-delete-btn {
-  @apply flex h-8 w-11 items-center justify-center rounded-md bg-red-100 text-red-500;
 }
 
 /* ================= DESTINATION FOOTER ================= */
@@ -3682,6 +3710,59 @@
   @apply mt-3 text-[34px] font-extrabold text-black;
 }
 
+/* The four boxes are as tall as the tallest, whether the name of the most visited takes one line or two. */
+.gis-bottom-stats {
+  align-items: stretch;
+}
+
+/* "15 of 15": the " of 15" is smaller than the number it belongs to. */
+.gis-stat-box h2 .gis-stat-of {
+  font-size: 17px;
+  font-weight: 600;
+  color: #7A6755;
+}
+
+/* The name of the most visited is text, not a number: smaller, at most two lines, cut with an ellipsis. */
+.gis-stat-box h2.gis-stat-name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gis-stat-box p.gis-stat-note {
+  font-size: 12.5px;
+  color: #87705C;
+}
+
+/* ── ACTIVITY LOGS: the brand colour follows the theme ──
+   shared/pages/ActivityLogsPage.css is the page of Sanitation too, with its own fixed green (#0f6b42), and it is loaded
+   with the rest of the shared CSS, so these are scoped to the tourism shell (one more class of specificity, as with
+   .sortable-th above): Sanitation keeps its rules. The meaningful colours stay as they are there: Created green, Updated
+   blue, Deleted red (the summary cards' left border and the action badges). */
+.tourism-layout .activity-refresh {
+  background: var(--th-primary);
+}
+
+.tourism-layout .activity-title {
+  color: var(--th-primary-ink);
+}
+
+.tourism-layout .activity-table-card th {
+  background: var(--th-primary-tint);
+}
+
+.tourism-layout .activity-summary-card {
+  box-shadow: 0 10px 20px rgba(var(--th-shadow-rgb), 0.12);
+}
+
+.tourism-layout .activity-table-card {
+  box-shadow: 0 8px 18px rgba(var(--th-shadow-rgb), 0.12);
+}
+
 /* ================= RESPONSIVE ================= */
 
 @media (max-width: 1200px) {
@@ -4652,6 +4733,13 @@
   color: var(--th-text-muted);
 }
 
+/* Above the table of a list that has fixed names, once: a hint on its own line, not a warning. */
+.options-fixed-note {
+  margin: 0 0 12px;
+  max-width: 720px;
+  line-height: 1.5;
+}
+
 .options-form {
   display: flex;
   flex-direction: column;
@@ -4930,6 +5018,642 @@
   border-color: var(--contact-color, var(--th-primary));
   box-shadow: 0 0 0 2px var(--contact-color, var(--th-primary));
   font-weight: 700;
+}
+
+/* Destinations: the Edit modal, the Details modal and the Length of Stay chips. The sizes and colours are the design's. */
+.dest-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6e55;
+}
+
+.dest-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #87705c;
+}
+
+/* ---- Edit modal ---- */
+.dest-edit {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.dest-edit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  padding: 18px 22px;
+  border-bottom: 1px solid #efe2d3;
+}
+
+.dest-edit-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.dest-edit-header p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #7a6755;
+}
+
+.dest-edit-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #e8dbcb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #453931;
+  cursor: pointer;
+}
+
+.dest-edit-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.dest-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: none;
+  padding: 14px 22px;
+  border-top: 1px solid #efe2d3;
+  background: #ffffff;
+}
+
+.dest-readonly {
+  padding: 13px 15px;
+  border-radius: 11px;
+  background: #fbf1e4;
+}
+
+.dest-readonly-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dest-readonly-value {
+  display: block;
+  margin-top: 3px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.dest-readonly .dest-hint {
+  display: block;
+  margin-top: 2px;
+}
+
+.dest-readonly > .dest-hint {
+  margin-top: 10px;
+}
+
+.dest-group {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #efe2d3;
+}
+
+.dest-group h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.dest-group-sub {
+  margin: 2px 0 12px;
+  font-size: 12.5px;
+  color: #87705c;
+}
+
+.dest-row-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dest-image-key {
+  margin-top: 18px;
+}
+
+.dest-seg {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f4e7d8;
+}
+
+.dest-seg-btn {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b5949;
+  cursor: pointer;
+}
+
+.dest-seg-btn.selected {
+  background: #ffffff;
+  color: #241e1a;
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.14);
+}
+
+.dest-stay-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dest-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 13px;
+  border: 1px solid #e0cdb7;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #453931;
+  cursor: pointer;
+}
+
+.dest-chip.selected {
+  padding: 6px 12px;
+  border: 2px solid #e0701a;
+  background: #fdf0e2;
+  color: #8a4310;
+}
+
+/* The fields of the Edit modal. The old rules (.tourist-record-field) made a white input with a transparent border for a green panel;
+   here the card is white, so the fields get their own border and the labels their own look. Everything is under .dest-edit. */
+.dest-edit .tourist-record-field {
+  gap: 0;
+}
+
+.dest-edit .tourist-record-field > span {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6e55;
+}
+
+.dest-edit .tourist-record-field input,
+.dest-edit .tourist-record-field select,
+.dest-edit .tourist-record-field textarea,
+.dest-edit .location-picker-search input {
+  height: auto;
+  min-height: 40px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #241e1a;
+}
+
+.dest-edit .tourist-record-field textarea {
+  min-height: 96px;
+}
+
+.dest-edit .tourist-record-field input:focus,
+.dest-edit .tourist-record-field select:focus,
+.dest-edit .tourist-record-field textarea:focus,
+.dest-edit .location-picker-search input:focus {
+  border-color: #e0cdb7;
+  box-shadow: none;
+  outline: 2px solid #e0701a;
+  outline-offset: -1px;
+}
+
+/* "Apply pin" is a second-rank button here, not the green one of the picker (which the sanitation page keeps). */
+.dest-edit .location-picker-search button {
+  height: auto;
+  min-height: 40px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #453931;
+}
+
+/* The Latitude / Longitude row sits 16px above the map. The picker's own sheet gives the map no space above it. */
+.dest-edit .location-picker > .dest-row-2 {
+  margin-bottom: 16px;
+}
+
+/* ---- Details modal ---- */
+.dest-hero-chips {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.dest-chip-status,
+.dest-chip-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.dest-chip-status {
+  background: #1c7a42;
+  color: #ffffff;
+}
+
+.dest-chip-status.inactive {
+  background: #6b5949;
+}
+
+.dest-chip-category {
+  background: rgba(255, 255, 255, 0.94);
+  color: #3f3a35;
+}
+
+.dest-close-round {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 16, 12, 0.72);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.dest-details-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.dest-details-sub {
+  margin: 4px 0 12px;
+  font-size: 13.5px;
+  color: #7a6755;
+}
+
+.dest-btn-orange {
+  background: #e0701a;
+  border-color: #e0701a;
+  color: #ffffff;
+}
+
+.dest-detail-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #efe2d3;
+}
+
+.dest-detail-group h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.dest-detail-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dest-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+}
+
+.dest-facts.two {
+  margin-bottom: 12px;
+}
+
+.dest-fact {
+  min-width: 0;
+}
+
+.dest-value {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #241e1a;
+}
+
+.dest-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dest-chip-static {
+  display: inline-flex;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: #fdf0e2;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8a4310;
+}
+
+.dest-about {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #241e1a;
+}
+
+.dest-coords {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: #87705c;
+}
+
+@media (max-width: 640px) {
+  .dest-row-2,
+  .dest-readonly-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Arrival Monitoring: the name as a button, the row on hover, the last column, and the modal of one arrival. */
+.arrival-record-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: #241e1a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.arrival-record-link:hover {
+  color: #8a4310;
+  text-decoration: underline;
+}
+
+.arrival-record-link:focus-visible {
+  outline: 2px solid #e0701a;
+  outline-offset: 3px;
+}
+
+tr.arrival-row {
+  cursor: pointer;
+}
+
+tr.arrival-row:hover > td {
+  background: #fdf5ec;
+}
+
+.arrival-chevron-col,
+.arrival-chevron {
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  text-align: center;
+}
+
+.arrival-chevron {
+  color: #c2ae98;
+}
+
+tr.arrival-row:hover > .arrival-chevron {
+  color: #8a4310;
+}
+
+.arm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--th-scrim);
+}
+
+.arm-modal {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fffdfb;
+  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+}
+
+.arm-band {
+  position: relative;
+  flex: none;
+  height: 96px;
+  background-color: #6e5a46;
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 60%);
+}
+
+.arm-chips {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: flex;
+  gap: 7px;
+}
+
+.arm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 12px;
+  font-weight: 700;
+  color: #3f3a35;
+}
+
+.arm-chip.status {
+  background: #1c7a42;
+  color: #ffffff;
+}
+
+.arm-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, 0.72);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.arm-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+
+.arm-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #241e1a;
+}
+
+.arm-sub {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: #7a6755;
+}
+
+.arm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.arm-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #e0cdb7;
+  border-radius: 9px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #453931;
+  cursor: pointer;
+}
+
+.arm-btn.primary {
+  border-color: #e0701a;
+  background: #e0701a;
+  color: #ffffff;
+}
+
+.arm-btn.primary:hover:not(:disabled) {
+  border-color: #be5b11;
+  background: #be5b11;
+}
+
+.arm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.arm-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #efe2d3;
+}
+
+.arm-group h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #241e1a;
+}
+
+.arm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 18px;
+  align-items: start;
+}
+
+.arm-label {
+  margin: 0 0 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6e55;
+}
+
+.arm-value {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #241e1a;
+  overflow-wrap: anywhere;
+}
+
+.arm-unit {
+  font-weight: 500;
+  color: #7a6755;
+}
+
+.arm-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12.5px;
+  color: #87705c;
+}
+
+.arm-footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: 14px 22px;
+  border-top: 1px solid #efe2d3;
 }
 
 /* ================= MOBILE APP CONTENT (Commit 4) =================

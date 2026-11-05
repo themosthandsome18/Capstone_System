@@ -73,7 +73,6 @@ function setup(entries = fixtures(), extra = {}) {
     unhideFeedbackEntry: jest.fn().mockResolvedValue({}),
     createResort: jest.fn(),
     updateResort: jest.fn(),
-    deleteResort: jest.fn(),
     uploadResortImage: jest.fn(),
     ...extra,
   };
@@ -224,7 +223,7 @@ describe("Hide / show a review: the destination detail", () => {
     setup();
     openDetail();
     // 5 reviews for the destination, 2 hidden.
-    expect(screen.getByRole("heading", { name: /Visitor Reviews \(3\)/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Visitor reviews \(3\)/ })).toBeTruthy();
     expect(screen.getByText(/2 hidden/)).toBeTruthy();
     expect(screen.queryByText("Message 4")).toBeNull();
     expect(screen.getByText("Message 1")).toBeTruthy();

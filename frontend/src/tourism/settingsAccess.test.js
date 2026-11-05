@@ -27,27 +27,28 @@ jest.mock("leaflet", () => ({ __esModule: true, default: { DivIcon: class {} }, 
 jest.mock("react-chartjs-2", () => ({ Bar: () => null, Doughnut: () => null, Line: () => null, Pie: () => null }));
 
 describe("Settings access", () => {
-  test("only the system admin may open Settings", () => {
-    expect(SETTINGS_ROLES).toEqual(["admin"]);
+  test("the Tourism Office and the system admin may open Settings, nobody else", () => {
+    expect(SETTINGS_ROLES).toEqual(["admin", "tourism"]);
     expect(canOpenSettings("admin")).toBe(true);
-    ["tourism", "sanitation", "", undefined].forEach((role) => expect(canOpenSettings(role)).toBe(false));
+    expect(canOpenSettings("tourism")).toBe(true);
+    ["tourist", "sanitation", "establishment", "auditor", "", undefined, null].forEach((role) => expect(canOpenSettings(role)).toBe(false));
   });
 
-  test("the Settings route is declared admin-only", () => {
+  test("the Settings route is declared for the Tourism Office and the system admin", () => {
     const route = tourismRoutes.find((item) => item.path === SETTINGS_PATH);
     expect(route).toBeDefined();
-    expect(route.allowedRoles).toEqual(["admin"]);
+    expect(route.allowedRoles).toEqual(["admin", "tourism"]);
   });
 
-  test("the route guard sends a tourism user away from Settings", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "tourism" });
+  test.each(["tourist", "sanitation", "establishment", "auditor"])("the route guard sends the %s role away from Settings", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={SETTINGS_ROLES} />);
-    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
+    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
     expect(screen.queryByTestId("outlet")).toBeNull();
   });
 
-  test("the route guard lets the admin through", () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role: "admin" });
+  test.each(["admin", "tourism"])("the route guard lets the %s role through", (role) => {
+    useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={SETTINGS_ROLES} />);
     expect(screen.getByTestId("outlet")).toBeTruthy();
   });

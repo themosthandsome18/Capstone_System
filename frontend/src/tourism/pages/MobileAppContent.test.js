@@ -195,8 +195,8 @@ describe("the tabs keep what they show", () => {
 });
 
 describe("who may open it", () => {
-  it("sends anyone but the admin away, mounts nothing and asks the server for nothing", () => {
-    for (const role of ["tourism", "sanitation", "tourist", "", undefined]) {
+  it("sends anyone but the Tourism Office and the admin away, mounts nothing and asks the server for nothing", () => {
+    for (const role of ["tourist", "sanitation", "establishment", "auditor", "", undefined]) {
       useAuth.mockReturnValue({ role });
       router.__setSearch("?tab=bogus");
       const { container, unmount } = render(<MobileAppContent />);
@@ -215,7 +215,7 @@ describe("who may open it", () => {
     router.__setSearch("?tab=hotlines"); // (5f, stage 1: the mount only; the page is opened on the Hotlines on purpose, not by default)
     const view = render(<MobileAppContent />);
     await screen.findByRole("list");
-    useAuth.mockReturnValue({ role: "tourism" });
+    useAuth.mockReturnValue({ role: "tourist" });
     view.rerender(<MobileAppContent />);
     expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/");
     expect(screen.queryByRole("tablist")).toBeNull();

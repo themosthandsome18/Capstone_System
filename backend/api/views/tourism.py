@@ -1,6 +1,5 @@
 import time
 from django.core.files.storage import default_storage
-from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -20,7 +19,7 @@ from api.models import (
     TourismThemeSetting,
     TouristRecord,
 )
-from api.permissions import get_user_role, module_required
+from api.permissions import administration_required, get_user_role, module_required
 from api.seeders import (
     ensure_initial_reference_data,
     ensure_initial_tourism_data,
@@ -35,6 +34,7 @@ from api.serializers import (
     TouristRecordSerializer,
 )
 from api.services.activity import log_activity
+from api.services.destination_figures import destination_map_figures
 from api.services.online_booking import (
     import_online_booking_workbook,
     preview_online_booking_workbook,
@@ -48,6 +48,7 @@ from api.services.tourism import (
     build_tourist_records_payload,
     read_tourism_theme,
     ReportParameterError,
+    tourist_record_computed,
 )
 from api.services.upload import (
     StorageServiceError,
@@ -84,6 +85,14 @@ def arrival_monitoring_export(request):
     ensure_initial_tourism_data()
     auto_update_no_show_bookings()
     return report_response(build_arrival_monitoring_export, request.query_params)
+
+
+@api_view(["GET"])
+@module_required("tourism")
+def destination_figures(request):
+    # The boxes under the GIS map; every number is worked out here (services/destination_figures.py), the web only writes them.
+    ensure_initial_reference_data()
+    return Response(destination_map_figures())
 
 
 @api_view(["GET"])
@@ -165,10 +174,13 @@ def tourist_record_list(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @module_required("tourism")
 def tourist_record_detail(request, survey_id):
-    record = get_object_or_404(TouristRecord, survey_id=survey_id)
+    record = get_object_or_404(TouristRecord.objects.select_related("itinerary"), survey_id=survey_id)
 
     if request.method == "GET":
-        return Response(TouristRecordSerializer(record).data)
+        # The record as it was, and what is worked out from it (Overnight and Same Day by sex, the fee): see tourist_record_computed.
+        data = dict(TouristRecordSerializer(record).data)
+        data["computed"] = tourist_record_computed(record)
+        return Response(data)
 
     if request.method == "DELETE":
         if get_user_role(request.user) != ROLE_ADMIN:
@@ -252,38 +264,27 @@ def resort_list(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+DESTINATION_DELETE_REFUSED = (
+    "Destinations are never deleted. Set the destination to Inactive instead."
+)
+
+
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @module_required("tourism")
 def resort_detail(request, resort_id):
+    # A destination is never deleted: Inactive is its end. This is answered before the destination is even looked up, so nothing
+    # reaches resort.delete(): not for a destination with no records, and not for one with records (which PROTECT would have
+    # refused only afterwards, with a 409).
+    if request.method == "DELETE":
+        return Response(
+            {"detail": DESTINATION_DELETE_REFUSED},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
     resort = get_object_or_404(Resort, resort_id=resort_id)
 
     if request.method == "GET":
         return Response(ResortSerializer(resort).data)
-
-    if request.method == "DELETE":
-        resort_label = resort.resort_name
-        resort_id_value = resort.resort_id
-        try:
-            resort.delete()
-        except ProtectedError:
-            return Response(
-                {
-                    "detail": (
-                        "This destination is linked to tourist records and cannot "
-                        "be deleted."
-                    )
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        log_activity(
-            request,
-            MODULE_TOURISM,
-            ACTION_DELETE,
-            resort,
-            label=resort_label,
-            record_id=resort_id_value,
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     data = request.data.copy()
     data["resort_id"] = resort.resort_id
@@ -497,13 +498,8 @@ def tourism_theme(request):
 
 
 @module_required("tourism")
+@administration_required("Only the Tourism Office and the system admin can change the tourism theme.")
 def update_tourism_theme(request):
-    if get_user_role(request.user) != ROLE_ADMIN:
-        return Response(
-            {"detail": "Only the system admin can change the tourism theme."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
     serializer = TourismThemeWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 

@@ -720,7 +720,7 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
                                   const Icon(Icons.star, size: 14, color: Color(0xFFFFD700)),
                                   const SizedBox(width: 4),
                                   Text(
-                                    destination.rating.toStringAsFixed(1),
+                                    destination.ratingLabel,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -1582,7 +1582,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    RatingPill(rating: destination.rating),
+                    RatingPill(destination: destination),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -3065,7 +3065,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      RatingPill(rating: widget.destination.rating),
+                      RatingPill(destination: widget.destination),
                       StatusPill.label(text: widget.destination.type),
                       PermitPill(verified: widget.destination.hasMayorPermit),
                     ],

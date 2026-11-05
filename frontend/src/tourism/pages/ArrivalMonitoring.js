@@ -22,7 +22,10 @@ import {
   viewFromFilters,
 } from "../utils/arrivalView";
 import { formatNumber } from "../utils/format";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ArrivalRecordModal from "./ArrivalRecordModal";
+import TablePagination, { usePagination } from "../components/TablePagination";
 
 const currentReportingYear = String(new Date().getFullYear());
 
@@ -85,6 +88,12 @@ function ArrivalMonitoring() {
   const reportingYearOptions = buildReportingYearOptions(reportingYears, selectedYear);
   const [exporting, setExporting] = useState(false);
   const [arrivalError, setArrivalError] = useState("");
+  // The modal of one arrival: the record the server sent for the name that was clicked.
+  const navigate = useNavigate();
+  const [openRecord, setOpenRecord] = useState(null);
+  const [recordError, setRecordError] = useState("");
+  const recordTrigger = useRef(null);
+  const recordRequested = useRef(false); // a ref, not a state: a second press in the same instant must already see the first
   const [refreshing, setRefreshing] = useState(false);
   // A record changed since arrival data was last loaded: refetch on open, never show stale.
   const [staleLoading, setStaleLoading] = useState(() =>
@@ -117,6 +126,31 @@ function ArrivalMonitoring() {
     };
   }, [isComputedDataStale, refreshArrivalMonitoringIfStale]);
 
+  async function openRecordOf(row, event) {
+    if (recordRequested.current) return; // one request for one click, however many times it is pressed
+    recordRequested.current = true;
+    // The focus goes back to the name of the row whichever part of it was pressed: it is the one thing in a row that can take it.
+    recordTrigger.current = event.currentTarget.closest("tr")?.querySelector(".arrival-record-link") || event.currentTarget;
+    setRecordError("");
+    try {
+      setOpenRecord(await tourismApi.getTouristRecord(row.survey_id));
+    } catch (requestError) {
+      setRecordError(requestError.message || "Unable to load this arrival.");
+    } finally {
+      recordRequested.current = false;
+    }
+  }
+
+  const closeRecord = useCallback(() => {
+    setOpenRecord(null);
+    recordTrigger.current?.focus();
+  }, []);
+
+  function openDestination(resortId) {
+    setOpenRecord(null);
+    navigate("/destinations", { state: { openResortId: resortId } });
+  }
+
   const summary = arrivalMonitoring.summary || {};
   const rows = arrivalMonitoring.rows || [];
   const dailyTotals = arrivalMonitoring.dailyTotals || {};
@@ -124,6 +158,9 @@ function ArrivalMonitoring() {
     () => referenceTables?.resorts || [],
     [referenceTables?.resorts]
   );
+  // The table is paged in the browser, over the rows received. The cards, the TOTAL row and Export CSV are not: they are the server's
+  // figures for every arrival of the view. Back to the first page when the view or any filter of the loaded data changes.
+  const pagination = usePagination(rows, JSON.stringify(arrivalMonitoring.filters || {}));
 
   // What the data on screen is for: the filters of the loaded response, not
   // the controls' pending selection. Every label is built from this, so the
@@ -476,6 +513,12 @@ function ArrivalMonitoring() {
         </div>
       ) : null}
 
+      {recordError ? (
+        <p className="tourist-record-error" role="alert">
+          {recordError}
+        </p>
+      ) : null}
+
       {/* Table */}
       <div className="arrival-table-card">
         <div className="table-responsive overflow-x-auto">
@@ -491,15 +534,28 @@ function ArrivalMonitoring() {
                 <th>Same Day</th>
                 <th>Resort</th>
                 <th>Fee Paid</th>
+                <th aria-hidden="true" className="arrival-chevron-col" />
               </tr>
             </thead>
 
             <tbody>
               {rows.length ? (
-                rows.map((row) => (
-                  <tr key={row.survey_id}>
+                pagination.visibleRows.map((row) => (
+                  <tr key={row.survey_id} className="arrival-row" onClick={(event) => openRecordOf(row, event)}>
                     <td>{formatDate(row.date)}</td>
-                    <td className="guest-name">{row.group}</td>
+                    <td className="guest-name">
+                      <button
+                        type="button"
+                        className="arrival-record-link"
+                        onClick={(event) => {
+                          // The press is the button's own: it must not go on up to the row, which would ask for the record a second time.
+                          event.stopPropagation();
+                          openRecordOf(row, event);
+                        }}
+                      >
+                        {row.group || row.survey_id}
+                      </button>
+                    </td>
                     <td>{row.male}</td>
                     <td>{row.female}</td>
                     <td>{row.itinerary || "--"}</td>
@@ -507,11 +563,14 @@ function ArrivalMonitoring() {
                     <td>{displayCount(row.sameDay)}</td>
                     <td>{row.resort}</td>
                     <td className="fee">{formatCurrency(row.feePaid)}</td>
+                    <td aria-hidden="true" className="arrival-chevron">
+                      ›
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="9" className="text-center" style={{ padding: "32px" }}>
+                  <td colSpan="10" className="text-center" style={{ padding: "32px" }}>
                     {loadedView.view === VIEW_DAY
                       ? `No arrivals recorded for ${formatDate(loadedView.date)} at ${activeResortName}.`
                       : `No arrived tourist records found for ${viewDescription} at ${activeResortName}.`}
@@ -535,11 +594,23 @@ function ArrivalMonitoring() {
                 <td>{dailyTotals.sameDay || 0}</td>
                 <td />
                 <td className="fee">{formatCurrency(dailyTotals.feesCollected || 0)}</td>
+                <td aria-hidden="true" />
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
+      <TablePagination pagination={pagination} idPrefix="arrival" />
+
+      {openRecord ? (
+        <ArrivalRecordModal
+          record={openRecord}
+          referenceTables={referenceTables}
+          onClose={closeRecord}
+          onOpenDestination={openDestination}
+        />
+      ) : null}
     </div>
   );
 }
