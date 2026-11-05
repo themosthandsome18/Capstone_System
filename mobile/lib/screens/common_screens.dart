@@ -213,7 +213,7 @@ class _LoginPageState extends State<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 10),
-              Image.asset('assets/tourism_logo.jpg', width: 80, height: 80),
+              Image.asset('assets/tourism_logo.png', width: 80, height: 80),
               const SizedBox(height: 16),
               const Text(
                 'Welcome to Mauban',

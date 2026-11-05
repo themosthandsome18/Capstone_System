@@ -1083,7 +1083,7 @@ class AppHeader extends StatelessWidget {
             border: Border.all(color: context.brand.primary.withValues(alpha: 0.35), width: 1.5),
           ),
           child: ClipOval(
-            child: Image.asset('assets/tourism_logo.jpg', width: 34, height: 34, fit: BoxFit.cover),
+            child: Image.asset('assets/tourism_logo.png', width: 34, height: 34, fit: BoxFit.cover),
           ),
         ),
         const SizedBox(width: 10),

@@ -154,7 +154,7 @@ String imageAssetFor(String imageKey) {
     return fallbackAssets[length % fallbackAssets.length];
   }
 
-  return 'assets/tourism_logo.jpg';
+  return 'assets/tourism_logo.png';
 }
 
 String isoDate(DateTime date) {
