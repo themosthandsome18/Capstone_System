@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   createSanitationEstablishment,
   createSanitationInspection,
@@ -22,8 +22,6 @@ import {
   updateSanitationComplaint,
   updateSanitationRenewal,
   fetchHouseholdBootstrap,
-  fetchHouseholdBarangays,
-  fetchHouseholdDashboard,
   fetchHouseholdRecords,
   createHouseholdRecord,
   updateHouseholdRecord,
@@ -45,6 +43,9 @@ const initialState = {
   householdRecords: [],
   barangays: [],
   householdDashboardData: null,
+  householdStatus: "idle",
+  householdError: "",
+  householdHasData: false,
 };
 
 export function SanitationDataProvider({ children }) {
@@ -53,19 +54,59 @@ export function SanitationDataProvider({ children }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function loadSanitationData(options = {}) {
-    const { includeHouseholds = true } = options;
-    setLoading(true);
+  const householdRequest = useRef(0);
+
+  // A complete snapshot owns readiness. Keep the last good snapshot while
+  // reloading, but never let consumers treat stale or unavailable data as ready.
+  const reloadHouseholds = useCallback(async () => {
+    const requestId = ++householdRequest.current;
+    setState((current) => requestId === householdRequest.current ? {
+      ...current, householdStatus: "loading", householdError: "",
+    } : current);
+
+    try {
+      const data = await fetchHouseholdBootstrap();
+      if (requestId !== householdRequest.current) return null;
+      if (!Array.isArray(data?.barangays) || !Array.isArray(data?.householdRecords) ||
+          !data?.householdDashboardData || typeof data.householdDashboardData !== "object" ||
+          Array.isArray(data.householdDashboardData)) {
+        throw new Error("Incomplete household data received. Please retry.");
+      }
+      setState((current) => requestId === householdRequest.current ? {
+        ...current,
+        barangays: data.barangays,
+        householdRecords: data.householdRecords,
+        householdDashboardData: data.householdDashboardData,
+        householdStatus: "success",
+        householdError: "",
+        householdHasData: true,
+      } : current);
+      return data;
+    } catch (requestError) {
+      if (requestId !== householdRequest.current) return null;
+      const detail = requestError?.details?.detail;
+      const message = (typeof detail === "string" && detail) || requestError?.message ||
+        "Unable to load household data. Please retry.";
+      setState((current) => requestId === householdRequest.current ? {
+        ...current, householdStatus: "error", householdError: message,
+      } : current);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    // Ignore requests belonging to an unmounted or StrictMode-restarted provider.
+    householdRequest.current += 1;
+  }, []);
+
+  const loadSanitationData = useCallback(async (options = {}) => {
+    const { includeHouseholds = true, background = false } = options;
+    if (!background) setLoading(true);
     setError("");
 
     try {
       const sanitationPromise = fetchSanitationBootstrap();
-      const householdPromise = includeHouseholds
-        ? fetchHouseholdBootstrap().catch((err) => {
-            console.warn("Deferred household bootstrap warning:", err);
-            return null;
-          })
-        : Promise.resolve(null);
+      if (includeHouseholds) reloadHouseholds();
 
       // Await core sanitation data first to display dashboard/establishments quickly
       const data = await sanitationPromise;
@@ -84,23 +125,13 @@ export function SanitationDataProvider({ children }) {
       }));
 
       // Release loading screen immediately so user can interact with the app right away
-      setLoading(false);
-
-      // When household data finishes in background, merge smoothly into state
-      householdPromise.then((householdData) => {
-        if (householdData) {
-          setState((current) => ({
-            ...current,
-            barangays: householdData.barangays || [],
-            householdRecords: householdData.householdRecords || [],
-            householdDashboardData:
-              householdData.householdDashboardData || null,
-          }));
-        }
-      });
+      if (!background) setLoading(false);
     } catch (requestError) {
-      setError(requestError.message || "Unable to load sanitation data.");
-      setLoading(false);
+      const message = requestError.message || "Unable to load sanitation data.";
+      setError(background
+        ? `Establishment saved, but related data could not be refreshed. ${message}`
+        : message);
+      if (!background) setLoading(false);
     } finally {
       // Preload reportData in background so "Report & Analytics" page loads instantly
       fetchSanitationReports()
@@ -112,27 +143,24 @@ export function SanitationDataProvider({ children }) {
         })
         .catch(() => {});
     }
-  }
+  }, [reloadHouseholds]);
 
   useEffect(() => {
     loadSanitationData();
-  }, []);
+  }, [loadSanitationData]);
 
   async function loadHouseholdData() {
     setLoading(true);
     setError("");
 
     try {
-      const [householdData, reportData] = await Promise.all([
-        fetchHouseholdBootstrap(),
+      const [, reportData] = await Promise.all([
+        reloadHouseholds(),
         fetchSanitationReports(),
       ]);
 
       setState((current) => ({
         ...current,
-        barangays: householdData.barangays || [],
-        householdRecords: householdData.householdRecords || [],
-        householdDashboardData: householdData.householdDashboardData || null,
         reportData,
       }));
     } catch (requestError) {
@@ -230,59 +258,48 @@ export function SanitationDataProvider({ children }) {
     return reportData;
   }
 
+  // Legacy full-data refresh entry points share the same snapshot generation.
   async function refreshHouseholdDashboardData() {
-    const householdDashboardData = await fetchHouseholdDashboard();
-
-    setState((current) => ({
-      ...current,
-      householdDashboardData,
-    }));
-
-    return householdDashboardData;
+    const data = await reloadHouseholds();
+    return data?.householdDashboardData ?? null;
   }
 
   async function refreshHouseholdBarangays() {
-    const barangays = await fetchHouseholdBarangays();
-
-    setState((current) => ({
-      ...current,
-      barangays,
-    }));
-
-    return barangays;
+    const data = await reloadHouseholds();
+    return data?.barangays ?? null;
   }
 
   async function refreshHouseholdRecords(params = {}) {
-    const householdRecords = await fetchHouseholdRecords(params);
-
-    setState((current) => ({
-      ...current,
-      householdRecords,
-    }));
-
-    return householdRecords;
+    if (Object.values(params).some((value) => value !== undefined && value !== null && value !== "")) {
+      // A filtered result is a query result, not the complete report dataset.
+      return fetchHouseholdRecords(params);
+    }
+    const data = await reloadHouseholds();
+    return data?.householdRecords ?? null;
   }
 
+  // Establishment forms own their pending state. A post-save refresh must not
+  // unmount the modal or activate the shell's connection/loading screens.
   async function createEstablishment(payload) {
-    setActionLoading(true);
-    try {
-      const created = await createSanitationEstablishment(payload);
-      await loadSanitationData({ includeHouseholds: false });
-      return created;
-    } finally {
-      setActionLoading(false);
-    }
+    const created = await createSanitationEstablishment(payload);
+    setState((current) => ({
+      ...current,
+      establishments: [...current.establishments, created],
+    }));
+    await loadSanitationData({ includeHouseholds: false, background: true });
+    return created;
   }
 
   async function updateEstablishment(id, payload) {
-    setActionLoading(true);
-    try {
-      const updated = await updateSanitationEstablishment(id, payload);
-      await loadSanitationData({ includeHouseholds: false });
-      return updated;
-    } finally {
-      setActionLoading(false);
-    }
+    const updated = await updateSanitationEstablishment(id, payload);
+    setState((current) => ({
+      ...current,
+      establishments: current.establishments.map((item) =>
+        item.id === id ? { ...item, ...updated } : item
+      ),
+    }));
+    await loadSanitationData({ includeHouseholds: false, background: true });
+    return updated;
   }
 
   async function deleteEstablishment(id) {
@@ -430,6 +447,8 @@ export function SanitationDataProvider({ children }) {
     ...state,
     loading,
     actionLoading,
+    householdReady: state.householdStatus === "success",
+    reloadHouseholds,
     error,
     reload: loadSanitationData,
 

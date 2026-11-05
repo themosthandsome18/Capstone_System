@@ -21,6 +21,8 @@ import { Bar, Doughnut } from "react-chartjs-2";
 import { useSanitationData } from "../context/SanitationDataContext";
 import SanitaryVisualAnswer from "../components/SanitaryVisualAnswer";
 import PageLoader from "../../shared/PageLoader";
+import { buildBarangayHouseholdAnswers } from "./householdReportAnswers";
+import "./HouseholdReportAnalytics.css";
 
 ChartJS.register(
   CategoryScale,
@@ -35,7 +37,7 @@ function formatHouseholdStatus(status) {
   if (status === "for_completion" || status === "For Completion") return "For Compliance";
   if (status === "violation" || status === "Violation") return "Needs Assistance";
   if (status === "good_standing" || status === "Good Standing") return "Good Standing";
-  return status || "Good Standing";
+  return status || "Not recorded";
 }
 
 function statusClass(status = "") {
@@ -43,19 +45,69 @@ function statusClass(status = "") {
     return "for-compliance";
   if (status === "violation" || status === "Violation" || status === "needs-assistance")
     return "needs-assistance";
-  return "good-standing";
+  return status === "good_standing" || status === "Good Standing" ? "good-standing" : "";
 }
 
 function HouseholdReportAnalytics() {
+  const data = useSanitationData();
+  // Keep coverage outside the ready-only report so retries cannot reset it.
+  const [selectedBarangay, setSelectedBarangay] = useState("all");
+  const ready = data.householdReady === true && data.householdStatus === "success";
+
+  if (!ready) {
+    const pending = ["idle", "loading"].includes(data.householdStatus);
+    return (
+      <div className="household-report-page">
+        <div className="household-report-header">
+          <h1>Household Report &amp; Analytics</h1>
+          <div className="household-report-actions">
+            <button type="button" className="report-print-btn" disabled>
+              <FiPrinter /> Print Report
+            </button>
+            <button type="button" className="report-export-btn" disabled>
+              <FiDownload /> Export CSV
+            </button>
+          </div>
+        </div>
+        <p>Coverage: {selectedBarangay === "all" ? "All Mauban Barangays" : `Barangay ${selectedBarangay}`}</p>
+        {pending ? (
+          <PageLoader
+            message="Loading household data..."
+            subtext="The report will be available after household data has loaded."
+            variant="content"
+            theme="sanitation"
+          />
+        ) : (
+          <div role="alert">
+            <p>{data.householdError || "Household data is unavailable. Please retry."}</p>
+            <button type="button" className="report-export-btn" onClick={() => data.reloadHouseholds()}>
+              Retry household data
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <HouseholdReportContent
+      data={data}
+      selectedBarangay={selectedBarangay}
+      setSelectedBarangay={setSelectedBarangay}
+    />
+  );
+}
+
+// Mount calculations and report output only for a confirmed complete snapshot.
+function HouseholdReportContent({ data, selectedBarangay, setSelectedBarangay }) {
   const {
     householdRecords,
+    barangays = [],
     loading,
     error,
     reportData,
     refreshReportData,
-  } = useSanitationData();
-
-  const [selectedBarangay, setSelectedBarangay] = useState("all");
+  } = data;
 
   useEffect(() => {
     if (!reportData && refreshReportData) {
@@ -63,18 +115,48 @@ function HouseholdReportAnalytics() {
     }
   }, [reportData, refreshReportData]);
 
+  useEffect(() => {
+    const prepareCharts = () => {
+      document.querySelectorAll(".household-report-page canvas").forEach((canvas) => {
+        const chart = ChartJS.getChart(canvas);
+        if (chart) {
+          chart.stop();
+          chart.resize();
+          chart.update("none");
+        }
+      });
+    };
+    window.addEventListener("beforeprint", prepareCharts);
+    window.addEventListener("afterprint", prepareCharts);
+    return () => {
+      window.removeEventListener("beforeprint", prepareCharts);
+      window.removeEventListener("afterprint", prepareCharts);
+    };
+  }, []);
+
   const barangayOptions = useMemo(() => {
     const names = Array.from(
-      new Set(householdRecords.map((r) => r.barangay).filter(Boolean))
+      new Set(
+        [
+          ...barangays.map((b) => b.name),
+          ...householdRecords.map((r) => r.barangay),
+          ...(selectedBarangay === "all" ? [] : [selectedBarangay]),
+        ].filter(Boolean)
+      )
     ).sort((a, b) => a.localeCompare(b));
     return ["all", ...names];
-  }, [householdRecords]);
+  }, [householdRecords, barangays, selectedBarangay]);
 
   // Filter household records based on chosen barangay
   const activeRecords = useMemo(() => {
     if (selectedBarangay === "all") return householdRecords;
     return householdRecords.filter((r) => r.barangay === selectedBarangay);
   }, [householdRecords, selectedBarangay]);
+
+  const selectedAnswers = useMemo(
+    () => buildBarangayHouseholdAnswers(activeRecords, selectedBarangay),
+    [activeRecords, selectedBarangay]
+  );
 
   // Dynamic summary for the selected barangay or all
   const summary = useMemo(() => buildLocalSummary(activeRecords), [activeRecords]);
@@ -234,7 +316,7 @@ function HouseholdReportAnalytics() {
       cutout: "66%",
       plugins: {
         legend: {
-          position: "right",
+          position: "bottom",
           labels: {
             boxWidth: 10,
             boxHeight: 10,
@@ -307,7 +389,7 @@ function HouseholdReportAnalytics() {
       cutout: "66%",
       plugins: {
         legend: {
-          position: "right",
+          position: "bottom",
           labels: {
             boxWidth: 10,
             boxHeight: 10,
@@ -346,10 +428,12 @@ function HouseholdReportAnalytics() {
   }, [waterDistribution]);
 
   function handlePrint() {
+    if (data.householdReady !== true || data.householdStatus !== "success") return;
     window.print();
   }
 
   function handleExport() {
+    if (data.householdReady !== true || data.householdStatus !== "success") return;
     const isSpecific = selectedBarangay !== "all";
     const filename = isSpecific
       ? `household-sanitation-report-${selectedBarangay.toLowerCase().replaceAll(" ", "-")}.csv`
@@ -509,10 +593,14 @@ function HouseholdReportAnalytics() {
           </div>
         ) : (
           <div className="hh-filter-badge municipal">
-            <FiShield /> Showing consolidated data across <strong>{barangayOptions.length - 1} Barangays</strong> ({householdRecords.length} total households)
+            <FiShield /> Showing consolidated data across <strong>{barangayData.length} Barangays</strong> ({householdRecords.length} total households)
           </div>
         )}
       </div>
+
+      {!activeRecords.length && (
+        <p role="status">No household records available for this coverage area. Percentages and compliance cannot be assessed.</p>
+      )}
 
       {/* ── Stat Summary Cards ── */}
       <div className="household-report-stat-grid">
@@ -565,11 +653,7 @@ function HouseholdReportAnalytics() {
               </small>
             </div>
             <div className="hh-chart-container hh-donut-container">
-              <Doughnut data={waterChartData} options={waterDonutOptions} />
-              <div className="hh-donut-center-stat">
-                <strong>{summary.totalHouseholds || 0}</strong>
-                <small>Households</small>
-              </div>
+              {activeRecords.length ? <Doughnut data={waterChartData} options={waterDonutOptions} /> : <p>No water access data.</p>}
             </div>
           </section>
         )}
@@ -583,11 +667,7 @@ function HouseholdReportAnalytics() {
           </div>
 
           <div className="hh-chart-container hh-donut-container">
-            <Doughnut data={wasteChartData} options={wasteDonutOptions} />
-            <div className="hh-donut-center-stat">
-              <strong>{summary.totalHouseholds || 0}</strong>
-              <small>Households</small>
-            </div>
+            {activeRecords.length ? <Doughnut data={wasteChartData} options={wasteDonutOptions} /> : <p>No waste disposal data.</p>}
           </div>
         </section>
       </div>
@@ -814,8 +894,13 @@ function HouseholdReportAnalytics() {
         <h3 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: "800", color: "#0f172a" }}>
           Household Insights &amp; Actionables
         </h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "18px" }}>
-          {reportData?.questionAnswers
+        <div className="household-insights-grid">
+          {(activeRecords.length ? [
+            ...selectedAnswers,
+            // Preserve the existing municipal establishment overview only in the all-area view.
+            ...(!isSpecificBarangay ? (reportData?.questionAnswers || [])
+              .filter((item) => item.id === "barangay_risk") : []),
+          ] : [])
             ?.filter((item) =>
               [
                 "household_poor_barangays",
@@ -924,7 +1009,7 @@ function Progress({ color, value, percent }) {
 function buildLocalSummary(records) {
   const total = records.length;
   const withSanitaryFacility = records.filter(
-    (item) => item.toilet_type !== "none"
+    (item) => ["water_sealed", "pour_flush", "pit_latrine"].includes(item.toilet_type)
   ).length;
 
   const withWaterAccess = records.filter((item) =>
@@ -964,7 +1049,7 @@ function buildBarangayInfrastructure(records) {
 
     grouped[barangay].totalHouseholds += 1;
 
-    if (record.toilet_type !== "none") {
+    if (["water_sealed", "pour_flush", "pit_latrine"].includes(record.toilet_type)) {
       grouped[barangay].safeToilet += 1;
     }
 

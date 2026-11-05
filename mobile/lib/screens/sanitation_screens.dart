@@ -204,10 +204,35 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool _locationConfirmed = false;
   bool _consentConfirmed = false;
   String? _editIncompatibility;
+  late final Future<void> _sessionReady;
+  SharedPreferences? _sessionPrefs;
+  String? _sessionToken;
+  bool _sessionInvalid = false;
+
+  Future<void> _captureHouseholdSession() async {
+    _sessionPrefs = await SharedPreferences.getInstance();
+    _sessionToken = _sessionPrefs!.getString(staffAuthTokenKey);
+  }
+
+  bool _checkHouseholdSession() {
+    if (!_sessionInvalid &&
+        _sessionToken != null &&
+        _sessionToken!.isNotEmpty &&
+        _sessionPrefs?.getString(staffAuthTokenKey) == _sessionToken) {
+      return true;
+    }
+    _sessionInvalid = true;
+    if (mounted) {
+      showAppMessage(context,
+          'Staff session changed. Reopen and review the household form under the current account.');
+    }
+    return false;
+  }
 
   @override
   void initState() {
     super.initState();
+    _sessionReady = _captureHouseholdSession();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
       _editIncompatibility = widget.household!.editIncompatibility;
@@ -437,6 +462,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
+    await _sessionReady;
+    if (!mounted || _submitting || !_checkHouseholdSession()) return;
     if (_editIncompatibility != null) return;
     if (_head.text.trim().isEmpty) {
       showAppMessage(context, 'Household head is required.');
@@ -483,6 +511,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       final finalWaterSource = _waterSourceSelection;
 
       final response = await widget.api.submitHouseholdSurvey(
+        expectedSessionToken: _sessionToken!,
         originalHousehold: widget.household,
         householdCode: widget.household?.householdCode,
         householdHead: stored != null && _head.text == stored['household_head']
@@ -507,6 +536,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         longitude: _longitude.text.trim(),
       );
 
+      if (!mounted || !_checkHouseholdSession()) return;
       if (mounted) {
         await showSubmissionDialog(
           context,
@@ -520,6 +550,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
           ],
         );
+        if (!mounted || !_checkHouseholdSession()) return;
         final receipt = MobileHouseholdSurveyReceipt.fromResponse(
           response,
           head: formatProperName(_head.text),
@@ -531,12 +562,16 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       }
     } catch (error) {
       if (!mounted) return;
+      if (!_checkHouseholdSession()) return;
       if (error is ApiException && error.isUnauthorized) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
-        await prefs.remove(staffAuthRoleKey);
-        await prefs.remove(staffAuthUsernameKey);
-        if (!mounted) return;
+        final prefs = _sessionPrefs!;
+        // Clear only the validated session before yielding, as in inspections.
+        await Future.wait([
+          prefs.remove(staffAuthTokenKey),
+          prefs.remove(staffAuthRoleKey),
+          prefs.remove(staffAuthUsernameKey),
+        ]);
+        if (!mounted || prefs.getString(staffAuthTokenKey) != null) return;
         Navigator.of(context).pop();
         if (widget.onSessionExpired != null) {
           widget.onSessionExpired!();
@@ -2067,6 +2102,14 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             ),
             const SizedBox(height: 8),
             ListTile(
+              leading: const Icon(Icons.person_outline, color: AppColors.deepGreen),
+              title: const Text('Profile'),
+              onTap: () {
+                Navigator.of(context).pop();
+                setState(() => _index = 4);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.fact_check_outlined, color: AppColors.deepGreen),
               title: const Text('New Establishment Inspection', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -2142,6 +2185,12 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         onOpenComplaints: _openComplaints,
         onOpenNotifications: _openNotifications,
         onOpenEstablishments: () => _filterEstablishments(),
+        onOpenProfile: () => setState(() => _index = 4),
+        onOpenDueInspections: _openDueInspections,
+        onOpenPendingComplaints: () => _openComplaints(pendingOnly: true),
+        onOpenHouseholdsThisMonth: _openHouseholdsThisMonth,
+        onOpenViolations: () => _filterEstablishments(status: 'violation'),
+        onOpenPermitFollowUp: () => _filterEstablishments(permit: 'renewal_due'),
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2220,7 +2269,69 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     );
   }
 
-  Future<void> _openComplaints() async {
+  Future<void> _openDashboardList(
+    String title,
+    Widget Function(Future<void> Function() refresh) buildList,
+  ) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
+      StatefulBuilder(builder: (routeContext, update) {
+        Future<void> refresh() async {
+          final pending = _refreshBootstrap();
+          update(() {});
+          await pending;
+          if (routeContext.mounted) update(() {});
+        }
+        return Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: _dashboard.data == null
+            ? Center(child: Text(_dashboard.status == SanitationDashboardStatus.loading
+                ? 'Loading records...' : 'Records unavailable. Return to Home and refresh to retry.'))
+            : buildList(refresh),
+        );
+      }),
+    ));
+  }
+
+  Future<void> _openDueInspections() => _openDashboardList(
+    'Due for inspection',
+    (refresh) {
+      final ids = _dashboard.data!.dueInspections.map((item) => item.establishmentId).toSet();
+      return SanitationEstablishmentsPage(
+        establishments: _bootstrap.establishments.where((item) => ids.contains(item.id)).toList(),
+        onOpenInspection: _openInspection,
+        onRefresh: refresh,
+        refreshing: _refreshing,
+      );
+    },
+  );
+
+  Future<void> _openHouseholdsThisMonth() => _openDashboardList(
+    'Households this month',
+    (refresh) {
+      final now = DateTime.now();
+      final latest = <String, HouseholdSanitationItem>{};
+      for (final item in _bootstrap.householdRecords) {
+        final date = sanitationDashboardDate(item.surveyDate);
+        if (date == null) continue;
+        final key = '${item.surveyValues?['id'] ?? item.householdCode}';
+        final previous = latest[key];
+        if (previous == null || date.isAfter(sanitationDashboardDate(previous.surveyDate)!)) {
+          latest[key] = item;
+        }
+      }
+      return SanitationHouseholdsPage(
+        householdRecords: latest.values.where((item) {
+          final date = sanitationDashboardDate(item.surveyDate)!;
+          return date.year == now.year && date.month == now.month;
+        }).toList(),
+        onOpenHouseholdSurvey: () => _openHouseholdSurvey(),
+        onRefresh: refresh,
+        refreshing: _refreshing,
+      );
+    },
+  );
+
+  Future<void> _openComplaints({bool pendingOnly = false}) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => StatefulBuilder(
@@ -2237,13 +2348,20 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             }
 
             return Scaffold(
-              appBar: AppBar(title: const Text('Complaints')),
+              appBar: AppBar(title: Text(pendingOnly ? 'Pending complaints' : 'Complaints')),
               body: RefreshIndicator(
                 onRefresh: () => runAndRefresh(_refreshBootstrap),
-                child: SanitationReportsPage(
+                child: pendingOnly && _dashboard.data == null
+                  ? ListView(children: [Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_dashboard.status == SanitationDashboardStatus.loading
+                        ? 'Loading pending complaints...' : 'Pending complaints unavailable. Refresh to retry.'),
+                    )])
+                  : SanitationReportsPage(
+                  complaintsOnly: pendingOnly,
                   reports: _reports,
                   drafts: _drafts,
-                  complaints: _bootstrap.complaints,
+                  complaints: pendingOnly ? (_dashboard.data?.newComplaints ?? []) : _bootstrap.complaints,
                   householdRecords: _bootstrap.householdRecords,
                   onOpenReport: () => runAndRefresh(_openReport),
                   onEditDraft: (draft) => runAndRefresh(() => _editReportDraft(draft)),
@@ -2453,6 +2571,12 @@ class SanitationDashboardPage extends StatelessWidget {
     required this.onOpenComplaints,
     required this.onOpenNotifications,
     required this.onOpenEstablishments,
+    this.onOpenDueInspections,
+    this.onOpenPendingComplaints,
+    this.onOpenHouseholdsThisMonth,
+    this.onOpenProfile,
+    this.onOpenViolations,
+    this.onOpenPermitFollowUp,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -2465,31 +2589,46 @@ class SanitationDashboardPage extends StatelessWidget {
   final VoidCallback onOpenComplaints;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenEstablishments;
+  final VoidCallback? onOpenDueInspections;
+  final VoidCallback? onOpenPendingComplaints;
+  final VoidCallback? onOpenHouseholdsThisMonth;
+  final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenViolations;
+  final VoidCallback? onOpenPermitFollowUp;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
 
-  Widget _card(Widget child, {Key? key}) => Container(
+  Widget _card(Widget child, {Key? key}) => Material(
     key: key,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: _sanitationHomeBorder),
+    color: Colors.white,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: _sanitationHomeBorder),
       borderRadius: BorderRadius.circular(18),
     ),
-    child: child,
+    clipBehavior: Clip.antiAlias,
+    child: Padding(padding: const EdgeInsets.all(16), child: child),
   );
 
-  Widget _stat(String label, int? value, IconData icon, {VoidCallback? onTap}) {
+  Widget _stat(BuildContext context, String label, int? value, IconData icon, {VoidCallback? onTap}) {
     final text = switch (dashboard.status) {
       SanitationDashboardStatus.loading => 'Loading',
       SanitationDashboardStatus.unavailable => 'Unavailable',
       SanitationDashboardStatus.loaded => '$value',
     };
-    return _card(
-      InkWell(
+    return Material(
+      key: ValueKey('dashboard-stat-$label'),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: _sanitationHomeBorder),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: onTap,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, color: _sanitationHomePrimary),
           const SizedBox(height: 10),
           // Fixed slots keep every metric aligned, including loading/error states.
@@ -2506,14 +2645,14 @@ class SanitationDashboardPage extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           SizedBox(
-            height: 40,
+            height: 40 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
             width: double.infinity,
-            child: Text(label, maxLines: 2, style: const TextStyle(
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(
               color: _sanitationHomeDark, fontSize: 14, height: 1.4)),
           ),
         ]),
+        ),
       ),
-      key: ValueKey('dashboard-stat-$label'),
     );
   }
 
@@ -2545,6 +2684,10 @@ class SanitationDashboardPage extends StatelessWidget {
             Expanded(child: Text('Good day, ${identity.name}',
               style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800,
                 color: _sanitationHomeDark))),
+            IconButton(tooltip: 'Profile', onPressed: onOpenProfile,
+              icon: const Icon(Icons.person_outline, color: _sanitationHomePrimary)),
+          ]),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             IconButton(tooltip: 'Refresh', onPressed: refreshing ? null : onRefresh,
               icon: const Icon(Icons.refresh, color: _sanitationHomePrimary)),
             IconButton(tooltip: 'Notifications', onPressed: onOpenNotifications,
@@ -2552,20 +2695,47 @@ class SanitationDashboardPage extends StatelessWidget {
           ]),
           const SizedBox(height: 16),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _stat('Establishments', data?.establishmentsCount,
+            Expanded(child: _stat(context, 'Establishments', data?.establishmentsCount,
               Icons.apartment_outlined, onTap: onOpenEstablishments)),
             const SizedBox(width: 12),
-            Expanded(child: _stat('Due for inspection', data?.dueForInspectionCount,
-              Icons.fact_check_outlined)),
+            Expanded(child: _stat(context, 'Due for inspection', data?.dueForInspectionCount,
+              Icons.fact_check_outlined, onTap: data == null ? null : onOpenDueInspections)),
           ]),
           const SizedBox(height: 12),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _stat('New complaints', data?.newComplaintsCount,
-              Icons.flag_outlined)),
+            Expanded(child: _stat(context, 'New complaints', data?.newComplaintsCount,
+              Icons.flag_outlined, onTap: data == null ? null : onOpenPendingComplaints)),
             const SizedBox(width: 12),
-            Expanded(child: _stat('Households this month', data?.householdsThisMonthCount,
-              Icons.home_work_outlined)),
+            Expanded(child: _stat(context, 'Households this month', data?.householdsThisMonthCount,
+              Icons.home_work_outlined, onTap: data == null ? null : onOpenHouseholdsThisMonth)),
           ]),
+          _heading('Status Shortcuts'),
+          _card(Column(children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text('Due Inspections'),
+              subtitle: const Text('Due for inspection'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenDueInspections,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: const Text('Violations'),
+              subtitle: const Text('Establishments with violation status'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenViolations,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_repeat_outlined),
+              title: const Text('Permit Follow-up'),
+              subtitle: const Text('Renewal due permits'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: data == null ? null : onOpenPermitFollowUp,
+            ),
+          ])),
           Row(children: [
             Expanded(child: _heading('New complaints from residents')),
             TextButton(onPressed: onOpenComplaints,
@@ -2723,6 +2893,7 @@ class _SanitationEstablishmentsPageState
         SanitationTopBar(
           title: 'Establishments',
           onMenuTap: widget.onOpenMenu,
+          showMenu: widget.onOpenMenu != null,
           onRefresh: widget.onRefresh,
           refreshing: widget.refreshing,
         ),
@@ -2775,8 +2946,10 @@ class _SanitationEstablishmentsPageState
               item == 'All Permits' ? item : permitStatusLabel(item),
           onChanged: (item) => setState(() => _permit = item),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
           children: [
             Text(
               '${filtered.length} establishment(s) found',
@@ -2820,6 +2993,25 @@ class _SanitationEstablishmentsPageState
     );
   }
 }
+
+// Map-only presentation: never derive compliance from permit state or inspection dates.
+const sanitationEstablishmentMapStatuses = <String, ({String label, Color color})>{
+  'good_standing': (label: 'Good Standing', color: AppColors.green),
+  'upcoming': (label: 'Upcoming', color: AppColors.amber),
+  'for_completion': (label: 'For Completion', color: Color(0xFFEF6C00)),
+  'violation': (label: 'Violation', color: Color(0xFFF44336)),
+  'no_permit': (label: 'No Permit', color: Color(0xFF7B1FA2)),
+  'not_yet_inspected': (label: 'Not Yet Inspected', color: AppColors.muted),
+};
+
+({String label, Color color}) sanitationEstablishmentMapStatus(String status) =>
+    sanitationEstablishmentMapStatuses[status] ??
+    (label: status.trim().isEmpty ? 'Status unavailable' : status, color: AppColors.muted);
+
+bool _sanitationMapCoordinates(double latitude, double longitude) =>
+    latitude.isFinite && longitude.isFinite &&
+    latitude.abs() > 0.001 && latitude.abs() <= 90 &&
+    longitude.abs() > 0.001 && longitude.abs() <= 180;
 
 class SanitationMapPage extends StatefulWidget {
   const SanitationMapPage({
@@ -2893,6 +3085,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
   Future<void> _loadGeoJson() async {
     try {
       final jsonString = await rootBundle.loadString('assets/mauban_barangays.json');
+      if (!mounted) return;
       final data = jsonDecode(jsonString);
       final features = data['features'] as List;
       
@@ -2936,6 +3129,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
         _isLoadingGeoJson = false;
       });
     } catch (e) {
+      if (!mounted) return;
       debugPrint("Error loading GeoJSON: $e");
       setState(() => _isLoadingGeoJson = false);
     }
@@ -2972,11 +3166,13 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
 
   @override
   Widget build(BuildContext context) {
+    bool matchesBarangay(String name) => _selectedBarangay == null ||
+        _normalizeBgyName(name) == _normalizeBgyName(_selectedBarangay);
     final establishmentPins = widget.establishments
-        .where((item) => item.hasCoordinates)
+        .where((item) => _sanitationMapCoordinates(item.latitude, item.longitude) && matchesBarangay(item.barangay))
         .toList();
     final householdPins = widget.householdRecords
-        .where((item) => item.hasCoordinates)
+        .where((item) => _sanitationMapCoordinates(item.latitude, item.longitude) && matchesBarangay(item.barangay))
         .toList();
     final pinCount = _showHouseholds
         ? householdPins.length
@@ -3037,7 +3233,19 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           ],
           selected: {_showHouseholds},
           onSelectionChanged: (value) =>
-              setState(() => _showHouseholds = value.first),
+              setState(() {
+                _showHouseholds = value.first;
+                _selectedBarangay = null;
+              }),
+        ),
+        if (_selectedBarangay != null) Align(
+          alignment: Alignment.centerLeft,
+          child: InputChip(
+            label: Text('Barangay: $_selectedBarangay'),
+            onSelected: (_) => setState(() => _selectedBarangay = null),
+            onDeleted: () => setState(() => _selectedBarangay = null),
+            deleteButtonTooltipMessage: 'Clear barangay filter',
+          ),
         ),
         const SizedBox(height: 12),
         DataSourceBanner(
@@ -3045,7 +3253,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           title: '$pinCount mapped records',
           text: _showHouseholds
               ? 'Household survey coordinates are displayed separately from establishments.'
-              : 'Establishment inspection records are displayed separately from household surveys.',
+              : 'Establishment compliance statuses use valid stored coordinates only.',
           warning: pinCount == 0,
         ),
         const SizedBox(height: 12),
@@ -3102,9 +3310,11 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                               ),
                               width: 42,
                               height: 42,
-                              child: MapPin(
-                                color: sanitationStatusColor(
-                                  item.complianceStatus,
+                              child: Tooltip(
+                                message: '${item.businessName} · ${sanitationEstablishmentMapStatus(item.complianceStatus).label} · ${item.barangay}',
+                                child: MapPin(
+                                  key: ValueKey('establishment-map-pin-${item.id}'),
+                                  color: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                                 ),
                               ),
                             ),
@@ -3140,19 +3350,15 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                 spacing: 16,
                 runSpacing: 6,
                 children: [
-                  _buildLegendItem(AppColors.green, 'Good Standing'),
-                  _buildLegendItem(
-                    const Color(0xffd59b00),
-                    _showHouseholds
-                        ? 'For Compliance'
-                        : 'Upcoming / For Completion',
-                  ),
-                  _buildLegendItem(
-                    AppColors.red,
-                    _showHouseholds
-                        ? 'Needs Assistance'
-                        : 'Violation / No Permit',
-                  ),
+                  if (_showHouseholds) ...[
+                    for (final status in ['good_standing', 'for_completion', 'violation'])
+                      _buildLegendItem(sanitationStatusColor(status), householdStatusLabel(status)),
+                  ] else ...[
+                    for (final entry in sanitationEstablishmentMapStatuses.entries)
+                      _buildLegendItem(entry.value.color, entry.value.label, key: ValueKey('establishment-map-legend-${entry.key}')),
+                    if (establishmentPins.any((item) => !sanitationEstablishmentMapStatuses.containsKey(item.complianceStatus)))
+                      _buildLegendItem(AppColors.muted, 'Other / Unknown'),
+                  ],
                 ],
               ),
             ],
@@ -3164,8 +3370,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
               : 'Mapped Establishments',
         ),
         if (_showHouseholds)
-          ...widget.householdRecords
-              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
+          ...householdPins
               .take(20)
               .map(
                 (item) => GestureDetector(
@@ -3175,27 +3380,29 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                     title: item.householdHead,
                     subtitle: '${item.householdCode} - ${item.barangay}',
                     trailing: householdStatusLabel(item.status),
+                    statusColor: householdStatusColor(item.status),
                   ),
                 ),
               )
         else
-          ...widget.establishments
-              .where((item) => _selectedBarangay == null || _normalizeBgyName(item.barangay) == _normalizeBgyName(_selectedBarangay))
+          ...establishmentPins
               .take(20)
               .map(
                 (item) => SimpleInfoCard(
                   icon: Icons.apartment_outlined,
                   title: item.businessName,
                   subtitle: '${item.businessTypeName} - ${item.barangay}',
-                  trailing: item.statusLabel,
+                  trailing: sanitationEstablishmentMapStatus(item.complianceStatus).label,
+                  statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
               ),
       ],
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(Color color, String label, {Key? key}) {
     return Row(
+      key: key,
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
@@ -3207,10 +3414,10 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
+        Flexible(child: Text(
           label,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
+        )),
       ],
     );
   }
@@ -3240,6 +3447,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
         SanitationTopBar(
           title: 'Households',
           onMenuTap: onOpenMenu,
+          showMenu: onOpenMenu != null,
           onRefresh: onRefresh,
           refreshing: refreshing,
         ),
@@ -3264,6 +3472,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
                 if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
               ].join(' - '),
               trailing: householdStatusLabel(item.status),
+              statusColor: householdStatusColor(item.status),
             ),
           ),
       ],
@@ -3274,6 +3483,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
 class SanitationReportsPage extends StatelessWidget {
   const SanitationReportsPage({
     super.key,
+    this.complaintsOnly = false,
     required this.reports,
     required this.drafts,
     required this.complaints,
@@ -3288,6 +3498,7 @@ class SanitationReportsPage extends StatelessWidget {
     required this.refreshing,
   });
 
+  final bool complaintsOnly;
   final List<MobileSanitationReceipt> reports;
   final List<SanitationReportDraft> drafts;
   final List<SanitationComplaintItem> complaints;
@@ -3307,11 +3518,13 @@ class SanitationReportsPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         SanitationTopBar(
-          title: 'Community Reports',
+          title: complaintsOnly ? 'Pending complaints' : 'Community Reports',
           onMenuTap: onOpenMenu,
+          showMenu: onOpenMenu != null,
           onRefresh: onRefresh,
           refreshing: refreshing,
         ),
+        if (!complaintsOnly) ...[
         DataSourceBanner(
           icon: Icons.home_work_outlined,
           title: 'Household + community sanitation',
@@ -3350,15 +3563,16 @@ class SanitationReportsPage extends StatelessWidget {
           )
         else
           ...reports.map((item) => SanitationReceiptCard(receipt: item)),
-        SectionHeader(title: 'Violations & Alerts'),
+        ],
+        SectionHeader(title: complaintsOnly ? 'Pending complaints' : 'Violations & Alerts'),
+        if (complaintsOnly) Text('Showing ${complaints.length} loaded pending complaint(s). The server may limit this list.'),
         if (complaints.isEmpty)
           const EmptyState(
             icon: Icons.notifications_none_outlined,
             title: 'No complaint alerts loaded',
           )
         else
-          ...complaints
-              .take(20)
+          ...(complaintsOnly ? complaints : complaints.take(20))
               .map(
                 (item) => SanitationAlertCard(
                   title: item.category,
@@ -3931,8 +4145,10 @@ class SanitationTopBar extends StatelessWidget {
     this.refreshing = false,
     this.onNotifications,
     this.onMenuTap,
+    this.showMenu = true,
   });
 
+  final bool showMenu;
   final String title;
   final Future<void> Function()? onRefresh;
   final bool refreshing;
@@ -3948,14 +4164,14 @@ class SanitationTopBar extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 14),
         child: Row(
           children: [
-            IconButton(
+            if (showMenu) IconButton(
               icon: const Icon(Icons.menu, color: AppColors.deepGreen),
               onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               tooltip: 'Menu',
             ),
-            const SizedBox(width: 8),
+            if (showMenu) const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
@@ -3997,8 +4213,9 @@ class SanitationEstablishmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = sanitationStatusColor(establishment.complianceStatus);
-    final statusLabel = sanitationStatusLabel(establishment.complianceStatus);
+    final presentation = sanitationEstablishmentMapStatus(establishment.complianceStatus);
+    final statusColor = presentation.color;
+    final statusLabel = presentation.label;
     final isViolation = establishment.complianceStatus == 'violation';
     final isForCompletion = establishment.complianceStatus == 'for_completion';
 
@@ -4219,12 +4436,14 @@ class SimpleInfoCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.trailing,
+    this.statusColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String trailing;
+  final Color? statusColor;
 
   @override
   Widget build(BuildContext context) {
@@ -4233,10 +4452,24 @@ class SimpleInfoCard extends StatelessWidget {
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: Icon(icon, color: AppColors.green),
+        leading: Icon(icon, color: statusColor ?? AppColors.green),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle),
-        trailing: StatusPill(text: trailing),
+        subtitle: statusColor == null ? Text(subtitle) : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(subtitle),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor!.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(trailing, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        trailing: statusColor == null ? StatusPill(text: trailing) : null,
       ),
     );
   }

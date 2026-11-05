@@ -8,7 +8,7 @@ jest.mock(
 );
 jest.mock("../../shared/LocationPicker", () => () => null);
 jest.mock("qrcode.react", () => ({
-  QRCodeSVG: ({ id, value }) => <svg id={id} data-value={value} />,
+  QRCodeSVG: ({ id, value, role, "aria-label": label }) => <svg id={id} data-value={value} role={role} aria-label={label} />,
 }));
 jest.mock("../../auth/AuthContext", () => ({
   useAuth: () => ({ role: "sanitation" }),
@@ -22,6 +22,7 @@ jest.mock("../services/sanitationApi", () => ({
 }));
 
 import EstablishmentRecords from "./EstablishmentRecords";
+import { issueOwnerTrackingCode } from "../services/sanitationApi";
 
 const BASE = {
   id: 901,
@@ -84,13 +85,14 @@ function fakePrintWindow() {
   return printWindow;
 }
 
-function printRecord(overrides = {}) {
+function printRecord(overrides = {}, beforePrint) {
   mockCtx.establishments = [{ ...BASE, ...overrides }];
   render(<EstablishmentRecords />);
 
   const row = document.querySelector(".establishment-table-wrap tbody tr");
   fireEvent.click(within(row).getByTitle("View establishment"));
   const modal = screen.getByRole("dialog");
+  beforePrint?.(modal);
   fireEvent.click(within(modal).getByRole("button", { name: /^Print$/ }));
 
   expect(printWindow.print).toHaveBeenCalledTimes(1);
@@ -202,4 +204,52 @@ test("preserves an HTML-sensitive nonblank permit number as text and escapes the
   expect(documentNode.querySelector(".print-qr-url")?.textContent).toContain(
     `/verify-permit/${encodeURIComponent(permitNumber)}`
   );
+});
+
+test("print takes the QR from this record's View, not an unrelated matching DOM id", () => {
+  const decoy = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  decoy.id = "establishment-detail-qr-svg";
+  decoy.setAttribute("data-value", "unrelated-record-value");
+  try {
+    const printed = printRecord({}, () => document.body.prepend(decoy));
+    expect(printed.querySelector(".print-qr-code svg")?.getAttribute("data-value")).toBe(
+      `${window.location.origin}/verify-permit/SP-2026-0901`
+    );
+  } finally { decoy.remove(); }
+});
+
+test("missing permit data gives an honest print state without an empty QR box or scan instructions", () => {
+  const printed = printRecord({ permit_number: "", tracking_code_issued_at: "2026-10-01T00:00:00Z" });
+  expect(printed.querySelector(".print-qr-code")).toBeNull();
+  expect(printed.querySelector(".print-qr-details")?.textContent).not.toMatch(/Scan with/);
+  expect(printed.querySelector(".print-qr-url")?.textContent).toBe("No permit number recorded; no verification QR.");
+  expect(issueOwnerTrackingCode).not.toHaveBeenCalled();
+});
+
+test("print describes only the existing public permit response, not private compliance records", () => {
+  const printed = printRecord();
+  expect(printed.querySelector(".print-qr-details")?.textContent).toMatch(/permit status and validity dates/);
+  expect(printed.querySelector(".print-qr-details")?.textContent).not.toMatch(/compliance records/);
+});
+
+test("an unavailable rendered SVG preserves the approved destination without pretending a QR printed", () => {
+  const printed = printRecord({}, modal => modal.querySelector("svg#establishment-detail-qr-svg").remove());
+  expect(printed.querySelector(".print-qr-code")).toBeNull();
+  expect(printed.querySelector(".print-qr-details")?.textContent).toMatch(/QR image unavailable/);
+  expect(printed.querySelector(".print-qr-url")?.textContent).toBe(`${window.location.origin}/verify-permit/SP-2026-0901`);
+});
+
+test("a stored permit number remains authoritative even with a legacy no-permit flag", () => {
+  const printed = printRecord({ has_permit: false, permit_status: "no_permit", permit_status_label: "No Permit" });
+  expect(printed.querySelector(".print-qr-code svg")?.getAttribute("data-value")).toBe(`${window.location.origin}/verify-permit/SP-2026-0901`);
+  expect(printedField(printed, "Permit Status")).toBe("No Permit");
+});
+
+
+test("View exposes a labelled QR with the exact approved verification destination", () => {
+  printRecord({}, modal => {
+    const qr = within(modal).getByRole("img", { name: "Permit verification QR for SP-2026-0901" });
+    expect(qr.getAttribute("data-value")).toBe(`${window.location.origin}/verify-permit/SP-2026-0901`);
+    expect(within(modal).getByRole("link", { name: /Open Verification Page/ }).getAttribute("href")).toBe("/verify-permit/SP-2026-0901");
+  });
 });

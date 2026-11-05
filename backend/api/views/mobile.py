@@ -1246,7 +1246,8 @@ def mobile_sanitation_inspection_submit(request):
     ensure_initial_sanitation_data()
 
     data = copy_request_fields(request)
-    data["inspector_name"] = data.get("inspector_name") or data.get("inspector") or ""
+    # Attribution belongs to the authenticated account, never a client-supplied name.
+    data["inspector_name"] = request.user.get_full_name().strip() or request.user.username
     data["inspection_date"] = (
         data.get("inspection_date") or timezone.localdate().isoformat()
     )
@@ -1319,8 +1320,15 @@ def mobile_household_survey_submit(request):
         data.get("household_head") or data.get("head") or data.get("full_name") or ""
     )
     data["barangay"] = data.get("barangay") or "Unspecified"
-    data["male_count"] = parse_mobile_int(data.get("male_count"), 0)
-    data["female_count"] = parse_mobile_int(data.get("female_count"), 0)
+    # Preserve the mobile POST/upsert's omitted-count zero defaults, but never
+    # truncate or replace a supplied invalid count. PositiveIntegerField's
+    # portable database range is 0..2147483647 (independent of SQLite storage).
+    count_field = serializers.IntegerField(min_value=0, max_value=2147483647)
+    for field in ("male_count", "female_count"):
+        try:
+            data[field] = count_field.run_validation(data.get(field, 0))
+        except serializers.ValidationError as error:
+            raise serializers.ValidationError({field: error.detail})
     data["toilet_type"] = data.get("toilet_type") or "water_sealed"
     data["water_level"] = data.get("water_level") or "level_3"
     data["waste_disposal"] = data.get("waste_disposal") or "collected"

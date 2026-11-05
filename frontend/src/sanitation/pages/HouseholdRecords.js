@@ -274,11 +274,20 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "last_survey_date",
 ];
 
-function normalizeComparable(value) {
-  if (value === null || value === undefined) return null;
-  if (value === "") return "";
-  const number = Number(value);
-  return Number.isFinite(number) && String(value).trim() !== "" ? number : value;
+// The backend stores these as PositiveIntegerField (not PositiveBigIntegerField).
+const MAX_MEMBER_COUNT = 2147483647;
+const MEMBER_COUNT_ERROR = "Enter a whole number from 0 to 2147483647.";
+
+function parseMemberCount(value) {
+  if ((typeof value !== "string" && typeof value !== "number") || !/^[0-9]+$/.test(String(value))) {
+    return null;
+  }
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count <= MAX_MEMBER_COUNT ? count : null;
+}
+
+function hasInvalidMemberCounts(form) {
+  return parseMemberCount(form.male_count) === null || parseMemberCount(form.female_count) === null;
 }
 
 export function buildHouseholdEditPayload(form, snapshot) {
@@ -308,7 +317,9 @@ export function buildHouseholdEditPayload(form, snapshot) {
     if (field === "last_survey_date" && (current === "" || current === null) && (original === "" || original === null || original === undefined)) {
       continue;
     }
-    if (normalizeComparable(current) !== normalizeComparable(original)) {
+    // Only member counts above are numeric. Preserve exact text, including
+    // leading zeros and whitespace, while retaining null/undefined equivalence.
+    if ((current ?? null) !== (original ?? null)) {
       payload[field] = field === "last_survey_date" && current === "" ? null : current;
     }
   }
@@ -317,8 +328,10 @@ export function buildHouseholdEditPayload(form, snapshot) {
 
 function HouseholdRecords() {
   const navigate = useNavigate();
-  const { barangays, householdRecords, householdDashboardData, loading, error, createHousehold, updateHousehold } =
+  const { barangays, householdRecords, householdDashboardData, householdStatus, householdReady,
+    householdHasData, householdError, reloadHouseholds, error, createHousehold, updateHousehold } =
     useSanitationData();
+  const householdPending = householdStatus === "idle" || householdStatus === "loading";
 
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -521,6 +534,7 @@ function HouseholdRecords() {
   );
 
   function handleExport() {
+    if (!householdReady) return;
     const headers = [
       "Household Code",
       "Household Head",
@@ -562,6 +576,7 @@ function HouseholdRecords() {
   }
 
   function openAdd() {
+    if (!householdReady) return;
     setForm(emptyForm);
     setEditSnapshot(null);
     setFormError("");
@@ -569,6 +584,7 @@ function HouseholdRecords() {
   }
 
   function openEdit(record) {
+    if (!householdReady) return;
     let firstName = "";
     let lastName = "";
     if (record.household_head) {
@@ -636,6 +652,14 @@ function HouseholdRecords() {
   }
 
   async function handleSaveAdd() {
+    if (!householdReady) {
+      setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
+      return;
+    }
+    if (hasInvalidMemberCounts(form)) {
+      setFormError("Check the household member counts.");
+      return;
+    }
     let finalHead = form.household_head.trim();
     if (form.last_name.trim() && form.first_name.trim()) {
       finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
@@ -669,8 +693,8 @@ function HouseholdRecords() {
       const payload = {
         ...form,
         household_head: finalHead,
-        male_count: Number(form.male_count) || 0,
-        female_count: Number(form.female_count) || 0,
+        male_count: parseMemberCount(form.male_count),
+        female_count: parseMemberCount(form.female_count),
         last_survey_date: form.last_survey_date || null,
       };
       if (!isSepticApplicable(form.toilet_type)) {
@@ -686,6 +710,14 @@ function HouseholdRecords() {
   }
 
   async function handleSaveEdit() {
+    if (!householdReady) {
+      setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
+      return;
+    }
+    if (hasInvalidMemberCounts(form)) {
+      setFormError("Check the household member counts.");
+      return;
+    }
     let finalHead = form.household_head.trim();
     if (form.last_name.trim() && form.first_name.trim()) {
       finalHead = `${form.last_name.trim()}, ${form.first_name.trim()}`;
@@ -727,7 +759,19 @@ function HouseholdRecords() {
           ? editSnapshot.household_head ?? ""
           : finalHead,
     };
-    const payload = buildHouseholdEditPayload(nextForm, editSnapshot);
+    const currentRecord = householdRecords.find((record) => String(record.id) === String(editRecord.id));
+    if (!currentRecord) {
+      setFormError("This household is no longer in the current data. Review the latest records before saving; your draft is retained.");
+      return;
+    }
+    const draftChanges = buildHouseholdEditPayload(nextForm, editSnapshot);
+    const refreshedChanges = buildHouseholdEditPayload(currentRecord, editSnapshot);
+    const payload = buildHouseholdEditPayload(draftChanges, currentRecord);
+    const conflicts = Object.keys(payload).filter((field) => Object.prototype.hasOwnProperty.call(refreshedChanges, field));
+    if (conflicts.length) {
+      setFormError(`This household has changed in ${conflicts.join(", ")}. Review the latest record before saving; your draft is retained.`);
+      return;
+    }
     if (!Object.keys(payload).length) {
       closeModals();
       return;
@@ -744,8 +788,22 @@ function HouseholdRecords() {
     }
   }
 
-  if (loading) {
-    return <div className="household-page">Loading household records...</div>;
+  const householdNotice = !householdReady ? (
+    <div role={householdPending ? "status" : "alert"}>
+      <p>{householdPending
+        ? householdHasData ? "Refreshing household records... Last successful snapshot is stale and unverified." : "Loading household records..."
+        : `${householdError || "Household data is unavailable."}${householdHasData ? " Showing the last successful snapshot; it is stale and unverified." : ""}`}</p>
+      <button type="button" onClick={() => reloadHouseholds()} disabled={householdPending}>
+        Retry household data
+      </button>
+    </div>
+  ) : null;
+  const householdRefresh = householdReady ? (
+    <button type="button" onClick={() => reloadHouseholds()}>Refresh household data</button>
+  ) : null;
+
+  if (!householdHasData && !householdReady) {
+    return <div className="household-page"><h1>Household Records</h1>{householdNotice}</div>;
   }
 
   return (
@@ -761,6 +819,7 @@ function HouseholdRecords() {
             type="button"
             className="sanitation-export-btn"
             onClick={handleExport}
+            disabled={!householdReady}
           >
             <FiDownload /> Export CSV
           </button>
@@ -769,6 +828,7 @@ function HouseholdRecords() {
             className="sanitation-export-btn"
             style={{ background: "#16a34a", color: "white", borderColor: "#16a34a" }}
             onClick={openAdd}
+            disabled={!householdReady}
           >
             <FiPlus /> Add Household
           </button>
@@ -776,6 +836,8 @@ function HouseholdRecords() {
       </div>
 
       {error ? <p className="sanitation-error-text">{error}</p> : null}
+      {householdNotice}
+      {householdRefresh}
 
       {/* ── Barangay Filter Selector Toolbar ── */}
       <div className="household-barangay-filter-bar">
@@ -1130,6 +1192,7 @@ function HouseholdRecords() {
                           className="establishment-icon-btn edit"
                           title="Edit Household Record"
                           onClick={() => openEdit(row)}
+                          disabled={!householdReady}
                         >
                           <FiEdit2 />
                         </button>
@@ -1140,7 +1203,7 @@ function HouseholdRecords() {
               ) : (
                 <tr>
                   <td colSpan="8" className="household-empty">
-                    No household records found.
+                    {householdReady ? "No household records found." : "The last successful snapshot has no matching records; current household data is unverified."}
                   </td>
                 </tr>
               )}
@@ -1180,7 +1243,8 @@ function HouseholdRecords() {
                   type="button"
                   className="hh-modal-close"
                   style={{ color: "#065f46" }}
-                  onClick={() => printHouseholdProfile(viewRecord)}
+                  onClick={() => { if (householdReady) printHouseholdProfile(viewRecord); }}
+                  disabled={!householdReady}
                   title="Print Household Sanitation Profile Slip"
                 >
                   <FiPrinter />
@@ -1192,6 +1256,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <div className="hh-detail-grid">
                 <HHDetailItem label="Household Code" value={viewRecord.household_code} />
                 <HHDetailItem label="Barangay" value={viewRecord.barangay} />
@@ -1230,6 +1296,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <HouseholdForm
                 form={form}
                 updateField={updateField}
@@ -1241,7 +1309,7 @@ function HouseholdRecords() {
               <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="hh-btn-save" onClick={handleSaveAdd} disabled={saving}>
+              <button type="button" className="hh-btn-save" onClick={handleSaveAdd} disabled={saving || !householdReady}>
                 {saving ? "Saving..." : "Save Household"}
               </button>
             </div>
@@ -1264,6 +1332,8 @@ function HouseholdRecords() {
             </div>
 
             <div className="hh-modal-body">
+              {householdNotice}
+              {householdRefresh}
               <HouseholdForm
                 form={form}
                 updateField={updateField}
@@ -1276,7 +1346,7 @@ function HouseholdRecords() {
               <button type="button" className="hh-btn-cancel" onClick={closeModals} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="hh-btn-save" onClick={handleSaveEdit} disabled={saving}>
+              <button type="button" className="hh-btn-save" onClick={handleSaveEdit} disabled={saving || !householdReady}>
                 {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
@@ -1289,6 +1359,8 @@ function HouseholdRecords() {
 
 /* ── Reusable form matching groupmate's exact UI design ── */
 function HouseholdForm({ form, updateField, formError, isEditing = false }) {
+  const maleCount = parseMemberCount(form.male_count);
+  const femaleCount = parseMemberCount(form.female_count);
   return (
     <div className="hh-form-grid">
       {formError && <p className="hh-form-error">{formError}</p>}
@@ -1367,20 +1439,21 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
 
       <fieldset className="hh-members-row" aria-label="Household Members">
         <legend>Household Members</legend>
-        <div className="hh-form-group">
-          <label htmlFor="hh-male">Male</label>
-          <input id="hh-male" type="number" min="0" value={form.male_count}
-            onChange={(e) => updateField("male_count", parseInt(e.target.value, 10) || 0)} />
-        </div>
-        <div className="hh-form-group">
-          <label htmlFor="hh-female">Female</label>
-          <input id="hh-female" type="number" min="0" value={form.female_count}
-            onChange={(e) => updateField("female_count", parseInt(e.target.value, 10) || 0)} />
-        </div>
+        {[["male", "Male", maleCount], ["female", "Female", femaleCount]].map(([key, label, count]) => (
+          <div className="hh-form-group" key={key}>
+            <label htmlFor={`hh-${key}`}>{label}</label>
+            <input id={`hh-${key}`} type="text" inputMode="numeric" pattern="[0-9]+"
+              value={form[`${key}_count`]}
+              aria-invalid={count === null}
+              aria-describedby={count === null ? `hh-${key}-error` : undefined}
+              onChange={(e) => updateField(`${key}_count`, e.target.value)} />
+            {count === null && <p id={`hh-${key}-error`} className="hh-form-error">{MEMBER_COUNT_ERROR}</p>}
+          </div>
+        ))}
         <div className="hh-form-group">
           <label htmlFor="hh-total">Total</label>
           <output id="hh-total" htmlFor="hh-male hh-female" aria-live="polite">
-            {(Number(form.male_count) || 0) + (Number(form.female_count) || 0)}
+            {maleCount === null || femaleCount === null ? "—" : maleCount + femaleCount}
           </output>
         </div>
       </fieldset>

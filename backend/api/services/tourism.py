@@ -54,8 +54,6 @@ ALL_TOURISM_REPORTING_YEARS = "all"
 REPORT_TYPES = ("daily", "monthly", "yearly", "resort", "origin", "purpose", "transport", "boat", "no_show")
 
 
-from django.core.cache import cache
-
 STATIC_REFERENCE_TABLE_SERIALIZERS = {
     "countries": (Country, CountrySerializer),
     "regions": (Region, RegionSerializer),
@@ -71,8 +69,8 @@ REFERENCE_TABLE_SERIALIZERS = {
     "resorts": (Resort, ResortSerializer),
 }
 
-# v2: the cached lists carry is_active / stay_nights. A v1 entry has the old
-# shape and must not be read back as if it were this one.
+# Legacy identifiers retained for invalidation/import compatibility.
+# Mutable reference rows are no longer read from or written to this cache.
 MOBILE_REFERENCE_TABLES_CACHE_KEY = "mobile_reference_tables_v2"
 MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT = 900  # 15 minutes
 
@@ -178,24 +176,18 @@ def build_reference_tables_payload(resorts=None, active_only=False):
     active_only=True (the mobile app): only the active rows, cut back to the
     keys the app reads.
 
-    The cache always holds the FULL lists; active_only is applied afterwards,
-    in memory. Caching the filtered result under the same key would serve the
-    web a mobile list (or the other way round) for up to 15 minutes.
+    Read authoritative rows on every call. Admin and other workers can change
+    these options without invalidating this process's memory. Filter the fresh
+    full lists afterwards so the web keeps inactive history and mobile does not
+    offer retired options.
     """
-    static_payload = cache.get(MOBILE_REFERENCE_TABLES_CACHE_KEY)
-    if static_payload is None:
-        static_payload = {
-            payload_key: [
-                dict(item)
-                for item in serializer_class(model.objects.all(), many=True).data
-            ]
-            for payload_key, (model, serializer_class) in STATIC_REFERENCE_TABLE_SERIALIZERS.items()
-        }
-        cache.set(
-            MOBILE_REFERENCE_TABLES_CACHE_KEY,
-            static_payload,
-            timeout=MOBILE_REFERENCE_TABLES_CACHE_TIMEOUT,
-        )
+    static_payload = {
+        payload_key: [
+            dict(item)
+            for item in serializer_class(model.objects.all(), many=True).data
+        ]
+        for payload_key, (model, serializer_class) in STATIC_REFERENCE_TABLE_SERIALIZERS.items()
+    }
 
     payload = dict(static_payload)
 
@@ -207,7 +199,7 @@ def build_reference_tables_payload(resorts=None, active_only=False):
                 if item.get("is_active", True)
             ]
 
-    # Outside the cache above: read now, every time.
+    # Fares remain independent of the web/mobile reference projection above.
     payload["boatCapacityFares"] = build_boat_capacity_fares_payload(active_only)
 
     if resorts is not None:

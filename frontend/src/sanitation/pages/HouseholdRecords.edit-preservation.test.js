@@ -13,6 +13,8 @@ beforeEach(() => {
 jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }), { virtual: true });
 jest.mock("../context/SanitationDataContext", () => ({
   useSanitationData: () => ({
+    householdStatus: "success", householdReady: true, householdHasData: true, householdError: "",
+    reloadHouseholds: jest.fn(),
     barangays: [],
     householdRecords: [
       {
@@ -64,6 +66,45 @@ const snapshot = {
   longitude: 121.73,
   last_survey_date: "2025-07-04",
 };
+
+describe("lossless text comparison", () => {
+  test.each(["address", "remarks", "household_head", "barangay", "house_number", "sitio", "water_source"])(
+    "%s sends numeric-looking text edits exactly without numeric coercion",
+    (field) => {
+      for (const [original, current] of [
+        ["001", "1"], ["1", "01"], ["1", "1.0"],
+        ["1", "1e0"], ["1", " 1 "], ["0", ""],
+      ]) {
+        expect(buildHouseholdEditPayload({ [field]: current }, { [field]: original }))
+          .toEqual({ [field]: current });
+      }
+    }
+  );
+
+  test("unchanged raw legacy strings and numeric-looking text produce no PATCH", () => {
+    const legacy = {
+      ...snapshot, address: "001", remarks: " 1e0 ", house_number: "01", sitio: "1.00",
+      water_source: "  001, Private pump  ", water_level: "legacy level", septic_tank_type: "septic_tank",
+    };
+    const { latitude, longitude, ...form } = legacy;
+    expect(buildHouseholdEditPayload(form, legacy)).toEqual({});
+    expect(form).not.toHaveProperty("latitude");
+    expect(form).not.toHaveProperty("longitude");
+  });
+
+  test("text-only PATCH leaves absent coordinates and unrelated raw values untouched", () => {
+    const { latitude, longitude, ...form } = snapshot;
+    const original = { ...snapshot, address: "001", remarks: "001" };
+    expect(buildHouseholdEditPayload({ ...form, address: "1", remarks: " 1 " }, original))
+      .toEqual({ address: "1", remarks: " 1 " });
+  });
+
+  test("only member counts compare numerically and changed counts remain numbers", () => {
+    expect(buildHouseholdEditPayload({ male_count: "04", female_count: "6" }, snapshot)).toEqual({});
+    expect(buildHouseholdEditPayload({ male_count: "5", female_count: "07" }, snapshot))
+      .toEqual({ male_count: 5, female_count: 7 });
+  });
+});
 
 test("address-only edit produces a differential payload and preserves raw legacy fields", () => {
   const payload = buildHouseholdEditPayload(

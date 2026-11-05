@@ -797,6 +797,13 @@ class SanitaryPermitRenewalSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def update(self, instance, validated_data):
+        # A partial renewal edit must not write stale, omitted financial values.
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save(update_fields=[*validated_data, "updated_at"])
+        return instance
+
 
 class PublicSanitaryComplaintSubmissionSerializer(serializers.Serializer):
     """Only resident-supplied data; never use the staff serializer for input."""
@@ -1079,6 +1086,7 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HouseholdSanitationRecord
+        extra_kwargs = {"remarks": {"trim_whitespace": False}}
         fields = [
             "id",
             "household_code",

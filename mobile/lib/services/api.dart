@@ -467,6 +467,7 @@ class TourismApi {
   }
 
   Future<Map<String, dynamic>> submitHouseholdSurvey({
+    String? expectedSessionToken,
     HouseholdSanitationItem? originalHousehold,
     String? householdCode,
     String? septicTankType,
@@ -506,7 +507,18 @@ class TourismApi {
     if (householdCode != null) {
       body['household_code'] = householdCode;
     }
-    final token = await _getStaffAuthToken();
+    final prefs = await SharedPreferences.getInstance();
+    final activeToken = prefs.getString(staffAuthTokenKey);
+    if (expectedSessionToken != null &&
+        (expectedSessionToken.isEmpty || activeToken != expectedSessionToken)) {
+      throw const ApiException(
+        statusCode: 409,
+        message: 'Staff session changed. Reopen and review the household form under the current account.',
+      );
+    }
+    // Validate before the no-change return as well as POST/PATCH dispatch.
+    // No await before dispatch; never substitute a replacement session.
+    final token = expectedSessionToken ?? activeToken;
     if (originalHousehold != null) {
       final problem = originalHousehold.editIncompatibility;
       if (problem != null || householdCode != originalHousehold.householdCode) {

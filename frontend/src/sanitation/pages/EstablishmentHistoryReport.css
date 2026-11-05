@@ -1,0 +1,55 @@
+.establishment-history-report {
+  min-width: 0; padding: 22px; border: 1px solid #cbd5d1;
+  border-radius: 12px; background: #fff; color: #172b24;
+}
+.establishment-history-report .ehr-controls { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+.establishment-history-report h2 { margin: 0; font-size: 21px; }
+.establishment-history-report p { line-height: 1.5; }
+.establishment-history-report .ehr-controls > div { min-width: 0; flex: 1 1 300px; }
+.establishment-history-report .ehr-actions { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 10px; }
+.establishment-history-report button {
+  border: 1px solid #0a6844; border-radius: 7px; padding: 10px 14px;
+  background: #f0f8f4; color: #064d33; font: inherit; cursor: pointer;
+}
+.establishment-history-report button:disabled { opacity: .55; cursor: not-allowed; }
+.establishment-history-report .ehr-selector { display: flex; flex-direction: column; gap: 6px; font-weight: 700; margin: 16px 0; }
+.establishment-history-report select { width: 100%; min-width: 0; padding: 10px; font: inherit; border: 1px solid #81978c; border-radius: 6px; }
+.ehr-body { min-width: 0; overflow-wrap: anywhere; }
+.ehr-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.ehr-fields > div { min-width: 0; }
+.ehr-fields dt { color: #43574c; font-size: 13px; font-weight: 700; }
+.ehr-fields dd { margin: 5px 0 0; white-space: pre-wrap; }
+.ehr-inspection { padding: 16px; margin: 16px 0; border: 1px solid #d8e2dc; border-radius: 8px; }
+.ehr-inspection h4 { margin: 0 0 12px; font-size: 16px; }
+.ehr-inspection h5 { margin: 12px 0; font-size: 14px; }
+.ehr-table-scroll { max-width: 100%; overflow-x: auto; }
+.ehr-body table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ehr-body th, .ehr-body td { padding: 9px; text-align: left; vertical-align: top; border: 1px solid #d8e2dc; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ehr-body th { background: #f0f5f2; }
+.ehr-body .ehr-renewals { min-width: 640px; }
+.ehr-metadata { font-size: 12px; color: #43574c; }
+.establishment-history-print { display: none; }
+@media screen and (max-width: 700px) {
+  .establishment-history-report { padding: 14px; }
+  .establishment-history-report .ehr-fields { grid-template-columns: minmax(0, 1fr); }
+  .establishment-history-report .ehr-inspection { padding: 10px; }
+  .sanitation-layout:has(.establishment-history-report) { flex-direction: column; }
+  .sanitation-layout:has(.establishment-history-report) .sanitation-sidebar { position: static; width: 100%; min-width: 0; max-width: none; height: auto; max-height: 220px; }
+  .sanitation-main:has(.establishment-history-report) { margin-left: 0; width: 100%; min-width: 0; }
+  .sanitation-main:has(.establishment-history-report) .sanitation-topbar { height: auto; flex-wrap: wrap; gap: 12px; padding: 12px; }
+  .sanitation-main:has(.establishment-history-report) .sanitation-top-actions { flex-wrap: wrap; min-width: 0; }
+  .sanitation-main:has(.establishment-history-report) .admin { min-width: 0; }
+  .sanitation-main:has(.establishment-history-report) .admin-text { overflow-wrap: anywhere; }
+}
+@media print {
+  body:has(> .establishment-history-print) > :not(.establishment-history-print) { display: none !important; }
+  .establishment-history-print { display: block !important; background: white; color: #111; font-size: 10pt; }
+  .establishment-history-print h1 { font-size: 18pt; }
+  .establishment-history-print h3 { font-size: 12pt; }
+  .establishment-history-print .ehr-inspection { break-inside: avoid; }
+  .establishment-history-print .ehr-table-scroll { overflow: visible; }
+  .establishment-history-print .ehr-renewals { min-width: 0; }
+  .establishment-history-print th, .establishment-history-print td { padding: 5px; }
+  .establishment-history-print tr { break-inside: avoid; }
+  .establishment-history-print thead { display: table-header-group; }
+}
