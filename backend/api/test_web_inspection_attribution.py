@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import ActivityLog, SanitaryBusinessType, SanitaryEstablishment, SanitaryInspection, UserProfile
+from .models import ActivityLog, SanitaryBusinessType, SanitaryEstablishment, SanitaryInspection, SanitaryRequirement, UserProfile
 
 
 @override_settings(USE_SEED_DATA=False)
@@ -28,6 +28,8 @@ class WebInspectionAttributionTests(TestCase):
             business_name="Synthetic web establishment", owner_name="Synthetic owner",
             business_type=kind, barangay="Abo-abo", address="Synthetic address",
         )
+        SanitaryRequirement.objects.create(business_type=kind,
+            permit_size=self.record.permit_size, requirement_name="Synthetic requirement")
         self.historical = SanitaryInspection.objects.create(
             establishment=self.record, inspector_name="Historical Bob", is_draft=True,
             inspection_date="2025-01-01", findings="Historical findings",
@@ -154,6 +156,8 @@ class WebInspectionAttributionTests(TestCase):
     def test_ordinary_matching_name_and_multipart_creation_remain_valid(self):
         payload = self.payload(inspector_name="Alice Inspector")
         payload.pop("checklist_items")
+        # This test exercises the valid unconfigured multipart workflow.
+        SanitaryRequirement.objects.filter(business_type=self.record.business_type).delete()
         response = self.client.post("/api/sanitation/inspections/", payload, format="multipart")
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["inspector_name"], "Alice Inspector")

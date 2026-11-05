@@ -109,7 +109,7 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(staffAuthTokenKey, token);
+      await setStaffSessionToken(prefs, token);
       await prefs.setString(staffAuthRoleKey, role);
       await prefs.setString(staffAuthUsernameKey, username);
 
@@ -293,7 +293,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
       if (!mounted) return;
       if (e is ApiException && e.isUnauthorized) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
         if (!mounted) return;
@@ -357,7 +357,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
     );
     if (confirm == true) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       if (mounted) {
@@ -445,7 +445,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
 
       if (e is ApiException && e.isUnauthorized) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
         if (!mounted) return;
@@ -771,7 +771,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
       if (!mounted) return;
       if (e is ApiException && e.isUnauthorized) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
         if (!mounted) return;
@@ -1237,7 +1237,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
       if (!mounted) return;
       if (e is ApiException && e.isUnauthorized) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
         if (!mounted) return;

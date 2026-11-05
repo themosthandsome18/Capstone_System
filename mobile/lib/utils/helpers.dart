@@ -8,6 +8,21 @@ const apiBaseUrl = String.fromEnvironment(
 const appModule = String.fromEnvironment('APP_MODULE', defaultValue: 'tourism');
 const sanitationReportDraftsKey = 'sanitation_report_drafts';
 const staffAuthTokenKey = 'staff_auth_token';
+
+/// Token-free invalidation signal. All staff credential writes use this boundary.
+final staffSessionRevision = ValueNotifier<int>(0);
+
+Future<bool> setStaffSessionToken(SharedPreferences prefs, String? token) {
+  final previous = prefs.getString(staffAuthTokenKey);
+  // SharedPreferences updates its in-process cache synchronously.
+  final write = token == null
+      ? prefs.remove(staffAuthTokenKey)
+      : prefs.setString(staffAuthTokenKey, token);
+  if (previous != token || token == null) {
+    staffSessionRevision.value++;
+  }
+  return write;
+}
 const staffAuthRoleKey = 'staff_auth_role';
 const staffAuthUsernameKey = 'staff_auth_username';
 const establishmentDataKey = 'establishment_data';

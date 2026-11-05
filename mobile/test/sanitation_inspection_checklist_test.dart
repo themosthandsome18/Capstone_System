@@ -77,6 +77,17 @@ class FakeSanitationApi extends TourismApi {
     'user': {'display_name': 'Juan Dela Cruz', 'username': 'jdelacruz'},
   };
 
+  @override
+  Future<InspectionRequirementsResult> fetchInspectionRequirements(int id, {String? expectedSessionToken}) async {
+    return InspectionRequirementsResult.loaded(InspectionRequirementsContext.fromResponses(
+      id, {'id': id, 'business_type': id == 702 ? 8 : 24, 'permit_size': 'sp'}, [
+        {'id': id == 702 ? 8 : 24, 'requirements': id == 702 ? [
+          {'id': 1, 'business_type': 8, 'permit_size': 'sp', 'requirement_name': 'Water Potability Certificate', 'is_required': true},
+          {'id': 2, 'business_type': 8, 'permit_size': 'sp', 'requirement_name': 'Health Certificate of Staff', 'is_required': true},
+        ] : []},
+      ]));
+  }
+
   List<InspectionChecklistDraft>? sentChecklist;
   String? sentStatus;
 
@@ -176,7 +187,7 @@ void main() {
     ) async {
       await pumpInspectionForm(tester, fishballCart);
 
-      expect(find.text('No requirements configured yet.'), findsOneWidget);
+      expect(find.textContaining('No requirements are configured for this classification/permit size.'), findsOneWidget);
       expect(find.byType(CheckboxListTile), findsNothing);
       for (final fabricated in oldFabricatedChecklist) {
         expect(find.text(fabricated), findsNothing);
@@ -223,7 +234,7 @@ void main() {
     ) async {
       final api = await pumpInspectionForm(tester, aquaStation);
 
-      expect(find.text('No requirements configured yet.'), findsNothing);
+      expect(find.textContaining('No requirements are configured for this classification/permit size.'), findsNothing);
       expect(find.text('Water Potability Certificate'), findsOneWidget);
       expect(find.text('Health Certificate of Staff'), findsOneWidget);
 

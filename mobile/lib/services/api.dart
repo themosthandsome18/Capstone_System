@@ -1,5 +1,9 @@
 part of '../main.dart';
 
+class _InspectionRequirementsSessionChanged implements Exception {
+  const _InspectionRequirementsSessionChanged();
+}
+
 /// What the user is told when the bootstrap fails. They see two answers only:
 /// the connection (timeout, network) or the server (a bad status, or an
 /// answer the app cannot read).
@@ -206,9 +210,136 @@ class TourismApi {
     );
   }
 
+  /// Reads the actual record and uncached staff catalogue; never falls back to
+  /// public bootstrap data or interprets a failed request as empty configuration.
+  Future<InspectionRequirementsResult> fetchInspectionRequirements(
+    int establishmentId, {
+    String? expectedSessionToken,
+  }) async {
+    if (establishmentId <= 0) {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.contract,
+      );
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final active = prefs.getString(staffAuthTokenKey);
+      if (active == null || active.isEmpty) {
+        return const InspectionRequirementsResult.failed(
+          InspectionRequirementsFailure.unauthenticated,
+          httpStatus: 401,
+        );
+      }
+      final token = expectedSessionToken ?? active;
+      void checkSession() {
+        if (token.isEmpty || prefs.getString(staffAuthTokenKey) != token) {
+          throw const _InspectionRequirementsSessionChanged();
+        }
+      }
+
+      Future<Object?> getJson(String path) async {
+        checkSession();
+        final response = await http
+            .get(
+              Uri.parse('$apiBaseUrl$path'),
+              headers: {'Authorization': 'Token $token'},
+            )
+            .timeout(_requestTimeout);
+        checkSession();
+        if (response.statusCode != 200) {
+          throw ApiException(
+            statusCode: response.statusCode,
+            message: 'Requirements retrieval failed.',
+          );
+        }
+        return jsonDecode(response.body);
+      }
+
+      final detail = await getJson(
+        '/sanitation/establishments/$establishmentId/',
+      );
+      // Fail malformed establishment detail before making the catalogue request.
+      if (detail is! Map ||
+          detail['id'] != establishmentId ||
+          detail['id'] is! int ||
+          detail['business_type'] is! int ||
+          (detail['business_type'] as int) <= 0 ||
+          !['sp', 'large'].contains(detail['permit_size'])) {
+        throw const FormatException(
+          'Invalid establishment requirements context.',
+        );
+      }
+      final catalogue = await getJson('/sanitation/business-types/');
+      checkSession();
+      return InspectionRequirementsResult.loaded(
+        InspectionRequirementsContext.fromResponses(
+          establishmentId,
+          detail,
+          catalogue,
+        ),
+      );
+    } on _InspectionRequirementsSessionChanged {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.sessionChanged,
+      );
+    } on ApiException catch (error) {
+      final failure = switch (error.statusCode) {
+        401 => InspectionRequirementsFailure.unauthenticated,
+        403 => InspectionRequirementsFailure.forbidden,
+        404 => InspectionRequirementsFailure.notFound,
+        _ => InspectionRequirementsFailure.retrieval,
+      };
+      return InspectionRequirementsResult.failed(
+        failure,
+        httpStatus: error.statusCode,
+      );
+    } on FormatException {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.contract,
+      );
+    } catch (_) {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.retrieval,
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async {
     return _getWithQuery('/sanitation/complaints/', {'status': 'pending'},
         headers: await _sanitationDashboardHeaders());
+  }
+
+  /// Unfiltered staff endpoint: rows contains the complete dataset, not the
+  /// mobile bootstrap's 50 open reports. Fail closed if that contract changes.
+  Future<List<SanitationMapReport>> fetchSanitationMapReports({required String expectedSessionToken}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final revision = staffSessionRevision.value;
+    void checkSession() {
+      if (expectedSessionToken.isEmpty || prefs.getString(staffAuthTokenKey) != expectedSessionToken ||
+          revision != staffSessionRevision.value) {
+        throw const ApiException(statusCode: 409, message: 'Staff session changed.');
+      }
+    }
+    checkSession();
+    final response = await http.get(Uri.parse('$apiBaseUrl/sanitation/complaints/'),
+      headers: {'Authorization': 'Token $expectedSessionToken'}).timeout(_requestTimeout);
+    checkSession();
+    if (response.statusCode != 200) {
+      throw ApiException(statusCode: response.statusCode, message: 'Reports retrieval failed.');
+    }
+    final data = jsonDecode(response.body);
+    if (data is! Map || data['rows'] is! List || data['summary'] is! Map ||
+        data['summary']['total'] is! int || data['summary']['total'] != (data['rows'] as List).length ||
+        data['next'] != null) {
+      throw const FormatException('Report data contract is incomplete.');
+    }
+    final ids = <int>{};
+    return List.unmodifiable((data['rows'] as List).map((row) {
+      if (row is! Map) throw const FormatException('Report data contract is invalid.');
+      final report = SanitationMapReport.fromJson(Map<String,dynamic>.from(row));
+      if (!ids.add(report.id)) throw const FormatException('Report data contract contains duplicate IDs.');
+      return report;
+    }));
   }
 
   /// This endpoint returns an uncapped JSON array, unlike the shared object decoder.

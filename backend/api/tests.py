@@ -50,6 +50,7 @@ from .models import (
     SanitaryComplaint,
     SanitaryEstablishment,
     SanitaryInspection,
+    SanitaryRequirement,
     TouristRecord,
     TravelMode,
     UserProfile,
@@ -938,6 +939,9 @@ class NotificationViolationTriggerTests(TestCase):
         )
 
     def test_inspection_violation_triggers_notifications_and_prevents_duplicates(self):
+        for name in ("Sanitary Permit", "Pest Control"):
+            SanitaryRequirement.objects.create(business_type=self.btype,
+                permit_size=self.establishment.permit_size, requirement_name=name)
         # 1. Submit a SanitaryInspection with status_after_inspection="violation" via the actual view
         response = self.client.post(
             "/api/sanitation/inspections/",
@@ -1742,6 +1746,8 @@ class MobileSanitationAuthTests(TestCase):
             permit_status="active",
         )
 
+        SanitaryRequirement.objects.create(business_type=self.establishment.business_type,
+            permit_size=self.establishment.permit_size, requirement_name="Sanitary Permit")
         self.inspection_payload = {
             "establishment": self.establishment.id,
             "inspector_name": "Inspector Auth",
@@ -9553,6 +9559,8 @@ class InspectionDraftIsolationTests(TestCase):
         )
 
     def violation_payload(self, is_draft):
+        SanitaryRequirement.objects.get_or_create(business_type=self.btype,
+            permit_size=self.establishment.permit_size, requirement_name="Pest Control")
         return {
             "establishment": self.establishment.id,
             "inspector_name": "Inspector Test",
