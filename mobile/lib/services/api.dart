@@ -309,6 +309,39 @@ class TourismApi {
         headers: await _sanitationDashboardHeaders());
   }
 
+  /// Unfiltered staff endpoint: rows contains the complete dataset, not the
+  /// mobile bootstrap's 50 open reports. Fail closed if that contract changes.
+  Future<List<SanitationMapReport>> fetchSanitationMapReports({required String expectedSessionToken}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final revision = staffSessionRevision.value;
+    void checkSession() {
+      if (expectedSessionToken.isEmpty || prefs.getString(staffAuthTokenKey) != expectedSessionToken ||
+          revision != staffSessionRevision.value) {
+        throw const ApiException(statusCode: 409, message: 'Staff session changed.');
+      }
+    }
+    checkSession();
+    final response = await http.get(Uri.parse('$apiBaseUrl/sanitation/complaints/'),
+      headers: {'Authorization': 'Token $expectedSessionToken'}).timeout(_requestTimeout);
+    checkSession();
+    if (response.statusCode != 200) {
+      throw ApiException(statusCode: response.statusCode, message: 'Reports retrieval failed.');
+    }
+    final data = jsonDecode(response.body);
+    if (data is! Map || data['rows'] is! List || data['summary'] is! Map ||
+        data['summary']['total'] is! int || data['summary']['total'] != (data['rows'] as List).length ||
+        data['next'] != null) {
+      throw const FormatException('Report data contract is incomplete.');
+    }
+    final ids = <int>{};
+    return List.unmodifiable((data['rows'] as List).map((row) {
+      if (row is! Map) throw const FormatException('Report data contract is invalid.');
+      final report = SanitationMapReport.fromJson(Map<String,dynamic>.from(row));
+      if (!ids.add(report.id)) throw const FormatException('Report data contract contains duplicate IDs.');
+      return report;
+    }));
+  }
+
   /// This endpoint returns an uncapped JSON array, unlike the shared object decoder.
   Future<List<Map<String, dynamic>>> fetchSanitationDashboardInspections() async {
     final response = await http.get(

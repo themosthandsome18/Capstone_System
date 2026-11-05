@@ -567,7 +567,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         final prefs = _sessionPrefs!;
         // Clear only the validated session before yielding, as in inspections.
         await Future.wait([
-          prefs.remove(staffAuthTokenKey),
+          setStaffSessionToken(prefs, null),
           prefs.remove(staffAuthRoleKey),
           prefs.remove(staffAuthUsernameKey),
         ]);
@@ -2002,7 +2002,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     if (_sessionExpired) return;
     _sessionExpired = true;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(staffAuthTokenKey);
+    await setStaffSessionToken(prefs, null);
     await prefs.remove(staffAuthRoleKey);
     await prefs.remove(staffAuthUsernameKey);
     if (!mounted) return;
@@ -2205,6 +2205,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         initialPermitStatus: _establishmentFilterPermit,
       ),
       SanitationMapPage(
+        api: widget.api,
         establishments: _bootstrap.establishments,
         householdRecords: _bootstrap.householdRecords,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
@@ -3022,8 +3023,10 @@ class SanitationMapPage extends StatefulWidget {
     required this.onRefresh,
     required this.refreshing,
     this.onEditHousehold,
+    this.api,
   });
 
+  final TourismApi? api;
   final List<SanitationEstablishment> establishments;
   final List<HouseholdSanitationItem> householdRecords;
   final VoidCallback? onOpenMenu;
@@ -3044,6 +3047,8 @@ class BarangayPolygon {
 
 class _SanitationMapPageState extends State<SanitationMapPage> {
   bool _showHouseholds = false;
+  bool _showReports = false;
+  final _reportsKey = GlobalKey<_SanitationReportsMapState>();
   
   List<BarangayPolygon> _barangayPolygons = [];
   bool _isLoadingGeoJson = true;
@@ -3223,21 +3228,30 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
         SanitationTopBar(
           title: 'GIS Map',
           onMenuTap: widget.onOpenMenu,
-          onRefresh: widget.onRefresh,
+          onRefresh: _showReports ? () => _reportsKey.currentState?.reload() ?? Future<void>.value() : widget.onRefresh,
           refreshing: widget.refreshing,
         ),
+        Wrap(spacing: 8, runSpacing: 8, children: [
         SegmentedButton<bool>(
+          emptySelectionAllowed: true,
           segments: const [
             ButtonSegment(value: false, label: Text('Establishments')),
             ButtonSegment(value: true, label: Text('Households')),
           ],
-          selected: {_showHouseholds},
+          selected: _showReports ? <bool>{} : {_showHouseholds},
           onSelectionChanged: (value) =>
-              setState(() {
+              value.isEmpty ? null : setState(() {
+                _showReports = false;
                 _showHouseholds = value.first;
                 _selectedBarangay = null;
               }),
         ),
+        ChoiceChip(label: const Text('Community Reports'), selected: _showReports,
+          onSelected: (_) => setState(() { _showReports = true; _selectedBarangay = null; })),
+        ]),
+        if (_showReports)
+          SanitationReportsMap(key: _reportsKey, api: widget.api ?? const TourismApi())
+        else ...[
         if (_selectedBarangay != null) Align(
           alignment: Alignment.centerLeft,
           child: InputChip(
@@ -3396,6 +3410,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                   statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
               ),
+        ],
       ],
     );
   }
@@ -4805,7 +4820,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     final prefs = _identityPrefs!;
     // Clear this session synchronously in the preference cache before yielding.
     await Future.wait([
-      prefs.remove(staffAuthTokenKey),
+      setStaffSessionToken(prefs, null),
       prefs.remove(staffAuthRoleKey),
       prefs.remove(staffAuthUsernameKey),
     ]);
@@ -5241,7 +5256,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       final token = prefs.getString(staffAuthTokenKey);
       final role = prefs.getString(staffAuthRoleKey) ?? '';
       if (role == 'establishment') {
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
       } else if (token != null && token.isNotEmpty) {
@@ -5724,7 +5739,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(staffAuthTokenKey, token);
+      await setStaffSessionToken(prefs, token);
       await prefs.setString(staffAuthRoleKey, role);
       await prefs.setString(staffAuthUsernameKey, username);
 
@@ -5744,7 +5759,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _signOut() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);
@@ -5761,7 +5776,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _handleSessionExpired() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);

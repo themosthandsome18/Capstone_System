@@ -806,6 +806,42 @@ String complaintLocationLine(SanitationComplaintItem item) {
   return address.isEmpty ? item.barangay : '${item.barangay} · $address';
 }
 
+/// Map-only projection. Private reporter/body/photo fields are never retained.
+class SanitationMapReport {
+  const SanitationMapReport({required this.id, required this.reference,
+    required this.category, required this.status, required this.locationSource,
+    required this.mapLocationEligible, this.latitude, this.longitude});
+  final int id;
+  final String reference, category, status, locationSource;
+  final bool mapLocationEligible;
+  final double? latitude, longitude;
+
+  factory SanitationMapReport.fromJson(Map<String, dynamic> row) {
+    if (row['id'] is! int || (row['id'] as int) <= 0 ||
+        row['complaint_id'] is! String || (row['complaint_id'] as String).trim().isEmpty ||
+        row['location_source'] is! String || row['map_location_eligible'] is! bool ||
+        !row.containsKey('latitude') || !row.containsKey('longitude')) {
+      throw const FormatException('Report data contract is invalid.');
+    }
+    return SanitationMapReport(id: row['id'] as int, reference: row['complaint_id'] as String,
+      category: row['category'] is String ? row['category'] as String : '',
+      status: row['status'] is String ? row['status'] as String : '',
+      locationSource: row['location_source'] as String,
+      mapLocationEligible: row['map_location_eligible'] as bool,
+      latitude: row['latitude'] is num ? (row['latitude'] as num).toDouble() : null,
+      longitude: row['longitude'] is num ? (row['longitude'] as num).toDouble() : null);
+  }
+  bool get canMap => mapLocationEligible &&
+    const {'reporter_provided','staff_provided'}.contains(locationSource) &&
+    latitude != null && longitude != null && latitude!.isFinite && longitude!.isFinite &&
+    latitude!.abs() >= 0.001 && latitude!.abs() <= 90 &&
+    longitude!.abs() >= 0.001 && longitude!.abs() <= 180;
+  String get provenanceLabel => locationSource == 'reporter_provided'
+    ? 'Reporter-provided location' : 'Staff-provided location';
+  String get statusLabel => const {'pending':'Pending','investigating':'Investigating',
+    'resolved':'Resolved','rejected':'Rejected'}[status] ?? 'Status unavailable';
+}
+
 class SanitationComplaintItem {
   const SanitationComplaintItem({
     required this.reference,
