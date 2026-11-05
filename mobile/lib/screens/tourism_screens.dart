@@ -3734,6 +3734,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           controller: _contact,
           label: 'Contact number *',
           keyboardType: TextInputType.phone,
+          prefixText: '$contactCountryCode ',
+          hintText: '9XXXXXXXXX',
+          maxLength: contactDigitCount,
+          inputFormatters: const [TenDigitContactFormatter()],
         ),
         AppTextField(
           controller: _email,
@@ -4004,7 +4008,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         firstName: firstName,
         lastName: lastName,
         fullName: fullName,
-        contactNumber: _contact.text.trim(),
+        contactNumber: contactWithCountryCode(_contact.text),
         email: _email.text.trim(),
         consentConfirmed: _consentConfirmed,
         arrivalDate: isoDate(_arrivalDate),
@@ -4073,6 +4077,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     if (firstName.isEmpty) return 'First name is required.';
     if (lastName.isEmpty) return 'Last name is required.';
     if (contact.isEmpty) return 'Contact number is required.';
+    if (contactDigits(contact).length != contactDigitCount) {
+      return contactNumberLengthMessage;
+    }
     if (email.isNotEmpty && !email.contains('@')) {
       return 'Enter a valid email address or leave email blank.';
     }

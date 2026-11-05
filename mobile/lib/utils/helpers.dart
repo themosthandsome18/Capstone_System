@@ -534,3 +534,45 @@ String getImageKeyFromName(String name) {
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
 }
+
+/// The Contact Number is `+63` and exactly 10 digits, the same as the admin's
+/// Add Record form. These take whatever was typed, pasted or filled in and
+/// return only the 10 digits that go in the box.
+const contactDigitCount = 10;
+const contactCountryCode = '+63';
+
+String contactDigits(String raw) {
+  var text = raw.trim();
+  if (text.startsWith(contactCountryCode)) {
+    text = text.substring(contactCountryCode.length);
+  } else if (text.startsWith('0')) {
+    text = text.substring(1);
+  }
+  final digits = text.replaceAll(RegExp(r'\D'), '');
+  return digits.length > contactDigitCount
+      ? digits.substring(0, contactDigitCount)
+      : digits;
+}
+
+/// What is sent and saved: `+63` and the 10 digits, e.g. `+639171234567`.
+String contactWithCountryCode(String raw) =>
+    '$contactCountryCode${contactDigits(raw)}';
+
+const contactNumberLengthMessage =
+    'Contact Number must be exactly 10 digits (after +63).';
+
+class TenDigitContactFormatter extends TextInputFormatter {
+  const TenDigitContactFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = contactDigits(newValue.text);
+    return TextEditingValue(
+      text: digits,
+      selection: TextSelection.collapsed(offset: digits.length),
+    );
+  }
+}
