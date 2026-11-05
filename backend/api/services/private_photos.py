@@ -1,4 +1,4 @@
-"""Read-only private storage. No default_storage, public URLs or caller URLs."""
+"""Explicit private storage. No default_storage, public URLs or caller URLs."""
 import re
 from contextlib import suppress
 from urllib.parse import urlsplit
@@ -92,6 +92,42 @@ class PrivatePhotoStore:
             if body is not None:
                 with suppress(BotoCoreError, OSError):
                     body.close()
+            if client is not None:
+                with suppress(BotoCoreError, OSError):
+                    client.close()
+
+    def write(self, key, data):
+        validate_key(key)
+        signature = b'\x89PNG\r\n\x1a\n' if key.endswith('.png') else b'\xff\xd8\xff'
+        if not isinstance(data, bytes) or not data or len(data) > MAX_BYTES or not data.startswith(signature):
+            raise PrivatePhotoUnavailable()
+        client = None
+        try:
+            client = self._client()
+            client.put_object(
+                Bucket=self.options['bucket'], Key=key, Body=data,
+                ContentType='image/png' if key.endswith('.png') else 'image/jpeg',
+                CacheControl='private, no-store',
+            )
+        except (BotoCoreError, ClientError, OSError, ValueError, TypeError):
+            raise PrivatePhotoUnavailable() from None
+        finally:
+            if client is not None:
+                with suppress(BotoCoreError, OSError):
+                    client.close()
+
+    def delete(self, key):
+        validate_key(key)
+        client = None
+        try:
+            client = self._client()
+            client.delete_object(Bucket=self.options['bucket'], Key=key)
+        except ClientError as error:
+            if error.response.get('Error', {}).get('Code') not in ('NoSuchKey', 'NotFound', '404'):
+                raise PrivatePhotoUnavailable() from None
+        except (BotoCoreError, OSError, ValueError, TypeError):
+            raise PrivatePhotoUnavailable() from None
+        finally:
             if client is not None:
                 with suppress(BotoCoreError, OSError):
                     client.close()

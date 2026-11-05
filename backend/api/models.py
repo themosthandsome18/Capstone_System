@@ -1249,6 +1249,26 @@ class HouseholdSanitationRecord(models.Model):
 
 
 # ============================================================
+class HouseholdFrontPhoto(models.Model):
+    """Private server-owned linkage, separate from ordinary household writes."""
+    household = models.OneToOneField(
+        HouseholdSanitationRecord, on_delete=models.CASCADE, related_name='front_photo',
+    )
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class HouseholdPhotoCleanup(models.Model):
+    """Durable object receipt; never exposed by a household serializer.
+
+    Created before upload. ready=False receipts require operator reconciliation
+    after an interrupted process; they must not be deleted while upload is live.
+    """
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    ready = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 # NOTIFICATION MODULE MODELS
 # ============================================================
 

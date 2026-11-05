@@ -1,4 +1,5 @@
 from django.urls import path
+from .views.private_photos import household_front_photo
 
 from .auth_views import (
     current_user_view,
@@ -219,6 +220,7 @@ urlpatterns = [
     path("households/dashboard/", household_dashboard_data),
     path("households/records/", household_record_list),
     path("households/records/<int:household_id>/", household_record_detail),
+    path("households/records/<int:household_id>/front-photo/", household_front_photo),
 
     # Notification routes
     path("notifications/", notification_list),
