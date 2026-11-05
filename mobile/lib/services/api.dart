@@ -1,5 +1,9 @@
 part of '../main.dart';
 
+class _InspectionRequirementsSessionChanged implements Exception {
+  const _InspectionRequirementsSessionChanged();
+}
+
 /// What the user is told when the bootstrap fails. They see two answers only:
 /// the connection (timeout, network) or the server (a bad status, or an
 /// answer the app cannot read).
@@ -204,6 +208,100 @@ class TourismApi {
       const {},
       headers: {'Authorization': 'Token $token'},
     );
+  }
+
+  /// Reads the actual record and uncached staff catalogue; never falls back to
+  /// public bootstrap data or interprets a failed request as empty configuration.
+  Future<InspectionRequirementsResult> fetchInspectionRequirements(
+    int establishmentId, {
+    String? expectedSessionToken,
+  }) async {
+    if (establishmentId <= 0) {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.contract,
+      );
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final active = prefs.getString(staffAuthTokenKey);
+      if (active == null || active.isEmpty) {
+        return const InspectionRequirementsResult.failed(
+          InspectionRequirementsFailure.unauthenticated,
+          httpStatus: 401,
+        );
+      }
+      final token = expectedSessionToken ?? active;
+      void checkSession() {
+        if (token.isEmpty || prefs.getString(staffAuthTokenKey) != token) {
+          throw const _InspectionRequirementsSessionChanged();
+        }
+      }
+
+      Future<Object?> getJson(String path) async {
+        checkSession();
+        final response = await http
+            .get(
+              Uri.parse('$apiBaseUrl$path'),
+              headers: {'Authorization': 'Token $token'},
+            )
+            .timeout(_requestTimeout);
+        checkSession();
+        if (response.statusCode != 200) {
+          throw ApiException(
+            statusCode: response.statusCode,
+            message: 'Requirements retrieval failed.',
+          );
+        }
+        return jsonDecode(response.body);
+      }
+
+      final detail = await getJson(
+        '/sanitation/establishments/$establishmentId/',
+      );
+      // Fail malformed establishment detail before making the catalogue request.
+      if (detail is! Map ||
+          detail['id'] != establishmentId ||
+          detail['id'] is! int ||
+          detail['business_type'] is! int ||
+          (detail['business_type'] as int) <= 0 ||
+          !['sp', 'large'].contains(detail['permit_size'])) {
+        throw const FormatException(
+          'Invalid establishment requirements context.',
+        );
+      }
+      final catalogue = await getJson('/sanitation/business-types/');
+      checkSession();
+      return InspectionRequirementsResult.loaded(
+        InspectionRequirementsContext.fromResponses(
+          establishmentId,
+          detail,
+          catalogue,
+        ),
+      );
+    } on _InspectionRequirementsSessionChanged {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.sessionChanged,
+      );
+    } on ApiException catch (error) {
+      final failure = switch (error.statusCode) {
+        401 => InspectionRequirementsFailure.unauthenticated,
+        403 => InspectionRequirementsFailure.forbidden,
+        404 => InspectionRequirementsFailure.notFound,
+        _ => InspectionRequirementsFailure.retrieval,
+      };
+      return InspectionRequirementsResult.failed(
+        failure,
+        httpStatus: error.statusCode,
+      );
+    } on FormatException {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.contract,
+      );
+    } catch (_) {
+      return const InspectionRequirementsResult.failed(
+        InspectionRequirementsFailure.retrieval,
+      );
+    }
   }
 
   Future<Map<String, dynamic>> fetchSanitationPendingComplaints() async {

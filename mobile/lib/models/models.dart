@@ -1,5 +1,121 @@
 part of '../main.dart';
 
+enum InspectionRequirementsStatus { ready, unconfigured, failure }
+
+enum InspectionRequirementsFailure {
+  unauthenticated,
+  forbidden,
+  notFound,
+  sessionChanged,
+  contract,
+  retrieval,
+}
+
+/// Interim catalogue verification data, not an on-site scoring definition.
+class InspectionRequirement {
+  const InspectionRequirement({
+    required this.id,
+    required this.businessTypeId,
+    required this.permitSize,
+    required this.requirementName,
+    required this.isRequired,
+  });
+  final int id;
+  final int businessTypeId;
+  final String permitSize;
+  final String requirementName;
+  final bool isRequired;
+}
+
+class InspectionRequirementsContext {
+  InspectionRequirementsContext._(
+    this.establishmentId,
+    this.businessTypeId,
+    this.permitSize,
+    List<InspectionRequirement> items,
+  ) : requirements = List.unmodifiable(items);
+  final int establishmentId;
+  final int businessTypeId;
+  final String permitSize;
+  final List<InspectionRequirement> requirements;
+
+  /// Strict only at this new boundary: legacy bootstrap models remain unchanged.
+  factory InspectionRequirementsContext.fromResponses(
+    int requestedId,
+    Object? detail,
+    Object? catalogue,
+  ) {
+    bool positive(Object? v) => v is int && v > 0;
+    bool coverage(Object? v) => v == 'sp' || v == 'large';
+    Never invalid() =>
+        throw const FormatException('Invalid requirements contract.');
+    if (detail is! Map ||
+        detail['id'] != requestedId ||
+        !positive(detail['id']) ||
+        !positive(detail['business_type']) ||
+        !coverage(detail['permit_size']) ||
+        catalogue is! List) {
+      invalid();
+    }
+    final typeId = detail['business_type'] as int;
+    final size = detail['permit_size'] as String;
+    final types = <int>{};
+    Map? selected;
+    for (final row in catalogue) {
+      if (row is! Map || !positive(row['id']) || !types.add(row['id'] as int)) {
+        invalid();
+      }
+      if (row['id'] == typeId) selected = row;
+    }
+    if (selected == null || selected['requirements'] is! List) invalid();
+    final ids = <int>{};
+    final items = <InspectionRequirement>[];
+    for (final row in selected['requirements'] as List) {
+      if (row is! Map ||
+          !positive(row['id']) ||
+          !ids.add(row['id'] as int) ||
+          row['business_type'] != typeId ||
+          row['business_type'] is! int ||
+          !coverage(row['permit_size']) ||
+          row['requirement_name'] is! String ||
+          (row['requirement_name'] as String).trim().isEmpty ||
+          row['is_required'] is! bool) {
+        invalid();
+      }
+      if (row['permit_size'] == size) {
+        items.add(
+          InspectionRequirement(
+            id: row['id'] as int,
+            businessTypeId: typeId,
+            permitSize: size,
+            requirementName: row['requirement_name'] as String,
+            isRequired: row['is_required'] as bool,
+          ),
+        );
+      }
+    }
+    return InspectionRequirementsContext._(requestedId, typeId, size, items);
+  }
+}
+
+class InspectionRequirementsResult {
+  InspectionRequirementsResult.loaded(InspectionRequirementsContext value)
+    : status = value.requirements.isEmpty
+          ? InspectionRequirementsStatus.unconfigured
+          : InspectionRequirementsStatus.ready,
+      context = value,
+      failure = null,
+      httpStatus = null;
+  const InspectionRequirementsResult.failed(this.failure, {this.httpStatus})
+    : status = InspectionRequirementsStatus.failure,
+      context = null;
+  final InspectionRequirementsStatus status;
+  final InspectionRequirementsContext? context;
+  final InspectionRequirementsFailure? failure;
+  final int? httpStatus;
+}
+
+
 class MobileBootstrap {
   const MobileBootstrap({
     required this.destinations,
