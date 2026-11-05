@@ -83,6 +83,7 @@ void main() {
     final stored = storedHousehold();
     final requests = <http.Request>[];
     final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       requests.add(request);
       return http.Response(jsonEncode({...stored, 'address': 'Changed address'}), 200);
     });
@@ -104,6 +105,7 @@ void main() {
     final location = UnusedHouseholdLocation();
     var requests = 0;
     final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       requests++;
       return http.Response('{}', 200);
     });
@@ -166,6 +168,7 @@ void main() {
         final stored = {...storedHousehold(), 'water_source': source};
         http.Request? sent;
         final client = MockClient((request) async {
+          if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           sent = request;
           return http.Response(
             jsonEncode({...stored, 'address': 'Changed address'}),
@@ -192,6 +195,7 @@ void main() {
     (tester) async {
       http.Request? sent;
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         sent = request;
         return http.Response(jsonEncode(storedHousehold()), 200);
       });
@@ -214,6 +218,7 @@ void main() {
   ) async {
     http.Request? sent;
     final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       sent = request;
       return http.Response(jsonEncode(storedHousehold()), 200);
     });
@@ -236,6 +241,7 @@ void main() {
     ) async {
       http.Request? sent;
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         sent = request;
         return http.Response(jsonEncode(storedHousehold()), 200);
       });
@@ -257,6 +263,7 @@ void main() {
     (tester) async {
       http.Request? sent;
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         sent = request;
         return http.Response(jsonEncode(storedHousehold()), 200);
       });
@@ -280,6 +287,7 @@ void main() {
     (tester) async {
       var calls = 0;
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         calls++;
         return http.Response(jsonEncode(storedHousehold()), 200);
       });

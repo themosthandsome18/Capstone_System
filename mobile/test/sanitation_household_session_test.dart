@@ -58,6 +58,7 @@ void main() {
         (tester) async {
           final requests = <http.Request>[];
           final client = MockClient((r) async {
+            if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
             requests.add(r);
             return http.Response(jsonEncode(storedHousehold()), 200);
           });
@@ -111,6 +112,7 @@ void main() {
       (tester) async {
         final requests = <http.Request>[];
         final client = MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests.add(r);
           return http.Response(jsonEncode(storedHousehold()), 200);
         });
@@ -136,6 +138,7 @@ void main() {
   ) async {
     var calls = 0;
     final client = MockClient((r) async {
+      if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       calls++;
       return http.Response('{}', 200);
     });
@@ -165,6 +168,7 @@ void main() {
       () async {
         final requests = <http.Request>[];
         final client = MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests.add(r);
           return http.Response('{}', 200);
         });
@@ -215,6 +219,7 @@ void main() {
         final prefs = await SharedPreferences.getInstance();
         final requests = <http.Request>[];
         final client = MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests.add(r);
           await prefs.setString(staffAuthTokenKey, 'session-B');
           return http.Response(jsonEncode(storedHousehold()), status);

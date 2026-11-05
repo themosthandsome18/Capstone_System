@@ -45,6 +45,7 @@ part 'models/app_contacts.dart';
 part 'models/boat_capacity_fares.dart';
 part 'services/api.dart';
 part 'widgets/widgets.dart';
+part 'widgets/household_front_photo.dart';
 part 'widgets/tourism_loading_screen.dart';
 part 'screens/common_screens.dart';
 part 'screens/tourism_screens.dart';

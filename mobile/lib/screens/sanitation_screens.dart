@@ -319,6 +319,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 '$_editIncompatibility. No changes have been sent. Ask the sanitation office to review this record.',
             warning: true,
           ),
+          if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+            HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
         ],
       );
     }
@@ -331,6 +333,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         onPressed: () => Navigator.of(context).pop(),
       ),
       children: [
+        if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+          HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
         AppTextField(
           controller: _head,
           label: 'Household head',
@@ -567,7 +571,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         final prefs = _sessionPrefs!;
         // Clear only the validated session before yielding, as in inspections.
         await Future.wait([
-          prefs.remove(staffAuthTokenKey),
+          setStaffSessionToken(prefs, null),
           prefs.remove(staffAuthRoleKey),
           prefs.remove(staffAuthUsernameKey),
         ]);
@@ -2002,7 +2006,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     if (_sessionExpired) return;
     _sessionExpired = true;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(staffAuthTokenKey);
+    await setStaffSessionToken(prefs, null);
     await prefs.remove(staffAuthRoleKey);
     await prefs.remove(staffAuthUsernameKey);
     if (!mounted) return;
@@ -4717,7 +4721,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     final prefs = _identityPrefs!;
     // Clear this session synchronously in the preference cache before yielding.
     await Future.wait([
-      prefs.remove(staffAuthTokenKey),
+      setStaffSessionToken(prefs, null),
       prefs.remove(staffAuthRoleKey),
       prefs.remove(staffAuthUsernameKey),
     ]);
@@ -5310,7 +5314,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       final token = prefs.getString(staffAuthTokenKey);
       final role = prefs.getString(staffAuthRoleKey) ?? '';
       if (role == 'establishment') {
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
       } else if (token != null && token.isNotEmpty) {
@@ -5793,7 +5797,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(staffAuthTokenKey, token);
+      await setStaffSessionToken(prefs, token);
       await prefs.setString(staffAuthRoleKey, role);
       await prefs.setString(staffAuthUsernameKey, username);
 
@@ -5813,7 +5817,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _signOut() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);
@@ -5830,7 +5834,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _handleSessionExpired() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);
