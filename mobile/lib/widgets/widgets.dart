@@ -2202,27 +2202,47 @@ class _PlanVisitFormState extends State<PlanVisitForm> {
   }
 }
 
+/// "View on map" on Destination Details. A real button (a ListTile with onTap: reached by the keyboard, activated by Enter and Space, and
+/// announced as a button) when the destination HAS a place on the map and a way to show it; otherwise it is not a button at all and says
+/// why, so it is never something that looks pressable and does nothing.
 class LocationCard extends StatelessWidget {
-  const LocationCard({super.key, required this.destination});
+  const LocationCard({super.key, required this.destination, this.onViewOnMap});
 
   final Destination destination;
 
+  /// What pressing does. null: nothing to press (the card only shows where the destination is).
+  final VoidCallback? onViewOnMap;
+
   @override
   Widget build(BuildContext context) {
+    final pressable = onViewOnMap != null && destination.hasCoordinates;
     return Card(
       elevation: 0,
       color: Colors.white,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: context.brand.tint,
-          child: Icon(Icons.navigation_outlined, color: context.brand.primary),
+      child: Semantics(
+        button: pressable,
+        enabled: pressable,
+        label: pressable ? 'View ${destination.name} on the map' : null,
+        onTap: pressable ? onViewOnMap : null,
+        excludeSemantics: pressable,
+        child: ListTile(
+          enabled: pressable,
+          onTap: pressable ? onViewOnMap : null,
+          leading: CircleAvatar(
+            backgroundColor: context.brand.tint,
+            child: Icon(Icons.navigation_outlined, color: context.brand.primary),
+          ),
+          title: Text(
+            destination.hasCoordinates ? 'View on map' : 'Not on the map yet',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          subtitle: Text(
+            destination.hasCoordinates
+                ? '${destination.latitude}, ${destination.longitude}'
+                : 'This destination has no map location yet.',
+          ),
+          trailing: pressable ? const Icon(Icons.chevron_right) : null,
         ),
-        title: const Text(
-          'View on map',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text('${destination.latitude}, ${destination.longitude}'),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

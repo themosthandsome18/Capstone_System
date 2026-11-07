@@ -20,6 +20,10 @@ class MobileShell extends StatefulWidget {
 
 class _MobileShellState extends State<MobileShell> {
   int _index = 0;
+
+  /// Set by "View on map" on Destination Details; the Map tab centres on it and opens its box. It is cleared when another tab is chosen, so
+  /// that the Map tab does not go back to it every time it is opened.
+  MapFocusRequest? _mapFocus;
   final List<MobileVisitReceipt> _visitHistory = [];
   final List<MobileFeedbackReceipt> _feedbackHistory = [];
   MobileUserProfile _profile = MobileUserProfile.guest();
@@ -58,6 +62,7 @@ class _MobileShellState extends State<MobileShell> {
         onRetry: widget.onRetry,
         savedNotice: savedNotice,
         onOpenDestination: _openDestination,
+        focus: _mapFocus,
       ),
       VisitPlannerPage(
         registerEnabled: widget.state.isLoaded,
@@ -81,7 +86,10 @@ class _MobileShellState extends State<MobileShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         height: 66,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: (value) => setState(() {
+          _index = value;
+          _mapFocus = null;
+        }),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
           NavigationDestination(
@@ -103,7 +111,18 @@ class _MobileShellState extends State<MobileShell> {
   }
 
   void _openTab(int index) {
-    setState(() => _index = index);
+    setState(() {
+      _index = index;
+      _mapFocus = null;
+    });
+  }
+
+  /// The Map tab (Maps & Guides), centred on [destination], with its box open.
+  void _showOnMap(Destination destination) {
+    setState(() {
+      _mapFocus = MapFocusRequest(destination);
+      _index = 2;
+    });
   }
 
   void _openDestination(Destination destination) {
@@ -117,6 +136,7 @@ class _MobileShellState extends State<MobileShell> {
           bootstrap: bootstrap,
           onVisitSubmitted: _addVisit,
           onFeedbackSubmitted: _addFeedback,
+          onViewOnMap: _showOnMap,
         ),
       ),
     );
@@ -1387,6 +1407,16 @@ class _DestinationListPageState extends State<DestinationListPage> {
   }
 }
 
+/// A request to show one destination on the map. A new request is a new object, so asking for the same destination twice is two requests.
+class MapFocusRequest {
+  const MapFocusRequest(this.destination);
+
+  final Destination destination;
+}
+
+/// How close the map is when it is centred on one destination.
+const mapFocusZoom = 15.0;
+
 class TourismMapPage extends StatefulWidget {
   const TourismMapPage({
     super.key,
@@ -1396,7 +1426,11 @@ class TourismMapPage extends StatefulWidget {
     this.failure,
     this.onRetry,
     this.savedNotice,
+    this.focus,
   });
+
+  /// A destination to centre on and open the box of. One without a place on the map is ignored.
+  final MapFocusRequest? focus;
 
   final List<Destination> destinations;
   final bool isLoading;
@@ -1411,6 +1445,47 @@ class TourismMapPage extends StatefulWidget {
 
 class _TourismMapPageState extends State<TourismMapPage> {
   Destination? _selectedDestination;
+  final MapController _mapController = MapController();
+  LatLng _initialCenter = const LatLng(14.185, 121.731);
+  double _initialZoom = 10.5;
+
+  @override
+  void initState() {
+    super.initState();
+    // The Map tab is built when it is chosen, so a request made from Destination Details is here from the start: the map opens on it.
+    final target = _focusTarget(widget.focus);
+    if (target != null) {
+      _selectedDestination = target;
+      _initialCenter = LatLng(target.latitude, target.longitude);
+      _initialZoom = mapFocusZoom;
+    }
+  }
+
+  @override
+  void didUpdateWidget(TourismMapPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A request that arrives while the map is already on screen: move the map to it and open its box.
+    final target = _focusTarget(widget.focus);
+    if (target != null && !identical(widget.focus, oldWidget.focus)) {
+      setState(() => _selectedDestination = target);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _mapController.move(LatLng(target.latitude, target.longitude), mapFocusZoom);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  Destination? _focusTarget(MapFocusRequest? request) {
+    final destination = request?.destination;
+    return destination != null && destination.hasCoordinates ? destination : null;
+  }
 
   void _openFullscreenMap(BuildContext context, List<Destination> highlighted) {
     showDialog(
@@ -1652,9 +1727,10 @@ class _TourismMapPageState extends State<TourismMapPage> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: FlutterMap(
+                  mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: const LatLng(14.185, 121.731),
-                    initialZoom: 10.5,
+                    initialCenter: _initialCenter,
+                    initialZoom: _initialZoom,
                     minZoom: 8,
                     maxZoom: 18,
                     interactionOptions: const InteractionOptions(
@@ -2959,6 +3035,7 @@ class DestinationDetailPage extends StatefulWidget {
     required this.bootstrap,
     required this.onVisitSubmitted,
     required this.onFeedbackSubmitted,
+    this.onViewOnMap,
   });
 
   final Destination destination;
@@ -2966,6 +3043,9 @@ class DestinationDetailPage extends StatefulWidget {
   final MobileBootstrap bootstrap;
   final ValueChanged<MobileVisitReceipt> onVisitSubmitted;
   final ValueChanged<MobileFeedbackReceipt> onFeedbackSubmitted;
+
+  /// Shows the destination on the Map tab. null: "View on map" is not offered as a button.
+  final ValueChanged<Destination>? onViewOnMap;
 
   @override
   State<DestinationDetailPage> createState() => _DestinationDetailPageState();
@@ -3112,7 +3192,16 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                   SectionHeader(title: 'Tourism Record'),
                   DestinationFactsPanel(destination: widget.destination),
                   SectionHeader(title: 'Location & Map'),
-                  LocationCard(destination: widget.destination),
+                  LocationCard(
+                    destination: widget.destination,
+                    onViewOnMap: widget.onViewOnMap == null
+                        ? null
+                        : () {
+                            // Back to the tabs (this page goes), and the Map tab shows the destination.
+                            Navigator.of(context).pop();
+                            widget.onViewOnMap!(widget.destination);
+                          },
+                  ),
                   const SizedBox(height: 24),
                   SectionHeader(title: 'Tourist Ratings & Reviews'),
                   if (_loading)
