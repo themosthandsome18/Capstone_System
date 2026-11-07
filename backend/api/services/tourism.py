@@ -173,7 +173,7 @@ def build_boat_capacity_fares_payload(active_only=False):
     ]
 
 
-def build_reference_tables_payload(resorts=None, active_only=False):
+def build_reference_tables_payload(resorts=None, active_only=False, request=None):
     """The reference lists.
 
     active_only=False (the web): every row, with is_active, so the web can
@@ -185,6 +185,8 @@ def build_reference_tables_payload(resorts=None, active_only=False):
     these options without invalidating this process's memory. Filter the fresh
     full lists afterwards so the web keeps inactive history and mobile does not
     offer retired options.
+
+    request: the one asking, so that a photo kept as a bare path is given as a whole URL (see ResortSerializer).
     """
     static_payload = {
         payload_key: [
@@ -208,10 +210,10 @@ def build_reference_tables_payload(resorts=None, active_only=False):
     payload["boatCapacityFares"] = build_boat_capacity_fares_payload(active_only)
 
     if resorts is not None:
-        payload["resorts"] = ResortSerializer(resorts, many=True).data
+        payload["resorts"] = ResortSerializer(resorts, many=True, context={"request": request}).data
     else:
         queryset = annotate_destination_figures(Resort.objects.all())
-        payload["resorts"] = ResortSerializer(queryset, many=True).data
+        payload["resorts"] = ResortSerializer(queryset, many=True, context={"request": request}).data
 
     return payload
 

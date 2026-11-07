@@ -2827,18 +2827,25 @@ class _DestinationImageSlideshowState
   int _currentPage = 0;
   Timer? _timer;
 
+  /// The slides. The photos that were uploaded, when there is at least one: ONLY those (the built-in photo is not added to them, which made
+  /// "2 / 2" of a destination with one photo). When there is none, the built-in one: a name of an asset the list holds, else the one
+  /// the image key points to (the logo when it points to none). An entry that is neither a photo of the server nor an asset name (for
+  /// example a build path of the web, "/static/media/...") is not a slide.
   List<String> get _images {
-    final list = <String>[];
+    final uploaded = <String>[];
+    final builtIn = <String>[];
     for (final img in widget.destination.images) {
-      if (img.trim().isNotEmpty && !list.contains(img.trim())) {
-        list.add(img.trim());
+      final path = img.trim();
+      if (path.isEmpty) continue;
+      if (serverImageUrl(path) != null) {
+        if (!uploaded.contains(path)) uploaded.add(path);
+      } else if (path.startsWith('assets/') && !builtIn.contains(path)) {
+        builtIn.add(path);
       }
     }
-    final defaultAsset = imageAssetFor(widget.destination.imageKey);
-    if (!list.contains(defaultAsset)) {
-      list.add(defaultAsset);
-    }
-    return list;
+    if (uploaded.isNotEmpty) return uploaded;
+    if (builtIn.isNotEmpty) return builtIn;
+    return [imageAssetFor(widget.destination.imageKey)];
   }
 
   @override
@@ -2870,28 +2877,22 @@ class _DestinationImageSlideshowState
   }
 
   Widget _buildImage(String path) {
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    // A photo the server holds, whole (or a bare /media/ path of an older server, made whole on the server's own address:
+    // not on the API's, which has /api in it and answered 404).
+    final url = serverImageUrl(path);
+    if (url != null) {
       return Image.network(
-        path,
+        url,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
-            DestinationImage(destination: widget.destination),
-      );
-    }
-    if (path.startsWith('/media/')) {
-      final fullUrl = '$apiBaseUrl$path';
-      return Image.network(
-        fullUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            DestinationImage(destination: widget.destination),
+            DestinationImage(destination: widget.destination, useUpload: false),
       );
     }
     return Image.asset(
       path,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) =>
-          DestinationImage(destination: widget.destination),
+          DestinationImage(destination: widget.destination, useUpload: false),
     );
   }
 

@@ -1,6 +1,7 @@
 import logging
 import os
 import uuid
+from django.conf import settings
 from django.core.files.storage import default_storage
 
 logger = logging.getLogger(__name__)
@@ -132,3 +133,27 @@ def save_image_file(file, folder, strict=False):
             exc_info=True,
         )
         raise StorageServiceError("Image upload failed. Storage service unavailable or full.") from exc
+
+
+def absolute_media_url(url, request):
+    """A path the storage gave without a host ("/media/resorts/x.png", what FileSystemStorage does) becomes a whole URL on the host
+    that is asking. A whole URL (what S3 storage gives) is left as it is, and so is anything that is not a path (an asset name).
+
+    It is done when the URL is READ, never when it is stored: the database keeps what the storage gave, so a destination does not
+    carry the host it was saved from (127.0.0.1 here, a LAN address for a phone)."""
+    if request is None or not isinstance(url, str):
+        return url
+    if url.startswith("/") and not url.startswith("//"):
+        return request.build_absolute_uri(url)
+    return url
+
+
+def relative_media_url(url, request):
+    """The other way, when a URL comes back to be stored: a whole URL that points at THIS server's own media goes back to the path it
+    was made from, so the database stays free of the host. A URL of any other host (S3) is left alone."""
+    if request is None or not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        return url
+    prefix = request.build_absolute_uri(settings.MEDIA_URL)
+    if url.startswith(prefix):
+        return settings.MEDIA_URL + url[len(prefix):]
+    return url

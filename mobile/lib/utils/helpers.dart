@@ -154,22 +154,30 @@ String imageAssetFor(String imageKey) {
     return 'assets/destinations/Villa Pilarosa Beach Resort - Cagbalete.png';
   }
 
-  // Fallbacks for other dynamic resort names using actually existing files
-  if (cleanKey.contains('beach') ||
-      cleanKey.contains('resort') ||
-      cleanKey.contains('cove') ||
-      cleanKey.contains('island')) {
-    final length = cleanKey.length;
-    final fallbackAssets = [
-      'assets/destinations/Dona Choleng Camping Resort - Cagbalete.jpg',
-      'assets/destinations/Aquazul Hotel and Resort - Cagbalete.jpg',
-      'assets/destinations/Rio Del Sol Beach Resort - Cagbalete.avif',
-      'assets/destinations/Villa Escaparde Camping and Beach Resort.jpg',
-    ];
-    return fallbackAssets[length % fallbackAssets.length];
-  }
-
+  // No exact match: the logo, which is neutral. (It used to pick one of four real resorts by the length of the key, so a destination
+  // with no photo of its own showed the photo of ANOTHER resort.)
   return 'assets/tourism_logo.png';
+}
+
+/// Where the server's media lives: the address of the API without its "/api" (the media is at /media/, not at /api/media/).
+String get serverOrigin => apiBaseUrl.replaceFirst(RegExp(r'/api/?$'), '').replaceFirst(RegExp(r'/$'), '');
+
+/// A photo the server holds, as a whole URL, or null when [path] is not one (an asset name, blank). The server now sends whole URLs;
+/// a bare "/media/..." (an older server) is made whole on the server's own address.
+String? serverImageUrl(String path) {
+  final text = path.trim();
+  if (text.startsWith('http://') || text.startsWith('https://')) return text;
+  if (text.startsWith('/media/')) return '$serverOrigin$text';
+  return null;
+}
+
+/// The first photo that was uploaded for a destination (one the server holds), or null when it has none.
+String? uploadedImageUrl(Destination destination) {
+  for (final path in destination.images) {
+    final url = serverImageUrl(path);
+    if (url != null) return url;
+  }
+  return null;
 }
 
 String isoDate(DateTime date) {
