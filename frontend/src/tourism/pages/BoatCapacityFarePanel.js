@@ -31,6 +31,38 @@ export function renameQuestion(count) {
   return `${count} record(s) hold the old text. They will keep it, and it will show as (not in the list). The tier itself will be renamed. Continue?`;
 }
 
+// The people range of a tier. Both boxes are REQUIRED here, in the form: the
+// database keeps them nullable on purpose (a row the migration could not read).
+// -> "" when the pair is good, else ONE sentence that says what to fix.
+export function paxRangeProblem(minText, maxText) {
+  const min = String(minText).trim();
+  const max = String(maxText).trim();
+  if (min === "") return "Min pax is required.";
+  if (max === "") return "Max pax is required.";
+  if (!/^\d+$/.test(min)) return "Min pax must be a whole number, digits only.";
+  if (!/^\d+$/.test(max)) return "Max pax must be a whole number, digits only.";
+  if (Number(min) < 1) return "Min pax must be 1 or more.";
+  if (Number(max) < Number(min)) return "Max pax cannot be less than Min pax.";
+  return "";
+}
+
+// A tier with no range yet (the server sends null): shown as incomplete.
+export const NO_RANGE_LABEL = "Range missing";
+export const NO_RANGE_NOTE =
+  "No pax range yet. Automatic matching with Total Visitors will not work for this tier until Min pax and Max pax are filled.";
+
+export function hasRange(row) {
+  return Number.isInteger(row.min_pax) && Number.isInteger(row.max_pax);
+}
+
+function digitsOnly(text) {
+  return String(text).replace(/\D/g, "");
+}
+
+function paxText(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
 function inOrder(list) {
   return [...list].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
 }
@@ -71,8 +103,12 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
   const [notice, setNotice] = useState("");
   const [adding, setAdding] = useState(false);
   const [addName, setAddName] = useState("");
+  const [addMin, setAddMin] = useState("");
+  const [addMax, setAddMax] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
+  const [editMin, setEditMin] = useState("");
+  const [editMax, setEditMax] = useState("");
   // Set when the server asked for a confirmation of a rename: { count } is the
   // number the SERVER named. That number, and no other, is what is confirmed.
   const [ask, setAsk] = useState(null);
@@ -168,6 +204,8 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
   function startEdit(row) {
     setEditingId(row.id);
     setEditName(row.name);
+    setEditMin(paxText(row.min_pax));
+    setEditMax(paxText(row.max_pax));
     setAdding(false);
     setAsk(null);
     setActionError("");
@@ -195,8 +233,18 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
 
   async function submitAdd(event) {
     event.preventDefault();
+    const problem = paxRangeProblem(addMin, addMax);
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
     const ok = await write(
-      () => tourismApi.createBoatCapacityFare({ name: addName }),
+      () =>
+        tourismApi.createBoatCapacityFare({
+          name: addName,
+          min_pax: Number(addMin),
+          max_pax: Number(addMax),
+        }),
       putRow,
       "The tier was added.",
       true
@@ -204,6 +252,8 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
     if (ok) {
       setAdding(false);
       setAddName("");
+      setAddMin("");
+      setAddMax("");
     }
   }
 
@@ -211,12 +261,13 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
   // records hold the old text and how many. When confirmedCount is given it is the
   // number the server named in its last refusal, not the one shown in the table.
   async function sendRename(confirmedCount) {
-    const payload = { name: editName };
+    const payload = { name: editName, min_pax: Number(editMin), max_pax: Number(editMax) };
     if (confirmedCount !== undefined) payload.confirm_affected_records = confirmedCount;
     const ok = await write(
       () => tourismApi.updateBoatCapacityFare(editing.id, payload),
       putRow,
-      "The tier was renamed.",
+      // as before when the text changed; only the range changed -> saved
+      editName !== editing.name ? "The tier was renamed." : "The tier was saved.",
       true
     );
     if (ok) stopEdit();
@@ -224,8 +275,20 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
 
   function submitEdit(event) {
     event.preventDefault();
+    const problem = paxRangeProblem(editMin, editMax);
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
     sendRename();
   }
+
+  // Something to save: the text, or either end of the range.
+  const editChanged =
+    editing !== null &&
+    (editName !== editing.name ||
+      editMin.trim() !== paxText(editing.min_pax) ||
+      editMax.trim() !== paxText(editing.max_pax));
 
   // The whole list of ids in the new order; the server answers with the list.
   function move(index, step) {
@@ -283,6 +346,32 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
               onChange={(event) => setAddName(event.target.value)}
             />
           </label>
+          <div className="options-form-row">
+            <label className="settings-field">
+              <span>Min pax</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label="New tier min pax"
+                value={addMin}
+                maxLength={3}
+                onChange={(event) => setAddMin(digitsOnly(event.target.value))}
+              />
+              <small className="options-hint">Required. At least 1.</small>
+            </label>
+            <label className="settings-field">
+              <span>Max pax</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label="New tier max pax"
+                value={addMax}
+                maxLength={3}
+                onChange={(event) => setAddMax(digitsOnly(event.target.value))}
+              />
+              <small className="options-hint">Required. Not less than Min pax.</small>
+            </label>
+          </div>
           {formError ? (
             <p className="options-reason" role="alert">
               {formError}
@@ -308,7 +397,7 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
           tabIndex={-1}
         >
           <div className="report-card-title">
-            <h3>Rename a tier</h3>
+            <h3>Edit a tier</h3>
             <p>Used by {recordsLabel(editing.record_count)}.</p>
           </div>
           <label className="settings-field settings-field-wide">
@@ -323,6 +412,34 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
               onChange={(event) => setEditName(event.target.value)}
             />
           </label>
+          <div className="options-form-row">
+            <label className="settings-field">
+              <span>Min pax</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label="Tier min pax"
+                value={editMin}
+                maxLength={3}
+                disabled={working || Boolean(ask)}
+                onChange={(event) => setEditMin(digitsOnly(event.target.value))}
+              />
+              <small className="options-hint">Required. At least 1.</small>
+            </label>
+            <label className="settings-field">
+              <span>Max pax</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label="Tier max pax"
+                value={editMax}
+                maxLength={3}
+                disabled={working || Boolean(ask)}
+                onChange={(event) => setEditMax(digitsOnly(event.target.value))}
+              />
+              <small className="options-hint">Required. Not less than Min pax.</small>
+            </label>
+          </div>
 
           {/* ONE message at a time: the question, else the refusal, else the note. */}
           {ask ? (
@@ -360,7 +477,7 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
                 <button
                   type="submit"
                   className="tourist-record-save"
-                  disabled={working || editName.trim() === "" || editName === editing.name}
+                  disabled={working || editName.trim() === "" || !editChanged}
                 >
                   {working ? "Saving..." : "Save"}
                 </button>
@@ -403,6 +520,7 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
             <thead>
               <tr>
                 <th>Tier text</th>
+                <th>Pax range</th>
                 <th>Order</th>
                 <th>Used by</th>
                 <th>Status</th>
@@ -420,6 +538,18 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
                       data-testid={`fare-row-${row.id}`}
                     >
                       <td>{row.name}</td>
+                      <td>
+                        {hasRange(row) ? (
+                          `${row.min_pax}-${row.max_pax}`
+                        ) : (
+                          <>
+                            <span className="options-status incomplete" title={NO_RANGE_NOTE}>
+                              {NO_RANGE_LABEL}
+                            </span>
+                            <small className="options-hint options-range-note">{NO_RANGE_NOTE}</small>
+                          </>
+                        )}
+                      </td>
                       <td>{row.display_order}</td>
                       <td>{recordsLabel(row.record_count)}</td>
                       <td>
@@ -496,7 +626,7 @@ const BoatCapacityFarePanel = forwardRef(function BoatCapacityFarePanel({ onWork
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="options-empty">
+                  <td colSpan={6} className="options-empty">
                     No tiers to show for this filter.
                   </td>
                 </tr>

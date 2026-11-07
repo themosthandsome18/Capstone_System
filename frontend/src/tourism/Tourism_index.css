@@ -4691,6 +4691,24 @@
   color: var(--th-success-text);
 }
 
+.options-status.incomplete {
+  background: var(--th-warning-bg);
+  color: var(--th-warning-text);
+}
+
+/* The two numbers of a tier range sit side by side under the tier text. */
+.options-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.options-range-note {
+  display: block;
+  margin-top: 4px;
+  max-width: 260px;
+}
+
 .options-status.inactive {
   background: var(--th-border);
   color: var(--th-text-muted);
