@@ -156,6 +156,28 @@ def _app_content_or_nothing():
         return {}
 
 
+HIDDEN_GEMS_LIMIT = 6
+
+
+def select_hidden_gems(destinations, featured):
+    """The "Hidden Gems" of the app: the destinations that are not featured, the least visited first.
+
+    `destinations` are already filtered (active, not excluded) and carry the annotated figures. A featured one is never here, so no resort
+    is in both lists. Order: people this month (visitor_total) fewest first, then visible reviews (review_total) fewest first, then the
+    newest resort_id first (the primary key: nothing ties after it). monthly_arrivals is NOT used: it is seeded demo data, repeated from id 7 on.
+    """
+    featured_ids = {r.resort_id for r in featured}
+    rest = [r for r in destinations if r.resort_id not in featured_ids]
+    rest.sort(
+        key=lambda r: (
+            getattr(r, "visitor_total", 0) or 0,
+            getattr(r, "review_total", 0) or 0,
+            -r.resort_id,
+        )
+    )
+    return rest[:HIDDEN_GEMS_LIMIT]
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mobile_tourism_bootstrap(request):
@@ -180,6 +202,8 @@ def mobile_tourism_bootstrap(request):
     # Every destination that is not excluded above reaches the app (it was cut at 10 before); the featured list is still its first six.
     destinations = filtered_destinations
     top_destination = destinations[0] if destinations else None
+    featured_destinations = destinations[:6]
+    hidden_gems = select_hidden_gems(destinations, featured_destinations)
 
     return Response(
         {
@@ -187,7 +211,9 @@ def mobile_tourism_bootstrap(request):
                 resorts=[r for r in all_resorts if r.is_active], active_only=True, request=request
             ),
             "destinations": ResortSerializer(destinations, many=True, context={"request": request}).data,
-            "featuredDestinations": ResortSerializer(destinations[:6], many=True, context={"request": request}).data,
+            "featuredDestinations": ResortSerializer(featured_destinations, many=True, context={"request": request}).data,
+            # Destinations the featured list does not show, the least visited first (see select_hidden_gems).
+            "hiddenGems": ResortSerializer(hidden_gems, many=True, context={"request": request}).data,
             "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_notifications(top_destination=top_destination),
             "theme": read_tourism_theme(),

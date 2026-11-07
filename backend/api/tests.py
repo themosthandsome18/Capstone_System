@@ -7056,7 +7056,7 @@ class EmergencyContactTests(TestCase):
     BOOTSTRAP = "/api/mobile/tourism/bootstrap/"
     PUBLIC_KEYS = {"id", "name", "contact_numbers", "email", "description", "icon"}
     OLD_BOOTSTRAP_KEYS = {
-        "referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme",
+        "referenceTables", "destinations", "featuredDestinations", "hiddenGems", "barangays", "notifications", "theme",
     }
 
     def setUp(self):
@@ -14320,7 +14320,7 @@ class MobileContentItemIsolationTests(_ItemApiBase, TestCase):
         url = "/api/mobile/tourism/bootstrap/"
         first = APIClient().get(url)
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "hiddenGems", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
         self._ok("post", self.LIST, self._new(), expect=201)
         self._ok("patch", self._url(self.festival), {"title": "Changed title"})
         self._ok("post", self._url(self.boat, "deactivate"))
@@ -14963,7 +14963,7 @@ class MobileContentBlockIsolationTests(_BlockApiBase, TestCase):
         self.assertEqual(first.status_code, 200)
         # Changed on purpose in Commit 3: the blocks reach the app through appContent, so the whole body is no longer the
         # same; everything before that last key is (the golden fences are in api/test_mobile_content_app_content.py).
-        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
+        self.assertEqual(set(first.json()), {"referenceTables", "destinations", "featuredDestinations", "hiddenGems", "barangays", "notifications", "theme", "emergencyContacts", "appContent"})
         self._ok("welcome", {"subtitle": "Changed"})
         self._ok("fee_office", {"body": "Changed place"})
         self.assertEqual(self._block("welcome").subtitle, "Changed")  # the fixture: things really changed

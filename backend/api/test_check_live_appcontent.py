@@ -53,7 +53,7 @@ class CheckLiveAppContentTests(SimpleTestCase):
     def test_each_damage_is_caught_by_name(self):
         cases = {
             "the answer is not JSON": (b"<html>502</html>", ["the answer is a JSON object"]),
-            "an old key gone": (self.good.replace(b'"theme"', b'"themed"', 1), ["the seven old keys are all there, in their places"]),
+            "an old key gone": (self.good.replace(b'"theme"', b'"themed"', 1), ["the seven old keys are all there, in the same order"]),
             "a fee placeholder left": (self.edited(lambda c: c["blocks"]["port_guide"].update(body="Pay {fee_regular}")), ["no {fee_...} placeholder is left in any text"]),
             "a stray brace": (self.edited(lambda c: c["blocks"]["why_visit"].update(body="a } b")), ["no brace is left in any text, except {name}"]),
             "the name outside the welcome": (self.edited(lambda c: c["blocks"]["why_visit"].update(body="Hi {name}")), ["{name} appears only in the welcome banner", "no brace is left in any text, except {name}"][:1]),
@@ -77,6 +77,59 @@ class CheckLiveAppContentTests(SimpleTestCase):
         failed = self.failed(shifted)
         self.assertIn("everything before appContent is byte for byte the saved bootstrap", failed)  # each of the two catches it by itself
         self.assertIn("prefix and suffix: not one byte moved", failed)
+
+    # ---- the seven old keys: all there and in the same order TO EACH OTHER; a new key between them is allowed (hiddenGems) ----
+    KEYS_NAME = "the seven old keys are all there, in the same order"
+
+    def without_hidden_gems(self):
+        """The golden as the live server sends it before the deploy: the same bytes with the hiddenGems block taken out."""
+        start, end = GOLDEN.index(b',"hiddenGems":'), GOLDEN.index(b',"barangays":')
+        old = GOLDEN[:start] + GOLDEN[end:]
+        self.assertEqual(old.count(b"hiddenGems"), 0)  # the fixture: it really is the shape without the key
+        self.assertEqual(len(GOLDEN) - len(old), end - start)
+        return old
+
+    def test_green_without_hidden_gems_the_live_server_today(self):
+        old = self.without_hidden_gems()
+        body = old[:-1] + MARK + self.value + b"}"
+        self.assertNotIn("hiddenGems", json.loads(body))
+        results = self.tool.check(body, old)
+        self.assertEqual([name for name, ok, _ in results if not ok], [])
+        self.assertIn(self.KEYS_NAME, [name for name, ok, _ in results if ok])
+
+    def test_green_with_hidden_gems_between_featured_and_barangays_after_the_deploy(self):
+        keys = list(json.loads(self.good))
+        self.assertEqual(keys.index("hiddenGems"), keys.index("featuredDestinations") + 1)
+        self.assertEqual(keys.index("barangays"), keys.index("hiddenGems") + 1)
+        results = self.tool.check(self.good, GOLDEN)
+        self.assertEqual([name for name, ok, _ in results if not ok], [])
+        self.assertIn(self.KEYS_NAME, [name for name, ok, _ in results if ok])
+
+    def test_red_when_an_old_key_is_missing_with_or_without_hidden_gems(self):
+        for label, base in (("without", self.without_hidden_gems()), ("with", GOLDEN)):
+            body = (base[:-1] + MARK + self.value + b"}").replace(b'"theme"', b'"themed"', 1)
+            self.assertNotEqual(body, base[:-1] + MARK + self.value + b"}")  # the fixture: the key really changed
+            self.assertIn(self.KEYS_NAME, self.failed(body, base), label)
+
+    def test_red_when_two_old_keys_changed_places_with_or_without_hidden_gems(self):
+        for label, base in (("without", self.without_hidden_gems()), ("with", GOLDEN)):
+            data = json.loads(base[:-1] + MARK + self.value + b"}")
+            keys = list(data)
+            i, j = keys.index("notifications"), keys.index("theme")
+            keys[i], keys[j] = keys[j], keys[i]  # notifications and theme swap
+            swapped = json.dumps({k: data[k] for k in keys}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            self.assertEqual(sorted(json.loads(swapped)), sorted(data))  # the fixture: the same keys, other order
+            self.assertNotEqual(list(json.loads(swapped)), list(data))
+            self.assertIn(self.KEYS_NAME, self.failed(swapped, base), label)
+
+    def test_red_when_a_key_moves_across_hidden_gems_does_not_hide_the_swap(self):
+        # featuredDestinations and destinations swapped, hiddenGems left where it is: still two old keys out of order
+        data = json.loads(self.good)
+        keys = list(data)
+        i, j = keys.index("destinations"), keys.index("featuredDestinations")
+        keys[i], keys[j] = keys[j], keys[i]
+        swapped = json.dumps({k: data[k] for k in keys}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        self.assertIn(self.KEYS_NAME, self.failed(swapped, GOLDEN))
 
     def test_the_canary_is_checked(self):
         big = self.edited(lambda c: c["sections"]["why_visit"][0].update(full_text="word " * 14000, tappable=True))
