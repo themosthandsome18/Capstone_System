@@ -2268,26 +2268,39 @@ class FactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Two even columns. The icon and the label are in the left one; the value is in
+    // the right one, aligned to ITS left edge, so every value starts at one
+    // position whatever its length. A long value wraps inside its own column, and
+    // the rows are aligned at the top so that a wrapped value does not push the
+    // label to the middle of the row.
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: context.brand.primary, size: 20),
-          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: context.brand.primary, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),
-          Flexible(
+          Expanded(
             child: Text(
               value,
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.left,
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
