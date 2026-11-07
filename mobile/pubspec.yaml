@@ -76,7 +76,7 @@ flutter:
 
   assets:
     - assets/fonts/roboto_license.txt
-    - assets/tourism_logo.jpg
+    - assets/tourism_logo.png
     - assets/sanitary_logo.jpg
     - assets/mauban_barangays.json
     - assets/destinations/Aguho Playa Beach Resort - Cagbalete.jpg

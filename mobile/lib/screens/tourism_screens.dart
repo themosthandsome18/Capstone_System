@@ -3583,9 +3583,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   final TextEditingController _lastName = TextEditingController();
   final TextEditingController _contact = TextEditingController();
   final TextEditingController _email = TextEditingController();
-  final TextEditingController _countryOfOrigin = TextEditingController(
-    text: 'Philippines',
-  );
   final TextEditingController _parkingSpace = TextEditingController();
   late DateTime _arrivalDate;
   // null until a resort is chosen. It is NOT defaulted to the first resort of
@@ -3619,18 +3616,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           _province ??
           _savedProvince ??
           _preferredProvinceForRegion(region, nameContains: 'Quezon');
-      if (country.name.toLowerCase().contains('philippines')) {
-        _countryOfOrigin.text = 'Philippines';
-      }
     } else {
       _savedRegion = _region ?? _savedRegion;
       _savedProvince = _province ?? _savedProvince;
       _region = null;
       _province = null;
-      // The autofilled "Philippines" is not a foreign visitor's origin.
-      if (_countryOfOrigin.text.trim() == 'Philippines') {
-        _countryOfOrigin.text = '';
-      }
     }
   }
   late RefItem _itinerary;
@@ -3707,7 +3697,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     _lastName.dispose();
     _contact.dispose();
     _email.dispose();
-    _countryOfOrigin.dispose();
     _parkingSpace.dispose();
     super.dispose();
   }
@@ -3734,6 +3723,10 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           controller: _contact,
           label: 'Contact number *',
           keyboardType: TextInputType.phone,
+          prefixText: '$contactCountryCode ',
+          hintText: '9XXXXXXXXX',
+          maxLength: contactDigitCount,
+          inputFormatters: const [TenDigitContactFormatter()],
         ),
         AppTextField(
           controller: _email,
@@ -3784,7 +3777,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
             onChanged: (item) => setState(() => _province = item),
           ),
         ],
-        AppTextField(controller: _countryOfOrigin, label: 'Country of origin *'),
         DropdownTile<Destination?>(
           label: 'Destination / Resort *',
           value: _destination,
@@ -4004,14 +3996,13 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         firstName: firstName,
         lastName: lastName,
         fullName: fullName,
-        contactNumber: _contact.text.trim(),
+        contactNumber: contactWithCountryCode(_contact.text),
         email: _email.text.trim(),
         consentConfirmed: _consentConfirmed,
         arrivalDate: isoDate(_arrivalDate),
         countryId: _country.id,
         regionId: _requiresLocation ? _region?.id : null,
         provinceId: _requiresLocation ? _province?.id : null,
-        countryOfOrigin: _countryOfOrigin.text.trim(),
         resortId: destination.id,
         itineraryId: _itinerary.id,
         travelModeId: _travelMode.id,
@@ -4066,13 +4057,15 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     final lastName = _lastName.text.trim();
     final contact = _contact.text.trim();
     final email = _email.text.trim();
-    final countryOfOrigin = _countryOfOrigin.text.trim();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     if (firstName.isEmpty) return 'First name is required.';
     if (lastName.isEmpty) return 'Last name is required.';
     if (contact.isEmpty) return 'Contact number is required.';
+    if (contactDigits(contact).length != contactDigitCount) {
+      return contactNumberLengthMessage;
+    }
     if (email.isNotEmpty && !email.contains('@')) {
       return 'Enter a valid email address or leave email blank.';
     }
@@ -4091,7 +4084,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     if (_requiresLocation && (_region == null || _province == null)) {
       return 'Region and province are required.';
     }
-    if (countryOfOrigin.isEmpty) return 'Country of origin is required.';
     if (_visitors < 1) return 'At least one visitor is required.';
     if (_male + _female != _visitors) {
       return 'Male and female counts must equal total visitors.';
