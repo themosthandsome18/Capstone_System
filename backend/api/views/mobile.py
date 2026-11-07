@@ -156,21 +156,37 @@ def _app_content_or_nothing():
         return {}
 
 
+FEATURED_LIMIT = 6
 HIDDEN_GEMS_LIMIT = 6
+
+
+def select_featured(destinations):
+    """The "Most Popular" of the app: the six destinations with the most people who ARRIVED this year.
+
+    `destinations` are already filtered (active, not excluded) and carry the annotated figures. Order: yearly_total most first, then the
+    better rating, then the newest resort_id (the primary key: nothing ties after it). The year, not the month: a month starts again at 0
+    for everybody. monthly_arrivals (the column) is NOT used: it is seeded demo data, repeated from id 7 on.
+    """
+    ranked = sorted(
+        destinations,
+        key=lambda r: (-(getattr(r, "yearly_total", 0) or 0), -(r.tourism_rating or 0.0), -r.resort_id),
+    )
+    return ranked[:FEATURED_LIMIT]
 
 
 def select_hidden_gems(destinations, featured):
     """The "Hidden Gems" of the app: the destinations that are not featured, the least visited first.
 
     `destinations` are already filtered (active, not excluded) and carry the annotated figures. A featured one is never here, so no resort
-    is in both lists. Order: people this month (visitor_total) fewest first, then visible reviews (review_total) fewest first, then the
-    newest resort_id first (the primary key: nothing ties after it). monthly_arrivals is NOT used: it is seeded demo data, repeated from id 7 on.
+    is in both lists. Order: people who ARRIVED this year (yearly_total) fewest first, then visible reviews (review_total) fewest first,
+    then the newest resort_id first (the primary key: nothing ties after it). The year, not the month. monthly_arrivals (the column) is
+    NOT used: it is seeded demo data, repeated from id 7 on.
     """
     featured_ids = {r.resort_id for r in featured}
     rest = [r for r in destinations if r.resort_id not in featured_ids]
     rest.sort(
         key=lambda r: (
-            getattr(r, "visitor_total", 0) or 0,
+            getattr(r, "yearly_total", 0) or 0,
             getattr(r, "review_total", 0) or 0,
             -r.resort_id,
         )
@@ -202,7 +218,8 @@ def mobile_tourism_bootstrap(request):
     # Every destination that is not excluded above reaches the app (it was cut at 10 before); the featured list is still its first six.
     destinations = filtered_destinations
     top_destination = destinations[0] if destinations else None
-    featured_destinations = destinations[:6]
+    # Only the two lists of the home page follow the year. `destinations` (and the "trending" notice built from its first) keep their order.
+    featured_destinations = select_featured(destinations)
     hidden_gems = select_hidden_gems(destinations, featured_destinations)
 
     return Response(

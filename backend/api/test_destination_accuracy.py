@@ -86,17 +86,16 @@ class EveryDestinationReachesTheAppTests(TestCase):
         # the web's list (referenceTables) is every destination, as before
         self.assertEqual(len(data["referenceTables"]["resorts"]), 4)
 
-    def test_featured_is_still_the_first_six_and_the_registration_list_is_all_of_them(self):
+    def test_featured_is_six_and_the_registration_list_is_all_of_them(self):
         for pk in range(1, 13):
             make_resort(pk, f"Resort {pk:02d}")
 
         data = self._bootstrap()
 
         self.assertEqual(len(data["featuredDestinations"]), 6)
-        self.assertEqual(
-            [d["resort_id"] for d in data["featuredDestinations"]],
-            [d["resort_id"] for d in data["destinations"][:6]],
-        )
+        # featured follows the people who arrived this year (here nobody: the newest first); the list of all keeps its own order
+        self.assertEqual([d["resort_id"] for d in data["featuredDestinations"]], [12, 11, 10, 9, 8, 7])
+        self.assertEqual({d["resort_id"] for d in data["featuredDestinations"]} <= {d["resort_id"] for d in data["destinations"]}, True)
         # the registration form lists bootstrap.destinations, so all twelve can be chosen there
         self.assertEqual(len(data["destinations"]), 12)
 
