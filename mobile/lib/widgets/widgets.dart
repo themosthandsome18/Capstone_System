@@ -1320,11 +1320,16 @@ class DestinationImage extends StatelessWidget {
     required this.destination,
     this.height,
     this.width,
+    this.useUpload = true,
   });
 
   final Destination destination;
   final double? height;
   final double? width;
+
+  /// false: the built-in photo only. The slideshow shows the uploads itself, and when one fails it falls back to THIS, so that it does not
+  /// ask again for the photo that just failed.
+  final bool useUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -1336,7 +1341,7 @@ class DestinationImage extends StatelessWidget {
       width: width ?? double.infinity,
       fit: BoxFit.cover,
     );
-    final uploaded = uploadedImageUrl(destination);
+    final uploaded = useUpload ? uploadedImageUrl(destination) : null;
     if (uploaded == null) return builtIn;
     return Image.network(
       uploaded,
