@@ -108,6 +108,14 @@ function getResortCoordinates(destination) {
 /**
  * Interactive Slideshow / Carousel for Resort Images
  */
+// What to SHOW for a destination: its uploaded photos, or its built-in one (see addResortImage). Never what is sent to the server.
+function displayPhotos(destination) {
+  if (!destination) return [];
+  if (Array.isArray(destination.displayImages)) return destination.displayImages;
+  if (Array.isArray(destination.images) && destination.images.length > 0) return destination.images;
+  return destination.image ? [destination.image] : [];
+}
+
 function ResortImageCarousel({
   images = [],
   resortName = "",
@@ -423,13 +431,7 @@ function DestinationManagement({ initialTab }) {
     selectedResortAllFeedback.length - selectedResortFeedback.length;
 
   // The photos the slideshow really has (the card's "PHOTOS" shows 1 for none, for its placeholder; this is the real count).
-  const selectedResortPhotoCount = selectedResortDetail
-    ? Array.isArray(selectedResortDetail.images) && selectedResortDetail.images.length > 0
-      ? selectedResortDetail.images.length
-      : selectedResortDetail.image
-      ? 1
-      : 0
-    : 0;
+  const selectedResortPhotoCount = selectedResortDetail ? displayPhotos(selectedResortDetail).length : 0;
 
   // The names of the Length of Stay options this destination offers, for the chips in Details.
   const selectedResortStays = useMemo(() => {
@@ -460,11 +462,9 @@ function DestinationManagement({ initialTab }) {
 
   function openEditDestination(destination) {
     setEditingDestination(destination);
-    const existingImages = Array.isArray(destination.images)
-      ? [...destination.images]
-      : destination.image
-      ? [destination.image]
-      : [];
+    // Only the photos that were really uploaded. The built-in photo is shown on the cards, but it is not a photo of the destination
+    // that can be removed, and it is never written to the database.
+    const existingImages = Array.isArray(destination.images) ? [...destination.images] : [];
 
     setForm({
       resort_name: destination.resort_name || "",
@@ -688,11 +688,7 @@ function DestinationManagement({ initialTab }) {
       return;
     }
 
-    const existingImages = Array.isArray(targetResort.images)
-      ? [...targetResort.images]
-      : targetResort.image
-      ? [targetResort.image]
-      : [];
+    const existingImages = Array.isArray(targetResort.images) ? [...targetResort.images] : [];
 
     if (existingImages.includes(photoUrl)) {
       setGalleryActionMsg(`Photo is already included in ${targetResort.resort_name} images.`);
@@ -784,12 +780,7 @@ function DestinationManagement({ initialTab }) {
 
           <div className="destination-grid">
             {filteredDestinations.map((destination) => {
-              const resortImages =
-                destination.images && destination.images.length > 0
-                  ? destination.images
-                  : destination.image
-                  ? [destination.image]
-                  : [];
+              const resortImages = displayPhotos(destination);
 
               return (
                 <div
@@ -1129,13 +1120,7 @@ function DestinationManagement({ initialTab }) {
             {/* Hero Cover Slideshow */}
             <div className="gmaps-modal-hero">
               <ResortImageCarousel
-                images={
-                  selectedResortDetail.images && selectedResortDetail.images.length > 0
-                    ? selectedResortDetail.images
-                    : selectedResortDetail.image
-                    ? [selectedResortDetail.image]
-                    : []
-                }
+                images={displayPhotos(selectedResortDetail)}
                 resortName={selectedResortDetail.resort_name}
                 height="100%"
               />

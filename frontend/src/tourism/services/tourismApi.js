@@ -142,19 +142,23 @@ const emptyBookingManagement = {
   rows: [],
 };
 
-function addResortImage(resort) {
+// The built-in photo of a destination (the web's own file, found by its image key) is for SHOWING only. It is never put in `images`:
+// `images` is what the server holds, what the Edit form lists and what Save sends back, so a built-in photo there was written to the
+// database (as a build path, "/static/media/<name>.<hash>.jpg") on every Save, and came back when it was removed.
+//   images        the photos that were really uploaded, exactly as the server sent them
+//   displayImages what to SHOW: the uploaded ones, or the built-in one when there are none
+//   image         the first of displayImages ("" for none), for the map and the cards
+export function addResortImage(resort) {
   const imageKey = resort.image_key || getImageKeyFromName(resort.resort_name);
   const defaultImage = resortImagesByKey[imageKey] || "";
   const uploadedImages = Array.isArray(resort.images) ? resort.images : [];
-  const allImages = [...uploadedImages];
-  if (defaultImage && !allImages.includes(defaultImage)) {
-    allImages.unshift(defaultImage);
-  }
+  const displayImages = uploadedImages.length > 0 ? uploadedImages : defaultImage ? [defaultImage] : [];
 
   return {
     ...resort,
-    image: uploadedImages[0] || defaultImage || "",
-    images: allImages.length > 0 ? allImages : (defaultImage ? [defaultImage] : []),
+    image: displayImages[0] || "",
+    images: uploadedImages,
+    displayImages,
   };
 }
 
