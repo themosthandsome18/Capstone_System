@@ -16,7 +16,12 @@ import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
-import { capacityFareForBoatType, requiresCapacityFare } from "../utils/boatCapacityFare";
+import {
+  capacityFareForBoatType,
+  fareFollowingTotal,
+  paxMismatchWarning,
+  requiresCapacityFare,
+} from "../utils/boatCapacityFare";
 import { countryRequiresLocation } from "../utils/countryLocation";
 import { choicesFor } from "../utils/optionChoices";
 import { fareChoicesFor, fareTiers } from "../utils/fareChoices";
@@ -422,6 +427,15 @@ function BookingManagement() {
     jumpToStep(targetStep);
   }
 
+  // Shown beside the Boat Capacity and Fare field when the tier chosen does not hold the
+  // head count. It informs only: it does not change the count and does not stop saving.
+  const fareWarning = paxMismatchWarning({
+    tiers: capacityFareTiers,
+    fare: form.boat_capacity_fare,
+    visitors: formTotals.visitors,
+    requiresFare: requiresCapacityFare(referenceTables.boatTypes, form.boat_type_id),
+  });
+
   function closeForm() {
     setIsAddOpen(false);
     setEditingRecord(null);
@@ -438,7 +452,7 @@ function BookingManagement() {
     }
 
     // The discounted count follows Age 0-7 + Age 60+ until staff set it.
-    setForm((current) => followDiscountedSuggestion({
+    setForm((current) => withFareForTotal(current, {
       ...current,
       [field]: value,
       ...(field === "region_id" ? { province_id: "" } : {}),
@@ -458,6 +472,20 @@ function BookingManagement() {
         : {}),
       ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
     }));
+  }
+
+  // When the head count (Filipino + foreigner) changes, the Boat Capacity and Fare
+  // tier whose range holds it is chosen. Only the tier is written, never the count.
+  // The tier's own range (min_pax, max_pax) decides, not its text.
+  function withFareForTotal(before, after) {
+    const fare = fareFollowingTotal({
+      tiers: capacityFareTiers,
+      fare: after.boat_capacity_fare,
+      before: toInteger(before.filipino_count) + toInteger(before.foreigner_count),
+      after: toInteger(after.filipino_count) + toInteger(after.foreigner_count),
+      requiresFare: requiresCapacityFare(referenceTables.boatTypes, after.boat_type_id),
+    });
+    return followDiscountedSuggestion(fare === after.boat_capacity_fare ? after : { ...after, boat_capacity_fare: fare });
   }
 
   function updateFilter(field, value) {
@@ -1490,6 +1518,9 @@ function BookingManagement() {
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
+                      {fareWarning && (
+                        <small className="wizard-field-hint warning" role="status">{fareWarning}</small>
+                      )}
                     </WizardField>
                   </div>
                 )}

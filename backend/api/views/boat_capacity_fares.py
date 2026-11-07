@@ -46,8 +46,10 @@ from api.models import (
     ACTION_CREATE,
     ACTION_UPDATE,
     MODULE_TOURISM,
+    PAX_WHOLE_MESSAGE,
     BoatCapacityFare,
     TouristRecord,
+    pax_range_error,
 )
 from api.permissions import administration_required
 from api.services.activity import LABEL_MAX, count_of, log_activity, moved_ids, reorder_note, shorten_label
@@ -122,6 +124,8 @@ def _item(fare, record_count):
         "name": fare.name,
         "display_order": fare.display_order,
         "is_active": fare.is_active,
+        "min_pax": fare.min_pax,
+        "max_pax": fare.max_pax,
         "record_count": record_count,
     }
 
@@ -173,6 +177,55 @@ def _clean_name(value):
     return None, name
 
 
+PAX_LIMIT = 32767  # what the column holds
+
+
+def _pax_number(raw):
+    """-> (error, value) for one of min_pax / max_pax. None (or blank text) means
+    "not given". A whole number, or text of digits only; a boolean is not a number."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, None
+    if isinstance(raw, bool):
+        return PAX_WHOLE_MESSAGE, None
+    if isinstance(raw, str) and raw.strip().isdigit():
+        raw = int(raw.strip())
+    if not isinstance(raw, int):
+        return PAX_WHOLE_MESSAGE, None
+    if raw > PAX_LIMIT:
+        return f"The number of people cannot be more than {PAX_LIMIT}.", None
+    return None, raw
+
+
+def _read_pax(data, current_min=None, current_max=None):
+    """The people range of a request -> (errors, min_pax, max_pax).
+
+    A key that is not in the request keeps the tier's current number (so a PATCH
+    that sends only max_pax is checked against the stored min_pax). The rule for
+    the pair is api.models.pax_range_error, the model's own."""
+    errors = {}
+    values = {}
+    for key, current in (("min_pax", current_min), ("max_pax", current_max)):
+        if key in data:
+            error, value = _pax_number(data.get(key))
+            if error:
+                errors[key] = [error]
+            values[key] = value
+        else:
+            values[key] = current
+    if errors:
+        return errors, None, None
+    error = pax_range_error(values["min_pax"], values["max_pax"])
+    if error:
+        # name the box the person should look at: the missing one for a pair, else the largest
+        key = "max_pax" if values["min_pax"] is not None else "min_pax"
+        return {key: [error]}, None, None
+    return {}, values["min_pax"], values["max_pax"]
+
+
+def _range_text(low, high):
+    return "no range" if low is None else f"{low}-{high}"
+
+
 _DUPLICATE = "Another tier already has this name (capitals and spaces do not count)."
 
 
@@ -189,14 +242,24 @@ def boat_capacity_fare_list(request):
     error, name = _clean_name(request.data.get("name"))
     if error:
         return _error(error, name=[error])
+    # Optional here (the column is nullable); the LGU form is what requires both.
+    pax_errors, min_pax, max_pax = _read_pax(request.data)
+    if pax_errors:
+        return _error(next(iter(pax_errors.values()))[0], **pax_errors)
 
     with transaction.atomic():
         _lock()
         if _name_taken(name):
             return _error(_DUPLICATE, name=["Already used."])
         top = BoatCapacityFare.objects.aggregate(top=Max("display_order"))["top"]
-        fare = BoatCapacityFare.objects.create(name=name, display_order=(top or 0) + ORDER_STEP, is_active=True)
-        _log(request, fare, ACTION_CREATE, f"added: '{fare.name}'")
+        fare = BoatCapacityFare.objects.create(
+            name=name,
+            display_order=(top or 0) + ORDER_STEP,
+            is_active=True,
+            min_pax=min_pax,
+            max_pax=max_pax,
+        )
+        _log(request, fare, ACTION_CREATE, f"added: '{fare.name}' ({_range_text(min_pax, max_pax)} pax)")
         count = _count_holders(fare.name)  # records may already hold this text
     return Response(_item(fare, count), status=status.HTTP_201_CREATED)
 
@@ -204,10 +267,15 @@ def boat_capacity_fare_list(request):
 @api_view(["PATCH"])
 @admin_required
 def boat_capacity_fare_detail(request, fare_id):
-    # Only the name can be edited. is_active and display_order have their own endpoints.
-    error, new_name = _clean_name(request.data.get("name"))
-    if error:
-        return _error(error, name=[error])
+    # The name and the people range can be edited. is_active and display_order have
+    # their own endpoints. A request may carry the name, the range, or both.
+    has_name = "name" in request.data
+    has_pax = "min_pax" in request.data or "max_pax" in request.data
+    new_name = None
+    if has_name or not has_pax:
+        error, new_name = _clean_name(request.data.get("name"))
+        if error:
+            return _error(error, name=[error])
 
     with transaction.atomic():
         _lock()
@@ -217,7 +285,16 @@ def boat_capacity_fare_detail(request, fare_id):
             raise Http404("No such tier.")
         old_name = fare.name
 
-        if new_name == old_name:
+        if has_pax:
+            pax_errors, min_pax, max_pax = _read_pax(request.data, fare.min_pax, fare.max_pax)
+            if pax_errors:
+                return _error(next(iter(pax_errors.values()))[0], **pax_errors)
+
+        renaming = new_name is not None and new_name != old_name
+        pax_changes = has_pax and (min_pax, max_pax) != (fare.min_pax, fare.max_pax)
+        if not renaming:
+            if pax_changes:
+                _set_pax(request, fare, min_pax, max_pax)
             return Response(_item(fare, _count_holders(old_name)))
         if _name_taken(new_name, excluding=fare.pk):
             return _error(_DUPLICATE, name=["Already used."])
@@ -241,8 +318,24 @@ def boat_capacity_fare_detail(request, fare_id):
             ACTION_UPDATE,
             _rename_note(old_name, new_name, held_by),
         )
+        # The range is written only after the rename went through: a rename that is
+        # refused (409) leaves the whole request unapplied.
+        if pax_changes:
+            _set_pax(request, fare, min_pax, max_pax)
         count = _count_holders(new_name)
     return Response(_item(fare, count))
+
+
+def _set_pax(request, fare, min_pax, max_pax):
+    before = _range_text(fare.min_pax, fare.max_pax)
+    fare.min_pax, fare.max_pax = min_pax, max_pax
+    fare.save(update_fields=["min_pax", "max_pax"])
+    _log(
+        request,
+        fare,
+        ACTION_UPDATE,
+        f"people range changed: '{fare.name}' from {before} to {_range_text(min_pax, max_pax)}",
+    )
 
 
 def _confirm_required(held_by):

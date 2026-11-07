@@ -38,7 +38,7 @@ let failNext;
 let answerWith;
 
 const tier = (id, name, display_order, record_count, extra = {}) => ({
-  id, name, display_order, is_active: true, record_count, ...extra,
+  id, name, display_order, is_active: true, record_count, min_pax: 1, max_pax: 2, ...extra,
 });
 
 // NOT the built-in nine: different texts, ids that run against the order, one
@@ -113,7 +113,7 @@ function fakeFetch(url, options = {}) {
   if (!idText) {
     if (method === "GET") return reply(200, ordered());
     if (method === "POST") {
-      const created = tier(Math.max(...fares.map((f) => f.id)) + 1, body.name.trim(), Math.max(...fares.map((f) => f.display_order)) + 10, 0);
+      const created = tier(Math.max(...fares.map((f) => f.id)) + 1, body.name.trim(), Math.max(...fares.map((f) => f.display_order)) + 10, 0, { min_pax: body.min_pax, max_pax: body.max_pax });
       fares.push(created);
       return reply(201, created);
     }
@@ -138,6 +138,8 @@ function fakeFetch(url, options = {}) {
       });
     }
     found.name = body.name.trim();
+    if (body.min_pax !== undefined) found.min_pax = body.min_pax;
+    if (body.max_pax !== undefined) found.max_pax = body.max_pax;
     found.record_count = 0; // nobody holds the new text; the records stay on the old one
     return reply(200, found);
   }
@@ -166,6 +168,12 @@ const fareWrites = () => requests.filter((r) => r.path.startsWith("/boat-capacit
 const rowOf = (id) => screen.getByTestId(`fare-row-${id}`);
 const shownOrder = () =>
   screen.getAllByTestId(/^fare-row-/).map((r) => Number(r.getAttribute("data-testid").replace("fare-row-", "")));
+
+// the two boxes of the range, in the add form
+function fillRange(min = "1", max = "2") {
+  fireEvent.change(screen.getByLabelText("New tier min pax"), { target: { value: min } });
+  fireEvent.change(screen.getByLabelText("New tier max pax"), { target: { value: max } });
+}
 
 async function openFareTab() {
   render(<RegistrationOptions />);
@@ -325,10 +333,11 @@ describe("each action: what is shown afterwards AND what was sent", () => {
     await openFareTab();
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "  Whiskey 9-10 pax (One-Way P5000)  " } });
+    fillRange("9", "10");
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("Whiskey 9-10 pax (One-Way P5000)");
 
-    expect(fareWrites()).toEqual([{ method: "POST", path: "/boat-capacity-fares/", body: { name: "  Whiskey 9-10 pax (One-Way P5000)  " } }]);
+    expect(fareWrites()).toEqual([{ method: "POST", path: "/boat-capacity-fares/", body: { name: "  Whiskey 9-10 pax (One-Way P5000)  ", min_pax: 9, max_pax: 10 } }]);
     expect(shownOrder()).toEqual([12, 5, 41, 7, 42]); // the server gave id 42 and order 50
     expect(within(screen.getByTestId("fare-row-42")).getByText("50")).toBeTruthy();
     expect(refreshReferenceTables).toHaveBeenCalledTimes(1);
@@ -343,6 +352,7 @@ describe("each action: what is shown afterwards AND what was sent", () => {
     };
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "typed text" } });
+    fillRange();
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("Name As The Server Kept It");
     expect(screen.queryByText("typed text")).toBeNull();
@@ -357,7 +367,7 @@ describe("each action: what is shown afterwards AND what was sent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await within(rowOf(5)).findByText("Tango renamed 3-4 pax");
 
-    expect(fareWrites()).toEqual([{ method: "PATCH", path: "/boat-capacity-fares/5/", body: { name: "Tango renamed 3-4 pax" } }]);
+    expect(fareWrites()).toEqual([{ method: "PATCH", path: "/boat-capacity-fares/5/", body: { name: "Tango renamed 3-4 pax", min_pax: 1, max_pax: 2 } }]);
     expect(shownOrder()).toEqual([12, 5, 41, 7]);
     expect(refreshReferenceTables).toHaveBeenCalledTimes(1);
   });
@@ -435,6 +445,7 @@ describe("no second fetch, no Loading... after the first open", () => {
     await waitFor(() => expect(shownOrder()).toEqual([5, 12, 41, 7]));
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "One more" } });
+    fillRange();
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText("One more");
     fireEvent.click(screen.getByRole("button", { name: /^Edit Sierra/ }));
@@ -487,6 +498,7 @@ describe("a failed write", () => {
     failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "Mike 1-2 pax (One-Way P1000, Two-way P1400)" } });
+    fillRange();
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     expect(await screen.findByText(/already has this name/)).toBeTruthy();
     expect(shownOrder()).toEqual([12, 5, 41, 7]);
@@ -510,7 +522,7 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     fireEvent.change(screen.getByLabelText("Tier text"), { target: { value: "Tango renamed" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await within(rowOf(5)).findByText("Tango renamed");
-    expect(patches()).toEqual([{ method: "PATCH", path: "/boat-capacity-fares/5/", body: { name: "Tango renamed" } }]);
+    expect(patches()).toEqual([{ method: "PATCH", path: "/boat-capacity-fares/5/", body: { name: "Tango renamed", min_pax: 1, max_pax: 2 } }]);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(patches()[0].body).not.toHaveProperty("confirm_affected_records");
   });
@@ -522,7 +534,7 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByRole("alertdialog");
     expect(patches()).toHaveLength(1);
-    expect(patches()[0].body).toEqual({ name: "Mike renamed" });
+    expect(patches()[0].body).toEqual({ name: "Mike renamed", min_pax: 1, max_pax: 2 });
   });
 
   it("asks the question with the SERVER's number, in the words given, and changes nothing yet", async () => {
@@ -564,7 +576,7 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
     await within(rowOf(12)).findByText("Mike renamed");
     expect(patches()).toHaveLength(2);
-    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 5 }); // NOT 3
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", min_pax: 1, max_pax: 2, confirm_affected_records: 5 }); // NOT 3
     expect(patches()[1].body.confirm_affected_records).not.toBe(3);
   });
 
@@ -596,7 +608,7 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     answerWith = { match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/", body: tier(12, "Mike renamed", 10, 0, { is_active: false }) };
     fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
     await within(rowOf(12)).findByText("Mike renamed");
-    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 5 }); // the number asked, not 7
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", min_pax: 1, max_pax: 2, confirm_affected_records: 5 }); // the number asked, not 7
   });
 
   it("b) refused twice: 3 and then 4. The question is asked again with 4, and the third try sends 4, not 3", async () => {
@@ -617,14 +629,14 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     await waitFor(() => expect(screen.getByRole("alertdialog").textContent).toContain("4 record(s) hold the old text"));
     expect(screen.getByRole("alertdialog").textContent).not.toContain("3 record(s)");
     expect(patches()).toHaveLength(2); // asked again, NOT resent on its own
-    expect(patches()[1].body).toEqual({ name: "Mike renamed", confirm_affected_records: 3 });
+    expect(patches()[1].body).toEqual({ name: "Mike renamed", min_pax: 1, max_pax: 2, confirm_affected_records: 3 });
     expect(within(rowOf(12)).getByText("4 records")).toBeTruthy(); // the row takes the server's new number too
 
     answerWith = { match: (method, path) => method === "PATCH" && path === "/boat-capacity-fares/12/", body: tier(12, "Mike renamed", 10, 0) };
     fireEvent.click(screen.getByRole("button", { name: "Yes, rename" }));
     await within(rowOf(12)).findByText("Mike renamed");
     expect(patches()).toHaveLength(3);
-    expect(patches()[2].body).toEqual({ name: "Mike renamed", confirm_affected_records: 4 }); // the NEW number
+    expect(patches()[2].body).toEqual({ name: "Mike renamed", min_pax: 1, max_pax: 2, confirm_affected_records: 4 }); // the NEW number
   });
 
   it("the whole way with the real count: the answer replaces the row, which then shows 0 records, and the form closes", async () => {
@@ -637,8 +649,8 @@ describe("C) renaming a tier that records hold: the server's number, asked, conf
     await within(rowOf(12)).findByText("Mike renamed");
 
     expect(patches().map((p) => p.body)).toEqual([
-      { name: "Mike renamed" },
-      { name: "Mike renamed", confirm_affected_records: 3 },
+      { name: "Mike renamed", min_pax: 1, max_pax: 2 },
+      { name: "Mike renamed", min_pax: 1, max_pax: 2, confirm_affected_records: 3 },
     ]);
     expect(within(rowOf(12)).getByText("0 records")).toBeTruthy();
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -730,6 +742,7 @@ describe("d) ONE message, in the form", () => {
     failNext = { status: 400, body: { detail: "Another tier already has this name (capitals and spaces do not count)." } };
     fireEvent.click(screen.getByRole("button", { name: /add option/i }));
     fireEvent.change(screen.getByLabelText("New tier text"), { target: { value: "Dup" } });
+    fillRange();
     fireEvent.click(screen.getByRole("button", { name: "Save new tier" }));
     await screen.findByText(/already has this name/);
     expect(screen.getAllByText(/already has this name/)).toHaveLength(1);

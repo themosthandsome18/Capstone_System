@@ -472,6 +472,13 @@
   color: var(--th-text-muted);
 }
 
+/* The same line as a hint, in the amber the page already uses for a warning
+   (.booking-save-notice.warning): it informs, it does not block. */
+.wizard-field-hint.warning {
+  color: #92400e;
+  font-weight: 600;
+}
+
 /* ── Water source multi-select ── */
 .ws-multiselect {
   position: relative;

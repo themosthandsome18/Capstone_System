@@ -1524,12 +1524,63 @@ class BoatCapacityFare(ActiveOption):
 
     name = models.CharField(max_length=160)
     display_order = models.PositiveIntegerField(default=0)
+    # The people the tier is for, "1-2 pax" -> 1 and 2. NULL only as a safety net
+    # (a row the backfill could not read, an old row): the LGU form requires both,
+    # the database does not. Nothing reads them yet except the clients that will
+    # tie the tier to Total Visitors.
+    min_pax = models.PositiveSmallIntegerField(null=True, blank=True)
+    max_pax = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["display_order", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(min_pax__isnull=True, max_pax__isnull=True)
+                    | models.Q(min_pax__isnull=False, max_pax__isnull=False)
+                ),
+                name="boat_capacity_fare_pax_both_or_neither",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_pax__isnull=True) | models.Q(min_pax__gte=1),
+                name="boat_capacity_fare_min_pax_at_least_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_pax__isnull=True) | models.Q(max_pax__gte=models.F("min_pax")),
+                name="boat_capacity_fare_max_pax_not_below_min",
+            ),
+        ]
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        error = pax_range_error(self.min_pax, self.max_pax)
+        if error:
+            raise ValidationError({"max_pax" if self.min_pax is not None else "min_pax": error})
+
+
+# The one place the rule for a tier's people range lives; the model's clean() and
+# the tier API both call it.
+PAX_MIN_MESSAGE = "The smallest number of people must be 1 or more."
+PAX_PAIR_MESSAGE = "Give both the smallest and the largest number of people, or neither."
+PAX_ORDER_MESSAGE = "The largest number of people cannot be smaller than the smallest."
+PAX_WHOLE_MESSAGE = "The number of people must be a whole number."
+
+
+def pax_range_error(min_pax, max_pax):
+    """-> None when (min_pax, max_pax) is a valid range (both None is allowed:
+    the database keeps those as the safety net), else a sentence saying why."""
+    if (min_pax is None) != (max_pax is None):
+        return PAX_PAIR_MESSAGE
+    if min_pax is None:
+        return None
+    if min_pax < 1:
+        return PAX_MIN_MESSAGE
+    if max_pax < min_pax:
+        return PAX_ORDER_MESSAGE
+    return None
 
 
 class MobileContentItem(models.Model):

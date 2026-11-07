@@ -24,7 +24,7 @@ let refreshReferenceTables;
 
 const row = (id, name, extra = {}) => ({ id, name, is_active: true, record_count: 0, rename_protected: false, ...extra });
 const fare = (id, name, display_order, record_count, extra = {}) => ({
-  id, name, display_order, is_active: true, record_count, ...extra,
+  id, name, display_order, is_active: true, record_count, min_pax: 1, max_pax: 2, ...extra,
 });
 
 function freshLists() {

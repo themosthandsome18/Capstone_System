@@ -7684,7 +7684,7 @@ class BoatCapacityFareModelTests(TestCase):
 
     def test_the_fields_are_exactly_these(self):
         fields = {f.name: f for f in BoatCapacityFare._meta.get_fields()}
-        self.assertEqual(set(fields), {"id", "name", "display_order", "is_active"})
+        self.assertEqual(set(fields), {"id", "name", "display_order", "is_active", "min_pax", "max_pax"})
         self.assertEqual(type(fields["id"]).__name__, "BigAutoField")
         self.assertEqual(fields["name"].max_length, 160)
         self.assertEqual(fields["display_order"].default, 0)
@@ -7904,9 +7904,9 @@ class BoatCapacityFarePayloadTests(TestCase):
     def test_the_mobile_list_is_the_active_names_in_order_and_nothing_else(self):
         self._nine()
         mobile = self._mobile()
-        self.assertEqual(mobile, [{"name": name} for name in self.seed.TIERS])
+        self.assertEqual(mobile, [{"name": name, "min_pax": None, "max_pax": None} for name in self.seed.TIERS])
         for item in mobile:
-            self.assertEqual(set(item), {"name"})
+            self.assertEqual(set(item), {"name", "min_pax", "max_pax"})
             self.assertNotIn("id", item)
 
     def test_the_web_list_is_every_tier_with_id_name_order_and_state(self):
@@ -7915,7 +7915,7 @@ class BoatCapacityFarePayloadTests(TestCase):
         web = self._web()
         self.assertEqual(len(web), 9)
         for item in web:
-            self.assertEqual(set(item), {"id", "name", "display_order", "is_active"})
+            self.assertEqual(set(item), {"id", "name", "display_order", "is_active", "min_pax", "max_pax"})
         self.assertEqual([item["name"] for item in web], self.seed.TIERS)
         self.assertEqual([item["display_order"] for item in web], [10, 20, 30, 40, 50, 60, 70, 80, 90])
         self.assertEqual([item["is_active"] for item in web], [True, True, False] + [True] * 6)
@@ -7937,7 +7937,7 @@ class BoatCapacityFarePayloadTests(TestCase):
         BoatCapacityFare.objects.create(id=777, name="Only tier", display_order=1)
         BoatCapacityFare.objects.create(id=778, name="Retired tier", display_order=2, is_active=False)
         mobile = self._mobile()
-        self.assertEqual(mobile, [{"name": "Only tier"}])
+        self.assertEqual(mobile, [{"name": "Only tier", "min_pax": None, "max_pax": None}])
         self.assertNotIn("777", str(mobile))
         self.assertNotIn("id", mobile[0])
 
@@ -8034,7 +8034,10 @@ class BoatCapacityFarePayloadTests(TestCase):
         mobile = self._mobile()
         web = self._web()
         self.assertEqual(MOBILE_REFERENCE_TABLES_CACHE_KEY, "mobile_reference_tables_v2")
-        self.assertEqual(mobile, [{"name": name} for name in self.seed.TIERS[1:]])
+        self.assertEqual(
+            mobile,
+            [{"name": name, "min_pax": None, "max_pax": None} for name in self.seed.TIERS[1:]],
+        )
         self.assertEqual([item["name"] for item in web], self.seed.TIERS)
         self.assertIs(web[0]["is_active"], False)
         self.assertNotIn("Stale fare", [item["name"] for item in web])
@@ -8268,7 +8271,7 @@ class BoatCapacityFareApiTests(_BoatFareApiBase, TestCase):
         self.assertEqual([r["display_order"] for r in rows], [10, 20, 30, 40])
         self.assertEqual([r["is_active"] for r in rows], [True, True, True, False])
         for row in rows:
-            self.assertEqual(set(row), {"id", "name", "display_order", "is_active", "record_count"})
+            self.assertEqual(set(row), {"id", "name", "display_order", "is_active", "min_pax", "max_pax", "record_count"})
 
     def test_record_count_is_exact_text_and_zero_for_a_tier_nobody_holds(self):
         rows = {r["name"]: r["record_count"] for r in self.admin.get(self.LIST).json()}
