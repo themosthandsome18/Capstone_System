@@ -1425,6 +1425,69 @@ const mapFocusCurve = Curves.easeInOutCubic;
 /// How long the page takes to go back up to the map when it was scrolled down to the list of places.
 const mapScrollDuration = Duration(milliseconds: 450);
 
+/// How much of the middle of the map a pin may be in and count as "already there": a pin tapped inside it does not move the map.
+const mapPinStillFraction = 0.25;
+
+/// The trip of a map to a place: centre and zoom together, in [mapFocusDuration] with [mapFocusCurve]; at once with "reduce motion". ONE trip
+/// for the Maps & Guides map and for the full-screen map, and for both "View on map" and a tap on a pin.
+class MapGlide {
+  MapGlide({required TickerProvider vsync, required this.controller})
+    : _animation = AnimationController(vsync: vsync, duration: mapFocusDuration);
+
+  final MapController controller;
+  final AnimationController _animation;
+  VoidCallback? _tick;
+
+  /// Goes to [to] at [zoom] from where the camera is now.
+  void flyTo(LatLng to, {double zoom = mapFocusZoom, required bool reduceMotion}) {
+    if (reduceMotion) {
+      _animation.stop();
+      controller.move(to, zoom);
+      return;
+    }
+    final from = controller.camera;
+    final fromCentre = from.center;
+    final fromZoom = from.zoom;
+    final eased = CurvedAnimation(parent: _animation, curve: mapFocusCurve);
+    if (_tick != null) _animation.removeListener(_tick!);
+    _tick = () {
+      final t = eased.value;
+      controller.move(
+        LatLng(
+          fromCentre.latitude + (to.latitude - fromCentre.latitude) * t,
+          fromCentre.longitude + (to.longitude - fromCentre.longitude) * t,
+        ),
+        fromZoom + (zoom - fromZoom) * t,
+      );
+    };
+    _animation.addListener(_tick!);
+    _animation.forward(from: 0);
+  }
+
+  /// A pin was tapped. The map goes to it, close in, unless it is close in already: it never zooms OUT, it does not zoom in further than
+  /// [mapFocusZoom] on its own account, and a pin that is already in the middle of what is on the screen is left where it is, so that tapping
+  /// the same pin again, or pins next to each other, does not make the map swim.
+  void focusPin(LatLng pin, {required bool reduceMotion}) {
+    final camera = controller.camera;
+    final closeIn = camera.zoom >= mapFocusZoom;
+    if (closeIn && _inTheMiddle(camera, pin)) return;
+    flyTo(pin, zoom: closeIn ? camera.zoom : mapFocusZoom, reduceMotion: reduceMotion);
+  }
+
+  bool _inTheMiddle(MapCamera camera, LatLng pin) {
+    final bounds = camera.visibleBounds;
+    final across = (bounds.north - bounds.south).abs();
+    final along = (bounds.east - bounds.west).abs();
+    return (pin.latitude - camera.center.latitude).abs() <= across * mapPinStillFraction &&
+        (pin.longitude - camera.center.longitude).abs() <= along * mapPinStillFraction;
+  }
+
+  /// A hand on the map: the trip stops where it is.
+  void stop() => _animation.stop();
+
+  void dispose() => _animation.dispose();
+}
+
 class TourismMapPage extends StatefulWidget {
   const TourismMapPage({
     super.key,
@@ -1451,20 +1514,19 @@ class TourismMapPage extends StatefulWidget {
   State<TourismMapPage> createState() => _TourismMapPageState();
 }
 
-class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProviderStateMixin {
+class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStateMixin {
   Destination? _selectedDestination;
   final MapController _mapController = MapController();
   final ScrollController _scrollController = ScrollController();
 
-  /// The trip of the map to a destination: one controller, and each frame moves the map a little of the way.
-  late final AnimationController _flight;
-  VoidCallback? _flightTick;
+  /// The trip of the map to a destination or a pin.
+  late final MapGlide _glide;
 
   @override
   void initState() {
     super.initState();
     // Made here, not on first use: a controller first made while the page is being taken down would look up a widget that is gone.
-    _flight = AnimationController(vsync: this, duration: mapFocusDuration);
+    _glide = MapGlide(vsync: this, controller: _mapController);
     // The Map tab is built when it is chosen. A request made from Destination Details is here from the start: its box is open at once, and
     // once the map is on screen it travels from the whole of Mauban in to that destination (it does not start already there: the trip is
     // what shows where it is going).
@@ -1490,7 +1552,7 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
 
   @override
   void dispose() {
-    _flight.dispose();
+    _glide.dispose();
     _scrollController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -1508,31 +1570,10 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
     }
   }
 
-  /// The map glides from where it is to [target], centre and zoom together. With "reduce motion" on, it goes there at once.
+  /// The map glides from where it is to [target], close in. With "reduce motion" on, it goes there at once.
   void _flyTo(Destination target) {
     if (!mounted) return;
-    final to = LatLng(target.latitude, target.longitude);
-    if (_reduceMotion) {
-      _mapController.move(to, mapFocusZoom);
-      return;
-    }
-    final from = _mapController.camera;
-    final fromCentre = from.center;
-    final fromZoom = from.zoom;
-    final eased = CurvedAnimation(parent: _flight, curve: mapFocusCurve);
-    if (_flightTick != null) _flight.removeListener(_flightTick!);
-    _flightTick = () {
-      final t = eased.value;
-      _mapController.move(
-        LatLng(
-          fromCentre.latitude + (to.latitude - fromCentre.latitude) * t,
-          fromCentre.longitude + (to.longitude - fromCentre.longitude) * t,
-        ),
-        fromZoom + (mapFocusZoom - fromZoom) * t,
-      );
-    };
-    _flight.addListener(_flightTick!);
-    _flight.forward(from: 0);
+    _glide.flyTo(LatLng(target.latitude, target.longitude), reduceMotion: _reduceMotion);
   }
 
   Destination? _focusTarget(MapFocusRequest? request) {
@@ -1541,6 +1582,9 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
   }
 
   void _openFullscreenMap(BuildContext context, List<Destination> highlighted) {
+    // Its own map, so its own controller and trip (the same MapGlide as the page's map). Taken down when the map is closed.
+    final fullController = MapController();
+    final fullGlide = MapGlide(vsync: this, controller: fullController);
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1552,11 +1596,13 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
               body: Stack(
                 children: [
                   FlutterMap(
+                    mapController: fullController,
                     options: MapOptions(
                       initialCenter: _selectedDestination != null && _selectedDestination!.hasCoordinates
                           ? LatLng(_selectedDestination!.latitude, _selectedDestination!.longitude)
                           : const LatLng(14.185, 121.731),
                       initialZoom: 12.0,
+                      onPointerDown: (event, point) => fullGlide.stop(),
                       minZoom: 8,
                       maxZoom: 18,
                       interactionOptions: const InteractionOptions(
@@ -1581,6 +1627,10 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
                             child: GestureDetector(
                               onTap: () {
                                 setDialogState(() => _selectedDestination = destination);
+                                fullGlide.focusPin(
+                                  LatLng(destination.latitude, destination.longitude),
+                                  reduceMotion: MediaQuery.maybeOf(context)?.disableAnimations ?? false,
+                                );
                               },
                               child: isSelected
                                   ? const Icon(Icons.location_on, color: Color(0xFFD81558), size: 48)
@@ -1665,7 +1715,10 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      fullGlide.dispose();
+      fullController.dispose();
+    });
   }
 
   Widget _buildMapPreviewCard(Destination destination, {required VoidCallback onDetails, required VoidCallback onClose}) {
@@ -1786,7 +1839,7 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
                     initialCenter: const LatLng(14.185, 121.731),
                     initialZoom: 10.5,
                     // The visitor takes hold of the map: the trip stops where it is.
-                    onPointerDown: (event, point) => _flight.stop(),
+                    onPointerDown: (event, point) => _glide.stop(),
                     minZoom: 8,
                     maxZoom: 18,
                     interactionOptions: const InteractionOptions(
@@ -1809,6 +1862,11 @@ class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProvid
                           child: GestureDetector(
                             onTap: () {
                               setState(() => _selectedDestination = destination);
+                              // The box opens, and the map goes to the pin (unless it is close in on it already).
+                              _glide.focusPin(
+                                LatLng(destination.latitude, destination.longitude),
+                                reduceMotion: _reduceMotion,
+                              );
                             },
                             child: isSelected
                                 ? const Icon(Icons.location_on, color: Color(0xFFD81558), size: 44)
