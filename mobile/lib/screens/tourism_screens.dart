@@ -1417,6 +1417,14 @@ class MapFocusRequest {
 /// How close the map is when it is centred on one destination.
 const mapFocusZoom = 15.0;
 
+/// How long the map takes to travel to a destination, and the curve of the trip: it leaves and arrives gently, so it reads as a glide and
+/// not as a jump, and it is short enough not to be waited for.
+const mapFocusDuration = Duration(milliseconds: 800);
+const mapFocusCurve = Curves.easeInOutCubic;
+
+/// How long the page takes to go back up to the map when it was scrolled down to the list of places.
+const mapScrollDuration = Duration(milliseconds: 450);
+
 class TourismMapPage extends StatefulWidget {
   const TourismMapPage({
     super.key,
@@ -1443,43 +1451,88 @@ class TourismMapPage extends StatefulWidget {
   State<TourismMapPage> createState() => _TourismMapPageState();
 }
 
-class _TourismMapPageState extends State<TourismMapPage> {
+class _TourismMapPageState extends State<TourismMapPage> with SingleTickerProviderStateMixin {
   Destination? _selectedDestination;
   final MapController _mapController = MapController();
-  LatLng _initialCenter = const LatLng(14.185, 121.731);
-  double _initialZoom = 10.5;
+  final ScrollController _scrollController = ScrollController();
+
+  /// The trip of the map to a destination: one controller, and each frame moves the map a little of the way.
+  late final AnimationController _flight;
+  VoidCallback? _flightTick;
 
   @override
   void initState() {
     super.initState();
-    // The Map tab is built when it is chosen, so a request made from Destination Details is here from the start: the map opens on it.
+    // Made here, not on first use: a controller first made while the page is being taken down would look up a widget that is gone.
+    _flight = AnimationController(vsync: this, duration: mapFocusDuration);
+    // The Map tab is built when it is chosen. A request made from Destination Details is here from the start: its box is open at once, and
+    // once the map is on screen it travels from the whole of Mauban in to that destination (it does not start already there: the trip is
+    // what shows where it is going).
     final target = _focusTarget(widget.focus);
     if (target != null) {
       _selectedDestination = target;
-      _initialCenter = LatLng(target.latitude, target.longitude);
-      _initialZoom = mapFocusZoom;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _flyTo(target));
     }
   }
 
   @override
   void didUpdateWidget(TourismMapPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A request that arrives while the map is already on screen: move the map to it and open its box.
+    // A request that arrives while the map is already on screen: open its box, bring the page back up to the map (it may have been scrolled
+    // down to the list of places) and send the map there from where it is.
     final target = _focusTarget(widget.focus);
     if (target != null && !identical(widget.focus, oldWidget.focus)) {
       setState(() => _selectedDestination = target);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _mapController.move(LatLng(target.latitude, target.longitude), mapFocusZoom);
-        }
-      });
+      _scrollToTop();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _flyTo(target));
     }
   }
 
   @override
   void dispose() {
+    _flight.dispose();
+    _scrollController.dispose();
     _mapController.dispose();
     super.dispose();
+  }
+
+  bool get _reduceMotion => MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  /// Back to the top of the page, where the map is. Nothing to do when it is there already.
+  void _scrollToTop() {
+    if (!_scrollController.hasClients || _scrollController.offset == 0) return;
+    if (_reduceMotion) {
+      _scrollController.jumpTo(0);
+    } else {
+      _scrollController.animateTo(0, duration: mapScrollDuration, curve: Curves.easeOutCubic);
+    }
+  }
+
+  /// The map glides from where it is to [target], centre and zoom together. With "reduce motion" on, it goes there at once.
+  void _flyTo(Destination target) {
+    if (!mounted) return;
+    final to = LatLng(target.latitude, target.longitude);
+    if (_reduceMotion) {
+      _mapController.move(to, mapFocusZoom);
+      return;
+    }
+    final from = _mapController.camera;
+    final fromCentre = from.center;
+    final fromZoom = from.zoom;
+    final eased = CurvedAnimation(parent: _flight, curve: mapFocusCurve);
+    if (_flightTick != null) _flight.removeListener(_flightTick!);
+    _flightTick = () {
+      final t = eased.value;
+      _mapController.move(
+        LatLng(
+          fromCentre.latitude + (to.latitude - fromCentre.latitude) * t,
+          fromCentre.longitude + (to.longitude - fromCentre.longitude) * t,
+        ),
+        fromZoom + (mapFocusZoom - fromZoom) * t,
+      );
+    };
+    _flight.addListener(_flightTick!);
+    _flight.forward(from: 0);
   }
 
   Destination? _focusTarget(MapFocusRequest? request) {
@@ -1706,6 +1759,7 @@ class _TourismMapPageState extends State<TourismMapPage> {
     final highlighted = mappedDestinations.take(80).toList();
 
     return ListView(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       children: [
         const PageTitle(
@@ -1729,8 +1783,10 @@ class _TourismMapPageState extends State<TourismMapPage> {
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: _initialCenter,
-                    initialZoom: _initialZoom,
+                    initialCenter: const LatLng(14.185, 121.731),
+                    initialZoom: 10.5,
+                    // The visitor takes hold of the map: the trip stops where it is.
+                    onPointerDown: (event, point) => _flight.stop(),
                     minZoom: 8,
                     maxZoom: 18,
                     interactionOptions: const InteractionOptions(

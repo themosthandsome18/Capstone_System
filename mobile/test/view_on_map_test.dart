@@ -177,12 +177,13 @@ void main() {
       expect(find.text('View'), findsNothing);
     });
 
-    testWidgets('with a request it opens centred on that destination', (tester) async {
+    testWidgets('with a request it ends centred on that destination, close in', (tester) async {
       await pump(tester, focus: MapFocusRequest(dest(bravo)));
-      final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
-      expect(map.options.initialCenter.latitude, closeTo(14.31, 0.0001));
-      expect(map.options.initialCenter.longitude, closeTo(121.88, 0.0001));
-      expect(map.options.initialZoom, mapFocusZoom);
+      await tester.pump(mapFocusDuration + const Duration(milliseconds: 100));
+      final camera = tester.widget<FlutterMap>(find.byType(FlutterMap)).mapController!.camera;
+      expect(camera.center.latitude, closeTo(14.31, 0.0001));
+      expect(camera.center.longitude, closeTo(121.88, 0.0001));
+      expect(camera.zoom, closeTo(mapFocusZoom, 0.0001));
     });
 
     // The names also stand in the list of places under the map (once each): the box is the second time.
@@ -209,7 +210,7 @@ void main() {
           ),
         );
         await tester.pump();
-        await tester.pump();
+        await tester.pump(mapFocusDuration + const Duration(milliseconds: 100));
       });
       final centre = centreOf(tester);
       expect(centre.latitude, closeTo(14.20, 0.0001));
@@ -226,6 +227,178 @@ void main() {
       expect(centre.latitude, closeTo(14.185, 0.0001));
       expect(find.text('Nowhere Place'), findsOneWidget, reason: 'in the list only: no box was opened for it');
       expect(find.text('View'), findsNothing);
+    });
+  });
+
+  group('the trip and the scroll', () {
+    // Alpha and Bravo, and twelve more places, so that the list under the map is long enough to scroll.
+    List<Destination> many() => [
+      dest(alpha),
+      dest(bravo),
+      for (var i = 0; i < 12; i++)
+        dest({
+          'resort_id': 100 + i,
+          'resort_name': 'Filler Place $i',
+          'type': 'Beach Resort',
+          'location': 'Mauban',
+          'latitude': 14.15 + i * 0.01,
+          'longitude': 121.6 + i * 0.01,
+        }),
+    ];
+
+    Widget page({MapFocusRequest? focus, bool reduceMotion = false}) => MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(size: const Size(411, 700), disableAnimations: reduceMotion),
+        child: Scaffold(
+          body: TourismMapPage(destinations: many(), onOpenDestination: (_) {}, focus: focus),
+        ),
+      ),
+    );
+
+    Future<void> pumpPage(WidgetTester tester, Widget widget) async {
+      await mocked(() async {
+        await tester.pumpWidget(widget);
+        await tester.pump();
+      });
+    }
+
+    double scrolled(WidgetTester tester) => tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels;
+
+    /// The map is on the screen, whole in the height of it.
+    bool mapVisible(WidgetTester tester) {
+      if (find.byType(FlutterMap).evaluate().isEmpty) return false;
+      final rect = tester.getRect(find.byType(FlutterMap));
+      return rect.top >= 0 && rect.bottom <= 700;
+    }
+
+    /// Scrolls the page down to the list of places. The drag starts on the list, not on the map (a drag on the map moves the map).
+    Future<void> scrollDown(WidgetTester tester) async {
+      await tester.dragFrom(const Offset(205, 660), const Offset(0, -3000));
+      await tester.pump();
+    }
+
+    void smallScreen(WidgetTester tester) {
+      bigScreen(tester);
+      tester.view.physicalSize = const Size(411, 700);
+    }
+
+    testWidgets('scrolled down to the list, View on map brings the page back up to the map and its box', (tester) async {
+      smallScreen(tester);
+      await pumpPage(tester, page());
+      await scrollDown(tester);
+      await tester.pump();
+      expect(scrolled(tester), greaterThan(300), reason: 'the fixture: the page really is scrolled down');
+      expect(mapVisible(tester), isFalse);
+
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(alpha))));
+      await mocked(() async {
+        await tester.pump(mapScrollDuration + const Duration(milliseconds: 50));
+        await tester.pump(mapFocusDuration);
+      });
+      expect(scrolled(tester), 0, reason: 'back at the top');
+      expect(mapVisible(tester), isTrue);
+      expect(find.text('View'), findsOneWidget, reason: 'its box is open and can be seen');
+      final centre = centreOf(tester);
+      expect(centre.latitude, closeTo(14.20, 0.0001));
+      expect(centre.longitude, closeTo(121.70, 0.0001));
+    });
+
+    testWidgets('the page does not jump: it is part-way up while it travels', (tester) async {
+      smallScreen(tester);
+      await pumpPage(tester, page());
+      await scrollDown(tester);
+      await tester.pump();
+      final start = scrolled(tester);
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(alpha))));
+      await mocked(() async {
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(scrolled(tester), lessThan(start * 0.8), reason: 'well on its way up (a settling of the layout is not a scroll)');
+        expect(scrolled(tester), greaterThan(0), reason: 'still on its way, not already at the top');
+        await tester.pump(mapScrollDuration);
+        await tester.pump(mapFocusDuration);
+      });
+    });
+
+    testWidgets('from another tab the map is at the top and on the screen, with the box open', (tester) async {
+      smallScreen(tester);
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(bravo))));
+      await mocked(() async {
+        await tester.pump(mapFocusDuration + const Duration(milliseconds: 100));
+      });
+      expect(scrolled(tester), 0);
+      expect(mapVisible(tester), isTrue);
+      expect(find.text('View'), findsOneWidget);
+    });
+
+    testWidgets('the map TRAVELS: part-way through, the camera is between where it began and where it ends', (tester) async {
+      smallScreen(tester);
+      final samples = <(double, double)>[];
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(bravo))));
+      await mocked(() async {
+        for (var i = 0; i < 8; i++) {
+          final camera = tester.widget<FlutterMap>(find.byType(FlutterMap)).mapController!.camera;
+          samples.add((camera.center.latitude, camera.zoom));
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+      });
+      final end = centreOf(tester);
+      expect(end.latitude, closeTo(14.31, 0.0001));
+      // it began far from the destination (the whole of Mauban) and not already there
+      expect(samples.first.$1, closeTo(14.185, 0.01));
+      expect(samples.first.$2, closeTo(10.5, 0.1));
+      // and in between it was neither at the start nor at the end: more than one move
+      final middle = samples[4];
+      expect(middle.$1, greaterThan(14.185 + 0.01));
+      expect(middle.$1, lessThan(14.31 - 0.01));
+      expect(middle.$2, greaterThan(10.5 + 0.3));
+      expect(middle.$2, lessThan(mapFocusZoom - 0.3));
+      // it only goes one way, step after step
+      for (var i = 1; i < samples.length; i++) {
+        expect(samples[i].$1, greaterThanOrEqualTo(samples[i - 1].$1));
+        expect(samples[i].$2, greaterThanOrEqualTo(samples[i - 1].$2));
+      }
+      // and it is a glide that eases: slower at the start than in the middle
+      final first = samples[1].$1 - samples[0].$1;
+      final mid = samples[4].$1 - samples[3].$1;
+      expect(first, lessThan(mid));
+    });
+
+    testWidgets('the trip takes about as long as it was meant to, and not much longer', (tester) async {
+      smallScreen(tester);
+      expect(mapFocusDuration.inMilliseconds, inInclusiveRange(700, 900));
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(bravo))));
+      await mocked(() async {
+        await tester.pump(mapFocusDuration ~/ 2);
+        expect(centreOf(tester).latitude, lessThan(14.31 - 0.005), reason: 'half way, not there yet');
+        await tester.pump(mapFocusDuration ~/ 2 + const Duration(milliseconds: 20));
+      });
+      expect(centreOf(tester).latitude, closeTo(14.31, 0.0001), reason: 'there when the time is up');
+    });
+
+    testWidgets('a trip that begins on the map starts where the camera is, not from the destination', (tester) async {
+      smallScreen(tester);
+      await pumpPage(tester, page());
+      final before = centreOf(tester);
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(bravo))));
+      await mocked(() async {
+        await tester.pump(const Duration(milliseconds: 100));
+        final soon = centreOf(tester);
+        expect((soon.latitude - before.latitude).abs(), lessThan(0.06), reason: 'it set off from where it was');
+        await tester.pump(mapFocusDuration);
+      });
+      expect(centreOf(tester).latitude, closeTo(14.31, 0.0001));
+    });
+
+    testWidgets('with reduce-motion on it goes at once, and the page jumps to the top', (tester) async {
+      smallScreen(tester);
+      await pumpPage(tester, page(reduceMotion: true));
+      await scrollDown(tester);
+      await tester.pump();
+      await pumpPage(tester, page(focus: MapFocusRequest(dest(alpha)), reduceMotion: true));
+      await tester.pump();
+      expect(centreOf(tester).latitude, closeTo(14.20, 0.0001));
+      expect(scrolled(tester), 0);
     });
   });
 
@@ -262,7 +435,7 @@ void main() {
         await tester.tap(viewOnMap());
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
-        await tester.pump();
+        await tester.pump(mapFocusDuration);
       });
       expect(find.byType(DestinationDetailPage), findsNothing);
       expect(find.text('Maps & Guides'), findsOneWidget);
@@ -271,6 +444,8 @@ void main() {
       expect(centre.longitude, closeTo(121.70, 0.0001));
       expect(find.text('View'), findsOneWidget);
       expect(find.text('Lamon Bay, Mauban'), findsOneWidget, reason: 'only in the list: not the box of the other destination');
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(tester.getRect(find.byType(FlutterMap)).top, greaterThanOrEqualTo(0), reason: 'the map can be seen');
     });
 
     testWidgets('leaving the Map tab and coming back is the whole map again, not the same destination', (tester) async {
