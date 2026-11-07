@@ -3083,6 +3083,10 @@ class _DestinationImageSlideshowState
   }
 }
 
+/// How far the name of a destination moves over, when the header is folded up, so that it starts after the back arrow: the 16 it has from the
+/// edge plus this is 72, the 48 of the arrow button with its margin and a gap. (Open, the arrow is above the name and nothing moves over.)
+const detailTitleFoldedShift = 56.0;
+
 class DestinationDetailPage extends StatefulWidget {
   const DestinationDetailPage({
     super.key,
@@ -3150,22 +3154,36 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              title: Text(
-                widget.destination.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black54,
-                      blurRadius: 8,
-                      offset: Offset(0, 1),
+              // Open, the name sits at the bottom of the photo, 16 from the edge. Folded up, it sits in the bar, next to the back arrow, so it
+              // must start after the arrow (a plain 16 put it under the arrow). It slides over by the amount the header is folded.
+              title: Builder(
+                builder: (context) {
+                  final bar = context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
+                  var folded = 0.0;
+                  if (bar != null && bar.maxExtent > bar.minExtent) {
+                    folded = (1 - (bar.currentExtent - bar.minExtent) / (bar.maxExtent - bar.minExtent)).clamp(0.0, 1.0);
+                  }
+                  return Padding(
+                    padding: EdgeInsetsDirectional.only(start: detailTitleFoldedShift * folded),
+                    child: Text(
+                      widget.destination.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 8,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
               background: Stack(
                 fit: StackFit.expand,
