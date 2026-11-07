@@ -462,7 +462,6 @@ class TourismApi {
     // Null for a foreign visitor: the server accepts a record without them.
     int? regionId,
     int? provinceId,
-    required String countryOfOrigin,
     required int resortId,
     required int itineraryId,
     required int travelModeId,
@@ -501,7 +500,6 @@ class TourismApi {
       // Left out, not sent as null, when there is none (a foreign visitor).
       'region_id': ?regionId,
       'province_id': ?provinceId,
-      'country_of_origin': countryOfOrigin,
       'resort_id': resortId,
       'itinerary_id': itineraryId,
       'travel_mode_id': travelModeId,

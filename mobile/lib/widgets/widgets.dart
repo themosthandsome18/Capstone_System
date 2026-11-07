@@ -1083,7 +1083,7 @@ class AppHeader extends StatelessWidget {
             border: Border.all(color: context.brand.primary.withValues(alpha: 0.35), width: 1.5),
           ),
           child: ClipOval(
-            child: Image.asset('assets/tourism_logo.jpg', width: 34, height: 34, fit: BoxFit.cover),
+            child: Image.asset('assets/tourism_logo.png', width: 34, height: 34, fit: BoxFit.cover),
           ),
         ),
         const SizedBox(width: 10),
@@ -2354,10 +2354,18 @@ class AppTextField extends StatelessWidget {
     this.keyboardType,
     this.textCapitalization = TextCapitalization.none,
     this.onChanged,
+    this.prefixText,
+    this.hintText,
+    this.inputFormatters,
+    this.maxLength,
   });
 
   final TextEditingController controller;
   final String label;
+  final String? prefixText;
+  final String? hintText;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
   final int maxLines;
   final TextInputType? keyboardType;
   final TextCapitalization textCapitalization;
@@ -2373,8 +2381,25 @@ class AppTextField extends StatelessWidget {
         keyboardType: keyboardType,
         textCapitalization: textCapitalization,
         onChanged: onChanged,
+        inputFormatters: inputFormatters,
+        maxLength: maxLength,
         decoration: InputDecoration(
           labelText: label,
+          prefixText: prefixText,
+          // A prefix (like +63) reads as a label and a hint as a suggestion, so
+          // they must not look like what the user types. Flutter makes the
+          // prefix follow the hint style unless it is set on its own.
+          prefixStyle: prefixText == null
+              ? null
+              : const TextStyle(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w600,
+                ),
+          hintText: hintText,
+          hintStyle: hintText == null
+              ? null
+              : const TextStyle(color: AppColors.muted),
+          counterText: maxLength == null ? null : '',
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
