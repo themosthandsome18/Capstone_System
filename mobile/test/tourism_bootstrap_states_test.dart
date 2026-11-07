@@ -17,14 +17,16 @@ final _rawOf = Expando<String>('raw bootstrap');
 String rawOf(MobileBootstrap bootstrap) => _rawOf[bootstrap]!;
 
 /// Synthetic data only: no real resort, person or contact.
-MobileBootstrap bootstrapWith(int count) {
-  final json = bootstrapJson(count);
+MobileBootstrap bootstrapWith(int count, {int gems = 0}) {
+  final json = bootstrapJson(count, gems: gems);
   final bootstrap = MobileBootstrap.fromJson(json);
   _rawOf[bootstrap] = jsonEncode(json);
   return bootstrap;
 }
 
-Map<String, dynamic> bootstrapJson(int count) {
+/// [gems]: how many of the places after the two featured ones the server also sends as its `hiddenGems` (none: the key is not there, as an older
+/// server's answer).
+Map<String, dynamic> bootstrapJson(int count, {int gems = 0}) {
   Map<String, dynamic> resort(int i) => {
     'resort_id': i,
     'resort_name': 'Sample Beach $i',
@@ -40,6 +42,7 @@ Map<String, dynamic> bootstrapJson(int count) {
   return {
     'destinations': list,
     'featuredDestinations': list.take(2).toList(),
+    if (gems > 0) 'hiddenGems': list.skip(2).take(gems).toList(),
     'referenceTables': <String, dynamic>{},
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
