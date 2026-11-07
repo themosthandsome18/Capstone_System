@@ -192,9 +192,34 @@ class VisitPurposeSerializer(NamedReferenceSerializer):
         fields = ["id", "name", "is_active"]
 
 
+NAME_REQUIRED_MESSAGE = "A destination needs a name."
+
+
+class DestinationNameField(serializers.CharField):
+    """The name of a destination: written as typed (trimmed), READ cleaned.
+
+    It used to be a SerializerMethodField, which is read-only: a rename was thrown away without a word, and a new destination was saved
+    with NO name (and then shown as "Unnamed Destination"). A name is required, and a name of only spaces is none. What is READ is
+    still cleaned for display (clean_resort_display_name), so an old record with no name reads "Unnamed Destination" as before.
+    """
+
+    default_error_messages = {
+        "blank": NAME_REQUIRED_MESSAGE,
+        "required": NAME_REQUIRED_MESSAGE,
+        "null": NAME_REQUIRED_MESSAGE,
+    }
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_length", 160)  # the column's length
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        return clean_resort_display_name(value)
+
+
 class ResortSerializer(serializers.ModelSerializer):
     coordinates = serializers.SerializerMethodField()
-    resort_name = serializers.SerializerMethodField()
+    resort_name = DestinationNameField()
     # The three below are worked out, never written: people (not records) who arrived this month and this year, and the
     # reviews that count in the rating. A client that sends them is ignored; the rating is read-only too (the reviews set it).
     monthly_arrivals = serializers.SerializerMethodField()
@@ -230,9 +255,6 @@ class ResortSerializer(serializers.ModelSerializer):
             "lat": obj.latitude,
             "lng": obj.longitude,
         }
-
-    def get_resort_name(self, obj):
-        return clean_resort_display_name(obj.resort_name)
 
     def _figures(self, obj):
         # Annotated by the list that built this (services/destination_figures); worked out for the one object when it was not.

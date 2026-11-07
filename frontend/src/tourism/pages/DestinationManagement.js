@@ -1547,6 +1547,7 @@ function DestinationManagement({ initialTab }) {
                   onChange={(value) => updateField("resort_name", value)}
                   required
                 />
+                <p className="dest-hint">{RENAME_HINT}</p>
                 <div className="dest-row-2">
                   <TextField
                     label="Category"
@@ -1811,6 +1812,10 @@ function TextAreaField({ label, value, onChange, required = false, showLabel = t
     </label>
   );
 }
+
+// Under Destination name, in the Add and the Edit form (one form serves both).
+export const RENAME_HINT =
+  'Renaming a destination does not move its records, but the online booking import matches rows by name. Rows that still carry the old name would land in "Others / Private Residence" instead.';
 
 function SelectBooleanField({ label, value, onChange }) {
   return (
