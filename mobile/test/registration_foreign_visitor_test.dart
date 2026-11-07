@@ -93,16 +93,6 @@ bool locationShown() =>
 String selected(WidgetTester tester, String label) =>
     tester.widget<DropdownTile<RefItem>>(tile(label)).value.name;
 
-String originText(WidgetTester tester) => tester
-    .widget<TextField>(find.widgetWithText(TextField, 'Country of origin *'))
-    .controller!
-    .text;
-
-Future<void> setOrigin(WidgetTester tester, String text) => tester.enterText(
-  find.widgetWithText(TextField, 'Country of origin *'),
-  text,
-);
-
 Future<Map<String, dynamic>> submit(WidgetTester tester) async {
   await tester.enterText(find.widgetWithText(TextField, 'First name *'), 'sample');
   await tester.enterText(find.widgetWithText(TextField, 'Last name *'), 'person');
@@ -129,6 +119,7 @@ Future<Map<String, dynamic>> submit(WidgetTester tester) async {
 }
 
 void main() {
+  originGoneTests();
   test('only a country typed "foreign" may leave the location out', () {
     expect(
       countryRequiresLocation(const RefItem(id: 1, name: 'P', type: 'local')),
@@ -161,7 +152,7 @@ void main() {
     expect(body['country_id'], 1);
     expect(body['region_id'], 4);
     expect(body['province_id'], 1);
-    expect(body['country_of_origin'], 'Philippines');
+    expect(body.containsKey('country_of_origin'), isFalse);
   });
 
   testWidgets('a foreign country: no region, no province, none sent', (
@@ -171,15 +162,12 @@ void main() {
     await choose(tester, 'Country *', 'United States');
 
     expect(locationShown(), isFalse);
-    // The autofilled "Philippines" is not this visitor's origin.
-    expect(originText(tester), '');
-    await setOrigin(tester, 'United States');
 
     final body = await submit(tester);
     expect(body['country_id'], 2);
     expect(body.containsKey('region_id'), isFalse);
     expect(body.containsKey('province_id'), isFalse);
-    expect(body['country_of_origin'], 'United States');
+    expect(body.containsKey('country_of_origin'), isFalse);
   });
 
   testWidgets('foreign, then back to the Philippines: required again', (
@@ -194,7 +182,6 @@ void main() {
     expect(locationShown(), isTrue);
     expect(selected(tester, 'Region *'), 'CALABARZON Region');
     expect(selected(tester, 'Province *'), 'Quezon');
-    expect(originText(tester), 'Philippines');
 
     final body = await submit(tester);
     expect(body['country_id'], 1);
@@ -241,7 +228,6 @@ void main() {
     await choose(tester, 'Country *', 'International');
 
     expect(locationShown(), isFalse);
-    await setOrigin(tester, 'Somewhere');
 
     final body = await submit(tester);
     expect(body['country_id'], 6);
@@ -262,7 +248,6 @@ void main() {
     await choose(tester, 'Country *', 'Elsewhere');
 
     expect(locationShown(), isTrue);
-    await setOrigin(tester, 'Elsewhere');
     final body = await submit(tester);
     expect(body['region_id'], 4);
     expect(body['province_id'], 1);
@@ -285,5 +270,16 @@ void main() {
     await choose(tester, 'Country *', 'Philippines');
     expect(locationShown(), isTrue);
     expect(selected(tester, 'Region *'), 'CALABARZON Region');
+  });
+}
+
+void originGoneTests() {
+  testWidgets('the form has no "Country of origin" field, but still has Country', (tester) async {
+    await pumpForm(tester, bootstrap());
+    expect(find.textContaining('Country of origin'), findsNothing);
+    expect(tile('Country *'), findsOneWidget);
+    await choose(tester, 'Country *', 'United States');
+    expect(selected(tester, 'Country *'), 'United States');
+    expect(find.textContaining('Country of origin'), findsNothing);
   });
 }
