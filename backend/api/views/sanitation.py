@@ -252,6 +252,7 @@ def staff_display_name(user):
 
 @api_view(["GET", "POST"])
 @module_required("sanitation")
+@transaction.atomic
 def sanitation_inspection_list(request):
     ensure_initial_sanitation_data()
 
@@ -286,6 +287,7 @@ def sanitation_inspection_list(request):
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @module_required("sanitation")
+@transaction.atomic
 def sanitation_inspection_detail(request, inspection_id):
     inspection = get_object_or_404(SanitaryInspection, pk=inspection_id)
 

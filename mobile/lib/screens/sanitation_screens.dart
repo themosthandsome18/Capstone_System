@@ -567,7 +567,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         final prefs = _sessionPrefs!;
         // Clear only the validated session before yielding, as in inspections.
         await Future.wait([
-          prefs.remove(staffAuthTokenKey),
+          setStaffSessionToken(prefs, null),
           prefs.remove(staffAuthRoleKey),
           prefs.remove(staffAuthUsernameKey),
         ]);
@@ -2002,7 +2002,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     if (_sessionExpired) return;
     _sessionExpired = true;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(staffAuthTokenKey);
+    await setStaffSessionToken(prefs, null);
     await prefs.remove(staffAuthRoleKey);
     await prefs.remove(staffAuthUsernameKey);
     if (!mounted) return;
@@ -2205,6 +2205,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         initialPermitStatus: _establishmentFilterPermit,
       ),
       SanitationMapPage(
+        api: widget.api,
         establishments: _bootstrap.establishments,
         householdRecords: _bootstrap.householdRecords,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
@@ -3022,8 +3023,10 @@ class SanitationMapPage extends StatefulWidget {
     required this.onRefresh,
     required this.refreshing,
     this.onEditHousehold,
+    this.api,
   });
 
+  final TourismApi? api;
   final List<SanitationEstablishment> establishments;
   final List<HouseholdSanitationItem> householdRecords;
   final VoidCallback? onOpenMenu;
@@ -3044,6 +3047,8 @@ class BarangayPolygon {
 
 class _SanitationMapPageState extends State<SanitationMapPage> {
   bool _showHouseholds = false;
+  bool _showReports = false;
+  final _reportsKey = GlobalKey<_SanitationReportsMapState>();
   
   List<BarangayPolygon> _barangayPolygons = [];
   bool _isLoadingGeoJson = true;
@@ -3223,21 +3228,30 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
         SanitationTopBar(
           title: 'GIS Map',
           onMenuTap: widget.onOpenMenu,
-          onRefresh: widget.onRefresh,
+          onRefresh: _showReports ? () => _reportsKey.currentState?.reload() ?? Future<void>.value() : widget.onRefresh,
           refreshing: widget.refreshing,
         ),
+        Wrap(spacing: 8, runSpacing: 8, children: [
         SegmentedButton<bool>(
+          emptySelectionAllowed: true,
           segments: const [
             ButtonSegment(value: false, label: Text('Establishments')),
             ButtonSegment(value: true, label: Text('Households')),
           ],
-          selected: {_showHouseholds},
+          selected: _showReports ? <bool>{} : {_showHouseholds},
           onSelectionChanged: (value) =>
-              setState(() {
+              value.isEmpty ? null : setState(() {
+                _showReports = false;
                 _showHouseholds = value.first;
                 _selectedBarangay = null;
               }),
         ),
+        ChoiceChip(label: const Text('Community Reports'), selected: _showReports,
+          onSelected: (_) => setState(() { _showReports = true; _selectedBarangay = null; })),
+        ]),
+        if (_showReports)
+          SanitationReportsMap(key: _reportsKey, api: widget.api ?? const TourismApi())
+        else ...[
         if (_selectedBarangay != null) Align(
           alignment: Alignment.centerLeft,
           child: InputChip(
@@ -3396,6 +3410,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                   statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
               ),
+        ],
       ],
     );
   }
@@ -4666,6 +4681,93 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   String? _status;
   List<InspectionChecklistDraft> _checks = [];
   bool _submitting = false;
+  bool _requirementsLoading = false;
+  int _requirementsRequest = 0;
+  InspectionRequirementsResult? _requirements;
+
+  bool get _requirementsReady => !_requirementsLoading &&
+      _requirements?.context?.establishmentId == _establishment.id &&
+      _requirements?.status != InspectionRequirementsStatus.failure;
+
+  void _clearRequirements() {
+    ++_requirementsRequest;
+    _requirementsLoading = false;
+    _requirements = null;
+    _checks = [];
+  }
+
+  Future<void> _loadRequirements() async {
+    if (!mounted || !_identityReady || !_checkIdentitySession()) return;
+    final request = ++_requirementsRequest;
+    final id = _establishment.id;
+    if (id <= 0) return;
+    setState(() {
+      _requirementsLoading = true;
+      _requirements = null;
+      _checks = [];
+    });
+    InspectionRequirementsResult result;
+    try {
+      result = await widget.api.fetchInspectionRequirements(id,
+          expectedSessionToken: _identityToken!);
+    } catch (_) {
+      result = const InspectionRequirementsResult.failed(
+          InspectionRequirementsFailure.retrieval);
+    }
+    if (!mounted || request != _requirementsRequest || id != _establishment.id ||
+        !_checkIdentitySession()) {
+      return;
+    }
+    setState(() {
+      _requirementsLoading = false;
+      _requirements = result;
+      _checks = result.context?.requirements.map((item) =>
+          InspectionChecklistDraft(item.requirementName, false)).toList() ?? [];
+    });
+  }
+
+  Widget _requirementsSection() {
+    final context = _requirements?.context;
+    final failure = _requirements?.failure;
+    final message = switch (failure) {
+      InspectionRequirementsFailure.unauthenticated => 'Authentication required. Sign in again.',
+      InspectionRequirementsFailure.forbidden => 'This account is not authorized to load requirements.',
+      InspectionRequirementsFailure.notFound => 'The establishment or requirements endpoint was not found.',
+      InspectionRequirementsFailure.sessionChanged => 'Staff session changed. Reopen the inspection form.',
+      InspectionRequirementsFailure.contract => 'The server returned invalid requirements data.',
+      _ => 'Requirements could not be retrieved. Check the connection and retry.',
+    };
+    return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Requirements Verification', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Interim requirements verification; final status is selected by the inspector.'),
+        if (_establishment.id <= 0) const Text('No establishment records loaded.')
+        else if (_requirementsLoading || _identityLoading) const Text('Loading requirements...')
+        else if (_requirements?.status == InspectionRequirementsStatus.unconfigured) ...[
+          const Text('No requirements are configured for this classification/permit size.'),
+          const Text('Warning: this inspection may be submitted without requirements evidence.'),
+        ] else if (_requirements?.status == InspectionRequirementsStatus.ready && context != null) ...[
+          Text('Permit coverage: ${context.permitSize == 'sp' ? 'SP' : 'Large'}'),
+          for (var i = 0; i < context.requirements.length; i++)
+            CheckboxListTile(
+              key: ValueKey('requirement-${context.requirements[i].id}'),
+              title: Text(context.requirements[i].requirementName),
+              subtitle: Text(context.requirements[i].isRequired ? 'Required' : 'Optional'),
+              value: _checks[i].isComplied,
+              onChanged: _submitting || _identityInvalid ? null : (_) => _toggleCheck(i),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+        ] else if (!_identityInvalid) ...[
+          Text('Requirements unavailable (${failure?.name ?? 'identity'}): $message'),
+          TextButton(onPressed: _identityReady ? _loadRequirements : null,
+              child: const Text('Retry requirements')),
+        ],
+      ],
+    )));
+  }
+
   SharedPreferences? _identityPrefs;
   String? _identityToken;
   String? _identityError;
@@ -4695,7 +4797,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         _findings.clear();
         _remarks.clear();
         _status = null;
-        _checks = _defaultChecksFor(_establishment);
+        _clearRequirements();
         _identityError = 'Staff session changed. Reopen the inspection form.';
       });
     }
@@ -4713,11 +4815,12 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
       _identityLoading = false;
       _inspector.clear();
       _identityError = 'Your session expired, please sign in again.';
+      _clearRequirements();
     });
     final prefs = _identityPrefs!;
     // Clear this session synchronously in the preference cache before yielding.
     await Future.wait([
-      prefs.remove(staffAuthTokenKey),
+      setStaffSessionToken(prefs, null),
       prefs.remove(staffAuthRoleKey),
       prefs.remove(staffAuthUsernameKey),
     ]);
@@ -4775,6 +4878,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
           _identityError = 'No inspector identity was returned.';
         }
       });
+      if (_identityReady) await _loadRequirements();
     } catch (error) {
       if (!mounted || request != _identityRequest || !_checkIdentitySession()) {
         return;
@@ -4799,7 +4903,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
         SanitationEstablishment.placeholder();
     _inspectionDate = DateTime.now();
     _nextDueDate = _suggestedDueDate(_inspectionDate, _establishment);
-    _checks = _defaultChecksFor(_establishment);
+    _checks = [];
     _status = null;
     _findings.clear();
     _remarks.clear();
@@ -4810,6 +4914,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   void dispose() {
     _sessionWatch?.cancel();
     ++_identityRequest;
+    ++_requirementsRequest;
     _inspector.dispose();
     _findings.dispose();
     _remarks.dispose();
@@ -4836,11 +4941,12 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
             setState(() {
               _establishment = item;
               _nextDueDate = _suggestedDueDate(_inspectionDate, item);
-              _checks = _defaultChecksFor(item);
+              _clearRequirements();
               _status = null;
               _findings.clear();
               _remarks.clear();
             });
+            _loadRequirements();
           },
         ),
         TextField(
@@ -4875,28 +4981,20 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
           hint: 'Select status',
           onChanged: (item) => setState(() => _status = item),
         ),
-        InspectionChecklistPanel(checks: _checks, onToggle: _toggleCheck),
+        _requirementsSection(),
         AppTextField(controller: _findings, label: 'Findings', maxLines: 3),
         AppTextField(
           controller: _remarks,
           label: 'Remarks / observations',
           maxLines: 3,
         ),
-        SubmitButton(
-          label: 'Submit Inspection',
-          loading: _submitting,
-          onPressed: _submit,
+        FilledButton.icon(
+          onPressed: _submitting || !_identityReady || !_requirementsReady || _identityInvalid ? null : _submit,
+          icon: _submitting ? const SizedBox(width: 18, height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send_outlined),
+          label: Text(_submitting ? 'Submitting...' : 'Submit Inspection'),
         ),
       ],
-    );
-  }
-
-  List<InspectionChecklistDraft> _defaultChecksFor(
-    SanitationEstablishment establishment,
-  ) {
-    return buildInspectionChecks(
-      widget.bootstrap.businessTypes,
-      establishment.businessTypeId,
     );
   }
 
@@ -4939,6 +5037,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   }
 
   void _toggleCheck(int index) {
+    if (!_requirementsReady || !_checkIdentitySession() || _submitting) return;
     setState(() {
       final current = _checks[index];
       _checks[index] = InspectionChecklistDraft(
@@ -4950,7 +5049,7 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
   }
 
   Future<void> _submit() async {
-    if (_submitting || !_identityReady || !_checkIdentitySession()) return;
+    if (_submitting || !_identityReady || !_checkIdentitySession() || !_requirementsReady) return;
     if (_establishment.id == 0 || widget.bootstrap.establishments.isEmpty) {
       showAppMessage(context, 'No establishment records loaded.');
       return;
@@ -5033,159 +5132,6 @@ class _SanitationInspectionPageState extends State<SanitationInspectionPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-}
-
-class InspectionChecklistPanel extends StatelessWidget {
-  const InspectionChecklistPanel({
-    super.key,
-    required this.checks,
-    required this.onToggle,
-  });
-
-  final List<InspectionChecklistDraft> checks;
-  final ValueChanged<int> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final completed = checks.where((item) => item.isComplied).length;
-    final total = checks.length;
-
-    if (total == 0) {
-      // Nothing is configured for this business type, so there is nothing to
-      // score. Say so instead of showing an empty 0% checklist.
-      return Card(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.only(bottom: 12),
-        child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Sanitation Checklist & Score',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'No requirements configured yet.',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final percent = ((completed / total) * 100).round();
-
-    Color gradeColor;
-    String gradeLabel;
-    if (percent == 100) {
-      gradeColor = const Color(0xFF166534);
-      gradeLabel = 'Grade A (100%)';
-    } else if (percent >= 80) {
-      gradeColor = const Color(0xFF0F766E);
-      gradeLabel = 'Grade B ($percent%)';
-    } else if (percent >= 60) {
-      gradeColor = const Color(0xFFD97706);
-      gradeLabel = 'For Correction ($percent%)';
-    } else if (percent > 0) {
-      gradeColor = const Color(0xFFDC2626);
-      gradeLabel = 'Notice of Violation ($percent%)';
-    } else {
-      gradeColor = const Color(0xFF64748B);
-      gradeLabel = '0% Complete (Unchecked)';
-    }
-
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Sanitation Checklist & Score',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$completed of $total requirements complied',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: gradeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: gradeColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    gradeLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: gradeColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: total == 0 ? 0.0 : completed / total,
-                minHeight: 6,
-                backgroundColor: const Color(0xFFF1F5F9),
-                valueColor: AlwaysStoppedAnimation<Color>(gradeColor),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...checks.asMap().entries.map(
-              (entry) => CheckboxListTile(
-                value: entry.value.isComplied,
-                onChanged: (_) => onToggle(entry.key),
-                contentPadding: EdgeInsets.zero,
-                activeColor: const Color(0xFF14532D),
-                title: Text(
-                  entry.value.requirementName,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: entry.value.isComplied ? FontWeight.w600 : FontWeight.w400,
-                    color: entry.value.isComplied ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                  ),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -5310,7 +5256,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       final token = prefs.getString(staffAuthTokenKey);
       final role = prefs.getString(staffAuthRoleKey) ?? '';
       if (role == 'establishment') {
-        await prefs.remove(staffAuthTokenKey);
+        await setStaffSessionToken(prefs, null);
         await prefs.remove(staffAuthRoleKey);
         await prefs.remove(staffAuthUsernameKey);
       } else if (token != null && token.isNotEmpty) {
@@ -5793,7 +5739,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(staffAuthTokenKey, token);
+      await setStaffSessionToken(prefs, token);
       await prefs.setString(staffAuthRoleKey, role);
       await prefs.setString(staffAuthUsernameKey, username);
 
@@ -5813,7 +5759,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _signOut() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);
@@ -5830,7 +5776,7 @@ class _SanitationAccessGatewayState extends State<SanitationAccessGateway> {
   Future<void> _handleSessionExpired() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(staffAuthTokenKey);
+      await setStaffSessionToken(prefs, null);
       await prefs.remove(staffAuthRoleKey);
       await prefs.remove(staffAuthUsernameKey);
       await prefs.remove(establishmentDataKey);

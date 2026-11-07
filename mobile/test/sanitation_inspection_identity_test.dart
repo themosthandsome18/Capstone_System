@@ -9,6 +9,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'sanitation_inspection_checklist_test.dart'
     show bootstrapWith, fishballCart, chooseStatus;
 
+// Only the new requirements boundary is stubbed; identity and submission still
+// exercise the original authenticated HTTP helpers and existing assertions.
+class IdentityRequirementsApi extends TourismApi {
+  @override
+  Future<InspectionRequirementsResult> fetchInspectionRequirements(int id, {String? expectedSessionToken}) async =>
+    InspectionRequirementsResult.loaded(InspectionRequirementsContext.fromResponses(
+      id, {'id': id, 'business_type': 24, 'permit_size': 'sp'}, [{'id': 24, 'requirements': []}]));
+}
+
 const accountA = {
   'id': 1,
   'username': 'msantos',
@@ -33,7 +42,7 @@ Future<void> form(
     MaterialApp(
       home: SanitationInspectionPage(
         key: key,
-        api: TourismApi(),
+        api: IdentityRequirementsApi(),
         bootstrap: bootstrapWith(fishballCart),
         onSessionExpired: onSessionExpired,
       ),
@@ -75,7 +84,7 @@ void main() {
     await http.runWithClient(() async {
       await tester.pumpWidget(MaterialApp(
         home: SanitationInspectionPage(
-          api: TourismApi(),
+          api: IdentityRequirementsApi(),
           bootstrap: const SanitationBootstrap(
             businessTypes: [],
             establishments: [],

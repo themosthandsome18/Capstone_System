@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import re
 from datetime import timedelta
 from functools import wraps
@@ -734,7 +735,8 @@ def mobile_sanitation_report_submit(request):
             if data.get(key) is None or abs(data[key]) < 0.0001:
                 data.pop(key, None)
         # Validate all report fields before writing any photo to storage.
-        serializer = SanitaryComplaintSerializer(data=data, context={"request": request})
+        serializer = SanitaryComplaintSerializer(data=data, context={
+            "request": request, "complaint_location_origin": "reporter_provided"})
         if not serializer.is_valid():
             return Response({"detail": "Please check the submitted fields.",
                              "errors": serializer.errors}, status=400)
@@ -1076,7 +1078,7 @@ def build_sanitation_staff_payload():
                 "open": open_complaints_count,
             },
             "rows": [
-                serialize_mobile_sanitation_complaint(item)
+                serialize_mobile_sanitation_complaint(item, include_location_provenance=True)
                 for item in complaints
             ],
         },
@@ -1165,8 +1167,8 @@ def serialize_mobile_sanitation_inspection(inspection):
     }
 
 
-def serialize_mobile_sanitation_complaint(complaint):
-    return {
+def serialize_mobile_sanitation_complaint(complaint, *, include_location_provenance=False):
+    data = {
         "id": complaint.id,
         "complaint_id": complaint.complaint_id,
         "category": complaint.category,
@@ -1177,8 +1179,8 @@ def serialize_mobile_sanitation_complaint(complaint):
         "status_label": complaint.get_status_display(),
         "priority": complaint.priority,
         "description": complaint.description,
-        "latitude": complaint.latitude,
-        "longitude": complaint.longitude,
+        "latitude": complaint.latitude if complaint.latitude is not None and math.isfinite(complaint.latitude) else None,
+        "longitude": complaint.longitude if complaint.longitude is not None and math.isfinite(complaint.longitude) else None,
         "assigned_inspector": complaint.assigned_inspector,
         "inspection_scheduled_date": date_to_iso(
             complaint.inspection_scheduled_date
@@ -1193,6 +1195,10 @@ def serialize_mobile_sanitation_complaint(complaint):
         "action_taken": complaint.action_taken,
         "resolved_date": date_to_iso(complaint.resolved_date),
     }
+    if include_location_provenance:
+        data.update(location_source=complaint.location_source,
+                    map_location_eligible=complaint.map_location_eligible)
+    return data
 
 
 def serialize_mobile_household_record(record):
@@ -1225,6 +1231,7 @@ def date_to_iso(value):
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def mobile_sanitation_inspection_submit(request):
     if not request.user or not request.user.is_authenticated:
         return Response(

@@ -1,5 +1,121 @@
 part of '../main.dart';
 
+enum InspectionRequirementsStatus { ready, unconfigured, failure }
+
+enum InspectionRequirementsFailure {
+  unauthenticated,
+  forbidden,
+  notFound,
+  sessionChanged,
+  contract,
+  retrieval,
+}
+
+/// Interim catalogue verification data, not an on-site scoring definition.
+class InspectionRequirement {
+  const InspectionRequirement({
+    required this.id,
+    required this.businessTypeId,
+    required this.permitSize,
+    required this.requirementName,
+    required this.isRequired,
+  });
+  final int id;
+  final int businessTypeId;
+  final String permitSize;
+  final String requirementName;
+  final bool isRequired;
+}
+
+class InspectionRequirementsContext {
+  InspectionRequirementsContext._(
+    this.establishmentId,
+    this.businessTypeId,
+    this.permitSize,
+    List<InspectionRequirement> items,
+  ) : requirements = List.unmodifiable(items);
+  final int establishmentId;
+  final int businessTypeId;
+  final String permitSize;
+  final List<InspectionRequirement> requirements;
+
+  /// Strict only at this new boundary: legacy bootstrap models remain unchanged.
+  factory InspectionRequirementsContext.fromResponses(
+    int requestedId,
+    Object? detail,
+    Object? catalogue,
+  ) {
+    bool positive(Object? v) => v is int && v > 0;
+    bool coverage(Object? v) => v == 'sp' || v == 'large';
+    Never invalid() =>
+        throw const FormatException('Invalid requirements contract.');
+    if (detail is! Map ||
+        detail['id'] != requestedId ||
+        !positive(detail['id']) ||
+        !positive(detail['business_type']) ||
+        !coverage(detail['permit_size']) ||
+        catalogue is! List) {
+      invalid();
+    }
+    final typeId = detail['business_type'] as int;
+    final size = detail['permit_size'] as String;
+    final types = <int>{};
+    Map? selected;
+    for (final row in catalogue) {
+      if (row is! Map || !positive(row['id']) || !types.add(row['id'] as int)) {
+        invalid();
+      }
+      if (row['id'] == typeId) selected = row;
+    }
+    if (selected == null || selected['requirements'] is! List) invalid();
+    final ids = <int>{};
+    final items = <InspectionRequirement>[];
+    for (final row in selected['requirements'] as List) {
+      if (row is! Map ||
+          !positive(row['id']) ||
+          !ids.add(row['id'] as int) ||
+          row['business_type'] != typeId ||
+          row['business_type'] is! int ||
+          !coverage(row['permit_size']) ||
+          row['requirement_name'] is! String ||
+          (row['requirement_name'] as String).trim().isEmpty ||
+          row['is_required'] is! bool) {
+        invalid();
+      }
+      if (row['permit_size'] == size) {
+        items.add(
+          InspectionRequirement(
+            id: row['id'] as int,
+            businessTypeId: typeId,
+            permitSize: size,
+            requirementName: row['requirement_name'] as String,
+            isRequired: row['is_required'] as bool,
+          ),
+        );
+      }
+    }
+    return InspectionRequirementsContext._(requestedId, typeId, size, items);
+  }
+}
+
+class InspectionRequirementsResult {
+  InspectionRequirementsResult.loaded(InspectionRequirementsContext value)
+    : status = value.requirements.isEmpty
+          ? InspectionRequirementsStatus.unconfigured
+          : InspectionRequirementsStatus.ready,
+      context = value,
+      failure = null,
+      httpStatus = null;
+  const InspectionRequirementsResult.failed(this.failure, {this.httpStatus})
+    : status = InspectionRequirementsStatus.failure,
+      context = null;
+  final InspectionRequirementsStatus status;
+  final InspectionRequirementsContext? context;
+  final InspectionRequirementsFailure? failure;
+  final int? httpStatus;
+}
+
+
 class MobileBootstrap {
   const MobileBootstrap({
     required this.destinations,
@@ -688,6 +804,42 @@ class SanitationInspectionItem {
 String complaintLocationLine(SanitationComplaintItem item) {
   final address = item.locationAddress.trim();
   return address.isEmpty ? item.barangay : '${item.barangay} · $address';
+}
+
+/// Map-only projection. Private reporter/body/photo fields are never retained.
+class SanitationMapReport {
+  const SanitationMapReport({required this.id, required this.reference,
+    required this.category, required this.status, required this.locationSource,
+    required this.mapLocationEligible, this.latitude, this.longitude});
+  final int id;
+  final String reference, category, status, locationSource;
+  final bool mapLocationEligible;
+  final double? latitude, longitude;
+
+  factory SanitationMapReport.fromJson(Map<String, dynamic> row) {
+    if (row['id'] is! int || (row['id'] as int) <= 0 ||
+        row['complaint_id'] is! String || (row['complaint_id'] as String).trim().isEmpty ||
+        row['location_source'] is! String || row['map_location_eligible'] is! bool ||
+        !row.containsKey('latitude') || !row.containsKey('longitude')) {
+      throw const FormatException('Report data contract is invalid.');
+    }
+    return SanitationMapReport(id: row['id'] as int, reference: row['complaint_id'] as String,
+      category: row['category'] is String ? row['category'] as String : '',
+      status: row['status'] is String ? row['status'] as String : '',
+      locationSource: row['location_source'] as String,
+      mapLocationEligible: row['map_location_eligible'] as bool,
+      latitude: row['latitude'] is num ? (row['latitude'] as num).toDouble() : null,
+      longitude: row['longitude'] is num ? (row['longitude'] as num).toDouble() : null);
+  }
+  bool get canMap => mapLocationEligible &&
+    const {'reporter_provided','staff_provided'}.contains(locationSource) &&
+    latitude != null && longitude != null && latitude!.isFinite && longitude!.isFinite &&
+    latitude!.abs() >= 0.001 && latitude!.abs() <= 90 &&
+    longitude!.abs() >= 0.001 && longitude!.abs() <= 180;
+  String get provenanceLabel => locationSource == 'reporter_provided'
+    ? 'Reporter-provided location' : 'Staff-provided location';
+  String get statusLabel => const {'pending':'Pending','investigating':'Investigating',
+    'resolved':'Resolved','rejected':'Rejected'}[status] ?? 'Status unavailable';
 }
 
 class SanitationComplaintItem {
