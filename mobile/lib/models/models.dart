@@ -120,6 +120,7 @@ class MobileBootstrap {
   const MobileBootstrap({
     required this.destinations,
     required this.featuredDestinations,
+    this.hiddenGems = const [],
     required this.countries,
     required this.regions,
     required this.provinces,
@@ -138,6 +139,10 @@ class MobileBootstrap {
 
   final List<Destination> destinations;
   final List<Destination> featuredDestinations;
+
+  /// The Hidden Gems of the Home, chosen by the server (its key `hiddenGems`): the destinations the featured list does not show, the least visited
+  /// first. Empty when the server sends none or does not know the key (an older one): the Home then shows no Hidden Gems at all.
+  final List<Destination> hiddenGems;
   final List<RefItem> countries;
   final List<RefItem> regions;
   final List<RefItem> provinces;
@@ -173,6 +178,7 @@ class MobileBootstrap {
         json['featuredDestinations'],
         Destination.fromJson,
       ),
+      hiddenGems: parseList(json['hiddenGems'], Destination.fromJson),
       countries: parseList(refs['countries'], RefItem.fromJson),
       regions: parseList(refs['regions'], RefItem.fromJson),
       provinces: parseList(refs['provinces'], RefItem.fromJson),
@@ -300,6 +306,7 @@ class TourismBootstrapState {
   List<Destination> get destinations => data?.destinations ?? const [];
   List<Destination> get featuredDestinations =>
       data?.featuredDestinations ?? const [];
+  List<Destination> get hiddenGems => data?.hiddenGems ?? const [];
   List<AppNotification> get notifications => data?.notifications ?? const [];
 
   /// The texts of the web admin; [AppContent.none] until loaded, so a screen that has none shows the texts written in the code.

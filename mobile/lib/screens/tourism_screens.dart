@@ -245,21 +245,9 @@ class _HomePageState extends State<HomePage> {
         ? state.featuredDestinations
         : destinations.take(5).toList();
 
-    // 2. Hidden Gems & Lesser-Known / Emerging Spots (to promote quiet and emerging spots)
-    final hiddenGems = destinations.where((d) {
-      final name = d.name.toLowerCase();
-      final type = d.type.toLowerCase();
-      return name.contains('tent') ||
-          name.contains('nilandingan') ||
-          name.contains('rio') ||
-          name.contains('jovencio') ||
-          name.contains('aguho') ||
-          name.contains('escaparde') ||
-          name.contains('pinay') ||
-          type.contains('falls') ||
-          type.contains('camp') ||
-          d.monthlyArrivals < 100;
-    }).take(6).toList();
+    // 2. Hidden Gems: the server's list (the destinations the featured list does not show, the least visited first). No name or number of the
+    // code takes part in it, and when the server sends none there are none: nothing is guessed here.
+    final hiddenGems = state.hiddenGems;
 
     // 3. Filter destinations by category & search query
     final filteredDestinations = destinations.where((d) {
@@ -468,6 +456,7 @@ class _HomePageState extends State<HomePage> {
               const FeaturedCarouselSkeleton()
             else
               FeaturedResortsSlideshow(
+                key: const ValueKey('popular-slideshow'),
                 destinations: popularResorts,
                 onTapDestination: widget.onOpenDestination,
               ),
@@ -481,8 +470,8 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 24),
 
-          // Section: Hidden Gems & Peaceful Stays (Promoting lesser-known resorts)
-          if (!state.isFailed) ...[
+          // Section: Hidden Gems & Peaceful Stays. Not at all (title and line included) when the server gave none.
+          if (!state.isFailed && (state.isLoading || hiddenGems.isNotEmpty)) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -510,17 +499,16 @@ class _HomePageState extends State<HomePage> {
             if (state.isLoading)
               const HiddenGemsRowSkeleton()
             else
-              SizedBox(
-                height: 195,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: hiddenGems.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) => _HiddenGemCard(
-                    destination: hiddenGems[index],
-                    onTap: () => widget.onOpenDestination(hiddenGems[index]),
-                  ),
-                ),
+              // The same slideshow as Most Popular, with its own badge, and starting 2 seconds after it so the two do not turn together.
+              FeaturedResortsSlideshow(
+                key: const ValueKey('hidden-gems-slideshow'),
+                destinations: hiddenGems,
+                onTapDestination: widget.onOpenDestination,
+                badgeLabel: hiddenGemBadgeLabel,
+                badgeIcon: Icons.diamond,
+                badgeIconColor: context.brand.border,
+                badgeColor: context.brand.deep,
+                startDelay: hiddenGemsStartDelay,
               ),
             const SizedBox(height: 24),
           ],
@@ -590,16 +578,39 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// Auto-Sliding and Interactive Carousel for Most Popular Resorts
+/// The words of the two badges, and the timing of the two slideshows of the Home.
+const popularBadgeLabel = 'POPULAR RESORT';
+const hiddenGemBadgeLabel = 'HIDDEN GEM';
+
+/// How often a slideshow turns by itself, and how much later Hidden Gems begins than Most Popular (so they never turn at the same moment).
+const featuredSlideInterval = Duration(seconds: 4);
+const hiddenGemsStartDelay = Duration(seconds: 2);
+
+/// Auto-Sliding and Interactive Carousel for Most Popular Resorts (and, with its own badge, for Hidden Gems)
 class FeaturedResortsSlideshow extends StatefulWidget {
   const FeaturedResortsSlideshow({
     super.key,
     required this.destinations,
     required this.onTapDestination,
+    this.badgeLabel = popularBadgeLabel,
+    this.badgeIcon = Icons.local_fire_department,
+    this.badgeIconColor = Colors.white,
+    this.badgeColor = const Color(0xFFD81558),
+    this.startDelay = Duration.zero,
   });
 
   final List<Destination> destinations;
   final ValueChanged<Destination> onTapDestination;
+
+  /// The badge at the top left of every slide: the words, the icon and the two colours. Most Popular's by default.
+  final String badgeLabel;
+  final IconData badgeIcon;
+  final Color badgeIconColor;
+  final Color badgeColor;
+
+  /// How long to wait before the automatic turning begins (it then turns every [featuredSlideInterval]). A second slideshow on the same page
+  /// starts later, so the two do not move together.
+  final Duration startDelay;
 
   @override
   State<FeaturedResortsSlideshow> createState() => _FeaturedResortsSlideshowState();
@@ -608,32 +619,67 @@ class FeaturedResortsSlideshow extends StatefulWidget {
 class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
   late PageController _pageController;
   int _currentPage = 0;
+  Timer? _starter;
   Timer? _timer;
+
+  bool get _reduceMotion => MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(viewportFraction: 0.94);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Here and not in initState: it needs to know whether the person asked for less motion, and it is told again when that changes.
     _startAutoSlide();
   }
 
-  void _startAutoSlide() {
+  @override
+  void didUpdateWidget(FeaturedResortsSlideshow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.destinations.length != widget.destinations.length || oldWidget.startDelay != widget.startDelay) {
+      if (_currentPage >= widget.destinations.length) _currentPage = 0;
+      _startAutoSlide();
+    }
+  }
+
+  void _stopAutoSlide() {
+    _starter?.cancel();
     _timer?.cancel();
-    if (widget.destinations.length <= 1) return;
-    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (!mounted || !_pageController.hasClients) return;
-      final nextPage = (_currentPage + 1) % widget.destinations.length;
-      _pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOutCubic,
-      );
-    });
+    _starter = null;
+    _timer = null;
+  }
+
+  /// Turns by itself every [featuredSlideInterval], the first time after [FeaturedResortsSlideshow.startDelay] more. Never with one slide, and
+  /// never when the person asked for less motion (a page that turns by itself is motion they did not ask for; they can still swipe).
+  void _startAutoSlide() {
+    _stopAutoSlide();
+    if (widget.destinations.length <= 1 || _reduceMotion) return;
+    void begin() {
+      _timer = Timer.periodic(featuredSlideInterval, (timer) {
+        if (!mounted || !_pageController.hasClients || widget.destinations.length <= 1) return;
+        final nextPage = (_currentPage + 1) % widget.destinations.length;
+        _pageController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOutCubic,
+        );
+      });
+    }
+
+    if (widget.startDelay == Duration.zero) {
+      begin();
+    } else {
+      _starter = Timer(widget.startDelay, begin);
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _stopAutoSlide();
     _pageController.dispose();
     super.dispose();
   }
@@ -696,23 +742,23 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFD81558),
+                                color: widget.badgeColor,
                                 borderRadius: BorderRadius.circular(999),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFD81558).withValues(alpha: 0.4),
+                                    color: widget.badgeColor.withValues(alpha: 0.4),
                                     blurRadius: 6,
                                   ),
                                 ],
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.local_fire_department, size: 13, color: Colors.white),
-                                  SizedBox(width: 4),
+                                  Icon(widget.badgeIcon, size: 13, color: widget.badgeIconColor),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'POPULAR RESORT',
-                                    style: TextStyle(
+                                    widget.badgeLabel,
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w900,
@@ -825,7 +871,7 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
           children: List.generate(
             widget.destinations.length,
             (index) => AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
+              duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 250),
               margin: const EdgeInsets.symmetric(horizontal: 3),
               width: _currentPage == index ? 22 : 6,
               height: 6,
@@ -988,127 +1034,6 @@ class _MaubanTownHighlightsCard extends StatelessWidget {
   }
 }
 
-/// Hidden Gem / Lesser-Known Resort Card
-class _HiddenGemCard extends StatelessWidget {
-  const _HiddenGemCard({required this.destination, required this.onTap});
-
-  final Destination destination;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 165,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              DestinationImage(destination: destination),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.2, 0.65, 1.0],
-                    colors: [
-                      Colors.transparent,
-                      Color(0x44000000),
-                      Color(0xEE000000),
-                    ],
-                  ),
-                ),
-              ),
-              // Hidden Gem Tag
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: context.brand.deep,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.diamond, size: 10, color: context.brand.border),
-                      SizedBox(width: 3),
-                      Text(
-                        'HIDDEN GEM',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      destination.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      destination.location,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70, fontSize: 10.5),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        destination.type.isNotEmpty ? destination.type : 'Quiet Stay',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Town Information & Travel Essentials Accordion / Grid
 class _MaubanTownGuideSection extends StatelessWidget {

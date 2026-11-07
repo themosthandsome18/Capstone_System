@@ -405,7 +405,7 @@ void main() {
     testWidgets('loaded: both headings are there', (tester) async {
       await openHome(
         tester,
-        SequenceApi([() => Future.value(bootstrapWith(3))]),
+        SequenceApi([() => Future.value(bootstrapWith(3, gems: 1))]),
       );
       await tester.pump();
       await tester.pump();
@@ -422,7 +422,7 @@ void main() {
         tester,
         SequenceApi([
           fails(const SocketException('no route')),
-          () => Future.value(bootstrapWith(3)),
+          () => Future.value(bootstrapWith(3, gems: 1)),
         ]),
       );
       await tester.pump();
