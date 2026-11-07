@@ -1425,6 +1425,15 @@ const mapFocusCurve = Curves.easeInOutCubic;
 /// How long the page takes to go back up to the map when it was scrolled down to the list of places.
 const mapScrollDuration = Duration(milliseconds: 450);
 
+/// The X that closes the box of a pin: the X that is SEEN is 18 across, in a target of 44 x 44, and it sits in the top right corner of the card, [mapPreviewCloseInset]
+/// from the top and from the right. Its target is therefore a little larger than the corner, and goes [mapPreviewCloseOverhang] beyond the card, above and to
+/// the right: the widget of the card is made that much larger on those two sides (and the place that holds it is moved back by the same), so that
+/// the whole target can be pressed, and the card itself is the size it was and where it was.
+const mapPreviewCloseInset = 8.0;
+const mapPreviewCloseTarget = 44.0;
+const mapPreviewCloseGlyph = 18.0;
+const mapPreviewCloseOverhang = (mapPreviewCloseTarget - mapPreviewCloseGlyph) / 2 - mapPreviewCloseInset;
+
 /// How much of the middle of the map a pin may be in and count as "already there": a pin tapped inside it does not move the map.
 const mapPinStillFraction = 0.25;
 
@@ -1700,7 +1709,7 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
                   if (_selectedDestination != null)
                     Positioned(
                       left: 16,
-                      right: 16,
+                      right: 16 - mapPreviewCloseOverhang,
                       bottom: 24,
                       child: _buildMapPreviewCard(_selectedDestination!, onDetails: () {
                         Navigator.of(context).pop();
@@ -1722,7 +1731,12 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
   }
 
   Widget _buildMapPreviewCard(Destination destination, {required VoidCallback onDetails, required VoidCallback onClose}) {
-    return Container(
+    return Stack(
+      children: [
+        Padding(
+          // Room for the target of the X, which goes beyond the card above and to the right. The card keeps its size and its place.
+          padding: const EdgeInsets.only(top: mapPreviewCloseOverhang, right: mapPreviewCloseOverhang),
+          child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1782,12 +1796,9 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-                onPressed: onClose,
-              ),
+              // The X is drawn on the card, at the top (below). This keeps the room it had here, so that the card and the View button
+              // are the size they were and where they were.
+              const SizedBox(width: 40, height: 40),
               FilledButton(
                 onPressed: onDetails,
                 style: FilledButton.styleFrom(
@@ -1801,6 +1812,28 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
           ),
         ],
       ),
+        ),
+        ),
+        // The X that closes the box, in the top right corner of the card (see mapPreviewCloseInset). A target of 44 x 44, a label for the
+        // screen reader, and clear of the name and of the picture.
+        Positioned(
+          top: 0,
+          right: 0,
+          child: SizedBox(
+            width: mapPreviewCloseTarget,
+            height: mapPreviewCloseTarget,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: mapPreviewCloseTarget,
+                minHeight: mapPreviewCloseTarget,
+              ),
+              icon: const Icon(Icons.close, size: mapPreviewCloseGlyph, color: Colors.grey, semanticLabel: 'Close'),
+              onPressed: onClose,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1883,7 +1916,7 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
             if (_selectedDestination != null)
               Positioned(
                 left: 12,
-                right: 12,
+                right: 12 - mapPreviewCloseOverhang,
                 bottom: 50,
                 child: _buildMapPreviewCard(
                   _selectedDestination!,
