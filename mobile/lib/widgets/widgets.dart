@@ -1328,11 +1328,23 @@ class DestinationImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
+    // The photo that was uploaded, when there is one; the built-in one (by the image key, else the logo) when there is none, while the
+    // upload loads, and when it cannot be loaded.
+    final builtIn = Image.asset(
       imageAssetFor(destination.imageKey),
       height: height,
       width: width ?? double.infinity,
       fit: BoxFit.cover,
+    );
+    final uploaded = uploadedImageUrl(destination);
+    if (uploaded == null) return builtIn;
+    return Image.network(
+      uploaded,
+      height: height,
+      width: width ?? double.infinity,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, progress) => progress == null ? child : builtIn,
+      errorBuilder: (context, error, stackTrace) => builtIn,
     );
   }
 }

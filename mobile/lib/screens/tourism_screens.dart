@@ -2870,18 +2870,12 @@ class _DestinationImageSlideshowState
   }
 
   Widget _buildImage(String path) {
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    // A photo the server holds, whole (or a bare /media/ path of an older server, made whole on the server's own address:
+    // not on the API's, which has /api in it and answered 404).
+    final url = serverImageUrl(path);
+    if (url != null) {
       return Image.network(
-        path,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            DestinationImage(destination: widget.destination),
-      );
-    }
-    if (path.startsWith('/media/')) {
-      final fullUrl = '$apiBaseUrl$path';
-      return Image.network(
-        fullUrl,
+        url,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             DestinationImage(destination: widget.destination),
