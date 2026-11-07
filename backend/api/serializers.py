@@ -5,6 +5,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.db import transaction
 
+from .services.upload import absolute_media_url, relative_media_url
 from .models import (
     ActivityLog,
     Barangay,
@@ -255,6 +256,22 @@ class ResortSerializer(serializers.ModelSerializer):
             "lat": obj.latitude,
             "lng": obj.longitude,
         }
+
+    def to_representation(self, instance):
+        # The photos are stored as the storage gave them ("/media/..." on the local disk, a whole URL on S3). A client needs a whole
+        # URL: the web page and the phone are not on the server's host. Done here, from the request, and only for a bare path.
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["images"] = [absolute_media_url(url, request) for url in (data.get("images") or [])]
+        return data
+
+    def validate_images(self, value):
+        # What comes back to be stored goes back to a path when it is a whole URL of this server's own media, so the database never
+        # holds the host it was saved from.
+        request = self.context.get("request")
+        if not isinstance(value, list):
+            return value
+        return [relative_media_url(url, request) for url in value]
 
     def _figures(self, obj):
         # Annotated by the list that built this (services/destination_figures); worked out for the one object when it was not.

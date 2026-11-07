@@ -51,6 +51,7 @@ from api.services.tourism import (
     tourist_record_computed,
 )
 from api.services.upload import (
+    absolute_media_url,
     StorageServiceError,
     UploadValidationError,
     save_image_file,
@@ -244,13 +245,13 @@ def resort_list(request):
     ensure_initial_reference_data()
 
     if request.method == "GET":
-        return Response(ResortSerializer(Resort.objects.all(), many=True).data)
+        return Response(ResortSerializer(Resort.objects.all(), many=True, context={"request": request}).data)
 
     data = request.data.copy()
     if not data.get("resort_id"):
         data["resort_id"] = generate_resort_id()
 
-    serializer = ResortSerializer(data=data)
+    serializer = ResortSerializer(data=data, context={"request": request})
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()
     log_activity(
@@ -284,7 +285,7 @@ def resort_detail(request, resort_id):
     resort = get_object_or_404(Resort, resort_id=resort_id)
 
     if request.method == "GET":
-        return Response(ResortSerializer(resort).data)
+        return Response(ResortSerializer(resort, context={"request": request}).data)
 
     data = request.data.copy()
     data["resort_id"] = resort.resort_id
@@ -292,6 +293,7 @@ def resort_detail(request, resort_id):
         resort,
         data=data,
         partial=request.method == "PATCH",
+        context={"request": request},
     )
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()
@@ -347,6 +349,9 @@ def resort_image_upload(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
+    # A whole URL, so that the form can show the photo it just uploaded before the destination is saved. What is stored is made a path
+    # again by the serializer (ResortSerializer.validate_images), so the database does not keep this host.
+    urls = [absolute_media_url(url, request) for url in urls]
     return Response(
         {
             "url": urls[0] if urls else None,

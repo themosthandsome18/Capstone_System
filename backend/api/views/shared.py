@@ -89,7 +89,7 @@ def bootstrap_data(request):
 
     return Response(
         {
-            "referenceTables": build_reference_tables_payload(),
+            "referenceTables": build_reference_tables_payload(request=request),
             "touristRecords": [],
             "bookingManagement": build_booking_management_payload(),
             "feedbackEntries": FeedbackEntrySerializer(
@@ -110,4 +110,4 @@ def bootstrap_data(request):
 @module_required("tourism")
 def reference_tables(request):
     ensure_initial_reference_data()
-    return Response(build_reference_tables_payload())
+    return Response(build_reference_tables_payload(request=request))

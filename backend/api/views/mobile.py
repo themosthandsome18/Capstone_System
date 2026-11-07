@@ -184,10 +184,10 @@ def mobile_tourism_bootstrap(request):
     return Response(
         {
             "referenceTables": build_reference_tables_payload(
-                resorts=[r for r in all_resorts if r.is_active], active_only=True
+                resorts=[r for r in all_resorts if r.is_active], active_only=True, request=request
             ),
-            "destinations": ResortSerializer(destinations, many=True).data,
-            "featuredDestinations": ResortSerializer(destinations[:6], many=True).data,
+            "destinations": ResortSerializer(destinations, many=True, context={"request": request}).data,
+            "featuredDestinations": ResortSerializer(destinations[:6], many=True, context={"request": request}).data,
             "barangays": get_cached_active_barangays(),
             "notifications": build_mobile_notifications(top_destination=top_destination),
             "theme": read_tourism_theme(),
@@ -227,7 +227,7 @@ def mobile_destination_list(request):
     if not search and not destination_type:
         destinations = get_mobile_top_destinations()
 
-    return Response(ResortSerializer(destinations, many=True).data)
+    return Response(ResortSerializer(destinations, many=True, context={"request": request}).data)
 
 
 @api_view(["GET"])
@@ -252,7 +252,7 @@ def mobile_destination_detail(request, resort_id):
 
     return Response(
         {
-            "destination": ResortSerializer(resort).data,
+            "destination": ResortSerializer(resort, context={"request": request}).data,
             "recentFeedback": recent_feedback,
         }
     )
