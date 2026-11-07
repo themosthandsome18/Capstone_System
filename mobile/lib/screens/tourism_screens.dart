@@ -3819,7 +3819,15 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
             value: _fare,
             items: _fareChoices,
             itemLabel: boatCapacityFareLabel,
-            onChanged: (item) => setState(() => _boatCapacityFare = item),
+            onChanged: (item) => setState(() {
+              _boatCapacityFare = item;
+              // Choosing a tier puts the largest number of its range in Total Visitors,
+              // through _setVisitors so that male, female, Filipino, foreigner and the
+              // ages follow. The tourist can lower it after; _setVisitors keeps the tier
+              // while the new number still fits it.
+              final people = widget.bootstrap.boatCapacityFares.visitorsForTier(item);
+              if (people != null) _setVisitors(people);
+            }),
           ),
         AppTextField(controller: _parkingSpace, label: 'Parking space (Optional)'),
         DropdownTile<RefItem>(
@@ -4111,6 +4119,13 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     _syncClassification();
     _specialGroup = clampInt(_specialGroup, 0, _visitors);
     _syncAgeGroups();
+    // The head count chooses the tier whose range holds it (the tier only: the
+    // count is never changed here). A tier that already holds it is kept.
+    _boatCapacityFare = widget.bootstrap.boatCapacityFares.fareFollowingVisitors(
+      fare: _fare,
+      visitors: _visitors,
+      requiresFare: boatRequiresCapacityFare(_boatType),
+    );
   }
 
   void _syncClassification() {
