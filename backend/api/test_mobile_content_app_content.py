@@ -26,6 +26,8 @@ GOLDEN = (HERE / "bootstrap_golden" / "before_appcontent_5ded035.json").read_byt
 SEED = json.loads((HERE / "migrations" / "seed_data" / "mobile_content_0061.json").read_text(encoding="utf-8"))
 MARK = b',"appContent":'
 OLD_KEYS = ["referenceTables", "destinations", "featuredDestinations", "barangays", "notifications", "theme", "emergencyContacts"]
+# the keys of the golden file now: hiddenGems (added by Hidden Gems from the server) sits between featuredDestinations and barangays
+GOLDEN_KEYS = ["referenceTables", "destinations", "featuredDestinations", "hiddenGems", "barangays", "notifications", "theme", "emergencyContacts"]
 
 # appContent for the seed texts with ids 1..10 in the fixed world, measured once and pinned: a tripwire for ANY change
 # of shape, wording, order or amount.
@@ -100,7 +102,7 @@ class AppContentBase(TestCase):
 
 class AppContentShapeTests(AppContentBase):
     def test_it_is_the_last_key_and_the_old_ones_keep_their_places(self):
-        self.assertEqual(list(json.loads(self.get())), OLD_KEYS + ["appContent"])
+        self.assertEqual(list(json.loads(self.get())), GOLDEN_KEYS + ["appContent"])
 
     def test_the_shape_is_exactly_this(self):
         content = self.content()
@@ -337,8 +339,8 @@ class AppContentTheThreeFencesTests(AppContentBase):
 
     def test_level_2_each_old_key_is_the_same_value_as_before(self):
         now, then = json.loads(self.get()), json.loads(GOLDEN)
-        self.assertEqual(list(then), OLD_KEYS)
-        for key in OLD_KEYS:
+        self.assertEqual(list(then), GOLDEN_KEYS)
+        for key in GOLDEN_KEYS:
             with self.subTest(key=key):
                 self.assertEqual(now[key], then[key])
                 self.assertEqual(

@@ -71,7 +71,9 @@ def check(body, before=None):
     if not isinstance(data, dict):
         return out
     keys = list(data)
-    add("the seven old keys are all there, in their places", keys[: len(OLD_KEYS)] == OLD_KEYS, str(keys))
+    # The seven old keys are all there and in the same order TO EACH OTHER. A key the server added between them (hiddenGems, after
+    # featuredDestinations) is allowed; a missing one, or two that changed places, is not.
+    add("the seven old keys are all there, in the same order", [k for k in keys if k in OLD_KEYS] == OLD_KEYS, str(keys))
     present = "appContent" in data
     add("appContent IS in the bootstrap", present, "MISSING: look for APPCONTENT_FAILED in the Render logs" if not present else "")
     if not present:
