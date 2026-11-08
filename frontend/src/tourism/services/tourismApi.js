@@ -501,6 +501,20 @@ export const tourismApi = {
     return apiRequest("/emergency-contacts/reorder/", { method: "POST", body: JSON.stringify({ ids }) });
   },
 
+  // The notices the Tourism Office sends to the visitors of the app (the Notifications tab of Mobile App Content). One endpoint: GET lists them
+  // ({ results }, every module: the tab keeps the tourism ones), POST sends one, PATCH switches one off or on. There is no delete.
+  async getPublicAdvisories() {
+    return apiRequest("/notifications/public/");
+  },
+
+  async createPublicAdvisory(payload) {
+    return apiRequest("/notifications/public/", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  async setPublicAdvisoryActive(id, active) {
+    return apiRequest(`/notifications/public/${encodeURIComponent(id)}/`, { method: "PATCH", body: JSON.stringify({ is_active: Boolean(active) }) });
+  },
+
   // Boat Capacity and Fare tiers (admin). Every write answers with the tier as
   // the server now holds it; reorder answers with the whole list. There is no
   // delete: a tier is deactivated. A rename of a text some record holds is

@@ -10,6 +10,7 @@ import {
 import { EmergencyHotlinesPanel } from "./EmergencyHotlines";
 import MobileContentBlockEditor from "./MobileContentBlockEditor";
 import { AddCardButton, TravelGuideTab, useCards } from "./MobileContentCardsTab";
+import MobileContentNotifications from "./MobileContentNotifications";
 import MobileContentPortTab from "./MobileContentPortTab";
 import { PillarsView, usePillars } from "./MobileContentPillars";
 import { BUILT_IN_BLOCKS } from "../utils/mobileContentBuiltIn";
@@ -37,6 +38,7 @@ function WhyVisitTab() {
 
 function TabPanel({ tab, cards }) {
   if (tab.key === "hotlines") return <EmergencyHotlinesPanel />;
+  if (tab.key === "notifications") return <MobileContentNotifications />;
   if (tab.key === "welcome") {
     return (
       <MobileContentBlockEditor

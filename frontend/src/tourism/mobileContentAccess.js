@@ -11,7 +11,7 @@ export function canManageMobileContent(role) {
   return MOBILE_CONTENT_ROLES.includes(role);
 }
 
-// The five tabs, in order. `ready` is false for a tab whose editor has not been built yet: it shows a message and
+// The six tabs, in order. `ready` is false for a tab whose editor has not been built yet: it shows a message and
 // asks the server for nothing.
 export const MOBILE_CONTENT_TABS = [
   { key: "welcome", label: "Welcome", ready: true },
@@ -19,6 +19,7 @@ export const MOBILE_CONTENT_TABS = [
   { key: "travel-guide", label: "Travel Guide & Tips", ready: true },
   { key: "port-guide", label: "Port & Boat Guide", ready: true },
   { key: "hotlines", label: "Emergency Hotlines", ready: true },
+  { key: "notifications", label: "Notifications", ready: true },
 ];
 
 // The tab that opens when the address names none: the Welcome, the first of the five (a decision of the owner, 5f). Nothing that has
@@ -27,7 +28,7 @@ export const DEFAULT_MOBILE_CONTENT_TAB = "welcome";
 
 export const tabPath = (key) => `${MOBILE_CONTENT_PATH}?tab=${key}`;
 
-// The tab named by ?tab=..., or null when the value is not one of the five.
+// The tab named by ?tab=..., or null when the value is not one of the six.
 export function knownTab(value) {
   return MOBILE_CONTENT_TABS.some((tab) => tab.key === value) ? value : null;
 }

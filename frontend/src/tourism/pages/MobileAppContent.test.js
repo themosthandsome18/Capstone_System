@@ -10,9 +10,9 @@ const router = require("../testing/routerStub");
 jest.mock("react-router-dom", () => require("../testing/routerStub"), { virtual: true });
 jest.mock("../../auth/AuthContext", () => ({ useAuth: jest.fn() }));
 
-const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines"];
+const LABELS = ["Welcome", "Why Visit", "Travel Guide & Tips", "Port & Boat Guide", "Emergency Hotlines", "Notifications"];
 const NOT_BUILT = []; // (all five tabs are built: the Welcome since 5b, the Why Visit since 5d, the Travel Guide since 7a, the Port & Boat Guide since 8b)
-const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines"];
+const KEYS = ["welcome", "why-visit", "travel-guide", "port-guide", "hotlines", "notifications"];
 
 // The Welcome tab asks for the blocks; a fake answers it, and the Hotlines are answered by their own fake, as before.
 const BLOCKS_LIST = {
@@ -65,7 +65,7 @@ const labelOf = (item) => item.textContent.replace("Coming soon", "");
 const requests = () => server.requests;
 
 describe("the page", () => {
-  it("has one heading, and five tabs in this order", async () => {
+  it("has one heading, and six tabs in this order", async () => {
     render(<MobileAppContent />);
     await settled();
     expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Mobile App Content"]);
@@ -118,7 +118,7 @@ describe("the tab is in the address", () => {
       expect(last).toEqual({ search: `tab=${key}`, options: { replace: true } });
       expect(selected().map(labelOf)).toEqual([LABELS[index]]);
     });
-    expect(router.__changes()).toHaveLength(5);
+    expect(router.__changes()).toHaveLength(6);
     expect(router.__changes().every((change) => change.options.replace === true)).toBe(true);
     await settled();
   });
