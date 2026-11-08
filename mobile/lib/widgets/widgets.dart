@@ -1302,8 +1302,11 @@ class HeroCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  VisitorPill(destination: destination, dark: true),
+                  // no count: no pill and no gap above it (measured in test/card_visitor_gap_test.dart)
+                  if (destination.hasVisitors) ...[
+                    const SizedBox(height: 8),
+                    VisitorPill(destination: destination, dark: true),
+                  ],
                 ],
               ),
             ),
@@ -1539,8 +1542,11 @@ class DestinationTile extends StatelessWidget {
                         fontSize: 11,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    VisitorPill(destination: destination, dark: true),
+                    // no count: no pill and no gap above it (measured in test/card_visitor_gap_test.dart)
+                    if (destination.hasVisitors) ...[
+                      const SizedBox(height: 6),
+                      VisitorPill(destination: destination, dark: true),
+                    ],
                   ],
                 ),
               ),
@@ -1681,13 +1687,11 @@ class VisitorPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasVisits = destination.monthlyArrivals > 0;
-    final text = hasVisits
-        ? '${formatCount(destination.monthlyArrivals)} visits'
-        : destination.type.isNotEmpty
-            ? destination.type
-            : 'Featured Spot';
-    final icon = hasVisits ? Icons.groups_outlined : Icons.place_outlined;
+    // The people who arrived this year. With none there is no pill at all: the type of the resort is not put in its place (the card
+    // already has its own pill for the type, so it would be there twice).
+    if (!destination.hasVisitors) return const SizedBox.shrink();
+    final text = destination.visitorCountLabel;
+    const icon = Icons.person_outline;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

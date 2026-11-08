@@ -13,7 +13,7 @@ Destination destination({Object? rating = 0, Object? arrivals = 0, Object? revie
       'resort_id': 7,
       'resort_name': 'Test Resort',
       'tourism_rating': rating,
-      'monthly_arrivals': arrivals,
+      'yearly_arrivals': arrivals,
       if (!identical(reviewCount, _noKey)) 'review_count': reviewCount,
       'latitude': 14.2,
       'longitude': 121.7,
