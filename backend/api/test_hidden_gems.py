@@ -1,8 +1,9 @@
-"""`featuredDestinations` and `hiddenGems` of the public tourism bootstrap: both follow the people who ARRIVED THIS YEAR (yearly_total).
+"""`featuredDestinations` and `hiddenGems` of the public tourism bootstrap: both follow the people who ARRIVED in the last 365 days (rolling_total).
 
-featured: most arrived this year first, then the better rating, then the newest resort_id; six.
-hiddenGems: not featured; fewest arrived this year first, then fewest visible reviews, then the newest resort_id; six.
-The month does not matter (it starts again at 0 for everybody) and monthly_arrivals (seeded demo data) is never used.
+featured: most arrived first, then the better rating, then the newest resort_id; six.
+hiddenGems: not featured; fewest arrived first, then fewest visible reviews, then the newest resort_id; six.
+The month does not matter (it starts again at 0 for everybody) and monthly_arrivals (seeded demo data) is never used. What a card SHOWS is still
+the calendar year (yearly_arrivals); the sliding window and the year-end are in test_rank_rolling_year.py.
 The clock is fixed at 15 June 2026, so "last month" and "last year" are real months and years.
 """
 from datetime import date

@@ -1,13 +1,20 @@
-"""The figures a destination carries: people who arrived this month and this year, and how many reviews it has.
+"""The figures a destination carries: people who arrived this month, this year and in the last 365 days, and how many reviews it has.
 
 One place for the sum, so the web list, the app's bootstrap and the serializer's fallback cannot count it three ways.
 The arrivals are PEOPLE (the records' total_visitors added up), not a count of records.
 """
+from datetime import timedelta
+
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ..models import BOOKING_STATUS_ARRIVED, FeedbackEntry, Resort, TouristRecord
+
+
+# The window the two lists of the Home are ranked by: today and the 364 days before it (365 days). It slides one day a day, so nothing starts
+# again from 0 on 1 January the way the calendar year does.
+ROLLING_DAYS = 365
 
 
 def _people(**when):
@@ -34,14 +41,17 @@ def _reviews():
 
 
 def annotate_destination_figures(queryset, today=None):
-    """Adds visitor_total (people this month), yearly_total (people this year) and review_total (visible reviews).
+    """Adds visitor_total (people this month), yearly_total (people this year), rolling_total (people in the last 365 days, today included)
+    and review_total (visible reviews).
 
-    Each is its own subquery, so no join multiplies another one's rows.
+    yearly_total is what a card shows ("this year"); rolling_total is only what the lists are RANKED by. Each is its own subquery, so no join
+    multiplies another one's rows.
     """
     today = today or timezone.localdate()
     return queryset.annotate(
         visitor_total=_people(arrival_date__year=today.year, arrival_date__month=today.month),
         yearly_total=_people(arrival_date__year=today.year),
+        rolling_total=_people(arrival_date__gt=today - timedelta(days=ROLLING_DAYS), arrival_date__lte=today),
         review_total=_reviews(),
     )
 
