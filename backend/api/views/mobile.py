@@ -218,8 +218,7 @@ def mobile_tourism_bootstrap(request):
     )
     # Every destination that is not excluded above reaches the app (it was cut at 10 before); the featured list is still its first six.
     destinations = filtered_destinations
-    top_destination = destinations[0] if destinations else None
-    # Only the two lists of the home page follow the year. `destinations` (and the "trending" notice built from its first) keep their order.
+    # Only the two lists of the home page follow the year. `destinations` keeps its order.
     featured_destinations = select_featured(destinations)
     hidden_gems = select_hidden_gems(destinations, featured_destinations)
 
@@ -233,7 +232,7 @@ def mobile_tourism_bootstrap(request):
             # Destinations the featured list does not show, the least visited first (see select_hidden_gems).
             "hiddenGems": ResortSerializer(hidden_gems, many=True, context={"request": request}).data,
             "barangays": get_cached_active_barangays(),
-            "notifications": build_mobile_notifications(top_destination=top_destination),
+            "notifications": build_mobile_notifications(),
             "theme": read_tourism_theme(),
             # Active contacts, in order. A NEW key: the app already installed
             # reads only the keys it knows (MobileBootstrap.fromJson) and
@@ -1415,13 +1414,13 @@ def mobile_household_survey_submit(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-_TOP_DESTINATION_UNSET = object()
-
-
-def build_mobile_notifications(top_destination=_TOP_DESTINATION_UNSET):
+def build_mobile_notifications():
     # Public: anyone can read these without a login, and the app shows them to
-    # every user. Only public advisories and the trending destination; never a
-    # tourist record (no name, survey ID or booking), under any parameter.
+    # every user. Only the public advisories the Tourism Office wrote (and the
+    # general ones); never a tourist record (no name, survey ID or booking),
+    # under any parameter. There is no computed "trending" notice any more: it
+    # had no threshold and said "0 recorded visitor arrivals in the tourism
+    # guide data" when nobody had arrived.
     notifications = []
 
     now = timezone.now()
@@ -1444,27 +1443,6 @@ def build_mobile_notifications(top_destination=_TOP_DESTINATION_UNSET):
                 "message": advisory.message,
                 "severity": advisory.severity,
                 "created_at": advisory.created_at.isoformat(),
-            }
-        )
-
-    if top_destination is _TOP_DESTINATION_UNSET:
-        top_destination = next(iter(get_mobile_top_destinations(limit=1)), None)
-
-    if top_destination:
-        arrivals = getattr(
-            top_destination,
-            "visitor_total",
-            top_destination.monthly_arrivals,
-        )
-        notifications.append(
-            {
-                "id": f"featured-{top_destination.resort_id}",
-                "type": "tourism",
-                "title": f"{top_destination.resort_name} is trending",
-                "message": (
-                    f"{arrivals} recorded visitor arrivals "
-                    "in the tourism guide data."
-                ),
             }
         )
 

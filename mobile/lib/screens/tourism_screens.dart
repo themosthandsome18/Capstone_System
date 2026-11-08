@@ -164,8 +164,11 @@ class _MobileShellState extends State<MobileShell> {
   void _openNotifications() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            NotificationPage(notifications: widget.state.notifications),
+        builder: (context) => NotificationPage(
+          notifications: widget.state.notifications,
+          subtitle: tourismNotificationsSubtitle,
+          severityStripe: true,
+        ),
       ),
     );
   }
@@ -577,6 +580,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+/// What the Notifications page of the tourism side says under its title.
+const tourismNotificationsSubtitle = 'Advisories from the Mauban Tourism Office';
 
 /// The words of the two badges, and the timing of the two slideshows of the Home.
 const popularBadgeLabel = 'POPULAR RESORT';

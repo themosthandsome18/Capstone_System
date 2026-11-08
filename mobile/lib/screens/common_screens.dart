@@ -341,10 +341,15 @@ class NotificationPage extends StatelessWidget {
     super.key,
     required this.notifications,
     this.subtitle = 'Sanitary advisories and compliance updates',
+    this.severityStripe = false,
   });
 
   final List<AppNotification> notifications;
   final String subtitle;
+
+  /// A line of the colour of its weight down the left of each notice, instead of the round icon (the tourism side asks for it). False: the round icon,
+  /// as the sanitation side has always had.
+  final bool severityStripe;
 
   @override
   Widget build(BuildContext context) {
@@ -394,21 +399,54 @@ class NotificationPage extends StatelessWidget {
             ]
           : notifications
               .map(
-                (item) => Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: item.colorFor(context).withValues(alpha: 0.14),
-                      child: Icon(item.icon, color: item.colorFor(context)),
-                    ),
-                    title: Text(
-                      item.title,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text(item.message),
-                  ),
-                ),
+                (item) => severityStripe
+                    ? Card(
+                        key: ValueKey('notice-${item.id}'),
+                        elevation: 0,
+                        color: Colors.white,
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: Container(
+                                  key: ValueKey('notice-stripe-${item.id}'),
+                                  width: 4,
+                                  decoration: BoxDecoration(
+                                    color: item.severityColor,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: ListTile(
+                                  title: Text(
+                                    item.title,
+                                    style: const TextStyle(fontWeight: FontWeight.w900),
+                                  ),
+                                  subtitle: Text(item.message),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: item.colorFor(context).withValues(alpha: 0.14),
+                            child: Icon(item.icon, color: item.colorFor(context)),
+                          ),
+                          title: Text(
+                            item.title,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          subtitle: Text(item.message),
+                        ),
+                      ),
               )
               .toList(),
     );

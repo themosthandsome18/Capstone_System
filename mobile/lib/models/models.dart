@@ -1275,12 +1275,25 @@ class AppNotification {
     required this.title,
     required this.message,
     required this.type,
+    this.severity = 'info',
   });
 
   final String id;
   final String title;
   final String message;
   final String type;
+
+  /// How much it matters, as the Tourism Office chose it: `info`, `warning` or `critical` (`severity`). A notice without one, or with one this app does
+  /// not know, is `info`.
+  final String severity;
+
+  /// The colour of the line down the side of a notice (the Tourism Office's Notifications): the status colours the app already has, not the brand colour.
+  /// info: the blue [colorFor] gives any other notice; warning: [AppColors.amber]; critical: [AppColors.red].
+  Color get severityColor {
+    if (severity == 'critical') return AppColors.red;
+    if (severity == 'warning') return AppColors.amber;
+    return Colors.blue;
+  }
 
   IconData get icon {
     if (type == 'approval') return Icons.verified_outlined;
@@ -1304,6 +1317,7 @@ class AppNotification {
       title: '${json['title'] ?? 'Notification'}',
       message: '${json['message'] ?? ''}',
       type: '${json['type'] ?? 'info'}',
+      severity: '${json['severity'] ?? 'info'}',
     );
   }
 

@@ -161,11 +161,11 @@ class CheckLiveAppContentTests(SimpleTestCase):
         body = json.dumps(calendar, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         failed = self.failed(body)
         self.assertIn("everything before appContent is byte for byte the saved bootstrap", failed)  # the bytes did move ...
-        self.assertNotIn("only keys that move with the calendar differ (monthly arrivals, the trending line)", failed)  # ... but only the calendar's
+        self.assertNotIn("only keys that move with the calendar differ (monthly arrivals, advisories come and go)", failed)  # ... but only the calendar's
         self.assertEqual([d for n, ok, d in self.tool.check(body, GOLDEN) if n == "INFO old keys that differ from the saved bootstrap"],
                          ["['referenceTables.resorts', 'destinations', 'notifications']"])
         real = json.loads(self.good)
         real["theme"]["primary_color"] = "#000000"
         real["barangays"] = []
         body = json.dumps(real, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        self.assertIn("only keys that move with the calendar differ (monthly arrivals, the trending line)", self.failed(body))
+        self.assertIn("only keys that move with the calendar differ (monthly arrivals, advisories come and go)", self.failed(body))
