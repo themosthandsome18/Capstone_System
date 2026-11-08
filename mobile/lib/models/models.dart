@@ -1120,6 +1120,7 @@ class Destination {
     required this.longitude,
     this.images = const [],
     this.reviewCount,
+    this.yearlyArrivals = 0,
   });
 
   final int id;
@@ -1132,7 +1133,12 @@ class Destination {
   /// How many reviews the rating is the average of (`review_count`); null when the server does not say (an older one).
   final int? reviewCount;
   final String imageKey;
+
+  /// People who arrived this MONTH (`monthly_arrivals`). It starts again at 0 every month, so no screen shows it as the destination's count.
   final int monthlyArrivals;
+
+  /// People who arrived this calendar YEAR (`yearly_arrivals`): the count every card and the details show. 0 when the server does not send it.
+  final int yearlyArrivals;
   final bool hasMayorPermit;
   final String access;
   final double latitude;
@@ -1142,9 +1148,15 @@ class Destination {
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
   String get permitLabel =>
       hasMayorPermit ? 'Mayor\'s permit verified' : 'Permit not verified';
-  String get visitorsLabel => monthlyArrivals > 0
-      ? '${formatCount(monthlyArrivals)} visitor arrivals'
+  String get visitorsLabel => yearlyArrivals > 0
+      ? '${formatCount(yearlyArrivals)} visitor arrivals'
       : noArrivalsLabel;
+
+  /// Whether there is a count to show on a card. With none, the card shows no count at all (it never shows something else in its place).
+  bool get hasVisitors => yearlyArrivals > 0;
+
+  /// The count as the pill of a card says it: "1 visitor", "12 visitors".
+  String get visitorCountLabel => yearlyArrivals == 1 ? '1 visitor' : '${formatCount(yearlyArrivals)} visitors';
 
   /// The rating is the average of the reviews, so a destination with none has no rating to show: not "0.0".
   String get ratingLabel => ratingText(rating, reviewCount: reviewCount);
@@ -1164,6 +1176,7 @@ class Destination {
       reviewCount: json['review_count'] is num ? (json['review_count'] as num).toInt() : null,
       imageKey: imageKey,
       monthlyArrivals: jsonInt(json['monthly_arrivals']),
+      yearlyArrivals: jsonInt(json['yearly_arrivals']),
       hasMayorPermit: jsonBool(json['with_mayors_permit']),
       access: '${json['access'] ?? ''}',
       latitude: jsonDouble(json['latitude'], 14.18),

@@ -82,7 +82,7 @@ Destination destination() => Destination.fromJson({
   'resort_id': 1,
   'resort_name': 'Test Beach',
   'type': 'Beach',
-  'monthly_arrivals': 12,
+  'yearly_arrivals': 12,
 });
 
 /// The widgets whose brand colour moved, and what they state.

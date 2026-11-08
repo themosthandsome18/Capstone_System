@@ -15,7 +15,7 @@ Destination destination({String access = longAccess, bool permit = true}) =>
       'resort_id': 1,
       'resort_name': 'Test Beach',
       'type': 'Beach Resort',
-      'monthly_arrivals': 1250,
+      'yearly_arrivals': 1250,
       'with_mayors_permit': permit,
       'access': access,
     });

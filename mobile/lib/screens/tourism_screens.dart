@@ -833,8 +833,11 @@ class _FeaturedResortsSlideshowState extends State<FeaturedResortsSlideshow> {
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
-                                    VisitorPill(destination: destination, dark: true),
-                                    const SizedBox(width: 8),
+                                    // no count, no pill and no gap: the type is then the only pill
+                                    if (destination.hasVisitors) ...[
+                                      VisitorPill(destination: destination, dark: true),
+                                      const SizedBox(width: 8),
+                                    ],
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
