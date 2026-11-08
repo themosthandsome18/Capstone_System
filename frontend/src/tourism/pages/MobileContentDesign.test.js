@@ -108,11 +108,11 @@ describe("the header of the page", () => {
     expect(within(header).queryAllByRole("button")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /cancel|save changes/i })).toBeNull();
   });
-  it("the tab bar carries the class of the design; the five tabs are the same", async () => {
+  it("the tab bar carries the class of the design; the six tabs are the same", async () => {
     await openTab("welcome", "Greeting");
     const bar = screen.getByRole("tablist");
     expect(bar.className).toContain("mobile-content-tabs");
-    expect(screen.getAllByRole("tab")).toHaveLength(5); // the fixture
+    expect(screen.getAllByRole("tab")).toHaveLength(6); // the fixture
   });
 });
 

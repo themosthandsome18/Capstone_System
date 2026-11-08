@@ -6992,3 +6992,520 @@ tr.arrival-row:hover > .arrival-chevron {
   line-height: 1.5;
   color: #8a7664;
 }
+
+
+
+
+/* ================= MOBILE APP CONTENT: the Notifications tab =================
+   A notice the Tourism Office sends to the visitors: three cards (compose, in the app now, no longer seen) on the left, the phone with the live
+   preview on the right (the layout of the page of a tile: .mobile-content-tile-layout / .mobile-content-tile-side).
+   Colours, by what they MEAN: whatever follows the admin's theme is var(--th-primary...) (the focus, the chosen date, the send button, the line over
+   the compose card, the icon and the count); the three weights are STATUS colours (--th-info, --th-warning, --th-danger and their -bg / -text), which
+   do not follow the theme; the browns of the paper are the page's own --mc-* variables. No colour of the theme is written as a hex here.
+   Every class starts with .mobile-content-. */
+.mobile-content-notice-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* a weight: its line and the bar of its button (--mobile-content-notice-color, the status colour: the line carries the meaning), and the tag / chosen
+   button (-bg, the status background; -ink, the text). One rule for the three: the TEXT is --th-text-main, the colour of the admin's text, which is
+   over 4.5:1 on each of the three backgrounds. No token is borrowed from another part of the admin. */
+.mobile-content-notice-panel [data-severity="info"] {
+  --mobile-content-notice-color: var(--th-info);
+  --mobile-content-notice-bg: var(--th-info-bg);
+  --mobile-content-notice-ink: var(--th-text-main);
+}
+
+.mobile-content-notice-panel [data-severity="warning"] {
+  --mobile-content-notice-color: var(--th-warning);
+  --mobile-content-notice-bg: var(--th-warning-bg);
+  --mobile-content-notice-ink: var(--th-text-main);
+}
+
+.mobile-content-notice-panel [data-severity="critical"] {
+  --mobile-content-notice-color: var(--th-danger);
+  --mobile-content-notice-bg: var(--th-danger-bg);
+  --mobile-content-notice-ink: var(--th-text-main);
+}
+
+/* the three cards */
+.mobile-content-notice-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--mc-line);
+  border-radius: 18px;
+  background: var(--mc-card);
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+}
+
+.mobile-content-notice-card.is-compose::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--th-primary) 0%, var(--th-primary-deep) 100%);
+}
+
+.mobile-content-notice-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 24px 15px;
+  border-bottom: 1px solid #f2e7dc;
+}
+
+.mobile-content-notice-card.is-compose .mobile-content-notice-head {
+  padding-top: 21px;
+  background: linear-gradient(180deg, #fff8f0 0%, var(--mc-card) 100%);
+}
+
+.mobile-content-notice-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+
+.mobile-content-notice-head[data-tone="compose"] .mobile-content-notice-icon,
+.mobile-content-notice-head[data-tone="now"] .mobile-content-notice-icon {
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.mobile-content-notice-head[data-tone="hidden"] .mobile-content-notice-icon {
+  background: #f2eae1;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-content-notice-head-text h2,
+.mobile-content-notice-head-text h3 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-notice-card.is-compose .mobile-content-notice-head-text h2 {
+  font-size: 17.5px;
+}
+
+.mobile-content-notice-head-text p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-count {
+  flex: none;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-content-notice-body {
+  padding: 18px 24px 20px;
+}
+
+/* the form */
+.mobile-content-notice-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-content-notice-body > .mobile-content-notice-field + .mobile-content-notice-field {
+  margin-top: 16px;
+}
+
+.mobile-content-notice-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mc-label);
+}
+
+.mobile-content-notice-label small {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mc-hint);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-content-notice-field input[type="text"],
+.mobile-content-notice-field input[type="date"],
+.mobile-content-notice-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--th-text-main);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mobile-content-notice-field textarea {
+  resize: vertical;
+}
+
+.mobile-content-notice-field input:focus,
+.mobile-content-notice-field textarea:focus {
+  outline: none;
+  border-color: var(--th-primary);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-20);
+}
+
+.mobile-content-notice-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #f2e7dc;
+}
+
+.mobile-content-notice-severities,
+.mobile-content-notice-durations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-content-notice-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--mc-input-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--mc-tab);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-content-notice-bar {
+  flex: none;
+  width: 4px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--mobile-content-notice-color);
+}
+
+.mobile-content-notice-severity[aria-pressed="true"] {
+  border-color: var(--mobile-content-notice-color);
+  background: var(--mobile-content-notice-bg);
+  color: var(--mobile-content-notice-ink);
+}
+
+.mobile-content-notice-duration {
+  min-height: 32px;
+  padding: 5px 13px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--mc-tab);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mobile-content-notice-duration[aria-pressed="true"] {
+  border-color: var(--th-primary);
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.mobile-content-notice-hint {
+  font-size: 12px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f2e7dc;
+  font-size: 12.5px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mobile-content-notice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--mc-tab);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-content-notice-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mobile-content-notice-btn.is-send {
+  border-color: var(--th-primary-hover);
+  background: linear-gradient(180deg, var(--th-primary) 0%, var(--th-primary-hover) 100%);
+  color: var(--th-text-inverse);
+}
+
+.mobile-content-notice-btn.is-small {
+  flex: none;
+  min-height: 34px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+
+.mobile-content-notice-btn.is-restore {
+  border-color: var(--th-primary);
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+/* the two lists */
+.mobile-content-notice-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-notice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid #f0e4d6;
+  border-radius: 13px;
+  background: #fffcf8;
+}
+
+.mobile-content-notice-stripe {
+  flex: none;
+  align-self: stretch;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--mobile-content-notice-color);
+}
+
+.mobile-content-notice-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-content-notice-row-body strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--th-text-main);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-notice-row-body p {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--mc-tab);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-notice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--mobile-content-notice-bg);
+  color: var(--mobile-content-notice-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mobile-content-notice-card.is-hidden {
+  background: #fbf7f2;
+}
+
+.mobile-content-notice-row.is-off {
+  background: #fbf7f2;
+}
+
+.mobile-content-notice-row.is-off .mobile-content-notice-stripe {
+  background: #d8c8b5;
+}
+
+.mobile-content-notice-row.is-off .mobile-content-notice-row-body strong {
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-expired {
+  flex: none;
+  max-width: 180px;
+  text-align: right;
+}
+
+/* the phone */
+.mobile-content-notice-preview {
+  padding: 18px 20px 22px;
+}
+
+.mobile-content-notice-preview-head {
+  margin-bottom: 14px;
+}
+
+.mobile-content-notice-phone {
+  padding: 9px;
+  border-radius: 30px;
+  background: #1d1713;
+  box-shadow: 0 12px 30px rgba(60, 38, 18, 0.26);
+}
+
+.mobile-content-notice-screen {
+  min-height: 420px;
+  overflow: hidden;
+  padding: 0 0 18px;
+  border-radius: 23px;
+  background: #fdf6ee;
+}
+
+.mobile-content-notice-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--mc-tab);
+}
+
+.mobile-content-notice-statusbar-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mobile-content-notice-app-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+  color: var(--th-text-main);
+}
+
+.mobile-content-notice-app-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.mobile-content-notice-app-sub {
+  margin: 2px 0 12px 36px;
+  font-size: 11.5px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-notice-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 12px;
+}
+
+.mobile-content-notice-phone-notice {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 13px;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.mobile-content-notice-phone-notice.is-draft {
+  outline: 2px dashed var(--mobile-content-notice-color);
+  outline-offset: 2px;
+}
+
+.mobile-content-notice-phone-stripe {
+  flex: none;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--mobile-content-notice-color);
+}
+
+.mobile-content-notice-phone-text {
+  min-width: 0;
+}
+
+.mobile-content-notice-phone-text strong,
+.mobile-content-notice-phone-text span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-notice-phone-text strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-notice-phone-message {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--mc-tab);
+}
+
+.mobile-content-notice-phone-day {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--mc-hint);
+}
+
+@media (max-width: 700px) {
+  .mobile-content-notice-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
