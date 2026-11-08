@@ -21,15 +21,22 @@ AppNotification notice(String id, {String title = 'Sea advisory', String message
       'created_at': ?createdAt,
     });
 
-Future<void> show(WidgetTester tester, List<AppNotification> items, {bool stripe = true, Size size = const Size(390, 800)}) async {
+Future<void> show(WidgetTester tester, List<AppNotification> items, {bool stripe = true, Size size = const Size(390, 800), TargetPlatform? platform}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    MaterialApp(home: NotificationPage(notifications: items, subtitle: stripe ? subtitle : 'Sanitary advisories and compliance updates', severityStripe: stripe, now: fixedNow)),
+    MaterialApp(theme: platform == null ? null : ThemeData(platform: platform), home: NotificationPage(notifications: items, subtitle: stripe ? subtitle : 'Sanitary advisories and compliance updates', severityStripe: stripe, now: fixedNow)),
   );
   await tester.pump();
+}
+
+/// The left edge of the FIRST GLYPH of a text, on the screen: not the box of the widget, which is somewhere else when the text sits in the middle of it.
+double glyphLeft(WidgetTester tester, Finder text) {
+  final paragraph = tester.renderObject<RenderParagraph>(text);
+  final first = paragraph.getBoxesForSelection(const TextSelection(baseOffset: 0, extentOffset: 1)).first;
+  return paragraph.localToGlobal(Offset.zero).dx + first.left;
 }
 
 Finder box(String id) => find.byKey(ValueKey('notice-$id'));
@@ -166,23 +173,35 @@ void main() {
   });
 
   group('C) the subtitle is in line with the title', () {
-    testWidgets('the left edge of the subtitle is the left edge of the title (measured)', (tester) async {
+    // The FIRST GLYPH of each, on both platforms (the bar centres its title on iOS and macOS unless told not to), at four widths. 0.5 allows the
+    // side bearings of the two first letters (0.13 here) and not a centred title (0.87 at 432 on iOS, 85 at 600).
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      for (final width in [432.0, 390.0, 600.0, 800.0]) {
+        testWidgets('$platform, ${width.toInt()} wide: the first glyph of the subtitle is where the first glyph of the title is', (tester) async {
+          await show(tester, [notice('a')], size: Size(width, 800), platform: platform);
+          final title = glyphLeft(tester, find.text('Notifications'));
+          final under = glyphLeft(tester, find.text(subtitle));
+          expect(under, closeTo(title, 0.5), reason: 'title $title, subtitle $under');
+          expect(title, 72, reason: 'the title begins after the back arrow, on the left, on every platform');
+          expect(under, greaterThan(18), reason: 'not at the far left any more');
+        });
+      }
+    }
+
+    testWidgets('the bar is told not to centre the title on this page, and nowhere else is it told anything', (tester) async {
       await show(tester, [notice('a')]);
-      final title = tester.getTopLeft(find.text('Notifications')).dx;
-      final under = tester.getTopLeft(find.text(subtitle)).dx;
-      expect(under, closeTo(title, 0.01), reason: 'title $title, subtitle $under');
-      expect(under, greaterThan(18), reason: 'not at the far left any more');
-    });
-
-    testWidgets('and it stays in line on a wider screen', (tester) async {
-      await show(tester, [notice('a')], size: const Size(600, 800));
-      expect(tester.getTopLeft(find.text(subtitle)).dx, closeTo(tester.getTopLeft(find.text('Notifications')).dx, 0.01));
-    });
-
-    testWidgets('on the sanitation side the subtitle is where it always was (18 from the left)', (tester) async {
+      expect(tester.widget<AppBar>(find.byType(AppBar)).centerTitle, isFalse);
       await show(tester, [notice('a')], stripe: false);
-      expect(tester.getTopLeft(find.text('Sanitary advisories and compliance updates')).dx, 18);
+      expect(tester.widget<AppBar>(find.byType(AppBar)).centerTitle, isNull, reason: 'the sanitation side leaves it to the platform, as it always did');
     });
+
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      testWidgets('$platform: on the sanitation side the subtitle is where it always was (18 from the left, first glyph within a pixel)', (tester) async {
+        await show(tester, [notice('a')], stripe: false, platform: platform);
+        expect(tester.getTopLeft(find.text('Sanitary advisories and compliance updates')).dx, 18);
+        expect(glyphLeft(tester, find.text('Sanitary advisories and compliance updates')), closeTo(18, 1));
+      });
+    }
   });
 
   group('D) the shape and the breathing room', () {

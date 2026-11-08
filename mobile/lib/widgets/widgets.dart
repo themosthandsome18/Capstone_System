@@ -2383,6 +2383,9 @@ class FormPageScaffold extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
+        // The indent above assumes the title starts after the back arrow. The bar centres its title on iOS and macOS unless it is told not to, so a page
+        // that lines its subtitle up with the title says so here; every other page keeps the platform's own way.
+        centerTitle: alignSubtitleWithTitle ? false : null,
         leading: leading ??
             (Navigator.of(context).canPop()
                 ? IconButton(
