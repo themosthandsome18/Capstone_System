@@ -161,15 +161,16 @@ HIDDEN_GEMS_LIMIT = 6
 
 
 def select_featured(destinations):
-    """The "Most Popular" of the app: the six destinations with the most people who ARRIVED this year.
+    """The "Most Popular" of the app: the six destinations with the most people who ARRIVED in the last 365 days.
 
-    `destinations` are already filtered (active, not excluded) and carry the annotated figures. Order: yearly_total most first, then the
-    better rating, then the newest resort_id (the primary key: nothing ties after it). The year, not the month: a month starts again at 0
-    for everybody. monthly_arrivals (the column) is NOT used: it is seeded demo data, repeated from id 7 on.
+    `destinations` are already filtered (active, not excluded) and carry the annotated figures. Order: rolling_total most first, then the
+    better rating, then the newest resort_id (the primary key: nothing ties after it). A sliding 365 days, not the month (which starts again
+    at 0 for everybody) and not the calendar year (which does on 1 January). monthly_arrivals (the column) is NOT used: it is seeded demo
+    data, repeated from id 7 on.
     """
     ranked = sorted(
         destinations,
-        key=lambda r: (-(getattr(r, "yearly_total", 0) or 0), -(r.tourism_rating or 0.0), -r.resort_id),
+        key=lambda r: (-(getattr(r, "rolling_total", 0) or 0), -(r.tourism_rating or 0.0), -r.resort_id),
     )
     return ranked[:FEATURED_LIMIT]
 
@@ -178,15 +179,15 @@ def select_hidden_gems(destinations, featured):
     """The "Hidden Gems" of the app: the destinations that are not featured, the least visited first.
 
     `destinations` are already filtered (active, not excluded) and carry the annotated figures. A featured one is never here, so no resort
-    is in both lists. Order: people who ARRIVED this year (yearly_total) fewest first, then visible reviews (review_total) fewest first,
-    then the newest resort_id first (the primary key: nothing ties after it). The year, not the month. monthly_arrivals (the column) is
-    NOT used: it is seeded demo data, repeated from id 7 on.
+    is in both lists. Order: people who ARRIVED in the last 365 days (rolling_total) fewest first, then visible reviews (review_total)
+    fewest first, then the newest resort_id first (the primary key: nothing ties after it). The sliding 365 days, as for the featured list.
+    monthly_arrivals (the column) is NOT used: it is seeded demo data, repeated from id 7 on.
     """
     featured_ids = {r.resort_id for r in featured}
     rest = [r for r in destinations if r.resort_id not in featured_ids]
     rest.sort(
         key=lambda r: (
-            getattr(r, "yearly_total", 0) or 0,
+            getattr(r, "rolling_total", 0) or 0,
             getattr(r, "review_total", 0) or 0,
             -r.resort_id,
         )
