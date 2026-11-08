@@ -348,13 +348,11 @@ class InactiveDestinationTests(TestCase):
         self.active.refresh_from_db()
         self.assertIs(self.active.is_active, True)
 
-    def test_it_does_not_count_among_the_featured_or_the_trending(self):
+    def test_it_does_not_count_among_the_featured_and_there_is_no_trending_notice_at_all(self):
         arrive(self.closed, "TREND-1", 500)  # the most arrivals of any, but inactive
         arrive(self.active, "TREND-2", 2)
 
         data = self._bootstrap()
 
         self.assertEqual(data["destinations"][0]["resort_id"], 1)
-        trending = [n for n in data["notifications"] if str(n.get("id", "")).startswith("featured-")]
-        for note in trending:
-            self.assertNotEqual(note["id"], "featured-2")
+        self.assertEqual([n for n in data["notifications"] if str(n.get("id", "")).startswith("featured-")], [])

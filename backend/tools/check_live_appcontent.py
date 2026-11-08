@@ -29,7 +29,7 @@ CANARY_BYTES = 60 * 1024  # the same canary as the backend test (SIZE_CANARY_BYT
 # What of the OLD bytes can move with nobody deploying anything: a resort's monthly_arrivals is the number of ARRIVED records of THIS
 # calendar month, so it changes when the month turns (1 November) and whenever a record of the month is checked in. It is in
 # destinations, featuredDestinations and referenceTables.resorts, and it decides which destination is on top, so also the order of
-# those lists and the "is trending" line of notifications (and an advisory that expires drops out). Nothing else moves by itself.
+# those lists (and an advisory that expires drops out of notifications, one that is written appears). Nothing else moves by itself.
 MOVES_WITH_THE_CALENDAR = {"destinations", "featuredDestinations", "notifications", "referenceTables.resorts"}
 
 
@@ -110,7 +110,7 @@ def check(body, before=None):
         except ValueError:
             moved = ["(the saved file is not JSON)"]
         add("INFO old keys that differ from the saved bootstrap", True, str(moved) if moved else "none")
-        add("only keys that move with the calendar differ (monthly arrivals, the trending line)", set(moved) <= MOVES_WITH_THE_CALENDAR,
+        add("only keys that move with the calendar differ (monthly arrivals, advisories come and go)", set(moved) <= MOVES_WITH_THE_CALENDAR,
             f"unexpected: {sorted(set(moved) - MOVES_WITH_THE_CALENDAR)}; an admin edit, or a real problem" if not set(moved) <= MOVES_WITH_THE_CALENDAR else "")
     add("INFO", True, f"whole bootstrap {len(body)} bytes sha256 {hashlib.sha256(body).hexdigest()}; "
                       f"appContent {len(value)} bytes sha256 {hashlib.sha256(value).hexdigest()}")

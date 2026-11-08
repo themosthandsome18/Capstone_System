@@ -1275,12 +1275,56 @@ class AppNotification {
     required this.title,
     required this.message,
     required this.type,
+    this.severity = 'info',
+    this.createdAt,
   });
 
   final String id;
   final String title;
   final String message;
   final String type;
+
+  /// When the notice was written (`created_at`); null when the server did not say, or said something that is not a date.
+  final DateTime? createdAt;
+
+  /// How much it matters, as the Tourism Office chose it: `info`, `warning` or `critical` (`severity`). A notice without one, or with one this app does
+  /// not know, is `info`.
+  final String severity;
+
+  /// The colour of the line down the side of a notice (the Tourism Office's Notifications): the status colours the app already has, not the brand colour.
+  /// info: the blue [colorFor] gives any other notice; warning: [AppColors.amber]; critical: [AppColors.red].
+  Color get severityColor {
+    if (severity == 'critical') return AppColors.red;
+    if (severity == 'warning') return AppColors.amber;
+    return Colors.blue;
+  }
+
+  /// The word for the weight, under the message: Info, Advisory, Urgent.
+  String get severityLabel {
+    if (severity == 'critical') return 'Urgent';
+    if (severity == 'warning') return 'Advisory';
+    return 'Info';
+  }
+
+  /// The colour of that word: the ink of the app, the same for the three (17.7:1 on the white box). The LINE carries the colour of the weight, not the
+  /// word (the line of info is 3.1:1 and of warning 2.5:1 on white, too little for text).
+  Color get severityTextColor => AppColors.ink;
+
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /// When it was written, in the words under the message, from [now]: "Just now" (under an hour), "Today", "Yesterday", "3 days ago" (under seven days),
+  /// "2 Nov", and "28 Oct 2025" for another year. Null when there is no date: the page then shows no date at all.
+  String? whenLabel(DateTime now) {
+    final at = createdAt?.toLocal();
+    if (at == null) return null;
+    if (now.difference(at) < const Duration(hours: 1)) return 'Just now'; // (a date a little ahead of this clock is "just now" too)
+    final days = DateTime.utc(now.year, now.month, now.day).difference(DateTime.utc(at.year, at.month, at.day)).inDays;
+    if (days <= 0) return 'Today';
+    if (days == 1) return 'Yesterday';
+    if (days < 7) return '$days days ago';
+    final day = '${at.day} ${_months[at.month - 1]}';
+    return at.year == now.year ? day : '$day ${at.year}';
+  }
 
   IconData get icon {
     if (type == 'approval') return Icons.verified_outlined;
@@ -1304,6 +1348,8 @@ class AppNotification {
       title: '${json['title'] ?? 'Notification'}',
       message: '${json['message'] ?? ''}',
       type: '${json['type'] ?? 'info'}',
+      severity: '${json['severity'] ?? 'info'}',
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
     );
   }
 
