@@ -12,6 +12,9 @@ from api.models import (
     NOTIFICATION_AUDIENCE_PUBLIC,
     NOTIFICATION_AUDIENCE_USER,
     NOTIFICATION_MODULE_CHOICES,
+    NOTIFICATION_MODULE_GENERAL,
+    NOTIFICATION_MODULE_SANITATION,
+    NOTIFICATION_MODULE_TOURISM,
     NOTIFICATION_SEVERITY_INFO,
     NOTIFICATION_TYPE_PUBLIC_ADVISORY,
     ROLE_ADMIN,
@@ -25,6 +28,14 @@ from api.serializers import NotificationPublicSerializer, NotificationSerializer
 VALID_MODULES = {code for code, _ in NOTIFICATION_MODULE_CHOICES}
 STAFF_ADVISORY_ROLES = {ROLE_ADMIN, ROLE_TOURISM, ROLE_SANITATION}
 
+# Which module's advisories each role may write (create, edit, move). "general" is only for the admin: it reaches the users of BOTH apps (it is in
+# the tourism bootstrap and in the sanitation one), so letting one office write it would let that office reach the other's users.
+ADVISORY_MODULES_BY_ROLE = {
+    ROLE_ADMIN: {NOTIFICATION_MODULE_TOURISM, NOTIFICATION_MODULE_SANITATION, NOTIFICATION_MODULE_GENERAL},
+    ROLE_TOURISM: {NOTIFICATION_MODULE_TOURISM},
+    ROLE_SANITATION: {NOTIFICATION_MODULE_SANITATION},
+}
+
 
 def is_advisory_staff(user):
     """Returns True if the user is authenticated and has an admin, tourism, or sanitation role."""
@@ -35,6 +46,13 @@ def is_advisory_staff(user):
     except ObjectDoesNotExist:
         return False
     return getattr(profile, "role", "") in STAFF_ADVISORY_ROLES
+
+
+def advisory_modules_for(user):
+    """The modules whose advisories this user may write: empty for anyone who is not advisory staff."""
+    if not is_advisory_staff(user):
+        return set()
+    return ADVISORY_MODULES_BY_ROLE.get(getattr(user.profile, "role", ""), set())
 
 
 @api_view(["GET"])
@@ -162,6 +180,12 @@ def public_notification_list(request):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        if serializer.validated_data.get("module") not in advisory_modules_for(request.user):
+            return Response(
+                {"detail": "You can only publish advisories for your own section."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         notification = serializer.save(
             audience_type=NOTIFICATION_AUDIENCE_PUBLIC,
             notification_type=NOTIFICATION_TYPE_PUBLIC_ADVISORY,
@@ -223,6 +247,14 @@ def public_notification_detail(request, notification_id):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    allowed = advisory_modules_for(request.user)
+    if notification.module not in allowed:
+        # Not found, not forbidden: an office is not told that the other office has such an advisory.
+        return Response(
+            {"detail": "Public advisory not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
     serializer = NotificationPublicSerializer(
         notification,
         data=request.data,
@@ -230,6 +262,12 @@ def public_notification_detail(request, notification_id):
     )
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    if serializer.validated_data.get("module", notification.module) not in allowed:
+        return Response(
+            {"detail": "You can only keep an advisory in your own section."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     serializer.save()
     return Response(serializer.data)
