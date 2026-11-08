@@ -41,7 +41,7 @@ Future<void> openNotifications(WidgetTester tester, List<Map<String, dynamic>> n
 
 Finder card(String id) => find.byKey(ValueKey('notice-$id'));
 Finder stripe(String id) => find.byKey(ValueKey('notice-stripe-$id'));
-Color colourOf(WidgetTester tester, Finder stripe) => ((tester.widget<Container>(stripe)).decoration as BoxDecoration).color!;
+Color colourOf(WidgetTester tester, Finder stripe) => tester.widget<Container>(stripe).color!;
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -92,23 +92,20 @@ void main() {
       }
     });
 
-    testWidgets('the line is 4 wide, round at the ends, and as tall as its whole row (measured on the screen)', (tester) async {
+    testWidgets('the line is 4 wide, flush with the left edge, and as tall as its whole row (measured on the screen)', (tester) async {
       await openNotifications(tester, [
         notice('advisory-1', 'Short', 'One line.', severity: 'critical'),
         notice('advisory-2', 'Long', 'A long message that runs over several lines so that the row is much taller than the first one. ' * 3, severity: 'warning'),
       ]);
       final heights = <double>[];
       for (final id in ['advisory-1', 'advisory-2']) {
-        // the row itself: the surface of the Card (its Material), not the margin the Card keeps around it
-        final box = tester.getRect(find.descendant(of: card(id), matching: find.byType(Material)).first);
+        final box = tester.getRect(card(id));
         final line = tester.getRect(stripe(id));
         expect(line.width, 4, reason: id);
         expect(line.height, box.height, reason: 'the line is as tall as the row: $line, row $box');
         expect(line.top, box.top, reason: id);
         expect(line.bottom, box.bottom, reason: id);
-        expect(line.left, greaterThan(box.left), reason: 'inside the row, on the left');
-        final decoration = (tester.widget<Container>(stripe(id))).decoration as BoxDecoration;
-        expect(decoration.borderRadius, BorderRadius.circular(999));
+        expect(line.left, box.left, reason: 'against the left edge of the box');
         heights.add(box.height);
       }
       expect(heights[1], greaterThan(heights[0] + 20), reason: 'the fixture: the two rows really are of different heights');

@@ -2358,6 +2358,8 @@ class FormPageScaffold extends StatelessWidget {
     required this.subtitle,
     required this.children,
     this.leading,
+    this.padding = const EdgeInsets.fromLTRB(18, 8, 18, 24),
+    this.alignSubtitleWithTitle = false,
   });
 
   final String title;
@@ -2365,8 +2367,19 @@ class FormPageScaffold extends StatelessWidget {
   final List<Widget> children;
   final Widget? leading;
 
+  /// The padding of the page (the default is what every page has had).
+  final EdgeInsets padding;
+
+  /// The subtitle begins where the title begins (after the back arrow), not at the far left. Off: as every page has had it.
+  final bool alignSubtitleWithTitle;
+
   @override
   Widget build(BuildContext context) {
+    final hasLeading = leading != null || Navigator.of(context).canPop();
+    // where the AppBar puts the title: after the leading widget and the spacing the bar gives it
+    final bar = AppBarTheme.of(context);
+    final titleLeft = (hasLeading ? (bar.leadingWidth ?? kToolbarHeight) : 0.0) + (bar.titleSpacing ?? NavigationToolbar.kMiddleSpacing);
+    final indent = alignSubtitleWithTitle ? (titleLeft - padding.left).clamp(0.0, double.infinity) : 0.0;
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -2381,13 +2394,16 @@ class FormPageScaffold extends StatelessWidget {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+          padding: padding,
           children: [
-            Text(
-              subtitle,
-              style: const TextStyle(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w700,
+            Padding(
+              padding: EdgeInsets.only(left: indent),
+              child: Text(
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             const SizedBox(height: 16),

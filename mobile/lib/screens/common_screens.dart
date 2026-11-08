@@ -342,10 +342,14 @@ class NotificationPage extends StatelessWidget {
     required this.notifications,
     this.subtitle = 'Sanitary advisories and compliance updates',
     this.severityStripe = false,
+    this.now,
   });
 
   final List<AppNotification> notifications;
   final String subtitle;
+
+  /// The moment the dates under the notices are told from (the clock when null). Only for a test to fix it.
+  final DateTime? now;
 
   /// A line of the colour of its weight down the left of each notice, instead of the round icon (the tourism side asks for it). False: the round icon,
   /// as the sanitation side has always had.
@@ -356,6 +360,9 @@ class NotificationPage extends StatelessWidget {
     return FormPageScaffold(
       title: 'Notifications',
       subtitle: subtitle,
+      // the tourism side: the subtitle in line with the title, and 16 around the page
+      alignSubtitleWithTitle: severityStripe,
+      padding: severityStripe ? const EdgeInsets.fromLTRB(16, 8, 16, 24) : const EdgeInsets.fromLTRB(18, 8, 18, 24),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         tooltip: '',
@@ -400,38 +407,7 @@ class NotificationPage extends StatelessWidget {
           : notifications
               .map(
                 (item) => severityStripe
-                    ? Card(
-                        key: ValueKey('notice-${item.id}'),
-                        elevation: 0,
-                        color: Colors.white,
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: Container(
-                                  key: ValueKey('notice-stripe-${item.id}'),
-                                  width: 4,
-                                  decoration: BoxDecoration(
-                                    color: item.severityColor,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: ListTile(
-                                  title: Text(
-                                    item.title,
-                                    style: const TextStyle(fontWeight: FontWeight.w900),
-                                  ),
-                                  subtitle: Text(item.message),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
+                    ? _Notice(item: item, now: now ?? DateTime.now())
                     : Card(
                         elevation: 0,
                         color: Colors.white,
@@ -449,6 +425,91 @@ class NotificationPage extends StatelessWidget {
                       ),
               )
               .toList(),
+    );
+  }
+}
+
+/// One notice of the tourism side: a white box, a line of the colour of its weight down the left edge (the corners follow the box), the title, the
+/// message (three lines at most), and under it the word of the weight and when it was written. One label for a screen reader.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.item, required this.now});
+
+  final AppNotification item;
+  final DateTime now;
+
+  static const _radius = 14.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final when = item.whenLabel(now);
+    final label = [item.severityLabel, item.title, item.message, ?when].join(', ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Semantics(
+        container: true,
+        label: label,
+        child: ExcludeSemantics(
+          child: DecoratedBox(
+            key: ValueKey('notice-${item.id}'),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_radius),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(_radius),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(key: ValueKey('notice-stripe-${item.id}'), width: 4, color: item.severityColor),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
+                            ),
+                            const SizedBox(height: 7),
+                            Text(
+                              item.message,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                            ),
+                            const SizedBox(height: 10),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: item.severityLabel,
+                                    style: TextStyle(fontWeight: FontWeight.w800, color: item.severityTextColor),
+                                  ),
+                                  if (when != null)
+                                    TextSpan(
+                                      text: ' · $when',
+                                      style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.muted),
+                                    ),
+                                ],
+                              ),
+                              style: const TextStyle(fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
