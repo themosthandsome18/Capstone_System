@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from django.contrib.auth.models import update_last_login
 from django.db import OperationalError, connection
 from .models import ROLE_ADMIN, ROLE_TOURIST, UserProfile
 from .serializers import AuthUserSerializer
@@ -95,6 +96,8 @@ def login_view(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
+    # When this account last came in, for every role: a token login does not go through django.contrib.auth.login, which is what records it.
+    update_last_login(None, user)
     token, _ = Token.objects.get_or_create(user=user)
     return Response(serialize_auth_payload(user, token))
 
