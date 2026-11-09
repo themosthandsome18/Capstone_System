@@ -7509,3 +7509,360 @@ tr.arrival-row:hover > .arrival-chevron {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ================= RESORT ACCOUNTS: the page of the staff of the resorts =================
+   Three cards (add a staff member, the staff by resort, the resorts with none), looking like the cards of the Notifications tab above.
+   Colours, by what they MEAN: whatever follows the admin's theme is var(--th-primary...) (the focus of the boxes, the Gumawa ng account button, the line
+   over the first card, the icon of the first card); an open account is the STATUS token --th-info (and its -bg), a closed one is NOT a status (it is only switched
+   off): the brown of the paper; both with the text in --th-text-main; the browns of the paper are the page's own --mc-* variables. Every class starts with .mobile-content-. */
+.mobile-content-staff-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.mobile-content-staff-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--mc-line);
+  border-radius: 18px;
+  background: var(--mc-card);
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+}
+
+.mobile-content-staff-card.is-add::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--th-primary) 0%, var(--th-primary-deep) 100%);
+}
+
+.mobile-content-staff-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 24px 15px;
+  border-bottom: 1px solid #f2e7dc;
+}
+
+.mobile-content-staff-card.is-add .mobile-content-staff-head {
+  padding-top: 21px;
+  background: linear-gradient(180deg, #fff8f0 0%, var(--mc-card) 100%);
+}
+
+.mobile-content-staff-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #f2eae1;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-card.is-add .mobile-content-staff-icon {
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+}
+
+.mobile-content-staff-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-content-staff-head-text h2 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-head-text p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-count {
+  flex: none;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #f2eae1;
+  color: var(--th-text-main);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-content-staff-body {
+  padding: 18px 24px 20px;
+}
+
+.mobile-content-staff-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 22px;
+}
+
+.mobile-content-staff-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-content-staff-field label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mc-label);
+}
+
+.mobile-content-staff-field small {
+  font-size: 12px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-field input,
+.mobile-content-staff-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--th-text-main);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mobile-content-staff-field input:focus,
+.mobile-content-staff-field select:focus {
+  outline: none;
+  border-color: var(--th-primary);
+  box-shadow: 0 0 0 3px var(--th-primary-alpha-20);
+}
+
+.mobile-content-staff-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f2e7dc;
+  font-size: 12.5px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mobile-content-staff-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid var(--mc-input-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--mc-tab);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-content-staff-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mobile-content-staff-btn.is-primary {
+  border-color: var(--th-primary-hover);
+  background: linear-gradient(180deg, var(--th-primary) 0%, var(--th-primary-hover) 100%);
+  color: var(--th-text-inverse);
+}
+
+.mobile-content-staff-btn.is-small {
+  min-height: 34px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+
+.mobile-content-staff-group {
+  overflow: hidden;
+  border: 1px solid #f0e4d6;
+  border-radius: 14px;
+}
+
+.mobile-content-staff-group + .mobile-content-staff-group {
+  margin-top: 14px;
+}
+
+.mobile-content-staff-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  background: #fbf3ea;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-group-head strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+}
+
+.mobile-content-staff-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-staff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border-top: 1px solid #f0e4d6;
+  background: #fffcf8;
+  cursor: pointer;
+}
+
+.mobile-content-staff-row:hover {
+  background: #fbf3ea;
+}
+
+.mobile-content-staff-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-content-staff-row-text strong {
+  font-size: 14px;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-row-text span {
+  font-size: 12.5px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-tag {
+  flex: none;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: #f2eae1;
+  color: var(--th-text-main);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-content-staff-tag[data-status="open"] {
+  background: var(--th-info-bg);
+  box-shadow: inset 0 0 0 1px var(--th-info);
+}
+
+.mobile-content-staff-tag[data-status="closed"] {
+  background: #f2eae1;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-chevron {
+  flex: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-staff-chip {
+  padding: 6px 14px;
+  border: 1px solid #f0e4d6;
+  border-radius: 999px;
+  background: #fffcf8;
+  color: var(--th-text-main);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-staff-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* the answer of the form (the server's, the form's own, the "done"): inside the card, above the two buttons; nothing when there is none */
+.mobile-content-staff-message {
+  padding: 0 24px 16px;
+}
+
+.mobile-content-staff-message:empty {
+  display: none;
+}
+
+.mobile-content-staff-message p {
+  margin: 0;
+}
+
+/* a password box with its own eye inside, at the right */
+.mobile-content-staff-secret {
+  position: relative;
+}
+
+.mobile-content-staff-secret input {
+  padding-right: 46px;
+}
+
+.mobile-content-staff-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--mc-hint);
+  cursor: pointer;
+}
+
+.mobile-content-staff-eye:hover,
+.mobile-content-staff-eye:focus-visible {
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-staff-spacer {
+    display: none;
+  }
+}
+
+/* Edge draws its own "show password" eye (and a clear cross) in every password box; ours is the only one here. Only the boxes of this page. */
+.mobile-content-staff-secret input::-ms-reveal,
+.mobile-content-staff-secret input::-ms-clear {
+  display: none;
+}
