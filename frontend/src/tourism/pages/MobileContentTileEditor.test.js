@@ -1399,7 +1399,7 @@ describe("the page does not touch the CSS of the pages that exist", () => {
     expect(decl(".mobile-content-page .mobile-content-tile-side", "top")).toBe("24px");
     expect(decl(".mobile-content-tile-layout", "grid-template-columns")).toBe("minmax(0, 1fr) minmax(300px, 380px)");
     expect(decl(".mobile-content-page .mobile-content-tile-preview .mobile-content-live-note", "font-size")).toBe("12.5px");
-    expect(decl(".mobile-content-page .mobile-content-tile-preview .mobile-content-live-note", "color")).toBe("var(--mc-hint)");
+    expect(decl(".mobile-content-page .mobile-content-tile-preview .mobile-content-live-note", "color")).toBe("var(--th-text-muted)");
     expect(decl(".mobile-content-mock-label", "font-size")).toBe("10.5px");
     expect(decl(".mobile-content-mock-label", "text-transform")).toBe("uppercase");
     expect(decl(".mobile-content-mock-label", "letter-spacing")).toBe("0.09em");
@@ -1437,8 +1437,8 @@ describe("the page does not touch the CSS of the pages that exist", () => {
       expect(start).toBeGreaterThan(-1);
       return CSS.slice(start, CSS.indexOf("\n}", start)).match(new RegExp(`^\\s*${property}:\\s*(.+);$`, "m"))[1].toLowerCase();
     };
-    expect(tag(".mobile-content-tag", "background")).toBe("#f2e8db");
-    expect(tag(".mobile-content-tag", "color")).toBe("#7a6450");
+    expect(tag(".mobile-content-tag", "background")).toBe("var(--th-border)");
+    expect(tag(".mobile-content-tag", "color")).toBe("var(--th-text-muted)");
     expect(tag('.mobile-content-tag[data-detail="yes"]', "background")).toBe("#dcf0e4");
     expect(tag('.mobile-content-tag[data-detail="yes"]', "color")).toBe("#176b3b");
     expect(tag(".mobile-content-tag", "border-radius")).toBe("7px");
@@ -1468,10 +1468,10 @@ describe("the page does not touch the CSS of the pages that exist", () => {
     expect(decl(".mobile-content-icon-choice", "width")).toBe("100%");
     expect(decl(".mobile-content-icon-choice", "aspect-ratio")).toBe("1");
     expect(decl(".mobile-content-icon-choice", "border-radius")).toBe("11px");
-    expect(decl(".mobile-content-icon-choice", "border")).toBe("1px solid #e8dbcb");
+    expect(decl(".mobile-content-icon-choice", "border")).toBe("1px solid var(--th-border)");
     expect(decl(".mobile-content-icon-choice", "background")).toBe("var(--th-surface)");
-    expect(decl(".mobile-content-icon-choice:hover", "background")).toBe("#fbf4ec");
-    expect(decl(".mobile-content-icon-choice:hover", "border-color")).toBe("#cdb295");
+    expect(decl(".mobile-content-icon-choice:hover", "background")).toBe("var(--th-surface-tinted)");
+    expect(decl(".mobile-content-icon-choice:hover", "border-color")).toBe("var(--th-border-strong)");
     expect(decl('.mobile-content-icon-choice[data-selected="true"]', "border")).toBe("2px solid var(--th-primary)");
     expect(decl('.mobile-content-icon-choice[data-selected="true"]', "background")).toBe("var(--th-primary-tint)");
     expect(decl(".mobile-content-page .mobile-content-tile-order", "width")).toBe("160px");

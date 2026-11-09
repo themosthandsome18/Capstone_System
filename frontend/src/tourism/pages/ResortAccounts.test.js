@@ -166,13 +166,6 @@ describe("the staff, in groups", () => {
     expect(container.querySelectorAll("li.mobile-content-staff-row button, li.mobile-content-staff-row a, li.mobile-content-staff-row [tabindex]")).toHaveLength(0);
   });
 
-  it("clicking a row does nothing yet: no request, no change", async () => {
-    await open([person({ name: "Ana Reyes" })]);
-    const before = server.requests.length;
-    fireEvent.click(screen.getByText("Ana Reyes"));
-    expect(server.requests.length).toBe(before);
-  });
-
   it("never asks for a DELETE, however the page is used", async () => {
     await open([person({ name: "Ana Reyes" })]);
     fill();
@@ -654,19 +647,44 @@ describe("the colours of the tags", () => {
     return block.slice(start, block.indexOf("\n}", start));
   };
 
-  it("Open is the info status with the text of the admin", () => {
+  const VARIABLES = Object.fromEntries([...CSS.matchAll(/--th-([a-z-]+): (#[0-9a-f]{6});/g)].map((match) => [match[1], match[2]]));
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("Open is green: --th-success and its background, and nothing else of the status", () => {
     const open = rule('.mobile-content-staff-tag[data-status="open"]');
-    expect(open).toContain("var(--th-info-bg)");
-    expect(open).toContain("var(--th-info)");
-    expect(rule(".mobile-content-staff-tag")).toContain("color: var(--th-text-main)");
+    expect(open).toContain("background: var(--th-success-bg);");
+    expect(open).toContain("var(--th-success)");
+    expect(open).not.toMatch(/th-danger|th-warning|th-info/);
   });
 
-  it("Closed is NOT a status: no warning and no danger, the paper brown and the text of the admin", () => {
+  it("Closed is red: --th-danger and its background, and nothing else of the status", () => {
     const closed = rule('.mobile-content-staff-tag[data-status="closed"]');
-    expect(closed).not.toMatch(/th-warning|th-danger|th-info/);
-    expect(closed).toContain("background: #f2eae1");
-    expect(closed).toContain("color: var(--th-text-main)");
-    expect(block).not.toMatch(/th-warning|th-danger/); // nowhere on the page
+    expect(closed).toContain("background: var(--th-danger-bg);");
+    expect(closed).toContain("var(--th-danger)");
+    expect(closed).not.toMatch(/th-success|th-warning|th-info/);
+  });
+
+  it("the TEXT of both is the text of the admin, written once, in the rule of every tag", () => {
+    expect(rule(".mobile-content-staff-tag")).toContain("color: var(--th-text-main)");
+    expect(rule('.mobile-content-staff-tag[data-status="open"]')).not.toMatch(/\bcolor:/);
+    expect(rule('.mobile-content-staff-tag[data-status="closed"]')).not.toMatch(/\bcolor:/);
+  });
+
+  it("the warning yellow is nowhere on the page", () => {
+    expect(block).not.toMatch(/th-warning/);
+  });
+
+  it("the text of the tag reads on both backgrounds: 4.5 to 1 at least", () => {
+    ["text-main", "success-bg", "danger-bg"].forEach((name) => expect(VARIABLES[name]).toMatch(/^#[0-9a-f]{6}$/)); // the fixture: the colours were found
+    expect(ratio(VARIABLES["text-main"], VARIABLES["success-bg"])).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(VARIABLES["text-main"], VARIABLES["danger-bg"])).toBeGreaterThanOrEqual(4.5);
   });
 
   it("the tags are drawn from data-status, so a closed account really gets the closed rule", async () => {

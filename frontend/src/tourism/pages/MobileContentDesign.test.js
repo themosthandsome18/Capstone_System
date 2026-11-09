@@ -292,7 +292,7 @@ describe("no request was added and none was lost", () => {
 
 describe("the CSS holds the values of the design", () => {
   it("the page: the gradient, the radius, the font (Public Sans, the font of the whole admin)", () => {
-    expect(decl(".mobile-content-page", "background")).toBe("linear-gradient(165deg, #f8e9d8, #f0d7be)");
+    expect(body(".mobile-content-page")).not.toMatch(/^\s*(background|padding|border-radius):/m); // no background, padding or rounded edge of its own: the shell, which follows the theme, shows through (like Registration Options)
     expect(variables["--mc-font"]).toMatch(/^"Public Sans", /);
     expect(decl(".mobile-content-page", "font-family")).toMatch(/^"public sans", /);
   });
@@ -307,10 +307,10 @@ describe("the CSS holds the values of the design", () => {
 
   it("the box (card): colour, border, radius, shadow", () => {
     const card = ".mobile-content-page .mobile-content-card";
-    expect(decl(card, "background")).toBe("#fffdfb");
-    expect(decl(card, "border")).toBe("1px solid #efe1d1");
+    expect(decl(card, "background")).toBe("rgba(255, 255, 255, 0.8)");
+    expect(decl(card, "border")).toBe("1px solid var(--th-border)");
     expect(decl(card, "border-radius")).toBe("16px");
-    expect(decl(card, "box-shadow")).toBe("0 1px 2px rgba(90, 60, 35, 0.05)");
+    expect(decl(card, "box-shadow")).toBe("0 18px 32px rgba(var(--th-shadow-rgb), 0.16)");
   });
 
   it("the eyebrow", () => {
@@ -333,11 +333,11 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(tab, "font-weight")).toBe("500");
     expect(decl(tab, "padding")).toBe("10px 16px");
     expect(decl(tab, "border-radius")).toBe("9px");
-    expect(decl(tab, "color")).toBe("#65564a");
+    expect(decl(tab, "color")).toBe("var(--th-text-muted)");
     expect(decl(`${tab}.active`, "background")).toBe("var(--th-primary)"); // the colour the admin chose, not a green written here
     expect(decl(`${tab}.active`, "color")).toBe("var(--th-text-inverse)"); // white, like the active item of the sidebar (which is `white`), not the derived dark contrast
     expect(decl(`${tab}.active`, "color")).not.toBe("var(--th-primary-contrast)");
-    expect(decl(tab, "color")).toBe("#65564a"); // the tab that is not active is untouched
+    expect(decl(tab, "color")).toBe("var(--th-text-muted)"); // the tab that is not active is untouched
     expect(decl(`${tab}.active`, "font-weight")).toBe("700");
   });
 
@@ -347,18 +347,18 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(label, "text-transform")).toBe("uppercase");
     expect(decl(label, "letter-spacing")).toBe("0.09em");
     expect(decl(label, "font-weight")).toBe("700");
-    expect(decl(label, "color")).toBe("#8a6e55");
+    expect(decl(label, "color")).toBe("var(--th-text-muted)");
     expect(decl(label, "margin-bottom")).toBe("7px");
     const input = ".mobile-content-page .mobile-content-card .settings-field-wide textarea";
     expect(decl(input, "border-radius")).toBe("10px");
-    expect(decl(input, "border")).toBe("1px solid #e0cdb7");
+    expect(decl(input, "border")).toBe("1px solid var(--th-border-strong)");
     expect(decl(input, "min-height")).toBe("42px");
     expect(decl(input, "padding")).toBe("10px 13px");
     expect(decl(input, "font-size")).toBe("14px");
     expect(decl(`${input}:focus`, "outline")).toBe("2px solid var(--th-primary)");
     const hint = ".mobile-content-page .mobile-content-card .options-hint";
     expect(decl(hint, "font-size")).toBe("12.5px");
-    expect(decl(hint, "color")).toBe("#8a7664");
+    expect(decl(hint, "color")).toBe("var(--th-text-muted)");
     expect(decl(hint, "line-height")).toBe("1.55");
   });
 
@@ -418,15 +418,15 @@ describe("the CSS holds the values of the design", () => {
   it("the pillars: the grid, the box, the icon and the two tags", () => {
     expect(decl(".mobile-content-pillars", "grid-template-columns")).toBe("repeat(auto-fit, minmax(min(248px, 100%), 1fr))");
     expect(decl(".mobile-content-pillars", "gap")).toBe("12px");
-    expect(decl(".mobile-content-pillar", "border")).toBe("1px solid #efe1d1");
+    expect(decl(".mobile-content-pillar", "border")).toBe("1px solid var(--th-border)");
     expect(decl(".mobile-content-pillar", "border-radius")).toBe("13px");
     expect(decl(".mobile-content-pillar", "padding")).toBe("14px 15px");
     expect(decl(".mobile-content-pillar", "background")).toBe("var(--th-surface)");
     expect(decl(".mobile-content-pillar-icon", "width")).toBe("30px");
     expect(decl(".mobile-content-pillar-icon", "height")).toBe("30px");
     expect(decl(".mobile-content-pillar-icon", "border-radius")).toBe("8px");
-    expect(decl(".mobile-content-tag", "background")).toBe("#f2e8db");
-    expect(decl(".mobile-content-tag", "color")).toBe("#7a6450");
+    expect(decl(".mobile-content-tag", "background")).toBe("var(--th-border)");
+    expect(decl(".mobile-content-tag", "color")).toBe("var(--th-text-muted)");
     expect(decl(".mobile-content-tag", "font-size")).toBe("11.5px");
     expect(decl(".mobile-content-tag", "font-weight")).toBe("700");
     expect(decl(".mobile-content-tag", "border-radius")).toBe("7px");

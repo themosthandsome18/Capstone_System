@@ -218,8 +218,8 @@ describe("the CSS of the doors", () => {
     expect(decl(edit, "font-size")).toBe("12px");
     expect(decl(edit, "border-radius")).toBe("9px");
     expect(decl(edit, "background")).toBe("var(--th-surface)");
-    expect(decl(edit, "border")).toBe("1px solid #e0cdb7");
-    expect(decl(edit, "color")).toBe("#453931");
+    expect(decl(edit, "border")).toBe("1px solid var(--th-border-strong)");
+    expect(decl(edit, "color")).toBe("var(--th-text-main)");
   });
 
   it("the Add pillar button is the size of the other main buttons", () => {
