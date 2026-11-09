@@ -5782,29 +5782,20 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 /* ================= MOBILE APP CONTENT: THE DESIGN (Commit 5e) =================
-   Looks only. The warm neutrals (the page background, the card, the lines, the labels and the hints) are the design's own and are written ONCE, here,
-   as --mc-* on the page. Every colour that MEANS "this is the theme" (the active tab, the eyebrow, the focus of a box, the chosen icon, the buttons
+   Looks only. The page follows the colour the admin chose, like Registration Options: no background of its own (the shell shows), the card, the lines, the labels,
+   the hints and the tabs are the tokens that page uses; the browns of the mobile app live only inside the phones (--mc-app-*). Every colour that MEANS "this is the theme" (the active tab, the eyebrow, the focus of a box, the chosen icon, the buttons
    that save and add) is a theme token (--th-primary...), so it follows the colour the admin chose; white is --th-surface, the main text --th-text-main.
    The font is the admin's own, Public Sans: no font is added for one page. Everything is scoped to .mobile-content-page / .mobile-content-card, so the
    Hotlines panel and the other pages of the app look as they did. */
 .mobile-content-page {
   --mc-font: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
-  --mc-card: #fffdfb;
-  --mc-line: #efe1d1;
-  --mc-input-line: #e0cdb7;
-  --mc-label: #8a6e55;
-  --mc-hint: #8a7664;
-  --mc-tab: #65564a;
+  /* The colours of the MOBILE APP, for the inside of the phones only: the app is brown and does not change with the admin's theme. */
+  --mc-app-line: #efe1d1;
+  --mc-app-hint: #8a7664;
+  --mc-app-tab: #65564a;
+  --mc-app-ink: #241e1a;
+  --mc-app-brand: #6b3410;
   font-family: var(--mc-font);
-  background: linear-gradient(165deg, #f8e9d8, #f0d7be);
-  border-radius: 20px;
-  padding: 28px;
-}
-
-@media (max-width: 640px) {
-  .mobile-content-page {
-    padding: 16px;
-  }
 }
 
 .mobile-content-page .mobile-content-eyebrow {
@@ -5829,7 +5820,7 @@ tr.arrival-row:hover > .arrival-chevron {
   max-width: 62ch;
   font-size: 14.5px;
   line-height: 1.55;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 /* the tab bar: a white box with the tabs in it */
@@ -5848,7 +5839,7 @@ tr.arrival-row:hover > .arrival-chevron {
   border-radius: 9px;
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   background: transparent;
   box-shadow: none;
 }
@@ -5869,10 +5860,10 @@ tr.arrival-row:hover > .arrival-chevron {
 
 /* the boxes (cards) of the editor, the preview, the built-in text and the pillars */
 .mobile-content-page .mobile-content-card {
-  background: var(--mc-card);
-  border: 1px solid var(--mc-line);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--th-border);
   border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
   padding: 20px;
 }
 
@@ -5896,7 +5887,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin-top: 6px;
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-page .mobile-content-card .settings-field > label span {
@@ -5906,13 +5897,13 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-page .mobile-content-card .options-hint {
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-page .mobile-content-card .settings-field-wide textarea {
@@ -5921,7 +5912,7 @@ tr.arrival-row:hover > .arrival-chevron {
   box-sizing: border-box;
   min-height: 42px;
   padding: 10px 13px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 10px;
   background: var(--th-surface);
   font: inherit;
@@ -6034,7 +6025,7 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: flex-start;
   gap: 12px;
   padding: 14px 15px;
-  border: 1px solid var(--mc-line);
+  border: 1px solid var(--th-border);
   border-radius: 13px;
   background: var(--th-surface);
   min-width: 0;
@@ -6078,7 +6069,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-pillar-text {
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-tag {
@@ -6086,8 +6077,8 @@ tr.arrival-row:hover > .arrival-chevron {
   border-radius: 7px;
   font-size: 11.5px;
   font-weight: 700;
-  background: #f2e8db;
-  color: #7a6450;
+  background: var(--th-border);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-tag[data-detail="yes"] {
@@ -6295,7 +6286,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-page .mobile-content-eyebrow .mobile-content-tag {
@@ -6319,15 +6310,15 @@ tr.arrival-row:hover > .arrival-chevron {
   width: 100%;
   aspect-ratio: 1;
   padding: 0;
-  border: 1px solid #e8dbcb;
+  border: 1px solid var(--th-border);
   border-radius: 11px;
   background: var(--th-surface);
   cursor: pointer;
 }
 
 .mobile-content-icon-choice:hover {
-  background: #fbf4ec;
-  border-color: #cdb295;
+  background: var(--th-surface-tinted);
+  border-color: var(--th-border-strong);
 }
 
 .mobile-content-icon-choice[data-selected="true"] {
@@ -6364,7 +6355,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-page .mobile-content-tile-order input {
@@ -6372,7 +6363,7 @@ tr.arrival-row:hover > .arrival-chevron {
   width: 160px;
   min-height: 42px;
   padding: 10px 13px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 10px;
   background: var(--th-surface);
   font: inherit;
@@ -6435,7 +6426,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin-top: 6px;
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-mock-label {
@@ -6550,17 +6541,17 @@ tr.arrival-row:hover > .arrival-chevron {
   align-self: flex-start;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-strong);
   border-radius: 9px;
   background: var(--th-surface);
-  color: #453931;
+  color: var(--th-text-main);
   font-size: 12px;
   text-decoration: none;
   cursor: pointer;
 }
 
 .mobile-content-pillar-edit:hover {
-  background: #fbf4ec;
+  background: var(--th-surface-tinted);
 }
 
 .mobile-content-tile-status {
@@ -6574,10 +6565,10 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-small-button {
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-strong);
   border-radius: 9px;
   background: var(--th-surface);
-  color: #453931;
+  color: var(--th-text-main);
   font-size: 12px;
   cursor: pointer;
 }
@@ -6589,10 +6580,10 @@ tr.arrival-row:hover > .arrival-chevron {
 
 .mobile-content-off-mark {
   padding: 4px 10px;
-  border: 1px dashed #7a6450;
+  border: 1px dashed var(--th-text-muted);
   border-radius: 7px;
-  background: #f2e8db;
-  color: #7a6450;
+  background: var(--th-border);
+  color: var(--th-text-muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -6603,12 +6594,12 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
-  color: #453931;
+  color: var(--th-text-main);
 }
 
 .mobile-content-off-line {
   font-size: 12px;
-  color: #8a7664;
+  color: var(--th-text-muted);
 }
 
 /* the tab of the Travel Guide: the list of cards, and its preview (Commit 7a) */
@@ -6644,13 +6635,13 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-cards-filter select {
   min-height: 38px;
   padding: 0 11px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-strong);
   border-radius: 9px;
   background: var(--th-surface);
   font-size: 13.5px;
@@ -6663,7 +6654,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #8a7664;
+  color: var(--th-text-muted);
 }
 
 .mobile-content-cards {
@@ -6713,8 +6704,8 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-card-tag {
   padding: 4px 10px;
   border-radius: 7px;
-  background: #f2e8db;
-  color: #7a6450;
+  background: var(--th-border);
+  color: var(--th-text-muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -6730,8 +6721,8 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-card-tag[data-kind="no-detail"] {
-  background: #f2e8db;
-  color: #7a6450;
+  background: var(--th-border);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-card-tag[data-kind="locked"] {
@@ -6749,7 +6740,7 @@ tr.arrival-row:hover > .arrival-chevron {
   max-width: 62ch;
   font-size: 13px;
   line-height: 1.5;
-  color: #6e5c4c;
+  color: var(--th-text-muted);
   overflow-wrap: anywhere;
 }
 
@@ -6777,12 +6768,12 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-card-status[data-state="off"] {
-  color: #7a6450;
+  color: var(--th-text-muted);
 }
 
 .mobile-content-card-status[data-state="off"] .mobile-content-card-dot {
   box-sizing: border-box;
-  border: 1.5px solid #7a6450;
+  border: 1.5px solid var(--th-text-muted);
   background: transparent;
 }
 
@@ -6792,7 +6783,7 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
-  color: #453931;
+  color: var(--th-text-main);
 }
 
 .mobile-content-guide-frame {
@@ -7035,10 +7026,10 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--mc-line);
+  border: 1px solid var(--th-border);
   border-radius: 18px;
-  background: var(--mc-card);
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .mobile-content-notice-card.is-compose::before {
@@ -7054,12 +7045,12 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 14px;
   padding: 17px 24px 15px;
-  border-bottom: 1px solid #f2e7dc;
+  border-bottom: 1px solid var(--th-border);
 }
 
 .mobile-content-notice-card.is-compose .mobile-content-notice-head {
   padding-top: 21px;
-  background: linear-gradient(180deg, #fff8f0 0%, var(--mc-card) 100%);
+  background: linear-gradient(180deg, var(--th-surface-tinted) 0%, var(--th-surface) 100%);
 }
 
 .mobile-content-notice-icon {
@@ -7078,8 +7069,8 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-notice-head[data-tone="hidden"] .mobile-content-notice-icon {
-  background: #f2eae1;
-  color: var(--mc-hint);
+  background: var(--th-surface-tinted-strong);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-head-text {
@@ -7102,7 +7093,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-head-text p {
   margin: 3px 0 0;
   font-size: 13px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-count {
@@ -7138,13 +7129,13 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 12px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-label small {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -7155,7 +7146,7 @@ tr.arrival-row:hover > .arrival-chevron {
   width: 100%;
   min-height: 44px;
   padding: 11px 14px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 11px;
   background: #fff;
   color: var(--th-text-main);
@@ -7180,7 +7171,7 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 22px;
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #f2e7dc;
+  border-top: 1px solid var(--th-border);
 }
 
 .mobile-content-notice-severities,
@@ -7196,10 +7187,10 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 8px;
   min-height: 40px;
   padding: 8px 14px;
-  border: 1.5px solid var(--mc-input-line);
+  border: 1.5px solid var(--th-border-strong);
   border-radius: 11px;
   background: #fff;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -7222,10 +7213,10 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-duration {
   min-height: 32px;
   padding: 5px 13px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 999px;
   background: #fff;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -7239,7 +7230,7 @@ tr.arrival-row:hover > .arrival-chevron {
 
 .mobile-content-notice-hint {
   font-size: 12px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-foot {
@@ -7249,9 +7240,9 @@ tr.arrival-row:hover > .arrival-chevron {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 24px 18px;
-  border-top: 1px solid #f2e7dc;
+  border-top: 1px solid var(--th-border);
   font-size: 12.5px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-actions {
@@ -7267,10 +7258,10 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 7px;
   min-height: 40px;
   padding: 8px 18px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 11px;
   background: #fff;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
@@ -7315,9 +7306,9 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: flex-start;
   gap: 12px;
   padding: 13px 15px;
-  border: 1px solid #f0e4d6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 13px;
-  background: #fffcf8;
+  background: var(--th-surface-tinted);
 }
 
 .mobile-content-notice-stripe {
@@ -7344,7 +7335,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-row-body p {
   margin: 4px 0 8px;
   font-size: 13px;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   overflow-wrap: anywhere;
 }
 
@@ -7354,7 +7345,7 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 4px 10px;
   font-size: 12px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-tag {
@@ -7367,19 +7358,19 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-notice-card.is-hidden {
-  background: #fbf7f2;
+  background: var(--th-surface-alt);
 }
 
 .mobile-content-notice-row.is-off {
-  background: #fbf7f2;
+  background: var(--th-surface-alt);
 }
 
 .mobile-content-notice-row.is-off .mobile-content-notice-stripe {
-  background: #d8c8b5;
+  background: var(--th-border-strong);
 }
 
 .mobile-content-notice-row.is-off .mobile-content-notice-row-body strong {
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-notice-expired {
@@ -7419,7 +7410,7 @@ tr.arrival-row:hover > .arrival-chevron {
   padding: 10px 18px 6px;
   font-size: 10.5px;
   font-weight: 700;
-  color: var(--mc-tab);
+  color: var(--mc-app-tab);
 }
 
 .mobile-content-notice-statusbar-icons {
@@ -7433,7 +7424,7 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 4px;
   padding: 8px 12px 0;
-  color: var(--th-text-main);
+  color: var(--mc-app-ink);
 }
 
 .mobile-content-notice-app-head h2 {
@@ -7445,7 +7436,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-app-sub {
   margin: 2px 0 12px 36px;
   font-size: 11.5px;
-  color: var(--mc-hint);
+  color: var(--mc-app-hint);
 }
 
 .mobile-content-notice-phone-list {
@@ -7489,19 +7480,19 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-notice-phone-text strong {
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--th-text-main);
+  color: var(--mc-app-ink);
 }
 
 .mobile-content-notice-phone-message {
   margin-top: 2px;
   font-size: 11.5px;
-  color: var(--mc-tab);
+  color: var(--mc-app-tab);
 }
 
 .mobile-content-notice-phone-day {
   margin-top: 4px;
   font-size: 10.5px;
-  color: var(--mc-hint);
+  color: var(--mc-app-hint);
 }
 
 @media (max-width: 700px) {
@@ -7525,10 +7516,10 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--mc-line);
+  border: 1px solid var(--th-border);
   border-radius: 18px;
-  background: var(--mc-card);
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .mobile-content-staff-card.is-add::before {
@@ -7544,12 +7535,12 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 14px;
   padding: 17px 24px 15px;
-  border-bottom: 1px solid #f2e7dc;
+  border-bottom: 1px solid var(--th-border);
 }
 
 .mobile-content-staff-card.is-add .mobile-content-staff-head {
   padding-top: 21px;
-  background: linear-gradient(180deg, #fff8f0 0%, var(--mc-card) 100%);
+  background: linear-gradient(180deg, var(--th-surface-tinted) 0%, var(--th-surface) 100%);
 }
 
 .mobile-content-staff-icon {
@@ -7559,8 +7550,8 @@ tr.arrival-row:hover > .arrival-chevron {
   width: 38px;
   height: 38px;
   border-radius: 11px;
-  background: #f2eae1;
-  color: var(--mc-hint);
+  background: var(--th-surface-tinted-strong);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-card.is-add .mobile-content-staff-icon {
@@ -7583,14 +7574,14 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-head-text p {
   margin: 3px 0 0;
   font-size: 13px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-count {
   flex: none;
   padding: 4px 12px;
   border-radius: 999px;
-  background: #f2eae1;
+  background: var(--th-surface-tinted-strong);
   color: var(--th-text-main);
   font-size: 12px;
   font-weight: 700;
@@ -7616,12 +7607,12 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-field label {
   font-size: 13px;
   font-weight: 700;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-field small {
   font-size: 12px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-field input,
@@ -7630,7 +7621,7 @@ tr.arrival-row:hover > .arrival-chevron {
   width: 100%;
   min-height: 44px;
   padding: 11px 14px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 11px;
   background: #fff;
   color: var(--th-text-main);
@@ -7652,9 +7643,9 @@ tr.arrival-row:hover > .arrival-chevron {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 24px 18px;
-  border-top: 1px solid #f2e7dc;
+  border-top: 1px solid var(--th-border);
   font-size: 12.5px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-actions {
@@ -7669,10 +7660,10 @@ tr.arrival-row:hover > .arrival-chevron {
   justify-content: center;
   min-height: 40px;
   padding: 8px 18px;
-  border: 1px solid var(--mc-input-line);
+  border: 1px solid var(--th-border-strong);
   border-radius: 11px;
   background: #fff;
-  color: var(--mc-tab);
+  color: var(--th-text-muted);
   font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
@@ -7697,7 +7688,7 @@ tr.arrival-row:hover > .arrival-chevron {
 
 .mobile-content-staff-group {
   overflow: hidden;
-  border: 1px solid #f0e4d6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 14px;
 }
 
@@ -7710,7 +7701,7 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 10px;
   padding: 11px 15px;
-  background: #fbf3ea;
+  background: var(--th-surface-tinted-strong);
   color: var(--th-text-main);
 }
 
@@ -7731,13 +7722,13 @@ tr.arrival-row:hover > .arrival-chevron {
   align-items: center;
   gap: 12px;
   padding: 12px 15px;
-  border-top: 1px solid #f0e4d6;
-  background: #fffcf8;
+  border-top: 1px solid var(--th-border-tinted);
+  background: var(--th-surface-tinted);
   cursor: pointer;
 }
 
 .mobile-content-staff-row:hover {
-  background: #fbf3ea;
+  background: var(--th-primary-tint);
 }
 
 .mobile-content-staff-row-text {
@@ -7755,14 +7746,14 @@ tr.arrival-row:hover > .arrival-chevron {
 
 .mobile-content-staff-row-text span {
   font-size: 12.5px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-tag {
   flex: none;
   padding: 3px 11px;
   border-radius: 999px;
-  background: #f2eae1;
+  background: var(--th-surface-tinted-strong);
   color: var(--th-text-main);
   font-size: 12px;
   font-weight: 700;
@@ -7782,7 +7773,7 @@ tr.arrival-row:hover > .arrival-chevron {
   flex: none;
   font-size: 20px;
   line-height: 1;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-chips {
@@ -7796,9 +7787,9 @@ tr.arrival-row:hover > .arrival-chevron {
 
 .mobile-content-staff-chip {
   padding: 6px 14px;
-  border: 1px solid #f0e4d6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 999px;
-  background: #fffcf8;
+  background: var(--th-surface-tinted);
   color: var(--th-text-main);
   font-size: 13px;
   font-weight: 600;
@@ -7844,7 +7835,7 @@ tr.arrival-row:hover > .arrival-chevron {
   border: none;
   border-radius: 9px;
   background: transparent;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
   cursor: pointer;
 }
 
@@ -7891,10 +7882,10 @@ tr.arrival-row:hover > .arrival-chevron {
   top: 16px;
   align-self: start;
   padding: 20px 20px 18px;
-  border: 1px solid var(--mc-line);
+  border: 1px solid var(--th-border);
   border-radius: 18px;
-  background: var(--mc-card);
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 32px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .mobile-content-staff-limit h2 {
@@ -7907,7 +7898,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-limit-sub {
   margin: 3px 0 14px;
   font-size: 12.5px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-phone {
@@ -7929,37 +7920,37 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 800;
-  color: var(--th-text-main);
+  color: var(--mc-app-ink);
 }
 
 .mobile-content-staff-screen-box {
   padding: 12px 14px;
-  border: 1px solid var(--mc-line);
+  border: 1px solid var(--mc-app-line);
   border-radius: 12px;
   background: #fff;
   font-size: 13px;
   font-weight: 700;
-  color: var(--th-text-main);
+  color: var(--mc-app-ink);
 }
 
 .mobile-content-staff-screen-box.is-main {
   padding: 18px 14px;
-  border-color: var(--th-primary);
-  background: var(--th-primary);
-  color: var(--th-text-inverse);
+  border-color: var(--mc-app-brand);
+  background: var(--mc-app-brand);
+  color: #ffffff;
   text-align: center;
 }
 
 .mobile-content-staff-screen-note {
   margin: 2px 0 0;
   font-size: 11px;
-  color: var(--mc-hint);
+  color: var(--mc-app-hint);
 }
 
 .mobile-content-staff-cannot {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #f2e7dc;
+  border-top: 1px solid var(--th-border);
 }
 
 .mobile-content-staff-cannot-heading {
@@ -7968,7 +7959,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-cannot ul {
@@ -7997,7 +7988,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 14px 0 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-backdrop {
@@ -8020,8 +8011,8 @@ tr.arrival-row:hover > .arrival-chevron {
   max-height: calc(100vh - 32px);
   overflow: hidden;
   border-radius: 16px;
-  background: #fffdfb;
-  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+  background: var(--th-surface);
+  box-shadow: 0 10px 30px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .mobile-content-staff-modal-head {
@@ -8031,8 +8022,8 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 16px;
   align-items: flex-start;
   padding: 20px 22px 18px;
-  border-bottom: 1px solid #f2e7dc;
-  background: linear-gradient(180deg, #fff8f0 0%, #fffdfb 100%);
+  border-bottom: 1px solid var(--th-border);
+  background: linear-gradient(180deg, var(--th-surface-tinted) 0%, var(--th-surface) 100%);
 }
 
 .mobile-content-staff-initial {
@@ -8063,7 +8054,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-modal-who p {
   margin: 3px 0 0;
   font-size: 12px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-chips-row {
@@ -8106,15 +8097,15 @@ tr.arrival-row:hover > .arrival-chevron {
   flex-direction: column;
   gap: 2px;
   padding: 12px 14px;
-  border: 1px solid #f0e4d6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 13px;
-  background: #fffcf8;
+  background: var(--th-surface-tinted);
 }
 
 .mobile-content-staff-number span,
 .mobile-content-staff-number small {
   font-size: 12px;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-number strong {
@@ -8126,7 +8117,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-section {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #f2e7dc;
+  border-top: 1px solid var(--th-border);
 }
 
 .mobile-content-staff-section h3 {
@@ -8140,7 +8131,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 8px 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--mc-hint);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-facts {
@@ -8153,7 +8144,7 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-fact dt {
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--mc-label);
+  color: var(--th-text-muted);
 }
 
 .mobile-content-staff-fact dd {
@@ -8181,7 +8172,7 @@ tr.arrival-row:hover > .arrival-chevron {
   bottom: 0;
   margin-top: 14px;
   padding: 0;
-  background: #fffdfb;
+  background: var(--th-surface);
 }
 
 @media (max-width: 640px) {

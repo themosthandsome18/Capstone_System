@@ -697,13 +697,13 @@ describe("the CSS holds the values of the design", () => {
     expect(decl(select, "min-height")).toBe("38px");
     expect(decl(select, "padding")).toBe("0 11px");
     expect(decl(select, "border-radius")).toBe("9px");
-    expect(decl(select, "border")).toBe("1px solid #e0cdb7");
+    expect(decl(select, "border")).toBe("1px solid var(--th-border-strong)");
     expect(decl(select, "background")).toBe("var(--th-surface)");
     expect(decl(select, "font-size")).toBe("13.5px");
     expect(decl(select, "font-weight")).toBe("500");
     const lines = ".mobile-content-cards-hint,\n.mobile-content-cards-locked";
     expect(decl(lines, "font-size")).toBe("13px");
-    expect(decl(lines, "color")).toBe("#8a7664");
+    expect(decl(lines, "color")).toBe("var(--th-text-muted)");
   });
 
   it("the card, its tags, its short line and its status", () => {
@@ -719,14 +719,14 @@ describe("the CSS holds the values of the design", () => {
     [
       ["order", "#e4edeb", "#2e6b64"],
       ["detail", "#dcf0e4", "#176b3b"],
-      ["no-detail", "#f2e8db", "#7a6450"],
+      ["no-detail", "var(--th-border)", "var(--th-text-muted)"],
       ["locked", "#fbeadb", "#8a4f16"],
     ].forEach(([kind, background, color]) => {
       expect(decl(`${tag}[data-kind="${kind}"]`, "background")).toBe(background);
       expect(decl(`${tag}[data-kind="${kind}"]`, "color")).toBe(color);
     });
     expect(decl(".mobile-content-card-line", "font-size")).toBe("13px");
-    expect(decl(".mobile-content-card-line", "color")).toBe("#6e5c4c");
+    expect(decl(".mobile-content-card-line", "color")).toBe("var(--th-text-muted)");
     expect(decl(".mobile-content-card-line", "max-width")).toBe("62ch");
     expect(decl(".mobile-content-card-dot", "width")).toBe("7px");
     expect(decl(".mobile-content-card-dot", "height")).toBe("7px");

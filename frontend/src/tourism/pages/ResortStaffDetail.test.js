@@ -482,7 +482,7 @@ describe("the look of the new parts, read from the CSS", () => {
     const screenRule = rule(".mobile-content-staff-screen");
     expect(screenRule).toContain("background: #fdf6ee;");
     expect(screenRule).toContain("border-radius: 20px;");
-    expect(rule(".mobile-content-staff-screen-box.is-main")).toContain("background: var(--th-primary);");
+    expect(rule(".mobile-content-staff-screen-box.is-main")).toContain("background: var(--mc-app-brand);"); // the brown of the app, not the theme
     expect(rule(".mobile-content-staff-screen-box.is-main")).toContain("text-align: center;");
   });
 
