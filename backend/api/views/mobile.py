@@ -566,6 +566,9 @@ def mobile_tourist_record_check_in(request):
         # Nothing of the record is read, let alone changed, and the answer names neither the visitor nor the other resort.
         return Response({"error": NOT_YOUR_RESORT}, status=status.HTTP_404_NOT_FOUND)
     record.status = BOOKING_STATUS_ARRIVED
+    # Who received the visitor, and when (the last check-in, when it is done again). Set only here, after the refusals above.
+    record.checked_in_by = request.user
+    record.checked_in_at = timezone.now()
 
     if "total_visitors" in request.data:
         record.total_visitors = parse_mobile_int(request.data.get("total_visitors"), record.total_visitors)

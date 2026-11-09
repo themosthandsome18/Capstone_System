@@ -598,6 +598,16 @@ class TouristRecord(models.Model):
         choices=BOOKING_STATUS_CHOICES,
         default=BOOKING_STATUS_PENDING,
     )
+    # Who received the visitor, and when: set by the check-in of the staff QR scanner (and by the last one, when it is done again). Null for a
+    # record nobody has checked in. A column, so that the count of who received how many does not depend on the wording of an ActivityLog label.
+    checked_in_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="checked_in_records",
+    )
+    checked_in_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
