@@ -13,6 +13,7 @@ from .views.boat_capacity_fares import (
     boat_capacity_fare_reactivate,
     boat_capacity_fare_reorder,
 )
+from .views.resort_staff import resort_staff_detail, resort_staff_list
 from .views.emergency_contacts import (
     emergency_contact_deactivate,
     emergency_contact_detail,
@@ -169,6 +170,8 @@ urlpatterns = [
     path("boat-capacity-fares/<int:fare_id>/deactivate/", boat_capacity_fare_deactivate),
     path("boat-capacity-fares/<int:fare_id>/reactivate/", boat_capacity_fare_reactivate),
     path("emergency-contacts/", emergency_contact_list),
+    path("resort-staff/", resort_staff_list),
+    path("resort-staff/<int:user_id>/", resort_staff_detail),
     path("emergency-contacts/reorder/", emergency_contact_reorder),
     path("emergency-contacts/<int:contact_id>/", emergency_contact_detail),
     path("emergency-contacts/<int:contact_id>/deactivate/", emergency_contact_deactivate),
