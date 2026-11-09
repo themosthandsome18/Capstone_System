@@ -21,11 +21,11 @@ export const PASSWORD_MIN = 8;
 export const USERNAME_PATTERN = /^[a-z0-9.-]{3,150}$/;
 
 export const MESSAGES = {
-  resort: "Pumili ng resort.",
-  name: "Isulat ang pangalan ng kawani.",
-  username: "Maliliit na titik, numero, tuldok, at gitling lang, tatlo hanggang 150 karakter.",
-  password: "Walong karakter pataas ang password.",
-  mismatch: "Hindi pareho ang dalawang password. Isulat ulit.",
+  resort: "Choose a resort.",
+  name: "Enter the staff name.",
+  username: "Lowercase letters, numbers, dots and hyphens only, 3 to 150 characters.",
+  password: "The password must be at least eight characters.",
+  mismatch: "The two passwords do not match. Please type them again.",
 };
 
 // A destination that may be given staff: open to visitors and not one of the placeholders.
@@ -44,7 +44,7 @@ export function groupByResort(staff) {
   const groups = new Map();
   (Array.isArray(staff) ? staff : []).forEach((person) => {
     const key = person.resort ? person.resort.id : "none";
-    if (!groups.has(key)) groups.set(key, { id: key, name: person.resort ? person.resort.name : "Walang resort", people: [] });
+    if (!groups.has(key)) groups.set(key, { id: key, name: person.resort ? person.resort.name : "No resort", people: [] });
     groups.get(key).people.push(person);
   });
   const list = [...groups.values()];
@@ -65,10 +65,11 @@ export function resortsWithoutOpenStaff(resorts, staff) {
 }
 
 export function lastSeenText(person) {
-  if (!person.last_login) return `${person.username} · hindi pa pumapasok`;
+  const never = `${person.username} · has not signed in yet`;
+  if (!person.last_login) return never;
   const when = new Date(person.last_login);
-  if (Number.isNaN(when.getTime())) return `${person.username} · hindi pa pumapasok`;
-  return `${person.username} · huling pumasok ${when.toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" })}`;
+  if (Number.isNaN(when.getTime())) return never;
+  return `${person.username} · last signed in ${when.toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 // The first thing wrong with the form, as a sentence, or "" when it may be sent.

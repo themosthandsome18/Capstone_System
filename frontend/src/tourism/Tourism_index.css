@@ -7822,3 +7822,41 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-message p {
   margin: 0;
 }
+
+/* a password box with its own eye inside, at the right */
+.mobile-content-staff-secret {
+  position: relative;
+}
+
+.mobile-content-staff-secret input {
+  padding-right: 46px;
+}
+
+.mobile-content-staff-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--mc-hint);
+  cursor: pointer;
+}
+
+.mobile-content-staff-eye:hover,
+.mobile-content-staff-eye:focus-visible {
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-staff-spacer {
+    display: none;
+  }
+}

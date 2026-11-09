@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { FiHome, FiUserPlus, FiUsers } from "react-icons/fi";
+import { FiEye, FiEyeOff, FiHome, FiUserPlus, FiUsers } from "react-icons/fi";
 import { useAuth } from "../../auth/AuthContext";
 import { useTourismData } from "../context/TourismDataContext";
 import { canManageResortAccounts } from "../resortAccountsAccess";
@@ -11,21 +11,40 @@ import { countStaff, groupByResort, lastSeenText, openResorts, payloadOf, proble
 // the resorts come from the Destination Management list. Nothing is ever deleted here, and the page of one staff member is not built yet.
 
 export const PAGE_LEAD =
-  "Isang account bawat KAWANI, hindi bawat resort. Bawat isa ay may sariling pangalan, kaya makikita sa talaan kung sino ang tumanggap sa bisita, at kapag may umalis ay siya lang ang isasara.";
-export const ADD_HEADING = "Magdagdag ng kawani";
-export const ADD_NOTE = "Ibigay ang username at ang unang password nang personal sa kawani. Hindi ito ipinapadala kahit saan.";
-export const LIST_HEADING = "Mga kawani";
-export const LIST_NOTE = "Nakagrupo ayon sa resort";
+  "One account per staff member, not per resort. Each has a name of their own, so the record shows who took the visitor in, and when someone leaves only that one account is closed.";
+export const ADD_HEADING = "Add a staff member";
+export const ADD_NOTE = "Give the username and the first password to them in person. It is not sent anywhere.";
+export const LIST_HEADING = "Staff";
+export const LIST_NOTE = "Grouped by resort";
 export const LIST_FOOT =
-  "Pindutin ang pangalan para sa detalye: ang pag-scan niya, ang pagpapalit ng password, at ang pagsasara. Walang Delete dito — ang sinarado ay hindi na makakapasok, pero nananatili ang tala ng mga pag-scan niya.";
-export const NONE_HEADING = "Walang makakapag-scan";
-export const NONE_NOTE = "Walang bukas na account ang mga resort na ito";
-export const NONE_FOOT = "Piliin ang resort sa itaas para makapagdagdag.";
-export const FORM_FOOT = "Ang scanner lang ang maibubukas nito.";
-export const LOAD_ERROR = "Hindi ma-load ang mga kawani.";
-export const EMPTY_LIST = "Wala pang kawani.";
+  "Tap a name for the details: their scans, a new password, and closing the account. There is no Delete here — a closed account cannot sign in, but every scan it made stays on record.";
+export const NONE_HEADING = "No one can scan";
+export const NONE_NOTE = "These resorts have no open account";
+export const NONE_FOOT = "Choose the resort above to add someone.";
+export const FORM_FOOT = "This account opens the scanner and nothing else.";
+export const LOAD_ERROR = "The staff could not be loaded.";
+export const EMPTY_LIST = "No staff yet.";
 
 const BLANK = { resortId: "", name: "", username: "", password: "", again: "" };
+
+// A box for a password with its own eye: it shows what is typed in THIS box only, and starts hidden.
+function PasswordBox({ id, value, onChange }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="mobile-content-staff-secret">
+      <input id={id} type={shown ? "text" : "password"} autoComplete="new-password" value={value} onChange={onChange} />
+      <button
+        type="button"
+        className="mobile-content-staff-eye"
+        aria-label={shown ? "Hide password" : "Show password"}
+        aria-pressed={shown}
+        onClick={() => setShown((current) => !current)}
+      >
+        {shown ? <FiEyeOff size={17} aria-hidden="true" /> : <FiEye size={17} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
 
 function CardHead({ icon, title, note, aside }) {
   return (
@@ -106,9 +125,9 @@ export default function ResortAccounts() {
       const created = await tourismApi.createResortStaff(payloadOf(form));
       setStaff((current) => [...(current || []), created]);
       setForm(BLANK);
-      setNotice(`Nagawa na ang account ni ${created.name}.`);
+      setNotice(`Account created for ${created.name}.`);
     } catch (failure) {
-      setActionError(failure.message || "Hindi nagawa ang account.");
+      setActionError(failure.message || "The account could not be created.");
     } finally {
       setWorking(false);
     }
@@ -142,7 +161,7 @@ export default function ResortAccounts() {
               <div className="mobile-content-staff-field">
                 <label htmlFor={`${uid}-resort`}>Resort</label>
                 <select id={`${uid}-resort`} value={form.resortId} onChange={type("resortId")}>
-                  <option value="">Pumili ng resort</option>
+                  <option value="">Choose a resort…</option>
                   {choices.map((resort) => (
                     <option key={resort.resort_id} value={resort.resort_id}>
                       {resort.resort_name}
@@ -151,9 +170,9 @@ export default function ResortAccounts() {
                 </select>
               </div>
               <div className="mobile-content-staff-field">
-                <label htmlFor={`${uid}-name`}>Pangalan ng kawani</label>
+                <label htmlFor={`${uid}-name`}>Staff name</label>
                 <input id={`${uid}-name`} type="text" value={form.name} maxLength={150} onChange={type("name")} />
-                <small>Ito ang lalabas sa talaan ng pag-scan.</small>
+                <small>This is the name the check-in record will show.</small>
               </div>
               <div className="mobile-content-staff-field">
                 <label htmlFor={`${uid}-username`}>Username</label>
@@ -166,17 +185,18 @@ export default function ResortAccounts() {
                   maxLength={150}
                   onChange={type("username")}
                 />
-                <small>Maliliit na titik, numero, tuldok, at gitling lang.</small>
+                <small>Lowercase letters, numbers, dots and hyphens only.</small>
               </div>
               <div className="mobile-content-staff-field">
-                <label htmlFor={`${uid}-password`}>Unang password</label>
-                <input id={`${uid}-password`} type="password" autoComplete="new-password" value={form.password} onChange={type("password")} />
-                <small>Walong karakter pataas.</small>
+                <label htmlFor={`${uid}-password`}>First password</label>
+                <PasswordBox id={`${uid}-password`} value={form.password} onChange={type("password")} />
+                <small>Eight characters or more.</small>
               </div>
+              <div className="mobile-content-staff-field mobile-content-staff-spacer" aria-hidden="true" data-testid="form-spacer" />
               <div className="mobile-content-staff-field">
-                <label htmlFor={`${uid}-again`}>Ulitin ang password</label>
-                <input id={`${uid}-again`} type="password" autoComplete="new-password" value={form.again} onChange={type("again")} />
-                <small>Dapat pareho ang dalawa. Hindi na maipapakita ulit ang password — kapag nakalimutan, bago ang gagawin.</small>
+                <label htmlFor={`${uid}-again`}>Repeat password</label>
+                <PasswordBox id={`${uid}-again`} value={form.again} onChange={type("again")} />
+                <small>The two must match. The password cannot be shown again — if it is forgotten, a new one is made.</small>
               </div>
             </div>
           </div>
@@ -201,10 +221,10 @@ export default function ResortAccounts() {
             <span>{FORM_FOOT}</span>
             <div className="mobile-content-staff-actions">
               <button type="button" className="mobile-content-staff-btn" disabled={working || !drafting} onClick={clearForm}>
-                Burahin ang nasulat
+                Clear
               </button>
               <button type="submit" className="mobile-content-staff-btn is-primary" disabled={working}>
-                {working ? "Ginagawa..." : "Gumawa ng account"}
+                {working ? "Creating..." : "Create account"}
               </button>
             </div>
           </footer>
@@ -228,7 +248,7 @@ export default function ResortAccounts() {
               note={LIST_NOTE}
               aside={
                 <span className="mobile-content-staff-count" data-testid="staff-count">
-                  {counts.open} bukas · {counts.closed} sarado
+                  {counts.open} open · {counts.closed} closed
                 </span>
               }
             />
@@ -238,10 +258,10 @@ export default function ResortAccounts() {
                 <section key={group.id} className="mobile-content-staff-group" aria-label={group.name} data-testid="staff-group">
                   <div className="mobile-content-staff-group-head">
                     <strong>{group.name}</strong>
-                    <span className="mobile-content-staff-tag">{group.people.length} kawani</span>
+                    <span className="mobile-content-staff-tag">{group.people.length} staff</span>
                     {group.id !== "none" ? (
                       <button type="button" className="mobile-content-staff-btn is-small" onClick={() => chooseResort(group.id)}>
-                        Magdagdag
+                        Add
                       </button>
                     ) : null}
                   </div>
@@ -253,7 +273,7 @@ export default function ResortAccounts() {
                           <span>{lastSeenText(person)}</span>
                         </div>
                         <span className="mobile-content-staff-tag" data-status={person.is_active ? "open" : "closed"}>
-                          {person.is_active ? "Bukas" : "Sarado"}
+                          {person.is_active ? "Open" : "Closed"}
                         </span>
                         <span className="mobile-content-staff-chevron" aria-hidden="true">
                           ›
@@ -276,7 +296,7 @@ export default function ResortAccounts() {
               icon={<FiHome size={19} />}
               title={NONE_HEADING}
               note={NONE_NOTE}
-              aside={<span className="mobile-content-staff-count">{withoutStaff.length} resort</span>}
+              aside={<span className="mobile-content-staff-count">{withoutStaff.length} {withoutStaff.length === 1 ? "resort" : "resorts"}</span>}
             />
             <div className="mobile-content-staff-body">
               <ul className="mobile-content-staff-chips">

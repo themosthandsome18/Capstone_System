@@ -94,19 +94,19 @@ const posts = () => server.requests.filter((request) => request.method === "POST
 function fill(values = {}) {
   const all = { resort: "1", name: "Maria Santos", username: "maria.s", password: "first-pass-1", again: "first-pass-1", ...values };
   fireEvent.change(field("Resort"), { target: { value: all.resort } });
-  fireEvent.change(field("Pangalan ng kawani"), { target: { value: all.name } });
+  fireEvent.change(field("Staff name"), { target: { value: all.name } });
   fireEvent.change(field("Username"), { target: { value: all.username } });
-  fireEvent.change(field("Unang password"), { target: { value: all.password } });
-  fireEvent.change(field("Ulitin ang password"), { target: { value: all.again } });
+  fireEvent.change(field("First password"), { target: { value: all.password } });
+  fireEvent.change(field("Repeat password"), { target: { value: all.again } });
 }
-const submit = () => fireEvent.click(screen.getByRole("button", { name: "Gumawa ng account" }));
+const submit = () => fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
 describe("the heading of the page", () => {
   it("says what the page is and who an account is for", async () => {
     await open([]);
     expect(screen.getByText("Administration").className).toContain("mobile-content-eyebrow");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Resort Accounts");
-    expect(screen.getByText(/Isang account bawat KAWANI, hindi bawat resort\./)).toBeTruthy();
+    expect(screen.getByText(/^One account per staff member, not per resort\./)).toBeTruthy();
   });
 
   it("is refused to a role that may not open it, and asks the server for nothing", async () => {
@@ -125,22 +125,22 @@ describe("the staff, in groups", () => {
     ]);
     expect(groups().map((group) => group.getAttribute("aria-label"))).toEqual(["Alpha Beach Resort", "Bravo Cove"]);
     const alpha = groupNamed("Alpha Beach Resort");
-    expect(within(alpha).getByText("2 kawani")).toBeTruthy();
-    expect(within(groupNamed("Bravo Cove")).getByText("1 kawani")).toBeTruthy();
+    expect(within(alpha).getByText("2 staff")).toBeTruthy();
+    expect(within(groupNamed("Bravo Cove")).getByText("1 staff")).toBeTruthy();
     expect(within(alpha).getAllByTestId("staff-row")).toHaveLength(2);
-    expect(within(alpha).getByText(/^ana\.r · huling pumasok .*2026/)).toBeTruthy();
-    expect(within(alpha).getByText("ben.c · hindi pa pumapasok")).toBeTruthy();
-    expect(within(alpha).getAllByText("Bukas")).toHaveLength(2);
+    expect(within(alpha).getByText(/^ana\.r · last signed in .*2026/)).toBeTruthy();
+    expect(within(alpha).getByText("ben.c · has not signed in yet")).toBeTruthy();
+    expect(within(alpha).getAllByText("Open")).toHaveLength(2);
   });
 
-  it("a closed account says Sarado and stays in its group; the counts of the card count it", async () => {
+  it("a closed account says Closed and stays in its group; the counts of the card count it", async () => {
     await open([person({ name: "Ana Reyes", is_active: false }), person({ name: "Ben Cruz" }), person({ name: "Cora Lim", resort: { id: 2, name: "Bravo Cove" } })]);
     const alpha = groupNamed("Alpha Beach Resort");
     expect(within(alpha).getAllByTestId("staff-row")).toHaveLength(2);
     const row = within(alpha).getByText("Ana Reyes").closest("[data-testid='staff-row']");
-    expect(within(row).getByText("Sarado")).toBeTruthy();
-    expect(within(alpha).getByText("2 kawani")).toBeTruthy();
-    expect(screen.getByTestId("staff-count").textContent).toBe("2 bukas · 1 sarado");
+    expect(within(row).getByText("Closed")).toBeTruthy();
+    expect(within(alpha).getByText("2 staff")).toBeTruthy();
+    expect(screen.getByTestId("staff-count").textContent).toBe("2 open · 1 closed");
   });
 
   it("a staff row has no button in it, and nothing on the page deletes", async () => {
@@ -154,14 +154,14 @@ describe("the staff, in groups", () => {
     });
     const words = screen.getAllByRole("button").map((button) => button.textContent.toLowerCase());
     expect(words.length).toBeGreaterThan(0);
-    words.forEach((text) => expect(text).not.toMatch(/delete|burahin ang (account|kawani)|alisin|tanggalin/));
+    words.forEach((text) => expect(text).not.toMatch(/delete|burahin ang (account|staff)|alisin|tanggalin/));
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });
 
-  it("the only buttons of the page are the form's two and one Magdagdag for each group, none of them inside a row", async () => {
+  it("the only buttons of the page are the form's two, the two eyes and one Add for each group, none of them inside a row", async () => {
     const { container } = await open([person({ name: "Ana Reyes" }), person({ name: "Ben Cruz", resort: { id: 2, name: "Bravo Cove" } })]);
-    const names = screen.getAllByRole("button").map((button) => button.textContent);
-    expect(names.sort()).toEqual(["Burahin ang nasulat", "Gumawa ng account", "Magdagdag", "Magdagdag"]);
+    const names = screen.getAllByRole("button").map((button) => button.getAttribute("aria-label") || button.textContent);
+    expect(names.sort()).toEqual(["Add", "Add", "Clear", "Create account", "Show password", "Show password"].sort());
     screen.getAllByRole("button").forEach((button) => expect(button.closest("li")).toBeNull());
     expect(container.querySelectorAll("li.mobile-content-staff-row button, li.mobile-content-staff-row a, li.mobile-content-staff-row [tabindex]")).toHaveLength(0);
   });
@@ -185,11 +185,11 @@ describe("the staff, in groups", () => {
 describe("the resorts with no staff", () => {
   it("a resort with no staff is in the third card, as a chip; a resort with staff is not", async () => {
     await open([person({ name: "Ana Reyes" })]);
-    const card = screen.getByRole("region", { name: "Walang makakapag-scan" });
+    const card = screen.getByRole("region", { name: "No one can scan" });
     const chips = within(card).getAllByTestId("no-staff-chip").map((chip) => chip.textContent);
     expect(chips).toEqual(["Bravo Cove", "Charlie Springs"]);
-    expect(within(card).getByText("2 resort")).toBeTruthy();
-    expect(within(card).getByText("Piliin ang resort sa itaas para makapagdagdag.")).toBeTruthy();
+    expect(within(card).getByText("2 resorts")).toBeTruthy();
+    expect(within(card).getByText("Choose the resort above to add someone.")).toBeTruthy();
     expect(within(card).queryByTestId("staff-row")).toBeNull();
   });
 
@@ -200,10 +200,10 @@ describe("the resorts with no staff", () => {
       person({ name: "Cora Lim", is_active: false }),
     ]);
     expect(within(groupNamed("Alpha Beach Resort")).getAllByTestId("staff-row")).toHaveLength(3); // the fixture: it has three staff
-    const card = screen.getByRole("region", { name: "Walang makakapag-scan" });
+    const card = screen.getByRole("region", { name: "No one can scan" });
     expect(within(card).getAllByTestId("no-staff-chip").map((chip) => chip.textContent)).toEqual(["Alpha Beach Resort", "Bravo Cove", "Charlie Springs"]);
-    expect(within(card).getByText("3 resort")).toBeTruthy();
-    expect(within(card).getByText("Walang bukas na account ang mga resort na ito")).toBeTruthy();
+    expect(within(card).getByText("3 resorts")).toBeTruthy();
+    expect(within(card).getByText("These resorts have no open account")).toBeTruthy();
   });
 
   it("ONE open account is enough to leave the card, whatever the others are", async () => {
@@ -227,7 +227,7 @@ describe("the resorts with no staff", () => {
       person({ name: "Ben Cruz", resort: { id: 2, name: "Bravo Cove" } }),
       person({ name: "Cora Lim", resort: { id: 3, name: "Charlie Springs" } }),
     ]);
-    expect(screen.queryByRole("region", { name: "Walang makakapag-scan" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "No one can scan" })).toBeNull();
     expect(screen.queryByTestId("no-staff-chip")).toBeNull();
     expect(groups()).toHaveLength(3); // the fixture: the staff were drawn
   });
@@ -244,7 +244,7 @@ describe("the resorts with no staff", () => {
     fill({ resort: "3" });
     submit();
     await settled();
-    expect(screen.queryByRole("region", { name: "Walang makakapag-scan" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "No one can scan" })).toBeNull();
   });
 });
 
@@ -252,7 +252,7 @@ describe("the form", () => {
   it("the resort box offers only open destinations: no closed one, no placeholder, no Kwebang", async () => {
     await open([]);
     const names = [...field("Resort").querySelectorAll("option")].map((option) => option.textContent);
-    expect(names).toEqual(["Pumili ng resort", "Alpha Beach Resort", "Bravo Cove", "Charlie Springs"]);
+    expect(names).toEqual(["Choose a resort…", "Alpha Beach Resort", "Bravo Cove", "Charlie Springs"]);
     ["Delta Closed Resort", "Others / Private Residence", "Kwebang Lampas", "Day tour"].forEach((name) => expect(names).not.toContain(name));
   });
 
@@ -261,7 +261,7 @@ describe("the form", () => {
     fill({ again: "something-else-9" });
     submit();
     await settled();
-    expect(screen.getByTestId("form-problem").textContent).toBe("Hindi pareho ang dalawang password. Isulat ulit.");
+    expect(screen.getByTestId("form-problem").textContent).toBe("The two passwords do not match. Please type them again.");
     expect(posts()).toHaveLength(0);
   });
 
@@ -274,7 +274,7 @@ describe("the form", () => {
     fill(values);
     submit();
     await settled();
-    expect(screen.getByTestId("form-problem").textContent).toBe("Hindi pareho ang dalawang password. Isulat ulit.");
+    expect(screen.getByTestId("form-problem").textContent).toBe("The two passwords do not match. Please type them again.");
     expect(posts()).toHaveLength(0);
   });
 
@@ -302,8 +302,8 @@ describe("the form", () => {
     expect(posts()[0].body).toEqual({ resort_id: 2, name: "Maria Santos", username: "maria.s", password: "first-pass-1" });
     const bravo = groupNamed("Bravo Cove");
     expect(within(bravo).getByText("Maria Santos")).toBeTruthy();
-    expect(within(bravo).getByText("1 kawani")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Nagawa na ang account ni Maria Santos.");
+    expect(within(bravo).getByText("1 staff")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Account created for Maria Santos.");
   });
 
   it("after it is sent the form is empty and the password is nowhere on the page", async () => {
@@ -311,8 +311,8 @@ describe("the form", () => {
     fill();
     submit();
     await settled();
-    expect(field("Unang password").value).toBe("");
-    expect(field("Ulitin ang password").value).toBe("");
+    expect(field("First password").value).toBe("");
+    expect(field("Repeat password").value).toBe("");
     expect(field("Username").value).toBe("");
     expect(container.textContent).not.toContain("first-pass-1");
   });
@@ -327,21 +327,21 @@ describe("the form", () => {
     expect(field("Username").value).toBe("maria.s");
   });
 
-  it("Burahin ang nasulat empties the boxes and sends nothing", async () => {
+  it("Clear empties the boxes and sends nothing", async () => {
     await open([]);
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Burahin ang nasulat" }));
-    expect(field("Pangalan ng kawani").value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(field("Staff name").value).toBe("");
     expect(field("Resort").value).toBe("");
     expect(posts()).toHaveLength(0);
   });
 
-  it("Magdagdag in the head of a group sets the resort of the form", async () => {
+  it("Add in the head of a group sets the resort of the form", async () => {
     await open([person({ name: "Ana Reyes" }), person({ name: "Ben Cruz", resort: { id: 2, name: "Bravo Cove" } })]);
     expect(field("Resort").value).toBe("");
-    fireEvent.click(within(groupNamed("Bravo Cove")).getByRole("button", { name: "Magdagdag" }));
+    fireEvent.click(within(groupNamed("Bravo Cove")).getByRole("button", { name: "Add" }));
     expect(field("Resort").value).toBe("2");
-    fireEvent.click(within(groupNamed("Alpha Beach Resort")).getByRole("button", { name: "Magdagdag" }));
+    fireEvent.click(within(groupNamed("Alpha Beach Resort")).getByRole("button", { name: "Add" }));
     expect(field("Resort").value).toBe("1");
     expect(posts()).toHaveLength(0);
   });
@@ -349,7 +349,7 @@ describe("the form", () => {
 
 describe("the answer of the form: one, new, and beside the buttons", () => {
   const TAKEN = "This username is already in use.";
-  const card = () => screen.getByRole("form", { name: "Magdagdag ng kawani" });
+  const card = () => screen.getByRole("form", { name: "Add a staff member" });
   const everyAnswer = () => [...document.querySelectorAll("[role='alert'], [role='status']")];
   const refuse = async () => {
     fill();
@@ -362,12 +362,12 @@ describe("the answer of the form: one, new, and beside the buttons", () => {
   it("an old answer of the server, then a mistake in the form: ONE message, the new one", async () => {
     await open([]);
     await refuse();
-    fireEvent.change(field("Unang password"), { target: { value: "short" } }); // (he starts to put it right...)
+    fireEvent.change(field("First password"), { target: { value: "short" } }); // (he starts to put it right...)
     submit();
     await settled();
     const answers = everyAnswer();
     expect(answers).toHaveLength(1);
-    expect(answers[0].textContent).toBe("Walong karakter pataas ang password.");
+    expect(answers[0].textContent).toBe("The password must be at least eight characters.");
     expect(screen.queryByText(TAKEN)).toBeNull();
   });
 
@@ -376,20 +376,20 @@ describe("the answer of the form: one, new, and beside the buttons", () => {
     fill();
     submit();
     await settled();
-    expect(screen.getByRole("status").textContent).toBe("Nagawa na ang account ni Maria Santos."); // the fixture: the old answer
+    expect(screen.getByRole("status").textContent).toBe("Account created for Maria Santos."); // the fixture: the old answer
     submit(); // the form is empty now: nothing was typed since
     await settled();
     expect(screen.queryByRole("status")).toBeNull();
     expect(everyAnswer()).toHaveLength(1);
-    expect(screen.getByTestId("form-problem").textContent).toBe("Pumili ng resort.");
+    expect(screen.getByTestId("form-problem").textContent).toBe("Choose a resort.");
   });
 
   it.each([
     ["Resort", "2"],
-    ["Pangalan ng kawani", "Another Name"],
+    ["Staff name", "Another Name"],
     ["Username", "another.user"],
-    ["Unang password", "another-pass-2"],
-    ["Ulitin ang password", "another-pass-2"],
+    ["First password", "another-pass-2"],
+    ["Repeat password", "another-pass-2"],
   ])("an old answer of the server goes the moment the %s box is changed", async (label, value) => {
     await open([]);
     await refuse();
@@ -398,13 +398,13 @@ describe("the answer of the form: one, new, and beside the buttons", () => {
     expect(screen.queryByText(TAKEN)).toBeNull();
   });
 
-  it("an old answer goes when a resort is chosen with Magdagdag, and when the boxes are emptied", async () => {
+  it("an old answer goes when a resort is chosen with Add, and when the boxes are emptied", async () => {
     await open([person({ name: "Ana Reyes" })]);
     await refuse();
-    fireEvent.click(within(groupNamed("Alpha Beach Resort")).getByRole("button", { name: "Magdagdag" }));
+    fireEvent.click(within(groupNamed("Alpha Beach Resort")).getByRole("button", { name: "Add" }));
     expect(everyAnswer()).toHaveLength(0);
     await refuse();
-    fireEvent.click(screen.getByRole("button", { name: "Burahin ang nasulat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(everyAnswer()).toHaveLength(0);
   });
 
@@ -416,15 +416,15 @@ describe("the answer of the form: one, new, and beside the buttons", () => {
     const box = answer.closest("[data-testid='form-message']");
     expect(box).not.toBeNull();
     // by position: after the boxes, before the footer with the two buttons, and the page has no message area above its cards
-    expect(field("Ulitin ang password").compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(box.compareDocumentPosition(screen.getByRole("button", { name: "Gumawa ng account" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(field("Repeat password").compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(box.compareDocumentPosition(screen.getByRole("button", { name: "Create account" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(box.nextElementSibling.querySelector("button")).not.toBeNull(); // the very next thing is the footer with the buttons
     expect(container.querySelector(".options-message-area")).toBeNull();
     const page = container.firstElementChild;
     const beforeTheCard = [...page.children].slice(0, [...page.children].findIndex((child) => child.contains(card())));
     beforeTheCard.forEach((child) => expect(child.querySelector("[role='alert'], [role='status']")).toBeNull());
     // the form's own message and the 'done' are in the same place
-    fireEvent.change(field("Unang password"), { target: { value: "short" } });
+    fireEvent.change(field("First password"), { target: { value: "short" } });
     submit();
     expect(screen.getByTestId("form-problem").closest("form")).toBe(card());
   });
@@ -448,6 +448,176 @@ describe("the answer of the form: one, new, and beside the buttons", () => {
   });
 });
 
+describe("English, all of it", () => {
+  const TAGALOG = /kawani|resort na|walang|pindutin|piliin|gumawa|burahin|ulitin|nagawa|pumasok|pumapasok|\bbukas\b|\bsarado\b|magdagdag|isulat|hindi|ang mga|ng mga/i;
+
+  it("no Tagalog is left in what the page builds: the page, a refusal, a wrong form, the 'done', a group of closed staff", async () => {
+    const { container } = await open([
+      person({ name: "Ana Reyes", is_active: false, last_login: "2026-10-03T08:00:00Z" }),
+      person({ name: "Ben Cruz" }),
+    ]);
+    const seen = [container.textContent];
+    seen.push(...[...container.querySelectorAll("[aria-label],[placeholder],[title]")].map((el) => `${el.getAttribute("aria-label")} ${el.getAttribute("placeholder")} ${el.getAttribute("title")}`));
+    submit(); // empty form: the message of the form
+    seen.push(container.textContent);
+    fill({ again: "else-1234" });
+    submit(); // the two passwords differ
+    seen.push(container.textContent);
+    fill();
+    server.failNext = { status: 400, detail: "This username is already in use." };
+    submit();
+    await settled();
+    seen.push(container.textContent);
+    submit();
+    await settled(); // the 'done'
+    seen.push(container.textContent);
+    expect(seen.join("\n")).toContain("Account created for"); // the fixture: the last state was reached
+    expect(seen.join("\n")).toContain("do not match"); // ...and the one before
+    seen.forEach((text) => expect(text).not.toMatch(TAGALOG));
+  });
+
+  it("the words of the page are the ones the owner gave", async () => {
+    const { container } = await open([person({ name: "Ana Reyes", is_active: false }), person({ name: "Ben Cruz" })]);
+    const text = container.textContent;
+    [
+      "Add a staff member",
+      "Give the username and the first password to them in person. It is not sent anywhere.",
+      "Staff name",
+      "This is the name the check-in record will show.",
+      "Eight characters or more.",
+      "This account opens the scanner and nothing else.",
+      "Grouped by resort",
+      "1 open · 1 closed",
+      "2 staff",
+      "has not signed in yet",
+      "Tap a name for the details: their scans, a new password, and closing the account. There is no Delete here",
+      "No one can scan",
+      "These resorts have no open account",
+      "Choose the resort above to add someone.",
+    ].forEach((words) => expect(text).toContain(words));
+    expect(screen.getByRole("button", { name: "Clear" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
+    expect(screen.getByText("Closed")).toBeTruthy();
+    expect(screen.getByText("Open")).toBeTruthy();
+  });
+
+  it("one resort is '1 resort', more are 'N resorts'", async () => {
+    await open([person({ name: "Ana Reyes" }), person({ name: "Ben Cruz", resort: { id: 2, name: "Bravo Cove" } })]);
+    expect(screen.getByText("1 resort")).toBeTruthy();
+  });
+});
+
+describe("the place of the password boxes", () => {
+  const cells = () => [...document.querySelector(".mobile-content-staff-grid").children];
+  const cellOf = (label) => cells().findIndex((cell) => cell.contains(field(label)));
+  const column = (index) => index % 2; // two columns: 0 is the left one
+  const row = (index) => Math.floor(index / 2);
+
+  it("the grid has exactly the cells of the plan, in order, with one empty cell under the Username", async () => {
+    await open([]);
+    const names = cells().map((cell) => (cell.matches(".mobile-content-staff-spacer") ? "" : cell.querySelector("label").textContent));
+    expect(names).toEqual(["Resort", "Staff name", "Username", "First password", "", "Repeat password"]);
+  });
+
+  it("Repeat password is in the same column as First password, in the row right UNDER it", async () => {
+    await open([]);
+    const first = cellOf("First password");
+    const again = cellOf("Repeat password");
+    expect(first).toBeGreaterThan(-1);
+    expect(again).toBeGreaterThan(-1);
+    expect(column(again)).toBe(column(first));
+    expect(row(again)).toBe(row(first) + 1);
+    expect(column(first)).toBe(1); // the right column
+  });
+
+  it("Username is at the LEFT of First password, in the same row", async () => {
+    await open([]);
+    const username = cellOf("Username");
+    const first = cellOf("First password");
+    expect(row(username)).toBe(row(first));
+    expect(column(username)).toBe(0);
+    expect(column(first)).toBe(1);
+  });
+
+  it("the empty cell is hidden on a narrow screen, so the two passwords still follow each other", () => {
+    const CSS = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8").replace(/\r\n/g, "\n");
+    const block = CSS.slice(CSS.indexOf("RESORT ACCOUNTS: the page of the staff"));
+    expect(block).toMatch(/\.mobile-content-staff-grid \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+    expect(block).toMatch(/@media \(max-width: 640px\) \{\s*\.mobile-content-staff-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/);
+    expect(block).toMatch(/@media \(max-width: 640px\) \{\s*\.mobile-content-staff-spacer \{\s*display: none;/);
+  });
+});
+
+describe("the eye of the password boxes", () => {
+  const box = (label) => field(label);
+  const eyeOf = (label) => box(label).closest(".mobile-content-staff-secret").querySelector("button");
+
+  it("both are hidden to begin with, and each has its own button inside its box", async () => {
+    await open([]);
+    ["First password", "Repeat password"].forEach((label) => {
+      expect(box(label).getAttribute("type")).toBe("password");
+      const eye = eyeOf(label);
+      expect(eye).not.toBeNull();
+      expect(eye.getAttribute("aria-label")).toBe("Show password");
+      expect(eye.getAttribute("type")).toBe("button");
+      expect(eye.querySelector("svg")).not.toBeNull(); // an icon, as the other icons of the page
+    });
+    expect(screen.getAllByRole("button", { name: "Show password" })).toHaveLength(2);
+    expect(eyeOf("First password")).not.toBe(eyeOf("Repeat password"));
+  });
+
+  it("the first eye shows only the first box, and the second eye only the second", async () => {
+    await open([]);
+    fireEvent.click(eyeOf("First password"));
+    expect(box("First password").getAttribute("type")).toBe("text");
+    expect(box("Repeat password").getAttribute("type")).toBe("password");
+    expect(eyeOf("Repeat password").getAttribute("aria-label")).toBe("Show password");
+    fireEvent.click(eyeOf("First password"));
+    fireEvent.click(eyeOf("Repeat password"));
+    expect(box("Repeat password").getAttribute("type")).toBe("text");
+    expect(box("First password").getAttribute("type")).toBe("password");
+    expect(eyeOf("First password").getAttribute("aria-label")).toBe("Show password");
+  });
+
+  it("the label changes when it is pressed, and changes back", async () => {
+    await open([]);
+    const eye = eyeOf("First password");
+    fireEvent.click(eye);
+    expect(eye.getAttribute("aria-label")).toBe("Hide password");
+    expect(eye.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(eye);
+    expect(eye.getAttribute("aria-label")).toBe("Show password");
+    expect(box("First password").getAttribute("type")).toBe("password");
+  });
+
+  it("pressing an eye sends nothing and keeps what was typed", async () => {
+    await open([]);
+    fill();
+    fireEvent.click(eyeOf("First password"));
+    expect(box("First password").value).toBe("first-pass-1");
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("the password is in no message: not of the form, not of the server, not of the 'done'", async () => {
+    const { container } = await open([]);
+    fill({ password: "secret-word-77", again: "other-word-88" });
+    fireEvent.click(eyeOf("First password"));
+    submit();
+    expect(screen.getByTestId("form-message").textContent).not.toContain("secret-word-77");
+    expect(screen.getByTestId("form-message").textContent).not.toContain("other-word-88");
+    fill({ password: "secret-word-77", again: "secret-word-77" });
+    server.failNext = { status: 400, detail: "This username is already in use." };
+    submit();
+    await settled();
+    expect(screen.getByTestId("form-message").textContent).not.toContain("secret-word-77");
+    submit();
+    await settled();
+    expect(screen.getByRole("status").textContent).toBe("Account created for Maria Santos.");
+    expect(container.textContent).not.toContain("secret-word-77");
+    expect([...container.querySelectorAll("input")].some((input) => input.value.includes("secret-word-77"))).toBe(false);
+  });
+});
+
 describe("the colours of the tags", () => {
   const CSS = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8").replace(/\r\n/g, "\n");
   const block = CSS.slice(CSS.indexOf("RESORT ACCOUNTS: the page of the staff"));
@@ -457,14 +627,14 @@ describe("the colours of the tags", () => {
     return block.slice(start, block.indexOf("\n}", start));
   };
 
-  it("Bukas is the info status with the text of the admin", () => {
+  it("Open is the info status with the text of the admin", () => {
     const open = rule('.mobile-content-staff-tag[data-status="open"]');
     expect(open).toContain("var(--th-info-bg)");
     expect(open).toContain("var(--th-info)");
     expect(rule(".mobile-content-staff-tag")).toContain("color: var(--th-text-main)");
   });
 
-  it("Sarado is NOT a status: no warning and no danger, the paper brown and the text of the admin", () => {
+  it("Closed is NOT a status: no warning and no danger, the paper brown and the text of the admin", () => {
     const closed = rule('.mobile-content-staff-tag[data-status="closed"]');
     expect(closed).not.toMatch(/th-warning|th-danger|th-info/);
     expect(closed).toContain("background: #f2eae1");
@@ -474,8 +644,8 @@ describe("the colours of the tags", () => {
 
   it("the tags are drawn from data-status, so a closed account really gets the closed rule", async () => {
     await open([person({ name: "Ana Reyes", is_active: false }), person({ name: "Ben Cruz" })]);
-    expect(screen.getByText("Sarado").getAttribute("data-status")).toBe("closed");
-    expect(screen.getByText("Bukas").getAttribute("data-status")).toBe("open");
+    expect(screen.getByText("Closed").getAttribute("data-status")).toBe("closed");
+    expect(screen.getByText("Open").getAttribute("data-status")).toBe("open");
   });
 });
 
