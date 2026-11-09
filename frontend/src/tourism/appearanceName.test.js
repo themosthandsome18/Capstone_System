@@ -87,7 +87,12 @@ describe("the address and who may open it are as they were", () => {
   test.each(["tourist", "sanitation", "auditor"])("and still sends the %s role away", (role) => {
     useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={SETTINGS_ROLES} />);
-    expect(screen.getByTestId("redirect")).toBeTruthy();
+    if (role === "sanitation") {
+      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/sanitation"); // it goes to its own home
+    } else {
+      expect(screen.queryByTestId("redirect")).toBeNull(); // a role that reaches no page is refused where it stands
+      expect(screen.getByRole("alert").textContent).toContain("for the mobile app only");
+    }
     expect(screen.queryByTestId("outlet")).toBeNull();
   });
 });

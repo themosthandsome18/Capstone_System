@@ -4,13 +4,14 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import maubanLogo from "../tourism/assets/logoMauban.jpg";
 import { getDefaultRouteForRole, useAuth } from "./AuthContext";
+import { MOBILE_ONLY_MESSAGE } from "./roleAccess";
 import "./LoginPage.css";
 
 
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, loading, login, role } = useAuth();
+  const { isAuthenticated, loading, login, role, notice } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -89,7 +90,11 @@ function LoginPage() {
               />
             </label>
 
-            {error ? <p className="login-error">{error}</p> : null}
+            {error || notice ? (
+              <p className="login-error" role="alert">
+                {error || notice}
+              </p>
+            ) : null}
 
             <button
               type="submit"
@@ -117,6 +122,10 @@ const SERVER_ERROR_MESSAGE =
 // Only a 401 means the credentials were rejected. Anything else is the
 // server's problem, not the user's, and must not be reported as bad credentials.
 function getLoginErrorMessage(requestError) {
+  if (requestError?.code === "account_refused") {
+    return MOBILE_ONLY_MESSAGE;
+  }
+
   const status = requestError?.status;
   const detail = requestError?.details?.detail;
 

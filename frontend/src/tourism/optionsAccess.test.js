@@ -46,7 +46,12 @@ describe("Registration Options access", () => {
   test.each(["tourist", "sanitation", "establishment", "auditor"])("the route guard sends the %s role away from the page", (role) => {
     useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
     render(<ProtectedRoute allowedRoles={OPTIONS_ROLES} />);
-    expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
+    if (role === "sanitation") {
+      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/sanitation"); // it goes to its own home
+    } else {
+      expect(screen.queryByTestId("redirect")).toBeNull(); // a role that reaches no page is refused where it stands (not sent to "/", which it cannot reach)
+      expect(screen.getByRole("alert").textContent).toContain("for the mobile app only");
+    }
     expect(screen.queryByTestId("outlet")).toBeNull();
   });
 

@@ -58,7 +58,12 @@ describe("the route of the page of a tile", () => {
     for (const [role, home] of [["tourist", "/"], ["sanitation", "/sanitation"]]) {
       useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
       const { unmount } = render(<ProtectedRoute allowedRoles={route.allowedRoles} />);
-      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(home); // each goes to its own home, not to this page
+      if (role === "sanitation") {
+        expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(home); // it goes to its own home, not to this page
+      } else {
+        expect(screen.queryByTestId("redirect")).toBeNull(); // a role that reaches no page is refused where it stands (home is "/", which it cannot reach)
+        expect(screen.getByRole("alert").textContent).toContain("for the mobile app only");
+      }
       expect(screen.queryByTestId("outlet")).toBeNull();
       unmount();
     }

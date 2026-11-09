@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import LoginPage from "./auth/LoginPage";
 import ModuleSelectionPage from "./auth/ModuleSelectionPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import { MODULE_SELECTION_ROLES, SANITATION_ROLES, TOURISM_ROLES } from "./auth/roleAccess";
 import VerifyPermit from "./sanitation/pages/VerifyPermit";
 import PublicCommunityReport from "./sanitation/pages/PublicCommunityReport";
 import PublicReportingMetadata from "./sanitation/components/PublicReportingMetadata";
@@ -62,12 +63,12 @@ function App() {
               <Route path="/report-sanitation" element={<PublicCommunityReport />} />
 
               {/* Module Selection (Admin Only) */}
-              <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+              <Route element={<ProtectedRoute allowedRoles={MODULE_SELECTION_ROLES} />}>
                 <Route path="/module-selection" element={<ModuleSelectionPage />} />
               </Route>
 
               {/* Tourism Module Routes */}
-              <Route element={<ProtectedRoute allowedRoles={["admin", "tourism"]} />}>
+              <Route element={<ProtectedRoute allowedRoles={TOURISM_ROLES} />}>
                 <Route element={<AppShell />}>
                   {tourismRoutes.map((route) =>
                     route.allowedRoles ? (
@@ -90,7 +91,7 @@ function App() {
               </Route>
 
               {/* Sanitation Module Routes */}
-              <Route element={<ProtectedRoute allowedRoles={["admin", "sanitation"]} />}>
+              <Route element={<ProtectedRoute allowedRoles={SANITATION_ROLES} />}>
                 <Route path="/sanitation" element={<SanitationAppShell />}>
                   {sanitationRoutes.map((route) => (
                     <Route
