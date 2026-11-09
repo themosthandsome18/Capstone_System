@@ -77,7 +77,12 @@ describe("Mobile App Content access and tabs", () => {
     for (const role of ["tourist", "sanitation", "auditor"]) {
       useAuth.mockReturnValue({ isAuthenticated: true, loading: false, role });
       const sent = render(<ProtectedRoute allowedRoles={MOBILE_CONTENT_ROLES} />);
-      expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe(role === "sanitation" ? "/sanitation" : "/"); // each goes to its own home
+      if (role === "sanitation") {
+        expect(screen.getByTestId("redirect").getAttribute("data-to")).toBe("/sanitation"); // it goes to its own home
+      } else {
+        expect(screen.queryByTestId("redirect")).toBeNull(); // a role that reaches no page is refused where it stands (not sent to "/", which it cannot reach)
+        expect(screen.getByRole("alert").textContent).toContain("for the mobile app only");
+      }
       sent.unmount();
     }
     for (const role of ["tourism", "admin"]) {

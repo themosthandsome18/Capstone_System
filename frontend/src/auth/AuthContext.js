@@ -14,6 +14,7 @@ import {
   logout as requestLogout,
 } from "./authApi";
 import { getStoredAuthToken, setStoredAuthToken } from "../shared/apiClient";
+import { MOBILE_ONLY_MESSAGE, canReachAnyPage } from "./roleAccess";
 
 
 const AuthContext = createContext(null);
@@ -35,6 +36,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(getStoredAuthToken()));
   const [sessionError, setSessionError] = useState("");
+  const [notice, setNotice] = useState("");
   const mountedRef = useRef(true);
 
   const restoreSession = useCallback(async () => {
@@ -48,7 +50,13 @@ export function AuthProvider({ children }) {
 
     try {
       const currentUser = await getCurrentUser();
-      if (mountedRef.current) {
+      if (!canReachAnyPage(currentUser?.profile?.role)) {
+        // A token kept from before, of an account that reaches nothing here: forget it (on this browser only) and say why at the login page.
+        setStoredAuthToken("");
+        if (mountedRef.current) {
+          setNotice(MOBILE_ONLY_MESSAGE);
+        }
+      } else if (mountedRef.current) {
         setUser(currentUser);
       }
     } catch (error) {
@@ -76,6 +84,7 @@ export function AuthProvider({ children }) {
   async function login(username, password) {
     const authenticatedUser = await requestLogin(username, password);
     setSessionError("");
+    setNotice("");
     setUser(authenticatedUser);
     return authenticatedUser;
   }
@@ -93,10 +102,11 @@ export function AuthProvider({ children }) {
       login,
       logout,
       isAuthenticated: Boolean(user),
+      notice,
       sessionError,
       retrySession: restoreSession,
     }),
-    [user, loading, sessionError, restoreSession]
+    [user, loading, notice, sessionError, restoreSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
