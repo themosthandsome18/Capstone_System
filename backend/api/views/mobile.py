@@ -409,6 +409,35 @@ def mobile_tourist_registration(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
  
  
+SCANNER_OPEN_ROLES = {"admin", "tourism"}
+SCANNER_RESORT_ROLE = "resort"
+NOT_YOUR_RESORT = "This booking is not for your resort."
+
+
+def scanner_scope(request, refusal):
+    """Who may use the staff QR scanner, and which records they may reach: -> (scope, refused).
+
+    admin and tourism: scope None (every record, as it always was). A resort's staff (role "resort"): scope is the id of THEIR resort, and nothing
+    else is theirs; an account that is not linked to a resort gets nothing (403). Anyone else: 403 with `refusal`. `refused` is the Response to
+    send, or None."""
+    try:
+        profile = request.user.profile
+        user_role = getattr(profile, "role", "")
+    except (ObjectDoesNotExist, AttributeError):
+        profile, user_role = None, ""
+
+    if user_role in SCANNER_OPEN_ROLES:
+        return None, None
+    if user_role == SCANNER_RESORT_ROLE:
+        if profile.resort_id is None:
+            return None, Response(
+                {"detail": "This account is not linked to a resort."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return profile.resort_id, None
+    return None, Response({"detail": refusal}, status=status.HTTP_403_FORBIDDEN)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def mobile_tourist_record_lookup(request):
@@ -422,16 +451,9 @@ def mobile_tourist_record_lookup(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    try:
-        user_role = getattr(request.user.profile, "role", "")
-    except (ObjectDoesNotExist, AttributeError):
-        user_role = ""
-
-    if user_role not in {"admin", "tourism"}:
-        return Response(
-            {"detail": "Only tourism staff and administrators can look up visitor records."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    scope, refused = scanner_scope(request, "Only tourism staff and administrators can look up visitor records.")
+    if refused is not None:
+        return refused
 
     ensure_mobile_reference_data()
     survey_id = request.query_params.get("survey_id", "").strip()
@@ -466,10 +488,15 @@ def mobile_tourist_record_lookup(request):
         except Exception:
             pass
 
+    def records():
+        # A resort's staff search inside their own resort only: a name, a number or an ID of another resort finds nothing.
+        found = TouristRecord.objects.select_related(
+            "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
+        )
+        return found if scope is None else found.filter(resort_id=scope)
+
     # Try exact / direct match first
-    record = TouristRecord.objects.select_related(
-        "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
-    ).filter(
+    record = records().filter(
         Q(survey_id__iexact=raw_query)
         | Q(survey_id__iexact=clean_id)
         | Q(survey_id__icontains=clean_id)
@@ -484,18 +511,18 @@ def mobile_tourist_record_lookup(request):
     if not record:
         digits = "".join(filter(str.isdigit, clean_id))
         if digits:
-            record = TouristRecord.objects.select_related(
-                "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
-            ).filter(survey_id__icontains=digits).first()
+            record = records().filter(survey_id__icontains=digits).first()
             if not record and len(digits) >= 5:
                 hyphenated = f"{digits[:4]}-{digits[4:]}"
-                record = TouristRecord.objects.select_related(
-                    "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
-                ).filter(survey_id__icontains=hyphenated).first()
+                record = records().filter(survey_id__icontains=hyphenated).first()
             if not record and len(digits) <= 4:
-                record = TouristRecord.objects.select_related(
-                    "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
-                ).filter(survey_id__endswith=digits).first()
+                record = records().filter(survey_id__endswith=digits).first()
+
+    if not record and scope is not None:
+        # Only an ID that is exactly another resort's booking says so (the person holds that booking's code); a name, a number or a part of an ID does
+        # not tell whether such a visitor is registered somewhere else. The message names no visitor and no resort.
+        if TouristRecord.objects.filter(Q(survey_id__iexact=raw_query) | Q(survey_id__iexact=clean_id)).exists():
+            return Response({"error": NOT_YOUR_RESORT}, status=status.HTTP_404_NOT_FOUND)
 
     if not record:
         return Response({"error": f"No visitor registration found for '{query}'"}, status=status.HTTP_404_NOT_FOUND)
@@ -525,16 +552,9 @@ def mobile_tourist_record_check_in(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    try:
-        user_role = getattr(request.user.profile, "role", "")
-    except (ObjectDoesNotExist, AttributeError):
-        user_role = ""
-
-    if user_role not in {"admin", "tourism"}:
-        return Response(
-            {"detail": "Only tourism staff and administrators can check in tourists."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    scope, refused = scanner_scope(request, "Only tourism staff and administrators can check in tourists.")
+    if refused is not None:
+        return refused
 
     ensure_mobile_reference_data()
     survey_id = (request.data.get("survey_id") or request.data.get("surveyId") or "").strip()
@@ -542,6 +562,9 @@ def mobile_tourist_record_check_in(request):
         return Response({"error": "Survey ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     record = get_object_or_404(TouristRecord, survey_id__iexact=survey_id)
+    if scope is not None and record.resort_id != scope:
+        # Nothing of the record is read, let alone changed, and the answer names neither the visitor nor the other resort.
+        return Response({"error": NOT_YOUR_RESORT}, status=status.HTTP_404_NOT_FOUND)
     record.status = BOOKING_STATUS_ARRIVED
 
     if "total_visitors" in request.data:
@@ -589,16 +612,9 @@ def mobile_tourist_record_history(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    try:
-        user_role = getattr(request.user.profile, "role", "")
-    except (ObjectDoesNotExist, AttributeError):
-        user_role = ""
-
-    if user_role not in {"admin", "tourism"}:
-        return Response(
-            {"detail": "Only tourism staff and administrators can view tourist history."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    scope, refused = scanner_scope(request, "Only tourism staff and administrators can view tourist history.")
+    if refused is not None:
+        return refused
 
     ensure_mobile_reference_data()
     resort_id = request.query_params.get("resort_id")
@@ -608,7 +624,10 @@ def mobile_tourist_record_history(request):
         "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
     ).all()
 
-    if resort_id:
+    if scope is not None:
+        # A resort's staff see their own resort and no other: the resort_id the client sent is not used (and not refused).
+        records = records.filter(resort_id=scope)
+    elif resort_id:
         records = records.filter(resort_id=resort_id)
 
     if search:
