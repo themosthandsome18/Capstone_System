@@ -548,6 +548,33 @@ describe("the place of the password boxes", () => {
   });
 });
 
+describe("the eye of the browser is hidden, in these boxes only", () => {
+  const CSS = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8").replace(/\r\n/g, "\n");
+  const block = CSS.slice(CSS.indexOf("RESORT ACCOUNTS: the page of the staff"));
+
+  it("::-ms-reveal and ::-ms-clear are display: none, on the password boxes of this page", () => {
+    const rule = /\n((?:[^\n{}]*::-ms-(?:reveal|clear),?\n)+)\{?[^\n]*/.exec(block);
+    const start = block.indexOf("::-ms-reveal");
+    expect(start).toBeGreaterThan(-1); // the fixture: the rule was found
+    const from = block.lastIndexOf("\n\n", start);
+    const text = block.slice(from, block.indexOf("\n}", start));
+    expect(rule).not.toBeNull();
+    expect(text).toMatch(/\.mobile-content-staff-secret input::-ms-reveal,\n\.mobile-content-staff-secret input::-ms-clear \{/);
+    expect(text).toMatch(/display: none;/);
+  });
+
+  it("is not made general: no rule outside this page hides it, and none without the class of the page", () => {
+    const all = CSS.match(/[^\n]*::-ms-(?:reveal|clear)[^\n]*/g) || [];
+    expect(all.length).toBe(2);
+    all.forEach((line) => expect(line).toContain(".mobile-content-staff-secret input"));
+  });
+
+  it("the boxes it is for are inside that class", async () => {
+    await open([]);
+    expect(document.querySelectorAll(".mobile-content-staff-secret input[type='password']")).toHaveLength(2);
+  });
+});
+
 describe("the eye of the password boxes", () => {
   const box = (label) => field(label);
   const eyeOf = (label) => box(label).closest(".mobile-content-staff-secret").querySelector("button");

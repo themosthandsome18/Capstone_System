@@ -7860,3 +7860,9 @@ tr.arrival-row:hover > .arrival-chevron {
     display: none;
   }
 }
+
+/* Edge draws its own "show password" eye (and a clear cross) in every password box; ours is the only one here. Only the boxes of this page. */
+.mobile-content-staff-secret input::-ms-reveal,
+.mobile-content-staff-secret input::-ms-clear {
+  display: none;
+}
