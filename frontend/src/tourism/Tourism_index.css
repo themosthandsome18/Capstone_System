@@ -7809,3 +7809,16 @@ tr.arrival-row:hover > .arrival-chevron {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* the answer of the form (the server's, the form's own, the "done"): inside the card, above the two buttons; nothing when there is none */
+.mobile-content-staff-message {
+  padding: 0 24px 16px;
+}
+
+.mobile-content-staff-message:empty {
+  display: none;
+}
+
+.mobile-content-staff-message p {
+  margin: 0;
+}

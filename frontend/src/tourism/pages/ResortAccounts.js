@@ -81,26 +81,31 @@ export default function ResortAccounts() {
 
   if (!allowed) return <Navigate to="/" replace />;
 
+  // Every answer on the form (the server's, the form's own, the "done") is out of date the moment the person changes a box or sends again.
+  const forgetAnswers = () => {
+    setProblem("");
+    setActionError("");
+    setNotice("");
+  };
+
   const type = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
-    setProblem("");
+    forgetAnswers();
   };
 
   async function submit(event) {
     event.preventDefault();
+    forgetAnswers(); // first of all: before the form is checked, so an old answer cannot stay beside the new one
     const found = problemWith(form);
     if (found) {
       setProblem(found);
       return;
     }
     setWorking(true);
-    setActionError("");
-    setNotice("");
     try {
       const created = await tourismApi.createResortStaff(payloadOf(form));
       setStaff((current) => [...(current || []), created]);
       setForm(BLANK);
-      setProblem("");
       setNotice(`Nagawa na ang account ni ${created.name}.`);
     } catch (failure) {
       setActionError(failure.message || "Hindi nagawa ang account.");
@@ -111,11 +116,11 @@ export default function ResortAccounts() {
 
   const chooseResort = (id) => {
     setForm((current) => ({ ...current, resortId: String(id) }));
-    setProblem("");
+    forgetAnswers();
   };
   const clearForm = () => {
     setForm(BLANK);
-    setProblem("");
+    forgetAnswers();
   };
   const drafting = Object.values(form).some((value) => value !== "");
 
@@ -127,19 +132,6 @@ export default function ResortAccounts() {
           <h1>Resort Accounts</h1>
           <p className="mobile-content-lead">{PAGE_LEAD}</p>
         </div>
-      </div>
-
-      <div className="options-message-area">
-        {notice ? (
-          <p className="settings-status success" role="status">
-            {notice}
-          </p>
-        ) : null}
-        {actionError ? (
-          <p className="settings-status error" role="alert">
-            {actionError}
-          </p>
-        ) : null}
       </div>
 
       <div className="mobile-content-staff-main">
@@ -187,9 +179,21 @@ export default function ResortAccounts() {
                 <small>Dapat pareho ang dalawa. Hindi na maipapakita ulit ang password — kapag nakalimutan, bago ang gagawin.</small>
               </div>
             </div>
+          </div>
+          <div className="mobile-content-staff-message" data-testid="form-message">
             {problem ? (
               <p className="settings-status error" role="alert" data-testid="form-problem">
                 {problem}
+              </p>
+            ) : null}
+            {actionError ? (
+              <p className="settings-status error" role="alert" data-testid="form-error">
+                {actionError}
+              </p>
+            ) : null}
+            {notice ? (
+              <p className="settings-status success" role="status">
+                {notice}
               </p>
             ) : null}
           </div>

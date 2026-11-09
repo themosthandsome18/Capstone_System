@@ -347,6 +347,107 @@ describe("the form", () => {
   });
 });
 
+describe("the answer of the form: one, new, and beside the buttons", () => {
+  const TAKEN = "This username is already in use.";
+  const card = () => screen.getByRole("form", { name: "Magdagdag ng kawani" });
+  const everyAnswer = () => [...document.querySelectorAll("[role='alert'], [role='status']")];
+  const refuse = async () => {
+    fill();
+    server.failNext = { status: 400, detail: TAKEN };
+    submit();
+    await settled();
+    expect(screen.getByRole("alert").textContent).toBe(TAKEN); // the fixture: the old answer is on screen
+  };
+
+  it("an old answer of the server, then a mistake in the form: ONE message, the new one", async () => {
+    await open([]);
+    await refuse();
+    fireEvent.change(field("Unang password"), { target: { value: "short" } }); // (he starts to put it right...)
+    submit();
+    await settled();
+    const answers = everyAnswer();
+    expect(answers).toHaveLength(1);
+    expect(answers[0].textContent).toBe("Walong karakter pataas ang password.");
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it("an old answer of 'done', then a send of a form that is wrong WITHOUT being typed in: only the new message (the old one goes first of all)", async () => {
+    await open([]);
+    fill();
+    submit();
+    await settled();
+    expect(screen.getByRole("status").textContent).toBe("Nagawa na ang account ni Maria Santos."); // the fixture: the old answer
+    submit(); // the form is empty now: nothing was typed since
+    await settled();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(everyAnswer()).toHaveLength(1);
+    expect(screen.getByTestId("form-problem").textContent).toBe("Pumili ng resort.");
+  });
+
+  it.each([
+    ["Resort", "2"],
+    ["Pangalan ng kawani", "Another Name"],
+    ["Username", "another.user"],
+    ["Unang password", "another-pass-2"],
+    ["Ulitin ang password", "another-pass-2"],
+  ])("an old answer of the server goes the moment the %s box is changed", async (label, value) => {
+    await open([]);
+    await refuse();
+    fireEvent.change(field(label), { target: { value } });
+    expect(everyAnswer()).toHaveLength(0);
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it("an old answer goes when a resort is chosen with Magdagdag, and when the boxes are emptied", async () => {
+    await open([person({ name: "Ana Reyes" })]);
+    await refuse();
+    fireEvent.click(within(groupNamed("Alpha Beach Resort")).getByRole("button", { name: "Magdagdag" }));
+    expect(everyAnswer()).toHaveLength(0);
+    await refuse();
+    fireEvent.click(screen.getByRole("button", { name: "Burahin ang nasulat" }));
+    expect(everyAnswer()).toHaveLength(0);
+  });
+
+  it("the answers are INSIDE the card of the form, beside its buttons, and not in the top of the page", async () => {
+    const { container } = await open([]);
+    await refuse();
+    const answer = screen.getByRole("alert");
+    expect(answer.closest("form")).toBe(card());
+    const box = answer.closest("[data-testid='form-message']");
+    expect(box).not.toBeNull();
+    // by position: after the boxes, before the footer with the two buttons, and the page has no message area above its cards
+    expect(field("Ulitin ang password").compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(box.compareDocumentPosition(screen.getByRole("button", { name: "Gumawa ng account" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(box.nextElementSibling.querySelector("button")).not.toBeNull(); // the very next thing is the footer with the buttons
+    expect(container.querySelector(".options-message-area")).toBeNull();
+    const page = container.firstElementChild;
+    const beforeTheCard = [...page.children].slice(0, [...page.children].findIndex((child) => child.contains(card())));
+    beforeTheCard.forEach((child) => expect(child.querySelector("[role='alert'], [role='status']")).toBeNull());
+    // the form's own message and the 'done' are in the same place
+    fireEvent.change(field("Unang password"), { target: { value: "short" } });
+    submit();
+    expect(screen.getByTestId("form-problem").closest("form")).toBe(card());
+  });
+
+  it("a successful creation leaves no message but its own 'done', and no error", async () => {
+    await open([]);
+    await refuse();
+    submit(); // the same form, sent again: the server now accepts it
+    await settled();
+    expect(everyAnswer().map((item) => item.getAttribute("role"))).toEqual(["status"]);
+    expect(screen.queryByText(TAKEN)).toBeNull();
+    expect(screen.queryByTestId("form-problem")).toBeNull();
+  });
+
+  it("the answer of the server is the sentence of the server, and says nothing of any module", async () => {
+    await open([]);
+    await refuse();
+    const text = screen.getByRole("alert").textContent;
+    expect(text).toBe(TAKEN);
+    ["sanitation", "sanitary", "tourism", "module", "admin", "resort", "staff"].forEach((word) => expect(text.toLowerCase()).not.toContain(word));
+  });
+});
+
 describe("the colours of the tags", () => {
   const CSS = fs.readFileSync(path.join(__dirname, "..", "Tourism_index.css"), "utf8").replace(/\r\n/g, "\n");
   const block = CSS.slice(CSS.indexOf("RESORT ACCOUNTS: the page of the staff"));
