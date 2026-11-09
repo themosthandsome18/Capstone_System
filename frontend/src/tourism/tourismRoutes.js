@@ -14,6 +14,8 @@ import { OPTIONS_PATH, OPTIONS_ROLES } from "./optionsAccess";
 import MobileAppContent from "./pages/MobileAppContent";
 import MobileContentTileEditor from "./pages/MobileContentTileEditor";
 import { MOBILE_CONTENT_PATH, MOBILE_CONTENT_ROLES, TILE_PATH, tabPath } from "./mobileContentAccess";
+import ResortAccounts from "./pages/ResortAccounts";
+import { RESORT_ACCOUNTS_PATH, RESORT_ACCOUNTS_ROLES } from "./resortAccountsAccess";
 import { HOTLINES_PATH, HOTLINES_ROLES } from "./hotlinesAccess";
 import { SETTINGS_PATH, SETTINGS_ROLES } from "./settingsAccess";
 
@@ -86,6 +88,11 @@ export const tourismRoutes = [
     path: TILE_PATH,
     allowedRoles: MOBILE_CONTENT_ROLES,
     element: React.createElement(withErrorBoundary(MobileContentTileEditor, "Edit a tile")),
+  },
+  {
+    path: RESORT_ACCOUNTS_PATH,
+    allowedRoles: RESORT_ACCOUNTS_ROLES,
+    element: React.createElement(withErrorBoundary(ResortAccounts, "Resort Accounts")),
   },
   {
     path: HOTLINES_PATH,

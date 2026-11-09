@@ -471,6 +471,15 @@ export const tourismApi = {
     );
   },
 
+  // Resort staff accounts (the scanner of a resort). Read the list, add one. There is no delete here: a closed account keeps the record of its scans.
+  async getResortStaff() {
+    return apiRequest("/resort-staff/");
+  },
+
+  async createResortStaff(payload) {
+    return apiRequest("/resort-staff/", { method: "POST", body: JSON.stringify(payload) });
+  },
+
   // Emergency contacts (the hotlines the mobile app lists). Every write answers
   // with the contact as the server now holds it; reorder answers with the whole
   // list in its new order. There is no delete: a contact is deactivated.

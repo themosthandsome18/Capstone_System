@@ -58,6 +58,10 @@ export const pageInfo = {
     title: "Mobile App Content",
     showAdd: false,
   },
+  "/resort-accounts": {
+    title: "Resort Accounts",
+    showAdd: false,
+  },
   // the page of one tile: it is a part of Mobile App Content, and the top bar says so
   "/mobile-content/tile": {
     title: "Mobile App Content",

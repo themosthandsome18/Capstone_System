@@ -100,7 +100,7 @@ describe("Mobile App Content access and tabs", () => {
     expect(links.filter(([, href]) => href === "/mobile-content")).toEqual([["Mobile App Content", "/mobile-content"]]);
     expect(links.filter(([text]) => /hotlines/i.test(text))).toEqual([]);
     expect(links.filter(([, href]) => /hotlines/.test(href))).toEqual([]);
-    expect(links.map(([text]) => text).slice(-3)).toEqual(["Appearance", "Registration Options", "Mobile App Content"]); // where Hotlines used to be
+    expect(links.map(([text]) => text).slice(-4)).toEqual(["Appearance", "Registration Options", "Mobile App Content", "Resort Accounts"]); // where Hotlines used to be; Resort Accounts comes right after
   });
 
   test("the top bar has a title for the new address and for the old one", () => {

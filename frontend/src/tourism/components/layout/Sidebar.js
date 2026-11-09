@@ -3,6 +3,7 @@ import logo from "../../assets/Tourismlogo.jpg";
 import { useAuth } from "../../../auth/AuthContext";
 import { OPTIONS_PATH, canManageOptions } from "../../optionsAccess";
 import { MOBILE_CONTENT_PATH, canManageMobileContent } from "../../mobileContentAccess";
+import { RESORT_ACCOUNTS_PATH, canManageResortAccounts } from "../../resortAccountsAccess";
 import { SETTINGS_PATH, canOpenSettings } from "../../settingsAccess";
 
 const navigation = [
@@ -20,6 +21,7 @@ const administration = [
   { to: SETTINGS_PATH, label: "Appearance", allowed: canOpenSettings },
   { to: OPTIONS_PATH, label: "Registration Options", allowed: canManageOptions },
   { to: MOBILE_CONTENT_PATH, label: "Mobile App Content", allowed: canManageMobileContent },
+  { to: RESORT_ACCOUNTS_PATH, label: "Resort Accounts", allowed: canManageResortAccounts },
 ];
 
 function SidebarLink({ item }) {
