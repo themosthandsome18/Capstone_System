@@ -7513,8 +7513,8 @@ tr.arrival-row:hover > .arrival-chevron {
 /* ================= RESORT ACCOUNTS: the page of the staff of the resorts =================
    Three cards (add a staff member, the staff by resort, the resorts with none), looking like the cards of the Notifications tab above.
    Colours, by what they MEAN: whatever follows the admin's theme is var(--th-primary...) (the focus of the boxes, the Gumawa ng account button, the line
-   over the first card, the icon of the first card); an open account is the STATUS token --th-info (and its -bg), a closed one is NOT a status (it is only switched
-   off): the brown of the paper; both with the text in --th-text-main; the browns of the paper are the page's own --mc-* variables. Every class starts with .mobile-content-. */
+   over the first card, the icon of the first card); an open account is the STATUS token --th-success (and its -bg), a closed one is --th-danger (and its -bg);
+   both with the text in --th-text-main; the browns of the paper are the page's own --mc-* variables. Every class starts with .mobile-content-. */
 .mobile-content-staff-main {
   display: flex;
   flex-direction: column;
@@ -7769,13 +7769,13 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-staff-tag[data-status="open"] {
-  background: var(--th-info-bg);
-  box-shadow: inset 0 0 0 1px var(--th-info);
+  background: var(--th-success-bg);
+  box-shadow: inset 0 0 0 1px var(--th-success);
 }
 
 .mobile-content-staff-tag[data-status="closed"] {
-  background: #f2eae1;
-  color: var(--th-text-main);
+  background: var(--th-danger-bg);
+  box-shadow: inset 0 0 0 1px var(--th-danger);
 }
 
 .mobile-content-staff-chevron {
@@ -7865,4 +7865,328 @@ tr.arrival-row:hover > .arrival-chevron {
 .mobile-content-staff-secret input::-ms-reveal,
 .mobile-content-staff-secret input::-ms-clear {
   display: none;
+}
+
+/* ---- Resort Accounts: the two columns, the limit panel, and the details of one staff member ---- */
+.mobile-content-staff-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .mobile-content-staff-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mobile-content-staff-row:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: -2px;
+}
+
+.mobile-content-staff-limit {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  padding: 20px 20px 18px;
+  border: 1px solid var(--mc-line);
+  border-radius: 18px;
+  background: var(--mc-card);
+  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.05), 0 10px 26px rgba(120, 80, 40, 0.06);
+}
+
+.mobile-content-staff-limit h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-limit-sub {
+  margin: 3px 0 14px;
+  font-size: 12.5px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-phone {
+  padding: 8px;
+  border-radius: 26px;
+  background: #1d1713;
+}
+
+.mobile-content-staff-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 14px 14px;
+  border-radius: 20px;
+  background: #fdf6ee;
+}
+
+.mobile-content-staff-screen-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-screen-box {
+  padding: 12px 14px;
+  border: 1px solid var(--mc-line);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-screen-box.is-main {
+  padding: 18px 14px;
+  border-color: var(--th-primary);
+  background: var(--th-primary);
+  color: var(--th-text-inverse);
+  text-align: center;
+}
+
+.mobile-content-staff-screen-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-cannot {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #f2e7dc;
+}
+
+.mobile-content-staff-cannot-heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-cannot ul {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-content-staff-cannot li {
+  display: flex;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-cross {
+  flex: none;
+  font-weight: 800;
+  color: var(--th-danger);
+}
+
+.mobile-content-staff-limit-foot {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--th-scrim);
+}
+
+.mobile-content-staff-modal {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fffdfb;
+  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+}
+
+.mobile-content-staff-modal-head {
+  position: relative;
+  flex: none;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 22px 18px;
+  border-bottom: 1px solid #f2e7dc;
+  background: linear-gradient(180deg, #fff8f0 0%, #fffdfb 100%);
+}
+
+.mobile-content-staff-initial {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--th-primary);
+  color: var(--th-text-inverse);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.mobile-content-staff-modal-who {
+  min-width: 0;
+  padding-right: 36px;
+}
+
+.mobile-content-staff-modal-who h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-modal-who p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mobile-content-staff-x {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, 0.72);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.mobile-content-staff-modal-body {
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+
+.mobile-content-staff-numbers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.mobile-content-staff-number {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid #f0e4d6;
+  border-radius: 13px;
+  background: #fffcf8;
+}
+
+.mobile-content-staff-number span,
+.mobile-content-staff-number small {
+  font-size: 12px;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-number strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f2e7dc;
+}
+
+.mobile-content-staff-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.mobile-content-staff-section-note {
+  margin: 8px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--mc-hint);
+}
+
+.mobile-content-staff-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 18px;
+  margin: 0;
+}
+
+.mobile-content-staff-fact dt {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--mc-label);
+}
+
+.mobile-content-staff-fact dd {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--th-text-main);
+  overflow-wrap: anywhere;
+}
+
+.mobile-content-staff-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.mobile-content-staff-btn.is-danger {
+  border-color: var(--th-danger);
+  background: #fff;
+  color: var(--th-danger);
+}
+
+.mobile-content-staff-modal-body .mobile-content-staff-message {
+  position: sticky;
+  bottom: 0;
+  margin-top: 14px;
+  padding: 0;
+  background: #fffdfb;
+}
+
+@media (max-width: 640px) {
+  .mobile-content-staff-numbers,
+  .mobile-content-staff-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

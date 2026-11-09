@@ -480,6 +480,11 @@ export const tourismApi = {
     return apiRequest("/resort-staff/", { method: "POST", body: JSON.stringify(payload) });
   },
 
+  // Change one staff account: { is_active } to close or reopen it, { password } to give a new one. Answers with the account as the server now holds it.
+  async updateResortStaff(id, payload) {
+    return apiRequest(`/resort-staff/${encodeURIComponent(id)}/`, { method: "PATCH", body: JSON.stringify(payload) });
+  },
+
   // Emergency contacts (the hotlines the mobile app lists). Every write answers
   // with the contact as the server now holds it; reorder answers with the whole
   // list in its new order. There is no delete: a contact is deactivated.
