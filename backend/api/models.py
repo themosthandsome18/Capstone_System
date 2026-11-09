@@ -62,6 +62,7 @@ ROLE_TOURISM = "tourism"
 ROLE_SANITATION = "sanitation"
 ROLE_ESTABLISHMENT = "establishment"
 ROLE_TOURIST = "tourist"
+ROLE_RESORT = "resort"
 
 USER_ROLE_CHOICES = [
     (ROLE_ADMIN, "System Admin"),
@@ -69,6 +70,7 @@ USER_ROLE_CHOICES = [
     (ROLE_SANITATION, "Sanitary Section"),
     (ROLE_ESTABLISHMENT, "Establishment Owner"),
     (ROLE_TOURIST, "Tourist"),
+    (ROLE_RESORT, "Resort Staff"),
 ]
 
 MODULE_TOURISM = "tourism"
@@ -96,10 +98,21 @@ class UserProfile(models.Model):
         on_delete=models.CASCADE,
         related_name="profile",
     )
+    # A profile made without a role is a tourist, the one role that reaches no module: it used to be the Tourism Office, which made an account
+    # that nobody gave a role into staff. Changing the default does not touch a row that already exists.
     role = models.CharField(
         max_length=20,
         choices=USER_ROLE_CHOICES,
-        default=ROLE_TOURISM,
+        default=ROLE_TOURIST,
+    )
+    # The resort a resort staff account works for. Many accounts can point to the same resort (one per person); the resort is not required (every other
+    # role has none). Not the same as Resort.user, which is the one owner account of a resort.
+    resort = models.ForeignKey(
+        "Resort",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="staff_profiles",
     )
 
     class Meta:
