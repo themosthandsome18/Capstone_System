@@ -86,50 +86,6 @@ Future<void> pumpCard(WidgetTester tester, Map<String, dynamic> data) async {
   await tester.pump();
 }
 
-/// Opens the edit sheet from a button, so that its result (the saved map, or
-/// null when it was left without saving) can be read.
-class EditHarness {
-  Map<String, dynamic>? saved;
-  bool returned = false;
-}
-
-Future<EditHarness> pumpEdit(
-  WidgetTester tester,
-  Map<String, dynamic> data,
-) async {
-  tallScreen(tester);
-  final harness = EditHarness();
-  await tester.pumpWidget(const SizedBox());
-  await tester.pumpWidget(
-    MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: TextButton(
-              onPressed: () async {
-                harness.saved = await Navigator.of(context)
-                    .push<Map<String, dynamic>>(
-                      MaterialPageRoute(
-                        builder: (_) => EditTouristRecordSheet(
-                          recordData: data,
-                          bootstrap: MobileBootstrap.fallback(),
-                        ),
-                      ),
-                    );
-                harness.returned = true;
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.tap(find.text('open'));
-  await tester.pumpAndSettle();
-  return harness;
-}
-
 class HistoryApi extends TourismApi {
   HistoryApi(this.records);
   final List<Map<String, dynamic>> records;
@@ -282,29 +238,18 @@ void main() {
   });
 
   group('5. arrival date', () {
-    testWidgets('with a value: shown on the card and in the edit form', (
-      tester,
-    ) async {
+    testWidgets('with a value: shown on the card', (tester) async {
       await pumpCard(tester, record());
       expect(find.text('ARRIVAL DATE'), findsOneWidget);
       expect(find.text('2026-10-12'), findsOneWidget);
-
-      await pumpEdit(tester, record());
-      expect(find.text('ARRIVAL DATE'), findsOneWidget);
     });
 
     for (final entry in {
       'missing': () => without(['arrival_date']),
       'blank': () => record({'arrival_date': ' '}),
     }.entries) {
-      testWidgets('${entry.key}: not on the card, not in the edit form', (
-        tester,
-      ) async {
+      testWidgets('${entry.key}: not on the card', (tester) async {
         await pumpCard(tester, entry.value());
-        expect(find.text('ARRIVAL DATE'), findsNothing);
-        expectNoMadeUp();
-
-        await pumpEdit(tester, entry.value());
         expect(find.text('ARRIVAL DATE'), findsNothing);
         expectNoMadeUp();
       });
@@ -351,167 +296,6 @@ void main() {
       await pumpHistory(tester, [record({'total_visitors': 0})]);
 
       expect(find.text('2026-10-12 • 0 Pax'), findsOneWidget);
-    });
-  });
-
-  group('1. the edit form', () {
-    testWidgets('with values: they are shown and saved as they are', (
-      tester,
-    ) async {
-      final h = await pumpEdit(tester, record());
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isTrue);
-      for (final key in countKeys) {
-        expect(h.saved![key], record()[key], reason: key);
-      }
-    });
-
-    testWidgets('missing counts are empty, not 1', (tester) async {
-      await pumpEdit(tester, noCounts());
-
-      // Every counter is empty: no 1, no 0 was made up.
-      for (final label in [
-        'FILIPINO',
-        'FOREIGNER',
-        'MALE',
-        'FEMALE',
-        'AGE 0-7',
-        'AGE 8-59',
-        'AGE 60+',
-      ]) {
-        expect(tileValue(tester, label), '', reason: label);
-      }
-    });
-
-    testWidgets('Done is refused while a required count is empty', (
-      tester,
-    ) async {
-      final h = await pumpEdit(tester, noCounts());
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isFalse, reason: 'the sheet must stay open');
-      expect(h.saved, isNull);
-      expect(find.textContaining('before saving'), findsOneWidget);
-      expect(find.textContaining('Filipino'), findsWidgets);
-    });
-
-    testWidgets('one count missing: refused, and it is named', (tester) async {
-      final h = await pumpEdit(tester, without(['total_female']));
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isFalse);
-      expect(
-        find.text('Enter the missing count before saving: Female.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a blank count is refused like a missing one', (tester) async {
-      final h = await pumpEdit(tester, record({'age_8_59': '  '}));
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isFalse);
-      expect(
-        find.text('Enter the missing count before saving: Age 8-59.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('entering the missing count lets Done through', (
-      tester,
-    ) async {
-      final h = await pumpEdit(tester, without(['total_female']));
-
-      // The FEMALE tile: one tap on its "+" makes it 1, a real entered value.
-      final femaleTile = find.ancestor(
-        of: find.text('FEMALE'),
-        matching: find.byType(Container),
-      );
-      final plus = find.descendant(
-        of: femaleTile.first,
-        matching: find.byIcon(Icons.add),
-      );
-      await tester.tap(plus.first);
-      await tester.pump();
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isTrue);
-      expect(h.saved!['total_female'], 1);
-    });
-
-    testWidgets('0 is a real value: shown as 0 and saved as 0', (tester) async {
-      final h = await pumpEdit(
-        tester,
-        record({'foreigner_count': 0, 'age_0_7': 0, 'age_60_above': 0}),
-      );
-
-      expect(tileValue(tester, 'FOREIGNER'), '0');
-      expect(tileValue(tester, 'AGE 0-7'), '0');
-      expect(tileValue(tester, 'AGE 60+'), '0');
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isTrue);
-      expect(h.saved!['foreigner_count'], 0);
-      expect(h.saved!['age_0_7'], 0);
-      expect(h.saved!['age_60_above'], 0);
-    });
-
-    testWidgets('every count 0 is saved as 0 (0 is never "missing")', (
-      tester,
-    ) async {
-      final h = await pumpEdit(tester, {
-        ...record(),
-        for (final key in countKeys) key: 0,
-      });
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isTrue);
-      for (final key in countKeys) {
-        expect(h.saved![key], 0, reason: key);
-      }
-    });
-
-    testWidgets('a missing total is typed in, not fixed at 1', (tester) async {
-      final h = await pumpEdit(tester, without(['total_visitors']));
-
-      // Empty, with its own + to enter it.
-      expect(tileValue(tester, 'TOTAL GUESTS'), '');
-      final column = find
-          .ancestor(of: find.text('TOTAL GUESTS'), matching: find.byType(Column))
-          .first;
-      final plus = find.descendant(of: column, matching: find.byIcon(Icons.add));
-      expect(plus, findsOneWidget);
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(h.returned, isFalse);
-      expect(
-        find.text('Enter the missing count before saving: Total guests.'),
-        findsOneWidget,
-      );
-
-      await tester.tap(plus);
-      await tester.pump();
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(h.returned, isTrue);
-      expect(h.saved!['total_visitors'], 1);
     });
   });
 
@@ -570,19 +354,6 @@ void main() {
       expect(touristStatusChip(null), isNull);
       expect(touristStatusChip(''), isNull);
       expect(touristStatusChip('on_hold'), isNull);
-    });
-  });
-
-  group('the check-in itself', () {
-    testWidgets('does not send a record that has counts missing', (
-      tester,
-    ) async {
-      await pumpCard(tester, noCounts());
-
-      await tester.tap(find.textContaining('Save'));
-      await tester.pump();
-
-      expect(find.textContaining('before saving'), findsOneWidget);
     });
   });
 

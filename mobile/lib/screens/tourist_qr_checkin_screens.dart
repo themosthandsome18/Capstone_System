@@ -1,5 +1,34 @@
 part of '../main.dart';
 
+/// The words of the screen of one's own scans (the log is what THIS account took in, not a list of the resort).
+const myCheckInsTitle = 'My Check-ins';
+const myCheckInsSearchHint = 'Search by Survey ID or name';
+const myCheckInsEmpty = 'No check-ins yet.';
+const myCheckInsEmptyHint = 'Visitors you take in will appear here.';
+const myCheckInsNoMatch = 'No matching check-ins';
+const myCheckInsNoMatchHint = 'Try searching with a different Survey ID or name.';
+
+String myCheckInsCount(int count) => count == 1 ? '1 check-in' : '$count check-ins';
+
+/// Who may use the staff QR scanner. A resort's own staff (role `resort`) now come in beside the tourism office and the admin; every other role is
+/// refused at the door. This is the door only: WHICH records a role can reach is decided by the server.
+const staffScannerRoles = {'admin', 'tourism', 'resort'};
+
+bool staffMayScan(String? role) => role != null && staffScannerRoles.contains(role);
+
+/// The two refusals of the server that a resort's staff can meet, said as they are: not as a general error.
+const notYourResortMessage = 'This booking is not for your resort.';
+const notLinkedMessage = 'This account is not linked to a resort.';
+const notLinkedHint = 'Ask the tourism office to link your account.';
+
+/// The sentence to show for one of those two refusals, or null when [error] is anything else (the callers then say what they always said).
+String? staffRefusalMessage(Object error) {
+  if (error is! ApiException) return null;
+  if (error.message.contains(notLinkedMessage)) return '$notLinkedMessage\n$notLinkedHint';
+  if (error.message.contains(notYourResortMessage)) return notYourResortMessage;
+  return null;
+}
+
 /// Opens the Resort Staff QR Portal protected by Staff Authentication
 Future<void> openStaffQrPortalWithAuth(
   BuildContext context, {
@@ -10,7 +39,7 @@ Future<void> openStaffQrPortalWithAuth(
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(staffAuthTokenKey);
     final role = prefs.getString(staffAuthRoleKey);
-    if (token != null && token.isNotEmpty && (role == 'admin' || role == 'tourism')) {
+    if (token != null && token.isNotEmpty && staffMayScan(role)) {
       if (!context.mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -99,7 +128,7 @@ class _StaffAuthGateDialogState extends State<StaffAuthGateDialog> {
         throw Exception('No authentication token returned by server.');
       }
 
-      if (role != 'admin' && role != 'tourism') {
+      if (!staffMayScan(role)) {
         setState(() {
           _loading = false;
           _errorMessage =
@@ -301,6 +330,11 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
         showAppMessage(context, 'Your session expired, please sign in again.');
         return;
       }
+      final refusal = staffRefusalMessage(e);
+      if (refusal != null) {
+        showAppMessage(context, refusal);
+        return;
+      }
       if (e is ApiException && e.isForbidden) {
         showAppMessage(
           context,
@@ -451,6 +485,11 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
         if (!mounted) return;
         Navigator.of(context).pop();
         showAppMessage(context, 'Your session expired, please sign in again.');
+        return;
+      }
+      final refusal = staffRefusalMessage(e);
+      if (refusal != null) {
+        showAppMessage(context, refusal);
         return;
       }
       if (e is ApiException && e.isForbidden) {
@@ -628,7 +667,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Button 2: Tourist History Log
+              // Button 2: My Check-ins
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -644,7 +683,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                   },
                   icon: const Icon(Icons.access_time, size: 20, color: Color(0xFF0F172A)),
                   label: const Text(
-                    'Tourist History Log',
+                    myCheckInsTitle,
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -699,7 +738,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   }
 }
 
-/// Screen 3: Tourist History Log
+/// Screen 3: My Check-ins (the visitors THIS account took in; the whole list of arrivals is Arrival Monitoring on the web)
 /// How a booking status is shown in the history list.
 class TouristStatusChip {
   const TouristStatusChip(this.label, this.background, this.foreground);
@@ -780,10 +819,13 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
         showAppMessage(context, 'Your session expired, please sign in again.');
         return;
       }
-      if (e is ApiException && e.isForbidden) {
+      final refusal = staffRefusalMessage(e);
+      if (refusal != null) {
+        showAppMessage(context, refusal);
+      } else if (e is ApiException && e.isForbidden) {
         showAppMessage(
           context,
-          "You don't have permission to view tourist history.",
+          "You don't have permission to view your check-ins.",
         );
       }
       if (mounted) {
@@ -879,8 +921,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
       if (q.isEmpty) return true;
       final name = (r['full_name'] ?? '').toString().toLowerCase();
       final id = (r['survey_id'] ?? '').toString().toLowerCase();
-      final resort = (r['resort_name'] ?? '').toString().toLowerCase();
-      return name.contains(q) || id.contains(q) || resort.contains(q);
+      return name.contains(q) || id.contains(q);
     }).toList();
 
     return Scaffold(
@@ -893,11 +934,11 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Tourist History Log',
+              myCheckInsTitle,
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
             ),
             Text(
-              '${filtered.length} record(s) loaded',
+              myCheckInsCount(filtered.length),
               style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
           ],
@@ -947,7 +988,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Search by Survey ID, name, or resort',
+                    hintText: myCheckInsSearchHint,
                     hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13.5),
                     prefixIcon: Icon(Icons.search, color: context.brand.dark),
                     suffixIcon: _search.text.isNotEmpty
@@ -994,9 +1035,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  _search.text.isNotEmpty
-                                      ? 'No matching records'
-                                      : 'No Checked-In Records Yet',
+                                  _search.text.isNotEmpty ? myCheckInsNoMatch : myCheckInsEmpty,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w900,
                                     fontSize: 17,
@@ -1005,9 +1044,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  _search.text.isNotEmpty
-                                      ? 'Try searching with a different Survey ID or tourist name.'
-                                      : 'When tourists register or scan their QR passes, their arrival logs will appear here in real-time.',
+                                  _search.text.isNotEmpty ? myCheckInsNoMatchHint : myCheckInsEmptyHint,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     fontSize: 13,
@@ -1175,29 +1212,14 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
   }
 
   Future<void> _saveRecord() async {
-    // A count that is not in the record is never sent as a made-up number.
-    final missing = [
-      for (final (key, label) in touristRecordCounts)
-        if (presentCount(_currentRecord[key]) == null) label,
-    ];
-    if (missing.isNotEmpty) {
-      showAppMessage(context, missingCountsMessage(missing));
-      return;
-    }
     setState(() => _saving = true);
 
     try {
+      // The arrival, and nothing else: the card is read-only (the visitor paid before arriving, and the count they paid for is already in the record),
+      // so no count and no other field is sent. The server sets the status and records who received the visitor.
       await widget.api.checkInTouristRecord({
         'survey_id': _currentRecord['survey_id'],
         'status': 'arrived',
-        'total_visitors': _currentRecord['total_visitors'],
-        'filipino_count': _currentRecord['filipino_count'],
-        'foreigner_count': _currentRecord['foreigner_count'],
-        'total_male': _currentRecord['total_male'],
-        'total_female': _currentRecord['total_female'],
-        'age_0_7': _currentRecord['age_0_7'],
-        'age_8_59': _currentRecord['age_8_59'],
-        'age_60_above': _currentRecord['age_60_above'],
       });
 
       if (mounted) {
@@ -1209,7 +1231,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
               children: [
                 Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 28),
                 SizedBox(width: 10),
-                Text('Verified & Recorded', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                Expanded(child: Text('Verified & Recorded', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
               ],
             ),
             content: Text(
@@ -1246,6 +1268,11 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
         showAppMessage(context, 'Your session expired, please sign in again.');
         return;
       }
+      final refusal = staffRefusalMessage(e);
+      if (refusal != null) {
+        showAppMessage(context, refusal);
+        return;
+      }
       if (e is ApiException && e.isForbidden) {
         showAppMessage(
           context,
@@ -1261,23 +1288,6 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  void _openEditForm() async {
-    final updated = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => EditTouristRecordSheet(
-          recordData: _currentRecord,
-          bootstrap: widget.bootstrap,
-        ),
-      ),
-    );
-
-    if (updated != null && mounted) {
-      setState(() {
-        _currentRecord = updated;
-      });
     }
   }
 
@@ -1328,7 +1338,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
+                    Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (surveyId != null)
@@ -1353,6 +1364,8 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                         ),
                       ],
                     ),
+                    ),
+                    const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -1490,9 +1503,11 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                               children: [
                                 Icon(Icons.calendar_today_outlined, size: 14, color: context.brand.dark),
                                 SizedBox(width: 6),
-                                Text(
-                                  'ARRIVAL DATE',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
+                                Flexible(
+                                  child: Text(
+                                    'ARRIVAL DATE',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
+                                  ),
                                 ),
                               ],
                             ),
@@ -1523,9 +1538,11 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                               children: [
                                 Icon(Icons.people_outline, size: 16, color: context.brand.dark),
                                 SizedBox(width: 6),
-                                Text(
-                                  'TOTAL GUESTS',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
+                                Flexible(
+                                  child: Text(
+                                    'TOTAL GUESTS',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.brand.dark),
+                                  ),
                                 ),
                               ],
                             ),
@@ -1551,30 +1568,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 const Divider(height: 28),
 
                 // TRIP DETAILS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('TRIP DETAILS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF0F172A))),
-                    GestureDetector(
-                      onTap: _openEditForm,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: context.brand.tintStrong,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.edit, size: 12, color: context.brand.dark),
-                            SizedBox(width: 4),
-                            Text('Edit Info', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: context.brand.dark)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                const Text('TRIP DETAILS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF0F172A))),
                 const SizedBox(height: 8),
                 if (resort != null) _buildInfoLine(Icons.place_outlined, 'Resort', resort),
                 if (regionProvince.isNotEmpty) _buildInfoLine(Icons.explore_outlined, 'Region / Province', regionProvince),
@@ -1607,7 +1601,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                 ),
                 const SizedBox(height: 24),
 
-                // Action Buttons (Cancel & Save Record)
+                // Action Buttons (Cancel & Check in)
                 Row(
                   children: [
                     Expanded(
@@ -1632,7 +1626,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                         icon: _saving
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.check_circle_outline, size: 20),
-                        label: const Text('Save Record', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                        label: const Text('Check in', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                         style: FilledButton.styleFrom(
                           backgroundColor: context.brand.dark,
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1650,434 +1644,74 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
     );
   }
 
+  /// One line of the record. Every label has the SAME width and every value starts at the same left edge, so the values of a group stand on one
+  /// vertical line; a long value wraps down inside its own column (it is never cut, and it cannot run out of the screen).
   Widget _buildInfoLine(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          ),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
-          const Spacer(),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A))),
+          SizedBox(
+            width: recordLabelWidth,
+            child: Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.start,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+            ),
+          ),
         ],
       ),
     );
   }
 
   /// One row of two counts. A count that is not in the record is not shown
-  /// (no 1, no 0, no dash); a row with neither takes no room.
+  /// (no 1, no 0, no dash); a row with neither takes no room. In each half the
+  /// label has one width and the number starts at one left edge, so the numbers
+  /// of a column stand on one vertical line.
   Widget _buildBreakdownRow(String l1, int? v1, String l2, int? v2) {
     final hasLeft = v1 != null;
     final hasRight = l2.isNotEmpty && v2 != null;
     if (!hasLeft && !hasRight) return const SizedBox.shrink();
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: !hasLeft
-              ? const SizedBox.shrink()
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(l1, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
-                    Text('$v1', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
-                  ],
-                ),
+        Expanded(child: !hasLeft ? const SizedBox.shrink() : _breakdownCell(l1, v1)),
+        const SizedBox(width: 16),
+        Expanded(child: !hasRight ? const SizedBox.shrink() : _breakdownCell(l2, v2)),
+      ],
+    );
+  }
+
+  Widget _breakdownCell(String label, int value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: breakdownLabelWidth,
+          child: Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
         ),
-        const SizedBox(width: 24),
         Expanded(
-          child: !hasRight
-              ? const SizedBox.shrink()
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(l2, style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
-                    Text('$v2', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A))),
-                  ],
-                ),
+          child: Text(
+            '$value',
+            key: ValueKey('count-$label'),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A)),
+          ),
         ),
       ],
     );
   }
 }
 
-/// Screen 5: Edit Tourist Record Sheet
-class EditTouristRecordSheet extends StatefulWidget {
-  const EditTouristRecordSheet({
-    super.key,
-    required this.recordData,
-    required this.bootstrap,
-  });
-
-  final Map<String, dynamic> recordData;
-  final MobileBootstrap bootstrap;
-
-  @override
-  State<EditTouristRecordSheet> createState() => _EditTouristRecordSheetState();
-}
-
-class _EditTouristRecordSheetState extends State<EditTouristRecordSheet> {
-  late TextEditingController _name;
-  late TextEditingController _email;
-  late TextEditingController _contact;
-  // null = not in the record. Never defaulted: a made-up 1 could be saved
-  // as the real number of visitors.
-  int? _visitors;
-  int? _filipino;
-  int? _foreigner;
-  int? _male;
-  int? _female;
-  int? _age07;
-  int? _age859;
-  int? _age60;
-
-  @override
-  void initState() {
-    super.initState();
-    _name = TextEditingController(text: widget.recordData['full_name'] ?? '');
-    _email = TextEditingController(text: widget.recordData['email'] ?? '');
-    _contact = TextEditingController(text: widget.recordData['contact_number'] ?? '');
-    _visitors = presentCount(widget.recordData['total_visitors']);
-    _filipino = presentCount(widget.recordData['filipino_count']);
-    _foreigner = presentCount(widget.recordData['foreigner_count']);
-    _male = presentCount(widget.recordData['total_male']);
-    _female = presentCount(widget.recordData['total_female']);
-    _age07 = presentCount(widget.recordData['age_0_7']);
-    _age859 = presentCount(widget.recordData['age_8_59']);
-    _age60 = presentCount(widget.recordData['age_60_above']);
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    _contact.dispose();
-    super.dispose();
-  }
-
-  /// The counts that are still empty, by the name staff see. A required count
-  /// is never saved empty (and never defaulted to 0: 0 is a real value).
-  bool get _totalWasMissing => presentCount(widget.recordData['total_visitors']) == null;
-
-  List<String> get _missingCounts => [
-    if (_visitors == null) 'Total guests',
-    if (_filipino == null) 'Filipino',
-    if (_foreigner == null) 'Foreigner',
-    if (_male == null) 'Male',
-    if (_female == null) 'Female',
-    if (_age07 == null) 'Age 0-7',
-    if (_age859 == null) 'Age 8-59',
-    if (_age60 == null) 'Age 60+',
-  ];
-
-  void _saveAndClose() {
-    final missing = _missingCounts;
-    if (missing.isNotEmpty) {
-      showAppMessage(context, missingCountsMessage(missing));
-      return;
-    }
-    final updated = Map<String, dynamic>.from(widget.recordData);
-    updated['full_name'] = formatProperName(_name.text);
-    updated['email'] = _email.text.trim();
-    updated['contact_number'] = _contact.text.trim();
-    updated['total_visitors'] = _visitors;
-    updated['filipino_count'] = _filipino;
-    updated['foreigner_count'] = _foreigner;
-    updated['total_male'] = _male;
-    updated['total_female'] = _female;
-    updated['age_0_7'] = _age07;
-    updated['age_8_59'] = _age859;
-    updated['age_60_above'] = _age60;
-
-    Navigator.of(context).pop(updated);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Tourist Record', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-            Text('ID: ${widget.recordData['survey_id']}', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-          ],
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Step 1: Traveller
-          _buildStepCard(
-            step: '1',
-            title: 'Traveller',
-            children: [
-              _buildLabeledField('FULL NAME', _name),
-              _buildLabeledField('EMAIL', _email),
-              _buildLabeledField('CONTACT NUMBER', _contact),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Step 2: Destination
-          _buildStepCard(
-            step: '2',
-            title: 'Destination',
-            children: [
-              if (presentText(widget.recordData['country_name']) != null)
-                _buildStaticField('COUNTRY', presentText(widget.recordData['country_name'])!),
-              if (presentText(widget.recordData['region_name']) != null)
-                _buildStaticField('REGION', presentText(widget.recordData['region_name'])!),
-              if (presentText(widget.recordData['province_name']) != null)
-                _buildStaticField('PROVINCE', presentText(widget.recordData['province_name'])!),
-              if (presentText(widget.recordData['resort_name']) != null)
-                _buildStaticField('RESORT', presentText(widget.recordData['resort_name'])!),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Step 3: Trip Details
-          _buildStepCard(
-            step: '3',
-            title: 'Trip details',
-            children: [
-              if (presentText(widget.recordData['itinerary_name']) != null)
-                _buildStaticField('ITINERARY', presentText(widget.recordData['itinerary_name'])!),
-              if (presentText(widget.recordData['visit_purpose_name']) != null)
-                _buildStaticField('VISIT PURPOSE', presentText(widget.recordData['visit_purpose_name'])!),
-              if (presentText(widget.recordData['travel_mode_name']) != null)
-                _buildStaticField('TRAVEL MODE', presentText(widget.recordData['travel_mode_name'])!),
-              if (presentText(widget.recordData['boat_type_name']) != null)
-                _buildStaticField('BOAT TYPE', presentText(widget.recordData['boat_type_name'])!),
-              if (presentText(widget.recordData['arrival_date']) != null)
-                _buildStaticField('ARRIVAL DATE', presentText(widget.recordData['arrival_date'])!),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Step 4: Group Breakdown
-          _buildStepCard(
-            step: '4',
-            title: 'Group breakdown',
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _buildCounterTile('FILIPINO', _filipino, (v) => setState(() => _filipino = v))),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCounterTile('FOREIGNER', _foreigner, (v) => setState(() => _foreigner = v))),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _buildCounterTile('MALE', _male, (v) => setState(() => _male = v))),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCounterTile('FEMALE', _female, (v) => setState(() => _female = v))),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _buildCounterTile('AGE 0-7', _age07, (v) => setState(() => _age07 = v))),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCounterTile('AGE 8-59', _age859, (v) => setState(() => _age859 = v))),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCounterTile('AGE 60+', _age60, (v) => setState(() => _age60 = v))),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // A total that is not in the record is typed in, not made up.
-              if (_totalWasMissing)
-                _buildCounterTile('TOTAL GUESTS', _visitors, (v) => setState(() => _visitors = v))
-              else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: context.brand.tintStrong,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('TOTAL GUESTS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: context.brand.dark)),
-                    Text(_visitors == null ? '' : '$_visitors', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.brand.dark)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Bottom Action Bar
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: context.brand.tintStrong,
-                    foregroundColor: const Color(0xFF0F172A),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('✕  Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _saveAndClose,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: context.brand.dark,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w900)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepCard({required String step, required String title, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: context.brand.tintStrong,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(step, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: context.brand.dark)),
-              ),
-              const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A))),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLabeledField(String label, TextEditingController ctrl) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF64748B))),
-          const SizedBox(height: 4),
-          Container(
-            decoration: BoxDecoration(
-              color: context.brand.tintStrong.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TextField(
-              controller: ctrl,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStaticField(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF64748B))),
-          const SizedBox(height: 4),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.brand.tintStrong.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF64748B)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCounterTile(String label, int? current, ValueChanged<int> onChanged) {
-    final value = current ?? 0;
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: context.brand.tintStrong.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF64748B))),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(current == null ? '' : '$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: value > 0 ? () => onChanged(value - 1) : null,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
-                      child: const Icon(Icons.remove, size: 14),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () => onChanged(value + 1),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
-                      child: const Icon(Icons.add, size: 14),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+/// The width of the label column of the record card, and of a count label in the visitor breakdown: ONE width each, so the values stand on one line.
+const double recordLabelWidth = 118;
+const double breakdownLabelWidth = 72;
