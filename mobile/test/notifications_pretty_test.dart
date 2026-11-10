@@ -1,4 +1,4 @@
-// The Notifications page of the tourism side, made good to read: when each notice was written, the word of its weight, the subtitle in line with the title,
+// The Notifications page of the tourism side, made good to read: when each notice was written, the word of its weight, the subtitle in line with the notices,
 // the shape of the box and its line, three lines of message, one label for a screen reader. The sanitation side is given none of it. Positions are
 // measured on the screen. Synthetic data only: no real notice, person or contact.
 import 'dart:math' as math;
@@ -172,20 +172,28 @@ void main() {
     });
   });
 
-  group('C) the subtitle is in line with the title', () {
-    // The FIRST GLYPH of each, on both platforms (the bar centres its title on iOS and macOS unless told not to), at four widths. 0.5 allows the
-    // side bearings of the two first letters (0.13 here) and not a centred title (0.87 at 432 on iOS, 85 at 600).
+  group('C) the subtitle is in line with the notices', () {
+    // The FIRST GLYPH of the subtitle is measured (not the box of the widget) against the LEFT EDGE of the box of the first notice, on both platforms and at
+    // four widths. 1.0 allows the side bearing of the first letter (0.13 here) and nothing like the 56 it was set in by, in line with the title.
     for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
       for (final width in [432.0, 390.0, 600.0, 800.0]) {
-        testWidgets('$platform, ${width.toInt()} wide: the first glyph of the subtitle is where the first glyph of the title is', (tester) async {
+        testWidgets('$platform, ${width.toInt()} wide: the first glyph of the subtitle is at the left edge of the first notice', (tester) async {
           await show(tester, [notice('a')], size: Size(width, 800), platform: platform);
-          final title = glyphLeft(tester, find.text('Notifications'));
+          final card = tester.getTopLeft(box('a')).dx;
           final under = glyphLeft(tester, find.text(subtitle));
-          expect(under, closeTo(title, 0.5), reason: 'title $title, subtitle $under');
-          expect(title, 72, reason: 'the title begins after the back arrow, on the left, on every platform');
-          expect(under, greaterThan(18), reason: 'not at the far left any more');
+          expect(card, 16, reason: 'the fixture: the notice begins 16 from the left');
+          expect(under, closeTo(card, 1.0), reason: 'card $card, subtitle $under');
+          expect(under, lessThan(40), reason: 'not set in after the back arrow any more');
         });
       }
+    }
+
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      testWidgets('$platform: the title is where it was: after the back arrow, on the left, whatever the subtitle does', (tester) async {
+        // wide enough that a CENTRED title would be far from the left (at 390 the test font is so wide that a centred title is pushed to 72 anyway)
+        await show(tester, [notice('a')], size: const Size(600, 800), platform: platform);
+        expect(glyphLeft(tester, find.text('Notifications')), closeTo(72, 0.5));
+      });
     }
 
     testWidgets('the bar is told not to centre the title on this page, and nowhere else is it told anything', (tester) async {

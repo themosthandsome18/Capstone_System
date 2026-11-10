@@ -360,8 +360,9 @@ class NotificationPage extends StatelessWidget {
     return FormPageScaffold(
       title: 'Notifications',
       subtitle: subtitle,
-      // the tourism side: the subtitle in line with the title, and 16 around the page
-      alignSubtitleWithTitle: severityStripe,
+      // the tourism side: 16 around the page, the subtitle begins where the notices begin (the same left edge as the box of the first one), and the
+      // title stays on the left after the back arrow on every platform
+      titleAtStart: severityStripe,
       padding: severityStripe ? const EdgeInsets.fromLTRB(16, 8, 16, 24) : const EdgeInsets.fromLTRB(18, 8, 18, 24),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
