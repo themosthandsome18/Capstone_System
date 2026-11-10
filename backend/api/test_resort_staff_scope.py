@@ -212,39 +212,11 @@ class CheckInTests(ScannerScopeBase):
 
 
 class HistoryTests(ScannerScopeBase):
-    def test_a_resort_sees_its_own_resort_only(self):
-        response = self.history("resort_a")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.ids(response), [ID_A])
-        self.assertEqual(response.json()["count"], 1)
-        self.assertEqual(self.ids(self.history("resort_b")), [ID_B])
-
-    def test_the_resort_id_the_client_sends_is_ignored_not_used_and_not_refused(self):
-        for sent in (self.b.resort_id, self.a.resort_id, 999, "abc", ""):
-            response = self.history("resort_a", resort_id=sent)
-            self.assertEqual(response.status_code, 200, sent)
-            self.assertEqual(self.ids(response), [ID_A], f"resort_id={sent!r}")
-
-    def test_a_search_for_a_visitor_or_a_resort_of_another_resort_finds_nothing(self):
-        for search in (NAME_B, "Ben", ID_B, RESORT_B, "Bravo"):
-            response = self.history("resort_a", search=search)
-            self.assertEqual(response.status_code, 200, search)
-            self.assertEqual(response.json(), {"count": 0, "records": []}, search)
-
-    def test_a_search_inside_its_own_resort_works(self):
-        self.assertEqual(self.ids(self.history("resort_a", search="Ana")), [ID_A])
-        self.assertEqual(self.ids(self.history("resort_a", search=ID_A)), [ID_A])
+    """What is left of the old rules of the history after it became the account's OWN scans (the new rules are in test_scanner_history_own.py)."""
 
     def test_an_account_not_linked_to_a_resort_gets_403(self):
         self.assertEqual(self.history("unlinked").status_code, 403)
         self.assertEqual(self.history("unlinked", resort_id=self.a.resort_id).status_code, 403)
-
-    def test_admin_and_tourism_see_everything_and_may_choose_a_resort(self):
-        for who in ("admin", "tourism"):
-            self.assertEqual(self.ids(self.history(who)), [ID_A, ID_B], who)
-            self.assertEqual(self.ids(self.history(who, resort_id=self.b.resort_id)), [ID_B], who)
-            self.assertEqual(self.ids(self.history(who, resort_id=self.a.resort_id)), [ID_A], who)
-            self.assertEqual(self.ids(self.history(who, search="Cruz")), [ID_B], who)
 
     def test_the_tourist_and_the_establishment_are_still_refused(self):
         for who in ("tourist", "establishment"):
@@ -252,14 +224,6 @@ class HistoryTests(ScannerScopeBase):
             self.assertEqual(response.status_code, 403, who)
             self.assertEqual(response.json()["detail"], "Only tourism staff and administrators can view tourist history.")
 
-    def test_the_rows_have_the_same_fields_as_for_admin(self):
-        own = self.history("resort_a").json()["records"][0]
-        admin_row = next(row for row in self.history("admin").json()["records"] if row["survey_id"] == ID_A)
-        self.assertEqual(own, admin_row)
+    def test_the_answer_is_still_a_count_and_the_records(self):
+        self.check_in("resort_a", ID_A)
         self.assertEqual(set(self.history("resort_a").json()), {"count", "records"})
-
-    def test_it_is_at_most_40_for_a_resort_too(self):
-        for number in range(45):
-            arrive(self.a, f"SURV-2026-3{number:04d}", 1)
-        self.assertEqual(len(self.history("resort_a").json()["records"]), 40)
-        self.assertEqual(self.ids(self.history("resort_b")), [ID_B])
