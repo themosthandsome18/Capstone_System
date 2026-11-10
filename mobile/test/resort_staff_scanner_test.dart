@@ -179,7 +179,7 @@ void main() {
         await pumpHub(tester, role: role);
         expect(find.text('Export / Download Records'), findsOneWidget);
         // the fixture reached the case: the other two buttons of the same screen are there
-        expect(find.text('Tourist History Log'), findsOneWidget);
+        expect(find.text('My Check-ins'), findsOneWidget);
       });
     }
 
@@ -187,7 +187,7 @@ void main() {
       await pumpHub(tester, role: 'resort');
       expect(find.text('Export / Download Records'), findsNothing);
       expect(find.textContaining('Export'), findsNothing);
-      expect(find.text('Tourist History Log'), findsOneWidget);
+      expect(find.text('My Check-ins'), findsOneWidget);
       expect(find.textContaining('Scan'), findsWidgets);
     });
 

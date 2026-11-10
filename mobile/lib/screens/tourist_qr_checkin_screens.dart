@@ -1,5 +1,15 @@
 part of '../main.dart';
 
+/// The words of the screen of one's own scans (the log is what THIS account took in, not a list of the resort).
+const myCheckInsTitle = 'My Check-ins';
+const myCheckInsSearchHint = 'Search by Survey ID or name';
+const myCheckInsEmpty = 'No check-ins yet.';
+const myCheckInsEmptyHint = 'Visitors you take in will appear here.';
+const myCheckInsNoMatch = 'No matching check-ins';
+const myCheckInsNoMatchHint = 'Try searching with a different Survey ID or name.';
+
+String myCheckInsCount(int count) => count == 1 ? '1 check-in' : '$count check-ins';
+
 /// Who may use the staff QR scanner. A resort's own staff (role `resort`) now come in beside the tourism office and the admin; every other role is
 /// refused at the door. This is the door only: WHICH records a role can reach is decided by the server.
 const staffScannerRoles = {'admin', 'tourism', 'resort'};
@@ -678,7 +688,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Button 2: Tourist History Log
+              // Button 2: My Check-ins
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -694,7 +704,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                   },
                   icon: const Icon(Icons.access_time, size: 20, color: Color(0xFF0F172A)),
                   label: const Text(
-                    'Tourist History Log',
+                    myCheckInsTitle,
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -751,7 +761,7 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   }
 }
 
-/// Screen 3: Tourist History Log
+/// Screen 3: My Check-ins (the visitors THIS account took in; the whole list of arrivals is Arrival Monitoring on the web)
 /// How a booking status is shown in the history list.
 class TouristStatusChip {
   const TouristStatusChip(this.label, this.background, this.foreground);
@@ -838,7 +848,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
       } else if (e is ApiException && e.isForbidden) {
         showAppMessage(
           context,
-          "You don't have permission to view tourist history.",
+          "You don't have permission to view your check-ins.",
         );
       }
       if (mounted) {
@@ -934,8 +944,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
       if (q.isEmpty) return true;
       final name = (r['full_name'] ?? '').toString().toLowerCase();
       final id = (r['survey_id'] ?? '').toString().toLowerCase();
-      final resort = (r['resort_name'] ?? '').toString().toLowerCase();
-      return name.contains(q) || id.contains(q) || resort.contains(q);
+      return name.contains(q) || id.contains(q);
     }).toList();
 
     return Scaffold(
@@ -948,11 +957,11 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Tourist History Log',
+              myCheckInsTitle,
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
             ),
             Text(
-              '${filtered.length} record(s) loaded',
+              myCheckInsCount(filtered.length),
               style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
           ],
@@ -1002,7 +1011,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Search by Survey ID, name, or resort',
+                    hintText: myCheckInsSearchHint,
                     hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13.5),
                     prefixIcon: Icon(Icons.search, color: context.brand.dark),
                     suffixIcon: _search.text.isNotEmpty
@@ -1049,9 +1058,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  _search.text.isNotEmpty
-                                      ? 'No matching records'
-                                      : 'No Checked-In Records Yet',
+                                  _search.text.isNotEmpty ? myCheckInsNoMatch : myCheckInsEmpty,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w900,
                                     fontSize: 17,
@@ -1060,9 +1067,7 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  _search.text.isNotEmpty
-                                      ? 'Try searching with a different Survey ID or tourist name.'
-                                      : 'When tourists register or scan their QR passes, their arrival logs will appear here in real-time.',
+                                  _search.text.isNotEmpty ? myCheckInsNoMatchHint : myCheckInsEmptyHint,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     fontSize: 13,
