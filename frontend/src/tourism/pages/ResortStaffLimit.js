@@ -5,7 +5,6 @@ export const LIMIT_CANNOT_HEADING = "They cannot open";
 export const LIMIT_CANNOT = [
   "The admin system on the web — any page",
   "Another resort's records",
-  "Export / Download Records",
   "Sanitation and its advisories",
   "A fellow staff member's account",
 ];

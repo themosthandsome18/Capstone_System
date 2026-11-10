@@ -418,21 +418,31 @@ describe("the panel of the limit", () => {
     expect(within(panel).getByText(/They can change the details of a visitor booked with them/)).toBeTruthy();
   });
 
-  it("has FIVE lines under 'They cannot open', each with a cross", async () => {
+  it("has FOUR lines under 'They cannot open', each with a cross", async () => {
     await open();
     const panel = screen.getByLabelText("The limit");
     expect(within(panel).getByText("They cannot open")).toBeTruthy();
     const lines = within(screen.getByTestId("cannot-list")).getAllByRole("listitem");
-    expect(lines).toHaveLength(5);
+    expect(lines).toHaveLength(4);
     expect(lines.map((line) => line.textContent)).toEqual(LIMIT_CANNOT.map((line) => `×${line}`));
     lines.forEach((line) => expect(line.querySelector(".mobile-content-staff-cross").textContent).toBe("×"));
     expect(LIMIT_CANNOT).toEqual([
       "The admin system on the web — any page",
       "Another resort's records",
-      "Export / Download Records",
       "Sanitation and its advisories",
       "A fellow staff member's account",
     ]);
+  });
+
+  it("does not say a staff member cannot open Export: they can, and it carries only their own check-ins", async () => {
+    await open();
+    const panel = screen.getByLabelText("The limit");
+    expect(panel.textContent).not.toMatch(/export/i);
+    expect(panel.textContent).not.toMatch(/download/i);
+    LIMIT_CANNOT.forEach((line) => expect(line).not.toMatch(/export|download/i));
+    expect(within(screen.getByTestId("cannot-list")).queryByText(/Export/)).toBeNull();
+    // the real fence of what they can reach is still said
+    expect(within(panel).getByText("Another resort's records")).toBeTruthy();
   });
 
   it("is a picture and a list: no button, no link, no box to type in", async () => {
