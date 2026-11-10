@@ -22,14 +22,14 @@ Map<String, dynamic> row(String id, String name, {String resort = 'Sample Beach 
   'status': 'arrived',
 };
 
-Future<void> pumpLog(WidgetTester tester, List<Map<String, dynamic>> records) async {
-  SharedPreferences.setMockInitialValues({});
+Future<void> pumpLog(WidgetTester tester, List<Map<String, dynamic>> records, {String? role, String? kept}) async {
+  SharedPreferences.setMockInitialValues({staffAuthRoleKey: ?kept});
   tester.view.physicalSize = const Size(411, 1200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(const SizedBox());
-  await tester.pumpWidget(MaterialApp(home: TouristHistoryLogScreen(api: ListApi(records), bootstrap: MobileBootstrap.fallback())));
+  await tester.pumpWidget(MaterialApp(home: TouristHistoryLogScreen(api: ListApi(records), bootstrap: MobileBootstrap.fallback(), staffRole: role)));
   await tester.pumpAndSettle();
 }
 
@@ -131,5 +131,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('My Check-ins'), findsOneWidget); // now it is the title of the screen it opened
     expect(find.text('No check-ins yet.'), findsOneWidget);
+  });
+
+  group('Export is not drawn for the staff of a resort, here either', () {
+    testWidgets('My Check-ins: no Export for resort', (tester) async {
+      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: 'resort');
+      expect(find.text('My Check-ins'), findsOneWidget); // the fixture reached the case: the screen is drawn
+      expect(find.text('Juan Dela Cruz'), findsOneWidget);
+      expect(find.text('Export'), findsNothing);
+      expect(find.textContaining('Export'), findsNothing);
+      expect(find.byIcon(Icons.download), findsNothing);
+    });
+
+    for (final role in ['admin', 'tourism']) {
+      testWidgets('My Check-ins: Export is there for $role', (tester) async {
+        await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: role);
+        expect(find.text('Export'), findsOneWidget);
+        expect(find.byIcon(Icons.download), findsOneWidget);
+      });
+    }
+
+    testWidgets('a role the screen does not know has no Export either', (tester) async {
+      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: 'something-new');
+      expect(find.text('Export'), findsNothing);
+    });
+
+    testWidgets('with no role given it is read from the kept sign-in: resort has none, tourism has it', (tester) async {
+      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], kept: 'resort');
+      expect(find.text('Export'), findsNothing);
+      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], kept: 'tourism');
+      expect(find.text('Export'), findsOneWidget);
+    });
+
+    for (final entry in {'resort': false, 'admin': true, 'tourism': true}.entries) {
+      testWidgets('from the main screen as ${entry.key}: the main Export and the Export of My Check-ins go together', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        tester.view.physicalSize = const Size(411, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(MaterialApp(home: TouristQrCheckInScreen(api: ListApi([]), bootstrap: MobileBootstrap.fallback(), staffRole: entry.key)));
+        await tester.pumpAndSettle();
+        expect(find.text('Export / Download Records'), entry.value ? findsOneWidget : findsNothing);
+        await tester.tap(find.text('My Check-ins'));
+        await tester.pumpAndSettle();
+        expect(find.text('No check-ins yet.'), findsOneWidget); // the screen it opened
+        expect(find.text('Export'), entry.value ? findsOneWidget : findsNothing);
+      });
+    }
   });
 }
