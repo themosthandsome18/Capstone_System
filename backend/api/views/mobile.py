@@ -544,7 +544,7 @@ def mobile_tourist_record_lookup(request):
 @permission_classes([IsAuthenticated])
 def mobile_tourist_record_check_in(request):
     """
-    Resort Staff Check-In action: updates status to 'arrived' and saves verified visitor details.
+    Resort Staff Check-In action: records the ARRIVAL (status 'arrived', who received the visitor, and when). It changes nothing else of the record.
     """
     if not request.user or not request.user.is_authenticated:
         return Response(
@@ -570,23 +570,8 @@ def mobile_tourist_record_check_in(request):
     record.checked_in_by = request.user
     record.checked_in_at = timezone.now()
 
-    if "total_visitors" in request.data:
-        record.total_visitors = parse_mobile_int(request.data.get("total_visitors"), record.total_visitors)
-    if "filipino_count" in request.data:
-        record.filipino_count = parse_mobile_int(request.data.get("filipino_count"), record.filipino_count)
-    if "foreigner_count" in request.data:
-        record.foreigner_count = parse_mobile_int(request.data.get("foreigner_count"), record.foreigner_count)
-    if "total_male" in request.data:
-        record.total_male = parse_mobile_int(request.data.get("total_male"), record.total_male)
-    if "total_female" in request.data:
-        record.total_female = parse_mobile_int(request.data.get("total_female"), record.total_female)
-    if "age_0_7" in request.data:
-        record.age_0_7 = parse_mobile_int(request.data.get("age_0_7"), record.age_0_7)
-    if "age_8_59" in request.data:
-        record.age_8_59 = parse_mobile_int(request.data.get("age_8_59"), record.age_8_59)
-    if "age_60_above" in request.data:
-        record.age_60_above = parse_mobile_int(request.data.get("age_60_above"), record.age_60_above)
-
+    # The counts are not changed from the door: the visitor paid before arriving, and the count they paid for is already in the record. A count sent
+    # (an older version of the app still sends them) is IGNORED, not refused: the check-in is still done, and the record keeps its counts.
     record.save()
 
     log_activity(
@@ -607,7 +592,8 @@ def mobile_tourist_record_check_in(request):
 @permission_classes([IsAuthenticated])
 def mobile_tourist_record_history(request):
     """
-    Returns list of checked-in / recent tourist records for the Staff History Log.
+    The Staff History Log: the records THIS account checked in, the latest scan first. It is the log of one's own scans, for every role (the whole list of
+    arrivals is Arrival Monitoring on the web). A record nobody has checked in is not in it, and a record checked in by someone else is not either.
     """
     if not request.user or not request.user.is_authenticated:
         return Response(
@@ -625,12 +611,10 @@ def mobile_tourist_record_history(request):
 
     records = TouristRecord.objects.select_related(
         "resort", "country", "region", "province", "itinerary", "travel_mode", "boat_type", "visit_purpose"
-    ).all()
+    ).filter(checked_in_by=request.user, checked_in_at__isnull=False)
 
-    if scope is not None:
-        # A resort's staff see their own resort and no other: the resort_id the client sent is not used (and not refused).
-        records = records.filter(resort_id=scope)
-    elif resort_id:
+    if scope is None and resort_id:
+        # (the resort_id the client sent is used by the tourism office and the admin, as before; a resort's staff see their own scans, whatever they send)
         records = records.filter(resort_id=resort_id)
 
     if search:
@@ -638,7 +622,7 @@ def mobile_tourist_record_history(request):
             Q(survey_id__icontains=search) | Q(full_name__icontains=search) | Q(resort__resort_name__icontains=search)
         )
 
-    records = records.order_by("-updated_at", "-arrival_date")[:40]
+    records = records.order_by("-checked_in_at", "-pk")[:40]
 
     rows = []
     for r in records:
