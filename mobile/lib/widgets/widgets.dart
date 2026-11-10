@@ -330,11 +330,48 @@ class VisitReceiptCard extends StatelessWidget {
   }
 }
 
+/// Puts the picture of the QR Pass in the gallery of the phone. The bytes are the PNG, [fileName] is `mauban_qr_<SURVEY_ID>.png`. Anything that goes
+/// wrong is thrown (a [GalException] for the gallery's own reasons), never swallowed: the pass says so on the screen.
+typedef QrPassSaver = Future<void> Function(Uint8List bytes, String fileName);
+
+/// The real saver, with the gallery of the phone (Android and iOS only: gal has no web, where the pass is downloaded instead).
+Future<void> saveQrPassToGallery(Uint8List bytes, String fileName) async {
+  // Gal.putImageBytes asks for the access itself, but it does not look at the answer; so it is asked here, and a "no" is said as what it is.
+  final allowed = await Gal.hasAccess() || await Gal.requestAccess();
+  if (!allowed) {
+    throw GalException(
+      type: GalExceptionType.accessDenied,
+      platformException: PlatformException(code: GalExceptionType.accessDenied.code),
+      stackTrace: StackTrace.current,
+    );
+  }
+  // gal puts the extension itself (from the bytes): the name is given without it, and the file is `mauban_qr_<SURVEY_ID>.png`.
+  final dot = fileName.lastIndexOf('.');
+  await Gal.putImageBytes(bytes, name: dot > 0 ? fileName.substring(0, dot) : fileName);
+}
+
+/// What the person is told when saving the QR Pass fails: one clear sentence for each reason the gallery gives, and for anything else.
+String qrPassSaveErrorMessage(Object error) {
+  if (error is GalException) {
+    return switch (error.type) {
+      GalExceptionType.accessDenied =>
+        'Could not save the QR Pass: this app is not allowed to save to the gallery. Allow it in your phone settings and try again.',
+      GalExceptionType.notEnoughSpace => 'Could not save the QR Pass: there is not enough storage space on your phone.',
+      GalExceptionType.notSupportedFormat => 'Could not save the QR Pass: the image format is not supported.',
+      GalExceptionType.unexpected => 'Could not save the QR Pass: an unexpected error happened. Please try again.',
+    };
+  }
+  return 'Could not save the QR Pass: ${conciseError(error)}';
+}
+
 /// Modal dialog displaying the exact Tourist QR Entry Pass from Screenshot 1
 class TouristDigitalPassModal extends StatefulWidget {
-  const TouristDigitalPassModal({super.key, required this.receipt});
+  const TouristDigitalPassModal({super.key, required this.receipt, this.saver = saveQrPassToGallery});
 
   final MobileVisitReceipt receipt;
+
+  /// Where the picture goes on the phone. A test hands its own, so that it never touches a real gallery.
+  final QrPassSaver saver;
 
   @override
   State<TouristDigitalPassModal> createState() => _TouristDigitalPassModalState();
@@ -344,7 +381,7 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
   final GlobalKey _passKey = GlobalKey();
   bool _saving = false;
 
-  Future<void> _handleSaveOrSharePass() async {
+  Future<void> _handleSaveQrPass() async {
     if (_saving) return;
     setState(() => _saving = true);
 
@@ -367,57 +404,48 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
       final cleanRef = widget.receipt.reference.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
       final fileName = 'mauban_qr_$cleanRef.png';
 
-      final result = await exportAndShareBytes(
-        bytes: pngBytes,
-        fileName: fileName,
-        mimeType: 'image/png',
-        subject: 'Mauban Tourist Entry Pass - ${widget.receipt.reference}',
-        text: 'Official Tourist Entry Pass for ${widget.receipt.fullName.isNotEmpty ? widget.receipt.fullName : "Tourist"} (${widget.receipt.reference}) at ${widget.receipt.destination.name}.',
-      );
+      if (kIsWeb) {
+        // The web has no gallery (gal does not run there): the picture is downloaded by the browser, as it always was.
+        await exportAndShareBytes(
+          bytes: pngBytes,
+          fileName: fileName,
+          mimeType: 'image/png',
+          subject: 'Mauban Tourist Entry Pass - ${widget.receipt.reference}',
+          text: 'Official Tourist Entry Pass for ${widget.receipt.fullName.isNotEmpty ? widget.receipt.fullName : "Tourist"} (${widget.receipt.reference}) at ${widget.receipt.destination.name}.',
+        );
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _showPassMessage('QR Pass for ${widget.receipt.reference} downloaded successfully!', error: false);
+        return;
+      }
 
+      // The phone: straight to the gallery, no share sheet.
+      await widget.saver(pngBytes, fileName);
       if (!mounted) return;
       setState(() => _saving = false);
-
-      if (result.status == ShareResultStatus.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(kIsWeb
-                      ? 'QR Pass for ${widget.receipt.reference} downloaded successfully!'
-                      : 'QR Pass for ${widget.receipt.reference} shared successfully!'),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF14532D),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
+      _showPassMessage('Saved to Gallery', error: false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Could not export pass: ${conciseError(e)}'),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      _showPassMessage(qrPassSaveErrorMessage(e), error: true);
     }
+  }
+
+  void _showPassMessage(String message, {required bool error}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(error ? Icons.error_outline : Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: error ? const Color(0xFFDC2626) : const Color(0xFF14532D),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override
@@ -660,20 +688,20 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                   ),
                   const SizedBox(height: 18),
 
-                  // Save / Share QR Pass Button
+                  // Save QR Pass Button
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _saving ? null : _handleSaveOrSharePass,
+                      onPressed: _saving ? null : _handleSaveQrPass,
                       icon: _saving
                           ? const SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.share),
+                          : const Icon(Icons.save_alt),
                       label: Text(
-                        _saving ? 'Preparing QR Pass...' : 'Save / Share QR Pass',
+                        _saving ? 'Saving QR Pass...' : 'Save QR Pass',
                         style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
                       ),
                       style: FilledButton.styleFrom(
