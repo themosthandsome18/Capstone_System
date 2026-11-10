@@ -14,6 +14,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:path_provider/path_provider.dart';
+import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';

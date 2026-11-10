@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Save QR Pass (gal): saving to the gallery needs this only on Android 10 (API 29) and below; on 11 and later it does not ask for anything. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
 
     <application
         android:label="${appLabel}"
