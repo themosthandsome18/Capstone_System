@@ -5,6 +5,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class RecordingApi extends ListApi {
+  RecordingApi(super.records);
+  final List<({String? search, int? resortId})> calls = [];
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTouristRecordHistory({String? search, int? resortId}) async {
+    calls.add((search: search, resortId: resortId));
+    return super.fetchTouristRecordHistory(search: search, resortId: resortId);
+  }
+}
+
+Future<void> pumpLogWith(WidgetTester tester, TourismApi api) async {
+  SharedPreferences.setMockInitialValues({});
+  tester.view.physicalSize = const Size(411, 1200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(const SizedBox());
+  await tester.pumpWidget(MaterialApp(home: TouristHistoryLogScreen(api: api, bootstrap: MobileBootstrap.fallback())));
+  await tester.pumpAndSettle();
+}
+
 class ListApi extends TourismApi {
   ListApi(this.records);
   final List<Map<String, dynamic>> records;
@@ -22,14 +44,14 @@ Map<String, dynamic> row(String id, String name, {String resort = 'Sample Beach 
   'status': 'arrived',
 };
 
-Future<void> pumpLog(WidgetTester tester, List<Map<String, dynamic>> records, {String? role, String? kept}) async {
+Future<void> pumpLog(WidgetTester tester, List<Map<String, dynamic>> records, {String? kept}) async {
   SharedPreferences.setMockInitialValues({staffAuthRoleKey: ?kept});
   tester.view.physicalSize = const Size(411, 1200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(const SizedBox());
-  await tester.pumpWidget(MaterialApp(home: TouristHistoryLogScreen(api: ListApi(records), bootstrap: MobileBootstrap.fallback(), staffRole: role)));
+  await tester.pumpWidget(MaterialApp(home: TouristHistoryLogScreen(api: ListApi(records), bootstrap: MobileBootstrap.fallback())));
   await tester.pumpAndSettle();
 }
 
@@ -123,7 +145,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const SizedBox());
-    await tester.pumpWidget(MaterialApp(home: TouristQrCheckInScreen(api: ListApi([]), bootstrap: MobileBootstrap.fallback(), staffRole: 'resort')));
+    await tester.pumpWidget(MaterialApp(home: TouristQrCheckInScreen(api: ListApi([]), bootstrap: MobileBootstrap.fallback())));
     await tester.pumpAndSettle();
     expect(find.text('My Check-ins'), findsOneWidget);
     expect(find.text('Tourist History Log'), findsNothing);
@@ -133,52 +155,45 @@ void main() {
     expect(find.text('No check-ins yet.'), findsOneWidget);
   });
 
-  group('Export is not drawn for the staff of a resort, here either', () {
-    testWidgets('My Check-ins: no Export for resort', (tester) async {
-      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: 'resort');
-      expect(find.text('My Check-ins'), findsOneWidget); // the fixture reached the case: the screen is drawn
-      expect(find.text('Juan Dela Cruz'), findsOneWidget);
-      expect(find.text('Export'), findsNothing);
-      expect(find.textContaining('Export'), findsNothing);
-      expect(find.byIcon(Icons.download), findsNothing);
-    });
-
-    for (final role in ['admin', 'tourism']) {
+  group('Export is there for every role, because it carries only this person\'s check-ins', () {
+    for (final role in ['admin', 'tourism', 'resort']) {
       testWidgets('My Check-ins: Export is there for $role', (tester) async {
-        await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: role);
+        await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], kept: role);
+        expect(find.text('My Check-ins'), findsOneWidget); // the fixture reached the case: the screen is drawn
+        expect(find.text('Juan Dela Cruz'), findsOneWidget);
         expect(find.text('Export'), findsOneWidget);
         expect(find.byIcon(Icons.download), findsOneWidget);
       });
-    }
 
-    testWidgets('a role the screen does not know has no Export either', (tester) async {
-      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], role: 'something-new');
-      expect(find.text('Export'), findsNothing);
-    });
-
-    testWidgets('with no role given it is read from the kept sign-in: resort has none, tourism has it', (tester) async {
-      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], kept: 'resort');
-      expect(find.text('Export'), findsNothing);
-      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')], kept: 'tourism');
-      expect(find.text('Export'), findsOneWidget);
-    });
-
-    for (final entry in {'resort': false, 'admin': true, 'tourism': true}.entries) {
-      testWidgets('from the main screen as ${entry.key}: the main Export and the Export of My Check-ins go together', (tester) async {
-        SharedPreferences.setMockInitialValues({});
+      testWidgets('from the main screen as $role: both Exports are there, and the log holds only what the server sent', (tester) async {
+        SharedPreferences.setMockInitialValues({staffAuthRoleKey: role});
         tester.view.physicalSize = const Size(411, 1200);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         await tester.pumpWidget(const SizedBox());
-        await tester.pumpWidget(MaterialApp(home: TouristQrCheckInScreen(api: ListApi([]), bootstrap: MobileBootstrap.fallback(), staffRole: entry.key)));
+        await tester.pumpWidget(MaterialApp(home: TouristQrCheckInScreen(api: ListApi([]), bootstrap: MobileBootstrap.fallback())));
         await tester.pumpAndSettle();
-        expect(find.text('Export / Download Records'), entry.value ? findsOneWidget : findsNothing);
+        expect(find.text('Export / Download Records'), findsOneWidget);
         await tester.tap(find.text('My Check-ins'));
         await tester.pumpAndSettle();
         expect(find.text('No check-ins yet.'), findsOneWidget); // the screen it opened
-        expect(find.text('Export'), entry.value ? findsOneWidget : findsNothing);
+        expect(find.text('Export'), findsOneWidget);
       });
     }
+
+    testWidgets('it does not depend on what the sign-in kept', (tester) async {
+      await pumpLog(tester, [row('SURV-TEST-001', 'Juan Dela Cruz')]);
+      expect(find.text('Export'), findsOneWidget);
+    });
+
+    testWidgets('the export asks for the same list as the screen: the own check-ins, nothing wider', (tester) async {
+      final api = RecordingApi([row('SURV-TEST-001', 'Juan Dela Cruz')]);
+      await pumpLogWith(tester, api);
+      expect(api.calls, isNotEmpty);
+      for (final call in api.calls) {
+        expect(call.resortId, isNull, reason: 'no resort is asked for: the server gives the own scans, whoever asks');
+      }
+    });
   });
 }

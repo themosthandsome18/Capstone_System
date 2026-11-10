@@ -118,13 +118,13 @@ Future<int> signIn(WidgetTester tester, String role) async {
   return authenticated;
 }
 
-Future<void> pumpHub(WidgetTester tester, {String? role, String? kept, ScriptedApi? api}) async {
+Future<void> pumpHub(WidgetTester tester, {String? kept, ScriptedApi? api}) async {
   SharedPreferences.setMockInitialValues({staffAuthRoleKey: ?kept});
   setSize(tester, 411);
   await tester.pumpWidget(const SizedBox()); // a fresh tree: the screen reads its role in initState
   await tester.pumpWidget(
     MaterialApp(
-      home: TouristQrCheckInScreen(api: api ?? ScriptedApi(), bootstrap: MobileBootstrap.fallback(), staffRole: role),
+      home: TouristQrCheckInScreen(api: api ?? ScriptedApi(), bootstrap: MobileBootstrap.fallback()),
     ),
   );
   await tester.pumpAndSettle();
@@ -174,41 +174,20 @@ void main() {
   });
 
   group('Export / Download Records', () {
-    for (final role in ['admin', 'tourism']) {
-      testWidgets('is there for $role', (tester) async {
-        await pumpHub(tester, role: role);
+    // The export carries only this person's check-ins (the history is the account's own scans), so there is no record of another resort for it to reach:
+    // it is there for every role that comes through the door, whatever the sign-in kept.
+    for (final role in ['admin', 'tourism', 'resort']) {
+      testWidgets('is there for $role, with the other two buttons of the same screen', (tester) async {
+        await pumpHub(tester, kept: role);
         expect(find.text('Export / Download Records'), findsOneWidget);
-        // the fixture reached the case: the other two buttons of the same screen are there
         expect(find.text('My Check-ins'), findsOneWidget);
+        expect(find.textContaining('Scan'), findsWidgets);
       });
     }
 
-    testWidgets('is NOT there for resort, and the other two buttons are', (tester) async {
-      await pumpHub(tester, role: 'resort');
-      expect(find.text('Export / Download Records'), findsNothing);
-      expect(find.textContaining('Export'), findsNothing);
-      expect(find.text('My Check-ins'), findsOneWidget);
-      expect(find.textContaining('Scan'), findsWidgets);
-    });
-
-    testWidgets('read from the kept sign-in when no role is given: resort has none, tourism has it', (tester) async {
-      await pumpHub(tester, kept: 'resort');
-      expect(find.text('Export / Download Records'), findsNothing);
-      await pumpHub(tester, kept: 'tourism');
+    testWidgets('it does not depend on what the sign-in kept: it is there with nothing kept too', (tester) async {
+      await pumpHub(tester);
       expect(find.text('Export / Download Records'), findsOneWidget);
-    });
-
-    testWidgets('a role the screen does not know shows no export either', (tester) async {
-      await pumpHub(tester, role: 'something-new');
-      expect(find.text('Export / Download Records'), findsNothing);
-    });
-
-    test('the rule: admin and tourism only', () {
-      expect(staffMayExport('admin'), isTrue);
-      expect(staffMayExport('tourism'), isTrue);
-      for (final role in ['resort', 'tourist', 'sanitation', '', null]) {
-        expect(staffMayExport(role), isFalse);
-      }
     });
   });
 
@@ -223,7 +202,7 @@ void main() {
     });
 
     Future<void> lookUp(WidgetTester tester, ApiException failure) async {
-      await pumpHub(tester, role: 'resort', api: ScriptedApi(failure: failure));
+      await pumpHub(tester, kept: 'resort', api: ScriptedApi(failure: failure));
       await tester.enterText(find.byType(TextField).first, 'SURV-TEST-001');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();

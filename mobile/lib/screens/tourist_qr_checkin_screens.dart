@@ -14,12 +14,7 @@ String myCheckInsCount(int count) => count == 1 ? '1 check-in' : '$count check-i
 /// refused at the door. This is the door only: WHICH records a role can reach is decided by the server.
 const staffScannerRoles = {'admin', 'tourism', 'resort'};
 
-/// Who sees "Export / Download Records". A resort's staff do not: this is how the screen LOOKS, not a lock. The server is what refuses an export
-/// to anyone who may not have it.
-const staffExportRoles = {'admin', 'tourism'};
-
 bool staffMayScan(String? role) => role != null && staffScannerRoles.contains(role);
-bool staffMayExport(String? role) => role != null && staffExportRoles.contains(role);
 
 /// The two refusals of the server that a resort's staff can meet, said as they are: not as a general error.
 const notYourResortMessage = 'This booking is not for your resort.';
@@ -280,14 +275,10 @@ class TouristQrCheckInScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.bootstrap,
-    this.staffRole,
   });
 
   final TourismApi api;
   final MobileBootstrap bootstrap;
-
-  /// The role of who signed in. When it is not given the screen reads it from what the sign-in kept (staffAuthRoleKey).
-  final String? staffRole;
 
   @override
   State<TouristQrCheckInScreen> createState() => _TouristQrCheckInScreenState();
@@ -297,18 +288,6 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
   bool _exporting = false;
-  String? _role;
-
-  @override
-  void initState() {
-    super.initState();
-    _role = widget.staffRole;
-    if (_role == null) {
-      SharedPreferences.getInstance().then((prefs) {
-        if (mounted) setState(() => _role = prefs.getString(staffAuthRoleKey));
-      }).catchError((_) {});
-    }
-  }
 
   @override
   void dispose() {
@@ -698,7 +677,6 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                         builder: (context) => TouristHistoryLogScreen(
                           api: widget.api,
                           bootstrap: widget.bootstrap,
-                          staffRole: _role,
                         ),
                       ),
                     );
@@ -719,7 +697,6 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                   ),
                 ),
               ),
-              if (staffMayExport(_role)) ...[
               const SizedBox(height: 12),
 
               // Button 3: Export / Download Records
@@ -753,7 +730,6 @@ class _TouristQrCheckInScreenState extends State<TouristQrCheckInScreen> {
                   ),
                 ),
               ),
-              ],
             ],
           ),
         ),
@@ -793,15 +769,10 @@ class TouristHistoryLogScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.bootstrap,
-    this.staffRole,
   });
 
   final TourismApi api;
   final MobileBootstrap bootstrap;
-
-  /// The role of who signed in; when it is not given it is read from what the sign-in kept. The same rule as the main screen decides who sees Export
-  /// (staffMayExport): how the screen LOOKS, not a lock (the server is the lock).
-  final String? staffRole;
 
   @override
   State<TouristHistoryLogScreen> createState() => _TouristHistoryLogScreenState();
@@ -812,17 +783,10 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
   List<Map<String, dynamic>> _records = [];
   bool _loading = true;
   bool _exporting = false;
-  String? _role;
 
   @override
   void initState() {
     super.initState();
-    _role = widget.staffRole;
-    if (_role == null) {
-      SharedPreferences.getInstance().then((prefs) {
-        if (mounted) setState(() => _role = prefs.getString(staffAuthRoleKey));
-      }).catchError((_) {});
-    }
     _fetchHistory();
   }
 
@@ -980,7 +944,6 @@ class _TouristHistoryLogScreenState extends State<TouristHistoryLogScreen> {
           ],
         ),
         actions: [
-          if (staffMayExport(_role))
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.icon(
