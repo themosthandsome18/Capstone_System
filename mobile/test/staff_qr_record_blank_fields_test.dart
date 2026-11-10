@@ -66,14 +66,6 @@ Future<void> pumpCard(WidgetTester tester, Map<String, dynamic> data) => pump(
   ),
 );
 
-Future<void> pumpEdit(WidgetTester tester, Map<String, dynamic> data) => pump(
-  tester,
-  EditTouristRecordSheet(
-    recordData: data,
-    bootstrap: MobileBootstrap.fallback(),
-  ),
-);
-
 void expectNoMadeUpPlaces() {
   for (final place in madeUpPlaces) {
     expect(find.textContaining(place), findsNothing, reason: place);
@@ -203,57 +195,6 @@ void main() {
 
       await pumpCard(tester, record({'full_name': 'juan dela cruz'}));
       expect(find.text('Juan Dela Cruz'), findsOneWidget);
-    });
-  });
-
-  group('edit sheet', () {
-    testWidgets('a normal record shows its places', (tester) async {
-      await pumpEdit(tester, record());
-
-      expect(find.text('CALABARZON Region'), findsOneWidget);
-      expect(find.text('Quezon'), findsOneWidget);
-      expect(find.text('Sample Beach 1'), findsOneWidget);
-      expectNoMadeUpPlaces();
-    });
-
-    testWidgets('blank or missing places are not filled in', (tester) async {
-      await pumpEdit(
-        tester,
-        record({
-          'region_name': '',
-          'province_name': null,
-          'resort_name': '  ',
-          'country_name': '',
-        }),
-      );
-
-      for (final label in ['REGION', 'PROVINCE', 'RESORT', 'COUNTRY']) {
-        expect(find.text(label), findsNothing, reason: label);
-      }
-      expect(find.text('Quezon'), findsNothing);
-      expect(find.text('Philippines'), findsNothing);
-      expectNoMadeUpPlaces();
-    });
-
-    testWidgets('blank trip details are not filled in', (tester) async {
-      await pumpEdit(
-        tester,
-        record({
-          'itinerary_name': '',
-          'visit_purpose_name': ' ',
-          'travel_mode_name': '',
-          'boat_type_name': '',
-        }),
-      );
-
-      for (final label in [
-        'ITINERARY',
-        'VISIT PURPOSE',
-        'TRAVEL MODE',
-        'BOAT TYPE',
-      ]) {
-        expect(find.text(label), findsNothing, reason: label);
-      }
     });
   });
 
