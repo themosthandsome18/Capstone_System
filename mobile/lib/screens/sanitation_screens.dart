@@ -3045,9 +3045,12 @@ class BarangayPolygon {
   BarangayPolygon({required this.name, required this.polygons});
 }
 
+enum _SanitationMapMode { establishments, households, reports }
+
 class _SanitationMapPageState extends State<SanitationMapPage> {
-  bool _showHouseholds = false;
-  bool _showReports = false;
+  _SanitationMapMode _mode = _SanitationMapMode.establishments;
+  bool get _showHouseholds => _mode == _SanitationMapMode.households;
+  bool get _showReports => _mode == _SanitationMapMode.reports;
   final _reportsKey = GlobalKey<_SanitationReportsMapState>();
   
   List<BarangayPolygon> _barangayPolygons = [];
@@ -3231,24 +3234,48 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           onRefresh: _showReports ? () => _reportsKey.currentState?.reload() ?? Future<void>.value() : widget.onRefresh,
           refreshing: widget.refreshing,
         ),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-        SegmentedButton<bool>(
-          emptySelectionAllowed: true,
-          segments: const [
-            ButtonSegment(value: false, label: Text('Establishments')),
-            ButtonSegment(value: true, label: Text('Households')),
-          ],
-          selected: _showReports ? <bool>{} : {_showHouseholds},
-          onSelectionChanged: (value) =>
-              value.isEmpty ? null : setState(() {
-                _showReports = false;
-                _showHouseholds = value.first;
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stackOptions = constraints.maxWidth < 280 ||
+                MediaQuery.textScalerOf(context).scale(12) > 15;
+            final selector = SegmentedButton<_SanitationMapMode>(
+              direction: stackOptions ? Axis.vertical : Axis.horizontal,
+              expandedInsets: EdgeInsets.zero,
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                ),
+                minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+                textStyle: const WidgetStatePropertyAll(
+                  TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+              segments: const [
+                ButtonSegment(
+                  value: _SanitationMapMode.establishments,
+                  label: Text('Establishments', textAlign: TextAlign.center),
+                ),
+                ButtonSegment(
+                  value: _SanitationMapMode.households,
+                  label: Text('Households', textAlign: TextAlign.center),
+                ),
+                ButtonSegment(
+                  value: _SanitationMapMode.reports,
+                  label: Text('Community Reports', textAlign: TextAlign.center),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (value) => setState(() {
+                _mode = value.single;
                 _selectedBarangay = null;
               }),
+            );
+            if (!stackOptions) return selector;
+            final labelSize = MediaQuery.textScalerOf(context).scale(12);
+            return SizedBox(height: 3 * (labelSize * 2.5 + 16), child: selector);
+          },
         ),
-        ChoiceChip(label: const Text('Community Reports'), selected: _showReports,
-          onSelected: (_) => setState(() { _showReports = true; _selectedBarangay = null; })),
-        ]),
         if (_showReports)
           SanitationReportsMap(key: _reportsKey, api: widget.api ?? const TourismApi())
         else ...[

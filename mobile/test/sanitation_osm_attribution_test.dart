@@ -92,7 +92,10 @@ void main() {
 
       expectFooterOutsideMap();
       expectOsmMapConfiguration();
-      expect(find.byType(SegmentedButton<bool>), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) => widget is SegmentedButton),
+        findsOneWidget,
+      );
       expect(find.byType(MapPin), findsOneWidget);
 
       await tester.tap(find.text('Households'));

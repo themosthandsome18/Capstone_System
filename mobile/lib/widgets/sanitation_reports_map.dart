@@ -127,17 +127,40 @@ class _SanitationReportsMapState extends State<SanitationReportsMap> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${_reports.length} reports · ${pins.length} mapped · ${_reports.length - pins.length} unmapped',
-        ),
-        const Text(
-          'Reported locations are not independently GPS-verified. Unknown and approximate locations are not mapped.',
+        Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  children: [
+                    Text('Total: ${_reports.length}'),
+                    Text('Mapped: ${pins.length}'),
+                    Text('Unmapped: ${_reports.length - pins.length}'),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (_reports.isEmpty)
+                  const Text('No community reports found.')
+                else if (pins.isEmpty)
+                  Text(
+                    'No eligible report locations',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                if (_reports.isNotEmpty)
+                  Text(pins.isEmpty
+                      ? 'These reports have no eligible map points. Unknown and approximate locations stay unmapped.'
+                      : 'Unknown and approximate locations stay unmapped. Reported locations are not independently GPS-verified.'),
+              ],
+            ),
+          ),
         ),
         TextButton(onPressed: reload, child: const Text('Refresh reports')),
-        if (_reports.isEmpty)
-          const Text('No community reports found.')
-        else ...[
-          if (pins.isEmpty) const Text('No eligible report locations.'),
+        if (_reports.isNotEmpty)
           SanitationOsmMapFrame(
             mapHeight: 360,
             borderRadius: 18,
@@ -180,7 +203,6 @@ class _SanitationReportsMapState extends State<SanitationReportsMap> {
               ],
             ),
           ),
-        ],
         if (selected != null)
           Card(
             child: Padding(
