@@ -760,14 +760,6 @@ def build_dashboard_payload(params=None):
         day_tour += item_same_day
         overnight += item_overnight
 
-    duplicate_contacts = (
-        all_records.exclude(contact_number="")
-        .values("contact_number")
-        .annotate(total=Count("survey_id"))
-        .filter(total__gt=1)
-        .count()
-    )
-
     total_arrivals = arrived_summary["total_arrivals"] or 0
     total_revenue = entrance_fee(total_arrivals, arrived_summary["total_discounted"])
     top_resort = (
@@ -823,11 +815,6 @@ def build_dashboard_payload(params=None):
         "stayType": {
             "dayTour": day_tour,
             "overnight": overnight,
-        },
-        "validation": {
-            "verifiedEntries": total_bookings,
-            "invalidEntries": 0,
-            "duplicateEntries": duplicate_contacts,
         },
     }
 
