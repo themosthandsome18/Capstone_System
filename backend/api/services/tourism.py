@@ -741,6 +741,7 @@ def build_dashboard_payload(params=None):
         total_arrivals=Sum("total_visitors"),
         total_discounted=Sum("discounted_count"),
         filipino=Sum("filipino_count"),
+        maubanin=Sum("maubanin_count"),
         foreign=Sum("foreigner_count"),
         male=Sum("total_male"),
         female=Sum("total_female"),
@@ -824,6 +825,8 @@ def build_dashboard_payload(params=None):
         },
         "classification": {
             "filipino": arrived_summary["filipino"] or 0,
+            # Maubanin is a SUBSET of Filipino (maubanin_count <= filipino_count on every record), never added to it.
+            "maubanin": arrived_summary["maubanin"] or 0,
             "foreign": arrived_summary["foreign"] or 0,
         },
         "gender": {

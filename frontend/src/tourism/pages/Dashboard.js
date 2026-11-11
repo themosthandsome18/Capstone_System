@@ -171,6 +171,8 @@ function Dashboard() {
   }, [isComputedDataStale, refreshDashboardIfStale]);
   const metrics = dashboardData.metrics;
   const classification = dashboardData.classification;
+  // Maubanin is a subset of Domestic (Filipino): never shown as more than Domestic, and never a slice of the donut.
+  const maubanin = Math.min(Number(classification.maubanin) || 0, Number(classification.filipino) || 0);
   const gender = dashboardData.gender;
   const stayType = dashboardData.stayType;
   // The server says so when the selected year is not the current one: today / week / month and the daily trend
@@ -394,6 +396,10 @@ function Dashboard() {
             </div>
 
             <LegendRow color={twoSeries[0]} label="Domestic (Filipino)" value={classification.filipino || 0} />
+            <div className="classification-sub">
+              <span className="classification-sub-label">Maubanin</span>
+              <span className="classification-sub-value">{formatNumber(maubanin)}</span>
+            </div>
             <LegendRow color={twoSeries[1]} label="Foreign (International)" value={classification.foreign || 0} />
           </div>
         </section>

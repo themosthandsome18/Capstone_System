@@ -618,6 +618,21 @@
   margin: 20px auto;
 }
 
+/* "Maubanin": a quiet line under Domestic (it is part of Domestic, not a third kind of visitor).
+   Smaller than the two main rows and in a muted colour (the same as the "Origin breakdown" subtitle); the number is semibold. */
+
+.classification-sub {
+  @apply ml-4 mt-0.5 flex items-baseline gap-1.5 text-[13px] font-normal text-slate-400;
+}
+
+.classification-sub-label {
+  @apply text-[13px] font-normal text-slate-400;
+}
+
+.classification-sub-value {
+  @apply text-[13px] font-semibold text-slate-400;
+}
+
 /* Stay Type Distribution (Donut) */
 
 .stay-chart {
