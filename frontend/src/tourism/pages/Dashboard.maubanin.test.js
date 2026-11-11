@@ -133,7 +133,8 @@ describe("the look of the Maubanin line", () => {
       .filter(([, selector]) => pattern.test(selector))
       .map(([, , body]) => body)
       .join("\n");
-  const colour = (body) => (body.match(/text-(?:slate-\d+|black|white)/) || [])[0];
+  // The colour a rule gives: a text-colour utility, or a written `color:`; "inherit" when it says nothing (the page's own text colour).
+  const colour = (body) => (body.match(/text-(?:slate|gray|zinc|neutral|stone)-\d+|text-black|text-white/) || [])[0] || (body.match(/(?:^|[;\s])color:\s*([^;]+)/) || [])[1]?.trim() || "inherit";
   const size = (body) => Number((body.match(/text-\[(\d+)px\]/) || [])[1]);
 
   const originBreakdown = bodyOf(".card-title p {");
@@ -143,13 +144,14 @@ describe("the look of the Maubanin line", () => {
   // The two main rows: what the stylesheet says about them, and the browser default (16px, the page text colour) where it says nothing.
   const main = rulesMatching(/\.legend-row|\.classification-content/);
   const MAIN_SIZE = size(main) || 16;
-  const MAIN_COLOUR = colour(main) || "inherit";
+  const MAIN_COLOUR = colour(main);
 
-  it("keeps the muted colour of the Origin breakdown subtitle, and not the colour of the main rows", () => {
-    expect(colour(originBreakdown)).toBe("text-slate-400");
+  it("is the SAME dark colour as the two main rows, not the muted colour of the Origin breakdown subtitle", () => {
+    expect(colour(originBreakdown)).toBe("text-slate-400"); // the muted colour it used to have
     for (const body of [box, label, value]) {
-      expect(colour(body)).toBe(colour(originBreakdown));
-      expect(colour(body)).not.toBe(MAIN_COLOUR);
+      expect(colour(body)).toBe(MAIN_COLOUR);
+      expect(colour(body)).not.toBe(colour(originBreakdown));
+      expect(body).not.toMatch(/opacity/);
     }
   });
 
@@ -157,8 +159,12 @@ describe("the look of the Maubanin line", () => {
     for (const body of [box, label, value]) expect(size(body)).toBe(13);
   });
 
-  it("is clearly smaller than the two main rows", () => {
-    for (const body of [box, label, value]) expect(size(body)).toBeLessThan(MAIN_SIZE);
+  it("is clearly smaller than the two main rows: by at least 2px, its size being the only thing that makes it lower", () => {
+    expect(MAIN_SIZE).toBeGreaterThanOrEqual(15);
+    for (const body of [box, label, value]) {
+      expect(size(body)).toBeLessThan(MAIN_SIZE);
+      expect(MAIN_SIZE - size(body)).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it("has a semibold number and a normal label, neither of them bold", () => {
@@ -169,7 +175,42 @@ describe("the look of the Maubanin line", () => {
     expect(box).not.toMatch(/font-(bold|semibold|extrabold|black|medium)/);
   });
 
-  it("is indented", () => {
-    expect(box).toMatch(/\bml-\d/);
+  it("is flush with the left edge of Domestic and Foreign: no indent, nothing centred or pushed to the right", () => {
+    for (const body of [box, label, value]) {
+      expect(body).not.toMatch(/\b(?:m|p)[lxse]?-(?!0\b)\S+/); // no margin or padding on the left (or across) from a utility
+      expect(body).not.toMatch(/margin(?:-left|-inline)?\s*:|padding(?:-left|-inline)?\s*:|text-indent|transform|translate/);
+      expect(body).not.toMatch(/text-(?:center|right)|justify-(?:center|end|between|around|evenly)|items-center|self-(?:center|end)|mx-auto|place-/);
+    }
+    expect(box).toMatch(/\btext-left\b/);
+    expect(box).toMatch(/\bjustify-start\b/);
+    // the main rows are not centred either, so the three share one left edge
+    expect(main).not.toMatch(/text-center|justify-center|items-center|mx-auto|padding|margin/);
+  });
+});
+
+describe("where the Maubanin line stands", () => {
+  it("is a sibling of the Domestic and Foreign rows, in the same box, between them, and not inside one of them", async () => {
+    await show({ filipino: 49, maubanin: 7, foreign: 10 });
+
+    const line = sub();
+    const domestic = line.previousElementSibling;
+    const foreign = line.nextElementSibling;
+    expect(domestic.classList.contains("legend-row")).toBe(true);
+    expect(foreign.classList.contains("legend-row")).toBe(true);
+    expect(line.parentElement).toBe(domestic.parentElement);
+    expect(line.parentElement).toBe(foreign.parentElement);
+    expect(domestic.contains(line)).toBe(false);
+  });
+
+  it("carries no style of its own that could move it, and the main rows carry no size or colour of their own", async () => {
+    await show({ filipino: 49, maubanin: 7, foreign: 10 });
+
+    expect(sub().getAttribute("style")).toBeNull();
+    for (const row of Array.from(document.querySelectorAll(".classification-content .legend-row"))) {
+      expect(row.getAttribute("style")).toBeNull();
+      expect(row.querySelector("strong").getAttribute("style")).toBeNull();
+      expect(row.firstElementChild.getAttribute("style")).toBeNull();
+      expect(row.querySelector("span").getAttribute("style")).toMatch(/^background-color:[^;]+;?$/); // only the colour of its dot
+    }
   });
 });

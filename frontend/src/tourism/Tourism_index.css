@@ -618,19 +618,23 @@
   margin: 20px auto;
 }
 
-/* "Maubanin": a quiet line under Domestic (it is part of Domestic, not a third kind of visitor).
-   Smaller than the two main rows and in a muted colour (the same as the "Origin breakdown" subtitle); the number is semibold. */
+/* "Maubanin": a line under Domestic (it is part of Domestic, not a third kind of visitor).
+   Flush with the left edge of Domestic and Foreign (no indent, nothing centred), in the SAME dark colour as their rows (it takes the colour of
+   its parent, as they do). Only its size shows that it is lower: 13px against their 16px; the number is semibold. */
 
 .classification-sub {
-  @apply ml-4 mt-0.5 flex items-baseline gap-1.5 text-[13px] font-normal text-slate-400;
+  @apply mt-0.5 flex items-baseline justify-start gap-1.5 text-left text-[13px] font-normal;
+  color: inherit;
 }
 
 .classification-sub-label {
-  @apply text-[13px] font-normal text-slate-400;
+  @apply text-[13px] font-normal;
+  color: inherit;
 }
 
 .classification-sub-value {
-  @apply text-[13px] font-semibold text-slate-400;
+  @apply text-[13px] font-semibold;
+  color: inherit;
 }
 
 /* Stay Type Distribution (Donut) */
@@ -5581,6 +5585,28 @@ tr.arrival-row:hover > .arrival-chevron {
 .arm-unit {
   font-weight: 500;
   color: #7a6755;
+}
+
+/* "Maubanin 4" under "In the group": a part of the group (of the Filipino), so it is a quiet line: indented, 13px, in the colour of the small labels,
+   the number semibold and the word normal. */
+.arm-subline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 0 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #8a6e55;
+}
+
+.arm-subline-label {
+  font-weight: 400;
+  color: #8a6e55;
+}
+
+.arm-subline-value {
+  font-weight: 600;
+  color: #8a6e55;
 }
 
 .arm-note {
