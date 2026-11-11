@@ -15,15 +15,12 @@ import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
   FiCalendar,
-  FiCheckCircle,
-  FiDownload,
   FiFileText,
   FiMapPin,
   FiTrendingUp,
   FiUsers,
   FiXCircle,
 } from "react-icons/fi";
-import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
 import {
@@ -169,7 +166,6 @@ function Dashboard() {
   const classification = dashboardData.classification;
   const gender = dashboardData.gender;
   const stayType = dashboardData.stayType;
-  const validation = dashboardData.validation;
 
   // null until the shell's theme colours have been read; charts wait for it.
   const chartPalette = useTourismChartPalette();
@@ -258,31 +254,6 @@ function Dashboard() {
     }
   }
 
-  function handleExportDashboard() {
-    const rows = [
-      ["Reporting Year", selectedYear === "all" ? "All Years" : selectedYear],
-      ["Report Date", dashboardData.reportingDate || ""],
-      ["Today's Arrivals", metrics.todayArrivals],
-      ["This Week's Arrivals", metrics.weekArrivals],
-      ["This Month's Arrivals", metrics.monthArrivals],
-      ["Total Revenue Collected", metrics.totalRevenueCollected],
-      ["Pending on Report Date", metrics.pendingForReportingDate],
-      ["No-show Rate", `${metrics.noShowRate || 0}%`],
-      ["Top Resort This Month", metrics.topResortThisMonth],
-      ["Top Origin This Month", metrics.topOriginThisMonth],
-      ["Domestic (Filipino)", classification.filipino || 0],
-      ["Foreign (International)", classification.foreign || 0],
-      ["Male", gender.male],
-      ["Female", gender.female],
-      ["Same Day", stayType.dayTour],
-      ["Overnight", stayType.overnight],
-      ["Verified Entries", validation.verifiedEntries],
-      ["Duplicate Entries", validation.duplicateEntries],
-    ];
-
-    exportCsv(datedCsvFilename("tourism-dashboard"), ["Metric", "Value"], rows);
-  }
-
   return (
     <div className="figma-dashboard">
       <div className="dashboard-header">
@@ -305,15 +276,6 @@ function Dashboard() {
               </option>
             ))}
           </select>
-
-          <button
-            type="button"
-            className="outline-action"
-            onClick={handleExportDashboard}
-          >
-            <FiDownload size={15} />
-            Export
-          </button>
 
           <button
             type="button"
@@ -443,45 +405,6 @@ function Dashboard() {
           </div>
         </section>
       </div>
-
-      <section className="dashboard-card validation-panel">
-        <div className="validation-header">
-          <CardTitle
-            title="Data Validation Panel"
-            subtitle="Automated quality checks on incoming submissions"
-          />
-
-          <button type="button" className="review-button">
-            Review All
-          </button>
-        </div>
-
-        <div className="validation-grid">
-          <ValidationBox
-            type="success"
-            icon={<FiCheckCircle />}
-            title="Verified Entries"
-            value={formatNumber(validation.verifiedEntries)}
-            note="All records stored in the system"
-          />
-
-          <ValidationBox
-            type="danger"
-            icon={<FiXCircle />}
-            title="Invalid Entries"
-            value={formatNumber(validation.invalidEntries)}
-            note="Records with validation issues"
-          />
-
-          <ValidationBox
-            type="warning"
-            icon={<FiFileText />}
-            title="Duplicate Entries"
-            value={formatNumber(validation.duplicateEntries)}
-            note="Detected by repeated contact numbers"
-          />
-        </div>
-      </section>
     </div>
   );
 }
@@ -531,20 +454,6 @@ function StayBox({ color, title, value, caption }) {
 
       <h3>{value}</h3>
       <p>{caption}</p>
-    </div>
-  );
-}
-
-function ValidationBox({ type, icon, title, value, note }) {
-  return (
-    <div className={`validation-box ${type}`}>
-      <div className="validation-icon">{icon}</div>
-
-      <div>
-        <p>{title}</p>
-        <h3>{value}</h3>
-        <span>{note}</span>
-      </div>
     </div>
   );
 }

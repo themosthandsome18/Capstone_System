@@ -66,11 +66,6 @@ const emptyBootstrap = {
     classification: { filipino: 0, maubanin: 0, foreign: 0 },
     gender: { male: 0, female: 0 },
     stayType: { dayTour: 0, overnight: 0 },
-    validation: {
-      verifiedEntries: 0,
-      invalidEntries: 0,
-      duplicateEntries: 0,
-    },
   },
   reportData: {
     filters: {
