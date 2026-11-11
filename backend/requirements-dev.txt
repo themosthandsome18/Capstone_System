@@ -1,0 +1,8 @@
+# For running the backend tests only; production never installs this file (build.sh reads requirements.txt).
+#
+# tblib is needed by `manage.py test --parallel`: a test that fails or errors in a worker process has to send its
+# traceback back to the main process, and without tblib Django cannot (the run crashes with
+# "TypeError: cannot pickle 'traceback' object" as soon as one test is red).
+#
+# Install with:  .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+tblib==3.2.2
