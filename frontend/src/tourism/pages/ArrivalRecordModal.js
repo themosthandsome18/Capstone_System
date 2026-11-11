@@ -77,6 +77,12 @@ function ArrivalRecordModal({ record, referenceTables, onClose, onOpenDestinatio
                         entry.text
                       )}
                     </p>
+                    {entry.sub ? (
+                      <p className="arm-subline">
+                        <span className="arm-subline-label">{entry.sub.label}</span>
+                        <span className="arm-subline-value">{entry.sub.text}</span>
+                      </p>
+                    ) : null}
                   </div>
                 ))}
                 {group.note ? <p className="arm-note">{group.note}</p> : null}

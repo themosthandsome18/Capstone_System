@@ -1589,7 +1589,7 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
                   ),
                   child: Column(
                     children: [
-                      _buildBreakdownRow('Filipino', presentCount(_currentRecord['filipino_count']), 'Foreigner', presentCount(_currentRecord['foreigner_count'])),
+                      _buildBreakdownRow('Filipino', presentCount(_currentRecord['filipino_count']), 'Foreigner', presentCount(_currentRecord['foreigner_count']), subValue: _maubaninOfFilipino()),
                       const SizedBox(height: 6),
                       _buildBreakdownRow('Male', presentCount(_currentRecord['total_male']), 'Female', presentCount(_currentRecord['total_female'])),
                       const Divider(height: 16),
@@ -1674,21 +1674,67 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
     );
   }
 
+  /// How many of the Filipino are Maubanin. They are a PART of the Filipino count, never added to it and never more than it; null when the record
+  /// has no Filipino count or no Maubanin count (the line is then not drawn).
+  int? _maubaninOfFilipino() {
+    final filipino = presentCount(_currentRecord['filipino_count']);
+    final maubanin = presentCount(_currentRecord['maubanin_count']);
+    if (filipino == null || maubanin == null) return null;
+    return math.min(math.max(maubanin, 0), filipino);
+  }
+
   /// One row of two counts. A count that is not in the record is not shown
   /// (no 1, no 0, no dash); a row with neither takes no room. In each half the
   /// label has one width and the number starts at one left edge, so the numbers
   /// of a column stand on one vertical line.
-  Widget _buildBreakdownRow(String l1, int? v1, String l2, int? v2) {
+  ///
+  /// [subValue], when given, is a quiet line under the LEFT count ("Maubanin", a part of it); it is not a count of its own.
+  Widget _buildBreakdownRow(String l1, int? v1, String l2, int? v2, {int? subValue}) {
     final hasLeft = v1 != null;
     final hasRight = l2.isNotEmpty && v2 != null;
     if (!hasLeft && !hasRight) return const SizedBox.shrink();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: !hasLeft ? const SizedBox.shrink() : _breakdownCell(l1, v1)),
+        Expanded(
+          child: !hasLeft
+              ? const SizedBox.shrink()
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _breakdownCell(l1, v1),
+                    if (subValue != null) _breakdownSubCell('Maubanin', subValue),
+                  ],
+                ),
+        ),
         const SizedBox(width: 16),
         Expanded(child: !hasRight ? const SizedBox.shrink() : _breakdownCell(l2, v2)),
       ],
+    );
+  }
+
+  /// "Maubanin 4" under "Filipino": indented, smaller, lighter and not bold, so it reads as a part of the Filipino count and not as a count beside it.
+  /// Its number starts where the number of the line above starts.
+  Widget _breakdownSubCell(String label, int value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(width: breakdownSubIndent),
+          SizedBox(
+            width: breakdownLabelWidth - breakdownSubIndent,
+            child: Text(label, style: const TextStyle(fontSize: breakdownSubLabelSize, color: breakdownSubColor)),
+          ),
+          Expanded(
+            child: Text(
+              '$value',
+              key: ValueKey('count-$label'),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: breakdownSubValueSize, color: breakdownSubColor),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1715,3 +1761,9 @@ class _ScannedTouristRecordSheetState extends State<ScannedTouristRecordSheet> {
 /// The width of the label column of the record card, and of a count label in the visitor breakdown: ONE width each, so the values stand on one line.
 const double recordLabelWidth = 118;
 const double breakdownLabelWidth = 72;
+
+/// The "Maubanin" line under "Filipino": indented, smaller than a count label (12.5) and a count (13), and lighter than both.
+const double breakdownSubIndent = 12;
+const double breakdownSubLabelSize = 11;
+const double breakdownSubValueSize = 11.5;
+const Color breakdownSubColor = Color(0xFF64748B);

@@ -70,7 +70,15 @@ export function whenText(value) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-const item = (label, text) => ({ label, text });
+const item = (label, text, sub) => (sub ? { label, text, sub } : { label, text });
+
+// How many of the group are Maubanin: a PART of the Filipino count (never added to anything, never more than it); the dash when the record
+// does not say, and a real 0 stays 0.
+export function maubaninText(maubanin, filipino) {
+  if (!finite(maubanin)) return DASH;
+  const part = finite(filipino) ? Math.min(Math.max(maubanin, 0), filipino) : Math.max(maubanin, 0);
+  return part.toLocaleString("en-US");
+}
 const unit = (label, value, singular, plural) => ({ label, number: finite(value) ? value.toLocaleString("en-US") : null, unit: value === 1 ? singular : plural });
 
 export function buildArrivalRecordView(record, referenceTables = {}) {
@@ -102,7 +110,7 @@ export function buildArrivalRecordView(record, referenceTables = {}) {
         items: [
           unit("Overnight", overnight.total, "person-night", "person-nights"),
           unit("Same day", sameDay.total, "person-day", "person-days"),
-          item("In the group", counted(r.total_visitors, "visitor")),
+          item("In the group", counted(r.total_visitors, "visitor"), { label: "Maubanin", text: maubaninText(r.maubanin_count, r.filipino_count) }),
           item("Fee paid", pesos(fee.total)),
         ],
       },
