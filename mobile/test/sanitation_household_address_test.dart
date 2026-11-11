@@ -60,6 +60,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final requests = <http.Request>[];
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         requests.add(request);
         return http.Response(
           jsonEncode({'household_code': 'HH-NEW', 'status': 'good_standing'}),
@@ -141,6 +142,7 @@ void main() {
           final stored = addressed();
           final requests = <http.Request>[];
           final client = MockClient((request) async {
+            if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
             requests.add(request);
             return http.Response(
               jsonEncode({...stored, entry.value: value}),
@@ -173,6 +175,7 @@ void main() {
       (tester) async {
         var requests = 0;
         final client = MockClient((request) async {
+          if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests++;
           return http.Response('{}', 200);
         });
@@ -190,6 +193,7 @@ void main() {
       (tester) async {
         final requests = <http.Request>[];
         final client = MockClient((request) async {
+          if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests.add(request);
           return http.Response(
             jsonEncode({...stored, 'household_head': 'Changed Household'}),
@@ -214,6 +218,7 @@ void main() {
   ) async {
     var requests = 0;
     final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       requests++;
       return http.Response('{}', 200);
     });

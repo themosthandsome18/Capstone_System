@@ -119,6 +119,7 @@ Future<void> withRequests(
 ) async {
   final requests = <http.Request>[];
   final client = MockClient((request) async {
+    if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
     requests.add(request);
     return http.Response(
       jsonEncode({

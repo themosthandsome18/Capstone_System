@@ -19,6 +19,7 @@ import {
 } from "react-icons/fi";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useSanitationData } from "../context/SanitationDataContext";
+import HouseholdFrontPhoto from "../components/HouseholdFrontPhoto";
 
 export const OFFICIAL_MAUBAN_BARANGAYS = [
   "Abo-abo",
@@ -1259,6 +1260,7 @@ function HouseholdRecords() {
               {householdNotice}
               {householdRefresh}
               <div className="hh-detail-grid">
+                <HouseholdFrontPhoto key={viewRecord.id} householdId={viewRecord.id} snapshot={householdRecords} />
                 <HHDetailItem label="Household Code" value={viewRecord.household_code} />
                 <HHDetailItem label="Barangay" value={viewRecord.barangay} />
                 <HHDetailItem label="House Number" value={viewRecord.house_number || "Not recorded"} />

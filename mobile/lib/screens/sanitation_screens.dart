@@ -319,6 +319,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 '$_editIncompatibility. No changes have been sent. Ask the sanitation office to review this record.',
             warning: true,
           ),
+          if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+            HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
         ],
       );
     }
@@ -331,6 +333,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         onPressed: () => Navigator.of(context).pop(),
       ),
       children: [
+        if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+          HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
         AppTextField(
           controller: _head,
           label: 'Household head',

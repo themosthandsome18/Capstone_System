@@ -743,6 +743,48 @@ class TourismApi {
     }
   }
 
+  void _checkPhotoSession(String expectedToken, SharedPreferences prefs) {
+    if (expectedToken.isEmpty || prefs.getString(staffAuthTokenKey) != expectedToken) {
+      throw const ApiException(statusCode: 409, message: 'Staff session changed. Reopen the household profile.');
+    }
+  }
+
+  Future<Uint8List?> fetchHouseholdFrontPhoto(int householdId, {required String expectedSessionToken}) async {
+    if (householdId <= 0) throw const ApiException(statusCode: 400, message: 'Household photo is unavailable.');
+    final prefs = await SharedPreferences.getInstance();
+    _checkPhotoSession(expectedSessionToken, prefs);
+    final response = await http.get(Uri.parse('$apiBaseUrl/households/records/$householdId/front-photo/'),
+      headers: {'Authorization': 'Token $expectedSessionToken'}).timeout(_requestTimeout);
+    _checkPhotoSession(expectedSessionToken, prefs);
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) { _decode(response); }
+    final mime = response.headers['content-type']?.split(';').first;
+    if (!['image/jpeg', 'image/png'].contains(mime) || response.bodyBytes.isEmpty || response.bodyBytes.length > 5 * 1024 * 1024) {
+      throw const ApiException(statusCode: 200, message: 'The photo response is invalid.');
+    }
+    return response.bodyBytes;
+  }
+
+  Future<bool> uploadHouseholdFrontPhoto(int householdId, Uint8List bytes, {required String expectedSessionToken}) async {
+    if (householdId <= 0 || bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      throw const ApiException(statusCode: 400, message: 'Choose a JPEG or PNG up to 5 MiB.');
+    }
+    final png = bytes.length >= 8 && listEquals(bytes.sublist(0, 8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    final jpeg = bytes.length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
+    if (!png && !jpeg) throw const ApiException(statusCode: 400, message: 'Choose a JPEG or PNG up to 5 MiB.');
+    final prefs = await SharedPreferences.getInstance();
+    _checkPhotoSession(expectedSessionToken, prefs);
+    final request = http.MultipartRequest('PUT', Uri.parse('$apiBaseUrl/households/records/$householdId/front-photo/'))
+      ..headers['Authorization'] = 'Token $expectedSessionToken'
+      ..files.add(http.MultipartFile.fromBytes('photo', bytes, filename: png ? 'front.png' : 'front.jpg',
+        contentType: MediaType('image', png ? 'png' : 'jpeg')));
+    final response = await http.Response.fromStream(await request.send().timeout(_uploadTimeout)).timeout(_uploadTimeout);
+    _checkPhotoSession(expectedSessionToken, prefs);
+    final result = _decode(response);
+    if (result['has_front_photo'] != true) throw const ApiException(statusCode: 200, message: 'Photo save could not be confirmed. Reload the profile.');
+    return result['cleanup_pending'] == true;
+  }
+
   Future<Map<String, dynamic>> _get(String path) async {
     final response = await http
         .get(Uri.parse('$apiBaseUrl$path'))
