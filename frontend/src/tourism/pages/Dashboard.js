@@ -23,6 +23,7 @@ import {
 } from "react-icons/fi";
 import { useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
+import { visitorAxis } from "../utils/visitorAxis";
 import {
   CHART_PALETTE_DEFAULTS,
   seriesColors,
@@ -52,34 +53,40 @@ function formatCurrency(value) {
 const currentReportingYear = String(new Date().getFullYear());
 
 // Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
-const buildLineOptions = (palette) => ({
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: { enabled: true },
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 400,
-      ticks: {
-        stepSize: 100,
-        color: palette.tick,
+const buildLineOptions = (palette, values) => {
+  const axis = visitorAxis(values);
+
+  return {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: true },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        min: axis.min,
+        max: axis.max,
+        ticks: {
+          stepSize: axis.stepSize,
+          precision: 0,
+          color: palette.tick,
+        },
+        grid: {
+          color: "rgba(190, 205, 198, 0.35)",
+        },
       },
-      grid: {
-        color: "rgba(190, 205, 198, 0.35)",
+      x: {
+        ticks: {
+          color: palette.tick,
+        },
+        grid: {
+          display: false,
+        },
       },
     },
-    x: {
-      ticks: {
-        color: palette.tick,
-      },
-      grid: {
-        display: false,
-      },
-    },
-  },
-});
+  };
+};
 
 const buildBarOptions = (palette) => ({
   maintainAspectRatio: false,
@@ -166,12 +173,22 @@ function Dashboard() {
   const classification = dashboardData.classification;
   const gender = dashboardData.gender;
   const stayType = dashboardData.stayType;
+  // The server says so when the selected year is not the current one: today / week / month and the daily trend
+  // only exist for the current year, so they are not shown (a dash), never as a zero that would read as a fact.
+  const currentYearOnly = dashboardData.currentYearOnly === true;
+  const currentYear = dashboardData.currentYear || currentReportingYear;
+  const liveValue = (value) => (currentYearOnly ? "—" : formatNumber(value));
+  const liveText = (value) => (currentYearOnly ? "—" : value);
+  const liveNote = currentYearOnly ? "Current year only" : undefined;
 
   // null until the shell's theme colours have been read; charts wait for it.
   const chartPalette = useTourismChartPalette();
   const palette = chartPalette || CHART_PALETTE_DEFAULTS;
   const twoSeries = useMemo(() => seriesColors(palette, 2), [palette]);
-  const lineOptions = useMemo(() => buildLineOptions(palette), [palette]);
+  const lineOptions = useMemo(
+    () => buildLineOptions(palette, dashboardData.trends.arrivals),
+    [palette, dashboardData.trends.arrivals],
+  );
   const barOptions = useMemo(() => buildBarOptions(palette), [palette]);
 
   const dailyVisitorData = useMemo(() => ({
@@ -294,19 +311,22 @@ function Dashboard() {
       <div className="metric-grid">
         <MetricCard
           title="Today's Arrivals"
-          value={formatNumber(metrics.todayArrivals)}
+          value={liveValue(metrics.todayArrivals)}
+          note={liveNote}
           icon={<FiUsers />}
         />
 
         <MetricCard
           title="This Week's Arrivals"
-          value={formatNumber(metrics.weekArrivals)}
+          value={liveValue(metrics.weekArrivals)}
+          note={liveNote}
           icon={<FiCalendar />}
         />
 
         <MetricCard
           title="This Month's Arrivals"
-          value={formatNumber(metrics.monthArrivals)}
+          value={liveValue(metrics.monthArrivals)}
+          note={liveNote}
           icon={<FiCalendar />}
         />
 
@@ -317,9 +337,9 @@ function Dashboard() {
         />
 
         <MetricCard
-          title="Pending on Report Date"
-          value={formatNumber(metrics.pendingForReportingDate)}
-          note={dashboardData.reportingDate}
+          title="Pending Today"
+          value={liveValue(metrics.pendingForReportingDate)}
+          note={liveNote}
           icon={<FiFileText />}
         />
 
@@ -332,13 +352,15 @@ function Dashboard() {
 
         <MetricCard
           title="Top Resort This Month"
-          value={metrics.topResortThisMonth}
+          value={liveText(metrics.topResortThisMonth)}
+          note={liveNote}
           icon={<FiTrendingUp />}
         />
 
         <MetricCard
           title="Top Origin This Month"
-          value={metrics.topOriginThisMonth}
+          value={liveText(metrics.topOriginThisMonth)}
+          note={liveNote}
           icon={<FiMapPin />}
         />
       </div>
@@ -348,7 +370,13 @@ function Dashboard() {
           <CardTitle title="Daily Visitor Trends" subtitle="Last 7 days" />
 
           <div className="line-chart-area">
-            {chartPalette ? <Line data={dailyVisitorData} options={lineOptions} /> : null}
+            {currentYearOnly ? (
+              <p className="line-chart-current-year-only">
+                Current year only {"—"} switch to {currentYear} to see this.
+              </p>
+            ) : chartPalette ? (
+              <Line data={dailyVisitorData} options={lineOptions} />
+            ) : null}
           </div>
         </section>
 

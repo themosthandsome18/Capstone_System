@@ -54,6 +54,8 @@ const emptyReferenceTables = {
 const emptyDashboardData = {
   filters: { year: currentReportingYear },
   reportingDate: "",
+  currentYearOnly: false,
+  currentYear: "",
   feePerVisitor: 80,
   metrics: {
     todayArrivals: 0,
