@@ -2928,11 +2928,15 @@ class ForeignOriginTests(TestCase):
         self._record("ORIGIN-0000002", self.united_states, visitors=5)
 
     def test_dashboard_top_origin_reports_the_country(self):
+        import datetime
         from .services.tourism import build_dashboard_payload
 
         self._seed_origins()
 
-        metrics = build_dashboard_payload({"year": "2026"})["metrics"]
+        # "This month" hangs from today, so today is fixed: the records are of 2 April 2026 and the answer must
+        # be the same whatever day this runs.
+        with patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 4, 2)):
+            metrics = build_dashboard_payload({"year": "2026"})["metrics"]
 
         self.assertEqual(metrics["topOriginThisMonth"], "United States")
 

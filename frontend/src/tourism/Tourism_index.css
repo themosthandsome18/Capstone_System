@@ -599,6 +599,10 @@
   margin-top: 10px;
 }
 
+.line-chart-current-year-only {
+  @apply flex h-full items-center justify-center text-center text-[14px] text-slate-500;
+}
+
 /* Gender Distribution (Bar Chart) */
 
 .bar-chart-area {

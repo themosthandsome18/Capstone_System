@@ -691,28 +691,39 @@ def build_dashboard_payload(params=None):
         TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
         reporting_year,
     )
-    latest_date = all_records.aggregate(latest=Max("arrival_date"))["latest"]
-    reporting_date = latest_date or timezone.localdate()
+    # Everything "today", "this week" and "this month" on the dashboard hangs from the real day, never from the
+    # newest arrival_date (a booking for next week must not drag the window forward).
+    #
+    # These live figures (today, week, month, the seven-day trend, pending today, the month's top resort and origin)
+    # are read from ALL records: the date window decides, not the year dropdown. The first week of January reaches
+    # back into December of the year before, and that December must be counted. The dropdown only decides whether
+    # the page shows them (currentYearOnly: they are not shown for a past year). The totals below (revenue, no-show
+    # rate, classification, gender, stay type) stay filtered by the selected year.
+    live_arrived = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    reporting_date = timezone.localdate()
     week_start = reporting_date - timedelta(days=6)
     month_start = reporting_date.replace(day=1)
+    current_year_only = (
+        reporting_year != ALL_TOURISM_REPORTING_YEARS
+        and int(reporting_year) != reporting_date.year
+    )
 
-    month_records = arrived_records.filter(arrival_date__gte=month_start)
+    # from the 1st up to today and no further: a record dated after today is not "this month so far"
+    month_records = live_arrived.filter(arrival_date__range=(month_start, reporting_date))
+
+    pending_today = TouristRecord.objects.filter(
+        status=BOOKING_STATUS_PENDING,
+        arrival_date=reporting_date,
+    ).count()
 
     record_summary = all_records.aggregate(
         total_bookings=Count("survey_id"),
-        pending_for_date=Count(
-            "survey_id",
-            filter=Q(
-                status=BOOKING_STATUS_PENDING,
-                arrival_date=reporting_date,
-            ),
-        ),
         no_show_count=Count(
             "survey_id",
             filter=Q(status=BOOKING_STATUS_NO_SHOW),
         ),
     )
-    arrived_summary = arrived_records.aggregate(
+    live_summary = live_arrived.aggregate(
         today_arrivals=Sum(
             "total_visitors",
             filter=Q(arrival_date=reporting_date),
@@ -723,8 +734,10 @@ def build_dashboard_payload(params=None):
         ),
         month_arrivals=Sum(
             "total_visitors",
-            filter=Q(arrival_date__gte=month_start),
+            filter=Q(arrival_date__range=(month_start, reporting_date)),
         ),
+    )
+    arrived_summary = arrived_records.aggregate(
         total_arrivals=Sum("total_visitors"),
         total_discounted=Sum("discounted_count"),
         filipino=Sum("filipino_count"),
@@ -737,7 +750,7 @@ def build_dashboard_payload(params=None):
     trend_values = []
     trend_values_by_date = {
         item["arrival_date"]: item["total"] or 0
-        for item in arrived_records.filter(
+        for item in live_arrived.filter(
             arrival_date__range=(week_start, reporting_date),
         )
         .values("arrival_date")
@@ -783,13 +796,18 @@ def build_dashboard_payload(params=None):
             "year": reporting_year,
         },
         "reportingDate": reporting_date.isoformat(),
+        # True when the selected year is not the current one: the live figures (today, week, month, the trend,
+        # pending today, the month's top resort and origin) are then not shown (the page says so). They are never
+        # filtered by the year; currentYear is the year to switch to.
+        "currentYearOnly": current_year_only,
+        "currentYear": str(reporting_date.year),
         "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "metrics": {
-            "todayArrivals": arrived_summary["today_arrivals"] or 0,
-            "weekArrivals": arrived_summary["week_arrivals"] or 0,
-            "monthArrivals": arrived_summary["month_arrivals"] or 0,
+            "todayArrivals": live_summary["today_arrivals"] or 0,
+            "weekArrivals": live_summary["week_arrivals"] or 0,
+            "monthArrivals": live_summary["month_arrivals"] or 0,
             "totalRevenueCollected": total_revenue,
-            "pendingForReportingDate": record_summary["pending_for_date"] or 0,
+            "pendingForReportingDate": pending_today,
             "noShowRate": round((no_show_count / total_bookings) * 100, 1)
             if total_bookings
             else 0,
