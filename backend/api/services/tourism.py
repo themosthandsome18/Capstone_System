@@ -826,7 +826,6 @@ def build_dashboard_payload(params=None):
         },
         "validation": {
             "verifiedEntries": total_bookings,
-            "invalidEntries": 0,
             "duplicateEntries": duplicate_contacts,
         },
     }

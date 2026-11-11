@@ -71,7 +71,6 @@ const emptyDashboardData = {
   stayType: { dayTour: 0, overnight: 0 },
   validation: {
     verifiedEntries: 0,
-    invalidEntries: 0,
     duplicateEntries: 0,
   },
 };

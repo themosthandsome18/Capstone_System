@@ -447,38 +447,26 @@ function Dashboard() {
       <section className="dashboard-card validation-panel">
         <div className="validation-header">
           <CardTitle
-            title="Data Validation Panel"
-            subtitle="Automated quality checks on incoming submissions"
+            title="Record Check"
+            subtitle="Counts from the records stored for this year"
           />
-
-          <button type="button" className="review-button">
-            Review All
-          </button>
         </div>
 
         <div className="validation-grid">
           <ValidationBox
             type="success"
             icon={<FiCheckCircle />}
-            title="Verified Entries"
+            title="Total Records"
             value={formatNumber(validation.verifiedEntries)}
-            note="All records stored in the system"
-          />
-
-          <ValidationBox
-            type="danger"
-            icon={<FiXCircle />}
-            title="Invalid Entries"
-            value={formatNumber(validation.invalidEntries)}
-            note="Records with validation issues"
+            note="All bookings stored for this year"
           />
 
           <ValidationBox
             type="warning"
             icon={<FiFileText />}
-            title="Duplicate Entries"
+            title="Duplicate Contact Numbers"
             value={formatNumber(validation.duplicateEntries)}
-            note="Detected by repeated contact numbers"
+            note="Numbers used by more than one record"
           />
         </div>
       </section>
