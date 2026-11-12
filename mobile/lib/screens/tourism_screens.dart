@@ -57,6 +57,40 @@ class _MobileShellState extends State<MobileShell> {
       _restored = true;
     });
     if (madeMeanwhile) _persist();
+    unawaited(_refreshPassStatuses());
+  }
+
+  /// The kept passes say what they said when they were made ("pending"). Once, when the app is opened and they are read, the server is asked where
+  /// each one stands now, with the survey ID and the contact number that are on the pass (the tourist types nothing). What it says replaces the
+  /// kept status and is kept. A pass the server cannot be asked about (no internet, a bad answer) or does not know keeps what it had: it is never
+  /// taken away, and nothing is shown to say it failed.
+  Future<void> _refreshPassStatuses() async {
+    final asked = List<MobileVisitReceipt>.of(_visitHistory);
+    final answers = await Future.wait(
+      asked.map((pass) async {
+        if (pass.reference.trim().isEmpty || pass.contactNumber.trim().isEmpty) return null;
+        try {
+          return await widget.api.fetchPassStatus(reference: pass.reference, contact: pass.contactNumber);
+        } catch (_) {
+          return null; // not reached, or not understood: the last known stays
+        }
+      }),
+    );
+    if (!mounted) return;
+    var changed = false;
+    setState(() {
+      for (var i = 0; i < asked.length; i++) {
+        final answer = answers[i];
+        if (answer == null) continue;
+        final at = _visitHistory.indexWhere((item) => identical(item, asked[i]));
+        if (at < 0) continue; // taken off meanwhile (Sign Out)
+        final pass = _visitHistory[at];
+        if (pass.status == answer.status && pass.checkedInAt == answer.checkedInAt) continue;
+        _visitHistory[at] = pass.withStatus(answer.status, answer.checkedInAt);
+        changed = true;
+      }
+    });
+    if (changed) _persist();
   }
 
   /// Keeps the three on the phone. Never throws (the store does not).
