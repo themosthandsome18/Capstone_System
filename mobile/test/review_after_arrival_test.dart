@@ -134,6 +134,9 @@ Future<Map<String, dynamic>> writeReview(WidgetTester tester) async {
   await mocked(() async {
     await tester.tap(reviewButton());
     await settle(tester);
+    // pressing Review opens the notice first; the form opens only on "I understand"
+    await tester.tap(find.byKey(const ValueKey('review-notice-understand')));
+    await settle(tester);
     await tester.enterText(find.widgetWithText(TextField, 'Your name'), 'Sample Person');
     await tester.enterText(find.widgetWithText(TextField, 'What did you like?'), 'A made-up review.');
     final submit = find.text('Submit Feedback');

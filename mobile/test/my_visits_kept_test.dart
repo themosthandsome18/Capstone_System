@@ -426,6 +426,9 @@ void main() {
         await settle(tester);
         await tester.tap(find.widgetWithText(OutlinedButton, 'Review'));
         await settle(tester);
+        // pressing Review opens the notice first; the form opens only on "I understand"
+        await tester.tap(find.byKey(const ValueKey('review-notice-understand')));
+        await settle(tester);
         await tester.enterText(find.widgetWithText(TextField, 'Your name'), 'Sample Person');
         await tester.enterText(find.widgetWithText(TextField, 'What did you like?'), 'A made-up review.');
         final submit = find.text('Submit Feedback');
@@ -578,6 +581,9 @@ void main() {
         await tester.tap(find.text('Sample Beach').first);
         await settle(tester);
         await tester.tap(find.widgetWithText(OutlinedButton, 'Review'));
+        await settle(tester);
+        // pressing Review opens the notice first; the form opens only on "I understand"
+        await tester.tap(find.byKey(const ValueKey('review-notice-understand')));
         await settle(tester);
         await tester.enterText(find.widgetWithText(TextField, 'Your name'), 'Sample Person');
         await tester.enterText(find.widgetWithText(TextField, 'What did you like?'), 'A made-up review.');
