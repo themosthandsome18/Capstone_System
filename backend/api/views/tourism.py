@@ -14,13 +14,12 @@ from api.models import (
     ACTION_DELETE,
     ACTION_UPDATE,
     MODULE_TOURISM,
-    ROLE_ADMIN,
     FeedbackEntry,
     Resort,
     TourismThemeSetting,
     TouristRecord,
 )
-from api.permissions import administration_required, get_user_role, module_required
+from api.permissions import administration_required, module_required
 from api.seeders import (
     ensure_initial_reference_data,
     ensure_initial_tourism_data,
@@ -111,12 +110,7 @@ def booking_management_data(request):
 @parser_classes([MultiPartParser])
 @module_required("tourism")
 def online_booking_import(request):
-    if get_user_role(request.user) != ROLE_ADMIN:
-        return Response(
-            {"detail": "Only the system admin can import online booking files."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
+    # The Tourism Office does this, and so does the system admin: module_required("tourism") lets in exactly those two (preview and import alike).
     upload = request.FILES.get("file")
 
     if not upload:
