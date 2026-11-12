@@ -14,7 +14,6 @@ import {
 } from "react-icons/fi";
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
-import { useAuth } from "../../auth/AuthContext";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
 import {
@@ -152,9 +151,7 @@ function BookingManagement() {
     [referenceTables.boatCapacityFares]
   );
 
-  const { role } = useAuth();
   const { addEntryRequestId } = useOutletContext() || {};
-  const isAdmin = role === "admin";
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -962,18 +959,16 @@ function BookingManagement() {
           <button type="button" className="outline-action" onClick={handleExport}>
             Export CSV
           </button>
-          {isAdmin ? (
-            <label className="outline-action booking-import-btn">
-              <FiUpload />
-              Import Excel
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handlePreviewImport}
-                hidden
-              />
-            </label>
-          ) : null}
+          <label className="outline-action booking-import-btn">
+            <FiUpload />
+            Import Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handlePreviewImport}
+              hidden
+            />
+          </label>
         </div>
       </div>
 

@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 from .models import (
     ROLE_ADMIN,
     ROLE_ESTABLISHMENT,
+    ROLE_RESORT,
     ROLE_SANITATION,
     ROLE_TOURIST,
     ROLE_TOURISM,
@@ -121,12 +122,32 @@ class AdministrationAccessTests(TestCase):
             with self.subTest(route=route):
                 self.assertIn(shape, listed)
 
-    def test_what_was_not_opened_is_still_the_system_admin_s_alone(self):
-        # only the administration pages are opened to the Tourism Office: the import of online bookings is not. (A record is deleted by nobody
-        # now: DELETE is refused for the admin as for the Tourism Office, and the record stays. See test_record_archive.py.)
-        tourism = self.clients[ROLE_TOURISM]
-        self.assertEqual(tourism.post("/api/online-booking-import/", {}, format="multipart").status_code, 403)
+    def test_the_import_of_online_bookings_is_the_tourism_office_s_as_much_as_the_system_admin_s(self):
+        # The Tourism Office does the import, and the system admin only passes through to it: both are let in (400 "Excel file is required." is
+        # the answer to an empty request, which shows the door was open), and every other role is refused with 403. Preview and import alike.
+        url = "/api/online-booking-import/"
+        for role in IN:
+            for action in (None, "preview"):
+                with self.subTest(role=role, action=action):
+                    data = {"action": action} if action else {}
+                    response = self.clients[role].post(url, data, format="multipart")
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.json(), {"detail": "Excel file is required."})
+        resort = User.objects.create_user(username="adm_resort", password="Password@123", email="resort@test.local")
+        UserProfile.objects.create(user=resort, role=ROLE_RESORT)
+        resort_client = APIClient()
+        resort_client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=resort).key}")
+        refused = {role: self.clients[role] for role in OUT}
+        refused[ROLE_RESORT] = resort_client
+        self.assertEqual(set(refused), {ROLE_TOURIST, ROLE_SANITATION, ROLE_ESTABLISHMENT, "auditor", ROLE_RESORT})
+        for role, client in refused.items():
+            with self.subTest(role=role):
+                self.assertEqual(client.post(url, {}, format="multipart").status_code, 403)
+        self.assertIn(APIClient().post(url, {}, format="multipart").status_code, (401, 403))
 
+    def test_a_tourist_record_is_deleted_by_nobody(self):
+        # DELETE is refused for the admin as for the Tourism Office, and the record stays. See test_record_archive.py.
+        tourism = self.clients[ROLE_TOURISM]
         Resort.objects.all().delete()
         arrive(make_resort(1, "Delete Resort"), "ADM-1", 2)
         self.assertEqual(tourism.delete("/api/tourist-records/ADM-1/").status_code, 405)
