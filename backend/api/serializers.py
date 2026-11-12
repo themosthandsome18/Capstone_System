@@ -1257,7 +1257,32 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def to_internal_value(self, data):
+        if hasattr(data, "get"):
+            for field in ("latitude", "longitude"):
+                value = data.get(field)
+                # HTML form parsing can turn blank numeric inputs into null.
+                if isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
+                    raise serializers.ValidationError({field: "A numeric coordinate or explicit null is required."})
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
+        if "latitude" in attrs or "longitude" in attrs:
+            latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+            longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+            if latitude is None or longitude is None:
+                if not ("latitude" in attrs and "longitude" in attrs
+                        and latitude is None and longitude is None):
+                    raise serializers.ValidationError({
+                        "coordinates": "Supply a complete coordinate pair, or explicitly set both coordinates to null.",
+                    })
+            else:
+                for field, value, bound in (("latitude", latitude, 90), ("longitude", longitude, 180)):
+                    if not math.isfinite(value) or not -bound <= value <= bound:
+                        raise serializers.ValidationError({
+                            field: f"A finite coordinate between {-bound} and {bound} is required.",
+                        })
+
         toilet_type = attrs.get("toilet_type", getattr(self.instance, "toilet_type", None))
         if attrs.get("septic_tank_type") == "septic_tank":
             raise serializers.ValidationError({

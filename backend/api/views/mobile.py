@@ -1391,10 +1391,6 @@ def mobile_household_survey_submit(request):
     data["status"] = household_status_from_payload(data)
     data["last_survey_date"] = data.get("last_survey_date") or timezone.localdate().isoformat()
 
-    for field in ["latitude", "longitude"]:
-        if data.get(field) in ("", None):
-            data.pop(field, None)
-
     household_code = data.get("household_code")
     instance = None
     if household_code:
