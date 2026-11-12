@@ -1,3 +1,5 @@
+import RecordedLocation from "../components/RecordedLocation";
+import SitioField, { applySitioPayload, useRecordSession } from "../components/SitioField";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -301,6 +303,9 @@ function formFromEstablishment(establishment) {
     owner_name: establishment.owner_name ?? "",
     business_type: establishment.business_type ?? "",
     permit_size: establishment.permit_size ?? "",
+    sitio: establishment.sitio ?? "",
+    sitio_reference: establishment.sitio_reference ?? null,
+    sitio_source: establishment.sitio_source ?? "unknown",
     barangay: establishment.barangay ?? "",
     address: establishment.address ?? "",
     contact_number: establishment.contact_number ?? "",
@@ -335,6 +340,7 @@ function groupBusinessTypesByCategory(businessTypes = []) {
 function EstablishmentRecords() {
   const {
     establishments,
+    barangays,
     businessTypes,
     inspections,
     complaintData,
@@ -368,6 +374,7 @@ function EstablishmentRecords() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [formError, setFormError] = useState("");
+  const sessionCurrent = useRecordSession(showModal, () => { setShowModal(false); setEditingEstablishment(null); setForm(initialForm); setFormError(""); setSaving(false); });
   const complaintRows = useMemo(() => complaintData?.rows || [], [complaintData]);
   const renewalRows = useMemo(() => renewalData?.rows || [], [renewalData]);
 
@@ -457,6 +464,10 @@ function EstablishmentRecords() {
   ]);
 
   function updateField(field, value) {
+    if (field === "sitioSelection") { setForm(current => ({ ...current, ...value })); return; }
+    if (field === "barangay") { setForm(current => current.barangay === value ? current : ({ ...current,
+      barangay: value, sitio: "", sitio_reference: null, _sitioMode: "", _sitioChanged: true,
+      _sitioBarangay: value, _sitioValid: true })); return; }
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -666,8 +677,12 @@ function EstablishmentRecords() {
   }
 
   async function handleSubmit(event) {
+    const requestCurrent = sessionCurrent.checkpoint();
     event.preventDefault();
-    if (saving) return;
+    if (saving || !requestCurrent()) return;
+    if (form._sitioChanged && (!form._sitioValid || form._sitioBarangay !== form.barangay)) {
+      setFormError("Choose a Sitio belonging to the selected Barangay, or use manual entry."); return;
+    }
 
     const values = toApiValues(form);
     const validationError = validatePayload(values);
@@ -678,7 +693,7 @@ function EstablishmentRecords() {
     }
 
     const changes = editingEstablishment
-      ? buildEditPayload(form, editingEstablishment)
+      ? applySitioPayload(buildEditPayload(form, editingEstablishment), form)
       : null;
 
     if (changes && Object.keys(changes).length === 0) {
@@ -687,6 +702,11 @@ function EstablishmentRecords() {
       return;
     }
 
+    if (changes && ("latitude" in changes || "longitude" in changes)) {
+      changes.latitude = values.latitude;
+      changes.longitude = values.longitude;
+      if (values.latitude !== null && values.longitude !== null) changes.location_capture = { method: "manual" };
+    }
     setSaving(true);
     setFormError("");
 
@@ -694,15 +714,18 @@ function EstablishmentRecords() {
       if (editingEstablishment) {
         await updateEstablishment(editingEstablishment.id, changes);
       } else {
-        await createEstablishment(buildCreatePayload(values));
+        await createEstablishment(applySitioPayload({ ...buildCreatePayload(values),
+          ...(values.latitude !== null && values.longitude !== null ? { location_capture: { method: "manual" } } : {}) }, form));
       }
 
+      if (!requestCurrent()) return;
       setSaveMessage(`${values.business_name} ${editingEstablishment ? "updated" : "registered"} successfully.`);
       closeModal(true);
     } catch (requestError) {
+      if (!requestCurrent()) return;
       setFormError(getErrorMessage(requestError));
     } finally {
-      setSaving(false);
+      if (requestCurrent()) setSaving(false);
     }
   }
 
@@ -1007,6 +1030,7 @@ function EstablishmentRecords() {
           form={form}
           establishments={establishments}
           businessTypes={businessTypes}
+          barangays={barangays}
           barangayOptions={barangayOptions}
           saving={saving}
           formError={formError}
@@ -1351,6 +1375,7 @@ function InfoTile({ label, value }) {
 
 function RegisterEstablishmentModal({
   form,
+  barangays,
   establishments = [],
   businessTypes,
   saving,
@@ -1491,6 +1516,8 @@ function RegisterEstablishmentModal({
             </label>
           </div>
 
+          <RecordedLocation record={editingEstablishment} />
+          <SitioField form={form} onChange={onChange} barangays={barangays} />
           <label className="modal-field full">
             <span>Complete Address</span>
             <input

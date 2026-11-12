@@ -300,6 +300,7 @@ describe("FOCUS 2: submission payload", () => {
       "permit_issued_date",
       "permit_number",
       "permit_status",
+      "sitio", "sitio_reference",
     ]);
   });
 

@@ -24,12 +24,17 @@ function edit(record = stored) {
  mockRecords = [{ ...record }]; render(<HouseholdRecords />);
  fireEvent.click(screen.getByTitle("Edit Household Record"));
 }
-const change = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+const change = (label, value) => {
+ if (label === "Sitio") {
+  fireEvent.change(screen.getByLabelText("Sitio"), { target: { value: "manual" } });
+  fireEvent.change(screen.getByLabelText("Manual Sitio"), { target: { value } });
+ } else fireEvent.change(screen.getByLabelText(label), { target: { value } });
+};
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 test("creation sends separate text fields and barangay without a fabricated combined address", async () => {
  render(<HouseholdRecords />); fireEvent.click(screen.getByRole("button", { name: "Add Household" }));
  fireEvent.change(screen.getByPlaceholderText("Last name"), { target: { value: "Reyes" } });
- change("House Number", "01-b"); change("Sitio", "lower sitio"); change("Barangay *", "Abo-abo");
+ change("House Number", "01-b"); change("Barangay *", "Abo-abo"); change("Sitio", "lower sitio");
  fireEvent.click(screen.getByRole("radio", { name: "Other", exact: true }));
  fireEvent.click(screen.getByRole("radio", { name: "Level 2", exact: true }));
  fireEvent.click(screen.getByRole("button", { name: "Save Household" }));
@@ -45,12 +50,12 @@ test.each([["House Number", "house_number", "B-9"], ["Sitio", "sitio", "new siti
  ["Barangay *", "barangay", "Alitap"], ["Existing combined address", "address", "  exact CASE / new  "]])(
  "editing %s sends only the changed field", async (label, key, value) => {
  edit(); change(label, value); save();
- await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { [key]: value }));
+ await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { [key]: value, ...(key === "sitio" ? { sitio_reference: null } : {}), ...(key === "barangay" ? { sitio: "", sitio_reference: null } : {}) }));
 });
 test.each([["House Number", "house_number"], ["Sitio", "sitio"]])(
  "clearing %s sends only an explicit empty string", async (label, key) => {
  edit(); change(label, ""); save();
- await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { [key]: "" }));
+ await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(31, { [key]: "", ...(key === "sitio" ? { sitio_reference: null } : {}) }));
 });
 test.each([stored, { ...stored, house_number: undefined, sitio: undefined }])(
  "no-op preserves exact historical address and sends no request", (record) => {
@@ -60,7 +65,8 @@ test.each([stored, { ...stored, house_number: undefined, sitio: undefined }])(
 test("older payloads do not fabricate components and controls limit length", () => {
  const { house_number, sitio, ...legacy } = stored;
  edit(legacy);
- for (const label of ["House Number", "Sitio"]) {
+ change("Sitio", "");
+ for (const label of ["House Number", "Manual Sitio"]) {
  expect(screen.getByLabelText(label)).toHaveValue("");
  expect(screen.getByLabelText(label)).toHaveAttribute("maxlength", "120");
  expect(screen.getByLabelText(label)).not.toBeRequired();

@@ -1,3 +1,5 @@
+import RecordedLocation from "../components/RecordedLocation";
+import SitioField, { applySitioPayload, useRecordSession } from "../components/SitioField";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -262,6 +264,7 @@ const EDITABLE_HOUSEHOLD_FIELDS = [
   "address",
   "house_number",
   "sitio",
+  "sitio_reference",
   "male_count",
   "female_count",
   "toilet_type",
@@ -347,6 +350,9 @@ function HouseholdRecords() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  const sessionCurrent = useRecordSession(isAddOpen || Boolean(editRecord), () => {
+    closeModals(); setForm(emptyForm); setSaving(false);
+  });
   const barangayOptions = useMemo(() => {
     const officialBarangays = (barangays || [])
       .map((item) => item.name || item)
@@ -612,6 +618,8 @@ function HouseholdRecords() {
       address: record.address || "",
       house_number: record.house_number ?? "",
       sitio: record.sitio ?? "",
+      sitio_reference: record.sitio_reference ?? null,
+      sitio_source: record.sitio_source ?? "unknown",
       male_count: record.male_count ?? 0,
       female_count: record.female_count ?? 0,
       toilet_type: record.toilet_type || "none",
@@ -637,11 +645,16 @@ function HouseholdRecords() {
     setEditRecord(null);
     setEditSnapshot(null);
     setViewRecord(null);
+    setSaving(false);
     setFormError("");
   }
 
   function updateField(field, value) {
     setForm((prev) => {
+      if (field === "sitioSelection") return { ...prev, ...value };
+      if (field === "barangay" && value !== prev.barangay) return { ...prev, barangay: value,
+        sitio: "", sitio_reference: null, _sitioMode: "", _sitioChanged: true,
+        _sitioBarangay: value, _sitioValid: true };
       if (field === "toilet_type" && (
         !isSepticApplicable(value) ||
         (value !== prev.toilet_type && prev.septic_tank_type === "septic_tank")
@@ -653,6 +666,11 @@ function HouseholdRecords() {
   }
 
   async function handleSaveAdd() {
+    const requestCurrent = sessionCurrent.checkpoint();
+    if (saving || !requestCurrent()) return;
+    if (form._sitioChanged && (!form._sitioValid || form._sitioBarangay !== form.barangay)) {
+      setFormError("Choose a Sitio belonging to the selected Barangay, or use manual entry."); return;
+    }
     if (!householdReady) {
       setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
       return;
@@ -701,16 +719,24 @@ function HouseholdRecords() {
       if (!isSepticApplicable(form.toilet_type)) {
         delete payload.septic_tank_type;
       }
-      await createHousehold(payload);
+      delete payload.sitio_source;
+      await createHousehold(applySitioPayload(payload, form));
+      if (!requestCurrent()) return;
       closeModals();
     } catch (err) {
+      if (!requestCurrent()) return;
       setFormError(err?.message || "Failed to save household record.");
     } finally {
-      setSaving(false);
+      if (requestCurrent()) setSaving(false);
     }
   }
 
   async function handleSaveEdit() {
+    const requestCurrent = sessionCurrent.checkpoint();
+    if (saving || !requestCurrent()) return;
+    if (form._sitioChanged && (!form._sitioValid || form._sitioBarangay !== form.barangay)) {
+      setFormError("Choose a Sitio belonging to the selected Barangay, or use manual entry."); return;
+    }
     if (!householdReady) {
       setFormError("Household data is unverified. Retry loading before saving; your draft is retained.");
       return;
@@ -767,7 +793,7 @@ function HouseholdRecords() {
     }
     const draftChanges = buildHouseholdEditPayload(nextForm, editSnapshot);
     const refreshedChanges = buildHouseholdEditPayload(currentRecord, editSnapshot);
-    const payload = buildHouseholdEditPayload(draftChanges, currentRecord);
+    const payload = applySitioPayload(buildHouseholdEditPayload(draftChanges, currentRecord), form);
     const conflicts = Object.keys(payload).filter((field) => Object.prototype.hasOwnProperty.call(refreshedChanges, field));
     if (conflicts.length) {
       setFormError(`This household has changed in ${conflicts.join(", ")}. Review the latest record before saving; your draft is retained.`);
@@ -780,12 +806,14 @@ function HouseholdRecords() {
     setSaving(true);
     setFormError("");
     try {
-      await updateHousehold(editRecord.id, payload);
+      await updateHousehold(editRecord.id, applySitioPayload(payload, form));
+      if (!requestCurrent()) return;
       closeModals();
     } catch (err) {
+      if (!requestCurrent()) return;
       setFormError(err?.message || "Failed to update household record.");
     } finally {
-      setSaving(false);
+      if (requestCurrent()) setSaving(false);
     }
   }
 
@@ -1302,6 +1330,7 @@ function HouseholdRecords() {
               {householdRefresh}
               <HouseholdForm
                 form={form}
+                barangays={barangays}
                 updateField={updateField}
                 formError={formError}
               />
@@ -1338,9 +1367,11 @@ function HouseholdRecords() {
               {householdRefresh}
               <HouseholdForm
                 form={form}
+                barangays={barangays}
                 updateField={updateField}
                 formError={formError}
                 isEditing
+                record={editRecord}
               />
             </div>
 
@@ -1360,7 +1391,7 @@ function HouseholdRecords() {
 }
 
 /* ── Reusable form matching groupmate's exact UI design ── */
-function HouseholdForm({ form, updateField, formError, isEditing = false }) {
+function HouseholdForm({ form, updateField, formError, barangays, record, isEditing = false }) {
   const maleCount = parseMemberCount(form.male_count);
   const femaleCount = parseMemberCount(form.female_count);
   return (
@@ -1409,12 +1440,6 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
           onChange={(e) => updateField("house_number", e.target.value)} />
       </div>
       <div className="hh-form-group">
-        <label htmlFor="hh-sitio">Sitio</label>
-        <input id="hh-sitio" type="text" maxLength={120}
-          value={form.sitio}
-          onChange={(e) => updateField("sitio", e.target.value)} />
-      </div>
-      <div className="hh-form-group">
         <label htmlFor="hh-barangay">Barangay *</label>
         <select id="hh-barangay"
           value={form.barangay}
@@ -1429,6 +1454,8 @@ function HouseholdForm({ form, updateField, formError, isEditing = false }) {
         </select>
       </div>
 
+      <RecordedLocation record={record} />
+      <SitioField form={form} onChange={updateField} barangays={barangays} />
       <div className="hh-form-group">
         <label htmlFor="hh-combined-address">{isEditing ? "Existing combined address" : "Combined address (optional)"}</label>
         <input id="hh-combined-address"
