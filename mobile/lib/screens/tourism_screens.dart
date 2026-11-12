@@ -3624,6 +3624,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                 onPressed: reviewPass == null
                     ? null
                     : () async {
+                  // What happens to a review and its photos is said BEFORE the form, every time, and only "I understand" opens the form.
+                  if (!await showReviewNoticeDialog(context) || !context.mounted) return;
                   final receipt = await Navigator.of(context).push<MobileFeedbackReceipt>(
                     MaterialPageRoute(
                       builder: (context) => FeedbackPage(
@@ -3868,7 +3870,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
             ),
           ),
-        const PublicVisibilityNotice(text: publicReviewNoticeText),
+        const PublicVisibilityNotice(),
         SubmitButton(
           label: 'Submit Feedback',
           loading: _submitting,

@@ -262,6 +262,9 @@ void main() {
         await settle(tester);
         await tester.tap(find.widgetWithText(OutlinedButton, 'Review'));
         await settle(tester);
+        // pressing Review opens the notice first; the form opens only on "I understand"
+        await tester.tap(find.byKey(const ValueKey('review-notice-understand')));
+        await settle(tester);
         await tester.enterText(find.widgetWithText(TextField, 'What did you like?'), 'A made-up review.');
         final submit = find.text('Submit Feedback');
         await tester.ensureVisible(submit);

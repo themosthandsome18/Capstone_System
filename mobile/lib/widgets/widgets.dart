@@ -1990,20 +1990,162 @@ class DataSourceBanner extends StatelessWidget {
   }
 }
 
-/// What the person who fills in the review form is told: who will see what
-/// they send. The text is one paragraph; every statement in it was checked
-/// against the code and the live data (see PROJECT_AUDIT.md, item #16).
-const publicReviewNoticeText =
-    'Reviews are public. Anyone who opens this destination in the app can see '
-    'the initials of your name (for example, J.D.C.), your rating, your '
-    'comment, any photos you attach, and the date. Your cleanliness rating is '
-    'added to the end of your comment. Each photo also gets its own web '
-    'address, so anyone with the link can open it outside the app. Once sent, '
-    'a review cannot be changed or removed from the app. The tourism office '
-    'sees your full name; the public does not. Leave the name blank to appear '
-    'as "Mobile Tourist".';
+/// What the tourist is told about a review BEFORE they write it, and again under the form. This is the ONE source of the words: the pop-up that opens
+/// when Review is pressed ([showReviewNoticeDialog]) and the notice under the form ([PublicVisibilityNotice]) both draw it with [ReviewNoticeContent],
+/// so they cannot differ. Every statement was checked against the code: what the public sees (PublicFeedbackSerializer: the initials, the rating, the
+/// comment, the photos, the date, and only the five latest reviews of a place), what the Tourism Office sees (the name that was typed, in full), that
+/// the web's "Add to Resort" puts a review photo into the place's gallery for everyone, and that hiding or removing a review does not delete the
+/// photo file (nothing in the server deletes a file) and does not take the photo out of the gallery.
+const reviewNoticeTitle = 'Before you write a review';
 
-/// A notice, on a form, that what is about to be sent will be public.
+/// One paragraph of the notice. [stressed] is for the one that is the reason for the pop-up: it is drawn bolder than the rest.
+class ReviewNoticeParagraph {
+  const ReviewNoticeParagraph(this.text, {this.stressed = false});
+
+  final String text;
+  final bool stressed;
+}
+
+const reviewNoticeParagraphs = <ReviewNoticeParagraph>[
+  ReviewNoticeParagraph(
+    'Your review is public. Anyone who opens this place in the app can see the '
+    'initials of your name (for example, J.D.C.), your rating, your comment, any '
+    'photos you attach, and the date. Your cleanliness rating is added to the end '
+    'of your comment.',
+  ),
+  ReviewNoticeParagraph(
+    "Only the five most recent reviews are shown on a place's page. Older ones "
+    'stop showing, but each photo keeps its own web address, so anyone who has '
+    'the link can still open it outside the app.',
+  ),
+  ReviewNoticeParagraph(
+    'The Mauban Tourism Office sees the name you type here. The public sees only '
+    'your initials. Leave the name blank to appear as "Mobile Tourist".',
+  ),
+  ReviewNoticeParagraph(
+    "The Tourism Office may add your photos to the place's photo gallery in the "
+    'app, where they are shown to everyone as pictures of the place. If they do, '
+    'your photos stay there even if your review is later hidden or removed.',
+    stressed: true,
+  ),
+  ReviewNoticeParagraph(
+    'Once sent, you cannot change or remove your review yourself. The Tourism '
+    'Office can hide or remove it, but hiding does not delete the photo file.',
+  ),
+];
+
+/// The whole notice as plain text: the title, then the paragraphs, a blank line between.
+String get publicReviewNoticeText => [reviewNoticeTitle, ...reviewNoticeParagraphs.map((paragraph) => paragraph.text)].join('\n\n');
+
+/// The words of the notice, drawn. Used by the pop-up and by the notice under the form, and by nothing else: the two show the same words because
+/// they are the same widget over the same constants.
+class ReviewNoticeContent extends StatelessWidget {
+  const ReviewNoticeContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          reviewNoticeTitle,
+          key: ValueKey('review-notice-title'),
+          style: TextStyle(color: AppColors.ink, fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        for (var index = 0; index < reviewNoticeParagraphs.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: reviewNoticeParagraphs[index].stressed
+                ? Container(
+                    key: const ValueKey('review-notice-stressed'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: context.brand.tint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border(left: BorderSide(color: context.brand.primary, width: 4)),
+                    ),
+                    child: Text(
+                      reviewNoticeParagraphs[index].text,
+                      key: ValueKey('review-notice-paragraph-$index'),
+                      style: TextStyle(color: context.brand.deep, fontSize: 13, height: 1.4, fontWeight: FontWeight.w800),
+                    ),
+                  )
+                : Text(
+                    reviewNoticeParagraphs[index].text,
+                    key: ValueKey('review-notice-paragraph-$index'),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+                  ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The pop-up shown the moment Review is pressed, BEFORE the form. True only when the tourist presses "I understand"; "Cancel" (and tapping outside
+/// it, and the back button) is false, and the form is not opened. It is shown EVERY time: nothing is remembered.
+///
+/// The words scroll and the two buttons do not: on a small screen, or with large text, the notice can be longer than the screen, and the buttons are
+/// outside the scrolling part so they can always be reached.
+Future<bool> showReviewNoticeDialog(BuildContext context) async {
+  final understood = await showDialog<bool>(
+    context: context,
+    builder: (context) => const _ReviewNoticeDialog(),
+  );
+  return understood == true;
+}
+
+class _ReviewNoticeDialog extends StatelessWidget {
+  const _ReviewNoticeDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      key: const ValueKey('review-notice-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('review-notice-scroll'),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: const ReviewNoticeContent(),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    key: const ValueKey('review-notice-cancel'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    key: const ValueKey('review-notice-understand'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('I understand'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The notice under the review form: the same words as the pop-up (see [ReviewNoticeContent]).
 ///
 /// It is its own widget and not a [DataSourceBanner] on purpose: that one says
 /// where the data you are looking at comes from (live, or the saved copy), and
@@ -2011,9 +2153,7 @@ const publicReviewNoticeText =
 /// widgets, as with [StatusPill] (a status) and [StatusPill.label] (a type).
 /// Neutral colours: it is not a status and not the brand.
 class PublicVisibilityNotice extends StatelessWidget {
-  const PublicVisibilityNotice({super.key, required this.text});
-
-  final String text;
+  const PublicVisibilityNotice({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -2026,21 +2166,12 @@ class PublicVisibilityNotice extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
-        child: Row(
+        child: const Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.public, size: 20, color: AppColors.muted),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ),
+            Icon(Icons.public, size: 20, color: AppColors.muted),
+            SizedBox(width: 10),
+            Expanded(child: ReviewNoticeContent()),
           ],
         ),
       ),
