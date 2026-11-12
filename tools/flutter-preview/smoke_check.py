@@ -111,8 +111,19 @@ def main():
 
     s, _, body = call(base, "GET", "/__preview__/status/")
     status = json.loads(body)
-    check("two fake private photos, zero real storage attempts",
-          status.get("fake_private_photos") == 2 and status.get("real_private_storage_attempts") == 0,
+    est_ids = sorted(e["id"] for e in rows(call(base, "GET", "/sanitation/establishments/", token)[2]))
+    if est_ids:
+        s, headers, _ = call(base, "GET", f"/sanitation/establishments/{est_ids[0]}/front-photo/", token)
+        check("establishment photo served from fake store", s == 200 and headers.get("Content-Type", "").startswith("image/"), s)
+        s, _, _ = call(base, "GET", f"/sanitation/establishments/{est_ids[1]}/front-photo/", token)
+        check("establishment without photo returns 404", s == 404, s)
+        s, _, _ = call(base, "GET", f"/sanitation/establishments/{est_ids[0]}/front-photo/")
+        check("anonymous establishment photo request refused", s == 401, s)
+
+    s, _, body = call(base, "GET", "/__preview__/status/")
+    status = json.loads(body)
+    check("four fake private photos (2 household, 2 establishment), zero real storage attempts",
+          status.get("fake_private_photos") == 4 and status.get("real_private_storage_attempts") == 0,
           (status.get("fake_private_photos"), status.get("real_private_storage_attempts")))
 
     print(f"\n{sum(results)}/{len(results)} checks passed")

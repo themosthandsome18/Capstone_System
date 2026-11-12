@@ -144,6 +144,8 @@ class HouseholdLocationAdapter {
   );
 }
 
+enum _PendingPhotoUpload { none, uploading, done, failed }
+
 class HouseholdSurveyPage extends StatefulWidget {
   const HouseholdSurveyPage({
     super.key,
@@ -218,6 +220,16 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   // The server accepted a NEW household but returned no usable id: the record may
   // exist, so the form must not be resubmitted and no photo can be attached.
   bool _saveUnconfirmed = false;
+  // Optional front photo chosen BEFORE submission (new households only). Held in
+  // memory on this page only and uploaded solely to a server-confirmed id.
+  late final ImagePicker _picker = widget.imagePicker ?? ImagePicker();
+  Uint8List? _pendingPhoto;
+  String? _pendingPhotoError;
+  bool _pickingPhoto = false;
+  bool _pendingPhotoDiscarded = false;
+  _PendingPhotoUpload _pendingUpload = _PendingPhotoUpload.none;
+  String? _pendingUploadError;
+  int _photoPanelGeneration = 0;
 
   Future<void> _captureHouseholdSession() async {
     _sessionPrefs = await SharedPreferences.getInstance();
@@ -242,6 +254,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   @override
   void initState() {
     super.initState();
+    staffSessionRevision.addListener(_onStaffSessionChanged);
     _sessionReady = _captureHouseholdSession();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
     if (widget.household != null) {
@@ -300,8 +313,20 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     });
   }
 
+  void _onStaffSessionChanged() {
+    // Any session change drops an unsaved selection immediately.
+    if (!mounted) return;
+    setState(() {
+      _pendingPhoto = null;
+      _pendingPhotoError = null;
+      if (_pendingUpload != _PendingPhotoUpload.done) _pendingUpload = _PendingPhotoUpload.none;
+    });
+  }
+
   @override
   void dispose() {
+    staffSessionRevision.removeListener(_onStaffSessionChanged);
+    _pendingPhoto = null;
     _head.dispose();
     _address.dispose();
     _houseNumber.dispose();
@@ -322,7 +347,218 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     ),
   );
 
-  void _finishSaved() => Navigator.of(context).pop(_savedReceipt);
+  void _finishSaved() {
+    _pendingPhoto = null; // never keep an unsaved image after leaving
+    Navigator.of(context).pop(_savedReceipt);
+  }
+
+  static bool _isJpegOrPng(Uint8List bytes) =>
+      (bytes.length >= 8 &&
+          listEquals(bytes.sublist(0, 8), const [137, 80, 78, 71, 13, 10, 26, 10])) ||
+      (bytes.length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255);
+
+  Future<void> _pickPendingPhoto(ImageSource source) async {
+    if (_pickingPhoto || _submitting) return;
+    final revision = staffSessionRevision.value;
+    setState(() {
+      _pickingPhoto = true;
+      _pendingPhotoError = null;
+    });
+    try {
+      final photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        requestFullMetadata: false,
+      );
+      if (!mounted || revision != staffSessionRevision.value || photo == null) return;
+      final bytes = await photo.readAsBytes();
+      if (!mounted || revision != staffSessionRevision.value) return;
+      if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024 || !_isJpegOrPng(bytes)) {
+        setState(() => _pendingPhotoError = 'Choose a JPEG or PNG up to 5 MiB.');
+        return;
+      }
+      setState(() => _pendingPhoto = bytes);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _pendingPhotoError =
+            'Camera/gallery access is unavailable or denied. Check app permissions and retry.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pendingPhotoError = 'The photo could not be read. Choose another JPEG or PNG.');
+      }
+    } finally {
+      if (mounted) setState(() => _pickingPhoto = false);
+    }
+  }
+
+  /// Uploads the pre-selected photo to a household id the server just confirmed.
+  /// Never resubmits the household; a failure keeps the selection for a retry.
+  Future<void> _uploadPendingPhoto(int householdId) async {
+    final bytes = _pendingPhoto;
+    final token = _sessionToken;
+    if (bytes == null || householdId <= 0 || token == null || token.isEmpty) return;
+    if (!_checkHouseholdSession()) {
+      setState(() {
+        _pendingPhoto = null;
+        _pendingUpload = _PendingPhotoUpload.none;
+      });
+      return;
+    }
+    setState(() {
+      _pendingUpload = _PendingPhotoUpload.uploading;
+      _pendingUploadError = null;
+    });
+    try {
+      await widget.api.uploadHouseholdFrontPhoto(householdId, bytes, expectedSessionToken: token);
+      if (!mounted) return;
+      setState(() {
+        _pendingUpload = _PendingPhotoUpload.done;
+        _pendingPhoto = null;
+        _photoPanelGeneration++; // the panel reloads and shows the saved photo
+      });
+    } catch (error) {
+      if (!mounted) return;
+      if (_sessionPrefs?.getString(staffAuthTokenKey) != token) {
+        setState(() {
+          _pendingPhoto = null;
+          _pendingUpload = _PendingPhotoUpload.none;
+        });
+        return;
+      }
+      if (error is ApiException && error.statusCode == 401) {
+        staffSessionRevision.value++; // clears the selection and protected panels
+        setState(() => _pendingUploadError = 'Sign in again; the selected photo was not uploaded.');
+        return;
+      }
+      setState(() {
+        _pendingUpload = _PendingPhotoUpload.failed;
+        _pendingUploadError = error is ApiException && error.statusCode == 503
+            ? 'Private photos are unavailable. Please retry later.'
+            : error is ApiException
+                ? error.message
+                : 'Could not confirm the photo upload. Retry to check again.';
+      });
+    }
+  }
+
+  Widget _buildPendingUploadStatus() => switch (_pendingUpload) {
+    _PendingPhotoUpload.none => _pendingUploadError == null
+        ? const SizedBox.shrink()
+        : Text(_pendingUploadError!, style: const TextStyle(color: Color(0xFFB91C1C))),
+    _PendingPhotoUpload.uploading => const Padding(
+        key: ValueKey('pending-photo-uploading'),
+        padding: EdgeInsets.only(bottom: 12),
+        child: Row(children: [
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 10),
+          Expanded(child: Text('Uploading the selected front photo…')),
+        ]),
+      ),
+    _PendingPhotoUpload.done => const Padding(
+        key: ValueKey('pending-photo-uploaded'),
+        padding: EdgeInsets.only(bottom: 12),
+        child: Text('Household and front photo saved.',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.green)),
+      ),
+    _PendingPhotoUpload.failed => Padding(
+        key: const ValueKey('pending-photo-failed'),
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The household is saved, but the selected front photo was not uploaded. '
+              '${_pendingUploadError ?? ''}',
+              style: const TextStyle(color: Color(0xFFB91C1C)),
+            ),
+            Wrap(spacing: 8, children: [
+              TextButton(
+                key: const ValueKey('pending-photo-retry'),
+                onPressed: _pendingPhoto == null ? null : () => _uploadPendingPhoto(_savedHouseholdId!),
+                child: const Text('Retry Photo Upload'),
+              ),
+              TextButton(
+                key: const ValueKey('pending-photo-discard'),
+                onPressed: () => setState(() {
+                  _pendingPhoto = null;
+                  _pendingUpload = _PendingPhotoUpload.none;
+                  _pendingUploadError = null;
+                }),
+                child: const Text('Discard Selected Photo'),
+              ),
+            ]),
+          ],
+        ),
+      ),
+  };
+
+  Widget _buildPendingPhotoSection() {
+    final photo = _pendingPhoto;
+    final busy = _pickingPhoto || _submitting;
+    return Container(
+      key: const ValueKey('pending-photo-section'),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Household Front Photo (Optional)',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text(
+            'Stays on this device and uploads only after the household is saved.',
+            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          if (photo != null) ...[
+            const SizedBox(height: 8),
+            Image.memory(
+              photo,
+              key: ValueKey(photo),
+              height: 180,
+              fit: BoxFit.contain,
+              semanticLabel: 'Selected household photo (not uploaded yet)',
+              errorBuilder: (_, _, _) => const Text('Photo cannot be previewed. Choose a valid JPEG or PNG.'),
+            ),
+          ],
+          if (_pickingPhoto) const Text('Opening camera/gallery…'),
+          if (_pendingPhotoError != null)
+            Text(_pendingPhotoError!, style: const TextStyle(color: Color(0xFFB91C1C))),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                key: const ValueKey('pending-photo-camera'),
+                onPressed: busy ? null : () => _pickPendingPhoto(ImageSource.camera),
+                child: Text(photo == null ? 'Take Photo' : 'Retake Photo'),
+              ),
+              TextButton(
+                key: const ValueKey('pending-photo-gallery'),
+                onPressed: busy ? null : () => _pickPendingPhoto(ImageSource.gallery),
+                child: Text(photo == null ? 'Choose from Gallery' : 'Change Photo'),
+              ),
+              if (photo != null)
+                TextButton(
+                  key: const ValueKey('pending-photo-remove'),
+                  onPressed: busy ? null : () => setState(() {
+                    _pendingPhoto = null;
+                    _pendingPhotoError = null;
+                  }),
+                  child: const Text('Remove Photo'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSavedHousehold(int id) => PopScope(
     canPop: false,
@@ -346,10 +582,14 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
               'or finish. The household stays saved either way.',
         ),
         const SizedBox(height: 12),
-        _photoPanel(id),
+        _buildPendingUploadStatus(),
+        KeyedSubtree(
+          key: ValueKey('household-photo-panel-$_photoPanelGeneration'),
+          child: _photoPanel(id),
+        ),
         FilledButton(
           key: const ValueKey('household-photo-done'),
-          onPressed: _finishSaved,
+          onPressed: _pendingUpload == _PendingPhotoUpload.uploading ? null : _finishSaved,
           style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
           child: const Text('Done'),
         ),
@@ -391,6 +631,17 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         Text('Household head: ${formatProperName(_head.text)}'),
         Text('Barangay: $_barangay'),
         if (_address.text.trim().isNotEmpty) Text('Address: ${_address.text.trim()}'),
+        if (_pendingPhotoDiscarded)
+          const Padding(
+            key: ValueKey('unconfirmed-photo-not-uploaded'),
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'The selected front photo was NOT uploaded, because the household ID '
+              'could not be confirmed. Add it from the household profile once the '
+              'household is found.',
+              style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+            ),
+          ),
         const SizedBox(height: 12),
         const Text(
           'To find it: close this form. The Households list refreshes, and you can '
@@ -565,6 +816,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           onChanged: _setLocation,
           onConfirm: () => setState(() => _locationConfirmed = true),
         ),
+        if (widget.household == null) _buildPendingPhotoSection(),
         ConsentCheckPanel(
           checked: _consentConfirmed,
           onChanged: (value) => setState(() => _consentConfirmed = value),
@@ -661,6 +913,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         // screen until staff acknowledge, and never resubmit automatically.
         setState(() {
           _saveUnconfirmed = true;
+          // No confirmed id: the selected photo is never uploaded and is dropped.
+          _pendingPhotoDiscarded = _pendingPhoto != null;
+          _pendingPhoto = null;
           _savedHouseholdCode = response['household_code'] is String
               ? (response['household_code'] as String).trim()
               : '';
@@ -685,6 +940,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             'Barangay: $_barangay',
             'Total members: ${_male + _female}',
             'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
+            if (widget.household == null && _pendingPhoto != null)
+              'Front photo: uploads next, to this saved household',
           ],
         );
         if (!mounted || !_checkHouseholdSession()) return;
@@ -704,6 +961,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
               _savedHouseholdId = savedId;
               _savedHouseholdCode = '${response['household_code'] ?? ''}';
             });
+            // Only now, with the server-confirmed id, may the selected photo upload.
+            if (_pendingPhoto != null) unawaited(_uploadPendingPhoto(savedId));
           }
           return;
         }
@@ -2393,6 +2652,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       SanitationEstablishmentsPage(
         establishments: _bootstrap.establishments,
         onOpenInspection: _openInspection,
+        onOpenFrontPhoto: _openEstablishmentPhoto,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2499,6 +2759,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       return SanitationEstablishmentsPage(
         establishments: _bootstrap.establishments.where((item) => ids.contains(item.id)).toList(),
         onOpenInspection: _openInspection,
+        onOpenFrontPhoto: _openEstablishmentPhoto,
         onRefresh: refresh,
         refreshing: _refreshing,
       );
@@ -2655,6 +2916,18 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     await SanitationDraftStore.removeReport(draft.id);
     await _loadDrafts();
     if (mounted) showAppMessage(context, 'Draft deleted.');
+  }
+
+  Future<void> _openEstablishmentPhoto(SanitationEstablishment establishment) async {
+    if (establishment.id <= 0) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EstablishmentFrontPhotoPage(
+          api: widget.api,
+          establishment: establishment,
+        ),
+      ),
+    );
   }
 
   Future<void> _openInspection([SanitationEstablishment? establishment]) async {
@@ -3002,6 +3275,7 @@ class SanitationEstablishmentsPage extends StatefulWidget {
     super.key,
     required this.establishments,
     required this.onOpenInspection,
+    this.onOpenFrontPhoto,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -3011,6 +3285,7 @@ class SanitationEstablishmentsPage extends StatefulWidget {
 
   final List<SanitationEstablishment> establishments;
   final ValueChanged<SanitationEstablishment> onOpenInspection;
+  final ValueChanged<SanitationEstablishment>? onOpenFrontPhoto;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
@@ -3187,6 +3462,10 @@ class _SanitationEstablishmentsPageState
                 (item) => SanitationEstablishmentCard(
                   establishment: item,
                   onInspection: () => widget.onOpenInspection(item),
+                  // Photos attach only to saved records with a server id.
+                  onFrontPhoto: widget.onOpenFrontPhoto != null && item.id > 0
+                      ? () => widget.onOpenFrontPhoto!(item)
+                      : null,
                 ),
               ),
       ],
@@ -4470,15 +4749,58 @@ class SanitationTopBar extends StatelessWidget {
   }
 }
 
+/// Private front photo of one saved establishment (its server id only).
+class EstablishmentFrontPhotoPage extends StatelessWidget {
+  const EstablishmentFrontPhotoPage({
+    super.key,
+    required this.api,
+    required this.establishment,
+    this.imagePicker,
+  });
+
+  final TourismApi api;
+  final SanitationEstablishment establishment;
+  final ImagePicker? imagePicker;
+
+  @override
+  Widget build(BuildContext context) => FormPageScaffold(
+    title: 'Establishment Front Photo',
+    subtitle: establishment.businessName,
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back),
+      tooltip: '',
+      onPressed: () => Navigator.of(context).pop(),
+    ),
+    children: [
+      Text(
+        [establishment.businessTypeName, establishment.barangay]
+            .where((part) => part.trim().isNotEmpty)
+            .join(' - '),
+        style: const TextStyle(color: AppColors.muted),
+      ),
+      const SizedBox(height: 12),
+      FrontPhotoPanel(
+        key: ValueKey('establishment-photo-${establishment.id}'),
+        api: api,
+        target: FrontPhotoTarget.establishment(establishment.id),
+        imagePicker: imagePicker,
+      ),
+    ],
+  );
+}
+
 class SanitationEstablishmentCard extends StatelessWidget {
   const SanitationEstablishmentCard({
     super.key,
     required this.establishment,
     required this.onInspection,
+    this.onFrontPhoto,
   });
 
   final SanitationEstablishment establishment;
   final VoidCallback onInspection;
+  /// Opens the establishment's private front photo; null hides the action.
+  final VoidCallback? onFrontPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -4506,56 +4828,13 @@ class SanitationEstablishmentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  backgroundColor: statusColor.withValues(alpha: 0.14),
-                  child: Icon(
-                    Icons.apartment_outlined,
-                    color: statusColor,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        establishment.businessName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${establishment.businessTypeName} • ${establishment.barangay}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                      if (establishment.ownerName.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Owner: ${establishment.ownerName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                FilledButton.tonal(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Narrow cards or large text: actions move under the name so the
+                // business name keeps a readable width.
+                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                final compact = constraints.maxWidth / scale < 280;
+                final inspect = FilledButton.tonal(
                   onPressed: onInspection,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
@@ -4565,8 +4844,101 @@ class SanitationEstablishmentCard extends StatelessWidget {
                     minimumSize: const Size(60, 36),
                   ),
                   child: const Text('Inspect'),
-                ),
-              ],
+                );
+                final frontPhoto = onFrontPhoto == null
+                    ? null
+                    : OutlinedButton.icon(
+                        key: ValueKey('establishment-front-photo-${establishment.id}'),
+                        onPressed: onFrontPhoto,
+                        icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                        label: const Text('Front Photo'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: const Size(60, 36),
+                        ),
+                      );
+                final header = Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: statusColor.withValues(alpha: 0.14),
+                      child: Icon(
+                        Icons.apartment_outlined,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            establishment.businessName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${establishment.businessTypeName} • ${establishment.barangay}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                          if (establishment.ownerName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Owner: ${establishment.ownerName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      header,
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [inspect, ?frontPhoto],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: header),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        inspect,
+                        if (frontPhoto != null) ...[
+                          const SizedBox(height: 6),
+                          frontPhoto,
+                        ],
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 8),
             const Divider(height: 1),

@@ -1,7 +1,31 @@
 part of '../main.dart';
 
+/// Which saved record a private front photo belongs to. The id is always the
+/// server's record id; the panel is never shown for an unsaved record.
+class FrontPhotoTarget {
+  const FrontPhotoTarget.household(this.id) : kind = 'household';
+  const FrontPhotoTarget.establishment(this.id) : kind = 'establishment';
+
+  final String kind;
+  final int id;
+
+  bool get _household => kind == 'household';
+  String get title => _household ? 'Household front photo' : 'Establishment front photo';
+  String get preserved => _household
+      ? 'Only the front photo changes. Household information and coordinates are preserved.'
+      : 'Only the front photo changes. Establishment, permit and inspection records are preserved.';
+
+  Future<Uint8List?> fetch(TourismApi api, String token) => _household
+      ? api.fetchHouseholdFrontPhoto(id, expectedSessionToken: token)
+      : api.fetchEstablishmentFrontPhoto(id, expectedSessionToken: token);
+
+  Future<bool> upload(TourismApi api, Uint8List bytes, String token) => _household
+      ? api.uploadHouseholdFrontPhoto(id, bytes, expectedSessionToken: token)
+      : api.uploadEstablishmentFrontPhoto(id, bytes, expectedSessionToken: token);
+}
+
 /// Existing-profile photos are independent of household survey/GPS submission.
-class HouseholdFrontPhotoPanel extends StatefulWidget {
+class HouseholdFrontPhotoPanel extends StatelessWidget {
   const HouseholdFrontPhotoPanel({
     super.key,
     required this.api,
@@ -11,12 +35,32 @@ class HouseholdFrontPhotoPanel extends StatefulWidget {
   final TourismApi api;
   final int householdId;
   final ImagePicker? imagePicker;
+
   @override
-  State<HouseholdFrontPhotoPanel> createState() =>
-      _HouseholdFrontPhotoPanelState();
+  Widget build(BuildContext context) => FrontPhotoPanel(
+    api: api,
+    target: FrontPhotoTarget.household(householdId),
+    imagePicker: imagePicker,
+  );
 }
 
-class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
+/// Private front photo of one saved record: load, pick (camera/gallery), preview,
+/// confirm, upload/replace and retry. Clears on any staff-session change.
+class FrontPhotoPanel extends StatefulWidget {
+  const FrontPhotoPanel({
+    super.key,
+    required this.api,
+    required this.target,
+    this.imagePicker,
+  });
+  final TourismApi api;
+  final FrontPhotoTarget target;
+  final ImagePicker? imagePicker;
+  @override
+  State<FrontPhotoPanel> createState() => _FrontPhotoPanelState();
+}
+
+class _FrontPhotoPanelState extends State<FrontPhotoPanel> {
   late final ImagePicker _picker = widget.imagePicker ?? ImagePicker();
   String? _token;
   SharedPreferences? _prefs;
@@ -25,7 +69,7 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
   Uint8List? _saved, _draft;
   bool _busy = true, _ready = false;
   String? _error, _notice;
-  String _progress = 'Loading household photo…';
+  late String _progress = 'Loading ${widget.target.kind} photo…';
 
   @override
   void initState() {
@@ -44,7 +88,7 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
       _ready = false;
       _busy = false;
       _notice = null;
-      _error = 'Staff session changed. Reopen the household profile.';
+      _error = 'Staff session changed. Reopen the ${widget.target.kind} profile.';
     });
   }
 
@@ -95,13 +139,13 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
   String _message(Object error) {
     if (error is ApiException) {
       if (error.statusCode == 401) {
-        return 'Sign in again to access household photos.';
+        return 'Sign in again to access ${widget.target.kind} photos.';
       }
       if (error.statusCode == 403) {
-        return 'You are not authorized to access household photos.';
+        return 'You are not authorized to access ${widget.target.kind} photos.';
       }
       if (error.statusCode == 409) {
-        return 'Staff session changed. Reopen the household profile.';
+        return 'Staff session changed. Reopen the ${widget.target.kind} profile.';
       }
       if (error.statusCode == 503) {
         return 'Private photos are unavailable. Please retry later.';
@@ -119,16 +163,13 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
       _ready = false;
       _saved = null;
       _error = null;
-      _progress = 'Loading household photo…';
+      _progress = 'Loading ${widget.target.kind} photo…';
     });
     try {
       if (_token == null || _token!.isEmpty) {
         throw const ApiException(statusCode: 401, message: 'Sign in again.');
       }
-      final saved = await widget.api.fetchHouseholdFrontPhoto(
-        widget.householdId,
-        expectedSessionToken: _token!,
-      );
+      final saved = await widget.target.fetch(widget.api, _token!);
       if (_current(generation)) {
         setState(() {
           _saved = saved;
@@ -198,12 +239,10 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
       builder: (context) => AlertDialog(
         title: Text(
           _saved == null
-              ? 'Save household front photo?'
-              : 'Replace saved household photo?',
+              ? 'Save ${widget.target.kind} front photo?'
+              : 'Replace saved ${widget.target.kind} photo?',
         ),
-        content: const Text(
-          'Only the front photo changes. Household information and coordinates are preserved.',
-        ),
+        content: Text(widget.target.preserved),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -221,14 +260,10 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
       _busy = true;
       _error = null;
       _notice = null;
-      _progress = 'Saving household photo…';
+      _progress = 'Saving ${widget.target.kind} photo…';
     });
     try {
-      final pending = await widget.api.uploadHouseholdFrontPhoto(
-        widget.householdId,
-        _draft!,
-        expectedSessionToken: _token!,
-      );
+      final pending = await widget.target.upload(widget.api, _draft!, _token!);
       if (!_current(generation)) {
         return;
       }
@@ -251,9 +286,9 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Household front photo',
-        style: TextStyle(fontWeight: FontWeight.bold),
+      Text(
+        widget.target.title,
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       if (_busy) Text(_progress),
       if (_draft != null) const Text('Preview — not saved'),
@@ -264,8 +299,8 @@ class _HouseholdFrontPhotoPanelState extends State<HouseholdFrontPhotoPanel> {
           height: 180,
           fit: BoxFit.contain,
           semanticLabel: _draft != null
-              ? 'Household photo preview'
-              : 'Saved household front photo',
+              ? '${widget.target.kind[0].toUpperCase()}${widget.target.kind.substring(1)} photo preview'
+              : 'Saved ${widget.target.kind} front photo',
           errorBuilder: (_, _, _) => const Text(
             'Photo cannot be previewed. Choose a valid JPEG or PNG.',
           ),

@@ -25,6 +25,7 @@ def seed(store):
         Barangay, HouseholdSanitationRecord, SanitaryBusinessType, SanitaryComplaint,
         SanitaryEstablishment, UserProfile,
     )
+    from api.services.establishment_photos import replace_establishment_photo
     from api.services.household_photos import replace_household_photo
 
     user = User.objects.create_user(
@@ -46,11 +47,12 @@ def seed(store):
         ("Synthetic Water Refilling", "Rizaliana", 14.1910, 121.7360, "for_completion"),
         ("Synthetic Sari-sari Store", "Alitap", 14.1800, 121.7400, "not_yet_inspected"),
     ]
+    created_establishments = []
     for index, (name, barangay, lat, lng, status) in enumerate(establishments, start=1):
-        SanitaryEstablishment.objects.create(
+        created_establishments.append(SanitaryEstablishment.objects.create(
             business_name=name, owner_name=f"Synthetic Owner {index}", business_type=business_type,
             barangay=barangay, address=f"{index} Synthetic Street", latitude=lat, longitude=lng,
-            compliance_status=status)
+            compliance_status=status))
 
     households = []
     # Water sources use the app's current options so forms show no "legacy" value.
@@ -82,11 +84,17 @@ def seed(store):
     for household, color in zip(households[:2], [(34, 120, 84), (40, 90, 160)]):
         replace_household_photo(household.pk, _photo(color, household.household_code), "jpg", store)
 
+    # Establishments 1 and 3 get a synthetic front photo; 2 and 4 have none.
+    for establishment, color in zip(created_establishments[0::2], [(170, 90, 30), (30, 120, 150)]):
+        replace_establishment_photo(
+            establishment.pk, _photo(color, establishment.business_name), "jpg", store)
+
     return {
         "username": PREVIEW_USERNAME,
         "establishments": SanitaryEstablishment.objects.count(),
         "households": HouseholdSanitationRecord.objects.count(),
         "reports": SanitaryComplaint.objects.count(),
-        "household_photos": len(store.objects),
+        "household_photos": sum(1 for key in store.objects if "/households/" in key),
+        "establishment_photos": sum(1 for key in store.objects if "/establishments/" in key),
         "household_ids": [h.pk for h in households],
     }

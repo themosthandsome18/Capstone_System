@@ -98,7 +98,8 @@ any database, storage, CORS or host value is not local and disposable.
 - **Data:** created fresh on every start by `seed.py`. All names are labelled "Synthetic":
   - staff login `preview.inspector` / `preview-only-not-a-secret` (Sanitation role; exists only
     in the throwaway database);
-  - 4 establishments (good standing, violation, for completion, not yet inspected);
+  - 4 establishments (good standing, violation, for completion, not yet inspected); the 1st and 3rd
+    have a generated front photo, the 2nd and 4th have none;
   - 5 reference barangays with real Mauban names (Daungan, Polo, Rizaliana, Alitap, San Lorenzo);
   - 4 households: A and B with coordinates and a generated "SYNTHETIC PREVIEW PHOTO" (saved through
     the real household-photo service), C without coordinates, D with coordinates but no photo
