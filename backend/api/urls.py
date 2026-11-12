@@ -1,5 +1,5 @@
 from django.urls import path
-from .views.private_photos import household_front_photo
+from .views.private_photos import establishment_front_photo, household_front_photo
 
 from .auth_views import (
     current_user_view,
@@ -194,6 +194,7 @@ urlpatterns = [
     path("sanitation/business-types/", sanitation_business_type_list),
     path("sanitation/establishments/", sanitation_establishment_list),
     path("sanitation/establishments/<int:establishment_id>/", sanitation_establishment_detail),
+    path("sanitation/establishments/<int:establishment_id>/front-photo/", establishment_front_photo),
     path(
         "sanitation/establishments/<int:establishment_id>/enforcement-stage/",
         sanitation_establishment_enforcement_stage,

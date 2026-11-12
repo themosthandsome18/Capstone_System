@@ -1,4 +1,4 @@
-"""Household-resolved private photos and shared protected response helper."""
+"""Record-resolved private front photos (households, establishments) and the shared protected response helper."""
 from django.db import DatabaseError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -7,11 +7,14 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from api.models import ROLE_ADMIN, ROLE_SANITATION, UserProfile, HouseholdSanitationRecord, HouseholdFrontPhoto
-from api.services import private_photos
-from api.services.household_photos import (
-    HouseholdPhotoUpdateFailed, InvalidHouseholdPhoto, replace_household_photo, validated_image,
+from api.models import (
+    ROLE_ADMIN, ROLE_SANITATION, UserProfile, HouseholdSanitationRecord, HouseholdFrontPhoto,
+    EstablishmentFrontPhoto, SanitaryEstablishment,
 )
+from api.services import private_photos
+from api.services.establishment_photos import replace_establishment_photo
+from api.services.front_photos import FrontPhotoUpdateFailed, InvalidFrontPhoto, validated_image
+from api.services.household_photos import replace_household_photo
 from api.services.private_photos import (
     InvalidPrivatePhotoKey, PrivatePhotoMissing, PrivatePhotoUnavailable,
     get_private_photo_store, validate_key,
@@ -42,19 +45,16 @@ def private_photo_response(request, *, resolved_key):
     return response
 
 
-@transaction.non_atomic_requests
-@api_view(['GET', 'PUT'])
-@parser_classes([MultiPartParser])
-@permission_classes([IsAuthenticated])
-def household_front_photo(request, household_id):
+def _front_photo(request, *, owner_model, owner_id, photo_model, owner_field, replace):
+    """GET/PUT one record's private front photo. Keys are always resolved server-side."""
     role = UserProfile.objects.filter(user=request.user).values_list('role', flat=True).first()
     if not request.user.is_active or (not request.user.is_superuser and role not in (ROLE_ADMIN, ROLE_SANITATION)):
         return Response({'detail': 'Sanitation access required.'}, status=403)
     if request.query_params:
         return Response({'detail': 'Photo query parameters are not supported.'}, status=400)
-    household = get_object_or_404(HouseholdSanitationRecord, pk=household_id)
+    owner = get_object_or_404(owner_model, pk=owner_id)
     if request.method == 'GET':
-        photo = HouseholdFrontPhoto.objects.filter(household=household).first()
+        photo = photo_model.objects.filter(**{owner_field: owner}).first()
         if photo is None:
             return Response({'detail': 'Photo not found.'}, status=404)
         return private_photo_response(request, resolved_key=photo.object_key)
@@ -64,11 +64,11 @@ def household_front_photo(request, household_id):
             return Response({'detail': 'Supply exactly one photo file and no other fields.'}, status=400)
         store = private_photos.get_private_photo_store()
         data, extension = validated_image(request.FILES['photo'])
-        pending = replace_household_photo(household.pk, data, extension, store)
+        pending = replace(owner.pk, data, extension, store)
         response = Response({'has_front_photo': True, 'cleanup_pending': pending})
-    except InvalidHouseholdPhoto as error:
+    except InvalidFrontPhoto as error:
         response = Response({'detail': error.message}, status=error.status)
-    except HouseholdPhotoUpdateFailed as error:
+    except FrontPhotoUpdateFailed as error:
         response = Response({'detail': 'Photo could not be saved; the previous photo is unchanged.',
                              'cleanup_pending': error.cleanup_pending}, status=503)
     except (PrivatePhotoUnavailable, DatabaseError):
@@ -76,3 +76,23 @@ def household_front_photo(request, household_id):
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
     return response
+
+
+@transaction.non_atomic_requests
+@api_view(['GET', 'PUT'])
+@parser_classes([MultiPartParser])
+@permission_classes([IsAuthenticated])
+def household_front_photo(request, household_id):
+    return _front_photo(request, owner_model=HouseholdSanitationRecord, owner_id=household_id,
+                        photo_model=HouseholdFrontPhoto, owner_field='household',
+                        replace=replace_household_photo)
+
+
+@transaction.non_atomic_requests
+@api_view(['GET', 'PUT'])
+@parser_classes([MultiPartParser])
+@permission_classes([IsAuthenticated])
+def establishment_front_photo(request, establishment_id):
+    return _front_photo(request, owner_model=SanitaryEstablishment, owner_id=establishment_id,
+                        photo_model=EstablishmentFrontPhoto, owner_field='establishment',
+                        replace=replace_establishment_photo)

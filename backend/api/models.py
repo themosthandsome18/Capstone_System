@@ -1323,6 +1323,25 @@ class HouseholdPhotoCleanup(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class EstablishmentFrontPhoto(models.Model):
+    """One current private front photo per establishment; never serialized.
+
+    PROTECT mirrors establishment retention; separate from inspection records.
+    """
+    establishment = models.OneToOneField(
+        SanitaryEstablishment, on_delete=models.PROTECT, related_name='front_photo',
+    )
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class EstablishmentPhotoCleanup(models.Model):
+    """Durable object receipt for establishment photos (same rules as households)."""
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    ready = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 # NOTIFICATION MODULE MODELS
 # ============================================================
 

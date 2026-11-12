@@ -7846,10 +7846,12 @@ class BoatCapacityFareSeedTests(TransactionTestCase):
         gone = before - set(connection.introspection.table_names())
         # Going back past 0055 also takes back every later migration, so the tables
         # that migrations AFTER 0055 created (Mobile App Content, 0060; Household
-        # front photo, 0063_household_front_photo) go with it.
+        # front photo, 0063_household_front_photo; Establishment front photo, 0070)
+        # go with it.
         later = {
             "api_mobilecontentitem", "api_mobilecontentblock",
             "api_householdfrontphoto", "api_householdphotocleanup",
+            "api_establishmentfrontphoto", "api_establishmentphotocleanup",
         }
         self.assertEqual(gone - later, {BoatCapacityFare._meta.db_table})
 
