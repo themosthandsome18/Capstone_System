@@ -88,7 +88,10 @@ void main() {
             expect(find.text('Survey submitted'), findsNothing);
             // Returning to A does not silently revive the already-invalid form.
             await prefs.setString(staffAuthTokenKey, 'session-A');
-            await submit(tester);
+            await tester.pump();
+            expect(find.text('Session expired'), findsOneWidget);
+            expect(find.text('Submit Household Survey'), findsNothing);
+            expect(find.byType(AppTextField), findsNothing);
             expect(requests, isEmpty);
           }, () => client);
         },

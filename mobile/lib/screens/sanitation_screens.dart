@@ -76,8 +76,8 @@ class HouseholdMembersPanel extends StatelessWidget {
                           '${item.value}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
                           children: [
                             IconButton(
                               tooltip: 'Decrease ${item.label}',
@@ -129,7 +129,7 @@ class HouseholdMembersPanel extends StatelessWidget {
   }
 }
 
-/// Household-only seam for testing service, permission and acquisition failures.
+/// Injectable device-location access for sanitation capture workflows.
 class HouseholdLocationAdapter {
   const HouseholdLocationAdapter();
 
@@ -188,9 +188,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _houseNumber = TextEditingController();
-  final TextEditingController _sitio = TextEditingController();
   bool _houseNumberEdited = false;
-  bool _sitioEdited = false;
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
@@ -207,6 +205,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool _submitting = false;
   bool _locating = false;
   bool _locationConfirmed = false;
+  SanitationLocationDetails _locationDetails = const SanitationLocationDetails();
+  bool _locationEdited = false;
+  int _locationGeneration = 0;
+  late final SanitationSitioSelection _sitioSelection;
   bool _consentConfirmed = false;
   String? _editIncompatibility;
   late final Future<void> _sessionReady;
@@ -233,7 +235,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
   Future<void> _captureHouseholdSession() async {
     _sessionPrefs = await SharedPreferences.getInstance();
+    if (!mounted || _sessionInvalid) return;
     _sessionToken = _sessionPrefs!.getString(staffAuthTokenKey);
+    if (mounted && _sessionToken != null) unawaited(_sitioSelection.load(_sessionToken!));
   }
 
   bool _checkHouseholdSession() {
@@ -243,7 +247,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         _sessionPrefs?.getString(staffAuthTokenKey) == _sessionToken) {
       return true;
     }
-    _sessionInvalid = true;
+    _onStaffSessionChanged();
     if (mounted) {
       showAppMessage(context,
           'Staff session changed. Reopen and review the household form under the current account.');
@@ -257,6 +261,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     staffSessionRevision.addListener(_onStaffSessionChanged);
     _sessionReady = _captureHouseholdSession();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
+    _sitioSelection = SanitationSitioSelection(api: widget.api, barangays: widget.barangays,
+      barangay: _barangay, text: widget.household?.sitio ?? '',
+      reference: widget.household?.sitioReference, source: widget.household?.sitioSource ?? 'unknown');
+    _locationDetails = widget.household?.locationDetails ?? const SanitationLocationDetails();
     if (widget.household != null) {
       _editIncompatibility = widget.household!.editIncompatibility;
       if (_editIncompatibility == null &&
@@ -267,7 +275,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       final stored = widget.household!.surveyValues!;
       _address.text = stored['address'] as String;
       _houseNumber.text = widget.household!.houseNumber;
-      _sitio.text = widget.household!.sitio;
       _male = stored['male_count'] as int;
       _female = stored['female_count'] as int;
       _waterLevel = stored['water_level'] as String;
@@ -317,6 +324,28 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     // Any session change drops an unsaved selection immediately.
     if (!mounted) return;
     setState(() {
+      _sessionInvalid = true;
+      _sessionToken = null;
+      _locationGeneration++;
+      _head.clear();
+      _address.clear();
+      _houseNumber.clear();
+      _latitude.clear();
+      _longitude.clear();
+      _sitioSelection.invalidate();
+      _locationDetails = const SanitationLocationDetails();
+      _locationConfirmed = false;
+      _locationEdited = false;
+      _consentConfirmed = false;
+      _male = 0;
+      _female = 0;
+      _septicTankType = null;
+      _waterSourceSelection = '';
+      _savedHouseholdId = null;
+      _savedHouseholdCode = '';
+      _savedReceipt = null;
+      _saveUnconfirmed = false;
+      _pendingUploadError = null;
       _pendingPhoto = null;
       _pendingPhotoError = null;
       if (_pendingUpload != _PendingPhotoUpload.done) _pendingUpload = _PendingPhotoUpload.none;
@@ -330,7 +359,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     _head.dispose();
     _address.dispose();
     _houseNumber.dispose();
-    _sitio.dispose();
+    _sitioSelection.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
@@ -661,6 +690,10 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_sessionInvalid) {
+      return Scaffold(appBar: AppBar(title: const Text('Session expired')),
+        body: const Center(child: Text('Sign in and reopen the household form to continue.')));
+    }
     if (_saveUnconfirmed) {
       return _buildUnconfirmedSave();
     }
@@ -685,6 +718,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           ),
           if (widget.household?.surveyValues?['id'] case final int id when id > 0)
             _photoPanel(id),
+          if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+            FilledButton.icon(onPressed: _openLocationRepair,
+              icon: const Icon(Icons.location_on_outlined), label: const Text('Repair Location and Sitio')),
         ],
       );
     }
@@ -709,18 +745,18 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           label: 'House Number',
           onChanged: (_) => _houseNumberEdited = true,
         ),
-        AppTextField(
-          controller: _sitio,
-          label: 'Sitio',
-          onChanged: (_) => _sitioEdited = true,
-        ),
         DropdownTile<String>(
           label: 'Barangay',
           value: _barangay,
           items: widget.barangays.map((item) => item.name).toList(),
           itemLabel: (item) => item,
-          onChanged: (item) => setState(() => _barangay = item),
+          onChanged: (item) => setState(() {
+            _barangay = item;
+            _sitioSelection.changeBarangay(item, _sessionToken ?? '');
+          }),
         ),
+        SanitationSitioField(selection: _sitioSelection,
+          onRetry: () => _sitioSelection.load(_sessionToken ?? '')),
         AppTextField(
           controller: _address,
           label: widget.household == null ? 'Address' : 'Existing combined address',
@@ -788,6 +824,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           title: 'Household Location',
           emptyText: 'No household location captured yet',
         ),
+        Text(_locationDetails.description),
         Row(
           children: [
             Expanded(
@@ -795,7 +832,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 controller: _latitude,
                 label: 'Latitude',
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+                onChanged: (_) => _manualLocationChanged(),
               ),
             ),
             const SizedBox(width: 10),
@@ -804,7 +841,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 controller: _longitude,
                 label: 'Longitude',
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+                onChanged: (_) => _manualLocationChanged(),
               ),
             ),
           ],
@@ -813,6 +850,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           latitude: _latitude.text,
           longitude: _longitude.text,
           confirmed: _locationConfirmed,
+          useGlobalCoordinates: true,
           onChanged: _setLocation,
           onConfirm: () => setState(() => _locationConfirmed = true),
         ),
@@ -831,10 +869,14 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _submit() async {
-    if (_submitting) return;
+    if (_submitting || _locating) return;
     await _sessionReady;
-    if (!mounted || _submitting || !_checkHouseholdSession()) return;
+    if (!mounted || _submitting || _locating || !_checkHouseholdSession()) return;
     if (_editIncompatibility != null) return;
+    if (_sitioSelection.validationError != null) {
+      showAppMessage(context, _sitioSelection.validationError!);
+      return;
+    }
     if (_head.text.trim().isEmpty) {
       showAppMessage(context, 'Household head is required.');
       return;
@@ -843,7 +885,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Barangay is required.');
       return;
     }
-    if (_houseNumber.text.length > 120 || _sitio.text.length > 120) {
+    if (_houseNumber.text.length > 120) {
       showAppMessage(context, 'House Number and Sitio must each be 120 characters or fewer.');
       return;
     }
@@ -857,7 +899,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Septic tank type is required.');
       return;
     }
-    if (latLngFromText(_latitude.text, _longitude.text) == null) {
+    if (sanitationCoordinatePair(_latitude.text, _longitude.text) == null) {
       showAppMessage(context, 'Capture or tap the household map location.');
       return;
     }
@@ -892,8 +934,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             : _address.text.trim(),
         houseNumber: stored == null || stored.containsKey('house_number') || _houseNumberEdited
             ? _houseNumber.text : null,
-        sitio: stored == null || stored.containsKey('sitio') || _sitioEdited
-            ? _sitio.text : null,
+        sitioChanges: _sitioSelection.changes,
+        locationCapture: _locationEdited ? _locationDetails.capture : null,
         maleCount: _male,
         femaleCount: _female,
         toiletType: _toiletType,
@@ -1005,54 +1047,53 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _captureLocation() async {
-    setState(() {
-      _locating = true;
-      _locationConfirmed = false;
-    });
-
+    if (_locating || _submitting) return;
+    await _sessionReady;
+    if (!mounted || _locating || _submitting || !_checkHouseholdSession()) return;
+    final generation = ++_locationGeneration;
+    setState(() { _locating = true; _locationConfirmed = false; });
     try {
-      final enabled = await widget.locationAdapter.isLocationServiceEnabled();
-      if (!mounted) return;
-      if (!enabled) {
-        _locationFailure('Location services are off. Turn them on, then tap Use GPS again.');
-        return;
-      }
-
-      var permission = await widget.locationAdapter.checkPermission();
-      if (!mounted) return;
-      if (permission == LocationPermission.denied) {
-        permission = await widget.locationAdapter.requestPermission();
-        if (!mounted) return;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _locationFailure('Location permission is blocked. Enable it in app settings, then tap Use GPS again.');
-        return;
-      }
-      if (permission == LocationPermission.denied) {
-        _locationFailure('Location permission was denied. Allow location access, then tap Use GPS again.');
-        return;
-      }
-      if (permission != LocationPermission.whileInUse &&
-          permission != LocationPermission.always) {
-        _locationFailure('Could not get your GPS location. Check location services and try again.');
-        return;
-      }
-
-      final position = await widget.locationAdapter.getCurrentPosition();
-      if (!mounted) return;
-
+      final position = await captureSanitationPosition(widget.locationAdapter);
+      final details = SanitationLocationDetails.fromPosition(position);
+      if (!mounted || !_checkHouseholdSession() || generation != _locationGeneration) return;
       setState(() {
-        _latitude.text = position.latitude.toStringAsFixed(6);
-        _longitude.text = position.longitude.toStringAsFixed(6);
-        _locationConfirmed = true;
+        _latitude.text = position.latitude.toString();
+        _longitude.text = position.longitude.toString();
+        _locationDetails = details;
+        _locationEdited = true;
       });
-      showAppMessage(context, 'GPS location acquired.');
+      showAppMessage(context, 'GPS location acquired. Review and Confirm Pin.');
     } on TimeoutException {
-      _locationFailure('GPS timed out. Move to an open area and tap Use GPS again.');
-    } catch (_) {
-      _locationFailure('Could not get your GPS location. Check location services and try again.');
+      if (mounted && generation == _locationGeneration && !_sessionInvalid) {
+        _locationFailure('GPS timed out. Move to an open area and tap Use GPS again.');
+      }
+    } catch (error) {
+      if (mounted && generation == _locationGeneration && !_sessionInvalid) {
+        _locationFailure(error is SanitationLocationException ? error.message
+            : 'Could not get your GPS location. Check location services and try again.');
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _manualLocationChanged() => setState(() {
+    _locationGeneration++;
+    _locationConfirmed = false;
+    _locationEdited = true;
+    _locationDetails = const SanitationLocationDetails(source: 'manual');
+  });
+
+  Future<void> _openLocationRepair() async {
+    await _sessionReady;
+    if (!mounted || !_checkHouseholdSession()) return;
+    final id = widget.household?.surveyValues?['id'];
+    if (id is! int || id <= 0) return;
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => SavedSanitationLocationPage(api: widget.api, recordId: id,
+        household: true, barangays: widget.barangays, locationAdapter: widget.locationAdapter)));
+    if (mounted && _checkHouseholdSession() && saved == true) {
+      Navigator.of(context).pop(MobileHouseholdSurveyReceipt.fromRecord(widget.household!));
     }
   }
 
@@ -1068,6 +1109,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       _latitude.text = point.latitude.toStringAsFixed(6);
       _longitude.text = point.longitude.toStringAsFixed(6);
       _locationConfirmed = false;
+      _locationGeneration++;
+      _locationEdited = true;
+      _locationDetails = const SanitationLocationDetails(source: 'manual');
     });
   }
 }
@@ -2653,6 +2697,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         establishments: _bootstrap.establishments,
         onOpenInspection: _openInspection,
         onOpenFrontPhoto: _openEstablishmentPhoto,
+        onOpenLocation: _openEstablishmentLocation,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2760,6 +2805,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
         establishments: _bootstrap.establishments.where((item) => ids.contains(item.id)).toList(),
         onOpenInspection: _openInspection,
         onOpenFrontPhoto: _openEstablishmentPhoto,
+        onOpenLocation: _openEstablishmentLocation,
         onRefresh: refresh,
         refreshing: _refreshing,
       );
@@ -2916,6 +2962,14 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     await SanitationDraftStore.removeReport(draft.id);
     await _loadDrafts();
     if (mounted) showAppMessage(context, 'Draft deleted.');
+  }
+
+  Future<void> _openEstablishmentLocation(SanitationEstablishment establishment) async {
+    if (establishment.id <= 0) return;
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => SavedSanitationLocationPage(api: widget.api,
+        recordId: establishment.id, household: false, barangays: _bootstrap.barangays)));
+    if (mounted && saved == true) await _refreshBootstrap(silent: true);
   }
 
   Future<void> _openEstablishmentPhoto(SanitationEstablishment establishment) async {
@@ -3276,6 +3330,7 @@ class SanitationEstablishmentsPage extends StatefulWidget {
     required this.establishments,
     required this.onOpenInspection,
     this.onOpenFrontPhoto,
+    this.onOpenLocation,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -3286,6 +3341,7 @@ class SanitationEstablishmentsPage extends StatefulWidget {
   final List<SanitationEstablishment> establishments;
   final ValueChanged<SanitationEstablishment> onOpenInspection;
   final ValueChanged<SanitationEstablishment>? onOpenFrontPhoto;
+  final ValueChanged<SanitationEstablishment>? onOpenLocation;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
@@ -3462,6 +3518,8 @@ class _SanitationEstablishmentsPageState
                 (item) => SanitationEstablishmentCard(
                   establishment: item,
                   onInspection: () => widget.onOpenInspection(item),
+                  onLocation: widget.onOpenLocation != null && item.id > 0
+                      ? () => widget.onOpenLocation!(item) : null,
                   // Photos attach only to saved records with a server id.
                   onFrontPhoto: widget.onOpenFrontPhoto != null && item.id > 0
                       ? () => widget.onOpenFrontPhoto!(item)
@@ -3917,7 +3975,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                   child: SimpleInfoCard(
                     icon: Icons.home_work_outlined,
                     title: item.householdHead,
-                    subtitle: '${item.householdCode} - ${item.barangay}',
+                    subtitle: '${item.householdCode} - ${item.barangay}\n${item.locationDetails.description}',
                     trailing: householdStatusLabel(item.status),
                     statusColor: householdStatusColor(item.status),
                   ),
@@ -3930,7 +3988,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                 (item) => SimpleInfoCard(
                   icon: Icons.apartment_outlined,
                   title: item.businessName,
-                  subtitle: '${item.businessTypeName} - ${item.barangay}',
+                  subtitle: '${item.businessTypeName} - ${item.barangay}\n${item.locationDetails.description}',
                   trailing: sanitationEstablishmentMapStatus(item.complianceStatus).label,
                   statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
@@ -4795,12 +4853,14 @@ class SanitationEstablishmentCard extends StatelessWidget {
     required this.establishment,
     required this.onInspection,
     this.onFrontPhoto,
+    this.onLocation,
   });
 
   final SanitationEstablishment establishment;
   final VoidCallback onInspection;
   /// Opens the establishment's private front photo; null hides the action.
   final VoidCallback? onFrontPhoto;
+  final VoidCallback? onLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -4845,6 +4905,10 @@ class SanitationEstablishmentCard extends StatelessWidget {
                   ),
                   child: const Text('Inspect'),
                 );
+                final location = onLocation == null || establishment.id <= 0 ? null
+                    : OutlinedButton.icon(onPressed: onLocation,
+                        key: ValueKey('establishment-location-${establishment.id}'),
+                        icon: const Icon(Icons.location_on_outlined, size: 18), label: const Text('Location'));
                 final frontPhoto = onFrontPhoto == null
                     ? null
                     : OutlinedButton.icon(
@@ -4917,7 +4981,7 @@ class SanitationEstablishmentCard extends StatelessWidget {
                       Wrap(
                         spacing: 8,
                         runSpacing: 6,
-                        children: [inspect, ?frontPhoto],
+                        children: [inspect, ?location, ?frontPhoto],
                       ),
                     ],
                   );
@@ -4930,6 +4994,7 @@ class SanitationEstablishmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         inspect,
+                        ?location,
                         if (frontPhoto != null) ...[
                           const SizedBox(height: 6),
                           frontPhoto,

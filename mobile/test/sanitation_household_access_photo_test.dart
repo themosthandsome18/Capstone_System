@@ -33,6 +33,12 @@ class HouseholdServer {
   MockClient get client => MockClient((request) async {
     requests.add(request);
     final path = request.url.path;
+    if (request.method == 'GET' && path == '/api/sanitation/sitios/') {
+      return http.Response(jsonEncode({
+        'barangay_id': int.parse(request.url.queryParameters['barangay_id']!),
+        'rows': [],
+      }), 200);
+    }
     if (request.method == 'POST' && path == '/api/mobile/sanitation/household-surveys/') {
       return http.Response(
         jsonEncode(createResponse ??
@@ -100,6 +106,9 @@ Future<List<Object?>> openNewSurvey(WidgetTester tester, PhotoPicker picker) asy
   tester.widget<ConsentCheckPanel>(find.byType(ConsentCheckPanel)).onChanged(true);
   await tester.pump();
   await capture(tester);
+  await tester.ensureVisible(find.text('Confirm Pin'));
+  await tester.tap(find.text('Confirm Pin'));
+  await tester.pump();
   return results;
 }
 
@@ -184,10 +193,12 @@ void main() {
         expect(find.byType(HouseholdSurveyPage), findsOneWidget);
         expect(find.byType(HouseholdFrontPhotoPanel), findsOneWidget);
         expect(savedPhoto(), findsOneWidget);
-        expect(
-          server.requests.single.url.path,
-          '/api/households/records/71/front-photo/',
-        );
+        expect(server.requests.map((request) => request.url.path), unorderedEquals([
+          '/api/households/records/71/front-photo/', '/api/sanitation/sitios/',
+        ]));
+        expect(server.requests.every((request) => request.method == 'GET'), isTrue);
+        expect(server.requests.singleWhere((request) => request.url.path.endsWith('/sitios/'))
+            .url.queryParameters, {'barangay_id': '1'});
       }, () => server.client);
     });
 

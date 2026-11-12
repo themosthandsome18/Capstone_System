@@ -41,14 +41,14 @@ void main() {
   });
 
   testWidgets(
-    'fixed fields use exact tap choices; only Barangay is a dropdown',
+    'fixed fields use exact tap choices; Barangay and optional Sitio are dropdowns',
     (tester) async {
       await pumpEdit(tester, storedHousehold());
       final dropdowns = tester.widgetList(
         find.byWidgetPredicate((w) => w is DropdownTile),
       );
-      expect(dropdowns.length, 1);
-      expect((dropdowns.single as dynamic).label, 'Barangay');
+      expect(dropdowns.length, 2);
+      expect(dropdowns.map((item) => (item as dynamic).label), ['Barangay', 'Sitio (optional)']);
       for (final label in [
         'Water-sealed',
         householdToiletLabel('pour_flush'),

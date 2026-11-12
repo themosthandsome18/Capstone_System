@@ -26,6 +26,8 @@ class SurveyApi extends TourismApi {
     required String address,
     String? houseNumber,
     String? sitio,
+    Map<String, dynamic> sitioChanges = const {},
+    Map<String, dynamic>? locationCapture,
     required int maleCount,
     required int femaleCount,
     required String toiletType,

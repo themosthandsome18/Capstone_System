@@ -219,21 +219,29 @@ void main() {
     LocationPermission.whileInUse,
     LocationPermission.always,
   ]) {
-    testWidgets('real GPS $permission populates and POSTs six decimals', (
+    testWidgets('real GPS $permission requires confirmation and POSTs exact device coordinates', (
       tester,
     ) async {
       await withRequests((requests) async {
         final location = FakeHouseholdLocation()..permission = permission;
         await pumpHousehold(tester, location);
         await capture(tester);
-        expect(coordinateText(tester, 'Latitude'), '14.213457');
-        expect(coordinateText(tester, 'Longitude'), '121.765432');
-        expect(confirmation(tester).confirmed, isTrue);
+        expect(coordinateText(tester, 'Latitude'), '14.213456789');
+        expect(coordinateText(tester, 'Longitude'), '121.765432198');
+        expect(confirmation(tester).confirmed, isFalse);
         final success = find
-            .text('GPS location acquired.')
+            .text('GPS location acquired. Review and Confirm Pin.')
             .evaluate()
             .isNotEmpty;
         await submit(tester);
+        expect(requests, isEmpty);
+        await tester.tap(find.text('Confirm Pin'));
+        await tester.pump();
+        await submit(tester);
+        expect(jsonDecode(requests.single.body)['location_capture'], {
+          'method': 'device_reported', 'accuracy_m': 10.0,
+          'captured_at': DateTime(2026, 10, 4).toUtc().toIso8601String(), 'reported_mock': false,
+        });
         expect(requests.single.method, 'POST');
         expect(
           requests.single.url.path,
@@ -241,11 +249,11 @@ void main() {
         );
         expect(
           jsonDecode(requests.single.body),
-          containsPair('latitude', '14.213457'),
+          containsPair('latitude', '14.213456789'),
         );
         expect(
           jsonDecode(requests.single.body),
-          containsPair('longitude', '121.765432'),
+          containsPair('longitude', '121.765432198'),
         );
         expect(success, isTrue);
       });
@@ -306,6 +314,7 @@ void main() {
       await submit(tester);
       expect(jsonDecode(requests.single.body), containsPair('latitude', lat));
       expect(jsonDecode(requests.single.body), containsPair('longitude', lng));
+      expect(jsonDecode(requests.single.body)['location_capture'], {'method': 'manual'});
     });
   });
 
@@ -335,7 +344,7 @@ void main() {
     },
   );
 
-  for (final value in ['', 'not-a-number', '0', '0.0001']) {
+  for (final value in ['', 'not-a-number', 'NaN', 'Infinity', '91']) {
     testWidgets('invalid latitude [$value] cannot be confirmed or submitted', (
       tester,
     ) async {
@@ -361,9 +370,23 @@ void main() {
     await capture(tester);
     location.enabled = true;
     await capture(tester);
-    expect(confirmation(tester).confirmed, isTrue);
-    expect(coordinateText(tester, 'Latitude'), '14.213457');
+    expect(confirmation(tester).confirmed, isFalse);
+    expect(coordinateText(tester, 'Latitude'), '14.213456789');
     expect(location.calls, ['service', 'service', 'check', 'position']);
+  });
+
+  testWidgets('rapid GPS taps start only one acquisition', (tester) async {
+    final pending = Completer<Position>();
+    final location = FakeHouseholdLocation()..pendingPosition = pending.future;
+    await pumpHousehold(tester, location);
+    final capture = tester.widget<LocationCapturePanel>(find.byType(LocationCapturePanel)).onCapture;
+    capture();
+    capture();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(location.calls.where((call) => call == 'position'), hasLength(1));
+    pending.complete(await FakeHouseholdLocation().getCurrentPosition());
+    await tester.pump();
+    expect(confirmation(tester).confirmed, isFalse);
   });
 
   testWidgets(

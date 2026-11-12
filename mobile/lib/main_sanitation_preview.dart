@@ -136,6 +136,11 @@ class SanitationPreviewApp extends StatelessWidget {
   const SanitationPreviewApp({super.key, this.api = const TourismApi()});
   final TourismApi api;
 
+  // Development-only accessibility rehearsal. Production entrypoints never
+  // import this file. Use --dart-define=PREVIEW_TEXT_SCALE=1.5 in local Chrome.
+  static final _textScale = double.parse(
+    const String.fromEnvironment('PREVIEW_TEXT_SCALE', defaultValue: '1.0'));
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -145,7 +150,10 @@ class SanitationPreviewApp extends StatelessWidget {
       message: 'PREVIEW',
       location: BannerLocation.topEnd,
       color: const Color(0xFFB45309),
-      child: child ?? const SizedBox.shrink(),
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_textScale)),
+        child: child ?? const SizedBox.shrink(),
+      ),
     ),
     home: SanitationPreviewHome(api: api),
   );

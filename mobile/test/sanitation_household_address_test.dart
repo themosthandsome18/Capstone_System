@@ -16,6 +16,13 @@ Map<String, dynamic> addressed() => {
   'sitio': 'lower sitio',
 };
 
+Future<void> enterSitio(WidgetTester tester, String value) async {
+  final selection = tester.widget<SanitationSitioField>(find.byType(SanitationSitioField)).selection;
+  selection.select('manual');
+  await tester.pump();
+  await tester.enterText(find.widgetWithText(TextFormField, 'Manual Sitio'), value);
+}
+
 void main() {
   setUp(
     () => SharedPreferences.setMockInitialValues({
@@ -87,7 +94,7 @@ void main() {
             .value;
         await tester.enterText(field('Household head'), 'Local household');
         await tester.enterText(field('House Number'), '01-b');
-        await tester.enterText(field('Sitio'), 'new sitio');
+        await enterSitio(tester, 'new sitio');
         await tester.enterText(field('Latitude'), '14.19');
         await tester.enterText(field('Longitude'), '121.73');
         await tester.tap(find.widgetWithText(ChoiceChip, 'Bottomless'));
@@ -120,7 +127,7 @@ void main() {
         tester.widget<AppTextField>(field('House Number')).controller.text,
         '',
       );
-      expect(tester.widget<AppTextField>(field('Sitio')).controller.text, '');
+      expect(tester.widget<SanitationSitioField>(find.byType(SanitationSitioField)).selection.text, '');
       expect(
         tester
             .widget<AppTextField>(field('Existing combined address'))
@@ -152,7 +159,11 @@ void main() {
           addTearDown(client.close);
           await http.runWithClient(() async {
             await pumpEdit(tester, stored);
-            await tester.enterText(field(entry.key), value);
+            if (entry.key == 'Sitio') {
+              await enterSitio(tester, value);
+            } else {
+              await tester.enterText(field(entry.key), value);
+            }
             await submitEdit(tester);
           }, () => client);
           expect(requests.single.method, 'PATCH');

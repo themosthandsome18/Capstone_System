@@ -143,17 +143,19 @@ class LocationCapturePanel extends StatelessWidget {
       elevation: 0,
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: context.brand.tint,
-          child: Icon(Icons.my_location_outlined, color: context.brand.primary),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          hasLocation ? '$latitude, $longitude' : emptyText,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: FilledButton.tonalIcon(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CircleAvatar(backgroundColor: context.brand.tint,
+              child: Icon(Icons.my_location_outlined, color: context.brand.primary)),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 6),
+          Text(hasLocation ? '$latitude, $longitude' : emptyText),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
           onPressed: locating ? null : onCapture,
           icon: locating
               ? const SizedBox(
@@ -163,7 +165,8 @@ class LocationCapturePanel extends StatelessWidget {
                 )
               : const Icon(Icons.gps_fixed),
           label: Text(locating ? 'Getting' : 'Use GPS'),
-        ),
+          ),
+        ]),
       ),
     );
   }
@@ -841,6 +844,7 @@ class LocationConfirmationPanel extends StatelessWidget {
     required this.confirmed,
     required this.onChanged,
     required this.onConfirm,
+    this.useGlobalCoordinates = false,
   });
 
   final String latitude;
@@ -848,10 +852,12 @@ class LocationConfirmationPanel extends StatelessWidget {
   final bool confirmed;
   final ValueChanged<LatLng> onChanged;
   final VoidCallback onConfirm;
+  final bool useGlobalCoordinates;
 
   @override
   Widget build(BuildContext context) {
-    final point = latLngFromText(latitude, longitude);
+    final point = useGlobalCoordinates ? sanitationCoordinatePair(latitude, longitude)
+        : latLngFromText(latitude, longitude);
     final center = point ?? const LatLng(14.185, 121.731);
 
     return Card(

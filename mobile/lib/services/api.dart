@@ -595,6 +595,67 @@ class TourismApi {
     );
   }
 
+  Future<Map<String, dynamic>> _sanitationLocationRequest(String path, {
+    required String expectedSessionToken, Map<String, dynamic>? changes,
+  }) async {
+    final revision = staffSessionRevision.value;
+    final prefs = await SharedPreferences.getInstance();
+    void checkSession() {
+      if (expectedSessionToken.isEmpty || prefs.getString(staffAuthTokenKey) != expectedSessionToken ||
+          staffSessionRevision.value != revision) {
+        throw const ApiException(statusCode: 409, message: 'Staff session changed. Reopen this record.');
+      }
+    }
+    checkSession();
+    final headers = {'Authorization': 'Token $expectedSessionToken', 'Content-Type': 'application/json'};
+    final uri = Uri.parse('$apiBaseUrl$path');
+    final response = await (changes == null ? http.get(uri, headers: headers)
+        : http.patch(uri, headers: headers, body: jsonEncode(changes))).timeout(_requestTimeout);
+    checkSession();
+    return _decode(response);
+  }
+
+  Future<List<SanitationSitioChoice>> fetchSanitationSitios(int barangayId, {
+    required String expectedSessionToken,
+  }) async {
+    if (barangayId <= 0) throw ArgumentError('A saved Barangay ID is required.');
+    final data = await _sanitationLocationRequest('/sanitation/sitios/?barangay_id=$barangayId',
+      expectedSessionToken: expectedSessionToken);
+    if (data['barangay_id'] != barangayId || data['rows'] is! List) {
+      throw const FormatException('Sitio response did not match the selected Barangay.');
+    }
+    final ids = <int>{};
+    return List.unmodifiable((data['rows'] as List).map((row) {
+      if (row is! Map || row['id'] is! int || row['id'] <= 0 ||
+          row['barangay_id'] != barangayId || row['is_active'] != true ||
+          row['name'] is! String || (row['name'] as String).trim().isEmpty || !ids.add(row['id'])) {
+        throw const FormatException('The Sitio choices are invalid. Reload to retry.');
+      }
+      return SanitationSitioChoice(row['id'], row['name'], barangayId);
+    }));
+  }
+
+  String _sanitationLocationPath(int id, bool household) {
+    if (id <= 0) throw ArgumentError('A saved record ID is required.');
+    return household ? '/households/records/$id/' : '/sanitation/establishments/$id/';
+  }
+
+  Future<Map<String, dynamic>> fetchSanitationLocationRecord(int id, {
+    required bool household, required String expectedSessionToken,
+  }) => _sanitationLocationRequest(_sanitationLocationPath(id, household),
+      expectedSessionToken: expectedSessionToken);
+
+  Future<Map<String, dynamic>> patchSanitationLocationRecord(int id, Map<String, dynamic> changes, {
+    required bool household, required String expectedSessionToken,
+  }) {
+    const allowed = {'latitude', 'longitude', 'location_capture', 'barangay', 'sitio', 'sitio_reference'};
+    if (changes.keys.any((key) => !allowed.contains(key))) {
+      throw ArgumentError('Unsupported location editor field.');
+    }
+    return _sanitationLocationRequest(_sanitationLocationPath(id, household),
+      expectedSessionToken: expectedSessionToken, changes: changes);
+  }
+
   Future<Map<String, dynamic>> submitHouseholdSurvey({
     String? expectedSessionToken,
     HouseholdSanitationItem? originalHousehold,
@@ -605,6 +666,8 @@ class TourismApi {
     required String address,
     String? houseNumber,
     String? sitio,
+    Map<String, dynamic> sitioChanges = const {},
+    Map<String, dynamic>? locationCapture,
     required int maleCount,
     required int femaleCount,
     required String toiletType,
@@ -632,6 +695,8 @@ class TourismApi {
       // Omit remarks: updates must preserve notes entered through the web.
       'latitude': latitude,
       'longitude': longitude,
+      ...sitioChanges,
+      'location_capture': ?locationCapture,
     };
     if (householdCode != null) {
       body['household_code'] = householdCode;
@@ -664,6 +729,10 @@ class TourismApi {
             ? double.parse(entry.value as String)
             : entry.value;
         if (value != stored[entry.key]) changes[entry.key] = value;
+      }
+      if (locationCapture != null) {
+        changes['latitude'] = double.parse(latitude);
+        changes['longitude'] = double.parse(longitude);
       }
       if (changes.isEmpty) return {...stored, 'status': originalHousehold.status};
       final response = await http.patch(
