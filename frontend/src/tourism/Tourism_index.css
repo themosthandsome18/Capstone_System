@@ -3338,6 +3338,55 @@
   border: 1px solid #2d9cff;
 }
 
+/* The GIS map's pin (MaubanDestinationMap.js). Leaflet moves the icon itself; everything that grows or fades is inside it. */
+.mauban-pin-icon {
+  background: none;
+  border: 0;
+}
+
+/* the pin grows from its tip (transform-origin), so the tip stays on the coordinate */
+.mauban-pin-body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 97%;
+  transition: transform 0.18s ease-out;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35));
+}
+
+.mauban-pin-body svg {
+  display: block;
+  overflow: visible;
+}
+
+.mauban-pin-icon:hover .mauban-pin-body {
+  transform: scale(1.12);
+}
+
+/* the soft shadow on the ground, under the tip */
+.mauban-pin-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: 16px;
+  height: 6px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  filter: blur(2px);
+}
+
+/* the selected pin's soft white ring, round its head */
+.mauban-pin-ring {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+}
+
 .gis-side-panel {
   display: flex;
   flex-direction: column;
