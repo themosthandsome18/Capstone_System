@@ -534,8 +534,12 @@ class TourismApi {
     });
   }
 
+  /// A review is for someone who has been there: it carries the survey ID and the contact number of the visit (the pass), and the server takes it
+  /// only if that visit is at this destination and was scanned on arrival.
   Future<Map<String, dynamic>> submitFeedback({
     required int destinationId,
+    required String surveyId,
+    required String contactNumber,
     required String reviewer,
     required int rating,
     required String message,
@@ -545,6 +549,8 @@ class TourismApi {
   }) {
     final fields = {
       'destination_id': '$destinationId',
+      'survey_id': surveyId,
+      'contact_number': contactNumber,
       'reviewer': reviewer,
       'rating': '$rating',
       'message': message,

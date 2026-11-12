@@ -42,13 +42,13 @@ MobileBootstrap bootstrap({List<Map<String, Object?>>? destinations}) => MobileB
   'notifications': <dynamic>[],
 });
 
-MobileVisitReceipt visit({String reference = 'SURV-TEST-1', String destination = 'Sample Beach', int destinationId = 7}) {
+MobileVisitReceipt visit({String reference = 'SURV-TEST-1', String destination = 'Sample Beach', int destinationId = 7, String status = 'pending'}) {
   return MobileVisitReceipt(
     reference: reference,
     destination: keptDestination(destinationId, destination),
     arrivalDate: DateTime(2099, 6, 1),
     totalVisitors: 3,
-    status: 'pending',
+    status: status,
     fullName: 'Sample Person',
     contactNumber: '+639000000000',
     email: 'sample@example.test',
@@ -474,6 +474,8 @@ void main() {
 
     testWidgets('feedback that was sent is kept, and its (N) is right when the app is opened again', (tester) async {
       bigScreen(tester);
+      // a review is for someone whose visit here was scanned on arrival
+      await keep(visits: [visit(reference: 'SURV-SCANNED-1', status: 'arrived')], who: profile);
       await openApp(tester);
       await sendFeedback(tester);
       expect(responses.where((r) => r.url.path.endsWith('/feedback/')), hasLength(1), reason: 'the feedback was not sent');
@@ -621,6 +623,8 @@ void main() {
 
     testWidgets('the feedback is kept while the "Feedback sent" dialog is still open, and is there if the app is opened again', (tester) async {
       bigScreen(tester);
+      // a review is for someone whose visit here was scanned on arrival
+      await keep(visits: [visit(reference: 'SURV-SCANNED-1', status: 'arrived')], who: profile);
       await openApp(tester);
       await sendFeedback(tester, closeDialog: false);
 
@@ -662,6 +666,8 @@ void main() {
 
     testWidgets('closing the "Feedback sent" dialog does not make a second feedback', (tester) async {
       bigScreen(tester);
+      // a review is for someone whose visit here was scanned on arrival
+      await keep(visits: [visit(reference: 'SURV-SCANNED-1', status: 'arrived')], who: profile);
       await openApp(tester);
       await sendFeedback(tester, closeDialog: true);
 

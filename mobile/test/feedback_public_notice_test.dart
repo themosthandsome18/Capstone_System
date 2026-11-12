@@ -43,11 +43,23 @@ Future<void> showForm(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: buildAppTheme(isSanitation: false, theme: TourismTheme.none),
-      home: FeedbackPage(api: const TourismApi(), destination: destination()),
+      home: FeedbackPage(api: const TourismApi(), destination: destination(), visit: visit()),
     ),
   );
   await tester.pump();
 }
+
+// The visit that opens the review: a pass for this destination that was scanned on arrival.
+MobileVisitReceipt visit() => MobileVisitReceipt(
+  reference: 'SURV-TEST-1',
+  destination: destination(),
+  arrivalDate: DateTime(2099, 6, 1),
+  totalVisitors: 1,
+  status: 'arrived',
+  fullName: 'Sample Person',
+  contactNumber: '+639000000000',
+  email: '',
+);
 
 String noticeText(WidgetTester tester) => tester
     .widget<Text>(

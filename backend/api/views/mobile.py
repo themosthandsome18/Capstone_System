@@ -91,6 +91,7 @@ from api.services.tracking_codes import (
 from api.throttles import (
     OwnerStatusRateThrottle,
     PassStatusRateThrottle,
+    ReviewVisitRateThrottle,
     CommunityReportContactRateThrottle,
     CommunityReportIpRateThrottle,
 )
@@ -703,9 +704,42 @@ def serialize_mobile_pass_status(record):
     }
 
 
+# A review is for a person who has really been to the place: they have a pass for THAT destination, and the pass was scanned on arrival. One message for
+# every way of failing the check (no pass, another number, another destination, not arrived yet, not sent at all): it is never said which of them it was,
+# so the answer cannot be used to find out what a pass number or a contact number belongs to.
+REVIEW_NEEDS_A_VISIT_MESSAGE = (
+    "You can only review a place you have visited: your visit there must be registered and scanned on arrival."
+)
+
+
+def review_names_a_visit(data):
+    """True when the post carries BOTH a survey ID and a contact number (with digits): it names a visit, right or wrong."""
+    return bool(str(data.get("survey_id") or "").strip() and normalize_contact_digits(data.get("contact_number")))
+
+
+def visit_allows_review(data, destination_id):
+    """True only when ALL of these are so: the survey ID names a TouristRecord, the contact number is that record's (compared by its digits,
+    normalize_contact_digits), the record's resort is the destination being reviewed, and the record's status is arrived (it was scanned).
+
+    An archived record is accepted: the archive is about the table of Record Management, not about the arrival.
+    """
+    survey_id = str(data.get("survey_id") or "").strip()
+    contact = normalize_contact_digits(data.get("contact_number"))
+    if not survey_id or not contact:
+        return False
+    record = TouristRecord.objects.filter(survey_id__iexact=survey_id).first()
+    return bool(
+        record is not None
+        and normalize_contact_digits(record.contact_number) == contact
+        and record.resort_id == parse_mobile_int(destination_id, -1)
+        and record.status == BOOKING_STATUS_ARRIVED
+    )
+
+
 @api_view(["POST"])
 @parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([AllowAny])
+@throttle_classes([ReviewVisitRateThrottle])
 def mobile_feedback_submit(request):
     ensure_mobile_reference_data()
 
@@ -722,6 +756,19 @@ def mobile_feedback_submit(request):
         or data.get("resort_id")
     )
     data["destinationId"] = destination_id
+
+    # Before anything is read or saved (a photo included): a review is for someone who has been there, and the server says so, not only the app
+    # (the app hides the button, but anyone can post here). The web's own POST /api/feedback/ has its own login and is not this.
+    if not visit_allows_review(data, destination_id):
+        if review_names_a_visit(data):
+            # A survey ID and a number that do not make a visit are a guess: counted per client address, and limited (ReviewVisitRateThrottle,
+            # which says why and how much). A post with one of them missing guesses nothing and is not counted.
+            ReviewVisitRateThrottle.record_failure(request)
+        return Response(
+            {"error": REVIEW_NEEDS_A_VISIT_MESSAGE, "detail": REVIEW_NEEDS_A_VISIT_MESSAGE},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     data["reviewer"] = data.get("reviewer") or data.get("full_name") or "Mobile User"
     data["date"] = data.get("date") or timezone.localdate().isoformat()
     data["title"] = data.get("title") or "Mobile tourism feedback"

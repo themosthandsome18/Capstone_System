@@ -253,6 +253,7 @@ void main() {
 
     testWidgets('feedback is not news for My Visit', (tester) async {
       bigScreen(tester);
+      await keepPasses([pass('SURV-SCANNED-1', status: 'arrived')]); // a review is for someone whose visit here was scanned on arrival
       await openApp(tester);
       await tester.tap(find.text('Explore').last);
       await tester.pump(const Duration(milliseconds: 300));
