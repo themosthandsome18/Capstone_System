@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import { useNavigate } from "react-router-dom";
 import {
   MapContainer,
   Marker,
@@ -149,6 +150,95 @@ function FocusSelectedDestination({ selectedDestination }) {
   return null;
 }
 
+// How long the card answers a press (sinks and fades) before the page changes: the app's own 0.15s ease (see .mauban-popup-card).
+export const POPUP_LEAVE_MS = 150;
+
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// "N visitors this month": this month's arrivals the destination already carries (monthly_arrivals), 0 included, 1 in the singular.
+export function visitorsThisMonthText(value) {
+  const people = Number(value || 0);
+  return `${people.toLocaleString()} ${people === 1 ? "visitor" : "visitors"} this month`;
+}
+
+// The whole card is one real button: it takes focus and Enter. It opens that destination's details on the Destinations page the way
+// Arrival Monitoring does (navigate("/destinations", { state: { openResortId } })), after a short answer, or at once if the person asked for no motion.
+function DestinationPopupCard({ destination }) {
+  const navigate = useNavigate();
+  const [leaving, setLeaving] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const open = () => {
+    if (leaving) return;
+    const go = () => navigate("/destinations", { state: { openResortId: destination.resort_id } });
+    if (prefersReducedMotion()) {
+      go();
+      return;
+    }
+    setLeaving(true);
+    timer.current = setTimeout(go, POPUP_LEAVE_MS);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`mauban-popup-card${leaving ? " is-leaving" : ""}`}
+      onClick={open}
+      aria-label={`View details of ${destination.resort_name}`}
+    >
+      {destination.image && (
+        <img
+          src={destination.image}
+          alt={destination.resort_name}
+          style={{
+            width: "100%",
+            height: "110px",
+            objectFit: "cover",
+            borderRadius: "6px",
+            marginBottom: "8px",
+            display: "block",
+          }}
+          onError={(e) => { e.target.style.display = "none"; }}
+        />
+      )}
+      <span style={{ display: "block", fontWeight: 700, fontSize: "13px", color: "var(--th-text-main)", margin: "0 0 4px" }}>
+        {destination.resort_name}
+      </span>
+      <span style={{
+        display: "inline-block",
+        background: "var(--th-primary-tint-strong)",
+        color: "var(--th-primary-active)",
+        fontSize: "10px",
+        fontWeight: 600,
+        borderRadius: "999px",
+        padding: "1px 8px",
+        marginBottom: "6px",
+      }}>
+        {destination.type}
+      </span>
+      {destination.tourism_rating && (
+        <span style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "4px" }}>
+          {[1,2,3,4,5].map((s) => (
+            <span key={s} style={{ color: Number(destination.tourism_rating) >= s ? "#f59e0b" : "#d1d5db", fontSize: "12px" }}>★</span>
+          ))}
+          <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "2px" }}>{destination.tourism_rating}</span>
+        </span>
+      )}
+      <span className="mauban-popup-visitors" style={{ display: "block", fontSize: "11px", color: "#6b7280", margin: "0 0 4px" }}>
+        {visitorsThisMonthText(destination.monthly_arrivals)}
+      </span>
+      <span style={{ display: "block", fontSize: "11px", color: "#6b7280", margin: "0" }}>
+        📍 {destination.location}
+      </span>
+      <span className="mauban-popup-cta">View details ›</span>
+    </button>
+  );
+}
+
 function MaubanDestinationMap({
   destinations,
   selectedDestination,
@@ -213,49 +303,7 @@ function MaubanDestinationMap({
               }}
             >
               <Popup minWidth={220} maxWidth={260}>
-                <div style={{ padding: "2px 0" }}>
-                  {destination.image && (
-                    <img
-                      src={destination.image}
-                      alt={destination.resort_name}
-                      style={{
-                        width: "100%",
-                        height: "110px",
-                        objectFit: "cover",
-                        borderRadius: "6px",
-                        marginBottom: "8px",
-                        display: "block",
-                      }}
-                      onError={(e) => { e.target.style.display = "none"; }}
-                    />
-                  )}
-                  <p style={{ fontWeight: 700, fontSize: "13px", color: "var(--th-text-main)", margin: "0 0 4px" }}>
-                    {destination.resort_name}
-                  </p>
-                  <span style={{
-                    display: "inline-block",
-                    background: "var(--th-primary-tint-strong)",
-                    color: "var(--th-primary-active)",
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    borderRadius: "999px",
-                    padding: "1px 8px",
-                    marginBottom: "6px",
-                  }}>
-                    {destination.type}
-                  </span>
-                  {destination.tourism_rating && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "4px" }}>
-                      {[1,2,3,4,5].map((s) => (
-                        <span key={s} style={{ color: Number(destination.tourism_rating) >= s ? "#f59e0b" : "#d1d5db", fontSize: "12px" }}>★</span>
-                      ))}
-                      <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "2px" }}>{destination.tourism_rating}</span>
-                    </div>
-                  )}
-                  <p style={{ fontSize: "11px", color: "#6b7280", margin: "0" }}>
-                    📍 {destination.location}
-                  </p>
-                </div>
+                <DestinationPopupCard destination={destination} />
               </Popup>
             </Marker>
           );

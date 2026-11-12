@@ -6,17 +6,22 @@
  * Leaflet does with the icon's anchor, and it is proved there and not assumed.
  */
 import L from "leaflet";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import MaubanDestinationMap, {
   PIN_SIZE,
   PIN_TIP,
   PIN_VIEWBOX,
+  POPUP_LEAVE_MS,
   SELECTED_PIN_Z_OFFSET,
   normalPinIcon,
   pinAnchor,
   selectedPinIcon,
 } from "./MaubanDestinationMap";
-import { normalised, expectedNorm, rule } from "../../testing/cssRules";
+import { normalised, expectedNorm, rule, tourismCss } from "../../testing/cssRules";
+
+const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({ useNavigate: () => mockNavigate }), { virtual: true });
 
 jest.mock("react-leaflet", () => {
   const React = require("react");
@@ -41,7 +46,8 @@ jest.mock("react-leaflet", () => {
     __opened: opened,
     MapContainer: ({ children }) => <div data-testid="map">{children}</div>,
     TileLayer: ({ url }) => <i data-testid="tile" data-url={url} />,
-    Popup: ({ children }) => <div data-testid="popup">{children}</div>,
+    // like Leaflet, a press inside the popup does not reach the marker
+    Popup: ({ children }) => <div data-testid="popup" onClick={(event) => event.stopPropagation()}>{children}</div>,
     Marker,
     useMap: () => ({ setView() {}, fitBounds() {}, getZoom: () => 11 }),
   };
@@ -181,6 +187,175 @@ describe("nothing else about the map changed", () => {
     for (const icon of [normalPinIcon, selectedPinIcon]) {
       expect(icon.options.html).not.toMatch(/<text|Alpha|Beach/);
     }
+  });
+});
+
+describe("this month's visitors in the popup", () => {
+  it("says N visitors this month, from the monthly_arrivals the destination already has", () => {
+    renderMap({ destinations: [{ ...DESTINATIONS[0], monthly_arrivals: 1234, yearly_arrivals: 99999 }] });
+
+    const text = within(pins()[0]).getByTestId("popup").textContent;
+    expect(text).toContain("1,234 visitors this month");
+    expect(text).not.toContain("99,999"); // this month only, not the year
+  });
+
+  it("says 0 visitors this month: zero is an answer too", () => {
+    renderMap({ destinations: [{ ...DESTINATIONS[0], monthly_arrivals: 0 }] });
+
+    expect(within(pins()[0]).getByTestId("popup").textContent).toContain("0 visitors this month");
+  });
+
+  it("says 0 when the destination has no figure at all, and 1 visitor in the singular", () => {
+    renderMap({ destinations: [{ ...DESTINATIONS[0] }, { ...DESTINATIONS[1], monthly_arrivals: 1 }] });
+
+    expect(within(pins()[0]).getByTestId("popup").textContent).toContain("0 visitors this month");
+    expect(within(pins()[1]).getByTestId("popup").textContent).toContain("1 visitor this month");
+  });
+
+  it("sits after the rating and before the location line", () => {
+    renderMap({ destinations: [{ ...DESTINATIONS[0], tourism_rating: 4, monthly_arrivals: 7 }] });
+
+    const text = within(pins()[0]).getByTestId("popup").textContent;
+    expect(text.indexOf("★")).toBeLessThan(text.indexOf("7 visitors this month"));
+    expect(text.indexOf("7 visitors this month")).toBeLessThan(text.indexOf("📍 Mauban"));
+  });
+
+  it("asks the server for nothing: the component has no request of its own", () => {
+    const source = require("fs").readFileSync(require("path").join(__dirname, "MaubanDestinationMap.js"), "utf8");
+    expect(source).not.toMatch(/fetch\(|tourismApi|axios|apiClient/);
+  });
+});
+
+describe("the card in the popup opens that destination's details", () => {
+  const card = (index) => within(pins()[index]).getByRole("button");
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    window.matchMedia = undefined;
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    delete window.matchMedia;
+  });
+
+  it("is one real button, with a cue that it can be pressed", () => {
+    renderMap();
+
+    expect(card(0).tagName).toBe("BUTTON");
+    expect(card(0).getAttribute("type")).toBe("button");
+    expect(card(0).textContent).toContain("View details ›");
+    expect(card(0).getAttribute("aria-label")).toBe("View details of Alpha Beach");
+    expect(rule(".mauban-popup-card").cursor).toBe("pointer");
+    expect(normalised(".mauban-popup-card:hover").transform).toBe("translatey(-2px)");
+  });
+
+  it("goes to Destinations with this destination's id, the way Arrival Monitoring does", () => {
+    renderMap();
+
+    fireEvent.click(card(2));
+    act(() => jest.advanceTimersByTime(POPUP_LEAVE_MS));
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith("/destinations", { state: { openResortId: 3 } });
+  });
+
+  it("each card carries its own id", () => {
+    renderMap();
+
+    for (const index of [0, 1, 2]) {
+      fireEvent.click(card(index));
+      act(() => jest.advanceTimersByTime(POPUP_LEAVE_MS));
+    }
+
+    expect(mockNavigate.mock.calls.map(([, options]) => options.state.openResortId)).toEqual([1, 2, 3]);
+  });
+
+  it("is reached with Tab and opened with Enter", () => {
+    renderMap();
+    userEvent.tab();
+
+    expect(document.activeElement).toBe(card(0));
+    userEvent.keyboard("{enter}");
+    act(() => jest.advanceTimersByTime(POPUP_LEAVE_MS));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/destinations", { state: { openResortId: 1 } });
+  });
+
+  it("answers first: it sinks and fades for 0.15s, and only then changes the page", () => {
+    renderMap();
+
+    fireEvent.click(card(0));
+
+    expect(card(0).className).toContain("is-leaving");
+    expect(mockNavigate).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(POPUP_LEAVE_MS - 1));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(1));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(POPUP_LEAVE_MS).toBe(150);
+    expect(rule(".mauban-popup-card.is-leaving").transition).toBe("transform 0.15s ease, opacity 0.15s ease");
+  });
+
+  it("a second press while it is answering does not go twice", () => {
+    renderMap();
+
+    fireEvent.click(card(0));
+    fireEvent.click(card(0));
+    act(() => jest.advanceTimersByTime(POPUP_LEAVE_MS * 2));
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("with reduced motion asked for, goes at once and does not animate", () => {
+    window.matchMedia = (query) => ({ matches: query === "(prefers-reduced-motion: reduce)" });
+    renderMap();
+
+    fireEvent.click(card(1));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/destinations", { state: { openResortId: 2 } });
+    expect(card(1).className).not.toContain("is-leaving");
+    expect(tourismCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.mauban-popup-card,\s*\.mauban-popup-card\.is-leaving \{\s*transition: none;/);
+  });
+
+  it("with no motion setting, it still answers (matchMedia is not there, or says no)", () => {
+    window.matchMedia = () => ({ matches: false });
+    renderMap();
+
+    fireEvent.click(card(0));
+
+    expect(card(0).className).toContain("is-leaving");
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe("pressing the PIN is as it was", () => {
+  beforeEach(() => mockNavigate.mockClear());
+
+  it("selects the destination and does not change the page", () => {
+    const { onSelectDestination } = renderMap();
+
+    fireEvent.click(pins()[1]);
+
+    expect(onSelectDestination).toHaveBeenCalledTimes(1);
+    expect(onSelectDestination.mock.calls[0][0]).toMatchObject({ resort_id: 2 });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("opening the popup of the selected pin does not change the page either", () => {
+    renderMap({ selectedDestination: DESTINATIONS[1] });
+
+    expect(opened).toEqual(["14.21,121.71"]);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("pressing the card is not also pressing the pin", () => {
+    const { onSelectDestination } = renderMap();
+
+    fireEvent.click(within(pins()[0]).getByRole("button"));
+
+    expect(onSelectDestination).not.toHaveBeenCalled();
   });
 });
 
