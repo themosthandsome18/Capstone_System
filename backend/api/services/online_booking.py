@@ -28,6 +28,12 @@ from ..models import (
 )
 from ..seeders import ensure_initial_reference_data
 from .no_show import mark_no_show_sweep_needed
+from .placeholder_resorts import (
+    FALLBACK_COORDINATES,
+    FALLBACK_DESCRIPTION,
+    ONLINE_BOOKING_COORDINATES,
+    ONLINE_BOOKING_DESCRIPTION,
+)
 
 
 COLUMNS = {
@@ -566,14 +572,15 @@ class ReferenceResolver:
                     "with_mayors_permit": False,
                     "type": "Private Residence / Others",
                     "location": "Mauban, Quezon",
-                    "short_description": "Fallback destination for private residences, homestays, and other non-resort locations.",
+                    "short_description": FALLBACK_DESCRIPTION,
                     "tourism_rating": 0.0,
                     "access": "N/A",
                     "itinerary_ids": [],
                     "image_key": "",
                     "monthly_arrivals": 0,
-                    "latitude": 14.185,
-                    "longitude": 121.725
+                    "latitude": FALLBACK_COORDINATES[0],
+                    "longitude": FALLBACK_COORDINATES[1],
+                    "is_placeholder": True,  # made up by this import: not a place, so not on the GIS map
                 }
             )
             self.resort_cache[normalize_key(others_resort.resort_name)] = others_resort
@@ -588,14 +595,15 @@ class ReferenceResolver:
             "with_mayors_permit": False,
             "type": "Registered Resort",
             "location": "Mauban, Quezon",
-            "short_description": "Imported from Tourism Office online booking responses.",
+            "short_description": ONLINE_BOOKING_DESCRIPTION,
             "tourism_rating": 0,
             "access": "N/A",
             "itinerary_ids": [],
             "image_key": "",
             "monthly_arrivals": 0,
-            "latitude": 14.185,
-            "longitude": 121.731,
+            "latitude": ONLINE_BOOKING_COORDINATES[0],
+            "longitude": ONLINE_BOOKING_COORDINATES[1],
+            "is_placeholder": True,  # made up by this import: not a place, so not on the GIS map
         }
         if self.commit:
             resort = self.create_resort(resort_data)

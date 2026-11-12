@@ -219,6 +219,11 @@ class DestinationNameField(serializers.CharField):
 
 
 class ResortSerializer(serializers.ModelSerializer):
+    """A destination. `is_placeholder` (a resort an import made up, not a place: see services/placeholder_resorts.py) is for the WEB only: it is
+    in the answer when the context says include_placeholder, and the phone's answers do not carry it (it does nothing there, and a new key would
+    move the bootstrap for nothing). It is never written by a client. It is cleared HERE, by the server, when an admin saves the resort with a
+    coordinate that is not the one the import gave: that is "exact coordinates added"."""
+
     coordinates = serializers.SerializerMethodField()
     resort_name = DestinationNameField()
     # The three below are worked out, never written: people (not records) who arrived this month and this year, and the
@@ -229,7 +234,7 @@ class ResortSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resort
-        read_only_fields = ["tourism_rating"]
+        read_only_fields = ["tourism_rating", "is_placeholder"]
         fields = [
             "resort_id",
             "resort_name",
@@ -242,6 +247,7 @@ class ResortSerializer(serializers.ModelSerializer):
             "itinerary_ids",
             "image_key",
             "is_active",
+            "is_placeholder",
             "monthly_arrivals",
             "yearly_arrivals",
             "review_count",
@@ -263,7 +269,18 @@ class ResortSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         data["images"] = [absolute_media_url(url, request) for url in (data.get("images") or [])]
+        if not self.context.get("include_placeholder"):
+            data.pop("is_placeholder", None)  # the web's key: the phone's answers do not carry it
         return data
+
+    def update(self, instance, validated_data):
+        from api.services.placeholder_resorts import has_placeholder_coordinates
+
+        latitude = validated_data.get("latitude", instance.latitude)
+        longitude = validated_data.get("longitude", instance.longitude)
+        if instance.is_placeholder and not has_placeholder_coordinates(latitude, longitude):
+            instance.is_placeholder = False  # the admin has said where the place is: it is a place now
+        return super().update(instance, validated_data)
 
     def validate_images(self, value):
         # What comes back to be stored goes back to a path when it is a whole URL of this server's own media, so the database never

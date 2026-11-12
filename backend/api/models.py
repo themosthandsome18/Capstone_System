@@ -409,6 +409,10 @@ class Resort(models.Model):
     # Whether the app offers this destination (its list and the registration form). An inactive one stays on the web and in every
     # record that names it; it is never deleted by being inactive.
     is_active = models.BooleanField(default=True)
+    # Made up by an import for a booking that named a resort nobody has set up (see services/placeholder_resorts.py). Its coordinates are the
+    # middle of the town, which is not a place, so the GIS map leaves it off. Set by the importers; cleared by the server when an admin saves the
+    # resort with a coordinate that is not the import's. Not a thing an admin switches by hand.
+    is_placeholder = models.BooleanField(default=False, db_default=False)
     latitude = models.FloatField()
     longitude = models.FloatField()
     images = models.JSONField(default=list, blank=True)

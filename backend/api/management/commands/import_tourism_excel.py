@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from openpyxl import load_workbook
 
 from api.models import Resort, ResortMonthlyArrival
+from api.services.placeholder_resorts import MONITORING_FORM_COORDINATES, MONITORING_FORM_DESCRIPTION
 
 
 MONTHS = {
@@ -123,14 +124,15 @@ class Command(BaseCommand):
                     "with_mayors_permit": False,
                     "type": "Resort",
                     "location": "Mauban, Quezon",
-                    "short_description": "Imported from client monitoring form.",
+                    "short_description": MONITORING_FORM_DESCRIPTION,
                     "tourism_rating": 0,
                     "access": "N/A",
                     "itinerary_ids": [],
                     "image_key": "",
                     "monthly_arrivals": 0,
-                    "latitude": 14.185,
-                    "longitude": 121.731,
+                    "latitude": MONITORING_FORM_COORDINATES[0],
+                    "longitude": MONITORING_FORM_COORDINATES[1],
+                    "is_placeholder": True,  # made up by this import: not a place, so not on the GIS map
                 },
             )
 
