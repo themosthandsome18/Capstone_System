@@ -1169,6 +1169,24 @@ class AppHeader extends StatelessWidget {
   }
 }
 
+/// The small red dot that says "there is something new here": the one on the bell of the Home, and on the My Visit tab. No number.
+class NewsDot extends StatelessWidget {
+  const NewsDot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+    );
+  }
+}
+
 class PageTitle extends StatelessWidget {
   const PageTitle({super.key, required this.title, required this.subtitle});
 

@@ -36,6 +36,10 @@ class _MobileShellState extends State<MobileShell> {
   /// write over the ones kept.
   bool _restored = false;
 
+  /// There is news in My Visit the tourist has not looked at: a pass that was added, or a pass whose status changed. It shows as a red dot on the
+  /// My Visit tab, is kept on the phone (so it is still there when the app is opened again), and goes only when the My Visit tab is opened.
+  bool _myVisitNews = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +58,7 @@ class _MobileShellState extends State<MobileShell> {
       final haveFeedback = _feedbackHistory.map((item) => item.reference).toSet();
       _feedbackHistory.addAll(mine.feedback.where((item) => !haveFeedback.contains(item.reference)));
       if (_profile.isGuest) _profile = mine.profile;
+      if (mine.news) _myVisitNews = true;
       _restored = true;
     });
     if (madeMeanwhile) _persist();
@@ -90,7 +95,10 @@ class _MobileShellState extends State<MobileShell> {
         changed = true;
       }
     });
-    if (changed) _persist();
+    if (changed) {
+      _persist();
+      _newsInMyVisit(); // a pass whose status changed (they were scanned) is news, as a new pass is
+    }
   }
 
   /// Keeps the three on the phone. Never throws (the store does not).
@@ -99,6 +107,27 @@ class _MobileShellState extends State<MobileShell> {
     unawaited(widget.store.saveVisits(_visitHistory));
     unawaited(widget.store.saveFeedback(_feedbackHistory));
     unawaited(widget.store.saveProfile(_profile));
+    unawaited(widget.store.saveNews(_myVisitNews));
+  }
+
+  static const int _myVisitTab = 3;
+
+  /// Something new for the tourist in My Visit. Not when they are looking at it already (the tab is the one open): they have seen it.
+  void _newsInMyVisit() {
+    if (_index == _myVisitTab || _myVisitNews) return;
+    setState(() => _myVisitNews = true);
+    _persist();
+  }
+
+  /// Opens a tab. Opening My Visit is the only thing that takes the red dot away: the tourist has now seen what is new.
+  void _showTab(int index) {
+    final clears = index == _myVisitTab && _myVisitNews;
+    setState(() {
+      _index = index;
+      _mapFocus = null;
+      if (clears) _myVisitNews = false;
+    });
+    if (clears) _persist();
   }
 
   /// A pass or feedback shows its destination from the bootstrap when it is still there, and the name that was kept when it is not.
@@ -118,6 +147,7 @@ class _MobileShellState extends State<MobileShell> {
       _visitHistory.clear();
       _feedbackHistory.clear();
       _profile = MobileUserProfile.guest();
+      _myVisitNews = false;
       _index = 0;
     });
     widget.onSignOut?.call();
@@ -181,22 +211,30 @@ class _MobileShellState extends State<MobileShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         height: 66,
-        onDestinationSelected: (value) => setState(() {
-          _index = value;
-          _mapFocus = null;
-        }),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(
+        onDestinationSelected: _showTab,
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          const NavigationDestination(
             icon: Icon(Icons.place_outlined),
             label: 'Explore',
           ),
-          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
+          const NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
           NavigationDestination(
-            icon: Icon(Icons.route_outlined),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.route_outlined),
+                if (_myVisitNews)
+                  const Positioned(
+                    top: -1,
+                    right: -3,
+                    child: NewsDot(key: ValueKey('my-visit-news-dot')),
+                  ),
+              ],
+            ),
             label: 'My Visit',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
           ),
@@ -205,12 +243,7 @@ class _MobileShellState extends State<MobileShell> {
     );
   }
 
-  void _openTab(int index) {
-    setState(() {
-      _index = index;
-      _mapFocus = null;
-    });
-  }
+  void _openTab(int index) => _showTab(index);
 
   /// The Map tab (Maps & Guides), centred on [destination], with its box open.
   void _showOnMap(Destination destination) {
@@ -253,7 +286,7 @@ class _MobileShellState extends State<MobileShell> {
 
     if (receipt != null) {
       _addVisit(receipt);
-      setState(() => _index = 3);
+      _showTab(_myVisitTab); // the tourist lands on My Visit: they see the new pass at once
     }
   }
 
@@ -270,9 +303,11 @@ class _MobileShellState extends State<MobileShell> {
   }
 
   void _addVisit(MobileVisitReceipt receipt) {
+    var isNewPass = false;
     setState(() {
       // The same pass arrives twice: when the server answers, and when the pass is closed. It is recorded once.
-      if (!_visitHistory.any((item) => identical(item, receipt))) _visitHistory.insert(0, receipt);
+      isNewPass = !_visitHistory.any((item) => identical(item, receipt));
+      if (isNewPass) _visitHistory.insert(0, receipt);
       _profile = _profile.copyWith(
         name: receipt.fullName,
         email: receipt.email,
@@ -280,6 +315,7 @@ class _MobileShellState extends State<MobileShell> {
       );
     });
     _persist();
+    if (isNewPass) _newsInMyVisit(); // a new pass is news (not when the tourist is already looking at My Visit)
   }
 
   void _addFeedback(MobileFeedbackReceipt receipt) {
