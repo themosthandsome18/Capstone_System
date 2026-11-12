@@ -494,6 +494,14 @@ def build_arrival_monitoring_export(params=None):
     return {"filters": filters, "rowCount": len(rows), "rows": rows}
 
 
+ARCHIVE_VIEWS = ("active", "archived", "all")
+
+
+def count_archived_records(params=None):
+    """How many records are archived in the reporting year of `params` (the table's "N archived", and the answer of archive / unarchive)."""
+    return apply_reporting_year(TouristRecord.objects.filter(is_archived=True), get_reporting_year(params)).count()
+
+
 def build_booking_management_payload(params=None):
     params = params or {}
     reporting_year = get_reporting_year(params)
@@ -506,8 +514,18 @@ def build_booking_management_payload(params=None):
     province_id = (params.get("province_id") or "").strip()
     date_from = (params.get("from") or "").strip()
     date_to = (params.get("to") or "").strip()
+    # Which rows the TABLE lists: "active" (the default: not archived), "archived" or "all". This is the only query that looks at the archive;
+    # the cards below (summary_records) and every other figure count the archived records too.
+    archived_view = (params.get("archived") or "active").strip().lower()
+    if archived_view not in ARCHIVE_VIEWS:
+        archived_view = "active"
     page = parse_positive_int(params.get("page"), 1)
     requested_page_size = params.get("page_size")
+
+    if archived_view == "active":
+        records = records.filter(is_archived=False)
+    elif archived_view == "archived":
+        records = records.filter(is_archived=True)
 
     if search:
         records = records.filter(
@@ -597,6 +615,8 @@ def build_booking_management_payload(params=None):
             "visit_purpose_name": record["visit_purpose__name"],
             "status": record["status"],
             "status_label": status_labels.get(record["status"], record["status"]),
+            "is_archived": record["is_archived"],
+            "archived_at": record["archived_at"].isoformat() if record["archived_at"] else None,
         }
         for record in page_records.values(
             "survey_id",
@@ -639,8 +659,13 @@ def build_booking_management_payload(params=None):
             "visit_purpose_id",
             "visit_purpose__name",
             "status",
+            "is_archived",
+            "archived_at",
         )
     ]
+
+    # How many are archived in this year, for the "N archived" line beside the filter. A number of its own: it is not in `summary`.
+    archived_count = count_archived_records(params)
 
     summary_records = apply_reporting_year(
         TouristRecord.objects.all(),
@@ -663,7 +688,9 @@ def build_booking_management_payload(params=None):
             "province_id": province_id,
             "from": date_from,
             "to": date_to,
+            "archived": archived_view,
         },
+        "archivedCount": archived_count,
         "summary": {
             "verifiedEntries": summary["verifiedEntries"] or 0,
             "pending": summary["pending"] or 0,

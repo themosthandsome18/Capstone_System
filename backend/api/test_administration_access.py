@@ -18,6 +18,7 @@ from .models import (
     ROLE_TOURIST,
     ROLE_TOURISM,
     Resort,
+    TouristRecord,
     UserProfile,
 )
 from .permissions import ADMINISTRATION_ROLES
@@ -121,11 +122,13 @@ class AdministrationAccessTests(TestCase):
                 self.assertIn(shape, listed)
 
     def test_what_was_not_opened_is_still_the_system_admin_s_alone(self):
-        # only the administration pages are opened to the Tourism Office: the import of online bookings and the delete of a record are not
+        # only the administration pages are opened to the Tourism Office: the import of online bookings is not. (A record is deleted by nobody
+        # now: DELETE is refused for the admin as for the Tourism Office, and the record stays. See test_record_archive.py.)
         tourism = self.clients[ROLE_TOURISM]
         self.assertEqual(tourism.post("/api/online-booking-import/", {}, format="multipart").status_code, 403)
 
         Resort.objects.all().delete()
         arrive(make_resort(1, "Delete Resort"), "ADM-1", 2)
-        self.assertEqual(tourism.delete("/api/tourist-records/ADM-1/").status_code, 403)
-        self.assertEqual(self.clients[ROLE_ADMIN].delete("/api/tourist-records/ADM-1/").status_code, 204)
+        self.assertEqual(tourism.delete("/api/tourist-records/ADM-1/").status_code, 405)
+        self.assertEqual(self.clients[ROLE_ADMIN].delete("/api/tourist-records/ADM-1/").status_code, 405)
+        self.assertTrue(TouristRecord.objects.filter(pk="ADM-1").exists())

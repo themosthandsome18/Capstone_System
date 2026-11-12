@@ -119,7 +119,9 @@ const emptyBookingManagement = {
     province_id: "",
     from: "",
     to: "",
+    archived: "active",
   },
+  archivedCount: 0,
   summary: {
     verifiedEntries: 0,
     pending: 0,
@@ -291,6 +293,7 @@ export const tourismApi = {
       search: params.search,
       year: params.year,
       status: params.status,
+      archived: params.archived,
       resort_id: params.resort_id,
       region_id: params.region_id,
       province_id: params.province_id,
@@ -386,11 +389,16 @@ export const tourismApi = {
     });
   },
 
-  async deleteTouristRecord(id) {
-    await apiRequest(`/tourist-records/${encodeURIComponent(id)}/`, {
-      method: "DELETE",
-    });
-    return { id };
+  // A record is never deleted. Archive takes it off the Record Management table (every count still has it); unarchive puts it back.
+  // The answer is { survey_id, is_archived, archived_at, archivedCount }: the "N archived" for the year asked (?year=, as the table asks).
+  async archiveTouristRecord(id, params = {}) {
+    const query = buildQueryString({ year: params.year });
+    return apiRequest(`/tourist-records/${encodeURIComponent(id)}/archive/${query}`, { method: "POST" });
+  },
+
+  async unarchiveTouristRecord(id, params = {}) {
+    const query = buildQueryString({ year: params.year });
+    return apiRequest(`/tourist-records/${encodeURIComponent(id)}/unarchive/${query}`, { method: "POST" });
   },
 
   async previewOnlineBookingImport(file, options = {}) {

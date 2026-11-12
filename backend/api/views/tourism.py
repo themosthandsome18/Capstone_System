@@ -1,4 +1,5 @@
 import time
+from django.db import transaction
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -46,6 +47,8 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reports_payload,
     build_tourist_records_payload,
+    count_archived_records,
+    get_reporting_year,
     read_tourism_theme,
     ReportParameterError,
     tourist_record_computed,
@@ -172,7 +175,9 @@ def tourist_record_list(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET", "PUT", "PATCH", "DELETE"])
+# A tourist record is never deleted (there is no DELETE here: the verb is refused with 405). It is archived instead: see
+# tourist_record_archive / tourist_record_unarchive below.
+@api_view(["GET", "PUT", "PATCH"])
 @module_required("tourism")
 def tourist_record_detail(request, survey_id):
     record = get_object_or_404(TouristRecord.objects.select_related("itinerary"), survey_id=survey_id)
@@ -182,26 +187,6 @@ def tourist_record_detail(request, survey_id):
         data = dict(TouristRecordSerializer(record).data)
         data["computed"] = tourist_record_computed(record)
         return Response(data)
-
-    if request.method == "DELETE":
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can delete tourist records."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        record_label = record.full_name
-        record_id = record.survey_id
-        record.delete()
-        log_activity(
-            request,
-            MODULE_TOURISM,
-            ACTION_DELETE,
-            record,
-            label=record_label,
-            record_id=record_id,
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     data = request.data.copy()
     data["survey_id"] = record.survey_id
@@ -221,6 +206,62 @@ def tourist_record_detail(request, survey_id):
         record_id=record.survey_id,
     )
     return Response(serializer.data)
+
+
+def _set_archived(request, survey_id, archived):
+    """Take a record off the Record Management table (archived=True) or put it back. In one transaction, with the row locked.
+
+    Only the table changes: every count, report and export reads the record as before. Who and when come from request.user and the server's
+    clock. Doing it twice changes nothing and logs nothing. The ActivityLog label holds the survey id only, no visitor name.
+
+    It writes the archive columns alone (update_fields), so updated_at and the order of the table do not move.
+
+    The answer carries the new "N archived" for the year in ?year= (as the table asks for it), so the screen can change at once and settle on
+    the server's word without reading the whole list again.
+    """
+    try:
+        get_reporting_year(request.query_params)  # a bad ?year= is refused before anything is written
+    except ReportParameterError as error:
+        return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        record = get_object_or_404(TouristRecord.objects.select_for_update(), survey_id=survey_id)
+        if record.is_archived == archived:
+            return Response(_archive_state(record, request))
+        record.is_archived = archived
+        record.archived_at = timezone.now() if archived else None
+        record.archived_by = request.user if archived else None
+        record.save(update_fields=["is_archived", "archived_at", "archived_by"])
+        log_activity(
+            request,
+            MODULE_TOURISM,
+            ACTION_UPDATE,
+            record,
+            label=f"Record {'archived' if archived else 'brought back (unarchived)'}: {record.survey_id}",
+            record_id=record.survey_id,
+        )
+    return Response(_archive_state(record, request))
+
+
+def _archive_state(record, request):
+    return {
+        "survey_id": record.survey_id,
+        "is_archived": record.is_archived,
+        "archived_at": record.archived_at,
+        "archivedCount": count_archived_records(request.query_params),
+    }
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def tourist_record_archive(request, survey_id):
+    return _set_archived(request, survey_id, True)
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def tourist_record_unarchive(request, survey_id):
+    return _set_archived(request, survey_id, False)
 
 
 @api_view(["GET"])

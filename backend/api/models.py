@@ -611,6 +611,18 @@ class TouristRecord(models.Model):
         related_name="checked_in_records",
     )
     checked_in_at = models.DateTimeField(null=True, blank=True)
+    # Archive: a record taken off the Record Management TABLE, and nowhere else. It is never deleted (the data is the tourist's), and an archived
+    # record is still counted by every figure (cards, dashboard, Analytics, exports, mobile). Who and when are set only by the archive and
+    # unarchive actions, from the logged-in user and the server's clock, never from what a client sends (as for FeedbackEntry.is_hidden).
+    is_archived = models.BooleanField(default=False, db_default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_tourist_records",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
