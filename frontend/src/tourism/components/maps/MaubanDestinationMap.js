@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
+import L from "leaflet";
 import {
-  CircleMarker,
   MapContainer,
+  Marker,
   Popup,
   TileLayer,
   useMap,
@@ -49,9 +50,51 @@ function getDestinationCoordinates(destination) {
   return { lat, lng };
 }
 
-function getMarkerColor(type = "") {
-  return "#ef4444";
+// ---- the pin: a teardrop whose TIP is the coordinate ----
+// The pin is drawn in a 28 x 36 box. Its tip is at (14, 35) in that box, and that point, not the middle of the box, is
+// what Leaflet puts on the coordinate (iconAnchor). The selected pin is the same drawing at 38 x 48, so its tip is at the
+// same place in proportion. The white edge is 2px whatever the size (non-scaling-stroke).
+export const PIN_VIEWBOX = { width: 28, height: 36 };
+export const PIN_TIP = { x: 14, y: 35 };
+export const PIN_SIZE = { normal: [28, 36], selected: [38, 48] };
+export const PIN_COLOR = "#D7263D";
+// A selected pin is above every other pin, so it is never covered by one near it.
+export const SELECTED_PIN_Z_OFFSET = 1000;
+
+const PIN_PATH = "M14 35 C13 33.5 2 22.5 2 14 A12 12 0 0 1 26 14 C26 22.5 15 33.5 14 35 Z";
+
+export function pinAnchor(selected) {
+  const [width, height] = selected ? PIN_SIZE.selected : PIN_SIZE.normal;
+  return [(PIN_TIP.x * width) / PIN_VIEWBOX.width, (PIN_TIP.y * height) / PIN_VIEWBOX.height];
 }
+
+function buildPinIcon(selected) {
+  const [width, height] = selected ? PIN_SIZE.selected : PIN_SIZE.normal;
+  const [anchorX, anchorY] = pinAnchor(selected);
+  const headX = (14 * width) / PIN_VIEWBOX.width;
+  const headY = (14 * height) / PIN_VIEWBOX.height;
+  const ring = selected
+    ? `<span class="mauban-pin-ring" style="left:${headX}px;top:${headY}px"></span>`
+    : "";
+
+  return new L.DivIcon({
+    className: selected ? "mauban-pin-icon mauban-pin-icon-selected" : "mauban-pin-icon",
+    html:
+      `${ring}<span class="mauban-pin-shadow"></span>` +
+      `<span class="mauban-pin-body">` +
+      `<svg width="${width}" height="${height}" viewBox="0 0 ${PIN_VIEWBOX.width} ${PIN_VIEWBOX.height}" ` +
+      `preserveAspectRatio="none" aria-hidden="true" focusable="false">` +
+      `<path d="${PIN_PATH}" fill="${PIN_COLOR}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` +
+      `<circle cx="14" cy="14" r="4.5" fill="#ffffff"/>` +
+      `</svg></span>`,
+    iconSize: [width, height],
+    iconAnchor: [anchorX, anchorY],
+    popupAnchor: [0, -anchorY],
+  });
+}
+
+export const normalPinIcon = buildPinIcon(false);
+export const selectedPinIcon = buildPinIcon(true);
 
 function FitMapToDestinations({ destinations }) {
   const map = useMap();
@@ -151,27 +194,20 @@ function MaubanDestinationMap({
           const active =
             destination.resort_id === selectedDestination?.resort_id;
 
-          const markerColor = getMarkerColor(destination.type);
-
           return (
-            <CircleMarker
+            <Marker
               key={destination.resort_id}
               ref={(ref) => {
                 if (ref) {
                   markerRefs.current[destination.resort_id] = ref;
                 }
               }}
-              center={[
+              position={[
                 destination.mapCoordinates.lat,
                 destination.mapCoordinates.lng,
               ]}
-              radius={active ? 10 : 7}
-              pathOptions={{
-                color: active ? "#ffffff" : markerColor,
-                fillColor: markerColor,
-                fillOpacity: 0.9,
-                weight: active ? 4 : 2,
-              }}
+              icon={active ? selectedPinIcon : normalPinIcon}
+              zIndexOffset={active ? SELECTED_PIN_Z_OFFSET : 0}
               eventHandlers={{
                 click: () => onSelectDestination(destination),
               }}
@@ -221,7 +257,7 @@ function MaubanDestinationMap({
                   </p>
                 </div>
               </Popup>
-            </CircleMarker>
+            </Marker>
           );
         })}
       </MapContainer>
