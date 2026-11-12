@@ -1077,6 +1077,19 @@ class MobileUserProfile {
         .join();
   }
 
+  Map<String, Object?> toStoredJson() => {'name': name, 'email': email, 'contact_number': contactNumber};
+
+  /// The profile as it was kept; null when it is not a profile (the name is what makes it one: without it the tourist is a guest).
+  static MobileUserProfile? fromStoredJson(Map<String, dynamic> json) {
+    final name = '${json['name'] ?? ''}'.trim();
+    if (name.isEmpty) return null;
+    return MobileUserProfile(
+      name: name,
+      email: '${json['email'] ?? ''}'.trim(),
+      contactNumber: '${json['contact_number'] ?? ''}'.trim(),
+    );
+  }
+
   MobileUserProfile copyWith({
     String? name,
     String? email,
@@ -1394,6 +1407,50 @@ class MobileVisitReceipt {
   final String email;
   String get displayStatus => statusLabel(status);
 
+  /// What is kept on the phone: the destination as its id and its NAME (the name is what a pass shows, and what is left if the destination is
+  /// ever no longer in the bootstrap).
+  Map<String, Object?> toStoredJson() => {
+    'reference': reference,
+    'destination_id': destination.id,
+    'destination_name': destination.name,
+    'arrival_date': arrivalDate.toIso8601String(),
+    'total_visitors': totalVisitors,
+    'status': status,
+    'full_name': fullName,
+    'contact_number': contactNumber,
+    'email': email,
+  };
+
+  /// A pass as it was kept; null when it is incomplete (no reference, no destination name or no date): it is left out, not guessed.
+  static MobileVisitReceipt? fromStoredJson(Map<String, dynamic> json) {
+    final reference = '${json['reference'] ?? ''}'.trim();
+    final destinationName = '${json['destination_name'] ?? ''}'.trim();
+    final arrival = DateTime.tryParse('${json['arrival_date'] ?? ''}');
+    if (reference.isEmpty || destinationName.isEmpty || arrival == null) return null;
+    return MobileVisitReceipt(
+      reference: reference,
+      destination: keptDestination(jsonInt(json['destination_id'], -1), destinationName),
+      arrivalDate: arrival,
+      totalVisitors: jsonInt(json['total_visitors'], 0),
+      status: '${json['status'] ?? 'pending'}',
+      fullName: '${json['full_name'] ?? ''}',
+      contactNumber: '${json['contact_number'] ?? ''}',
+      email: '${json['email'] ?? ''}',
+    );
+  }
+
+  /// The same pass with another destination object (the bootstrap's, once it is known).
+  MobileVisitReceipt withDestination(Destination other) => MobileVisitReceipt(
+    reference: reference,
+    destination: other,
+    arrivalDate: arrivalDate,
+    totalVisitors: totalVisitors,
+    status: status,
+    fullName: fullName,
+    contactNumber: contactNumber,
+    email: email,
+  );
+
   factory MobileVisitReceipt.fromResponse(
     Map<String, dynamic> json, {
     required Destination destination,
@@ -1433,6 +1490,47 @@ class MobileFeedbackReceipt {
   final String reply;
   final String date;
   final List<String> photos;
+
+  Map<String, Object?> toStoredJson() => {
+    'reference': reference,
+    'destination_id': destination.id,
+    'destination_name': destination.name,
+    'reviewer': reviewer,
+    'rating': rating,
+    'message': message,
+    'reply': reply,
+    'date': date,
+    'photos': photos,
+  };
+
+  /// Feedback as it was kept; null when it is incomplete (no reference or no destination name): it is left out, not guessed.
+  static MobileFeedbackReceipt? fromStoredJson(Map<String, dynamic> json) {
+    final reference = '${json['reference'] ?? ''}'.trim();
+    final destinationName = '${json['destination_name'] ?? ''}'.trim();
+    if (reference.isEmpty || destinationName.isEmpty) return null;
+    final rawPhotos = json['photos'];
+    return MobileFeedbackReceipt(
+      reference: reference,
+      destination: keptDestination(jsonInt(json['destination_id'], -1), destinationName),
+      reviewer: '${json['reviewer'] ?? ''}',
+      rating: jsonInt(json['rating'], 5),
+      message: '${json['message'] ?? ''}',
+      reply: '${json['reply'] ?? ''}',
+      date: '${json['date'] ?? ''}',
+      photos: rawPhotos is List ? rawPhotos.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList() : const [],
+    );
+  }
+
+  MobileFeedbackReceipt withDestination(Destination other) => MobileFeedbackReceipt(
+    reference: reference,
+    destination: other,
+    reviewer: reviewer,
+    rating: rating,
+    message: message,
+    reply: reply,
+    date: date,
+    photos: photos,
+  );
 
   factory MobileFeedbackReceipt.fromResponse(
     Map<String, dynamic> json, {
