@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 
 from .services.upload import absolute_media_url, relative_media_url
+from .location_serializers import SanitationLocationSerializer
 from .models import (
     ActivityLog,
     Barangay,
@@ -524,7 +525,7 @@ class SanitaryEnforcementIssuanceSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
-class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
+class SanitaryEstablishmentSerializer(SanitationLocationSerializer):
     enforcement_stage = serializers.CharField(read_only=True)
     enforcement_stage_label = serializers.CharField(
         source="get_enforcement_stage_display", read_only=True,
@@ -572,6 +573,7 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "permit_size",
             "permit_size_label",
             "barangay",
+            "sitio",
             "address",
             "contact_number",
             "has_permit",
@@ -587,6 +589,13 @@ class SanitaryEstablishmentSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "coordinates",
+            "location_source",
+            "location_accuracy_m",
+            "location_captured_at",
+            "location_reported_mock",
+            "location_capture",
+            "sitio_reference",
+            "sitio_source",
             "risk_score",
             "risk_level",
             "open_complaints",
@@ -1193,7 +1202,7 @@ class SanitaryInspectionCreateSerializer(serializers.ModelSerializer):
 # ============================================================
 
 
-class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
+class HouseholdSanitationRecordSerializer(SanitationLocationSerializer):
     # No serializer defaults: omitted fields must survive full and partial updates.
     house_number = serializers.CharField(
         max_length=120, required=False, allow_blank=True, allow_null=False,
@@ -1249,6 +1258,13 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "coordinates",
+            "location_source",
+            "location_accuracy_m",
+            "location_captured_at",
+            "location_reported_mock",
+            "location_capture",
+            "sitio_reference",
+            "sitio_source",
             "risk_score",
             "risk_level",
             "remarks",
@@ -1257,32 +1273,8 @@ class HouseholdSanitationRecordSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def to_internal_value(self, data):
-        if hasattr(data, "get"):
-            for field in ("latitude", "longitude"):
-                value = data.get(field)
-                # HTML form parsing can turn blank numeric inputs into null.
-                if isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
-                    raise serializers.ValidationError({field: "A numeric coordinate or explicit null is required."})
-        return super().to_internal_value(data)
-
     def validate(self, attrs):
-        if "latitude" in attrs or "longitude" in attrs:
-            latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
-            longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
-            if latitude is None or longitude is None:
-                if not ("latitude" in attrs and "longitude" in attrs
-                        and latitude is None and longitude is None):
-                    raise serializers.ValidationError({
-                        "coordinates": "Supply a complete coordinate pair, or explicitly set both coordinates to null.",
-                    })
-            else:
-                for field, value, bound in (("latitude", latitude, 90), ("longitude", longitude, 180)):
-                    if not math.isfinite(value) or not -bound <= value <= bound:
-                        raise serializers.ValidationError({
-                            field: f"A finite coordinate between {-bound} and {bound} is required.",
-                        })
-
+        attrs = super().validate(attrs)
         toilet_type = attrs.get("toilet_type", getattr(self.instance, "toilet_type", None))
         if attrs.get("septic_tank_type") == "septic_tank":
             raise serializers.ValidationError({

@@ -1,6 +1,8 @@
 """Synthetic preview records (requires Django setup and the fake photo store)."""
 import datetime
 import io
+import os
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
@@ -20,10 +22,21 @@ def _photo(color, label):
 
 
 def seed(store):
+    from django.conf import settings
+    from preview_safety import TEMP_PREFIX, OWNER_FILE, UnsafePreviewConfig, check_effective_settings
+    from preview_store import FakePrivatePhotoStore
+
+    root = Path(str(settings.DATABASES["default"]["NAME"])).resolve().parent
+    if (not root.name.startswith(TEMP_PREFIX) or not (root / OWNER_FILE).is_file()
+            or (root / OWNER_FILE).read_text(encoding="ascii").strip() != str(os.getpid())
+            or not isinstance(store, FakePrivatePhotoStore)):
+        raise UnsafePreviewConfig("Synthetic seeding requires the owned disposable preview and fake photo store.")
+    check_effective_settings(settings, root)
+
     from django.contrib.auth.models import User
     from api.models import (
         Barangay, HouseholdSanitationRecord, SanitaryBusinessType, SanitaryComplaint,
-        SanitaryEstablishment, UserProfile,
+        SanitaryEstablishment, Sitio, UserProfile,
     )
     from api.services.establishment_photos import replace_establishment_photo
     from api.services.household_photos import replace_household_photo
@@ -37,6 +50,13 @@ def seed(store):
     # barangays that exist in this reference table.
     for order, name in enumerate(["Daungan", "Polo", "Rizaliana", "Alitap", "San Lorenzo"], start=1):
         Barangay.objects.get_or_create(name=name, defaults={"display_order": order})
+
+    # Deliberately fictional choices, only inside this guarded throwaway seed.
+    # Alitap and San Lorenzo intentionally have no choices for empty-state tests.
+    for barangay_name in ("Daungan", "Polo", "Rizaliana"):
+        for suffix in ("A", "B"):
+            Sitio.objects.create(barangay=Barangay.objects.get(name=barangay_name),
+                                 name=f"SYNTHETIC DEMO ONLY - {barangay_name} - {suffix}")
 
     business_type = SanitaryBusinessType.objects.order_by("pk").first()
     if business_type is None:

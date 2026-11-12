@@ -61,6 +61,7 @@ from .views.tourism import (
     tourist_record_detail,
     tourist_record_list,
 )
+from .views.sitios import sanitation_sitio_list
 from .views.sanitation import (
     household_barangay_list,
     household_bootstrap_data,
@@ -208,6 +209,7 @@ urlpatterns = [
     path("sanitation/permits/", sanitation_permit_data),
     path("sanitation/renewals/", sanitation_renewal_list),
     path("sanitation/renewals/<int:renewal_id>/", sanitation_renewal_detail),
+    path("sanitation/sitios/", sanitation_sitio_list),
     path("sanitation/complaints/", sanitation_complaint_list),
     path("sanitation/complaints/<int:complaint_id>/", sanitation_complaint_detail),
     path("sanitation/submissions/", sanitation_submission_data),

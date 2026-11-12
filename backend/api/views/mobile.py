@@ -2,6 +2,8 @@ import json
 import logging
 import math
 import re
+
+from api.location_serializers import sanitation_location_details
 from datetime import timedelta
 from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
@@ -1173,6 +1175,7 @@ def mobile_sanitation_bootstrap(request):
 
 def serialize_mobile_sanitation_establishment(establishment):
     return {
+        **sanitation_location_details(establishment),
         "id": establishment.id,
         "business_name": establishment.business_name,
         "owner_name": establishment.owner_name,
@@ -1252,6 +1255,7 @@ def serialize_mobile_sanitation_complaint(complaint, *, include_location_provena
 
 def serialize_mobile_household_record(record):
     return {
+        **sanitation_location_details(record),
         "id": record.id,
         "household_code": record.household_code,
         "household_head": record.household_head,
