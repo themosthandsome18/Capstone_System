@@ -305,7 +305,7 @@ String statusLabel(String value) {
     case 'arrived':
       return 'Arrived';
     case 'no_show':
-      return 'No-show';
+      return 'Cancelled';
     default:
       return value.isEmpty ? 'Pending' : value;
   }

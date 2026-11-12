@@ -4043,11 +4043,11 @@ class QuestionAnswersDeduplicationTests(TestCase):
             "visit_purpose": (purpose_answer, {"type": "ranking", "items": purpose_items}),
             "high_demand": (demand_signal(), demand_visual()),
             "validation": (
-                f"Needs review: {pending} pending, {no_show} no-show, "
+                f"Needs review: {pending} pending, {no_show} cancelled, "
                 f"{duplicates} possible duplicates, and {incomplete} incomplete records.",
                 {"type": "stack", "items": [
                     {"label": "Pending", "value": pending},
-                    {"label": "No-show", "value": no_show},
+                    {"label": "Cancelled", "value": no_show},
                     {"label": "Duplicates", "value": duplicates},
                     {"label": "Incomplete", "value": incomplete},
                 ]},
@@ -9159,8 +9159,8 @@ class VisitorDemographicsVisualTests(TestCase):
                               {"type": "ranking", "items": [{"label": "Leisure", "value": 13}, {"label": "Vacation", "value": 7}]}),
             "high_demand": ("Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
                             {"type": "comparison", "items": [{"label": "Previous 30 days", "value": 0}, {"label": "Latest 30 days", "value": 8}]}),
-            "validation": ("Needs review: 1 pending, 1 no-show, 0 possible duplicates, and 0 incomplete records.",
-                           {"type": "stack", "items": [{"label": "Pending", "value": 1}, {"label": "No-show", "value": 1}, {"label": "Duplicates", "value": 0}, {"label": "Incomplete", "value": 0}]}),
+            "validation": ("Needs review: 1 pending, 1 cancelled, 0 possible duplicates, and 0 incomplete records.",
+                           {"type": "stack", "items": [{"label": "Pending", "value": 1}, {"label": "Cancelled", "value": 1}, {"label": "Duplicates", "value": 0}, {"label": "Incomplete", "value": 0}]}),
         }
         answers = self._answers()
         self.assertEqual(list(answers), [
@@ -9230,7 +9230,7 @@ class ReportsCountArrivedOnlyTests(TestCase):
 
         self.assertEqual(answers["classification"]["answer"], "Domestic (Filipino): 3, Foreign (International): 0.")
         self.assertEqual(answers["peak_month"]["visual"]["total"], 3)
-        self.assertIn("1 pending, 1 no-show", answers["validation"]["answer"])
+        self.assertIn("1 pending, 1 cancelled", answers["validation"]["answer"])
 
     def test_reports_match_arrival_monitoring_for_the_same_year(self):
         from .services.tourism import build_arrival_monitoring_payload

@@ -23,7 +23,7 @@ TITLES = {"top_resort": "Top Tourist Destination", "month_compare": "Month-over-
           "high_demand": "Destinations with Growing Demand", "validation": "Data Quality & Validation"}
 SUBTITLES = {"Daily": "Dailyvisitortotals", "Monthly": "Monthlyvisitortotals", "Yearly": "Yearlyvisitortotals", "Resort": "Visitortotalsbyresort",
              "Origin": "Visitortotalsgroupedbyprovince", "Purpose": "Visitortotalsgroupedbydeclared", "Vehicle": "Visitortotalsgroupedbyvehicle",
-             "Boat": "Visitortotalsbyboattype", "No-show": "Noshowbookingsgrouped"}
+             "Boat": "Visitortotalsbyboattype", "Cancelled": "Cancelledbookingsgrouped"}
 saturated = lambda p: max(p[:3]) - min(p[:3]) > 60 and min(p[:3]) < 235
 gridish = lambda p: max(p[:3]) - min(p[:3]) < 14 and 200 <= min(p[:3]) <= 248
 

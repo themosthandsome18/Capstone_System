@@ -139,11 +139,11 @@ describe("Settings: system colour", () => {
       Array.from(group.querySelectorAll("dd span")).map((chip) => chip.textContent),
     ]);
     expect(groups).toEqual([
-      ["Bookings", ["Pending", "Arrived", "No-show"]],
+      ["Bookings", ["Pending", "Arrived", "Cancelled"]],
       ["Feedback", ["Positive", "Neutral", "Negative"]],
       ["Destinations", ["Active", "No Permit"]],
     ]);
-    expect(screen.queryByText("Cancelled")).toBeNull();
+    expect(screen.queryByText("Rejected")).toBeNull();
   });
 });
 

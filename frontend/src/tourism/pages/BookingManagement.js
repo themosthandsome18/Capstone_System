@@ -93,7 +93,7 @@ const boatCapacityFareOptions = [
 const statusLabels = {
   pending: "Pending",
   arrived: "Arrived",
-  no_show: "No-show",
+  no_show: "Cancelled",
 };
 
 const statusClassNames = {
@@ -992,7 +992,7 @@ function BookingManagement() {
         </div>
 
         <div className="booking-status-card noshow">
-          <p>No-show</p>
+          <p>Cancelled</p>
           <h2>{summary.noShow}</h2>
         </div>
       </div>
@@ -1052,7 +1052,7 @@ function BookingManagement() {
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="arrived">Arrived</option>
-          <option value="no_show">No-show</option>
+          <option value="no_show">Cancelled</option>
         </select>
 
         <select
@@ -1224,8 +1224,8 @@ function BookingManagement() {
                             className="booking-icon-btn noshow"
                             disabled={status === "no_show" || Boolean(updatingStatus)}
                             onClick={() => updateBookingStatus(row, "no_show")}
-                            title="Mark as no-show"
-                            aria-label="Mark as no-show"
+                            title="Mark as cancelled"
+                            aria-label="Mark as cancelled"
                           >
                             <FiX/>
                           </button>

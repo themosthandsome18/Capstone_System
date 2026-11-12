@@ -309,9 +309,9 @@ describe("blank, null and missing", () => {
 
   it("an unknown status is written as it is, capitalised, and gets no check", () => {
     draw({ ...RECORD, status: "no_show" });
-    expect(valueOf(groups()[4], "Arrival status")).toBe("No-show");
+    expect(valueOf(groups()[4], "Arrival status")).toBe("Cancelled");
     expect(document.querySelector(".arm-chip.status svg")).toBeNull();
-    expect(document.querySelector(".arm-sub").textContent).toContain("no-show");
+    expect(document.querySelector(".arm-sub").textContent).toContain("cancelled");
   });
 
   it("a date that is not a date is the dash", () => {

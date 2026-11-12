@@ -34,7 +34,7 @@ const TAB_NAMES = [
   "Purpose Report",
   "Vehicle Report",
   "Boat Report",
-  "No-show Report",
+  "Cancelled Report",
 ];
 
 // Rows in the backend's order: by visitors this sorts to Alpha, Charlie, Bravo.
@@ -489,8 +489,8 @@ const KEY_INSIGHTS = [
     visual: { type: "ranking", items: [{ label: "Leisure", value: 13 }, { label: "Vacation", value: 7 }] } },
   { id: "high_demand", answer: "Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
     visual: { type: "comparison", items: [{ label: "Previous 30 days", value: 0 }, { label: "Latest 30 days", value: 8 }] } },
-  { id: "validation", answer: "Needs review: 1 pending, 1 no-show, 0 possible duplicates, and 0 incomplete records.",
-    visual: { type: "stack", items: [{ label: "Pending", value: 1 }, { label: "No-show", value: 1 }, { label: "Duplicates", value: 0 }, { label: "Incomplete", value: 0 }] } },
+  { id: "validation", answer: "Needs review: 1 pending, 1 cancelled, 0 possible duplicates, and 0 incomplete records.",
+    visual: { type: "stack", items: [{ label: "Pending", value: 1 }, { label: "Cancelled", value: 1 }, { label: "Duplicates", value: 0 }, { label: "Incomplete", value: 0 }] } },
 ].map((item) => ({ ...item, question: item.id }));
 
 describe("Reports Key Insights cards", () => {
@@ -546,7 +546,7 @@ describe("Reports Key Insights cards", () => {
       "Destinations with Growing Demand": bar([0, 8], ["Previous 30 days", "Latest 30 days"]),
       "Data Quality & Validation": {
         type: "doughnut", axis: "x", values: [1, 1, 0, 0],
-        labels: ["Pending: 1 (50.0%)", "No-show: 1 (50.0%)", "Duplicates: 0 (0.0%)", "Incomplete: 0 (0.0%)"],
+        labels: ["Pending: 1 (50.0%)", "Cancelled: 1 (50.0%)", "Duplicates: 0 (0.0%)", "Incomplete: 0 (0.0%)"],
       },
     };
     Object.entries(expected).forEach(([title, chart]) => {
@@ -693,7 +693,7 @@ describe("Reports: all nine reports", () => {
     "Purpose of Travel Report",
     "Vehicle Classification Report",
     "Boat Classification Report",
-    "No-show Booking Report",
+    "Cancelled Booking Report",
   ];
 
   // Report i has i + 1 rows, so every report's row count is different.

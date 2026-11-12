@@ -139,9 +139,9 @@ describe("Dashboard figures anchored to today", () => {
     await show();
 
     expect(card("Total Revenue Collected").querySelector("h2").textContent).toContain("1,000");
-    expect(card("No-show Rate").querySelector("h2").textContent).toBe("5%");
+    expect(card("Cancellation Rate").querySelector("h2").textContent).toBe("5%");
     expect(card("Total Revenue Collected").querySelector("span").textContent).not.toBe("Current year only");
-    expect(card("No-show Rate").querySelector("span").textContent).not.toBe("Current year only");
+    expect(card("Cancellation Rate").querySelector("span").textContent).not.toBe("Current year only");
     // the classification doughnut and the others are still drawn
     expect(mockCharts.some((c) => c.type === "doughnut")).toBe(true);
   });

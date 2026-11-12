@@ -758,7 +758,7 @@ TouristStatusChip? touristStatusChip(String? status) {
     case 'pending':
       return const TouristStatusChip('Pending', Color(0xFFFEF3C7), Color(0xFF92400E));
     case 'no_show':
-      return const TouristStatusChip('No-show', Color(0xFFFEE2E2), Color(0xFF991B1B));
+      return const TouristStatusChip('Cancelled', Color(0xFFFEE2E2), Color(0xFF991B1B));
     default:
       return null;
   }

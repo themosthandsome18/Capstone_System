@@ -346,7 +346,7 @@ function Dashboard() {
         />
 
         <MetricCard
-          title="No-show Rate"
+          title="Cancellation Rate"
           value={`${metrics.noShowRate || 0}%`}
           note="Selected year"
           icon={<FiXCircle />}
