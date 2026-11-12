@@ -7,12 +7,16 @@ class MobileShell extends StatefulWidget {
     required this.state,
     required this.onRetry,
     this.onSignOut,
+    this.store = const MyVisitsStore(),
   });
 
   final TourismApi api;
   final TourismBootstrapState state;
   final VoidCallback onRetry;
   final VoidCallback? onSignOut;
+
+  /// Where the tourist's passes, feedback and profile are kept on the phone.
+  final MyVisitsStore store;
 
   @override
   State<MobileShell> createState() => _MobileShellState();
@@ -27,6 +31,63 @@ class _MobileShellState extends State<MobileShell> {
   final List<MobileVisitReceipt> _visitHistory = [];
   final List<MobileFeedbackReceipt> _feedbackHistory = [];
   MobileUserProfile _profile = MobileUserProfile.guest();
+
+  /// The kept passes, feedback and profile have been read. Nothing is written before that, so a pass made while they were being read cannot
+  /// write over the ones kept.
+  bool _restored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restore());
+  }
+
+  /// The passes, feedback and profile kept on the phone, put back before the tourist reaches My Visit or Profile (the shell is behind the
+  /// welcome and login screens, and reading them takes a moment). Anything made meanwhile stays, and is written together with them.
+  Future<void> _restore() async {
+    final mine = await widget.store.read();
+    if (!mounted) return;
+    final madeMeanwhile = _visitHistory.isNotEmpty || _feedbackHistory.isNotEmpty || !_profile.isGuest;
+    setState(() {
+      final haveVisits = _visitHistory.map((item) => item.reference).toSet();
+      _visitHistory.addAll(mine.visits.where((item) => !haveVisits.contains(item.reference)));
+      final haveFeedback = _feedbackHistory.map((item) => item.reference).toSet();
+      _feedbackHistory.addAll(mine.feedback.where((item) => !haveFeedback.contains(item.reference)));
+      if (_profile.isGuest) _profile = mine.profile;
+      _restored = true;
+    });
+    if (madeMeanwhile) _persist();
+  }
+
+  /// Keeps the three on the phone. Never throws (the store does not).
+  void _persist() {
+    if (!_restored) return;
+    unawaited(widget.store.saveVisits(_visitHistory));
+    unawaited(widget.store.saveFeedback(_feedbackHistory));
+    unawaited(widget.store.saveProfile(_profile));
+  }
+
+  /// A pass or feedback shows its destination from the bootstrap when it is still there, and the name that was kept when it is not.
+  List<Destination>? get _liveDestinations => widget.state.data?.destinations;
+
+  List<MobileVisitReceipt> get _shownVisits =>
+      _visitHistory.map((item) => item.withDestination(resolveDestination(item.destination, _liveDestinations))).toList();
+
+  List<MobileFeedbackReceipt> get _shownFeedback =>
+      _feedbackHistory.map((item) => item.withDestination(resolveDestination(item.destination, _liveDestinations))).toList();
+
+  /// Sign Out takes everything kept off the phone, then leaves: the next person to use it must not find this tourist's passes.
+  Future<void> _signOut() async {
+    await widget.store.clear();
+    if (!mounted) return;
+    setState(() {
+      _visitHistory.clear();
+      _feedbackHistory.clear();
+      _profile = MobileUserProfile.guest();
+      _index = 0;
+    });
+    widget.onSignOut?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,14 +130,14 @@ class _MobileShellState extends State<MobileShell> {
         failure: widget.state.failure,
         onRetry: widget.onRetry,
         content: widget.state.appContent,
-        visits: _visitHistory,
+        visits: _shownVisits,
         onRegisterVisit: () => _openRegistration(),
       ),
       ProfilePage(
         profile: _profile,
-        visits: _visitHistory,
-        feedbackHistory: _feedbackHistory,
-        onSignOut: widget.onSignOut,
+        visits: _shownVisits,
+        feedbackHistory: _shownFeedback,
+        onSignOut: widget.onSignOut == null ? null : _signOut,
         contacts: widget.state.emergencyContacts,
       ),
     ];
@@ -151,6 +212,7 @@ class _MobileShellState extends State<MobileShell> {
           api: widget.api,
           bootstrap: bootstrap,
           initialDestination: destination,
+          onRecorded: _addVisit,
         ),
       ),
     );
@@ -175,20 +237,24 @@ class _MobileShellState extends State<MobileShell> {
 
   void _addVisit(MobileVisitReceipt receipt) {
     setState(() {
-      _visitHistory.insert(0, receipt);
+      // The same pass arrives twice: when the server answers, and when the pass is closed. It is recorded once.
+      if (!_visitHistory.any((item) => identical(item, receipt))) _visitHistory.insert(0, receipt);
       _profile = _profile.copyWith(
         name: receipt.fullName,
         email: receipt.email,
         contactNumber: receipt.contactNumber,
       );
     });
+    _persist();
   }
 
   void _addFeedback(MobileFeedbackReceipt receipt) {
     setState(() {
-      _feedbackHistory.insert(0, receipt);
+      // The same feedback arrives twice: when the server answers, and when the dialog is closed. It is recorded once.
+      if (!_feedbackHistory.any((item) => identical(item, receipt))) _feedbackHistory.insert(0, receipt);
       _profile = _profile.copyWith(name: receipt.reviewer);
     });
+    _persist();
   }
 }
 
@@ -2695,6 +2761,21 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
   }
 }
 
+/// What the Sign Out confirmation says: what will be taken off this phone, in plain words. With nothing kept it says so.
+String signOutNotice({required int visits, required int feedback, required bool hasProfile}) {
+  final lost = <String>[
+    if (visits > 0) '$visits entry pass${visits == 1 ? '' : 'es'}',
+    if (feedback > 0) '$feedback feedback you sent',
+    if (hasProfile) 'your profile (name, email and contact number)',
+  ];
+  if (lost.isEmpty) {
+    return 'Are you sure you want to sign out of Mauban Tourism? Nothing about you is saved on this phone. You will return to the welcome screen.';
+  }
+  return 'Signing out removes these from this phone:\n'
+      '${lost.map((item) => '\u2022 $item').join('\n')}\n\n'
+      'You will not be able to show these entry passes again in this app. Your registrations stay with the tourism office.';
+}
+
 class ProfilePage extends StatelessWidget {
   const ProfilePage({
     super.key,
@@ -2725,9 +2806,7 @@ class ProfilePage extends StatelessWidget {
             Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w900)),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to sign out of Mauban Tourism? You will return to the welcome screen.',
-        ),
+        content: Text(signOutNotice(visits: visits.length, feedback: feedbackHistory.length, hasProfile: !profile.isGuest)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -3458,6 +3537,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                       builder: (context) => FeedbackPage(
                         api: widget.api,
                         destination: widget.destination,
+                        onRecorded: widget.onFeedbackSubmitted,
                       ),
                     ),
                   );
@@ -3488,6 +3568,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                           api: widget.api,
                           bootstrap: widget.bootstrap,
                           initialDestination: widget.destination,
+                          onRecorded: widget.onVisitSubmitted,
                         ),
                       ),
                     );
@@ -3511,7 +3592,12 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
 }
 
 class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key, required this.api, required this.destination});
+  const FeedbackPage({super.key, required this.api, required this.destination, this.onRecorded});
+
+  /// Told the moment the server has answered, BEFORE the "Feedback sent" dialog is shown: the feedback is recorded (and kept on the phone) at
+  /// once, so that closing the app with the dialog still open does not lose it. The page still returns it when it closes; the one who records
+  /// it must take the same feedback only once.
+  final ValueChanged<MobileFeedbackReceipt>? onRecorded;
 
   final TourismApi api;
   final Destination destination;
@@ -3710,6 +3796,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               : _name.text.trim(),
           rating: _rating,
         );
+        widget.onRecorded?.call(receipt);
         await showSubmissionDialog(
           context,
           title: 'Feedback sent',
@@ -3756,11 +3843,17 @@ class TouristRegistrationPage extends StatefulWidget {
     required this.api,
     required this.bootstrap,
     this.initialDestination,
+    this.onRecorded,
   });
 
   final TourismApi api;
   final MobileBootstrap bootstrap;
   final Destination? initialDestination;
+
+  /// Told the moment the server has answered, BEFORE the pass is shown: the visit is recorded (and kept on the phone) at once, so that closing
+  /// the app with the pass still open does not lose it. The page still returns it when it closes; the one who records it must take the same
+  /// pass only once.
+  final ValueChanged<MobileVisitReceipt>? onRecorded;
 
   @override
   State<TouristRegistrationPage> createState() =>
@@ -4236,6 +4329,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           arrivalDate: _arrivalDate,
           totalVisitors: _visitors,
         );
+        widget.onRecorded?.call(receipt);
         await showDialog(
           context: context,
           builder: (context) => TouristDigitalPassModal(receipt: receipt),
