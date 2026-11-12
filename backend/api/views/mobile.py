@@ -90,6 +90,7 @@ from api.services.tracking_codes import (
 )
 from api.throttles import (
     OwnerStatusRateThrottle,
+    PassStatusRateThrottle,
     CommunityReportContactRateThrottle,
     CommunityReportIpRateThrottle,
 )
@@ -643,6 +644,63 @@ def mobile_tourist_record_history(request):
         rows.append(d)
 
     return Response({"count": len(rows), "records": rows})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([PassStatusRateThrottle])
+def mobile_tourist_record_status(request):
+    """Where a tourist's own pass stands now: its status, when it was checked in, and its destination. Nothing else.
+
+    Public lookup of one's own record, the way the sanitation report history is (mobile_sanitation_report_history): both the survey ID printed on
+    the pass and the exact contact number used are required. Either alone (or a partial number) would let anyone list other people's records.
+    The survey ID is not case sensitive; the contact number is compared by its digits (normalize_contact_digits).
+
+    A record that does not exist and a record with another contact number answer the same: nothing. It is never said which of the two was wrong.
+    The answer holds no name, no email and no contact number: the app already has them, and the answer is for the status.
+
+    The survey ID is printed on the pass, so it is no secret, and the contact number is the only thing left to guess: the lookups that FAIL are
+    counted per client address and limited (PassStatusRateThrottle, which says why and how much). A lookup with a missing key guesses nothing and
+    is not counted.
+    """
+    reference = (request.query_params.get("reference") or "").strip()
+    contact = (request.query_params.get("contact") or "").strip()
+
+    if not reference or not contact:
+        return Response(
+            {"detail": "Enter both the contact number and the survey ID from your pass."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    wanted_contact = normalize_contact_digits(contact)
+    record = TouristRecord.objects.select_related("resort").filter(survey_id__iexact=reference).first()
+    matches = (
+        [record]
+        if record is not None
+        and wanted_contact
+        and normalize_contact_digits(record.contact_number) == wanted_contact
+        else []
+    )
+
+    if not matches:
+        PassStatusRateThrottle.record_failure(request)
+
+    return Response(
+        {
+            "rows": [serialize_mobile_pass_status(item) for item in matches],
+            "summary": {"total": len(matches)},
+        }
+    )
+
+
+def serialize_mobile_pass_status(record):
+    """What the answer holds. An explicit list, on purpose: a field added to the record later does NOT reach this public answer."""
+    return {
+        "status": record.status,
+        "checked_in_at": record.checked_in_at.isoformat() if record.checked_in_at else None,
+        "destination_id": record.resort_id,
+        "destination_name": record.resort.resort_name,
+    }
 
 
 @api_view(["POST"])

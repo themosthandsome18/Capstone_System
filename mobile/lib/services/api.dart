@@ -432,6 +432,19 @@ class TourismApi {
     );
   }
 
+  /// Where a pass stands now. Asked with the survey ID and the contact number that are ON the pass, as the sanitation report history is asked with
+  /// the complaint ID and the contact number: the tourist types nothing. Null when the server has no such pass for that number (it does not say which
+  /// was wrong). Throws when the server cannot be reached or does not answer well: the caller keeps what it knew.
+  Future<MobilePassStatus?> fetchPassStatus({required String reference, required String contact}) async {
+    final data = await _getWithQuery('/mobile/tourism/records/status/', {
+      'reference': reference.trim(),
+      'contact': contact.trim(),
+    });
+    final rows = data['rows'];
+    if (rows is! List || rows.isEmpty || rows.first is! Map) return null;
+    return MobilePassStatus.tryParse(Map<String, dynamic>.from(rows.first as Map));
+  }
+
   Future<List<Map<String, dynamic>>> fetchTouristRecordHistory({
     String? search,
     int? resortId,

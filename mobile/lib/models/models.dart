@@ -1395,17 +1395,36 @@ class MobileVisitReceipt {
     required this.fullName,
     required this.contactNumber,
     required this.email,
+    this.checkedInAt,
   });
 
   final String reference;
   final Destination destination;
   final DateTime arrivalDate;
   final int totalVisitors;
+
+  /// pending, arrived or no_show. As the server said when the pass was made, until [withStatus] brings it up to date (see MobilePassStatus).
   final String status;
   final String fullName;
   final String contactNumber;
   final String email;
+
+  /// When the tourist was scanned on arrival (the server's time, as it sent it); null until they are.
+  final String? checkedInAt;
   String get displayStatus => statusLabel(status);
+
+  /// The same pass with the status the server gave now.
+  MobileVisitReceipt withStatus(String newStatus, String? newCheckedInAt) => MobileVisitReceipt(
+    reference: reference,
+    destination: destination,
+    arrivalDate: arrivalDate,
+    totalVisitors: totalVisitors,
+    status: newStatus,
+    fullName: fullName,
+    contactNumber: contactNumber,
+    email: email,
+    checkedInAt: newCheckedInAt,
+  );
 
   /// What is kept on the phone: the destination as its id and its NAME (the name is what a pass shows, and what is left if the destination is
   /// ever no longer in the bootstrap).
@@ -1419,6 +1438,7 @@ class MobileVisitReceipt {
     'full_name': fullName,
     'contact_number': contactNumber,
     'email': email,
+    'checked_in_at': checkedInAt,
   };
 
   /// A pass as it was kept; null when it is incomplete (no reference, no destination name or no date): it is left out, not guessed.
@@ -1436,6 +1456,7 @@ class MobileVisitReceipt {
       fullName: '${json['full_name'] ?? ''}',
       contactNumber: '${json['contact_number'] ?? ''}',
       email: '${json['email'] ?? ''}',
+      checkedInAt: cleanProfileValue('${json['checked_in_at'] ?? ''}'),
     );
   }
 
@@ -1449,6 +1470,7 @@ class MobileVisitReceipt {
     fullName: fullName,
     contactNumber: contactNumber,
     email: email,
+    checkedInAt: checkedInAt,
   );
 
   factory MobileVisitReceipt.fromResponse(
@@ -1466,6 +1488,27 @@ class MobileVisitReceipt {
       fullName: '${json['full_name'] ?? ''}',
       contactNumber: '${json['contact_number'] ?? ''}',
       email: '${json['email'] ?? ''}',
+    );
+  }
+}
+
+/// Where a pass stands NOW, as the server says it (GET /mobile/tourism/records/status/): the status, when the tourist was checked in, and the
+/// destination. The answer has no name, email or contact number.
+class MobilePassStatus {
+  const MobilePassStatus({required this.status, this.checkedInAt, this.destinationName = ''});
+
+  final String status;
+  final String? checkedInAt;
+  final String destinationName;
+
+  /// Null when the row has no status (it is not an answer to use).
+  static MobilePassStatus? tryParse(Map<String, dynamic> json) {
+    final status = '${json['status'] ?? ''}'.trim();
+    if (status.isEmpty) return null;
+    return MobilePassStatus(
+      status: status,
+      checkedInAt: cleanProfileValue('${json['checked_in_at'] ?? ''}'),
+      destinationName: '${json['destination_name'] ?? ''}',
     );
   }
 }

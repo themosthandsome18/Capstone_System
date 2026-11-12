@@ -87,6 +87,30 @@ class OwnerStatusRateThrottle(_FixedScopeRateThrottle):
         owner_throttle_history.record_failure(throttle.cache, key, throttle.duration, throttle.timer)
 
 
+class PassStatusRateThrottle(OwnerStatusRateThrottle):
+    """Failed lookups of a tourist's pass status (GET /api/mobile/tourism/records/status/) per client address.
+
+    WHY: the survey ID is printed on the pass itself (it is the text of its QR), so it is not a secret. The contact number is the only thing left
+    standing between a stranger and somebody's pass, and a lookup with no limit is a lookup that can be guessed at, over and over, at the speed of
+    the network. So the guesses are limited.
+
+    Made like OwnerStatusRateThrottle, the Establishment Portal's lookup by a private code, and for the same reason it counts only the lookups
+    that FAIL (a number that does not match, or a survey ID that does not exist: the view calls `record_failure`). The app asks once for each
+    pass every time it is opened, and an answer that is right costs nothing, so a tourist with three passes, opening the app all day, is never
+    near the limit, and tourists who share a mobile-carrier address are not locked out by one another's right answers. Once the limit is reached
+    every request from the address is refused until the hour has passed (the app keeps the last status it knew and asks again the next time).
+
+    THE LIMIT, 30 failures an hour (settings: DEFAULT_THROTTLE_RATES["pass_status_ip"]):
+      * the app itself fails only when a kept pass no longer exists on the server, for each such pass each time it is opened: 30 an hour is
+        ten openings with three such passes, which is more than a tourist makes;
+      * a stranger gets 30 guesses an hour (720 a day) from one address, against about a thousand million Philippine mobile numbers: years of
+        guessing for one pass from one address, where without the limit it is minutes.
+    """
+
+    fixed_scope = "pass_status_ip"
+    message = "Too many attempts from this device. Please try again in an hour."
+
+
 def _is_resend_of_saved_report(request):
     """True when this request resends a form whose report was already saved.
 
