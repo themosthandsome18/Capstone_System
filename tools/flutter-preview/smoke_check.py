@@ -80,8 +80,8 @@ def main():
     s, _, body = call(base, "GET", "/households/records/", token)
     households = rows(body) if s == 200 else []
     with_coords = [h for h in households if h.get("latitude") is not None]
-    check("staff households (3, one without coordinates)",
-          s == 200 and len(households) == 3 and len(with_coords) == 2, (s, len(households), len(with_coords)))
+    check("staff households (4, one without coordinates)",
+          s == 200 and len(households) == 4 and len(with_coords) == 3, (s, len(households), len(with_coords)))
 
     s, _, body = call(base, "GET", "/sanitation/complaints/", token)
     reports = rows(body) if s == 200 else []
@@ -93,6 +93,10 @@ def main():
           eligible == ["SYN-RPT-001", "SYN-RPT-002"], eligible)
 
     ids = sorted(h["id"] for h in households)
+    s, _, body = call(base, "GET", "/mobile/sanitation/bootstrap/")
+    names = {b.get("name") for b in json.loads(body).get("barangays", [])} if s == 200 else set()
+    check("seeded barangays are reference barangays",
+          {h.get("barangay") for h in households} <= names and len(names) >= 4, sorted(names))
     if ids:
         s, headers, body = call(base, "GET", f"/households/records/{ids[0]}/front-photo/", token)
         check("household photo served from fake store",

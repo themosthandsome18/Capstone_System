@@ -22,7 +22,7 @@ def _photo(color, label):
 def seed(store):
     from django.contrib.auth.models import User
     from api.models import (
-        HouseholdSanitationRecord, SanitaryBusinessType, SanitaryComplaint,
+        Barangay, HouseholdSanitationRecord, SanitaryBusinessType, SanitaryComplaint,
         SanitaryEstablishment, UserProfile,
     )
     from api.services.household_photos import replace_household_photo
@@ -32,12 +32,17 @@ def seed(store):
         first_name="Preview", last_name="Inspector")
     UserProfile.objects.update_or_create(user=user, defaults={"role": "sanitation"})
 
+    # Real Mauban barangay names (they match the map boundary file); forms only accept
+    # barangays that exist in this reference table.
+    for order, name in enumerate(["Daungan", "Polo", "Rizaliana", "Alitap", "San Lorenzo"], start=1):
+        Barangay.objects.get_or_create(name=name, defaults={"display_order": order})
+
     business_type = SanitaryBusinessType.objects.order_by("pk").first()
     if business_type is None:
         business_type = SanitaryBusinessType.objects.create(name="Synthetic Food Establishment")
     establishments = [
         ("Synthetic Carinderia", "Daungan", 14.1855, 121.7310, "good_standing"),
-        ("Synthetic Bakery", "Poblacion", 14.1890, 121.7290, "violation"),
+        ("Synthetic Bakery", "Polo", 14.1890, 121.7290, "violation"),
         ("Synthetic Water Refilling", "Rizaliana", 14.1910, 121.7360, "for_completion"),
         ("Synthetic Sari-sari Store", "Alitap", 14.1800, 121.7400, "not_yet_inspected"),
     ]
@@ -48,19 +53,22 @@ def seed(store):
             compliance_status=status)
 
     households = []
-    for index, (head, barangay, lat, lng) in enumerate([
-        ("Synthetic Household A", "Daungan", 14.1860, 121.7320),
-        ("Synthetic Household B", "Poblacion", 14.1880, 121.7280),
-        ("Synthetic Household C (no coordinates)", "Alitap", None, None),
+    # Water sources use the app's current options so forms show no "legacy" value.
+    for index, (head, barangay, lat, lng, water_source) in enumerate([
+        ("Synthetic Household A", "Daungan", 14.1860, 121.7320, "Deep well"),
+        ("Synthetic Household B", "Polo", 14.1880, 121.7280, "Barangay water system"),
+        ("Synthetic Household C (no coordinates)", "Alitap", None, None, "Spring"),
+        ("Synthetic Household D (no photo)", "San Lorenzo", 14.1925, 121.7335, "Poso-shallow well"),
     ], start=1):
         households.append(HouseholdSanitationRecord.objects.create(
             household_code=f"SYN-HH-{index:03d}", household_head=head, barangay=barangay,
-            latitude=lat, longitude=lng, male_count=2, female_count=2))
+            latitude=lat, longitude=lng, male_count=2, female_count=2,
+            water_source=water_source))
 
     today = datetime.date.today()
     for complaint_id, barangay, lat, lng, source in [
         ("SYN-RPT-001", "Daungan", 14.1858, 121.7315, "reporter_provided"),
-        ("SYN-RPT-002", "Poblacion", 14.1885, 121.7295, "staff_provided"),
+        ("SYN-RPT-002", "Polo", 14.1885, 121.7295, "staff_provided"),
         ("SYN-RPT-003", "Alitap", None, None, "unknown"),
     ]:
         complaint = SanitaryComplaint.objects.create(

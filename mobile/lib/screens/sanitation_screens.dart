@@ -153,12 +153,15 @@ class HouseholdSurveyPage extends StatefulWidget {
     this.locationAdapter = const HouseholdLocationAdapter(),
     this.onLogout,
     this.onSessionExpired,
+    this.imagePicker,
   });
 
   final TourismApi api;
   final List<BarangayItem> barangays;
   final HouseholdSanitationItem? household;
   final HouseholdLocationAdapter locationAdapter;
+  /// Passed to the front-photo panel; null uses the platform camera/gallery picker.
+  final ImagePicker? imagePicker;
   final VoidCallback? onLogout;
   final VoidCallback? onSessionExpired;
 
@@ -208,6 +211,13 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   SharedPreferences? _sessionPrefs;
   String? _sessionToken;
   bool _sessionInvalid = false;
+  // Set only after the server confirmed a NEW household: its real id and receipt.
+  int? _savedHouseholdId;
+  String _savedHouseholdCode = '';
+  MobileHouseholdSurveyReceipt? _savedReceipt;
+  // The server accepted a NEW household but returned no usable id: the record may
+  // exist, so the form must not be resubmitted and no photo can be attached.
+  bool _saveUnconfirmed = false;
 
   Future<void> _captureHouseholdSession() async {
     _sessionPrefs = await SharedPreferences.getInstance();
@@ -301,8 +311,111 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     super.dispose();
   }
 
+  Widget _photoPanel(int id) => Padding(
+    // Keep the photo controls visually separate from the first form field.
+    padding: const EdgeInsets.only(bottom: 20),
+    child: HouseholdFrontPhotoPanel(
+      key: ValueKey('household-photo-$id'),
+      api: widget.api,
+      householdId: id,
+      imagePicker: widget.imagePicker,
+    ),
+  );
+
+  void _finishSaved() => Navigator.of(context).pop(_savedReceipt);
+
+  Widget _buildSavedHousehold(int id) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _finishSaved();
+    },
+    child: FormPageScaffold(
+      title: 'Household Survey',
+      subtitle: 'Household saved',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: _finishSaved,
+      ),
+      children: [
+        DataSourceBanner(
+          key: const ValueKey('household-saved-banner'),
+          icon: Icons.check_circle_outline,
+          title: 'Household saved',
+          text: 'Household Code $_savedHouseholdCode. Add an optional front photo now, '
+              'or finish. The household stays saved either way.',
+        ),
+        const SizedBox(height: 12),
+        _photoPanel(id),
+        FilledButton(
+          key: const ValueKey('household-photo-done'),
+          onPressed: _finishSaved,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildUnconfirmedSave() => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _finishSaved();
+    },
+    child: FormPageScaffold(
+      title: 'Household Survey',
+      subtitle: 'Save not fully confirmed',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: _finishSaved,
+      ),
+      children: [
+        const DataSourceBanner(
+          key: ValueKey('household-save-unconfirmed'),
+          icon: Icons.warning_amber_outlined,
+          title: 'Saved, but the household ID was not confirmed',
+          text: 'The server accepted this survey but did not return the household '
+              'record ID. The household may already be saved, so do not submit it '
+              'again. A front photo can be added once the record is confirmed.',
+          warning: true,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _savedHouseholdCode.isEmpty
+              ? 'No household code was returned.'
+              : 'Household Code: $_savedHouseholdCode',
+          key: const ValueKey('household-unconfirmed-code'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        Text('Household head: ${formatProperName(_head.text)}'),
+        Text('Barangay: $_barangay'),
+        if (_address.text.trim().isNotEmpty) Text('Address: ${_address.text.trim()}'),
+        const SizedBox(height: 12),
+        const Text(
+          'To find it: close this form. The Households list refreshes, and you can '
+          'open the household there by its head or code to review it or add its '
+          'front photo. If it is missing, ask the sanitation office before entering it again.',
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const ValueKey('household-unconfirmed-close'),
+          onPressed: _finishSaved,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          child: const Text('I understand, close and refresh Households'),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (_saveUnconfirmed) {
+      return _buildUnconfirmedSave();
+    }
+    if (_savedHouseholdId case final int id) {
+      return _buildSavedHousehold(id);
+    }
     if (_editIncompatibility != null) {
       return FormPageScaffold(
         title: 'Household Survey',
@@ -320,7 +433,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             warning: true,
           ),
           if (widget.household?.surveyValues?['id'] case final int id when id > 0)
-            HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
+            _photoPanel(id),
         ],
       );
     }
@@ -334,7 +447,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       ),
       children: [
         if (widget.household?.surveyValues?['id'] case final int id when id > 0)
-          HouseholdFrontPhotoPanel(key: ValueKey('household-photo-$id'), api: widget.api, householdId: id),
+          _photoPanel(id),
         AppTextField(
           controller: _head,
           label: 'Household head',
@@ -541,6 +654,26 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       );
 
       if (!mounted || !_checkHouseholdSession()) return;
+      final savedId = response['id'];
+      final idConfirmed = savedId is int && savedId > 0;
+      if (widget.household == null && !idConfirmed) {
+        // Never fabricate an id or treat this as complete; keep the entered data on
+        // screen until staff acknowledge, and never resubmit automatically.
+        setState(() {
+          _saveUnconfirmed = true;
+          _savedHouseholdCode = response['household_code'] is String
+              ? (response['household_code'] as String).trim()
+              : '';
+          _savedReceipt = MobileHouseholdSurveyReceipt.fromResponse(
+            response,
+            head: formatProperName(_head.text),
+            barangay: _barangay,
+            waterSource: finalWaterSource,
+            toiletType: _toiletType,
+          );
+        });
+        return;
+      }
       if (mounted) {
         await showSubmissionDialog(
           context,
@@ -562,6 +695,18 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           waterSource: finalWaterSource,
           toiletType: _toiletType,
         );
+        // A NEW household offers the optional front photo against the id the
+        // server just assigned; edits finish as before.
+        if (widget.household == null && savedId is int && savedId > 0) {
+          if (mounted) {
+            setState(() {
+              _savedReceipt = receipt;
+              _savedHouseholdId = savedId;
+              _savedHouseholdCode = '${response['household_code'] ?? ''}';
+            });
+          }
+          return;
+        }
         if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
@@ -1941,6 +2086,52 @@ class SanitationStaffIdentity {
   }
 }
 
+/// Keeps bottom-navigation labels on one line (e.g. "Households" at 320 px with
+/// enlarged text) by capping the text scale for the bar only, and only when a label
+/// would otherwise wrap. The user's text size is untouched everywhere else, and
+/// labels never shrink below [minScale] of the base size.
+class SanitationNavLabelFit extends StatelessWidget {
+  const SanitationNavLabelFit({
+    super.key,
+    required this.labels,
+    required this.child,
+    this.minScale = 0.8,
+  });
+
+  final List<String> labels;
+  final Widget child;
+  final double minScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final style = (Theme.of(context).textTheme.labelMedium ??
+            const TextStyle(fontSize: 12))
+        .copyWith(fontWeight: FontWeight.w700);
+    final base = style.fontSize ?? 12;
+    var widest = 0.0;
+    for (final label in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+      painter.dispose();
+    }
+    if (labels.isEmpty || widest <= 0) return child;
+    final available = media.size.width / labels.length - 6;
+    final fits = available / widest;
+    final requested = media.textScaler.scale(base) / base;
+    if (requested <= fits) return child;
+    final capped = fits < minScale ? minScale : fits;
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(capped)),
+      child: child,
+    );
+  }
+}
+
 class SanitationMobileShell extends StatefulWidget {
   const SanitationMobileShell({
     super.key,
@@ -2220,6 +2411,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       SanitationHouseholdsPage(
         householdRecords: _bootstrap.householdRecords,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onOpenHousehold: _openHouseholdSurvey,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2251,7 +2443,9 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           child: pages[_index],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: SanitationNavLabelFit(
+        labels: const ['Home', 'Records', 'Map', 'Households', 'Profile'],
+        child: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: const [
@@ -2270,6 +2464,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             label: 'Profile',
           ),
         ],
+      ),
       ),
     );
   }
@@ -3247,6 +3442,12 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
               expandedInsets: EdgeInsets.zero,
               showSelectedIcon: false,
               style: ButtonStyle(
+                // A stadium outline turns into an oval when the options stack.
+                shape: stackOptions
+                    ? WidgetStatePropertyAll(
+                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      )
+                    : null,
                 padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 ),
@@ -3340,8 +3541,22 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                               ),
                               width: 42,
                               height: 42,
-                              child: MapPin(
-                                color: sanitationStatusColor(item.status),
+                              child: Tooltip(
+                                message: '${item.householdHead} · ${householdStatusLabel(item.status)} · ${item.barangay}',
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Open household ${item.householdHead}',
+                                  child: GestureDetector(
+                                    key: ValueKey('household-map-pin-${item.householdCode}'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: widget.onEditHousehold == null
+                                        ? null
+                                        : () => widget.onEditHousehold!(item),
+                                    child: MapPin(
+                                      color: sanitationStatusColor(item.status),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           )
@@ -3474,6 +3689,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
     super.key,
     required this.householdRecords,
     required this.onOpenHouseholdSurvey,
+    this.onOpenHousehold,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -3481,6 +3697,8 @@ class SanitationHouseholdsPage extends StatelessWidget {
 
   final List<HouseholdSanitationItem> householdRecords;
   final VoidCallback onOpenHouseholdSurvey;
+  /// Opens an existing household (profile and front photo); null keeps cards read-only.
+  final ValueChanged<HouseholdSanitationItem>? onOpenHousehold;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
@@ -3510,15 +3728,20 @@ class SanitationHouseholdsPage extends StatelessWidget {
           )
         else
           ...householdRecords.map(
-            (item) => SimpleInfoCard(
-              icon: Icons.home_work_outlined,
-              title: item.householdHead,
-              subtitle: [
-                item.barangay,
-                if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
-              ].join(' - '),
-              trailing: householdStatusLabel(item.status),
-              statusColor: householdStatusColor(item.status),
+            (item) => GestureDetector(
+              key: ValueKey('household-card-${item.householdCode}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpenHousehold == null ? null : () => onOpenHousehold!(item),
+              child: SimpleInfoCard(
+                icon: Icons.home_work_outlined,
+                title: item.householdHead,
+                subtitle: [
+                  item.barangay,
+                  if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
+                ].join(' - '),
+                trailing: householdStatusLabel(item.status),
+                statusColor: householdStatusColor(item.status),
+              ),
             ),
           ),
       ],

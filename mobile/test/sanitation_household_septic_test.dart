@@ -41,7 +41,9 @@ class SurveyApi extends TourismApi {
       'septic_tank_type': septicTankType,
       'address': address,
     };
+    // Like the real endpoint (serializer data), a save returns the record id.
     return {
+      'id': 77,
       'household_code': householdCode ?? 'HH-NEW',
       'status': 'for_completion',
     };
