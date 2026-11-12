@@ -3387,6 +3387,51 @@
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
 }
 
+/* The card in the pin's popup is one button. It lifts a little under the mouse; when pressed it sinks and fades (0.15s) before the page changes. */
+.mauban-popup-card {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.mauban-popup-card:hover {
+  transform: translateY(-2px);
+}
+
+.mauban-popup-card:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.mauban-popup-card.is-leaving {
+  transform: scale(0.97);
+  opacity: 0.4;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.mauban-popup-cta {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--th-primary-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mauban-popup-card,
+  .mauban-popup-card.is-leaving {
+    transition: none;
+  }
+}
+
 .gis-side-panel {
   display: flex;
   flex-direction: column;
