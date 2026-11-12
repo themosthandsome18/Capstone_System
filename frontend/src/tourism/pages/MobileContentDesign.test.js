@@ -98,7 +98,7 @@ describe("the header of the page", () => {
     await openTab("welcome", "Greeting");
     const header = document.querySelector(".reports-header");
     expect(header).not.toBeNull(); // the fixture reached the case: the header is on the page
-    expect(within(header).getByText("Mauban Tourism App").className).toContain("mobile-content-eyebrow");
+    expect(within(header).getByText("Cagbalete Island App").className).toContain("mobile-content-eyebrow");
     expect(within(header).getByRole("heading", { level: 1 }).textContent).toBe("Mobile App Content");
     expect(within(header).getByText(LEAD)).toBeTruthy();
     expect(header.textContent).not.toMatch(/without a new app version/i);

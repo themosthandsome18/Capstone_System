@@ -1061,16 +1061,16 @@ class MobileUserProfile {
 
   bool get isGuest => name.trim().isEmpty;
 
-  String get displayName => isGuest ? 'Mauban Tourism' : name.trim();
+  String get displayName => isGuest ? 'Guest' : name.trim();
 
   String get initials {
-    if (isGuest) return 'MT';
+    if (isGuest) return 'G';
     final parts = name
         .trim()
         .split(RegExp(r'\s+'))
         .where((part) => part.isNotEmpty)
         .toList();
-    if (parts.isEmpty) return 'MT';
+    if (parts.isEmpty) return 'G';
     return parts
         .take(2)
         .map((part) => part.characters.first.toUpperCase())

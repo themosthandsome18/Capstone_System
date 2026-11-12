@@ -1114,7 +1114,7 @@ class AppHeader extends StatelessWidget {
                 ),
               ),
               Text(
-                'Tourism Guide',
+                'Cagbalete Island Guide',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink),
               ),
             ],

@@ -30,7 +30,7 @@ android {
         create("tourism") {
             dimension = "module"
             applicationId = "com.mauban.tourism"
-            manifestPlaceholders["appLabel"] = "Mauban Tourism"
+            manifestPlaceholders["appLabel"] = "Cagbalete"
         }
         create("sanitation") {
             dimension = "module"

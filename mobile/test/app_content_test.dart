@@ -189,7 +189,7 @@ void main() {
     test('the code\'s own text also gets the name; with no name it is the Explorer', () {
       expect(contentOr(null, codeWelcome, name: 'Ana'), 'CODE hello, Ana!');
       expect(contentOr(null, codeWelcome), 'CODE hello, Explorer!');
-      expect(visitorName(isGuest: true, displayName: 'Mauban Tourism'), 'Explorer');
+      expect(visitorName(isGuest: true, displayName: 'Guest'), 'Explorer');
       expect(visitorName(isGuest: false, displayName: 'Ana Cruz'), 'Ana Cruz');
       expect(visitorName(isGuest: false, displayName: '  '), 'Explorer');
     });

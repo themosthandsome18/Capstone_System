@@ -57,7 +57,7 @@ describe("the title at the top and in the tab of the browser", () => {
     }
     render(<Probe />);
 
-    expect(document.title).toBe("Appearance | Mauban Tourism");
+    expect(document.title).toBe("Appearance | Cagbalete Island Visitor Monitoring");
     expect(document.title).not.toMatch(/Settings/);
   });
 

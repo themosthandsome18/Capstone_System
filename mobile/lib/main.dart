@@ -145,7 +145,7 @@ class _MaubanMobileAppState extends State<MaubanMobileApp> {
           debugShowCheckedModeBanner: false,
           title: isSanitation
               ? 'Mauban Sanitation & Health Portal'
-              : 'Mauban Tourism & Travel Pass',
+              : 'Cagbalete Island Guide',
           theme: buildAppTheme(
             isSanitation: isSanitation,
             theme: theme,

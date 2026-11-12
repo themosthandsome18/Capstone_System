@@ -199,7 +199,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const TourismLoadingScreen(
-        message: 'Signing In to Mauban Tourism...',
+        message: 'Signing In to Cagbalete Island Guide...',
         subtext: 'Synchronizing tourist profile and destinations...',
       );
     }
