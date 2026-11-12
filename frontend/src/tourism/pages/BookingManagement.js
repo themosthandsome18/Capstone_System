@@ -157,6 +157,8 @@ function BookingManagement() {
   const [page, setPage] = useState(1);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  // A record opened from the table is only LOOKED AT: the data is the tourist's, who has already paid. Add Record has no editingRecord.
+  const isViewOnly = Boolean(editingRecord);
 
   const todayDateString = useMemo(() => getTodayDateString(), []);
 
@@ -1284,7 +1286,7 @@ function BookingManagement() {
             {/* ── Sidebar ── */}
             <aside className="wizard-sidebar">
               <p className="wizard-sidebar-title">
-                {editingRecord ? "Tourist Record Details & Edit" : "Data Management Add Record"}
+                {isViewOnly ? "Tourist Record Details" : "Data Management Add Record"}
               </p>
               {WIZARD_STEPS.map((step, idx) => {
                 const stepNum = idx + 1;
@@ -1302,7 +1304,7 @@ function BookingManagement() {
                     </div>
                     <div className="wizard-step-label">
                       <strong>{step.label}</strong>
-                      <small>{step.sub}</small>
+                      <small>{isViewOnly && stepNum === 5 ? "The whole record" : step.sub}</small>
                     </div>
                   </div>
                 );
@@ -1340,6 +1342,8 @@ function BookingManagement() {
               </div>
 
               <div className="wizard-body">
+                {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). */}
+                <fieldset className="wizard-fieldset" disabled={isViewOnly}>
                 {/* ── Step 1: Tourist Info ── */}
                 {currentStep === 1 && (
                   <div className="wizard-grid">
@@ -1581,31 +1585,32 @@ function BookingManagement() {
                     </div>
                   </>
                 )}
+                </fieldset>
 
                 {/* ── Step 5: Review ── */}
                 {currentStep === 5 && (
                   <>
-                    <WizardReviewSection title="Tourist Info" onEdit={() => jumpToStep(1)}>
+                    <WizardReviewSection title="Tourist Info" onEdit={isViewOnly ? undefined : () => jumpToStep(1)}>
                       <WizardReviewItem label="Last Name" value={form.last_name || "—"} />
                       <WizardReviewItem label="First Name" value={form.first_name || "—"} />
                       <WizardReviewItem label="Email" value={form.email || "—"} />
                       <WizardReviewItem label="Contact Number" value={form.contact_number || "—"} />
                       <WizardReviewItem label="Country" value={resolveLabel(referenceTables.countries, form.country_id)} />
                     </WizardReviewSection>
-                    <WizardReviewSection title="Location" onEdit={() => jumpToStep(2)}>
+                    <WizardReviewSection title="Location" onEdit={isViewOnly ? undefined : () => jumpToStep(2)}>
                       <WizardReviewItem label="Region" value={resolveLabel(referenceTables.regions, form.region_id)} />
                       <WizardReviewItem label="Province" value={resolveLabel(referenceTables.provinces, form.province_id)} />
                       <WizardReviewItem label="Resort" value={resolveLabel(referenceTables.resorts, form.resort_id, "resort_id", "resort_name")} />
                       <WizardReviewItem label="Length of Stay" value={resolveLabel(referenceTables.itineraries, form.itinerary_id)} />
                     </WizardReviewSection>
-                    <WizardReviewSection title="Travel Details" onEdit={() => jumpToStep(3)}>
+                    <WizardReviewSection title="Travel Details" onEdit={isViewOnly ? undefined : () => jumpToStep(3)}>
                       <WizardReviewItem label="Travel Mode" value={resolveLabel(referenceTables.travelModes, form.travel_mode_id)} />
                       <WizardReviewItem label="Boat Type" value={resolveLabel(referenceTables.boatTypes, form.boat_type_id)} />
                       <WizardReviewItem label="Visit Purpose" value={resolveLabel(referenceTables.visitPurposes, form.visit_purpose_id)} />
                       <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
                       <WizardReviewItem label="Arrival Status" value={!editingRecord || form.status === "pending" ? "Pending" : form.status === "arrived" ? "Arrived (Confirmed)" : "—"} />
                     </WizardReviewSection>
-                    <WizardReviewSection title="Head Count" onEdit={() => jumpToStep(4)}>
+                    <WizardReviewSection title="Head Count" onEdit={isViewOnly ? undefined : () => jumpToStep(4)}>
                       <WizardReviewItem label="Filipino Count" value={form.filipino_count} />
                       <WizardReviewItem label="Foreigner Count" value={form.foreigner_count} />
                       <WizardReviewItem label="Total Male" value={form.total_male} />
@@ -1628,35 +1633,29 @@ function BookingManagement() {
 
               {/* ── Footer ── */}
               <div className="wizard-footer">
-                <span className="wizard-footer-note">Progress saved automatically</span>
+                {isViewOnly ? <span /> : <span className="wizard-footer-note">Progress saved automatically</span>}
                 <div className="wizard-footer-actions">
-                  {currentStep > 1 && (
+                  {isViewOnly ? (
+                    <button type="button" className="wizard-btn-close" onClick={closeForm}>
+                      Close
+                    </button>
+                  ) : null}
+                  {!isViewOnly && currentStep > 1 && (
                     <button type="button" className="wizard-btn-back" onClick={handleStepBack}>
                       Back
                     </button>
                   )}
-                  {currentStep < 5 && (
+                  {!isViewOnly && currentStep < 5 && (
                     <button type="button" className="wizard-btn-continue" onClick={handleStepContinue}>
                       Continue &rsaquo;
                     </button>
                   )}
-                  {editingRecord && currentStep < 5 && (
-                    <button
-                      type="button"
-                      className="wizard-btn-back"
-                      style={{ color: "var(--th-primary)", fontWeight: "600" }}
-                      onClick={() => jumpToStep(5)}
-                      title="Return to Review"
-                    >
-                      Review &rsaquo;
-                    </button>
-                  )}
-                  {currentStep === 1 && !editingRecord && (
+                  {!isViewOnly && currentStep === 1 && (
                     <button type="button" className="wizard-btn-back" onClick={closeForm}>
                       Cancel
                     </button>
                   )}
-                  {currentStep === 5 && (
+                  {!isViewOnly && currentStep === 5 && (
                     <>
                       <button type="button" className="wizard-btn-back" onClick={closeForm}>
                         Close
@@ -1667,7 +1666,7 @@ function BookingManagement() {
                         disabled={saving}
                         onClick={handleSubmit}
                       >
-                        {saving ? "Saving..." : editingRecord ? "✓ Update Record" : "✓ Save Record"}
+                        {saving ? "Saving..." : "✓ Save Record"}
                       </button>
                     </>
                   )}
@@ -1855,9 +1854,11 @@ function WizardReviewSection({ title, onEdit, children }) {
     <div className="wizard-review-section">
       <div className="wizard-review-section-header">
         <h4>{title}</h4>
-        <button type="button" className="wizard-review-edit-btn" onClick={onEdit}>
-          Edit
-        </button>
+        {onEdit ? (
+          <button type="button" className="wizard-review-edit-btn" onClick={onEdit}>
+            Edit
+          </button>
+        ) : null}
       </div>
       <div className="wizard-review-grid">{children}</div>
     </div>

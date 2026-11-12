@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
 import { useTourismData } from "../context/TourismDataContext";
+import { balanceHeadCount, expectNoWayToSave, fillAddRecordUpToTravel, goToStep, setCount } from "../testing/addRecordFlow";
 
 // This test PINS the nine "Boat Capacity and Fare" tiers as the record form
 // offers them today: the nine texts and their ORDER. They are written out below
@@ -24,10 +25,11 @@ const NINE = [
 const PLACEHOLDER = "Select capacity and fare";
 
 // react-router-dom v7 is ESM that CRA's Jest cannot load; stub what is used.
+let mockRouterState = null;
 jest.mock(
   "react-router-dom",
   () => ({
-    useLocation: () => ({ pathname: "/tourist-data", state: null }),
+    useLocation: () => ({ pathname: "/tourist-data", state: mockRouterState }),
     useNavigate: () => jest.fn(),
     useOutletContext: () => ({}),
   }),
@@ -92,9 +94,12 @@ const RECORD_B = record("SV-B", "Berto", "Cruz", 32, "");
 const RECORD_C = record("SV-C", "Carla", "Dela Paz", 31, "");
 
 let updateRecord;
+let createRecord;
 
 beforeEach(() => {
+  mockRouterState = null;
   updateRecord = jest.fn().mockResolvedValue({});
+  createRecord = jest.fn().mockResolvedValue({});
   useTourismData.mockReturnValue({
     referenceTables: REFERENCE,
     bookingManagement: {
@@ -103,7 +108,7 @@ beforeEach(() => {
       pagination: { page: 1, totalPages: 1, total: 3 },
     },
     reportingYears: ["2099"],
-    createRecord: jest.fn().mockResolvedValue({}),
+    createRecord,
     updateRecord,
     deleteRecord: jest.fn(),
     previewOnlineBookingImport: jest.fn(),
@@ -118,7 +123,7 @@ async function openEdit(surveyId) {
   render(<BookingManagement />);
   const row = await waitFor(() => rowOf(surveyId));
   fireEvent.click(row.querySelector(".booking-icon-btn.view"));
-  await screen.findByText("Tourist Record Details & Edit");
+  await screen.findByText("Tourist Record Details");
   fireEvent.click(screen.getByText("Travel Details", { selector: ".wizard-step-label strong" }).closest(".wizard-step-item"));
 }
 
@@ -155,23 +160,30 @@ describe("the Boat Capacity and Fare dropdown of the record form", () => {
     expect(fareSelect().disabled).toBe(true);
   });
 
-  it("sends the tier back unchanged when the record is saved without touching it", async () => {
+  it("shows the tier it holds, and has no way to send it: there is no Update Record", async () => {
     await openEdit("SV-A");
-    fireEvent.click(screen.getByText("Review", { selector: ".wizard-step-label strong" }).closest(".wizard-step-item"));
-    fireEvent.click(await screen.findByRole("button", { name: /Update Record/ }));
-    await waitFor(() => expect(updateRecord).toHaveBeenCalled());
-    const [, payload] = updateRecord.mock.calls[updateRecord.mock.calls.length - 1];
-    expect(payload.boat_capacity_fare).toBe(NINE[2]);
+    expect(shown(fareSelect())).toBe(NINE[2]);
+    expectNoWayToSave(updateRecord, createRecord);
   });
 
-  it("sends the tier that was chosen, exactly as written", async () => {
-    await openEdit("SV-C");
+  it("sends the tier that was chosen, exactly as written (in Add Record, where it is chosen)", async () => {
+    mockRouterState = { openAddModal: true, ts: 4243 };
+    render(<BookingManagement />);
+    await screen.findByText("Data Management Add Record");
+    fillAddRecordUpToTravel({ boat: "31" });
     fireEvent.change(fareSelect(), { target: { value: NINE[0] } });
-    fireEvent.click(screen.getByText("Review", { selector: ".wizard-step-label strong" }).closest(".wizard-step-item"));
-    fireEvent.click(await screen.findByRole("button", { name: /Update Record/ }));
-    await waitFor(() => expect(updateRecord).toHaveBeenCalled());
-    const [, payload] = updateRecord.mock.calls[updateRecord.mock.calls.length - 1];
+    setCount("Filipino Count", 2);
+    balanceHeadCount(2);
+    goToStep("Review");
+    fireEvent.click(await screen.findByRole("button", { name: /Save Record/ }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalled());
+    const [payload] = createRecord.mock.calls[createRecord.mock.calls.length - 1];
     expect(payload.boat_capacity_fare).toBe("1-2 pax (One-Way P1500, Two-way P2000)");
+  });
+
+  it("a record that is only looked at has its fare tier locked", async () => {
+    await openEdit("SV-A");
+    expect(fareSelect().closest("fieldset").disabled).toBe(true);
   });
 });
 

@@ -193,6 +193,23 @@
   overflow-y: auto;
 }
 
+/* The fields of a record that is only looked at: locked, and still easy to read. */
+.wizard-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.wizard-fieldset:disabled input,
+.wizard-fieldset:disabled select,
+.wizard-fieldset:disabled textarea {
+  opacity: 1;
+  cursor: default;
+  color: var(--th-text-main);
+  -webkit-text-fill-color: var(--th-text-main);
+}
+
 .wizard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -429,7 +446,8 @@
   cursor: not-allowed;
 }
 
-.wizard-btn-save {
+.wizard-btn-save,
+.wizard-btn-close {
   padding: 8px 22px;
   background: var(--th-primary);
   border: none;
@@ -444,11 +462,13 @@
   transition: background 0.15s;
 }
 
-.wizard-btn-save:hover:not(:disabled) {
+.wizard-btn-save:hover:not(:disabled),
+.wizard-btn-close:hover:not(:disabled) {
   background: var(--th-primary-hover);
 }
 
-.wizard-btn-save:disabled {
+.wizard-btn-save:disabled,
+.wizard-btn-close:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

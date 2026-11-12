@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
 import { useTourismData } from "../context/TourismDataContext";
+import { balanceHeadCount, expectNoWayToSave, fillAddRecordUpToTravel, goToStep, setCount } from "../testing/addRecordFlow";
 
 // The Boat Capacity and Fare dropdown of the record form, now fed by the server's
 // list (referenceTables.boatCapacityFares) with the built-in nine as the fallback.
@@ -116,6 +117,7 @@ const RECORDS = {
 };
 
 let updateRecord;
+let createRecord;
 
 function useReference(extra) {
   useTourismData.mockReturnValue({
@@ -126,7 +128,7 @@ function useReference(extra) {
       pagination: { page: 1, totalPages: 1, total: Object.keys(RECORDS).length },
     },
     reportingYears: ["2099"],
-    createRecord: jest.fn().mockResolvedValue({}),
+    createRecord,
     updateRecord,
     deleteRecord: jest.fn(),
     previewOnlineBookingImport: jest.fn(),
@@ -138,6 +140,7 @@ function useReference(extra) {
 beforeEach(() => {
   mockRouterState = null;
   updateRecord = jest.fn().mockResolvedValue({});
+  createRecord = jest.fn().mockResolvedValue({});
   useReference({ boatCapacityFares: SERVER_LIST });
 });
 
@@ -149,7 +152,7 @@ async function openEdit(surveyId) {
   render(<BookingManagement />);
   const row = await waitFor(() => rowOf(surveyId));
   fireEvent.click(row.querySelector(".booking-icon-btn.view"));
-  await screen.findByText("Tourist Record Details & Edit");
+  await screen.findByText("Tourist Record Details");
   step("Travel Details");
 }
 
@@ -158,14 +161,8 @@ const labelsOf = (select) => Array.from(select.querySelectorAll("option")).map((
 const valuesOf = (select) => Array.from(select.querySelectorAll("option")).map((o) => o.value);
 const shown = (select) => select.options[select.selectedIndex]?.textContent;
 
-// what is SENT when the record is saved without touching the fare
-async function savedFare() {
-  step("Review");
-  fireEvent.click(await screen.findByRole("button", { name: /Update Record/ }));
-  await waitFor(() => expect(updateRecord).toHaveBeenCalled());
-  const [, payload] = updateRecord.mock.calls[updateRecord.mock.calls.length - 1];
-  return payload.boat_capacity_fare;
-}
+// A record opened from the table is only looked at: it has no way to be sent (these used to press Update Record and read the payload).
+const noWayToSave = () => expectNoWayToSave(updateRecord, createRecord);
 
 describe("the server's list wins", () => {
   it("offers the server's list, not the built-in nine: a tenth first, the new order, the retired one left out", async () => {
@@ -207,13 +204,13 @@ describe("the fallback and the empty list", () => {
     expect(shown(fareSelect())).toBe(PLACEHOLDER);
   });
 
-  it("with an empty list, a record that holds a fare still shows it (not blank), and sends it unchanged", async () => {
+  it("with an empty list, a record that holds a fare still shows it (not blank), and has no way to send it", async () => {
     useReference({ boatCapacityFares: [] });
     await openEdit("SV-ACTIVE");
     expect(labelsOf(fareSelect())).toEqual([PLACEHOLDER, `${NINE[0]} (not in the list)`]);
     expect(shown(fareSelect())).toBe(`${NINE[0]} (not in the list)`);
     expect(fareSelect().value).toBe(NINE[0]);
-    expect(await savedFare()).toBe(NINE[0]);
+    noWayToSave();
   });
 });
 
@@ -247,24 +244,24 @@ describe("what the staff sees when the server holds exactly the seeded nine (as 
   });
 
   it.each([["SV-T1", 0], ["SV-T2", 1], ["SV-T3", 2]])(
-    "%s: the record's tier (number %i + 1) is still the one selected, with no mark, and is sent unchanged",
+    "%s: the record's tier (number %i + 1) is still the one selected, with no mark, and has no way to be sent",
     async (surveyId, index) => {
       await openWith({ boatCapacityFares: SEEDED }, surveyId);
       expect(shown(fareSelect())).toBe(NINE[index]);
       expect(fareSelect().value).toBe(NINE[index]);
       expect(labelsOf(fareSelect())).toHaveLength(10); // placeholder + nine: nothing added
-      expect(await savedFare()).toBe(NINE[index]);
+      noWayToSave();
     }
   );
 });
 
 describe("a: a listed, active tier", () => {
-  it("is an ordinary option, selected, with no mark, and is sent unchanged", async () => {
+  it("is an ordinary option, selected, with no mark, and has no way to be sent", async () => {
     await openEdit("SV-ACTIVE");
     expect(labelsOf(fareSelect())).toEqual([PLACEHOLDER, ...SERVER_ACTIVE_IN_ORDER]); // no extra option
     expect(shown(fareSelect())).toBe(NINE[0]);
     expect(fareSelect().value).toBe(NINE[0]);
-    expect(await savedFare()).toBe(NINE[0]);
+    noWayToSave();
   });
 });
 
@@ -284,9 +281,10 @@ describe("b: a retired tier the record holds", () => {
     expect(fareSelect().value).toBe(NINE[3]); // the value is the text itself
   });
 
-  it("sends exactly the text it holds when the record is saved without touching the fare", async () => {
+  it("holds exactly the text it has as the value, and has no way to send it", async () => {
     await openEdit("SV-RETIRED");
-    expect(await savedFare()).toBe(NINE[3]);
+    expect(fareSelect().value).toBe(NINE[3]);
+    noWayToSave();
   });
 
   it("is not offered to a record that does not hold it", async () => {
@@ -305,20 +303,20 @@ describe("c: a text that is in no tier", () => {
     expect(fareSelect().value).toBe(UNLISTED);
   });
 
-  it("sends exactly the text it holds when the record is saved without touching the fare", async () => {
+  it("holds exactly the text it has as the value, and has no way to send it", async () => {
     await openEdit("SV-UNLISTED");
-    expect(await savedFare()).toBe(UNLISTED);
+    expect(fareSelect().value).toBe(UNLISTED);
+    noWayToSave();
   });
 
-  it("keeps a text with spaces at both ends and inside byte for byte: shown, selected and sent", async () => {
+  it("keeps a text with spaces at both ends and inside byte for byte: shown and selected, and not sent", async () => {
     await openEdit("SV-ODD");
     expect(ODD).not.toBe(NINE[1]); // close to a tier, not equal to it
     expect(valuesOf(fareSelect()).filter((v) => v === ODD)).toHaveLength(1);
     expect(fareSelect().value).toBe(ODD); // not trimmed, not collapsed
     expect(shown(fareSelect())).toBe(`${ODD} (not in the list)`);
-    const sent = await savedFare();
-    expect(sent).toBe(ODD);
-    expect(sent.length).toBe(ODD.length);
+    expect(fareSelect().value.length).toBe(ODD.length);
+    noWayToSave();
   });
 
   it("is not carried over to another record: it belongs to the record that holds it", async () => {
@@ -340,26 +338,22 @@ describe("the dropdown is never blank while the record holds a fare", () => {
     }
   );
 
-  it("a record that holds nothing shows the placeholder, and sends nothing", async () => {
+  it("a record that holds nothing shows the placeholder, and has no way to send anything", async () => {
     await openEdit("SV-NONE");
     expect(shown(fareSelect())).toBe(PLACEHOLDER);
-    expect(await savedFare()).toBe("");
+    noWayToSave();
   });
 });
 
 describe("choosing another tier", () => {
-  it("sends the tier that was chosen, as the server wrote it", async () => {
-    await openEdit("SV-RETIRED");
-    fireEvent.change(fareSelect(), { target: { value: TENTH } });
-    expect(await savedFare()).toBe(TENTH);
-  });
-
-  it("keeps the record's own text on offer after the person changes it, so it can be put back", async () => {
+  // The first of these sends a chosen tier, which is done in Add Record (see "a NEW record" below). A record that is only looked at keeps its own text.
+  it("a record that is only looked at has its fare locked, and its own text stays on offer", async () => {
     await openEdit("SV-UNLISTED");
-    fireEvent.change(fareSelect(), { target: { value: NINE[2] } });
+    expect(fareSelect().closest("fieldset").disabled).toBe(true);
+    expect(fareSelect().closest("fieldset").matches(":disabled")).toBe(true);
     expect(valuesOf(fareSelect())).toContain(UNLISTED);
-    fireEvent.change(fareSelect(), { target: { value: UNLISTED } });
-    expect(await savedFare()).toBe(UNLISTED);
+    expect(fareSelect().value).toBe(UNLISTED);
+    noWayToSave();
   });
 });
 
@@ -390,19 +384,31 @@ describe("a NEW record", () => {
     expect(document.body.textContent).not.toContain("(inactive)");
     expect(document.body.textContent).not.toContain("(not in the list)");
   });
+  it("sends the tier that was chosen, as the server wrote it (moved here from the old record form: this is where a tier is chosen)", async () => {
+    mockRouterState = { openAddModal: true, ts: 778 };
+    render(<BookingManagement />);
+    await screen.findByText("Data Management Add Record");
+    fillAddRecordUpToTravel({ boat: "31" });
+    fireEvent.change(fareSelect(), { target: { value: TENTH } });
+    setCount("Filipino Count", 2);
+    balanceHeadCount(2);
+    goToStep("Review");
+    fireEvent.click(await screen.findByRole("button", { name: /Save Record/ }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalled());
+    const [payload] = createRecord.mock.calls[createRecord.mock.calls.length - 1];
+    expect(payload.boat_capacity_fare).toBe(TENTH);
+    expect(updateRecord).not.toHaveBeenCalled();
+  });
 });
 
-describe("KNOWN BUG, not fixed yet: a boat that takes no fare loses the stored fare on save", () => {
-  // KILALANG BUG, hindi pa inaayos, tingnan ang listahan ng butas.
-  // This test PINS the behaviour as it is today, so that any change to it, up or
-  // down, is noticed. When a record's boat type has requires_capacity_fare=false,
-  // saving the record silently clears the fare text it holds (capacityFareForBoatType
-  // returns ""). One live record is affected. Do NOT "fix" this test to expect the
-  // fare to survive until the bug itself is fixed on purpose.
-  it("the field is switched off, still shows the stored tier, and the save sends an EMPTY fare", async () => {
+describe("a boat that takes no fare, holding a stored fare", () => {
+  // This used to PIN a known bug: saving a record whose boat type has requires_capacity_fare=false silently cleared the fare it holds
+  // (capacityFareForBoatType returns ""). A record opened from the table is only looked at now, so that save cannot be made from the screen;
+  // the code that wipes it is still in handleSubmit. When the bug is fixed on purpose, test it where records are written.
+  it("the field is switched off and still shows the stored tier, and there is no way to save it (so nothing is wiped)", async () => {
     await openEdit("SV-NOFARE");
     expect(fareSelect().disabled).toBe(true);
     expect(fareSelect().value).toBe(NINE[0]); // what the person sees: the tier is still there
-    expect(await savedFare()).toBe(""); // what is sent: it is wiped. This is the bug.
+    noWayToSave();
   });
 });
