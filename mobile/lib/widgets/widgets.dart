@@ -1868,6 +1868,168 @@ class BookingStatusPill extends StatelessWidget {
   }
 }
 
+/// The small "3 / 5" pill that says which photo of a set is on screen: the one the destination's slideshow has had, now a widget, so the photo viewer
+/// of a review shows exactly the same thing.
+class PhotoCounterPill extends StatelessWidget {
+  const PhotoCounterPill({super.key, required this.current, required this.total});
+
+  /// The photo on screen, counting from 1.
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.photo_library_outlined, size: 12, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            '$current / $total',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Opens the photos of a review full screen, on the one that was pressed. Just looking: there is no download and no share.
+Future<void> showReviewPhotoViewer(BuildContext context, List<String> urls, {int initialIndex = 0}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (context) => ReviewPhotoViewer(urls: urls, initialIndex: initialIndex),
+    ),
+  );
+}
+
+/// The photos of a review, one at a time, full screen, on black. It closes with its Close button and with the phone's Back. With more than one photo
+/// they can be swiped (with the mouse too, on the web) and the pill says which one it is ("2 / 3", like the slideshow of a destination). A photo that
+/// is still coming shows a spinner; one that could not be loaded says so, instead of an empty black page.
+class ReviewPhotoViewer extends StatefulWidget {
+  const ReviewPhotoViewer({super.key, required this.urls, this.initialIndex = 0});
+
+  /// Whole addresses, as the review card shows them.
+  final List<String> urls;
+  final int initialIndex;
+
+  @override
+  State<ReviewPhotoViewer> createState() => _ReviewPhotoViewerState();
+}
+
+class _ReviewPhotoViewerState extends State<ReviewPhotoViewer> {
+  late final PageController _controller;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
+    _controller = PageController(initialPage: _current);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _photo(String url, int index) {
+    return Center(
+      child: Image.network(
+        url,
+        key: ValueKey('photo-viewer-image-$index'),
+        fit: BoxFit.contain,
+        semanticLabel: 'Photo ${index + 1} of ${widget.urls.length}',
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame == null && !wasSynchronouslyLoaded) {
+            return Center(
+              key: ValueKey('photo-viewer-loading-$index'),
+              child: const CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          return child;
+        },
+        errorBuilder: (context, error, stackTrace) => Center(
+          key: ValueKey('photo-viewer-error-$index'),
+          child: const Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.broken_image_outlined, color: Colors.white70, size: 56),
+                SizedBox(height: 12),
+                Text(
+                  'This photo could not be loaded.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.urls.length;
+    return Scaffold(
+      key: const ValueKey('photo-viewer'),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            child: PageView.builder(
+              key: const ValueKey('photo-viewer-pages'),
+              controller: _controller,
+              itemCount: total,
+              onPageChanged: (index) => setState(() => _current = index),
+              itemBuilder: (context, index) => _photo(widget.urls[index], index),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    key: const ValueKey('photo-viewer-close'),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+                    icon: const Icon(Icons.close),
+                  ),
+                  const Spacer(),
+                  if (total > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, right: 6),
+                      child: KeyedSubtree(
+                        key: const ValueKey('photo-viewer-counter'),
+                        child: PhotoCounterPill(current: _current + 1, total: total),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class InfoBanner extends StatelessWidget {
   const InfoBanner({
     super.key,
