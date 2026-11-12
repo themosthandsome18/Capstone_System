@@ -147,6 +147,130 @@ class DestinationMapFiguresTests(TestCase):
 
         self.assertEqual(self.figures()["mostVisited"]["resort_id"], 5)
 
+    # -- the share of the busiest place, Least visited, and the places with none -----------------
+
+    def test_the_busiest_place_share_is_its_arrivals_over_the_total_as_a_whole_number(self):
+        self.arrive(make_resort(1, "A"), 6)
+        self.arrive(make_resort(2, "B"), 3)
+        self.arrive(make_resort(3, "C"), 1)  # 6 of 10
+
+        self.assertEqual(self.figures()["mostVisitedSharePercent"], 60)
+
+    def test_the_share_is_the_busiest_over_the_total_and_not_an_average(self):
+        self.arrive(make_resort(1, "A"), 5)
+        self.arrive(make_resort(2, "B"), 5)
+        self.arrive(make_resort(3, "C"), 5)
+        self.arrive(make_resort(4, "D"), 5)  # 5 of 20 is 25; an average of the places' shares would be 25 too, so the next test separates them
+
+        self.assertEqual(self.figures()["mostVisitedSharePercent"], 25)
+
+    def test_the_share_of_a_single_visited_place_is_100(self):
+        self.arrive(make_resort(1, "A"), 4)
+        make_resort(2, "B")
+
+        self.assertEqual(self.figures()["mostVisitedSharePercent"], 100)
+
+    def test_the_share_rounds_half_up_not_to_even(self):
+        self.arrive(make_resort(1, "A"), 5)
+        self.arrive(make_resort(2, "B"), 3)  # 5 of 8 is 62.5: 63, not 62
+
+        self.assertEqual(self.figures()["mostVisitedSharePercent"], 63)
+
+    def test_the_share_is_none_at_a_zero_total(self):
+        make_resort(1, "A")
+        self.arrive(make_resort(2, "B"), 40, when=LAST_YEAR_DAY)
+
+        self.assertIsNone(self.figures()["mostVisitedSharePercent"])
+
+    def test_the_share_is_none_with_no_destination(self):
+        self.assertIsNone(self.figures()["mostVisitedSharePercent"])
+
+    def test_least_visited_is_the_fewest_people_among_the_places_that_have_some(self):
+        self.arrive(make_resort(1, "Alpha"), 9)
+        self.arrive(make_resort(2, "Bravo"), 2)
+        self.arrive(make_resort(3, "Charlie"), 5)
+        make_resort(4, "Delta")  # none: not the least visited, it has no visit
+
+        self.assertEqual(self.figures()["leastVisited"], {"resort_id": 2, "name": "Bravo", "arrivals": 2})
+
+    def test_least_visited_ignores_a_place_with_zero(self):
+        self.arrive(make_resort(1, "Alpha"), 9)
+        make_resort(2, "Zero One")
+        make_resort(3, "Zero Two")
+
+        self.assertEqual(self.figures()["leastVisited"]["resort_id"], 1)
+        self.assertGreater(self.figures()["leastVisited"]["arrivals"], 0)
+
+    def test_least_visited_counts_people_not_records(self):
+        a, b = make_resort(1, "A"), make_resort(2, "B")
+        self.arrive(a, 1)
+        self.arrive(a, 1)
+        self.arrive(a, 1)  # three records, 3 people
+        self.arrive(b, 2)  # one record, 2 people: fewer people, so it is the least
+
+        self.assertEqual(self.figures()["leastVisited"], {"resort_id": 2, "name": "B", "arrivals": 2})
+
+    def test_least_visited_tie_gives_the_smaller_resort_id_whatever_the_order(self):
+        for pk in (9, 4, 6):
+            self.arrive(make_resort(pk, f"R{pk}"), 3)
+        self.arrive(make_resort(1, "Busy"), 20)
+
+        self.assertEqual(self.figures()["leastVisited"], {"resort_id": 4, "name": "R4", "arrivals": 3})
+
+    def test_least_visited_is_the_most_visited_when_only_one_place_has_arrivals(self):
+        self.arrive(make_resort(1, "Only"), 7)
+
+        figures = self.figures()
+
+        self.assertEqual(figures["leastVisited"], figures["mostVisited"])
+
+    def test_least_visited_is_none_when_nobody_has_arrivals(self):
+        make_resort(1, "A")
+        self.arrive(make_resort(2, "B"), 40, status="no_show")
+
+        self.assertIsNone(self.figures()["leastVisited"])
+
+    def test_least_visited_is_none_with_no_destination(self):
+        self.assertIsNone(self.figures()["leastVisited"])
+
+    def test_places_with_no_arrivals_counts_the_ones_a_tourist_could_go_to_that_nobody_has_visited(self):
+        self.arrive(make_resort(1, "A"), 4)
+        make_resort(2, "B")
+        make_resort(3, "C")
+
+        self.assertEqual(self.figures()["placesWithNoArrivals"], 2)
+
+    def test_places_with_no_arrivals_is_0_when_every_place_has_some(self):
+        self.arrive(make_resort(1, "A"), 4)
+        self.arrive(make_resort(2, "B"), 1)
+
+        self.assertEqual(self.figures()["placesWithNoArrivals"], 0)
+
+    def test_places_with_no_arrivals_is_every_place_when_nobody_has_arrived(self):
+        make_resort(1, "A")
+        make_resort(2, "B")
+        make_resort(3, "C")
+
+        self.assertEqual(self.figures()["placesWithNoArrivals"], 3)
+
+    def test_places_with_no_arrivals_leaves_out_inactive_places_and_placeholders(self):
+        self.arrive(make_resort(1, "A"), 4)
+        make_resort(2, "Real With None")
+        make_resort(3, "Switched Off", is_active=False)
+        make_resort(4, "Made Up By An Import", is_placeholder=True)
+
+        self.assertEqual(self.figures()["placesWithNoArrivals"], 1)
+
+    def test_a_placeholder_with_arrivals_still_counts_in_the_total_and_can_be_the_busiest(self):
+        self.arrive(make_resort(1, "Real"), 2)
+        self.arrive(make_resort(2, "Made Up", is_placeholder=True), 8)  # people did arrive: they are in the Year view, so here too
+
+        figures = self.figures()
+
+        self.assertEqual(figures["arrivalsThisYear"], 10)
+        self.assertEqual(figures["mostVisited"]["resort_id"], 2)
+        self.assertEqual(figures["mostVisitedSharePercent"], 80)
+
     # -- the endpoint -----------------------------------------------------------
 
     def test_the_year_is_sent_and_a_visitor_without_a_login_gets_no_figures(self):

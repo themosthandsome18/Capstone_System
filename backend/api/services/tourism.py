@@ -210,10 +210,10 @@ def build_reference_tables_payload(resorts=None, active_only=False, request=None
     payload["boatCapacityFares"] = build_boat_capacity_fares_payload(active_only)
 
     if resorts is not None:
-        payload["resorts"] = ResortSerializer(resorts, many=True, context={"request": request}).data
+        payload["resorts"] = ResortSerializer(resorts, many=True, context={"request": request, "include_placeholder": not active_only}).data
     else:
         queryset = annotate_destination_figures(Resort.objects.all())
-        payload["resorts"] = ResortSerializer(queryset, many=True, context={"request": request}).data
+        payload["resorts"] = ResortSerializer(queryset, many=True, context={"request": request, "include_placeholder": not active_only}).data
 
     return payload
 

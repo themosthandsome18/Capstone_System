@@ -4,8 +4,6 @@ import MaubanDestinationMap from "../components/maps/MaubanDestinationMap";
 import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
 
-const OFFICIAL_DESTINATION_LIMIT = 15;
-
 function parseCoordinate(value) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -26,20 +24,17 @@ function hasValidMapCoordinates(destination) {
   return lat !== null && lng !== null && lat >= 13.9 && lat <= 14.4 && lng >= 121.55 && lng <= 122;
 }
 
-function isOfficialMapDestination(destination) {
-  return (
-    hasValidMapCoordinates(destination) &&
-    (Boolean(destination.image_key) ||
-      Boolean(destination.with_mayors_permit) ||
-      Number(destination.resort_id || 0) <= OFFICIAL_DESTINATION_LIMIT)
-  );
+// The map asks two things: are the coordinates inside Mauban, and is it not a placeholder (a resort an import made
+// up, which carries the middle of the town and is not a place). A photo, a permit or an id number has no part in it.
+function isMapDestination(destination) {
+  return hasValidMapCoordinates(destination) && !destination.is_placeholder;
 }
 
 function GISMap() {
   const { referenceTables } = useTourismData();
   const [mapLayer, setMapLayer] = useState("street");
   const mapDestinations = useMemo(
-    () => referenceTables.resorts.filter(isOfficialMapDestination),
+    () => referenceTables.resorts.filter(isMapDestination),
     [referenceTables.resorts]
   );
   const [selectedDestination, setSelectedDestination] = useState(
@@ -68,8 +63,7 @@ function GISMap() {
     }
   }, [mapDestinations, selectedDestination]);
 
-  const totalLocations = mapDestinations.length;
-  // The three figures after Total Locations come from the server as they are; nothing here adds them up.
+  // The four figures below come from the server as they are; nothing here adds them up.
   const [figures, setFigures] = useState(null);
 
   useEffect(() => {
@@ -84,6 +78,9 @@ function GISMap() {
   }, []);
 
   const mostVisited = figures?.mostVisited;
+  const leastVisited = figures?.leastVisited;
+  const sharePercent = figures?.mostVisitedSharePercent;
+  const withNone = figures?.placesWithNoArrivals || 0;
 
   return (
     <div className="gis-page">
@@ -196,16 +193,15 @@ function GISMap() {
           <div className="gis-heatmap-card">
             <h3>GIS Coverage</h3>
             <p>
-              Showing official destinations with verified Mauban coordinates.
-              Imported placeholder records are hidden from the map until exact
-              coordinates are added.
+              Showing every destination that has coordinates inside Mauban.
+              Placeholder records made by an import are hidden from the map
+              until an admin gives them exact coordinates.
             </p>
           </div>
         </aside>
       </div>
 
       <div className="gis-bottom-stats">
-        <StatBox title="Total Locations" value={totalLocations} />
         <StatBox
           title="Active in the app"
           value={
@@ -219,19 +215,38 @@ function GISMap() {
             )
           }
         />
-        <StatBox title="Arrivals this year" value={figures ? figures.arrivalsThisYear : "—"} />
+        <StatBox
+          title="Arrivals this year"
+          value={figures ? figures.arrivalsThisYear : "—"}
+          note={
+            sharePercent === null || sharePercent === undefined
+              ? null
+              : `the busiest place has ${sharePercent}% of them`
+          }
+        />
         <StatBox
           title="Most visited this year"
           value={!figures ? "—" : mostVisited ? mostVisited.name : "None yet"}
           isName={Boolean(figures)}
           note={mostVisited ? `${mostVisited.arrivals} arrivals` : null}
         />
+        <StatBox
+          title="Least visited this year"
+          value={!figures ? "—" : leastVisited ? leastVisited.name : "None yet"}
+          isName={Boolean(figures)}
+          note={leastVisited ? `${leastVisited.arrivals} arrivals` : null}
+          extraNote={
+            figures && withNone > 0
+              ? `${withNone} ${withNone === 1 ? "place has" : "places have"} none yet`
+              : null
+          }
+        />
       </div>
     </div>
   );
 }
 
-function StatBox({ title, value, note, isName = false }) {
+function StatBox({ title, value, note, extraNote, isName = false }) {
   return (
     <div className="gis-stat-box">
       <p>{title}</p>
@@ -243,6 +258,7 @@ function StatBox({ title, value, note, isName = false }) {
         <h2>{value}</h2>
       )}
       {note ? <p className="gis-stat-note">{note}</p> : null}
+      {extraNote ? <p className="gis-stat-note">{extraNote}</p> : null}
     </div>
   );
 }

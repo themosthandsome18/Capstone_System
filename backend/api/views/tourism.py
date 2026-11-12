@@ -280,13 +280,13 @@ def resort_list(request):
     ensure_initial_reference_data()
 
     if request.method == "GET":
-        return Response(ResortSerializer(Resort.objects.all(), many=True, context={"request": request}).data)
+        return Response(ResortSerializer(Resort.objects.all(), many=True, context={"request": request, "include_placeholder": True}).data)
 
     data = request.data.copy()
     if not data.get("resort_id"):
         data["resort_id"] = generate_resort_id()
 
-    serializer = ResortSerializer(data=data, context={"request": request})
+    serializer = ResortSerializer(data=data, context={"request": request, "include_placeholder": True})
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()
     log_activity(
@@ -320,7 +320,7 @@ def resort_detail(request, resort_id):
     resort = get_object_or_404(Resort, resort_id=resort_id)
 
     if request.method == "GET":
-        return Response(ResortSerializer(resort, context={"request": request}).data)
+        return Response(ResortSerializer(resort, context={"request": request, "include_placeholder": True}).data)
 
     data = request.data.copy()
     data["resort_id"] = resort.resort_id
@@ -328,7 +328,7 @@ def resort_detail(request, resort_id):
         resort,
         data=data,
         partial=request.method == "PATCH",
-        context={"request": request},
+        context={"request": request, "include_placeholder": True},
     )
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()
