@@ -139,6 +139,15 @@ class _MobileShellState extends State<MobileShell> {
   List<MobileFeedbackReceipt> get _shownFeedback =>
       _feedbackHistory.map((item) => item.withDestination(resolveDestination(item.destination, _liveDestinations))).toList();
 
+  /// The pass that opens the review of [destination]: a kept pass for THAT destination whose status is arrived (it was scanned on arrival). When there
+  /// is more than one, the newest (the list is newest first). Null: the review is not open to this tourist yet.
+  MobileVisitReceipt? _reviewPassFor(Destination destination) {
+    for (final pass in _visitHistory) {
+      if (pass.destination.id == destination.id && pass.status == 'arrived') return pass;
+    }
+    return null;
+  }
+
   /// Sign Out takes everything kept off the phone, then leaves: the next person to use it must not find this tourist's passes.
   Future<void> _signOut() async {
     await widget.store.clear();
@@ -265,6 +274,7 @@ class _MobileShellState extends State<MobileShell> {
           onVisitSubmitted: _addVisit,
           onFeedbackSubmitted: _addFeedback,
           onViewOnMap: _showOnMap,
+          reviewPassFor: _reviewPassFor,
         ),
       ),
     );
@@ -3270,6 +3280,7 @@ class DestinationDetailPage extends StatefulWidget {
     required this.onVisitSubmitted,
     required this.onFeedbackSubmitted,
     this.onViewOnMap,
+    this.reviewPassFor,
   });
 
   final Destination destination;
@@ -3277,6 +3288,10 @@ class DestinationDetailPage extends StatefulWidget {
   final MobileBootstrap bootstrap;
   final ValueChanged<MobileVisitReceipt> onVisitSubmitted;
   final ValueChanged<MobileFeedbackReceipt> onFeedbackSubmitted;
+
+  /// The pass that lets this tourist review this destination (theirs, for here, arrived), or null: the Review button is then shown, but cannot be
+  /// pressed, and says why. null here (no function) is the same as no pass.
+  final MobileVisitReceipt? Function(Destination destination)? reviewPassFor;
 
   /// Shows the destination on the Map tab. null: "View on map" is not offered as a button.
   final ValueChanged<Destination>? onViewOnMap;
@@ -3318,6 +3333,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // The pass that opens the review (this tourist's, for here, arrived), or null.
+    final reviewPass = widget.reviewPassFor?.call(widget.destination);
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -3598,15 +3615,21 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
           ],
         ),
         child: SafeArea(
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+          Row(
             children: [
               OutlinedButton(
-                onPressed: () async {
+                onPressed: reviewPass == null
+                    ? null
+                    : () async {
                   final receipt = await Navigator.of(context).push<MobileFeedbackReceipt>(
                     MaterialPageRoute(
                       builder: (context) => FeedbackPage(
                         api: widget.api,
                         destination: widget.destination,
+                        visit: reviewPass,
                         onRecorded: widget.onFeedbackSubmitted,
                       ),
                     ),
@@ -3655,14 +3678,33 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               ),
             ],
           ),
+          // The Review button is not hidden when it cannot be used: it is shown, cannot be pressed, and says why.
+          if (reviewPass == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                reviewNeedsVisitNote,
+                key: ValueKey('review-needs-visit-note'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+              ),
+            ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+/// What is said under the Review button of a destination the tourist has no scanned visit for.
+const reviewNeedsVisitNote = 'You can review this place after your visit here is scanned on arrival.';
+
 class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key, required this.api, required this.destination, this.onRecorded});
+  const FeedbackPage({super.key, required this.api, required this.destination, required this.visit, this.onRecorded});
+
+  /// The visit that lets this tourist review here: its survey ID and contact number go with the review.
+  final MobileVisitReceipt visit;
 
   /// Told the moment the server has answered, BEFORE the "Feedback sent" dialog is shown: the feedback is recorded (and kept on the phone) at
   /// once, so that closing the app with the dialog still open does not lose it. The page still returns it when it closes; the one who records
@@ -3847,6 +3889,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
     try {
       final response = await widget.api.submitFeedback(
         destinationId: widget.destination.id,
+        surveyId: widget.visit.reference,
+        contactNumber: widget.visit.contactNumber,
         reviewer: _name.text.trim().isEmpty
             ? 'Mobile Tourist'
             : _name.text.trim(),

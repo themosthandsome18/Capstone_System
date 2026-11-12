@@ -15,6 +15,7 @@ from .models import ROLE_ADMIN, ROLE_TOURIST, ROLE_TOURISM, FeedbackEntry, Resor
 from .permissions import get_user_role
 from .test_destination_accuracy import make_resort
 from .tests import ensure_test_reference_tables
+from .visit_support import arrived_visit, visit_fields
 
 
 def client_for(user):
@@ -102,12 +103,13 @@ class ReplyIsTheStaffsTests(TestCase):
         ensure_test_reference_tables()
         Resort.objects.all().delete()
         self.resort = make_resort(1, "Reply Resort")
+        self.visit = arrived_visit(self.resort)  # a review is for someone whose visit here was scanned on arrival
         staff = User.objects.create_user(username="reply_staff", password="Password@123")
         UserProfile.objects.create(user=staff, role=ROLE_TOURISM)
         self.staff = client_for(staff)
 
     def send(self, **extra):
-        body = {"destinationId": self.resort.pk, "reviewer": "A Visitor", "rating": 4, "title": "Nice", "message": "A good stay.", **extra}
+        body = {"destinationId": self.resort.pk, "reviewer": "A Visitor", "rating": 4, "title": "Nice", "message": "A good stay.", **visit_fields(self.visit), **extra}
         return APIClient().post("/api/mobile/tourism/feedback/", body, format="json")
 
     def test_a_public_review_with_a_reply_does_not_save_it(self):
@@ -133,7 +135,7 @@ class ReplyIsTheStaffsTests(TestCase):
     def test_a_form_post_with_a_reply_is_the_same(self):
         response = APIClient().post(
             "/api/mobile/tourism/feedback/",
-            {"destinationId": self.resort.pk, "reviewer": "A Visitor", "rating": "5", "title": "Nice", "message": "Fine.", "reply": "Official reply"},
+            {"destinationId": self.resort.pk, "reviewer": "A Visitor", "rating": "5", "title": "Nice", "message": "Fine.", "reply": "Official reply", **visit_fields(self.visit)},
             format="multipart",
         )
 

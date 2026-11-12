@@ -260,6 +260,7 @@ REST_FRAMEWORK = {
         "community_report_ip": "20/hour",
         "owner_status_ip": "20/hour",
         "pass_status_ip": "30/hour",
+        "review_visit_ip": "10/hour",
     },
 }
 

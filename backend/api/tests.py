@@ -185,6 +185,19 @@ def ensure_test_barangays():
         )
 
 
+# The visit a review needs (see visit_support.py). Imported when called: visit_support imports test_destination_accuracy, which imports this module.
+def arrived_visit(*args, **kwargs):
+    from .visit_support import arrived_visit as make
+
+    return make(*args, **kwargs)
+
+
+def visit_fields(*args, **kwargs):
+    from .visit_support import visit_fields as fields
+
+    return fields(*args, **kwargs)
+
+
 def ensure_test_reference_tables():
     if not Country.objects.exists():
         Country.objects.bulk_create([Country(**c) for c in REFERENCE_TABLES["countries"]], ignore_conflicts=True)
@@ -737,6 +750,7 @@ class MobilePublicApiTests(TestCase):
     def test_mobile_feedback_creates_feedback_entry(self):
         self.client.get("/api/mobile/tourism/bootstrap/")
         resort = Resort.objects.first()
+        visit = arrived_visit(resort)  # a review is for someone whose visit here was scanned on arrival
 
         response = self.client.post(
             "/api/mobile/tourism/feedback/",
@@ -746,6 +760,7 @@ class MobilePublicApiTests(TestCase):
                 "rating": 5,
                 "message": "Clean and organized.",
                 "cleanliness_rating": 5,
+                **visit_fields(visit),
             },
             format="json",
         )
@@ -4728,6 +4743,7 @@ class FeedbackModerationTests(TestCase):
                 "is_hidden": True,
                 "hidden_by": mod.pk,
                 "hidden_at": "2026-01-01T00:00:00Z",
+                **visit_fields(arrived_visit(self.resort)),
             },
             format="json",
         )
@@ -9264,6 +9280,7 @@ class MobileFeedbackPhotoUploadTests(TestCase):
         patcher = patch("api.services.upload.default_storage", self.storage)
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.visit = arrived_visit(self.resort)  # a review is for someone whose visit here was scanned on arrival
 
     def _fields(self):
         # Same string fields as ApiService.submitFeedback
@@ -9274,6 +9291,7 @@ class MobileFeedbackPhotoUploadTests(TestCase):
             "message": "Nice place",
             "cleanliness_rating": "5",
             "sanitation_comment": "Clean",
+            **visit_fields(self.visit),
         }
 
     def _photo(self, index=0, name=None, content=None, content_type="image/jpeg"):

@@ -111,6 +111,36 @@ class PassStatusRateThrottle(OwnerStatusRateThrottle):
     message = "Too many attempts from this device. Please try again in an hour."
 
 
+class ReviewVisitRateThrottle(OwnerStatusRateThrottle):
+    """Reviews posted with a survey ID and a contact number that do NOT make a visit (POST /api/mobile/tourism/feedback/), per client address.
+
+    WHY: a review is taken only from someone whose visit at that place was scanned on arrival, and the server finds that out from the survey ID and
+    the contact number in the post. The survey ID is printed on the pass, so it is not a secret; the contact number is the only thing left to guess.
+    Without a limit this endpoint is a way to guess it, over and over, at the speed of the network (a right guess even writes a review under the
+    owner's visit). So the guesses are limited.
+
+    Made like PassStatusRateThrottle and OwnerStatusRateThrottle, and like them it counts only the attempts that FAIL (the view calls
+    `record_failure`): a review that is taken costs nothing. It counts only a post that carries BOTH a survey ID and a contact number, because a post
+    with one of them missing guesses nothing (an old copy of the app that does not send them is refused anyway). Once the limit is reached every
+    post from the address is refused until the hour has passed, even a right one.
+
+    ITS OWN COUNTER, not the one of the status lookup: the two are different doors to the same guess, and each is counted at its own door.
+
+    THE LIMIT, 10 failures an hour (settings: DEFAULT_THROTTLE_RATES["review_visit_ip"]), tighter than the status lookup's 30 because the people on
+    each side are different:
+      * the app never lets a tourist get here without a pass that was scanned at this very place, and sends that pass's own survey ID and number, so a
+        real tourist almost never fails; the one way is a pass the server has changed since the app last asked (the tourist was scanned, then the
+        record was corrected), and that fails once, perhaps a few times in a row: 10 is plenty;
+      * who fails here is nearly always somebody looking for a way in, and 10 an hour is 240 a day from one address, against about a thousand
+        million Philippine mobile numbers.
+    The cost of being strict is the same as for the lookups: a stranger on the same mobile-carrier address can use the allowance up for everybody
+    on it, for an hour; the reviews that were refused are written again later, and nothing is lost.
+    """
+
+    fixed_scope = "review_visit_ip"
+    message = "Too many attempts from this device. Please try again in an hour."
+
+
 def _is_resend_of_saved_report(request):
     """True when this request resends a form whose report was already saved.
 
