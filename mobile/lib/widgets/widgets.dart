@@ -214,7 +214,7 @@ class VisitReceiptCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                StatusPill(text: receipt.displayStatus),
+                BookingStatusPill(status: receipt.status),
               ],
             ),
           ),
@@ -660,22 +660,7 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                                       const SizedBox(width: 8),
                                       const Text('Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
                                       const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFDCFCE7),
-                                          borderRadius: BorderRadius.circular(999),
-                                          border: Border.all(color: const Color(0xFF86EFAC)),
-                                        ),
-                                        child: Text(
-                                          receipt.displayStatus,
-                                          style: const TextStyle(
-                                            color: Color(0xFF166534),
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ),
+                                      BookingStatusPill(status: receipt.status),
                                     ],
                                   ),
                                 ],
@@ -1839,6 +1824,43 @@ class StatusPill extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           color: followsBrand ? context.brand.primary : AppColors.green,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+/// The pill that states a TOURISM BOOKING's status on a pass: Pending is amber, Arrived is green, Cancelled is red. It was green whatever the status
+/// was, which said "done" of a tourist who had not come yet.
+///
+/// The colours are not decided here: they are [touristStatusChip]'s, the same three the staff see on the chips of the QR check-in History, so the app
+/// has ONE set of colours for these three statuses. A status the app does not know gets a neutral grey pill and its own words, never a status colour.
+class BookingStatusPill extends StatelessWidget {
+  const BookingStatusPill({super.key, required this.status});
+
+  /// pending, arrived or no_show (as the server says it).
+  final String? status;
+
+  /// The grey of a status that is none of the three.
+  static const Color unknownBackground = Color(0xFFF1F5F9);
+  static const Color unknownForeground = Color(0xFF475569);
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = touristStatusChip(status?.trim().toLowerCase());
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: chip?.background ?? unknownBackground,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        chip?.label ?? statusLabel(status ?? ''),
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          color: chip?.foreground ?? unknownForeground,
           fontWeight: FontWeight.w900,
         ),
       ),
