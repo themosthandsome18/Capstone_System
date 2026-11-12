@@ -1438,7 +1438,7 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "validation",
-            "question": "Which tourist records need validation due to pending status, no-show status, duplicate entries, or incomplete information?",
+            "question": "Which tourist records need validation due to pending status, cancelled status, duplicate entries, or incomplete information?",
             "answer": validation,
             "visual": validation_visual,
         },
@@ -1615,14 +1615,14 @@ def get_validation(records):
     ).count()
 
     answer = (
-        f"Needs review: {pending} pending, {no_show} no-show, "
+        f"Needs review: {pending} pending, {no_show} cancelled, "
         f"{duplicates} possible duplicates, and {incomplete} incomplete records."
     )
     visual = {
         "type": "stack",
         "items": [
             {"label": "Pending", "value": pending},
-            {"label": "No-show", "value": no_show},
+            {"label": "Cancelled", "value": no_show},
             {"label": "Duplicates", "value": duplicates},
             {"label": "Incomplete", "value": incomplete},
         ],

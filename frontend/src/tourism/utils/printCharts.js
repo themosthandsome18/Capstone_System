@@ -29,7 +29,7 @@ const LEGEND_BELOW = new Set(["pie", "doughnut"]);
 const PRINT_LABEL_LINE = 16;
 
 // Name labels under a printed column chart (Resort, Origin, Purpose, Vehicle,
-// Boat, No-show: boxes marked data-print-labels="wrap") are set level on up to
+// Boat, Cancelled: boxes marked data-print-labels="wrap") are set level on up to
 // four lines instead of rotated. Rotated, seven resort names took the left of
 // the chart and left the plot 464px of a 630px chart. A line holds what fits
 // one column at the 15px tick font (about 8px a character, 60px for the value

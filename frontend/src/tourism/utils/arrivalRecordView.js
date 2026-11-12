@@ -7,7 +7,7 @@ import { formatCurrency } from "./format";
 
 export const DASH = "—";
 
-const STATUS_WORDS = { arrived: "Arrived", pending: "Pending", no_show: "No-show" };
+const STATUS_WORDS = { arrived: "Arrived", pending: "Pending", no_show: "Cancelled" };
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
 

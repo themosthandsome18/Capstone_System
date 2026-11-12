@@ -46,7 +46,7 @@ const reportData = {
         type: "stack",
         items: [
           { label: "Pending", value: 1 },
-          { label: "No-show", value: 1 },
+          { label: "Cancelled", value: 1 },
           { label: "Duplicates", value: 1 },
           { label: "Incomplete", value: 1 },
         ],

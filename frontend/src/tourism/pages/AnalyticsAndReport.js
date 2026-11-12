@@ -70,7 +70,7 @@ function getReportTitle(type) {
   }
 
   if (type === "no_show") {
-    return "No-show Booking Report";
+    return "Cancelled Booking Report";
   }
 
   return "Visitors by Resorts";
@@ -106,7 +106,7 @@ function getReportSubtitle(type) {
   }
 
   if (type === "no_show") {
-    return "No-show bookings grouped by resort";
+    return "Cancelled bookings grouped by resort";
   }
 
   return "Visitor totals by resort from arrived bookings";
@@ -196,7 +196,7 @@ const buildMainReportChartOptions = (palette) => ({
   },
 });
 
-// Data Quality & Validation is a STATUS chart (Pending, No-show, Duplicates,
+// Data Quality & Validation is a STATUS chart (Pending, Cancelled, Duplicates,
 // Incomplete): its slices stay fixed and never follow the theme. Follow-up:
 // move them to the status tokens (THEME_TOKENS.md section 7).
 const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
@@ -752,7 +752,7 @@ function AnalyticsAndReport() {
           disabled={loadingReport}
           onClick={() => changeReportType("no_show")}
         >
-          No-show Report
+          Cancelled Report
         </button>
       </div>
 
@@ -1433,7 +1433,7 @@ function buildFallbackVisual(item) {
       type: "stack",
       items: [
         { label: "Pending", value: numbers[0] || 0 },
-        { label: "No-show", value: numbers[1] || 0 },
+        { label: "Cancelled", value: numbers[1] || 0 },
         { label: "Duplicates", value: numbers[2] || 0 },
         { label: "Incomplete", value: numbers[3] || 0 },
       ],

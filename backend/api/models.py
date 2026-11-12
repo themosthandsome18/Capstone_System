@@ -198,12 +198,15 @@ TOURIST_RECORD_REQUIRED_FIELDS = [
 
 BOOKING_STATUS_PENDING = "pending"
 BOOKING_STATUS_ARRIVED = "arrived"
+# The stored value is "no_show", but people are shown "Cancelled" since 2026-11-12,
+# at the request of the person who checks the system. The value was not renamed so
+# that the data already in the database is not touched.
 BOOKING_STATUS_NO_SHOW = "no_show"
 
 BOOKING_STATUS_CHOICES = [
     (BOOKING_STATUS_PENDING, "Pending"),
     (BOOKING_STATUS_ARRIVED, "Arrived"),
-    (BOOKING_STATUS_NO_SHOW, "No-show"),
+    (BOOKING_STATUS_NO_SHOW, "Cancelled"),
 ]
 
 
