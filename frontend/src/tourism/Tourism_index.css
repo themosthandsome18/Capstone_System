@@ -218,12 +218,30 @@
   object-fit: cover;
 }
 
-.sidebar-brand span {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--th-text-tinted-strong);
-  line-height: 1.2;
+/* The system's name on two lines, like the phone's header: the place first, larger and stronger; what the system does under it, smaller and quieter.
+   min-width: 0 lets the text box be as wide as the sidebar leaves it (260px less its padding, the logo and the gap), and neither line wraps. */
+.sidebar-brand-text {
+  min-width: 0;
+}
+
+.sidebar-brand-text span {
+  display: block;
   white-space: nowrap;
+}
+
+.sidebar-brand-text .sidebar-brand-name {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--th-text-tinted-strong);
+}
+
+.sidebar-brand-text .sidebar-brand-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--th-text-tinted-muted);
 }
 
 /* Navigation */

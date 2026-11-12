@@ -1779,7 +1779,7 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
                           ],
                         ),
                         child: const Text(
-                          'Mauban Tourism GIS Map',
+                          'Cagbalete Island Map',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0f2e1f)),
                         ),
                       ),
@@ -2849,7 +2849,7 @@ String signOutNotice({required int visits, required int feedback, required bool 
     if (hasProfile) 'your profile (name, email and contact number)',
   ];
   if (lost.isEmpty) {
-    return 'Are you sure you want to sign out of Mauban Tourism? Nothing about you is saved on this phone. You will return to the welcome screen.';
+    return 'Are you sure you want to sign out of Cagbalete Island Guide? Nothing about you is saved on this phone. You will return to the welcome screen.';
   }
   return 'Signing out removes these from this phone:\n'
       '${lost.map((item) => '\u2022 $item').join('\n')}\n\n'
