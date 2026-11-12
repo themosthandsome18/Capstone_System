@@ -1,6 +1,6 @@
 import React from "react";
 import "@testing-library/jest-dom";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import SanitaryGISMap from "./SanitaryGISMap";
 import { fetchHouseholdRecords } from "../services/sanitationApi";
 import HouseholdRecords from "./HouseholdRecords";
@@ -14,6 +14,7 @@ const mockHousehold = {
 };
 let mockHouseholds;
 let mockEstablishments;
+let mockComplaintData;
 let mockLoading;
 let mockError;
 let mockGeoJSON;
@@ -27,8 +28,8 @@ jest.mock("react-leaflet", () => ({
   TileLayer: () => null,
   GeoJSON: (props) => { mockGeoJSON = props; return null; },
   Popup: ({ children }) => <div>{children}</div>,
-  Marker: ({ position, icon, title, children }) => (
-    <div data-testid="map-marker" data-position={JSON.stringify(position)} data-icon={icon.options.html} title={title}>{children}</div>
+  Marker: ({ position, icon, title, children, eventHandlers }) => (
+    <div data-testid="map-marker" data-position={JSON.stringify(position)} data-icon={icon.options.html} title={title} onClick={eventHandlers?.click}>{children}</div>
   ),
   useMap: () => mockMap,
 }));
@@ -37,7 +38,7 @@ jest.mock("../context/SanitationDataContext", () => ({
   useSanitationData: () => ({
     householdStatus: "success", householdReady: true, householdHasData: true, householdError: "",
     reloadHouseholds: jest.fn(),
-    householdRecords: mockHouseholds, establishments: mockEstablishments,
+    householdRecords: mockHouseholds, establishments: mockEstablishments, complaintData: mockComplaintData,
     barangays: [], householdDashboardData: { summary: { totalHouseholds: mockHouseholds.length }, riskByBarangay: [] },
     loading: mockLoading, error: mockError,
     refreshData: jest.fn(), refreshComplaintData: jest.fn(),
@@ -48,6 +49,7 @@ jest.mock("../context/SanitationDataContext", () => ({
 beforeEach(() => {
   mockHouseholds = [{ ...mockHousehold }];
   mockEstablishments = [];
+  mockComplaintData = null;
   mockUpdate.mockClear();
   fetchHouseholdRecords.mockReset();
   fetchHouseholdRecords.mockImplementation(async () => mockHouseholds);
@@ -61,6 +63,110 @@ async function renderHouseholdMap() {
   fireEvent.click(screen.getByRole("button", { name: "Households" }));
   await screen.findByText("Total Households");
 }
+
+function communityReports() {
+  const report = {
+    barangay: "Daungan", category: "Waste", status: "pending", priority: "medium",
+    reported_date: "2026-11-12", description: "Synthetic report",
+  };
+  return [
+    { id: 101, complaint_id: "SYNTH-A", location_source: "reporter_provided", map_location_eligible: true, latitude: 14.192345678, longitude: 121.734567891 },
+    { id: 102, complaint_id: "SYNTH-B", location_source: "staff_provided", map_location_eligible: true, latitude: 14.195, longitude: 121.735 },
+    { id: 103, complaint_id: "SYNTH-C", location_source: "barangay_approximate", map_location_eligible: false, latitude: 14.188, longitude: 121.728 },
+    { id: 104, complaint_id: "SYNTH-D", location_source: "unknown", map_location_eligible: false, latitude: null, longitude: null },
+  ].map(item => ({ ...report, ...item, complainant_name: `Synthetic ${item.complaint_id}` }));
+}
+
+function renderCommunityMap(rows = communityReports()) {
+  mockComplaintData = { rows };
+  render(<SanitaryGISMap />);
+  fireEvent.click(screen.getByRole("button", { name: "Community Reports", exact: true }));
+}
+
+test("community reports map only eligible stored pairs while keeping all reports visible", () => {
+  renderCommunityMap();
+  const markers = screen.queryAllByTestId("map-marker");
+  expect(markers).toHaveLength(2);
+  expect(markers.map(marker => [marker.title, marker.getAttribute("data-position")])).toEqual([
+    ["SYNTH-A: Pending", "[14.192345678,121.734567891]"],
+    ["SYNTH-B: Pending", "[14.195,121.735]"],
+  ]);
+  expect(summary("Total Reports")).toBe("4");
+  expect(summary("Pending")).toBe("4");
+  expect(within(screen.getByRole("complementary")).getAllByRole("button")).toHaveLength(4);
+  expect(screen.getAllByText("Location unavailable for mapping")).toHaveLength(2);
+});
+
+test.each([
+  ["missing eligibility", { map_location_eligible: undefined }],
+  ["null eligibility", { map_location_eligible: null }],
+  ["string eligibility", { map_location_eligible: "true" }],
+  ["numeric eligibility", { map_location_eligible: 1 }],
+  ["false eligibility", { map_location_eligible: false }],
+  ["missing source", { location_source: undefined }],
+  ["null source", { location_source: null }],
+  ["malformed source", { location_source: ["reporter_provided"] }],
+  ["unknown source", { location_source: "unknown" }],
+  ["approximate source", { location_source: "barangay_approximate" }],
+  ["missing latitude", { latitude: undefined }],
+  ["null longitude", { longitude: null }],
+  ["boolean latitude", { latitude: true }],
+  ["numeric string latitude", { latitude: "14.19" }],
+  ["NaN", { latitude: NaN }],
+  ["infinity", { longitude: Infinity }],
+  ["latitude outside range", { latitude: 90.001 }],
+  ["longitude outside range", { longitude: -180.001 }],
+  ["zero latitude", { latitude: 0 }],
+  ["near-zero longitude", { longitude: 0.0009 }],
+  ["nested coordinates only", { latitude: null, longitude: null, coordinates: { lat: 14.19, lng: 121.73 } }],
+])("community report with %s stays listed without a marker", (_label, changes) => {
+  renderCommunityMap([{ ...communityReports()[0], ...changes }]);
+  expect(screen.queryAllByTestId("map-marker")).toHaveLength(0);
+  expect(summary("Total Reports")).toBe("1");
+  expect(within(screen.getByRole("complementary")).getAllByRole("button")).toHaveLength(1);
+  expect(screen.getByText("Location unavailable for mapping")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("no map-eligible location");
+});
+
+test.each([[0.001, -0.001], [-90, 180], [90, -180], [15.123456789, 120.987654321]])(
+  "eligible community report preserves backend-usable pair %s/%s exactly",
+  (latitude, longitude) => {
+    renderCommunityMap([{ ...communityReports()[0], latitude, longitude }]);
+    expect(screen.getByTestId("map-marker")).toHaveAttribute("data-position", JSON.stringify([latitude, longitude]));
+  },
+);
+
+test("community status and barangay filters retain unmapped reports in totals and lists", () => {
+  const rows = communityReports();
+  rows[1].barangay = "Lual";
+  rows[2].status = "investigating";
+  renderCommunityMap(rows);
+  fireEvent.change(screen.getByLabelText("Barangay:"), { target: { value: "Daungan" } });
+  expect(summary("Total Reports")).toBe("3");
+  expect(summary("Pending")).toBe("2");
+  expect(summary("Under Investigation")).toBe("1");
+  expect(screen.queryAllByTestId("map-marker")).toHaveLength(1);
+  fireEvent.change(screen.getByLabelText("Status:"), { target: { value: "investigating" } });
+  expect(summary("Total Reports")).toBe("1");
+  expect(screen.queryAllByTestId("map-marker")).toHaveLength(0);
+  expect(within(screen.getByRole("complementary")).getByRole("button", { name: /SYNTH-C/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Reset View/ }));
+  expect(summary("Total Reports")).toBe("4");
+  expect(screen.queryAllByTestId("map-marker")).toHaveLength(2);
+});
+
+test("eligible report pin selection and popups work while unmapped selection creates no pin", () => {
+  renderCommunityMap();
+  const markers = screen.getAllByTestId("map-marker");
+  expect(within(markers[0]).getByText('"Synthetic report"')).toBeInTheDocument();
+  fireEvent.click(markers[1]);
+  expect(within(screen.getByRole("complementary")).getAllByText("Synthetic SYNTH-B")).toHaveLength(2);
+  expect(markers[1].getAttribute("data-icon")).toContain('width: 34px');
+  fireEvent.click(screen.getByRole("button", { name: /Synthetic SYNTH-D/ }));
+  expect(within(screen.getByRole("complementary")).getAllByText("Synthetic SYNTH-D")).toHaveLength(2);
+  expect(screen.queryAllByTestId("map-marker")).toHaveLength(2);
+  expect(screen.getAllByText('"Synthetic report"')).toHaveLength(2);
+});
 
 test.each([
   ["null", null, null], ["missing", undefined, undefined],

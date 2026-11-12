@@ -149,21 +149,21 @@ function getHouseholdMapPosition(item) {
   return [lat, lng];
 }
 
-function getDeterministicOffset(seedStr) {
-  let hash = 0;
-  const str = String(seedStr || "");
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const x = Math.sin(hash) * 10000;
-  const y = Math.cos(hash) * 10000;
-  const latOff = (x - Math.floor(x) - 0.5) * 0.005;
-  const lngOff = (y - Math.floor(y) - 0.5) * 0.005;
-  return [latOff, lngOff];
+function getComplaintMapPosition(item) {
+  if (item.map_location_eligible !== true ||
+      !["reporter_provided", "staff_provided"].includes(item.location_source)) return null;
+
+  const { latitude, longitude } = item;
+  // Match the backend's usable-coordinate rule using the persisted pair only.
+  if (typeof latitude !== "number" || typeof longitude !== "number" ||
+      !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      Math.abs(latitude) < 0.001 || Math.abs(latitude) > 90 ||
+      Math.abs(longitude) < 0.001 || Math.abs(longitude) > 180) return null;
+
+  return [latitude, longitude];
 }
 
-function getMapPosition(item, allowFallback = true) {
+function getMapPosition(item) {
   const lat =
     parseCoordinate(item.latitude) ?? parseCoordinate(item.coordinates?.lat);
   const lng =
@@ -175,26 +175,7 @@ function getMapPosition(item, allowFallback = true) {
     }
   }
 
-  // Establishments and households without usable stored coordinates remain unmapped.
-  if (!allowFallback) return null;
-
-  // Fallback: derive realistic coordinates from barangay center
-  const bgyName = item.barangay || "Bagong Bayan";
-  const matchedCenter =
-    MAUBAN_BARANGAY_CENTERS[bgyName] ||
-    Object.entries(MAUBAN_BARANGAY_CENTERS).find(
-      ([k]) => k.toLowerCase() === bgyName.toLowerCase()
-    )?.[1] ||
-    maubanCenter;
-
-  const [latOff, lngOff] = getDeterministicOffset(
-    item.id || item.household_code || item.complaint_id || item.business_name
-  );
-
-  return [
-    Number((matchedCenter[0] + latOff).toFixed(6)),
-    Number((matchedCenter[1] + lngOff).toFixed(6)),
-  ];
+  return null;
 }
 
 function getPinColor(item, mapMode) {
@@ -361,7 +342,8 @@ function SanitaryGISMap() {
 
     return source.map((item) => ({
       ...item,
-      position: isHouseholdMode ? getHouseholdMapPosition(item) : getMapPosition(item, isCommunityMode),
+      position: isHouseholdMode ? getHouseholdMapPosition(item)
+        : isCommunityMode ? getComplaintMapPosition(item) : getMapPosition(item),
     }));
   }, [establishments, householdGis.rows, complaintData, isHouseholdMode, isCommunityMode]);
 
@@ -423,7 +405,7 @@ function SanitaryGISMap() {
 
   const tileLayer = tileLayers[mapLayer] || tileLayers.street;
 
-  const visibleListItems = isCommunityMode ? filteredItems : sortedItems;
+  const visibleListItems = sortedItems;
   const selectedItem =
     visibleListItems.find((item) => item.id === selectedItemId) || visibleListItems[0];
 
@@ -596,12 +578,14 @@ function SanitaryGISMap() {
               ? `${item.complaint_id} • Brgy. ${item.barangay}`
               : `${item.business_type_name || "Establishment"} • Brgy. ${item.barangay}`}
           </small>
-          {!isCommunityMode ? (
+          {isCommunityMode ? (
+            !item.position ? <small>Location unavailable for mapping</small> : null
+          ) : (
             <small>
               {isHouseholdMode ? formatHouseholdStatus(item.status) : formatEstablishmentStatus(item.compliance_status)}
               {!item.position ? " • Missing or unusable coordinates — not mapped" : ""}
             </small>
-          ) : null}
+          )}
         </div>
       </button>
     );
@@ -772,20 +756,20 @@ function SanitaryGISMap() {
       >
         {isCommunityMode ? (
           <>
-            <MapSummaryCard label="Total Reports" value={filteredItems.length} color="#3b82f6" />
+            <MapSummaryCard label="Total Reports" value={sortedItems.length} color="#3b82f6" />
             <MapSummaryCard
               label="Pending"
-              value={filteredItems.filter((i) => i.status === "pending").length}
+              value={sortedItems.filter((i) => i.status === "pending").length}
               color="#dc2626"
             />
             <MapSummaryCard
               label="Under Investigation"
-              value={filteredItems.filter((i) => i.status === "investigating").length}
+              value={sortedItems.filter((i) => i.status === "investigating").length}
               color="#f59e0b"
             />
             <MapSummaryCard
               label="Resolved"
-              value={filteredItems.filter((i) => i.status === "resolved").length}
+              value={sortedItems.filter((i) => i.status === "resolved").length}
               color="#16a34a"
             />
           </>
@@ -980,7 +964,9 @@ function SanitaryGISMap() {
           {!filteredItems.length && !householdUnavailable ? (
             <div className="gis-map-empty-overlay" role="status">
               <FiMapPin style={{ marginRight: "6px" }} />
-              {sortedItems.length ? "Matching records have missing or unusable coordinates; no markers can be shown." : "No records match the current status and barangay filters."}
+              {sortedItems.length
+                ? isCommunityMode ? "Matching reports have no map-eligible location; no markers can be shown." : "Matching records have missing or unusable coordinates; no markers can be shown."
+                : "No records match the current status and barangay filters."}
             </div>
           ) : null}
 
