@@ -57,7 +57,9 @@ from .views.tourism import (
     resort_image_upload,
     resort_list,
     tourism_theme,
+    tourist_record_archive,
     tourist_record_detail,
+    tourist_record_unarchive,
     tourist_record_list,
 )
 from .views.sanitation import (
@@ -163,6 +165,8 @@ urlpatterns = [
     path("feedback/<int:feedback_id>/unhide/", feedback_unhide),
     path("tourist-records/", tourist_record_list),
     path("tourist-records/<str:survey_id>/", tourist_record_detail),
+    path("tourist-records/<str:survey_id>/archive/", tourist_record_archive),
+    path("tourist-records/<str:survey_id>/unarchive/", tourist_record_unarchive),
     path("tourism-theme/", tourism_theme),
     path("boat-capacity-fares/", boat_capacity_fare_list),
     path("boat-capacity-fares/reorder/", boat_capacity_fare_reorder),

@@ -6,7 +6,8 @@ import {
   FiFilter,
   FiSearch,
   FiEye,
-  FiTrash2,
+  FiArchive,
+  FiRotateCcw,
   FiCheck,
   FiX,
   FiUpload,
@@ -134,7 +135,9 @@ function BookingManagement() {
     referenceTables,
     createRecord,
     updateRecord,
-    deleteRecord,
+    archiveRecord,
+    unarchiveRecord,
+    setRecordStatus,
     previewOnlineBookingImport,
     importOnlineBookingFile,
     refreshBookingManagement,
@@ -168,8 +171,6 @@ function BookingManagement() {
     }
     return todayDateString;
   }, [editingRecord, todayDateString]);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteError, setDeleteError] = useState("");
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -177,10 +178,13 @@ function BookingManagement() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [stepError, setStepError] = useState("");
-  const [updatingStatus, setUpdatingStatus] = useState("");
+  const [pendingRows, setPendingRows] = useState({}); // survey ids with a change on its way to the server
+  const isPending = (surveyId) => Boolean(pendingRows[surveyId]);
   const [filters, setFilters] = useState({
     year: currentReportingYear,
     status: "",
+    // Which rows the table lists: "active" (not archived, the default), "archived" or "all". Only the table: every count includes the archived.
+    archived: "active",
     resort_id: "",
     region_id: "",
     province_id: "",
@@ -288,6 +292,7 @@ function BookingManagement() {
   const bookingRows = bookingManagement.rows || [];
   const bookingSummary = bookingManagement.summary || {};
   const bookingPagination = bookingManagement.pagination || {};
+  const archivedCount = Number(bookingManagement.archivedCount) || 0;
   const summary = {
     verifiedEntries: bookingSummary.verifiedEntries || 0,
     arrived: bookingSummary.arrived || 0,
@@ -750,48 +755,38 @@ function BookingManagement() {
     }
   }
 
-  async function updateBookingStatus(record, nextStatus) {
+  // The row changes AT ONCE (the context moves it before the server answers) and settles on the server's word. If the server refuses, the row
+  // is already back as it was and this says so. Only the row being changed is held back, so the next one can be pressed straight away.
+  async function changeRow(record, change, failure) {
     setTableError("");
-    setUpdatingStatus(`${record.survey_id}:${nextStatus}`);
+    setPendingRows((current) => ({ ...current, [record.survey_id]: true }));
 
     try {
-      await updateRecord(
-        record.survey_id,
-        { status: nextStatus },
-        { refreshComputed: true }
-      );
-      setUpdatingStatus("");
-      loadBookingRows();
+      await change();
     } catch (error) {
-      setTableError(getErrorMessage(error));
-      setUpdatingStatus("");
+      setTableError(`${failure} It is back as it was. ${getErrorMessage(error)}`);
+    } finally {
+      setPendingRows((current) => {
+        const { [record.survey_id]: _done, ...rest } = current;
+        return rest;
+      });
     }
   }
 
-  async function confirmDeleteRecord() {
-    if (!deleteTarget) {
-      return;
-    }
+  function updateBookingStatus(record, nextStatus) {
+    const what = nextStatus === "arrived" ? "as arrived" : "as cancelled";
+    return changeRow(
+      record,
+      () => setRecordStatus(record.survey_id, nextStatus),
+      `Could not mark ${record.survey_id} ${what}.`
+    );
+  }
 
-    setSaving(true);
-    setDeleteError("");
-
-    let deleted = false;
-
-    try {
-      await deleteRecord(deleteTarget.survey_id);
-      deleted = true;
-    } catch (error) {
-      setDeleteError(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-
-    if (deleted) {
-      setDeleteTarget(null);
-      showFirstPageAfterChange();
-      refreshListInBackground("Record deleted.");
-    }
+  // Archive takes a record off the table (and unarchive puts it back). The record is never deleted and every number still counts it.
+  function toggleArchive(record) {
+    return record.is_archived
+      ? changeRow(record, () => unarchiveRecord(record.survey_id), `Could not bring ${record.survey_id} back.`)
+      : changeRow(record, () => archiveRecord(record.survey_id), `Could not archive ${record.survey_id}.`);
   }
 
   function fillGenderBalance() {
@@ -1047,6 +1042,19 @@ function BookingManagement() {
           ))}
         </select>
 
+        <div className="booking-archive-filter">
+          <select
+            value={filters.archived}
+            aria-label="Records shown"
+            onChange={(event) => updateFilter("archived", event.target.value)}
+          >
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+            <option value="all">All</option>
+          </select>
+          {archivedCount > 0 ? <small className="booking-archived-count">{archivedCount} archived</small> : null}
+        </div>
+
         <select
           value={filters.status}
           onChange={(event) => updateFilter("status", event.target.value)}
@@ -1135,10 +1143,11 @@ function BookingManagement() {
                   const statusLabel = statusLabels[status] || "Pending";
 
                   return (
-                    <tr key={row.survey_id}>
+                    <tr key={row.survey_id} className={row.is_archived ? "booking-row-archived" : undefined}>
                       <td>
                         <p className="booking-guest-name">{getFirstName(row)}</p>
                         <p className="booking-id">{row.survey_id}</p>
+                        {row.is_archived ? <span className="booking-archived-mark">Archived</span> : null}
                       </td>
 
                       <td>
@@ -1186,7 +1195,7 @@ function BookingManagement() {
                           <button
                             type="button"
                             className="booking-icon-btn view"
-                            disabled={Boolean(updatingStatus)}
+                            disabled={isPending(row.survey_id)}
                             onClick={() => openViewRecord(row)}
                             title="View & Review record"
                             aria-label="View record"
@@ -1194,26 +1203,21 @@ function BookingManagement() {
                             <FiEye/>
                           </button>
 
-                          {isAdmin ? (
-                            <button
-                              type="button"
-                              className="booking-icon-btn delete"
-                              disabled={Boolean(updatingStatus)}
-                              onClick={() => {
-                                setDeleteTarget(row);
-                                setDeleteError("");
-                              }}
-                              title="Delete record"
-                              aria-label="Delete record"
-                            >
-                              <FiTrash2/>
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            className="booking-icon-btn archive"
+                            disabled={isPending(row.survey_id)}
+                            onClick={() => toggleArchive(row)}
+                            title={row.is_archived ? "Bring back to the table (unarchive)" : "Hide from the table (archive)"}
+                            aria-label={row.is_archived ? "Unarchive record" : "Archive record"}
+                          >
+                            {row.is_archived ? <FiRotateCcw/> : <FiArchive/>}
+                          </button>
 
                           <button
                             type="button"
                             className="booking-icon-btn arrived"
-                            disabled={status === "arrived" || Boolean(updatingStatus)}
+                            disabled={status === "arrived" || isPending(row.survey_id)}
                             onClick={() => updateBookingStatus(row, "arrived")}
                             title="Mark as arrived"
                             aria-label="Mark as arrived"
@@ -1224,7 +1228,7 @@ function BookingManagement() {
                           <button
                             type="button"
                             className="booking-icon-btn noshow"
-                            disabled={status === "no_show" || Boolean(updatingStatus)}
+                            disabled={status === "no_show" || isPending(row.survey_id)}
                             onClick={() => updateBookingStatus(row, "no_show")}
                             title="Mark as cancelled"
                             aria-label="Mark as cancelled"
@@ -1788,44 +1792,6 @@ function BookingManagement() {
         </div>
       ) : null}
 
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[var(--th-scrim)] px-4 py-10">
-          <div className="delete-record-confirm w-full max-w-[420px]">
-            <p>
-              Are you sure you want to delete{" "}
-              <strong>{deleteTarget.full_name}</strong>?
-            </p>
-
-            <p className="mt-2 text-xs text-slate-500">
-              This will remove the tourist record from the backend.
-            </p>
-
-            {deleteError ? (
-              <p className="tourist-record-error">{deleteError}</p>
-            ) : null}
-
-            <div className="delete-record-actions">
-              <button
-                type="button"
-                className="tourist-record-cancel"
-                disabled={saving}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="delete-record-confirm-btn"
-                disabled={saving}
-                onClick={confirmDeleteRecord}
-              >
-                {saving ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

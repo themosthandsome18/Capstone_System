@@ -90,7 +90,17 @@ class TouristRecordAdmin(admin.ModelAdmin):
         "resort",
         "status",
         "consent_confirmed",
+        "is_archived",
     )
+
+    # A tourist record is never deleted, not even by a superuser: it is archived instead (see tourist_record_archive).
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
 
 
 @admin.register(UserProfile)
