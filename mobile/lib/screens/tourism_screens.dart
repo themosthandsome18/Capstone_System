@@ -3235,32 +3235,7 @@ class _DestinationImageSlideshowState
           Positioned(
             top: 14,
             right: 14,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.photo_library_outlined,
-                    size: 12,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_currentPage + 1} / ${images.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: PhotoCounterPill(current: _currentPage + 1, total: images.length),
           ),
       ],
     );
@@ -3548,21 +3523,28 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                                     itemCount: feedback.photos.length,
                                     separatorBuilder: (context, index) => const SizedBox(width: 8),
                                     itemBuilder: (context, idx) {
-                                      final photoUrl = feedback.photos[idx];
-                                      final fullUrl = photoUrl.startsWith('http')
-                                          ? photoUrl
-                                          : '$apiBaseUrl$photoUrl';
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          fullUrl,
-                                          width: 68,
-                                          height: 68,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) => const Icon(
-                                            Icons.image_not_supported,
-                                            size: 24,
-                                            color: Colors.grey,
+                                      final fullUrls = feedback.photos.map(reviewPhotoUrl).toList();
+                                      // A photo of a review can be pressed: it opens full screen, on this one, with the others a swipe away.
+                                      return GestureDetector(
+                                        key: ValueKey('review-photo-${feedback.reference}-$idx'),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => showReviewPhotoViewer(context, fullUrls, initialIndex: idx),
+                                        child: Semantics(
+                                          button: true,
+                                          label: 'Open photo ${idx + 1} of ${fullUrls.length}',
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              fullUrls[idx],
+                                              width: 68,
+                                              height: 68,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => const SizedBox(
+                                                width: 68,
+                                                height: 68,
+                                                child: Icon(Icons.image_not_supported, size: 24, color: Colors.grey),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       );

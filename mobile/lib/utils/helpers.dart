@@ -171,6 +171,11 @@ String? serverImageUrl(String path) {
   return null;
 }
 
+/// The address of a photo of a review, whole: the server's whole URL, or a bare "/media/..." made whole on the server's own address (as
+/// [serverImageUrl] does for a destination's photos); anything else on the API's address, as the review card always did. The card and the photo
+/// viewer use this, so they ask for the same address.
+String reviewPhotoUrl(String path) => serverImageUrl(path) ?? '$apiBaseUrl$path';
+
 /// The first photo that was uploaded for a destination (one the server holds), or null when it has none.
 String? uploadedImageUrl(Destination destination) {
   for (final path in destination.images) {
