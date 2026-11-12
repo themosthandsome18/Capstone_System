@@ -243,7 +243,20 @@ void main() {
       );
       await render(tester, orangeTheme, VisitReceiptCard(receipt: receipt));
 
-      expect(pillColours(tester), [fixed]);
+      // The pill is the booking's status pill now (amber for pending, whatever the brand): its colours are the status's, not the theme's.
+      final colours = <String>{};
+      void visit(Element e) {
+        final w = e.widget;
+        if (w is DecoratedBox && w.decoration is BoxDecoration) {
+          final c = (w.decoration as BoxDecoration).color;
+          if (c != null) colours.add(hex(c));
+        }
+        if (w is Text && w.style?.color != null) colours.add(hex(w.style!.color!));
+        e.visitChildren(visit);
+      }
+
+      find.byType(BookingStatusPill).evaluate().forEach(visit);
+      expect(colours, {hex(const Color(0xFFFEF3C7)), hex(const Color(0xFF92400E))});
     });
 
     testWidgets("the destination's type label follows the brand under orange", (
