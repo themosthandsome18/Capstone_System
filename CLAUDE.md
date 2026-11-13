@@ -2,6 +2,39 @@
 
 ## Backend (from `backend/`)
 
+### WARNING: `backend/.env` points at the LIVE Supabase database
+
+A plain `manage.py runserver` or `manage.py migrate` hits LIVE, not `local_dev.sqlite3`. `.env` says `DB_ENGINE=postgresql` with the
+Supabase pooler host, and `settings.py` only forces SQLite for `test` and `testserver`; there is no guard for anything else. Environment
+variables in the shell win over `.env`, so the override below is the only thing that points a command at the local file.
+
+This has already happened: on 13 Nov 2026 migration 0072 was applied to LIVE from the owner's machine, because a plain `migrate` was used.
+
+Put the override in front of EVERY `runserver`, `migrate`, `makemigrations`, `showmigrations`, `shell` or script that touches the database.
+
+PowerShell (from `backend\`; the variables stay in that terminal until it is closed):
+
+```
+$env:DB_ENGINE="sqlite"; $env:SQLITE_DB_PATH="C:/Capstone_System/backend/data/local_dev.sqlite3"; $env:DATABASE_URL=""; .venv\Scripts\python.exe manage.py runserver
+```
+
+Bash (from `backend/`):
+
+```
+DB_ENGINE=sqlite SQLITE_DB_PATH=C:/Capstone_System/backend/data/local_dev.sqlite3 DATABASE_URL= DEBUG=true SECRET_KEY=x .venv/Scripts/python.exe manage.py runserver
+```
+
+Before a `migrate`, prove where it will go (same prefix; this does not connect to anything):
+
+```
+.venv/Scripts/python.exe manage.py shell -c "from django.conf import settings; d = settings.DATABASES['default']; print(d['ENGINE'], d.get('NAME'), d.get('HOST'))"
+```
+
+It must print `django.db.backends.sqlite3 C:/Capstone_System/backend/data/local_dev.sqlite3`. If it prints `postgresql` or a Supabase host, the
+prefix is not in effect: stop.
+
+### The tests
+
 ```
 DB_ENGINE=sqlite SQLITE_DB_PATH=C:/Capstone_System/backend/data/local_dev.sqlite3 DATABASE_URL= DEBUG=true SECRET_KEY=x .venv/Scripts/python.exe manage.py test --parallel 8
 ```

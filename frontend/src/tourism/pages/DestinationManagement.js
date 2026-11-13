@@ -241,6 +241,7 @@ function DestinationManagement({ initialTab }) {
     updateResort,
     uploadResortImage,
     feedbackEntries = [],
+    refreshFeedbackEntries,
     updateFeedbackEntry,
     hideFeedbackEntry,
     unhideFeedbackEntry,
@@ -300,6 +301,40 @@ function DestinationManagement({ initialTab }) {
     setActiveTab("destinations");
     setSelectedResortDetail(found);
   }, [location.state, location.key, destinations]);
+
+  // "Open" on a notification (the bell) comes here as /feedback?openFeedbackId=<id>: the Feedback tab opens with every filter cleared (so the review is in the
+  // list), scrolls to that review and marks it for a moment. A review that has just come in may not be in the list yet: the list is refreshed once, and this
+  // runs again when it arrives.
+  const openedFromNotice = useRef(null);
+  const askedForFeedback = useRef(null);
+  const [markedFeedbackId, setMarkedFeedbackId] = useState(null);
+  useEffect(() => {
+    const wanted = new URLSearchParams(location.search).get("openFeedbackId");
+    if (!wanted || openedFromNotice.current === location.key) return;
+    const found = feedbackEntries.find((entry) => String(entry.id) === String(wanted));
+    if (!found) {
+      if (askedForFeedback.current !== location.key && typeof refreshFeedbackEntries === "function") {
+        askedForFeedback.current = location.key;
+        Promise.resolve(refreshFeedbackEntries()).catch(() => {});
+      }
+      return;
+    }
+    openedFromNotice.current = location.key;
+    setActiveTab("feedback");
+    setFeedbackSearch("");
+    setDestinationFilter("");
+    setStatusFilter("");
+    setVisibilityFilter("all");
+    setMarkedFeedbackId(found.id);
+  }, [location.search, location.key, feedbackEntries, refreshFeedbackEntries]);
+
+  useEffect(() => {
+    if (markedFeedbackId === null) return undefined;
+    const card = document.querySelector(`[data-feedback-id="${markedFeedbackId}"]`);
+    if (card && typeof card.scrollIntoView === "function") card.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = window.setTimeout(() => setMarkedFeedbackId(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [markedFeedbackId]);
 
   const filteredDestinations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -947,7 +982,8 @@ function DestinationManagement({ initialTab }) {
               filteredFeedback.map((entry) => (
                 <div
                   key={entry.id}
-                  className={`feedback-card${entry.is_hidden ? " feedback-card-hidden" : ""}`}
+                  data-feedback-id={entry.id}
+                  className={`feedback-card${entry.is_hidden ? " feedback-card-hidden" : ""}${markedFeedbackId === entry.id ? " feedback-card-marked" : ""}`}
                 >
                   <div className="feedback-left">
                     <h3>

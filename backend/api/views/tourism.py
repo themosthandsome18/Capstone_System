@@ -34,6 +34,7 @@ from api.serializers import (
     TouristRecordSerializer,
 )
 from api.services.activity import log_activity
+from api.services.notifications import notify_new_tourist_record, notify_safely
 from api.services.destination_figures import destination_map_figures
 from api.services.online_booking import (
     import_online_booking_workbook,
@@ -166,6 +167,7 @@ def tourist_record_list(request):
         label=record.full_name,
         record_id=record.survey_id,
     )
+    notify_safely(notify_new_tourist_record, record, actor=request.user)  # the one who added it is not told about it
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

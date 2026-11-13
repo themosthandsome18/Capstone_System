@@ -15,6 +15,7 @@ import {
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
+import { tourismApi } from "../services/tourismApi";
 import { buildReportingYearOptions } from "../utils/reportingYears";
 import {
   capacityFareForBoatType,
@@ -238,6 +239,22 @@ function BookingManagement() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addEntryRequestId, location.state, location.pathname, navigate]);
+
+  // "Open" on a notification (the bell) comes here as /tourist-data?openSurveyId=<survey ID>: the view modal of that one record opens, once for each
+  // visit (location.key). The record is read from the server by its survey ID, not looked for in the page of the table that happens to be loaded.
+  const openedFromNotice = useRef(null);
+  useEffect(() => {
+    const wanted = new URLSearchParams(location.search).get("openSurveyId");
+    if (!wanted || openedFromNotice.current === location.key) return;
+    openedFromNotice.current = location.key;
+    tourismApi
+      .getTouristRecord(wanted)
+      .then((record) => {
+        if (record) openViewRecord(record);
+      })
+      .catch(() => setTableError(`Record ${wanted} could not be opened.`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, location.key]);
 
 
   useEffect(() => {

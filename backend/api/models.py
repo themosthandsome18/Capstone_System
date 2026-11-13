@@ -1330,6 +1330,9 @@ NOTIFICATION_TYPE_INSPECTION_DUE = "inspection_due"
 NOTIFICATION_TYPE_VIOLATION_ALERT = "violation_alert"
 NOTIFICATION_TYPE_PUBLIC_ADVISORY = "public_advisory"
 NOTIFICATION_TYPE_SYSTEM = "system"
+# For the staff of the Tourism module (admin and tourism): a visit was registered, a review was sent. One row for each person who is told.
+NOTIFICATION_TYPE_NEW_REGISTRATION = "new_registration"
+NOTIFICATION_TYPE_NEW_FEEDBACK = "new_feedback"
 
 NOTIFICATION_TYPE_CHOICES = [
     (NOTIFICATION_TYPE_PERMIT_DUE, "Permit Due"),
@@ -1337,6 +1340,8 @@ NOTIFICATION_TYPE_CHOICES = [
     (NOTIFICATION_TYPE_VIOLATION_ALERT, "Violation Alert"),
     (NOTIFICATION_TYPE_PUBLIC_ADVISORY, "Public Advisory"),
     (NOTIFICATION_TYPE_SYSTEM, "System"),
+    (NOTIFICATION_TYPE_NEW_REGISTRATION, "New Registration"),
+    (NOTIFICATION_TYPE_NEW_FEEDBACK, "New Feedback"),
 ]
 
 NOTIFICATION_SEVERITY_INFO = "info"

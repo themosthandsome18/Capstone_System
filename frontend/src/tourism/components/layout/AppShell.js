@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FiBell, FiLogOut } from "react-icons/fi";
+import { FiLogOut } from "react-icons/fi";
 import { useAuth } from "../../../auth/AuthContext";
 import { useTourismData } from "../../context/TourismDataContext";
 import LoadingOverlay from "../../../shared/LoadingOverlay";
@@ -9,6 +9,7 @@ import ErrorBoundary from "../../../shared/ErrorBoundary";
 import useDocumentBranding from "../../../shared/useDocumentBranding";
 import { TourismChartPaletteContext } from "../../theme/chartPalette";
 import { TourismThemePreviewContext, useTourismShellTheme } from "../../theme/themePreview";
+import NotificationBell from "./NotificationBell";
 import Sidebar from "./Sidebar";
 
 // Exported so a test can check that every route has a title: a path missing
@@ -182,14 +183,7 @@ function AppShell() {
 
           <div className="topbar-actions">
 
-            <button
-              type="button"
-              className="icon-pill"
-              title="Notifications preview"
-              aria-label="Notifications preview"
-            >
-              <FiBell />
-            </button>
+            <NotificationBell />
 
             {currentPage.showAdd ? (
               <button
