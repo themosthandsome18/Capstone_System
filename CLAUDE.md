@@ -10,6 +10,10 @@ variables in the shell win over `.env`, so the override below is the only thing 
 
 This has already happened: on 13 Nov 2026 migration 0072 was applied to LIVE from the owner's machine, because a plain `migrate` was used.
 
+Do NOT migrate live by hand before a merge. Proven on 13 Nov 2026: Render runs `manage.py migrate` as part of the deploy (it is in `backend/build.sh`).
+Migration 0073 was applied to live 26 seconds after the merge of PR #98. So the earlier manual applies (0070 to 0072) were not needed; they came from a
+plain `migrate` that hit live because of `.env`. A migration that is added only needs to be merged; the deploy applies it before the new code serves.
+
 Put the override in front of EVERY `runserver`, `migrate`, `makemigrations`, `showmigrations`, `shell` or script that touches the database.
 
 PowerShell (from `backend\`; the variables stay in that terminal until it is closed):
