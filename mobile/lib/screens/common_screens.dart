@@ -336,17 +336,30 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class NotificationPage extends StatelessWidget {
+class NotificationPage extends StatefulWidget {
   const NotificationPage({
     super.key,
     required this.notifications,
     this.subtitle = 'Sanitary advisories and compliance updates',
     this.severityStripe = false,
     this.now,
+    this.onSeen,
+    this.onDismiss,
+    this.onOpen,
   });
 
   final List<AppNotification> notifications;
   final String subtitle;
+
+  /// Called once, when the page is shown, with the ids of the notices on it: the tourist has now seen them (the red dot on the bell goes).
+  final ValueChanged<List<String>>? onSeen;
+
+  /// Called when the tourist removes a notice (the X, or a swipe). The phone keeps it removed, so it does not come back when the app is opened again.
+  /// Without it the page is as it was: no X and no swipe.
+  final ValueChanged<String>? onDismiss;
+
+  /// Called when a notice that leads somewhere is pressed (an answer to a review opens that review).
+  final ValueChanged<AppNotification>? onOpen;
 
   /// The moment the dates under the notices are told from (the clock when null). Only for a test to fix it.
   final DateTime? now;
@@ -356,7 +369,34 @@ class NotificationPage extends StatelessWidget {
   final bool severityStripe;
 
   @override
+  State<NotificationPage> createState() => _NotificationPageState();
+}
+
+class _NotificationPageState extends State<NotificationPage> {
+  late final List<AppNotification> _items = List.of(widget.notifications);
+
+  @override
+  void initState() {
+    super.initState();
+    final onSeen = widget.onSeen;
+    if (onSeen != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) onSeen(_items.map((item) => item.id).toList());
+      });
+    }
+  }
+
+  void _dismiss(AppNotification item) {
+    setState(() => _items.removeWhere((other) => other.id == item.id));
+    widget.onDismiss?.call(item.id);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final notifications = _items;
+    final subtitle = widget.subtitle;
+    final severityStripe = widget.severityStripe;
+    final now = widget.now;
     return FormPageScaffold(
       title: 'Notifications',
       subtitle: subtitle,
@@ -408,7 +448,12 @@ class NotificationPage extends StatelessWidget {
           : notifications
               .map(
                 (item) => severityStripe
-                    ? _Notice(item: item, now: now ?? DateTime.now())
+                    ? _Notice(
+                        item: item,
+                        now: now ?? DateTime.now(),
+                        onDismiss: widget.onDismiss == null ? null : () => _dismiss(item),
+                        onOpen: (item.isReply || item.isPass) && widget.onOpen != null ? () => widget.onOpen!(item) : null,
+                      )
                     : Card(
                         elevation: 0,
                         color: Colors.white,
@@ -433,10 +478,16 @@ class NotificationPage extends StatelessWidget {
 /// One notice of the tourism side: a white box, a line of the colour of its weight down the left edge (the corners follow the box), the title, the
 /// message (three lines at most), and under it the word of the weight and when it was written. One label for a screen reader.
 class _Notice extends StatelessWidget {
-  const _Notice({required this.item, required this.now});
+  const _Notice({required this.item, required this.now, this.onDismiss, this.onOpen});
 
   final AppNotification item;
   final DateTime now;
+
+  /// The X and the swipe (null: neither). The tourism side gives it, so that a notice can be removed and stay removed.
+  final VoidCallback? onDismiss;
+
+  /// Pressing the notice (null: it leads nowhere).
+  final VoidCallback? onOpen;
 
   static const _radius = 14.0;
 
@@ -444,10 +495,13 @@ class _Notice extends StatelessWidget {
   Widget build(BuildContext context) {
     final when = item.whenLabel(now);
     final label = [item.severityLabel, item.title, item.message, ?when].join(', ');
-    return Padding(
+    final dismissable = onDismiss != null;
+    final box = Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Semantics(
         container: true,
+        button: onOpen != null,
+        onTap: onOpen,
         label: label,
         child: ExcludeSemantics(
           child: DecoratedBox(
@@ -467,8 +521,11 @@ class _Notice extends StatelessWidget {
                   children: [
                     Container(key: ValueKey('notice-stripe-${item.id}'), width: 4, color: item.severityColor),
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onOpen,
+                        child: Padding(
+                        padding: EdgeInsets.fromLTRB(14, 14, dismissable ? 40 : 14, 14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -503,6 +560,7 @@ class _Notice extends StatelessWidget {
                           ],
                         ),
                       ),
+                      ),
                     ),
                   ],
                 ),
@@ -511,6 +569,86 @@ class _Notice extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (!dismissable) return box;
+
+    // Removed by the X or by a swipe either way. The X is outside the one label of the notice, so a screen reader finds it as a button of its own.
+    return Dismissible(
+      key: ValueKey('dismiss-${item.id}'),
+      direction: DismissDirection.horizontal,
+      onDismissed: (_) => onDismiss!(),
+      child: Stack(
+        children: [
+          box,
+          Positioned(
+            top: 2,
+            right: 2,
+            child: IconButton(
+              key: ValueKey('notice-x-${item.id}'),
+              icon: const Icon(Icons.close, size: 18, color: AppColors.muted),
+              tooltip: 'Remove this notification',
+              onPressed: onDismiss,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One of the tourist's own passes, opened from the notice that says it was scanned or cancelled: the pass itself, with its status as it stands now.
+class PassDetailPage extends StatelessWidget {
+  const PassDetailPage({super.key, required this.receipt});
+
+  final MobileVisitReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPageScaffold(
+      title: 'My Pass',
+      subtitle: receipt.destination.name,
+      children: [VisitReceiptCard(receipt: receipt)],
+    );
+  }
+}
+
+/// One of the tourist's own reviews, opened from the notice that says it was answered: what they wrote, and the office's answer in full.
+class FeedbackDetailPage extends StatelessWidget {
+  const FeedbackDetailPage({super.key, required this.receipt});
+
+  final MobileFeedbackReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final reply = receipt.reply.trim();
+    return FormPageScaffold(
+      title: 'My Review',
+      subtitle: receipt.destination.name,
+      children: [
+        FeedbackReceiptCard(receipt: receipt),
+        if (receipt.message.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 12),
+            child: Text(receipt.message.trim(), key: const ValueKey('review-message'), style: const TextStyle(fontSize: 14, height: 1.4)),
+          ),
+        Container(
+          key: const ValueKey('review-reply'),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border(left: BorderSide(color: context.brand.primary, width: 3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Reply from the Tourism Office', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: context.brand.primary)),
+              const SizedBox(height: 6),
+              Text(reply.isEmpty ? 'No reply yet.' : reply, style: const TextStyle(fontSize: 14, height: 1.45)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

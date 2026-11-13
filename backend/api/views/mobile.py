@@ -89,6 +89,7 @@ from api.services.tracking_codes import (
     owner_status_payload,
 )
 from api.throttles import (
+    FeedbackReplyRateThrottle,
     OwnerStatusRateThrottle,
     PassStatusRateThrottle,
     ReviewVisitRateThrottle,
@@ -719,8 +720,8 @@ def review_names_a_visit(data):
     return bool(str(data.get("survey_id") or "").strip() and normalize_contact_digits(data.get("contact_number")))
 
 
-def visit_allows_review(data, destination_id):
-    """True only when ALL of these are so: the survey ID names a TouristRecord, the contact number is that record's (compared by its digits,
+def visit_for_review(data, destination_id):
+    """The TouristRecord that lets this review be taken, or None. It is the one the survey ID names, and ALL of these must be so: the survey ID names a TouristRecord, the contact number is that record's (compared by its digits,
     normalize_contact_digits), the record's resort is the destination being reviewed, and the record's status is arrived (it was scanned).
 
     An archived record is accepted: the archive is about the table of Record Management, not about the arrival.
@@ -728,14 +729,68 @@ def visit_allows_review(data, destination_id):
     survey_id = str(data.get("survey_id") or "").strip()
     contact = normalize_contact_digits(data.get("contact_number"))
     if not survey_id or not contact:
-        return False
+        return None
     record = TouristRecord.objects.filter(survey_id__iexact=survey_id).first()
-    return bool(
+    if (
         record is not None
         and normalize_contact_digits(record.contact_number) == contact
         and record.resort_id == parse_mobile_int(destination_id, -1)
         and record.status == BOOKING_STATUS_ARRIVED
-    )
+    ):
+        return record
+    return None
+
+
+def visit_allows_review(data, destination_id):
+    """True when visit_for_review finds the visit that lets this review be taken."""
+    return visit_for_review(data, destination_id) is not None
+
+
+# The most reviews one visit can have in the answer of mobile_feedback_replies (a visit has one or two; this only keeps the answer small).
+FEEDBACK_REPLIES_MAX = 50
+
+
+@api_view(["POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+@permission_classes([AllowAny])
+@throttle_classes([FeedbackReplyRateThrottle])
+def mobile_feedback_replies(request):
+    """Has the office answered MY reviews? What stands now, for the reviews that were written with this visit's pass. Nothing else.
+
+    A tourist has no account, so the key is the pass: the survey ID printed on it AND the exact contact number used, as the pass status is asked.
+    Either alone would let anyone list other people's reviews. It is a POST so that the contact number is in the body and not in the address, which
+    is written to the server's access log. The survey ID is not case sensitive; the contact number is compared by its digits.
+
+    A visit that does not exist and a visit with another contact number answer the same: no rows. It is never said which of the two was wrong. An
+    answer that is right but has no reviews is also no rows, and is not counted as a failed guess.
+
+    Only reviews that carry THIS visit's survey ID (written with it, see FeedbackEntry.survey_id) are in the answer: never another person's review, never
+    one written before the column existed (those are not guessed to belong to anybody), never one of the same destination written with another pass.
+    Each row holds exactly three things, written out here on purpose (a field added to the model later does NOT reach this public answer):
+    id (the review's own number), destination_id (so the app can match it) and reply (the office's words, "" when it has not answered).
+    No name, no email, no contact number, no message, no photo, no staff name, no moderation state.
+
+    The lookups that FAIL are counted per client address and limited (FeedbackReplyRateThrottle). A request with a missing key guesses nothing and is
+    not counted.
+    """
+    reference = str(request.data.get("reference") or "").strip()
+    contact = str(request.data.get("contact") or "").strip()
+
+    if not reference or not contact:
+        return Response(
+            {"detail": "Enter both the contact number and the survey ID from your pass."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    wanted_contact = normalize_contact_digits(contact)
+    record = TouristRecord.objects.filter(survey_id__iexact=reference).first()
+    if record is None or not wanted_contact or normalize_contact_digits(record.contact_number) != wanted_contact:
+        FeedbackReplyRateThrottle.record_failure(request)
+        return Response({"rows": [], "summary": {"total": 0}})
+
+    entries = FeedbackEntry.objects.filter(survey_id=record.survey_id).order_by("id")[:FEEDBACK_REPLIES_MAX]
+    rows = [{"id": entry.pk, "destination_id": entry.destination_id, "reply": entry.reply} for entry in entries]
+    return Response({"rows": rows, "summary": {"total": len(rows)}})
 
 
 @api_view(["POST"])
@@ -761,7 +816,8 @@ def mobile_feedback_submit(request):
 
     # Before anything is read or saved (a photo included): a review is for someone who has been there, and the server says so, not only the app
     # (the app hides the button, but anyone can post here). The web's own POST /api/feedback/ has its own login and is not this.
-    if not visit_allows_review(data, destination_id):
+    visit = visit_for_review(data, destination_id)
+    if visit is None:
         if review_names_a_visit(data):
             # A survey ID and a number that do not make a visit are a guess: counted per client address, and limited (ReviewVisitRateThrottle,
             # which says why and how much). A post with one of them missing guesses nothing and is not counted.
@@ -819,7 +875,9 @@ def mobile_feedback_submit(request):
 
     serializer = FeedbackEntrySerializer(data=data)
     serializer.is_valid(raise_exception=True)
-    entry = serializer.save()
+    # The survey ID of the visit that was just checked is kept with the review (and only here, after the check): it is how its writer can later ask
+    # whether the office has answered it. The serializer does not list it, so it is neither read from the post nor shown.
+    entry = serializer.save(survey_id=visit.survey_id)
 
     log_activity(
         request,

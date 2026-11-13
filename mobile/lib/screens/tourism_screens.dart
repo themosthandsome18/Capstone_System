@@ -40,6 +40,19 @@ class _MobileShellState extends State<MobileShell> {
   /// My Visit tab, is kept on the phone (so it is still there when the app is opened again), and goes only when the My Visit tab is opened.
   bool _myVisitNews = false;
 
+  /// The notices the tourist has seen (the Notifications page was opened) and the ones they removed. Kept on the phone. See [_notices].
+  final Set<String> _seenNotices = {};
+  final Set<String> _removedNotices = {};
+
+  /// The passes whose status was SEEN to change, to arrived or to cancelled, when they were brought up to date; survey ID -> status. A notice for a pass
+  /// is made only from here, so a pass that was already arrived before the app could tell has none, and one that stays arrived adds none. Kept on the phone.
+  final Map<String, String> _passEvents = {};
+
+  /// The passes the server said it does not know (it answered, well, with no rows). They are not asked about again, at this opening or any other: each
+  /// question that finds no pass counts against the tourist's own limit on the server, and asking at every opening would use it up and lock out their
+  /// real passes too. The pass stays in the list; only the asking stops. A refusal (429) or no network is a failure, not "not known", and is asked again.
+  final Set<String> _unknownPasses = {};
+
   @override
   void initState() {
     super.initState();
@@ -59,11 +72,64 @@ class _MobileShellState extends State<MobileShell> {
       _feedbackHistory.addAll(mine.feedback.where((item) => !haveFeedback.contains(item.reference)));
       if (_profile.isGuest) _profile = mine.profile;
       if (mine.news) _myVisitNews = true;
+      _seenNotices.addAll(mine.seenNotices);
+      _removedNotices.addAll(mine.removedNotices);
+      _unknownPasses.addAll(mine.unknownPasses);
+      for (final event in mine.passEvents.entries) {
+        _passEvents.putIfAbsent(event.key, () => event.value);
+      }
       _restored = true;
     });
     if (madeMeanwhile) _persist();
-    unawaited(_refreshPassStatuses());
+    unawaited(_refreshPassStatuses().whenComplete(_refreshFeedbackReplies));
   }
+
+  /// Has the Tourism Office answered the tourist's reviews? Once, when the app is opened and after the passes are brought up to date, the server is
+  /// asked, with the survey ID and the contact number that were kept with each review (the tourist types nothing), what it says now. A review kept
+  /// BEFORE those were kept (an older copy of the app) is not asked about: nobody is guessed to be its writer. A new or changed answer is kept with its
+  /// review, and so is a notice (see [_notices]). A server that cannot be reached, or does not answer well, changes nothing: the last known stays.
+  Future<void> _refreshFeedbackReplies() async {
+    if (!mounted) return;
+    final askedAbout = _feedbackHistory.where((item) => item.canAskForReply).toList();
+    final passes = <(String, String)>{for (final item in askedAbout) (item.surveyId, item.contactNumber)};
+    final answers = await Future.wait(
+      passes.map((pass) async {
+        try {
+          return await widget.api.fetchFeedbackReplies(reference: pass.$1, contact: pass.$2);
+        } catch (_) {
+          return const <MobileFeedbackReply>[]; // not reached, or not understood: what was known stays
+        }
+      }),
+    );
+    if (!mounted) return;
+    final said = {for (final answer in answers) for (final row in answer) '${row.id}': row.reply.trim()};
+    var changed = false;
+    setState(() {
+      for (var i = 0; i < _feedbackHistory.length; i++) {
+        final item = _feedbackHistory[i];
+        if (!item.canAskForReply) continue;
+        final reply = said[item.reference];
+        if (reply == null || reply == item.reply.trim()) continue;
+        _feedbackHistory[i] = item.withReply(reply);
+        changed = true;
+      }
+    });
+    if (changed) _persist();
+  }
+
+  /// What the Notifications page shows: the Tourism Office's answers to the tourist's own reviews (made here, from the reviews that have one), then
+  /// the advisories of the bootstrap, without the ones the tourist removed.
+  List<AppNotification> get _notices => [
+    for (final pass in _shownVisits)
+      if (_passEvents[pass.reference] == pass.status) ?AppNotification.passChanged(pass),
+    for (final item in _feedbackHistory)
+      if (item.reply.trim().isNotEmpty) AppNotification.replyTo(item),
+    ...widget.state.notifications,
+  ].where((notice) => !_removedNotices.contains(notice.id)).toList();
+
+  /// The red dot on the bell: there is a notice the tourist has not seen. It goes when the Notifications page is opened, and comes back only for a
+  /// notice that is new (an id that was not there).
+  bool get _hasUnseenNotices => _notices.any((notice) => !_seenNotices.contains(notice.id));
 
   /// The kept passes say what they said when they were made ("pending"). Once, when the app is opened and they are read, the server is asked where
   /// each one stands now, with the survey ID and the contact number that are on the pass (the tourist types nothing). What it says replaces the
@@ -72,33 +138,38 @@ class _MobileShellState extends State<MobileShell> {
   Future<void> _refreshPassStatuses() async {
     final asked = List<MobileVisitReceipt>.of(_visitHistory);
     final answers = await Future.wait(
-      asked.map((pass) async {
-        if (pass.reference.trim().isEmpty || pass.contactNumber.trim().isEmpty) return null;
+      asked.map<Future<({MobilePassStatus? answer, bool unknown})>>((pass) async {
+        if (pass.reference.trim().isEmpty || pass.contactNumber.trim().isEmpty) return (answer: null, unknown: false);
+        if (_unknownPasses.contains(pass.reference)) return (answer: null, unknown: false); // the server already said it does not know this one
         try {
-          return await widget.api.fetchPassStatus(reference: pass.reference, contact: pass.contactNumber);
+          final answer = await widget.api.fetchPassStatus(reference: pass.reference, contact: pass.contactNumber);
+          return (answer: answer, unknown: answer == null); // null is ONLY "the server answered that it does not know it"
         } catch (_) {
-          return null; // not reached, or not understood: the last known stays
+          return (answer: null, unknown: false); // not reached, refused (429) or not understood: the last known stays, and it is asked again next time
         }
       }),
     );
     if (!mounted) return;
     var changed = false;
+    var learned = false;
     setState(() {
       for (var i = 0; i < asked.length; i++) {
-        final answer = answers[i];
+        if (answers[i].unknown && _unknownPasses.add(asked[i].reference)) learned = true;
+        final answer = answers[i].answer;
         if (answer == null) continue;
         final at = _visitHistory.indexWhere((item) => identical(item, asked[i]));
         if (at < 0) continue; // taken off meanwhile (Sign Out)
         final pass = _visitHistory[at];
         if (pass.status == answer.status && pass.checkedInAt == answer.checkedInAt) continue;
+        // A CHANGE to arrived or to cancelled that the app has just seen is one notice (and a later change of the same pass replaces it). A pass that
+        // says the same as it did (arrived and still arrived, or already arrived before this existed) is not a change: no notice, not at any opening.
+        if (pass.status != answer.status && (answer.status == 'arrived' || answer.status == 'no_show')) _passEvents[pass.reference] = answer.status;
         _visitHistory[at] = pass.withStatus(answer.status, answer.checkedInAt);
         changed = true;
       }
     });
-    if (changed) {
-      _persist();
-      _newsInMyVisit(); // a pass whose status changed (they were scanned) is news, as a new pass is
-    }
+    if (changed || learned) _persist();
+    if (changed) _newsInMyVisit(); // a pass whose status changed (they were scanned) is news, as a new pass is
   }
 
   /// Keeps the three on the phone. Never throws (the store does not).
@@ -108,6 +179,9 @@ class _MobileShellState extends State<MobileShell> {
     unawaited(widget.store.saveFeedback(_feedbackHistory));
     unawaited(widget.store.saveProfile(_profile));
     unawaited(widget.store.saveNews(_myVisitNews));
+    unawaited(widget.store.saveNotices(seen: _seenNotices, removed: _removedNotices));
+    unawaited(widget.store.savePassEvents(_passEvents));
+    unawaited(widget.store.saveUnknownPasses(_unknownPasses));
   }
 
   static const int _myVisitTab = 3;
@@ -157,6 +231,10 @@ class _MobileShellState extends State<MobileShell> {
       _feedbackHistory.clear();
       _profile = MobileUserProfile.guest();
       _myVisitNews = false;
+      _seenNotices.clear();
+      _removedNotices.clear();
+      _passEvents.clear();
+      _unknownPasses.clear();
       _index = 0;
     });
     widget.onSignOut?.call();
@@ -180,6 +258,7 @@ class _MobileShellState extends State<MobileShell> {
         onOpenTab: _openTab,
         onOpenDestination: _openDestination,
         onOpenNotifications: _openNotifications,
+        hasUnreadNotices: _hasUnseenNotices,
       ),
       DestinationListPage(
         destinations: widget.state.destinations,
@@ -304,12 +383,45 @@ class _MobileShellState extends State<MobileShell> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => NotificationPage(
-          notifications: widget.state.notifications,
+          notifications: _notices,
           subtitle: tourismNotificationsSubtitle,
           severityStripe: true,
+          onSeen: _noticesSeen,
+          onDismiss: _noticeRemoved,
+          onOpen: _openNotice,
         ),
       ),
     );
+  }
+
+  /// The Notifications page was opened: what is on it has been seen, and the red dot goes.
+  void _noticesSeen(List<String> ids) {
+    final fresh = ids.where((id) => !_seenNotices.contains(id)).toList();
+    if (fresh.isEmpty) return;
+    setState(() => _seenNotices.addAll(fresh));
+    _persist();
+  }
+
+  /// The tourist removed a notice (the X or a swipe): it stays removed, also when the app is opened again.
+  void _noticeRemoved(String id) {
+    setState(() => _removedNotices.add(id));
+    _persist();
+  }
+
+  /// An answer was pressed: the tourist's own review opens, with the office's answer in full.
+  void _openNotice(AppNotification notice) {
+    final passReference = notice.passReference;
+    if (passReference != null) {
+      final passes = _shownVisits.where((item) => item.reference == passReference);
+      if (passes.isEmpty) return;
+      Navigator.of(context).push(MaterialPageRoute(builder: (context) => PassDetailPage(receipt: passes.first)));
+      return;
+    }
+    final reference = notice.feedbackReference;
+    if (reference == null) return;
+    final matches = _shownFeedback.where((item) => item.reference == reference);
+    if (matches.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => FeedbackDetailPage(receipt: matches.first)));
   }
 
   void _addVisit(MobileVisitReceipt receipt) {
@@ -348,7 +460,11 @@ class HomePage extends StatefulWidget {
     required this.onOpenTab,
     required this.onOpenDestination,
     required this.onOpenNotifications,
+    this.hasUnreadNotices = false,
   });
+
+  /// There is a notice the tourist has not seen (the red dot on the bell).
+  final bool hasUnreadNotices;
 
   final TourismBootstrapState state;
   final VoidCallback onRetry;
@@ -420,7 +536,7 @@ class _HomePageState extends State<HomePage> {
         // Top Header
         AppHeader(
           onOpenNotifications: widget.onOpenNotifications,
-          hasUnread: state.notifications.isNotEmpty,
+          hasUnread: widget.hasUnreadNotices,
         ),
         const SizedBox(height: 16),
 
@@ -3893,6 +4009,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ? 'Mobile Tourist'
               : _name.text.trim(),
           rating: _rating,
+          surveyId: widget.visit.reference,
+          contactNumber: widget.visit.contactNumber,
         );
         widget.onRecorded?.call(receipt);
         await showSubmissionDialog(

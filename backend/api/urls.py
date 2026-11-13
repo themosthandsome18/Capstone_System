@@ -104,6 +104,7 @@ from .views.mobile import (
     mobile_tourist_record_check_in,
     mobile_tourist_record_history,
     mobile_tourist_record_status,
+    mobile_feedback_replies,
     mobile_tourist_record_lookup,
     mobile_tourist_registration,
 )
@@ -137,6 +138,7 @@ urlpatterns = [
     path("mobile/tourism/records/history/", mobile_tourist_record_history),
     path("mobile/tourism/records/status/", mobile_tourist_record_status),
     path("mobile/tourism/feedback/", mobile_feedback_submit),
+    path("mobile/tourism/feedback/replies/", mobile_feedback_replies),
     path("mobile/sanitation/bootstrap/", mobile_sanitation_bootstrap),
     path("mobile/sanitation/staff-bootstrap/", mobile_sanitation_staff_bootstrap),
     path("mobile/sanitation/inspections/", mobile_sanitation_inspection_submit),

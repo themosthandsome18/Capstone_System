@@ -787,7 +787,11 @@ class FeedbackReceiptCard extends StatelessWidget {
       icon: Icons.star_outline,
       title: receipt.destination.name,
       reference: receipt.reference,
-      lines: ['Rating: ${receipt.rating}/5', 'Reviewer: ${receipt.reviewer}'],
+      lines: [
+        'Rating: ${receipt.rating}/5',
+        'Reviewer: ${receipt.reviewer}',
+        if (receipt.reply.trim().isNotEmpty) 'Tourism Office reply: ${receipt.reply.trim()}',
+      ],
     );
   }
 }
@@ -1138,6 +1142,7 @@ class AppHeader extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: Container(
+                  key: const ValueKey('bell-dot'),
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(

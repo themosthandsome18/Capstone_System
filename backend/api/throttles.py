@@ -111,6 +111,25 @@ class PassStatusRateThrottle(OwnerStatusRateThrottle):
     message = "Too many attempts from this device. Please try again in an hour."
 
 
+class FeedbackReplyRateThrottle(OwnerStatusRateThrottle):
+    """Failed lookups of "has the office answered my reviews" (POST /api/mobile/tourism/feedback/replies/) per client address.
+
+    WHY: the same as PassStatusRateThrottle. The survey ID is printed on the pass, so it is no secret, and the contact number is the only thing left to
+    guess; a lookup with no limit is a lookup that can be guessed at, over and over. So the guesses are limited.
+
+    Made like PassStatusRateThrottle, and like it it counts only the lookups that FAIL (the view calls `record_failure`): the app asks once for each pass
+    every time it is opened, and an answer that is right costs nothing. A request with a missing key guesses nothing and is not counted.
+
+    ITS OWN COUNTER, not the one of the status lookup: they are two doors to the same guess, and each is counted at its own door.
+
+    THE LIMIT, 30 failures an hour (settings: DEFAULT_THROTTLE_RATES["feedback_reply_ip"]), as the pass status: the app itself fails only for a kept
+    review whose visit no longer exists on the server, which is rare, and a stranger gets 720 guesses a day from one address.
+    """
+
+    fixed_scope = "feedback_reply_ip"
+    message = "Too many attempts from this device. Please try again in an hour."
+
+
 class ReviewVisitRateThrottle(OwnerStatusRateThrottle):
     """Reviews posted with a survey ID and a contact number that do NOT make a visit (POST /api/mobile/tourism/feedback/), per client address.
 
