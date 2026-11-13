@@ -24,6 +24,7 @@ from api.models import (
 )
 from django.core.exceptions import ObjectDoesNotExist
 from api.serializers import NotificationPublicSerializer, NotificationSerializer
+from api.services.notifications import TOURISM_NOTICE_ROLES
 
 VALID_MODULES = {code for code, _ in NOTIFICATION_MODULE_CHOICES}
 STAFF_ADVISORY_ROLES = {ROLE_ADMIN, ROLE_TOURISM, ROLE_SANITATION}
@@ -48,6 +49,24 @@ def is_advisory_staff(user):
     return getattr(profile, "role", "") in STAFF_ADVISORY_ROLES
 
 
+def reads_tourism_notices(user):
+    """The Tourism module's notifications (a visit was registered, a review was sent) are for the system admin and the Tourism Office, equally.
+    Anyone else (sanitation, a resort's staff, a tourist, an account with no profile) is refused when they ask for that module."""
+    if not user or not user.is_authenticated:
+        return False
+    try:
+        return user.profile.role in TOURISM_NOTICE_ROLES
+    except ObjectDoesNotExist:
+        return False
+
+
+def tourism_notices_refused():
+    return Response(
+        {"detail": "Only the system admin and the Tourism Office can read the Tourism notifications."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 def advisory_modules_for(user):
     """The modules whose advisories this user may write: empty for anyone who is not advisory staff."""
     if not is_advisory_staff(user):
@@ -68,6 +87,10 @@ def notification_list(request):
     """
     user = request.user
 
+    module_filter = request.query_params.get("module", "").strip().lower()
+    if module_filter == NOTIFICATION_MODULE_TOURISM and not reads_tourism_notices(user):
+        return tourism_notices_refused()
+
     # Total unread count for request.user regardless of filters/limits
     unread_count = Notification.objects.filter(
         recipient_user=user,
@@ -80,9 +103,15 @@ def notification_list(request):
     if unread_only in ("true", "1", "yes"):
         queryset = queryset.filter(is_read=False)
 
-    module_filter = request.query_params.get("module", "").strip().lower()
+    module_unread_count = None
     if module_filter in VALID_MODULES:
         queryset = queryset.filter(module=module_filter)
+        # What a screen of ONE module (the Tourism bell) needs for its red dot: the unread of that module, not of the user's other modules.
+        module_unread_count = Notification.objects.filter(
+            recipient_user=user,
+            is_read=False,
+            module=module_filter,
+        ).count()
 
     limit_param = request.query_params.get("limit")
     try:
@@ -94,10 +123,13 @@ def notification_list(request):
     results = queryset[:limit]
     serializer = NotificationSerializer(results, many=True)
 
-    return Response({
+    payload = {
         "unread_count": unread_count,
         "results": serializer.data,
-    })
+    }
+    if module_unread_count is not None:
+        payload["module_unread_count"] = module_unread_count
+    return Response(payload)
 
 
 @api_view(["PATCH"])
@@ -134,10 +166,16 @@ def notification_mark_all_read(request):
     Returns the count of notifications updated.
     """
     now = timezone.now()
-    updated_count = Notification.objects.filter(
-        recipient_user=request.user,
-        is_read=False,
-    ).update(
+    queryset = Notification.objects.filter(recipient_user=request.user, is_read=False)
+
+    # ?module=tourism marks only that module's notifications (the Tourism bell must not read the sanitation ones that an admin also has).
+    module_filter = request.query_params.get("module", "").strip().lower()
+    if module_filter == NOTIFICATION_MODULE_TOURISM and not reads_tourism_notices(request.user):
+        return tourism_notices_refused()
+    if module_filter in VALID_MODULES:
+        queryset = queryset.filter(module=module_filter)
+
+    updated_count = queryset.update(
         is_read=True,
         read_at=now,
     )
@@ -146,6 +184,32 @@ def notification_mark_all_read(request):
         "updated_count": updated_count,
         "count": updated_count,
     })
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def notification_delete(request, notification_id):
+    """
+    Deletes ONE notification: the row that belongs to request.user, and only that row. Each person who is told has a row of their own, so taking
+    it off one person's list takes nothing off anybody else's. Returns 404 if the notification does not exist or is somebody else's (the same
+    answer for both: a person is not told which ids exist).
+    """
+    try:
+        notification = Notification.objects.get(
+            id=notification_id,
+            recipient_user=request.user,
+        )
+    except Notification.DoesNotExist:
+        return Response(
+            {"detail": "Notification not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if notification.module == NOTIFICATION_MODULE_TOURISM and not reads_tourism_notices(request.user):
+        return tourism_notices_refused()
+
+    notification.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET", "POST"])

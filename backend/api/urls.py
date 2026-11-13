@@ -108,6 +108,7 @@ from .views.mobile import (
     mobile_tourist_registration,
 )
 from .views.notifications import (
+    notification_delete,
     notification_list,
     notification_mark_all_read,
     notification_mark_read,
@@ -233,6 +234,7 @@ urlpatterns = [
     path("notifications/", notification_list),
     path("notifications/mark-all-read/", notification_mark_all_read),
     path("notifications/<int:notification_id>/read/", notification_mark_read),
+    path("notifications/<int:notification_id>/", notification_delete),
     path("notifications/public/", public_notification_list),
     path("notifications/public/<int:notification_id>/", public_notification_detail),
     path("notifications/evaluate-due/", trigger_due_notifications_scan, name="evaluate-due-notifications"),

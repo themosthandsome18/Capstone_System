@@ -99,6 +99,7 @@ from api.services.public_reporting import (
     matching_submission, public_receipt, record_submission, submission_fingerprint,
 )
 from api.services.activity import log_activity
+from api.services.notifications import notify_new_feedback, notify_new_tourist_record, notify_safely
 from api.services.sanitation import (
     COMMUNITY_REPORT_CATEGORY_PRIORITIES,
     community_report_category,
@@ -407,6 +408,7 @@ def mobile_tourist_registration(request):
         label=record.full_name,
         record_id=record.survey_id,
     )
+    notify_safely(notify_new_tourist_record, record)
 
     return Response(serializer.data, status=status.HTTP_201_CREATED)
  
@@ -827,6 +829,7 @@ def mobile_feedback_submit(request):
         label=entry.title,
         record_id=entry.pk,
     )
+    notify_safely(notify_new_feedback, entry)
 
     # The answer to the sender is what they sent, as it always was. The
     # moderation fields are for staff and are not part of it.
