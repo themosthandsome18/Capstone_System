@@ -1290,12 +1290,64 @@ class AppNotification {
     required this.type,
     this.severity = 'info',
     this.createdAt,
+    this.feedbackReference,
+    this.passReference,
+    this.passStatus,
   });
+
+  /// The notice that one of the tourist's own passes changed: it was scanned on arrival (arrived) or it was cancelled (no_show). Made on the phone from the
+  /// pass, only for a CHANGE that the app saw when it brought the pass up to date (see _MobileShellState._refreshPassStatuses); null for a pass in any other
+  /// status (a pass that is still pending is no news). Its id has the status in it, so a pass that goes on from one to the other is a new notice.
+  static AppNotification? passChanged(MobileVisitReceipt pass) {
+    final resort = pass.destination.name;
+    if (pass.status == 'arrived') {
+      return AppNotification(
+        id: 'pass-${pass.reference}-arrived',
+        title: 'Your arrival was recorded',
+        message: 'Your visit to $resort was scanned when you arrived.',
+        type: 'pass',
+        passReference: pass.reference,
+        passStatus: 'arrived',
+      );
+    }
+    if (pass.status == 'no_show') {
+      return AppNotification(
+        id: 'pass-${pass.reference}-no_show',
+        title: 'Your visit was cancelled',
+        message: 'Your visit to $resort on ${_dayLabel(pass.arrivalDate)} was marked cancelled.',
+        type: 'pass',
+        passReference: pass.reference,
+        passStatus: 'no_show',
+      );
+    }
+    return null;
+  }
+
+  static String _dayLabel(DateTime day) => '${day.day} ${_months[day.month - 1]} ${day.year}';
+
+  /// The notice that the Tourism Office has answered one of the tourist's own reviews. It is made on the phone from the review it answers: its id has
+  /// the answer in it (a changed answer is a new notice, a seen or removed one stays so), and it has no date (the server does not say when).
+  factory AppNotification.replyTo(MobileFeedbackReceipt receipt) => AppNotification(
+    id: 'reply-${receipt.reference}-${stableTextHash(receipt.reply.trim())}',
+    title: 'The Tourism Office answered your review',
+    message: 'Your review of ${receipt.destination.name} has a reply. Open it to read it.',
+    type: 'reply',
+    feedbackReference: receipt.reference,
+  );
 
   final String id;
   final String title;
   final String message;
   final String type;
+
+  /// For a notice that is an answer to a review: the reference (the number) of that review. Null for an advisory.
+  final String? feedbackReference;
+  bool get isReply => feedbackReference != null;
+
+  /// For a notice that a pass changed: the survey ID (the reference) of that pass, and its new status (arrived or no_show). Null for any other notice.
+  final String? passReference;
+  final String? passStatus;
+  bool get isPass => passReference != null;
 
   /// When the notice was written (`created_at`); null when the server did not say, or said something that is not a date.
   final DateTime? createdAt;
@@ -1307,6 +1359,7 @@ class AppNotification {
   /// The colour of the line down the side of a notice (the Tourism Office's Notifications): the status colours the app already has, not the brand colour.
   /// info: the blue [colorFor] gives any other notice; warning: [AppColors.amber]; critical: [AppColors.red].
   Color get severityColor {
+    if (isPass) return passStatus == 'no_show' ? AppColors.red : AppColors.green; // the colours the pass status pills have
     if (severity == 'critical') return AppColors.red;
     if (severity == 'warning') return AppColors.amber;
     return Colors.blue;
@@ -1314,6 +1367,8 @@ class AppNotification {
 
   /// The word for the weight, under the message: Info, Advisory, Urgent.
   String get severityLabel {
+    if (isReply) return 'Reply';
+    if (isPass) return 'Pass';
     if (severity == 'critical') return 'Urgent';
     if (severity == 'warning') return 'Advisory';
     return 'Info';
@@ -1340,6 +1395,8 @@ class AppNotification {
   }
 
   IconData get icon {
+    if (type == 'reply') return Icons.reply_outlined;
+    if (type == 'pass') return Icons.confirmation_number_outlined;
     if (type == 'approval') return Icons.verified_outlined;
     if (type == 'sanitation') return Icons.health_and_safety_outlined;
     if (type == 'tourism') return Icons.explore_outlined;
@@ -1523,6 +1580,8 @@ class MobileFeedbackReceipt {
     required this.reply,
     required this.date,
     this.photos = const [],
+    this.surveyId = '',
+    this.contactNumber = '',
   });
 
   final String reference;
@@ -1530,9 +1589,19 @@ class MobileFeedbackReceipt {
   final String reviewer;
   final int rating;
   final String message;
+
+  /// The Tourism Office's answer, as the server last said (empty until it has answered). Brought up to date when the app is opened, see MobileFeedbackReply.
   final String reply;
   final String date;
   final List<String> photos;
+
+  /// The survey ID and the contact number of the pass this review was written with, kept so that the app can ask, with nothing typed, whether the office
+  /// has answered it. EMPTY for a review kept before they were kept: such a review is never asked about (nobody is guessed to be its writer), and it
+  /// shows what it always showed.
+  final String surveyId;
+  final String contactNumber;
+
+  bool get canAskForReply => surveyId.trim().isNotEmpty && contactNumber.trim().isNotEmpty;
 
   Map<String, Object?> toStoredJson() => {
     'reference': reference,
@@ -1544,6 +1613,8 @@ class MobileFeedbackReceipt {
     'reply': reply,
     'date': date,
     'photos': photos,
+    'survey_id': surveyId,
+    'contact_number': contactNumber,
   };
 
   /// Feedback as it was kept; null when it is incomplete (no reference or no destination name): it is left out, not guessed.
@@ -1561,6 +1632,8 @@ class MobileFeedbackReceipt {
       reply: '${json['reply'] ?? ''}',
       date: '${json['date'] ?? ''}',
       photos: rawPhotos is List ? rawPhotos.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList() : const [],
+      surveyId: '${json['survey_id'] ?? ''}'.trim(),
+      contactNumber: '${json['contact_number'] ?? ''}'.trim(),
     );
   }
 
@@ -1573,6 +1646,21 @@ class MobileFeedbackReceipt {
     reply: reply,
     date: date,
     photos: photos,
+    surveyId: surveyId,
+    contactNumber: contactNumber,
+  );
+
+  MobileFeedbackReceipt withReply(String newReply) => MobileFeedbackReceipt(
+    reference: reference,
+    destination: destination,
+    reviewer: reviewer,
+    rating: rating,
+    message: message,
+    reply: newReply,
+    date: date,
+    photos: photos,
+    surveyId: surveyId,
+    contactNumber: contactNumber,
   );
 
   factory MobileFeedbackReceipt.fromResponse(
@@ -1580,6 +1668,8 @@ class MobileFeedbackReceipt {
     required Destination destination,
     required String reviewer,
     required int rating,
+    String surveyId = '',
+    String contactNumber = '',
   }) {
     final rawPhotos = json['photos'];
     final List<String> photos = rawPhotos is List
@@ -1595,8 +1685,38 @@ class MobileFeedbackReceipt {
       reply: '${json['reply'] ?? ''}',
       date: '${json['date'] ?? ''}',
       photos: photos,
+      surveyId: surveyId.trim(),
+      contactNumber: contactNumber.trim(),
     );
   }
+}
+
+/// What the server says now about one of the reviews written with a pass (POST /mobile/tourism/feedback/replies/): which review, where, and the
+/// office's words ("" when it has not answered). Nothing else is in the answer.
+class MobileFeedbackReply {
+  const MobileFeedbackReply({required this.id, required this.destinationId, required this.reply});
+
+  final int id;
+  final int destinationId;
+  final String reply;
+
+  /// Null when the row is not understood (no id): it is left out, not guessed.
+  static MobileFeedbackReply? tryParse(Map<String, dynamic> json) {
+    final id = jsonInt(json['id'], -1);
+    if (id < 0) return null;
+    return MobileFeedbackReply(id: id, destinationId: jsonInt(json['destination_id'], -1), reply: '${json['reply'] ?? ''}');
+  }
+}
+
+/// A short number made of a text, the same on every phone and every run (String.hashCode is not promised to be): it tells one answer of the office
+/// from another, so that an answer that was CHANGED is a new notice.
+int stableTextHash(String text) {
+  var hash = 0x811c9dc5;
+  for (final unit in text.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0xffffffff;
+  }
+  return hash;
 }
 
 class MobileSanitationReceipt {

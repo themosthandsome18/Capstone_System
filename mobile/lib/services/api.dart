@@ -433,16 +433,38 @@ class TourismApi {
   }
 
   /// Where a pass stands now. Asked with the survey ID and the contact number that are ON the pass, as the sanitation report history is asked with
-  /// the complaint ID and the contact number: the tourist types nothing. Null when the server has no such pass for that number (it does not say which
-  /// was wrong). Throws when the server cannot be reached or does not answer well: the caller keeps what it knew.
+  /// the complaint ID and the contact number: the tourist types nothing. Null ONLY when the server answered, well, that it has no such pass for that number
+  /// (an empty list of rows; it does not say which was wrong): the caller may then stop asking about that pass. Throws when the server cannot be reached
+  /// (no network, a timeout), refuses (429, a 5xx) or does not answer in a way that can be read (rows missing, a row that is not a status): that is a
+  /// failure and NOT "not known", and the caller keeps what it knew and asks again the next time.
   Future<MobilePassStatus?> fetchPassStatus({required String reference, required String contact}) async {
     final data = await _getWithQuery('/mobile/tourism/records/status/', {
       'reference': reference.trim(),
       'contact': contact.trim(),
     });
     final rows = data['rows'];
-    if (rows is! List || rows.isEmpty || rows.first is! Map) return null;
-    return MobilePassStatus.tryParse(Map<String, dynamic>.from(rows.first as Map));
+    if (rows is! List) throw const ApiException(statusCode: 200, message: _unreadableResponse);
+    if (rows.isEmpty) return null;
+    final status = rows.first is Map ? MobilePassStatus.tryParse(Map<String, dynamic>.from(rows.first as Map)) : null;
+    if (status == null) throw const ApiException(statusCode: 200, message: _unreadableResponse);
+    return status;
+  }
+
+  /// What the office has said to the reviews written with this pass. Asked with the survey ID and the contact number that are on the pass (the tourist
+  /// types nothing), in a POST so that the number is not in the address (and so not in the server's log). Empty when the pass has no reviews, and also
+  /// when the server does not know the pass or the number does not fit: it does not say which. Throws when the server cannot be reached or does not
+  /// answer well: the caller keeps what it knew.
+  Future<List<MobileFeedbackReply>> fetchFeedbackReplies({required String reference, required String contact}) async {
+    final data = await _post('/mobile/tourism/feedback/replies/', {
+      'reference': reference.trim(),
+      'contact': contact.trim(),
+    });
+    final rows = data['rows'];
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows)
+        if (row is Map) ?MobileFeedbackReply.tryParse(Map<String, dynamic>.from(row)),
+    ];
   }
 
   Future<List<Map<String, dynamic>>> fetchTouristRecordHistory({

@@ -458,6 +458,11 @@ class FeedbackEntry(models.Model):
     title = models.CharField(max_length=160)
     message = models.TextField()
     reply = models.TextField(blank=True)
+    # The survey ID of the visit that made this review possible. mobile_feedback_submit sets it, and only AFTER the visit has been checked (the survey
+    # ID names a record, the contact number is that record's, it is at this destination, and it was scanned on arrival). It is how a tourist, who has
+    # no account, asks "has the office answered MY reviews": the survey ID and the contact number of the pass (mobile_feedback_replies). It is in NO
+    # serializer: nobody is shown it. A review made before this column existed has none, and is never guessed to belong to anybody.
+    survey_id = models.CharField(max_length=30, null=True, blank=True, db_index=True)
     photos = models.JSONField(default=list, blank=True)
     # Moderation: a hidden review is not shown to the public and does not count
     # in the destination's rating. Set only by the hide / unhide actions, from
