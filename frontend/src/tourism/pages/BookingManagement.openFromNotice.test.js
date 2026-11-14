@@ -2,7 +2,7 @@
  * "Open" on a notification (the bell) comes to Record Management as /tourist-data?openSurveyId=<survey ID>: the view modal of THAT record opens, once for
  * each visit. The record is read from the server by its survey ID (it need not be on the page of the table that is loaded).
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
 import { useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
@@ -92,5 +92,46 @@ describe("opened from a notification", () => {
 
     expect(tourismApi.getTouristRecord).not.toHaveBeenCalled();
     expect(screen.queryByText("Tourist Record Details")).toBeNull();
+  });
+});
+
+describe("opened from a notification: an archived record is not edited", () => {
+  const footer = () => document.querySelector(".wizard-footer");
+  const footerButtons = () => Array.from(footer().querySelectorAll("button")).map((b) => b.textContent.trim());
+  const openFromBell = async () => {
+    mockLocation = { pathname: "/tourist-data", search: "?openSurveyId=SV-OPEN", key: "n-arch", state: null };
+    render(<BookingManagement />);
+    await screen.findByText("Tourist Record Details");
+  };
+
+  it("the GET says it is archived: Edit is there, disabled, and the words say what to do", async () => {
+    tourismApi.getTouristRecord.mockResolvedValue({ ...RECORD, is_archived: true });
+    await openFromBell();
+    expect(footerButtons()).toEqual(["Edit", "Close"]);
+    const edit = within(footer()).getByRole("button", { name: "Edit" });
+    expect(edit.matches(":disabled")).toBe(true);
+    expect(footer().textContent).toMatch(/This record is archived\. Bring it back to the table \(unarchive it\) before changing it\./);
+    fireEvent.click(edit);
+    expect(screen.queryByText("Editing a Tourist Record")).toBeNull();
+  });
+
+  it("the table's rows are not asked: the record's own is_archived decides, even when the row of the table says the opposite", async () => {
+    useTourismData.mockReturnValue({
+      ...useTourismData(),
+      bookingManagement: { rows: [{ ...RECORD, is_archived: false }], summary: {}, pagination: { page: 1, totalPages: 1, total: 1 } },
+    });
+    tourismApi.getTouristRecord.mockResolvedValue({ ...RECORD, is_archived: true });
+    await openFromBell();
+    expect(within(footer()).getByRole("button", { name: "Edit" }).matches(":disabled")).toBe(true);
+  });
+
+  it("a record that is not archived can be edited", async () => {
+    tourismApi.getTouristRecord.mockResolvedValue({ ...RECORD, is_archived: false });
+    await openFromBell();
+    const edit = within(footer()).getByRole("button", { name: "Edit" });
+    expect(edit.matches(":disabled")).toBe(false);
+    expect(footer().textContent).not.toMatch(/archived/i);
+    fireEvent.click(edit);
+    await screen.findByText("Editing a Tourist Record");
   });
 });

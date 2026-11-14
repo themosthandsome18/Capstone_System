@@ -506,6 +506,10 @@ TOURIST_RECORD_EDITABLE_FIELDS = (
 )
 
 
+# Of those, what an ARCHIVED record may not change: the head count, the Length of Stay and the resort. Its status may still be (see tourist_record_detail).
+TOURIST_RECORD_EDIT_ONLY_FIELDS = tuple(name for name in TOURIST_RECORD_EDITABLE_FIELDS if name != "status")
+
+
 class TouristRecordEditSerializer(TouristRecordSerializer):
     """The serializer of PATCH on one record. It is TouristRecordSerializer (so the head count is still checked: the total must equal each of its
     splits, and so on) with two differences:

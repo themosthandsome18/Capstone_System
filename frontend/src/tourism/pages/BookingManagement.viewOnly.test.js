@@ -495,6 +495,27 @@ describe("an archived record", () => {
     await openView();
     expect(document.querySelector(".wizard-footer").textContent).not.toMatch(/archived/i);
   });
+
+  it("if the server says 409 (the record was archived while it was open), its message is shown in full, and nothing closes", async () => {
+    const message =
+      "This record is archived, so its head count, length of stay and resort cannot be changed. Bring it back to the table first (unarchive it), then change it. Its status can still be changed on its own.";
+    updateRecord.mockRejectedValueOnce(Object.assign(new Error("Conflict"), { status: 409, details: { detail: message, fields: ["total_visitors"] } }));
+    await openView();
+    fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Edit" }));
+    await screen.findByText("Editing a Tourist Record");
+    setCount("Filipino Count", 1);
+    setCount("Total Male", 1);
+    setCount("Total Female", 0);
+    setCount("Age 8-59", 1);
+    fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and save" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(Array.from(alert.querySelectorAll("li")).map((li) => li.textContent)).toEqual([message]);
+    expect(alert.textContent).toContain("Nothing was saved");
+    expect(alert.textContent).not.toMatch(/something went wrong/i);
+    expect(document.querySelector(".wizard-shell")).not.toBeNull();
+  });
 });
 
 describe("Add Record is as it was", () => {
