@@ -148,16 +148,16 @@ const FIELD_SELECTORS = [
 ];
 
 describe("the fields, in the CSS file", () => {
-  it.each(FIELD_SELECTORS)("%s: white, a 1px #E0CDB7 border, radius 9, min-height 40, padding 9px 12px, 14px, #241E1A", (selector) => {
+  it.each(FIELD_SELECTORS)("%s: white, a 1px var(--th-border-tinted-control) border, radius 9, min-height 40, padding 9px 12px, 14px, var(--th-text-tinted-strong)", (selector) => {
     const rule = declared(selector);
     expect(white(rule.background)).toBe(true);
     expect(rule).toMatchObject({
-      border: "1px solid #e0cdb7",
+      border: "1px solid var(--th-border-tinted-control)",
       "border-radius": "9px",
       "min-height": selector.endsWith("textarea") ? "96px" : "40px",
       padding: "9px 12px",
       "font-size": "14px",
-      color: "#241e1a",
+      color: "var(--th-text-tinted-strong)",
     });
   });
 
@@ -166,27 +166,27 @@ describe("the fields, in the CSS file", () => {
     ".dest-edit .tourist-record-field select:focus",
     ".dest-edit .tourist-record-field textarea:focus",
     ".dest-edit .location-picker-search input:focus",
-  ])("%s: an orange outline of 2px, pulled in by 1px", (selector) => {
-    expect(declared(selector)).toMatchObject({ outline: "2px solid #e0701a", "outline-offset": "-1px" });
+  ])("%s: an outline of 2px in the theme's primary colour, pulled in by 1px", (selector) => {
+    expect(declared(selector)).toMatchObject({ outline: "2px solid var(--th-primary)", "outline-offset": "-1px" });
   });
 
-  it("the labels are 11px uppercase, letter-spacing .07em, #8A6E55, w700, with 6px under them", () => {
+  it("the labels are 11px uppercase, letter-spacing .07em, var(--th-text-tinted-muted), w700, with 6px under them", () => {
     expect(declared(".dest-edit .tourist-record-field > span")).toMatchObject({
       "font-size": "11px",
       "text-transform": "uppercase",
       "letter-spacing": "0.07em",
-      color: "#8a6e55",
+      color: "var(--th-text-tinted-muted)",
       "font-weight": "700",
       "margin-bottom": "6px",
     });
   });
 
-  it("Apply pin is white with a #E0CDB7 border, #453931, radius 9, min-height 40, padding 0 16px, 13.5px w600", () => {
+  it("Apply pin is white with a var(--th-border-tinted-control) border, var(--th-text-tinted), radius 9, min-height 40, padding 0 16px, 13.5px w600", () => {
     const rule = declared(".dest-edit .location-picker-search button");
     expect(white(rule.background)).toBe(true);
     expect(rule).toMatchObject({
-      border: "1px solid #e0cdb7",
-      color: "#453931",
+      border: "1px solid var(--th-border-tinted-control)",
+      color: "var(--th-text-tinted)",
       "border-radius": "9px",
       "min-height": "40px",
       padding: "0 16px",
@@ -262,7 +262,7 @@ describe("the cascade: the new rules win over the old ones", () => {
     for (const property of ["border", "border-radius", "padding", "font-size", "color", "min-height"]) {
       expect({ property, from: won[property].selector?.startsWith(".dest-edit"), ahead: won[property].strictlyAhead }).toEqual({ property, from: true, ahead: true });
     }
-    expect(won.border.value).toBe("1px solid #e0cdb7");
+    expect(won.border.value).toBe("1px solid var(--th-border-tinted-control)");
     expect(won.height.value).toBe("auto"); // not the old 34px
   });
 
@@ -271,7 +271,7 @@ describe("the cascade: the new rules win over the old ones", () => {
     const label = form.querySelector(".tourist-record-field > span");
     const won = cascade(label, ["font-size", "color", "text-transform", "letter-spacing", "margin-bottom", "font-weight"]);
     expect(won["font-size"].value).toBe("11px");
-    expect(won.color.value).toBe("#8a6e55");
+    expect(won.color.value).toBe("var(--th-text-tinted-muted)");
     expect(won["text-transform"].value).toBe("uppercase");
     expect(won["letter-spacing"].value).toBe("0.07em");
     expect(won["margin-bottom"].value).toBe("6px");
@@ -280,14 +280,14 @@ describe("the cascade: the new rules win over the old ones", () => {
     }
   });
 
-  it("on focus the outline is the orange one and the old blue ring is gone", () => {
+  it("on focus the outline is the theme's primary colour and the old blue ring is gone", () => {
     const form = openEdit();
     const input = form.querySelector('.tourist-record-field input[type="text"]');
     const won = cascade(input, ["outline", "outline-offset", "box-shadow", "border-color"], "focus");
-    expect(won.outline.value).toBe("2px solid #e0701a");
+    expect(won.outline.value).toBe("2px solid var(--th-primary)");
     expect(won["outline-offset"].value).toBe("-1px");
     expect(won["box-shadow"].value).toBe("none"); // not the old rgba(18, 183, 245, ...) ring
-    expect(won["border-color"].value).toBe("#e0cdb7");
+    expect(won["border-color"].value).toBe("var(--th-border-tinted-control)");
     for (const property of Object.keys(won)) {
       expect({ property, ahead: won[property].strictlyAhead }).toEqual({ property, ahead: true });
     }
@@ -299,10 +299,10 @@ describe("the cascade: the new rules win over the old ones", () => {
     const button = form.querySelector(".location-picker-search button");
     const inputWon = cascade(input, ["border", "border-radius", "font-size", "color", "padding", "height"]);
     const buttonWon = cascade(button, ["background", "border", "color", "border-radius", "font-size", "font-weight", "padding", "height", "min-height"]);
-    expect(inputWon.border.value).toBe("1px solid #e0cdb7");
+    expect(inputWon.border.value).toBe("1px solid var(--th-border-tinted-control)");
     expect(buttonWon.background.value).toBe("#ffffff");
-    expect(buttonWon.border.value).toBe("1px solid #e0cdb7");
-    expect(buttonWon.color.value).toBe("#453931");
+    expect(buttonWon.border.value).toBe("1px solid var(--th-border-tinted-control)");
+    expect(buttonWon.color.value).toBe("var(--th-text-tinted)");
     expect(buttonWon["font-size"].value).toBe("13.5px");
     for (const won of [inputWon, buttonWon]) {
       for (const property of Object.keys(won)) {
