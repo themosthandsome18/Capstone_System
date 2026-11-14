@@ -531,7 +531,7 @@
 
 .notification-item-main small {
   font-size: 11.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 .notification-item-x {
@@ -3918,7 +3918,7 @@
 .gis-stat-box h2 .gis-stat-of {
   font-size: 17px;
   font-weight: 600;
-  color: #7A6755;
+  color: var(--th-text-tinted-muted);
 }
 
 /* The name of the most visited is text, not a number: smaller, at most two lines, cut with an ellipsis. */
@@ -3934,7 +3934,7 @@
 
 .gis-stat-box p.gis-stat-note {
   font-size: 12.5px;
-  color: #87705C;
+  color: var(--th-text-tinted-muted);
 }
 
 /* ── ACTIVITY LOGS: the brand colour follows the theme ──
