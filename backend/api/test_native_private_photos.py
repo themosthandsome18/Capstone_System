@@ -221,11 +221,10 @@ class NativePrivatePhotoTests(SimpleTestCase):
                 self.assertRaises(private_photos.PrivatePhotoUnavailable):
             private_photos.get_private_photo_store()
 
-    def test_native_factory_is_not_referenced_by_active_photo_modules(self):
+    def test_native_upload_factory_is_not_referenced_by_active_upload_modules(self):
         import inspect
         from api.services import front_photos, household_photos, establishment_photos
-        from api.views import private_photos as views
-        for module in (front_photos, household_photos, establishment_photos, views):
+        for module in (front_photos, household_photos, establishment_photos):
             self.assertNotIn('native_private_photos', inspect.getsource(module))
 
     def test_contradictory_acknowledgment_is_rejected_without_cleanup(self):

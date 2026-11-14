@@ -16,7 +16,8 @@ from uuid import uuid4
 
 from django.conf import settings
 
-from api.services.private_photos import MAX_BYTES, InvalidPrivatePhotoKey, validate_key
+from api.services.private_photos import (MAX_BYTES, InvalidPrivatePhotoKey, PrivatePhotoMissing,
+                                         PrivatePhotoUnavailable, validate_key)
 
 MAX_RESPONSE_BYTES = 4096
 
@@ -105,6 +106,50 @@ class NativeCreateOnlyStore:
                 or extension not in ('jpg', 'png')):
             raise InvalidPrivatePhotoKey()
         return validate_key(f'profile-photos/{folder}/{owner_id}/{uuid4().hex}.{extension}')
+
+    def read(self, key):
+        """Exact authenticated download; never a public URL or S3 fallback.
+
+        Uses the native secret apikey header, not a JWT Authorization value.
+        Provider behavior remains subject to separate real-instance verification.
+        """
+        validate_key(key)
+        try:
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({}), RejectRedirects(),
+                urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+            request = urllib.request.Request(
+                self._endpoint + '/storage/v1/object/authenticated/' + self._bucket + '/' + key,
+                method='GET', headers={'apikey': self._secret, 'Cache-Control': 'no-store',
+                                       'Accept-Encoding': 'identity'})
+            try:
+                response = opener.open(request, timeout=15)
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                if response.code == 404:
+                    raise PrivatePhotoMissing()
+                if response.code != 200:
+                    raise PrivatePhotoUnavailable()
+                expected = 'image/png' if key.endswith('.png') else 'image/jpeg'
+                mime = response.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+                if mime != expected or response.headers.get('Content-Encoding', 'identity') != 'identity':
+                    raise PrivatePhotoUnavailable()
+                length = response.headers.get('Content-Length')
+                if length is not None:
+                    if not re.fullmatch(r'[0-9]{1,10}', length) or not 0 < int(length) <= MAX_BYTES:
+                        raise PrivatePhotoUnavailable()
+                data = response.read(MAX_BYTES + 1)
+                signature = b'\x89PNG\r\n\x1a\n' if key.endswith('.png') else b'\xff\xd8\xff'
+                if (not isinstance(data, bytes) or not data or len(data) > MAX_BYTES
+                        or (length is not None and len(data) != int(length)) or not data.startswith(signature)):
+                    raise PrivatePhotoUnavailable()
+                return data
+        except PrivatePhotoMissing:
+            raise
+        except Exception:
+            # Never log or propagate a provider URL, body, key or exception text.
+            raise PrivatePhotoUnavailable() from None
 
     def create(self, key, data, *, upsert=False):
         """Attempt once; callers retain their key/receipt for later reconciliation.

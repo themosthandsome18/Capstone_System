@@ -1,4 +1,6 @@
 """Record-resolved private front photos (households, establishments) and the shared protected response helper."""
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -33,18 +35,34 @@ def private_photo_response(request, *, resolved_photo):
             try:
                 # The record-resolved, persisted binding selects the provider.
                 # Journal/key matches remain cleanup holds, never read routing.
-                if resolved_photo.storage_provider != 'S3' or resolved_photo.native_attempt_id is not None:
-                    raise PrivatePhotoUnavailable()
                 resolved_key = resolved_photo.object_key
                 validate_key(resolved_key)
-                store = get_private_photo_store()
-                private_photos.require_s3_binding(resolved_photo, private_photos.s3_target(store))
+                if resolved_photo.storage_provider == 'S3':
+                    store = get_private_photo_store()
+                    private_photos.require_s3_binding(resolved_photo, private_photos.s3_target(store))
+                elif resolved_photo.storage_provider == 'NATIVE':
+                    if getattr(settings, 'SANITATION_NATIVE_PHOTO_READ_DEVELOPMENT', False) is not True:
+                        raise PrivatePhotoUnavailable()
+                    if any(value is not None for value in
+                           (resolved_photo.s3_endpoint, resolved_photo.s3_bucket, resolved_photo.s3_region)):
+                        raise PrivatePhotoUnavailable()
+                    resolved_photo._native_binding(using=resolved_photo._state.db)
+                    from api.services.native_private_photos import get_native_create_only_store, NativePhotoConfigurationError
+                    try:
+                        store = get_native_create_only_store()
+                    except NativePhotoConfigurationError:
+                        raise PrivatePhotoUnavailable() from None
+                    attempt = resolved_photo.native_attempt
+                    if (attempt.project_ref, attempt.bucket) != (store.project_ref, store.bucket):
+                        raise PrivatePhotoUnavailable()
+                else:
+                    raise PrivatePhotoUnavailable()
                 data = store.read(resolved_key)
                 response = HttpResponse(data, content_type='image/png' if resolved_key.endswith('.png') else 'image/jpeg')
                 response['Content-Disposition'] = 'inline; filename="front-photo.' + ('png' if resolved_key.endswith('.png') else 'jpg') + '"'
             except (InvalidPrivatePhotoKey, PrivatePhotoMissing):
                 response = JsonResponse({'detail': 'Photo not found.'}, status=404)
-            except (PrivatePhotoUnavailable, DatabaseError):
+            except (PrivatePhotoUnavailable, DatabaseError, ValidationError):
                 response = JsonResponse({'detail': 'Private photo storage unavailable.'}, status=503)
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
@@ -82,7 +100,7 @@ def _front_photo(request, *, owner_model, owner_id, photo_model, owner_field, re
     except FrontPhotoUpdateFailed as error:
         response = Response({'detail': 'Photo could not be saved; the previous photo is unchanged.',
                              'cleanup_pending': error.cleanup_pending}, status=503)
-    except (PrivatePhotoUnavailable, DatabaseError):
+    except (PrivatePhotoUnavailable, DatabaseError, ValidationError):
         response = Response({'detail': 'Private photo storage unavailable.'}, status=503)
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
