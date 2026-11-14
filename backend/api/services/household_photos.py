@@ -31,13 +31,17 @@ def retry_cleanup(receipt_id, store=None):
     return front_photos.retry_cleanup(HOUSEHOLD_PHOTOS, receipt_id, store)
 
 
-def replace_household_photo(household_id, data, extension, store):
-    return front_photos.replace_front_photo(HOUSEHOLD_PHOTOS, household_id, data, extension, store)
+def replace_household_photo(household_id, data, extension, store, *, native_development=False, actor=None):
+    return front_photos.replace_front_photo(HOUSEHOLD_PHOTOS, household_id, data, extension, store,
+                                            native_development=native_development, actor=actor)
 
 
 def _household_deleting(sender, instance, using, **kwargs):
     key = HouseholdFrontPhoto.objects.using(using).filter(household_id=instance.pk).values_list('object_key', flat=True).first()
     if key:
+        from api.services.native_photo_workflow import hold_deleted_owner
+        if hold_deleted_owner(HOUSEHOLD_PHOTOS, instance.pk, key, using=using):
+            return
         receipt = HouseholdPhotoCleanup.objects.using(using).create(object_key=key, ready=True)
         transaction.on_commit(lambda: retry_cleanup(receipt.pk), using=using)
 

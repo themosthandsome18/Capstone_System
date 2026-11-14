@@ -26,8 +26,11 @@ def image_bytes(kind='PNG', color='red', exif=False):
     return output.getvalue()
 
 
-class FakePrivateStore:
+class FakePrivateStore(PrivatePhotoStore):
     def __init__(self):
+        super().__init__(dict(enabled=True, private_bucket_confirmed=True,
+            endpoint_url='https://storage.example.invalid', bucket='private-fixtures',
+            region='fixture-region', access_key='fixture-only', secret_key='fixture-only'))
         self.objects = {}
         self.fail_write = self.fail_delete = self.fail_read = False
 

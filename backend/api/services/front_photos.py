@@ -10,6 +10,7 @@ import logging
 from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
 
 from api.services import private_photos
@@ -26,6 +27,14 @@ class InvalidFrontPhoto(Exception):
 class FrontPhotoUpdateFailed(Exception):
     def __init__(self, cleanup_pending=False):
         self.cleanup_pending = cleanup_pending
+
+
+class NativeFrontPhotoUpdateFailed(FrontPhotoUpdateFailed):
+    def __init__(self, outcome, attempt_id=None):
+        super().__init__(cleanup_pending=True)
+        allowed = {'CREATED_UNLINKED', 'CONFLICT', 'AMBIGUOUS', 'UNAVAILABLE', 'AUTHORIZATION_FAILURE', 'SAFETY_FAILURE'}
+        self.outcome = outcome if type(outcome) is str and outcome in allowed else 'SAFETY_FAILURE'
+        self.attempt_id = attempt_id
 
 
 @dataclass(frozen=True)
@@ -89,25 +98,28 @@ def retry_cleanup(kind, receipt_id, store=None):
     Failures leave a durable receipt and log its numeric id, never its key.
     """
     try:
-        receipt = kind.cleanup_model.objects.filter(pk=receipt_id).first()
-        if receipt is None:
+        with transaction.atomic():
+            receipt = kind.cleanup_model.objects.select_for_update().filter(pk=receipt_id).first()
+            if receipt is None:
+                return True
+            if not receipt.ready:
+                return False
+            from api.services.native_photo_workflow import lock_native_key, native_key_is_held
+            lock_native_key(receipt.object_key)
+            if native_key_is_held(receipt.object_key):
+                return False
+            if not receipt.object_key.startswith(kind.key_prefix):
+                kind.logger.error('Private %s photo cleanup refused for out-of-namespace receipt %s',
+                                  kind.owner_field, receipt_id)
+                return False
+            if kind.photo_model.objects.filter(object_key=receipt.object_key).exists():
+                kind.logger.error('Private %s photo cleanup refused for linked receipt %s',
+                                  kind.owner_field, receipt_id)
+                return False
+            store = store or private_photos.get_private_photo_store()
+            store.delete(receipt.object_key)
+            receipt.delete()
             return True
-        if not receipt.ready:
-            return False
-        if not receipt.object_key.startswith(kind.key_prefix):
-            # A kind only ever deletes objects in its own namespace, so it can never
-            # remove another kind's (possibly linked) photo.
-            kind.logger.error('Private %s photo cleanup refused for out-of-namespace receipt %s',
-                              kind.owner_field, receipt_id)
-            return False
-        if kind.photo_model.objects.filter(object_key=receipt.object_key).exists():
-            kind.logger.error('Private %s photo cleanup refused for linked receipt %s',
-                              kind.owner_field, receipt_id)
-            return False
-        store = store or private_photos.get_private_photo_store()
-        store.delete(receipt.object_key)
-        receipt.delete()
-        return True
     except (DatabaseError, private_photos.PrivatePhotoUnavailable, private_photos.InvalidPrivatePhotoKey):
         kind.logger.error('Private %s photo cleanup pending for receipt %s', kind.owner_field, receipt_id)
         return False
@@ -122,32 +134,58 @@ def _compensate(kind, receipt_id, store):
     return retry_cleanup(kind, receipt_id, store)
 
 
-def replace_front_photo(kind, owner_id, data, extension, store):
+def replace_front_photo(kind, owner_id, data, extension, store, *, native_development=False, actor=None):
     """Write a new object, link it atomically, then retire the previous one.
 
     Returns True when cleanup of the previous object is still pending.
     """
+    from api.services.native_photo_workflow import lock_native_key, native_key_is_held, replace_native_front_photo
+    if native_development is not False:
+        return replace_native_front_photo(kind, owner_id, data, extension, actor=actor,
+                                          explicitly_selected=native_development)
+    target = private_photos.s3_target(store)
+    previous_photo = kind.photo_model.objects.filter(**{f'{kind.owner_field}_id': owner_id}).first()
+    previous_key = previous_photo.object_key if previous_photo else None
+    if previous_key and native_key_is_held(previous_key):
+        raise FrontPhotoUpdateFailed(cleanup_pending=True)
+    if previous_photo is not None:
+        private_photos.require_s3_binding(previous_photo, target)
     key = kind.new_key(owner_id, extension)
+    if native_key_is_held(key):
+        raise FrontPhotoUpdateFailed(cleanup_pending=True)
     # Persist before PUT: even an ambiguous provider failure has a receipt.
     receipt = kind.cleanup_model.objects.create(object_key=key)
     receipt_id = receipt.pk  # Model.delete() clears pk even if the surrounding transaction rolls back.
     pending = []
     link = {f'{kind.owner_field}_id': owner_id}
     try:
-        store.write(key, data)
+        with transaction.atomic():
+            lock_native_key(key)
+            if native_key_is_held(key):
+                raise private_photos.PrivatePhotoUnavailable()
+            store.write(key, data)
         with transaction.atomic():
             # Serialize replacements even when the record has no photo yet.
-            kind.owner_model.objects.select_for_update().get(pk=owner_id)
+            kind.owner_model.objects.select_for_update().only('pk').get(pk=owner_id)
             photo = kind.photo_model.objects.filter(**link).first()
             previous = photo.object_key if photo else None
+            if photo is not None:
+                private_photos.require_s3_binding(photo, target)
+            if previous and native_key_is_held(previous):
+                # Recheck under the parent lock: a native upload may have linked
+                # while this legacy request was writing its S3 object.
+                raise private_photos.PrivatePhotoUnavailable()
             if photo is None:
                 photo = kind.photo_model(**link)
             photo.object_key = key
+            photo.storage_provider = 'S3'
+            photo.s3_endpoint, photo.s3_bucket, photo.s3_region = target
+            photo.native_attempt = None
             photo.save()
             if previous:
                 old = kind.cleanup_model.objects.create(object_key=previous, ready=True)
                 transaction.on_commit(lambda: pending.append(not retry_cleanup(kind, old.pk, store)))
             receipt.delete()
-    except (DatabaseError, kind.owner_model.DoesNotExist, private_photos.PrivatePhotoUnavailable):
+    except (DatabaseError, ValidationError, kind.owner_model.DoesNotExist, private_photos.PrivatePhotoUnavailable):
         raise FrontPhotoUpdateFailed(not _compensate(kind, receipt_id, store)) from None
     return any(pending)

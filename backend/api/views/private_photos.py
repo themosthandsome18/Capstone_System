@@ -13,7 +13,7 @@ from api.models import (
 )
 from api.services import private_photos
 from api.services.establishment_photos import replace_establishment_photo
-from api.services.front_photos import FrontPhotoUpdateFailed, InvalidFrontPhoto, validated_image
+from api.services.front_photos import FrontPhotoUpdateFailed, NativeFrontPhotoUpdateFailed, InvalidFrontPhoto, validated_image
 from api.services.household_photos import replace_household_photo
 from api.services.private_photos import (
     InvalidPrivatePhotoKey, PrivatePhotoMissing, PrivatePhotoUnavailable,
@@ -21,7 +21,7 @@ from api.services.private_photos import (
 )
 
 
-def private_photo_response(request, *, resolved_key):
+def private_photo_response(request, *, resolved_photo):
     user = request.user
     if not user or not user.is_authenticated or not user.is_active:
         response = JsonResponse({'detail': 'Authentication required.'}, status=401)
@@ -31,13 +31,20 @@ def private_photo_response(request, *, resolved_key):
             response = JsonResponse({'detail': 'Sanitation access required.'}, status=403)
         else:
             try:
+                # The record-resolved, persisted binding selects the provider.
+                # Journal/key matches remain cleanup holds, never read routing.
+                if resolved_photo.storage_provider != 'S3' or resolved_photo.native_attempt_id is not None:
+                    raise PrivatePhotoUnavailable()
+                resolved_key = resolved_photo.object_key
                 validate_key(resolved_key)
-                data = get_private_photo_store().read(resolved_key)
+                store = get_private_photo_store()
+                private_photos.require_s3_binding(resolved_photo, private_photos.s3_target(store))
+                data = store.read(resolved_key)
                 response = HttpResponse(data, content_type='image/png' if resolved_key.endswith('.png') else 'image/jpeg')
                 response['Content-Disposition'] = 'inline; filename="front-photo.' + ('png' if resolved_key.endswith('.png') else 'jpg') + '"'
             except (InvalidPrivatePhotoKey, PrivatePhotoMissing):
                 response = JsonResponse({'detail': 'Photo not found.'}, status=404)
-            except PrivatePhotoUnavailable:
+            except (PrivatePhotoUnavailable, DatabaseError):
                 response = JsonResponse({'detail': 'Private photo storage unavailable.'}, status=503)
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
@@ -57,7 +64,7 @@ def _front_photo(request, *, owner_model, owner_id, photo_model, owner_field, re
         photo = photo_model.objects.filter(**{owner_field: owner}).first()
         if photo is None:
             return Response({'detail': 'Photo not found.'}, status=404)
-        return private_photo_response(request, resolved_key=photo.object_key)
+        return private_photo_response(request, resolved_photo=photo)
     try:
         if (set(request.data) != {'photo'} or len(request.FILES.getlist('photo')) != 1
                 or len(request.data.getlist('photo')) != 1):
@@ -68,6 +75,10 @@ def _front_photo(request, *, owner_model, owner_id, photo_model, owner_field, re
         response = Response({'has_front_photo': True, 'cleanup_pending': pending})
     except InvalidFrontPhoto as error:
         response = Response({'detail': error.message}, status=error.status)
+    except NativeFrontPhotoUpdateFailed as error:
+        response = Response({'detail': 'Native photo requires reconciliation; no object was deleted.',
+                             'photo_outcome': error.outcome, 'cleanup_pending': True},
+                            status=409 if error.outcome == 'CONFLICT' else 503)
     except FrontPhotoUpdateFailed as error:
         response = Response({'detail': 'Photo could not be saved; the previous photo is unchanged.',
                              'cleanup_pending': error.cleanup_pending}, status=503)

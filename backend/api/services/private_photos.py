@@ -30,6 +30,40 @@ def validate_key(key):
     return key
 
 
+def validate_s3_target(endpoint, bucket, region):
+    """Validate only non-secret provenance; never construct a client from it."""
+    from api.models import PHOTO_S3_ENDPOINT_PATTERN, PHOTO_S3_BUCKET_PATTERN, PHOTO_S3_REGION_PATTERN
+    values = (endpoint, bucket, region)
+    for value, pattern, limit in zip(values,
+            (PHOTO_S3_ENDPOINT_PATTERN, PHOTO_S3_BUCKET_PATTERN, PHOTO_S3_REGION_PATTERN), (500, 63, 63)):
+        if type(value) is not str or len(value) > limit or not re.fullmatch(pattern, value):
+            raise PrivatePhotoUnavailable()
+    return values
+
+
+def s3_target(store):
+    """Snapshot the server-selected S3 adapter, not arbitrary caller metadata."""
+    if not isinstance(store, PrivatePhotoStore):
+        raise PrivatePhotoUnavailable()
+    options = store.options
+    if options.get('enabled') is not True or options.get('private_bucket_confirmed') is not True:
+        raise PrivatePhotoUnavailable()
+    return validate_s3_target(options.get('endpoint_url'), options.get('bucket'), options.get('region'))
+
+
+def require_s3_binding(photo, target):
+    """Read/replacement eligibility only. This never grants deletion permission."""
+    if photo.storage_provider != 'S3' or photo.native_attempt_id is not None:
+        raise PrivatePhotoUnavailable()
+    if validate_s3_target(photo.s3_endpoint, photo.s3_bucket, photo.s3_region) != target:
+        raise PrivatePhotoUnavailable()
+    field = photo._provenance_owner_field
+    folder = {'household': 'households', 'establishment': 'establishments'}[field]
+    validate_key(photo.object_key)
+    if not photo.object_key.startswith(f'profile-photos/{folder}/{getattr(photo, field + "_id")}/'):
+        raise PrivatePhotoUnavailable()
+
+
 class PrivatePhotoStore:
     """Constructed only from explicit private configuration; never stores URLs."""
     def __init__(self, options):

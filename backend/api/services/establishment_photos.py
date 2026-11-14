@@ -25,5 +25,6 @@ def retry_cleanup(receipt_id, store=None):
     return front_photos.retry_cleanup(ESTABLISHMENT_PHOTOS, receipt_id, store)
 
 
-def replace_establishment_photo(establishment_id, data, extension, store):
-    return front_photos.replace_front_photo(ESTABLISHMENT_PHOTOS, establishment_id, data, extension, store)
+def replace_establishment_photo(establishment_id, data, extension, store, *, native_development=False, actor=None):
+    return front_photos.replace_front_photo(ESTABLISHMENT_PHOTOS, establishment_id, data, extension, store,
+                                            native_development=native_development, actor=actor)
