@@ -32,7 +32,6 @@ import { formatNumber } from "../utils/format";
 import {
   RECORD_EDIT_FIELDS,
   canEditRecords,
-  peso,
   recordEditBlankProblem,
   recordEditChanges,
   recordEditPayload,
@@ -1446,35 +1445,11 @@ function BookingManagement() {
               </div>
 
               <div className="wizard-body">
-                {isEditing ? (
-                  <div className="record-edit-panel" role="status" aria-live="polite">
-                    <p className="record-edit-panel-lead">
-                      <FiLock size={14} aria-hidden="true" /> Editing: only the <strong>head count</strong>, the <strong>length of stay</strong> and the{" "}
-                      <strong>resort</strong> can change. Everything else on this record is the tourist&apos;s and stays locked.
-                    </p>
-                    <dl className="record-edit-now">
-                      <div>
-                        <dt>Pax</dt>
-                        <dd>
-                          {editBefore.total_visitors}
-                          {editAfter.total_visitors !== editBefore.total_visitors ? ` → ${editAfter.total_visitors}` : " (no change)"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Environmental Fee</dt>
-                        <dd>
-                          {peso(entranceFeeBreakdown(editBefore.total_visitors, editBefore.discounted_count).total)}
-                          {editProblem
-                            ? " → — (see the problem below)"
-                            : entranceFeeBreakdown(editAfter.total_visitors, editAfter.discounted_count).total !==
-                              entranceFeeBreakdown(editBefore.total_visitors, editBefore.discounted_count).total
-                            ? ` → ${peso(entranceFeeBreakdown(editAfter.total_visitors, editAfter.discounted_count).total)}`
-                            : " (no change)"}
-                        </dd>
-                      </div>
-                    </dl>
-                    {editProblem ? <p className="wizard-step-error record-edit-problem">{editProblem}</p> : null}
-                  </div>
+                {/* The live warning of the head count while a record is edited: the total that does not add up, a discounted count above the visitors. */}
+                {isEditing && editProblem ? (
+                  <p className="wizard-step-error record-edit-problem" role="alert">
+                    {editProblem}
+                  </p>
                 ) : null}
 
                 {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). While it is edited, only the 13 fields that may change are open: the closed ones sit in a locked fieldset of their own. */}

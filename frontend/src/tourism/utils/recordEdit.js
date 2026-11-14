@@ -77,7 +77,7 @@ const COUNT_LABELS = [
   ["discounted_count", "discounted"],
 ];
 
-export function peso(amount) {
+function peso(amount) {
   return `₱${formatNumber(amount)}`;
 }
 

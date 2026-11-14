@@ -270,9 +270,7 @@ describe("a record in Edit mode: the closed fields are STILL closed", () => {
   it.each(OPEN_IN_STEP)("step %s: the only fields a person can use are %j", async (label, expected) => {
     await openForEdit();
     goToStep(label);
-    const open = enabledControls()
-      .filter((control) => !control.closest(".record-edit-panel"))
-      .filter((control) => !control.matches(".wizard-review-edit-btn"));
+    const open = enabledControls().filter((control) => !control.matches(".wizard-review-edit-btn"));
     const named = open.filter((control) => !control.closest(".tourist-auto-fill-row")).map(labelOf);
     expect(named.sort()).toEqual([...expected].sort());
     expect(named.filter((name) => !ALLOWED_LABELS.includes(name))).toEqual([]);
@@ -320,35 +318,50 @@ describe("a record in Edit mode: the closed fields are STILL closed", () => {
 });
 
 describe("a record in Edit mode: live, confirm, send", () => {
-  const panel = () => document.querySelector(".record-edit-panel").textContent;
+  // the live warning of the head count (there is no banner above the fields: the fee, old and new, is in the confirmation)
+  const problem = () => document.querySelector(".record-edit-problem")?.textContent ?? "";
   const saveButton = () => within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Save" });
 
-  it("shows the new pax and the new Environmental Fee as the count changes", async () => {
+  it("has no banner above the fields: no 'Editing: only the head count...' box, and no pax or fee in a header", async () => {
     await openForEdit();
-    expect(panel()).toContain("Pax2 (no change)");
+    for (const label of ["Head Count", "Location", "Tourist Info"]) {
+      goToStep(label);
+      expect(document.querySelector(".record-edit-panel")).toBeNull();
+      expect(document.querySelector(".record-edit-now")).toBeNull();
+      expect(document.querySelector(".wizard-body").textContent).not.toMatch(/Editing: only the/);
+    }
     setCount("Filipino Count", 3);
-    expect(panel()).toContain("Pax2 \u2192 3");
-    expect(panel()).toContain("\u20B1160 \u2192 \u2014"); // the head count does not add up yet: no new fee is shown, rather than a wrong one
+    expect(document.querySelector(".wizard-body").textContent).not.toMatch(/Environmental Fee\s*₱/);
+  });
+
+  it("the fee, as it was and as it will be, is in the confirmation", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 3);
     balanceHeadCount(3);
-    expect(panel()).toContain("\u20B1160 \u2192 \u20B1240"); // 2 x 80 and then 3 x 80, the rates of services/tourism.py
     setCount("Discounted (PHP 64)", 1);
-    expect(panel()).toContain("\u20B1160 \u2192 \u20B1224"); // (3 - 1) x 80 + 1 x 64
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    const fee = Array.from(dialog.querySelectorAll("tbody tr")).find((row) => row.dataset.change === "fee");
+    expect(Array.from(fee.children).map((cell) => cell.textContent.trim())).toEqual(["Environmental Fee", "₱160", "→", "₱224"]); // 2 x 80, then (3 - 1) x 80 + 1 x 64
   });
 
   it("the head count is checked live by validateTotals: the total must equal the genders and the ages", async () => {
     await openForEdit();
     setCount("Filipino Count", 3);
-    expect(panel()).toContain("must equal total male + total female");
+    expect(problem()).toContain("must equal total male + total female");
+    expect(screen.getByRole("alert").textContent).toContain("must equal total male + total female");
     expect(saveButton().matches(":disabled")).toBe(true);
     balanceHeadCount(3);
-    expect(panel()).not.toContain("must equal");
+    expect(problem()).toBe("");
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(saveButton().matches(":disabled")).toBe(false);
   });
 
   it("a discounted count above the visitors is said at once, and Save waits", async () => {
     await openForEdit();
     setCount("Discounted (PHP 64)", 9);
-    expect(panel()).toContain("Discounted count cannot be greater than total visitors");
+    expect(problem()).toContain("Discounted count cannot be greater than total visitors");
+    expect(screen.getByRole("alert").textContent).toContain("Discounted count cannot be greater than total visitors");
     expect(saveButton().matches(":disabled")).toBe(true);
     expect(updateRecord).not.toHaveBeenCalled();
   });
@@ -359,7 +372,7 @@ describe("a record in Edit mode: live, confirm, send", () => {
     setCount("Age 0-7", 1);
     expect(fieldInput("Discounted (PHP 64)").value).toBe("0");
     fireEvent.change(fieldInput("Discounted (PHP 64)"), { target: { value: "" } });
-    expect(panel()).toContain("Discounted is required");
+    expect(problem()).toContain("Discounted is required");
     expect(saveButton().matches(":disabled")).toBe(true);
   });
 
