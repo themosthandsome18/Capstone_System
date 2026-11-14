@@ -699,50 +699,8 @@
   color: var(--th-text-tinted-muted);
 }
 
-.record-edit-panel {
-  margin-bottom: 18px;
-  padding: 12px 16px;
-  border: 1.5px solid var(--th-primary-border);
-  border-radius: 12px;
-  background: var(--th-primary-tint);
-}
-
-.record-edit-panel-lead {
-  margin: 0 0 8px;
-  font-size: 0.82rem;
-  color: var(--th-text-tinted);
-}
-
-.record-edit-panel-lead svg {
-  display: inline;
-  margin-right: 6px;
-  vertical-align: -2px;
-}
-
-.record-edit-now {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
-  margin: 0;
-}
-
-.record-edit-now dt {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--th-text-tinted-muted);
-}
-
-.record-edit-now dd {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--th-text-tinted-strong);
-}
-
 .record-edit-problem {
-  margin: 10px 0 0;
+  margin: 0 0 16px;
 }
 
 .wizard-btn-edit {
