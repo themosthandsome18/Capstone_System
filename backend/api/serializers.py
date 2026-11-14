@@ -485,6 +485,74 @@ class TouristRecordSerializer(serializers.ModelSerializer):
         }
 
 
+# What PATCH /api/tourist-records/<id>/ may change, by the names the API uses (the ones of TouristRecordSerializer): the whole head count, the
+# Length of Stay, the resort, and the status (the quick Arrived / Cancelled switch of Record Management uses it). Everything else about a record
+# (the name, the email, the contact, the country and place, the arrival date, the boat, the purpose) is the tourist's, and is refused.
+TOURIST_RECORD_EDITABLE_FIELDS = (
+    "foreigner_count",
+    "filipino_count",
+    "maubanin_count",
+    "total_visitors",
+    "total_male",
+    "total_female",
+    "age_0_7",
+    "age_8_59",
+    "age_60_above",
+    "special_group_count",
+    "discounted_count",
+    "itinerary_id",
+    "resort_id",
+    "status",
+)
+
+
+class TouristRecordEditSerializer(TouristRecordSerializer):
+    """The serializer of PATCH on one record. It is TouristRecordSerializer (so the head count is still checked: the total must equal each of its
+    splits, and so on) with two differences:
+
+    * A field that is not in TOURIST_RECORD_EDITABLE_FIELDS is REFUSED with a 400 that names it, even when the value is the one the record already
+      has. It is never ignored: a caller that sends it is wrong, and should hear it at once.
+    * A discounted count above the head count says so in words that fit an edit. It is never lowered for the person: the fee follows
+      discounted_count, and a fee must not change without someone having said so.
+
+    POST (a new record) does not use this class, and keeps every field.
+    """
+
+    def to_internal_value(self, data):
+        if hasattr(data, "keys"):
+            refused = [name for name in data.keys() if name not in TOURIST_RECORD_EDITABLE_FIELDS]
+            if refused:
+                allowed = ", ".join(TOURIST_RECORD_EDITABLE_FIELDS)
+                raise serializers.ValidationError(
+                    {
+                        name: [f"This field cannot be changed here. A record may only change: {allowed}."]
+                        for name in refused
+                    }
+                )
+        return super().to_internal_value(data)
+
+    def _api_error_keys(self, errors):
+        keys = super()._api_error_keys(errors)
+        if "discounted_count" in keys and self._discounted_is_above_total():
+            values = self._values_checked
+            keys["discounted_count"] = [
+                f"The discounted count ({values['discounted_count']}) cannot be greater than the number of visitors ({values['total_visitors']}). "
+                "Lower the discounted count in the same change: it is not changed for you, because the fee follows it."
+            ]
+        return keys
+
+    def _merged_validation_values(self, attrs):
+        self._values_checked = super()._merged_validation_values(attrs)
+        return self._values_checked
+
+    def _discounted_is_above_total(self):
+        values = getattr(self, "_values_checked", {})
+        try:
+            return int(values.get("discounted_count") or 0) > int(values.get("total_visitors") or 0)
+        except (TypeError, ValueError):
+            return False
+
+
 # ============================================================
 # SANITATION MODULE SERIALIZERS
 # Business / Permit Side

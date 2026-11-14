@@ -31,9 +31,10 @@ from api.serializers import (
     ResortSerializer,
     TourismThemeReadSerializer,
     TourismThemeWriteSerializer,
+    TouristRecordEditSerializer,
     TouristRecordSerializer,
 )
-from api.services.activity import log_activity
+from api.services.activity import log_activity, tourist_record_edit_label
 from api.services.notifications import notify_new_tourist_record, notify_safely
 from api.services.destination_figures import destination_map_figures
 from api.services.online_booking import (
@@ -173,10 +174,14 @@ def tourist_record_list(request):
 
 # A tourist record is never deleted (there is no DELETE here: the verb is refused with 405). It is archived instead: see
 # tourist_record_archive / tourist_record_unarchive below.
-@api_view(["GET", "PUT", "PATCH"])
+#
+# There is no PUT either (405): a whole-body write is the way every field of the tourist would be rewritten. PATCH may change only what
+# TOURIST_RECORD_EDITABLE_FIELDS lists (the head count, the Length of Stay, the resort and the status) and refuses any other field named in the body
+# with a 400, even when its value is the same. POST (a new record) is not affected: see tourist_record_list.
+@api_view(["GET", "PATCH"])
 @module_required("tourism")
 def tourist_record_detail(request, survey_id):
-    record = get_object_or_404(TouristRecord.objects.select_related("itinerary"), survey_id=survey_id)
+    record = get_object_or_404(TouristRecord.objects.select_related("itinerary", "resort"), survey_id=survey_id)
 
     if request.method == "GET":
         # The record as it was, and what is worked out from it (Overnight and Same Day by sex, the fee): see tourist_record_computed.
@@ -184,24 +189,36 @@ def tourist_record_detail(request, survey_id):
         data["computed"] = tourist_record_computed(record)
         return Response(data)
 
-    data = request.data.copy()
-    data["survey_id"] = record.survey_id
-    serializer = TouristRecordSerializer(
-        record,
-        data=data,
-        partial=request.method == "PATCH",
-    )
+    serializer = TouristRecordEditSerializer(record, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
+    before = _edit_snapshot(record)  # read BEFORE the save: save() changes this same object
     record = serializer.save()
-    log_activity(
-        request,
-        MODULE_TOURISM,
-        ACTION_UPDATE,
-        record,
-        label=record.full_name,
-        record_id=record.survey_id,
-    )
+    label = tourist_record_edit_label(record.survey_id, before, _edit_snapshot(record))
+    if label:  # a PATCH that changes nothing logs nothing (as the archive does when it is done twice)
+        log_activity(
+            request,
+            MODULE_TOURISM,
+            ACTION_UPDATE,
+            record,
+            label=label,
+            record_id=record.survey_id,
+        )
     return Response(serializer.data)
+
+
+def _edit_snapshot(record):
+    """The values a PATCH may change, as an Activity Log label names them: the Length of Stay and the resort by name, the rest as they are."""
+    snapshot = {
+        field: getattr(record, field)
+        for field in (
+            "total_visitors", "foreigner_count", "filipino_count", "maubanin_count", "total_male", "total_female",
+            "age_0_7", "age_8_59", "age_60_above", "special_group_count", "discounted_count",
+        )
+    }
+    snapshot["status"] = record.get_status_display()
+    snapshot["itinerary"] = record.itinerary.name
+    snapshot["resort"] = record.resort.resort_name
+    return snapshot
 
 
 def _set_archived(request, survey_id, archived):

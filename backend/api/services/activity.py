@@ -92,3 +92,42 @@ def log_activity(request, module, action, instance, label=None, record_id=None):
 def get_instance_id(instance):
     primary_key = getattr(instance, "pk", "")
     return primary_key or ""
+
+
+# The fields of a tourist record that PATCH may change, in the order a label names them: the three the Tourism Office edits first (so that a label that is
+# cut loses the least important part), then the status, then the rest of the head count.
+TOURIST_RECORD_EDIT_PARTS = (
+    ("total_visitors", "pax"),
+    ("itinerary", "length of stay"),
+    ("resort", "resort"),
+    ("status", "status"),
+    ("foreigner_count", "foreigners"),
+    ("filipino_count", "Filipinos"),
+    ("maubanin_count", "Maubanin"),
+    ("total_male", "male"),
+    ("total_female", "female"),
+    ("age_0_7", "age 0-7"),
+    ("age_8_59", "age 8-59"),
+    ("age_60_above", "age 60+"),
+    ("special_group_count", "special needs"),
+    ("discounted_count", "discounted"),
+)
+
+
+def tourist_record_edit_label(survey_id, before, after):
+    """What a PATCH of a tourist record changed, for the Activity Log: "Record SURV-1 edited: pax 12 → 9, length of stay 5 Nights and above → 2 Nights".
+
+    `before` and `after` are dicts with the keys of TOURIST_RECORD_EDIT_PARTS (the Length of Stay and the resort by NAME), read BEFORE the save and
+    after it. Only what really changed is named, with the old value and the new. Like the archive's label it carries the survey id and NOT the
+    visitor's name. A resort or a stay name is cut to NAME_SHARE; the whole label is cut to the column with shorten_label, so a long one ends in an
+    ellipsis and never fails. Returns "" when nothing changed.
+    """
+    parts = []
+    for key, words in TOURIST_RECORD_EDIT_PARTS:
+        old, new = before.get(key), after.get(key)
+        if old == new:
+            continue
+        parts.append(f"{words} {shorten_label(str(old), NAME_SHARE)} → {shorten_label(str(new), NAME_SHARE)}")
+    if not parts:
+        return ""
+    return shorten_label(f"Record {survey_id} edited: " + ", ".join(parts))
