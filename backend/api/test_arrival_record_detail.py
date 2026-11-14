@@ -244,7 +244,7 @@ class ArrivalRecordDetailTests(TestCase):
 
         data = self.detail("KEY-1")
 
-        self.assertEqual(set(data), OLD_KEYS | {"created_at", "computed"})
+        self.assertEqual(set(data), OLD_KEYS | {"created_at", "computed", "is_archived"})  # is_archived: read only (a PATCH refuses it)
         self.assertEqual(set(data["computed"]), {"overnight", "sameDay", "fee"})
         self.assertEqual(set(data["computed"]["overnight"]), {"male", "female", "total"})
         self.assertEqual(set(data["computed"]["sameDay"]), {"male", "female", "total"})

@@ -393,11 +393,9 @@ function BookingManagement() {
   const editAfter = isEditing ? recordEditPayload(form) : null;
   const editChanges = isEditing ? recordEditChanges(editBefore, editAfter, editNames) : [];
   const editProblem = isEditing ? recordEditBlankProblem(form) || validateTotals(editAfter) : "";
-  // An archived record is not edited: it is brought back to the table first. The row says so; a record opened from a notice (read by its survey ID)
-  // is looked up among the rows that are loaded.
-  const editingArchived = editingRecord
-    ? Boolean(editingRecord.is_archived ?? bookingRows.find((row) => row.survey_id === editingRecord.survey_id)?.is_archived)
-    : false;
+  // An archived record is not edited: it is brought back to the table first (the server refuses it too, with a 409). The record says so itself, whether it
+  // came from a row of the table or was read by its survey ID (a notification): GET /api/tourist-records/<id>/ carries is_archived.
+  const editingArchived = Boolean(editingRecord?.is_archived);
   const canEdit = canEditRecords(role);
 
   function startEdit() {

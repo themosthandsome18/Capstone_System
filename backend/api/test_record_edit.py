@@ -408,3 +408,176 @@ class WhoMayTests(RecordEditBase):
 
     def test_a_record_that_does_not_exist_is_404(self):
         self.assertEqual(self.admin.patch("/api/tourist-records/NOPE/", {"status": "arrived"}, format="json").status_code, 404)
+
+
+class ArchivedRecordTests(RecordEditBase):
+    """An archived record is still counted by every figure, but it is not EDITED: the head count, the Length of Stay and the resort are refused with a
+    409 (the record's state, not wrong data), and the refusal comes before anything is written. Its status alone may still be put right, because what
+    really happened (arrived or not) still counts."""
+
+    def logs(self):
+        """Only what an EDIT wrote: archive and unarchive write their own 'Record archived' / 'brought back' lines (as action update too)."""
+        return [label for label in super().logs() if " edited: " in label]
+
+    def archive(self):
+        self.assertEqual(self.admin.post("/api/tourist-records/EDIT-1/archive/").status_code, 200)
+        self.assertTrue(self.reload().is_archived)
+
+    def unarchive(self):
+        self.assertEqual(self.admin.post("/api/tourist-records/EDIT-1/unarchive/").status_code, 200)
+        self.assertFalse(self.reload().is_archived)
+
+    def row(self):
+        return TouristRecord.objects.filter(pk="EDIT-1").values().get()
+
+    # -- the GET says it ------------------------------------------------------------------------------------------------------------------
+
+    def test_the_get_says_whether_it_is_archived(self):
+        self.assertIs(self.admin.get(URL).json()["is_archived"], False)
+        self.archive()
+        self.assertIs(self.admin.get(URL).json()["is_archived"], True)
+        self.unarchive()
+        self.assertIs(self.admin.get(URL).json()["is_archived"], False)
+
+    def test_it_is_read_only_a_patch_cannot_write_it(self):
+        for value in (True, False):
+            response = self.admin.patch(URL, {"is_archived": value}, format="json")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(response.json()), ["is_archived"])
+        self.assertFalse(self.reload().is_archived)
+        self.archive()
+        response = self.admin.patch(URL, {"is_archived": False}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(self.reload().is_archived)
+
+    # -- what is refused -------------------------------------------------------------------------------------------------------------------
+
+    def test_each_of_the_three_alone_is_a_409_and_nothing_changes(self):
+        self.archive()
+        before = self.row()
+        cases = {
+            "head count": dict(THREE_PEOPLE),
+            "the total only": {"total_visitors": 4},
+            "a single count": {"maubanin_count": 0},
+            "length of stay": {"itinerary_id": self.short_stay.id},
+            "resort": {"resort_id": self.other_resort.resort_id},
+        }
+        for name, body in cases.items():
+            with self.subTest(name):
+                response = self.admin.patch(URL, body, format="json")
+                self.assertEqual(response.status_code, 409, (name, response.content))
+                message = response.json()["detail"]
+                self.assertIn("archived", message)
+                self.assertIn("unarchive", message)
+                self.assertEqual(response.json()["fields"], sorted(body))
+        self.assertEqual(self.row(), before)
+        self.assertEqual(self.logs(), [])
+
+    def test_every_field_of_the_head_count_is_refused_one_by_one(self):
+        self.archive()
+        before = self.row()
+        for field in ("foreigner_count", "filipino_count", "maubanin_count", "total_visitors", "total_male", "total_female", "age_0_7", "age_8_59",
+                      "age_60_above", "special_group_count", "discounted_count"):
+            with self.subTest(field):
+                self.assertEqual(self.admin.patch(URL, {field: HEAD_COUNT[field]}, format="json").status_code, 409)
+        self.assertEqual(self.row(), before)
+
+    def test_the_status_together_with_the_head_count_is_a_409_and_NOTHING_is_saved_not_even_the_status(self):
+        self.archive()
+        before = self.row()
+        for name, extra in {
+            "the head count": dict(THREE_PEOPLE),
+            "the length of stay": {"itinerary_id": self.short_stay.id},
+            "the resort": {"resort_id": self.other_resort.resort_id},
+            "all three": {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id},
+        }.items():
+            with self.subTest(name):
+                response = self.admin.patch(URL, {"status": "arrived", **extra}, format="json")
+                self.assertEqual(response.status_code, 409, response.content)
+                self.assertEqual(response.json()["fields"], sorted(extra))  # the status is not what is refused: it is named by nothing
+                self.assertEqual(self.row(), before)  # every column as it was: the status did not get through either
+                self.assertEqual(self.reload().status, "pending")
+        self.assertEqual(self.logs(), [])
+
+    def test_a_refusal_writes_no_log_and_does_not_touch_updated_at(self):
+        self.archive()
+        stamp = self.reload().updated_at
+        self.admin.patch(URL, {"total_visitors": 4, "status": "arrived"}, format="json")
+        self.assertEqual(self.reload().updated_at, stamp)
+        self.assertEqual(self.logs(), [])
+
+    def test_a_closed_field_is_still_a_400_that_names_it_not_a_409(self):
+        self.archive()
+        for body in ({"email": "x@x.com"}, {"first_name": "X", "total_visitors": 4}, {"is_archived": False, "resort_id": self.other_resort.resort_id}):
+            with self.subTest(body):
+                response = self.admin.patch(URL, body, format="json")
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertNotIn("detail", response.json())
+                self.assertTrue(set(response.json()) <= set(body))
+
+    def test_an_empty_patch_on_an_archived_record_is_fine(self):
+        self.archive()
+        self.assertEqual(self.admin.patch(URL, {}, format="json").status_code, 200)
+
+    def test_the_other_roles_are_still_403_first(self):
+        self.archive()
+        for role in OUT:
+            with self.subTest(role=role):
+                self.assertEqual(self.clients[role].patch(URL, {"total_visitors": 4}, format="json").status_code, 403)
+
+    # -- what is allowed -------------------------------------------------------------------------------------------------------------------
+
+    def test_the_status_alone_is_allowed_and_really_changes(self):
+        self.archive()
+        for target in ("arrived", "no_show", "pending", "arrived"):
+            with self.subTest(target=target):
+                response = self.admin.patch(URL, {"status": target}, format="json")
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(response.json()["status"], target)
+                self.assertEqual(self.reload().status, target)
+        self.assertTrue(self.reload().is_archived)  # putting the status right does not bring the record back
+        self.assertEqual(len(self.logs()), 4)
+
+    def test_the_status_flip_is_logged_for_an_archived_record_as_for_any_other(self):
+        self.archive()
+        self.admin.patch(URL, {"status": "arrived"}, format="json")
+        self.assertEqual(self.logs(), ["Record EDIT-1 edited: status Pending → Arrived"])
+
+    def test_the_status_and_the_unchanged_head_count_is_still_refused(self):
+        """Even the values the record already has: naming a field of the head count on an archived record is the refusal, as a closed field is (a
+        PATCH is for what changes)."""
+        self.archive()
+        response = self.admin.patch(URL, {"status": "arrived", "total_visitors": 4}, format="json")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.reload().status, "pending")
+
+    # -- and after it is brought back, all of it works --------------------------------------------------------------------------------------
+
+    def test_everything_works_again_after_it_is_brought_back(self):
+        self.archive()
+        self.assertEqual(self.admin.patch(URL, {"resort_id": self.other_resort.resort_id}, format="json").status_code, 409)
+        self.unarchive()
+
+        response = self.admin.patch(URL, {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id, "status": "arrived"}, format="json")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        record = self.reload()
+        self.assertEqual(
+            (record.total_visitors, record.itinerary_id, record.resort_id, record.status),
+            (3, self.short_stay.id, self.other_resort.resort_id, "arrived"),
+        )
+
+    def test_each_of_the_three_alone_works_after_unarchive(self):
+        self.archive()
+        self.unarchive()
+        self.assertEqual(self.admin.patch(URL, dict(THREE_PEOPLE), format="json").status_code, 200)
+        self.assertEqual(self.admin.patch(URL, {"itinerary_id": self.short_stay.id}, format="json").status_code, 200)
+        self.assertEqual(self.admin.patch(URL, {"resort_id": self.other_resort.resort_id}, format="json").status_code, 200)
+        self.assertEqual(self.admin.patch(URL, {"status": "no_show"}, format="json").status_code, 200)
+        self.assertEqual(len(self.logs()), 4)
+
+    def test_archive_and_unarchive_themselves_are_not_affected(self):
+        self.archive()
+        self.archive()  # twice is fine (it logs nothing the second time)
+        self.unarchive()
+        self.unarchive()

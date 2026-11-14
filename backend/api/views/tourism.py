@@ -31,6 +31,8 @@ from api.serializers import (
     ResortSerializer,
     TourismThemeReadSerializer,
     TourismThemeWriteSerializer,
+    TOURIST_RECORD_EDIT_ONLY_FIELDS,
+    TOURIST_RECORD_EDITABLE_FIELDS,
     TouristRecordEditSerializer,
     TouristRecordSerializer,
 )
@@ -187,7 +189,27 @@ def tourist_record_detail(request, survey_id):
         # The record as it was, and what is worked out from it (Overnight and Same Day by sex, the fee): see tourist_record_computed.
         data = dict(TouristRecordSerializer(record).data)
         data["computed"] = tourist_record_computed(record)
+        data["is_archived"] = record.is_archived  # read only: a PATCH cannot write it (see TOURIST_RECORD_EDITABLE_FIELDS), only archive / unarchive do
         return Response(data)
+
+    sent = set(request.data.keys()) if hasattr(request.data, "keys") else set()
+    wants_edit = sent & set(TOURIST_RECORD_EDIT_ONLY_FIELDS)
+    # An archived record is not edited: the head count, the Length of Stay and the resort stay as they are until it is brought back. This is a 409, not
+    # a 400: nothing is wrong with what was sent, it is the record's state. It is refused BEFORE anything is written, so a PATCH that names the status
+    # together with one of them changes nothing at all, the status included. The status ALONE is allowed on an archived record: it is still counted
+    # by every figure, so what really happened (arrived or not) must still be put right. A field that is not editable at all keeps its 400
+    # (the serializer says so), so it is checked first.
+    if record.is_archived and wants_edit and not (sent - set(TOURIST_RECORD_EDITABLE_FIELDS)):
+        return Response(
+            {
+                "detail": (
+                    "This record is archived, so its head count, length of stay and resort cannot be changed. "
+                    "Bring it back to the table first (unarchive it), then change it. Its status can still be changed on its own."
+                ),
+                "fields": sorted(wants_edit),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
 
     serializer = TouristRecordEditSerializer(record, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
