@@ -5280,13 +5280,13 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-hint {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 /* ---- Edit modal ---- */
@@ -5308,20 +5308,20 @@
   gap: 12px;
   flex: none;
   padding: 18px 22px;
-  border-bottom: 1px solid #efe2d3;
+  border-bottom: 1px solid var(--th-border-tinted);
 }
 
 .dest-edit-header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-edit-header p {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-edit-close {
@@ -5332,10 +5332,10 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid #e8dbcb;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 8px;
   background: #ffffff;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
@@ -5351,14 +5351,14 @@
   gap: 10px;
   flex: none;
   padding: 14px 22px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
   background: #ffffff;
 }
 
 .dest-readonly {
   padding: 13px 15px;
   border-radius: 11px;
-  background: #fbf1e4;
+  background: var(--th-surface-tinted);
 }
 
 .dest-readonly-facts {
@@ -5372,7 +5372,7 @@
   margin-top: 3px;
   font-size: 17px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-readonly .dest-hint {
@@ -5387,20 +5387,20 @@
 .dest-group {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .dest-group h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-group-sub {
   margin: 2px 0 12px;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-row-2 {
@@ -5417,7 +5417,7 @@
   display: inline-flex;
   padding: 4px;
   border-radius: 10px;
-  background: #f4e7d8;
+  background: var(--th-primary-tint-strong);
 }
 
 .dest-seg-btn {
@@ -5428,14 +5428,14 @@
   background: transparent;
   font-size: 13px;
   font-weight: 700;
-  color: #6b5949;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .dest-seg-btn.selected {
   background: #ffffff;
-  color: #241e1a;
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.14);
+  color: var(--th-text-tinted-strong);
+  box-shadow: 0 1px 2px rgba(var(--th-shadow-rgb), 0.14);
 }
 
 .dest-stay-options {
@@ -5449,20 +5449,20 @@
   display: inline-flex;
   align-items: center;
   padding: 7px 13px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 999px;
   background: #ffffff;
   font-size: 12.5px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .dest-chip.selected {
   padding: 6px 12px;
-  border: 2px solid #e0701a;
-  background: #fdf0e2;
-  color: #8a4310;
+  border: 2px solid var(--th-primary);
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
 }
 
 /* The fields of the Edit modal. The old rules (.tourist-record-field) made a white input with a transparent border for a green panel;
@@ -5477,7 +5477,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-edit .tourist-record-field input,
@@ -5486,13 +5486,13 @@
 .dest-edit .location-picker-search input {
   height: auto;
   min-height: 40px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   padding: 9px 12px;
   font-size: 14px;
   font-weight: 400;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-edit .tourist-record-field textarea {
@@ -5503,9 +5503,9 @@
 .dest-edit .tourist-record-field select:focus,
 .dest-edit .tourist-record-field textarea:focus,
 .dest-edit .location-picker-search input:focus {
-  border-color: #e0cdb7;
+  border-color: var(--th-border-tinted-control);
   box-shadow: none;
-  outline: 2px solid #e0701a;
+  outline: 2px solid var(--th-primary);
   outline-offset: -1px;
 }
 
@@ -5513,13 +5513,13 @@
 .dest-edit .location-picker-search button {
   height: auto;
   min-height: 40px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   padding: 0 16px;
   font-size: 13.5px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
 }
 
 /* The Latitude / Longitude row sits 16px above the map. The picker's own sheet gives the map no space above it. */
@@ -5554,7 +5554,7 @@
 }
 
 .dest-chip-status.inactive {
-  background: #6b5949;
+  background: var(--th-text-tinted-muted);
 }
 
 .dest-chip-category {
@@ -5584,32 +5584,27 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-details-sub {
   margin: 4px 0 12px;
   font-size: 13.5px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
-.dest-btn-orange {
-  background: #e0701a;
-  border-color: #e0701a;
-  color: #ffffff;
-}
 
 .dest-detail-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .dest-detail-group h3 {
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-detail-group-head {
@@ -5638,7 +5633,7 @@
   margin-top: 3px;
   font-size: 14px;
   font-weight: 600;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-chip-row {
@@ -5652,23 +5647,23 @@
   display: inline-flex;
   padding: 7px 13px;
   border-radius: 999px;
-  background: #fdf0e2;
+  background: var(--th-primary-tint);
   font-size: 12.5px;
   font-weight: 600;
-  color: #8a4310;
+  color: var(--th-primary-ink);
 }
 
 .dest-about {
   margin: 0;
   font-size: 14px;
   line-height: 1.65;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-coords {
   margin: 0 0 8px;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 @media (max-width: 640px) {
@@ -5685,18 +5680,18 @@
   background: none;
   font-size: 14px;
   font-weight: 700;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
   text-align: left;
   cursor: pointer;
 }
 
 .arrival-record-link:hover {
-  color: #8a4310;
+  color: var(--th-primary-ink);
   text-decoration: underline;
 }
 
 .arrival-record-link:focus-visible {
-  outline: 2px solid #e0701a;
+  outline: 2px solid var(--th-primary);
   outline-offset: 3px;
 }
 
@@ -5704,9 +5699,6 @@ tr.arrival-row {
   cursor: pointer;
 }
 
-tr.arrival-row:hover > td {
-  background: #fdf5ec;
-}
 
 .arrival-chevron-col,
 .arrival-chevron {
@@ -5717,11 +5709,11 @@ tr.arrival-row:hover > td {
 }
 
 .arrival-chevron {
-  color: #c2ae98;
+  color: var(--th-text-tinted-muted);
 }
 
 tr.arrival-row:hover > .arrival-chevron {
-  color: #8a4310;
+  color: var(--th-primary-ink);
 }
 
 .arm-backdrop {
@@ -5745,14 +5737,14 @@ tr.arrival-row:hover > .arrival-chevron {
   overflow: hidden;
   border-radius: 16px;
   background: #fffdfb;
-  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+  box-shadow: 0 10px 30px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .arm-band {
   position: relative;
   flex: none;
   height: 96px;
-  background-color: #6e5a46;
+  background-color: var(--th-primary-deep);
   background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 60%);
 }
 
@@ -5809,13 +5801,13 @@ tr.arrival-row:hover > .arrival-chevron {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .arm-sub {
   margin: 0 0 16px;
   font-size: 13.5px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-actions {
@@ -5826,24 +5818,24 @@ tr.arrival-row:hover > .arrival-chevron {
 .arm-btn {
   min-height: 38px;
   padding: 0 14px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   font-size: 13px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .arm-btn.primary {
-  border-color: #e0701a;
-  background: #e0701a;
+  border-color: var(--th-primary);
+  background: var(--th-primary);
   color: #ffffff;
 }
 
 .arm-btn.primary:hover:not(:disabled) {
-  border-color: #be5b11;
-  background: #be5b11;
+  border-color: var(--th-primary-hover);
+  background: var(--th-primary-hover);
 }
 
 .arm-btn:disabled {
@@ -5854,14 +5846,14 @@ tr.arrival-row:hover > .arrival-chevron {
 .arm-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .arm-group h3 {
   margin: 0 0 12px;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .arm-grid {
@@ -5877,7 +5869,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-value {
@@ -5885,13 +5877,13 @@ tr.arrival-row:hover > .arrival-chevron {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
   overflow-wrap: anywhere;
 }
 
 .arm-unit {
   font-weight: 500;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
 /* "Maubanin 4" under "In the group": a part of the group (of the Filipino), so it is a quiet line: indented, 13px, in the colour of the small labels,
@@ -5903,24 +5895,24 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 4px 0 0 12px;
   font-size: 13px;
   line-height: 1.4;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-subline-label {
   font-weight: 400;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-subline-value {
   font-weight: 600;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-note {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-footer {
@@ -5928,7 +5920,7 @@ tr.arrival-row:hover > .arrival-chevron {
   flex: none;
   justify-content: flex-end;
   padding: 14px 22px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 /* ================= MOBILE APP CONTENT (Commit 4) =================

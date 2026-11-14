@@ -28,27 +28,27 @@ function rule(selector) {
 }
 
 describe("the chip of the Length of Stay in Edit", () => {
-  it("not picked: white, a 1px border #E0CDB7, text #453931, padding 7px 13px, a pill, 12.5px w600", () => {
+  it("not picked: white, a 1px border var(--th-border-tinted-control), text var(--th-text-tinted), padding 7px 13px, a pill, 12.5px w600", () => {
     expect(rule(".dest-chip")).toMatchObject({
       "border-radius": "999px",
       "font-size": "12.5px",
       "font-weight": "600",
       background: "#ffffff",
-      border: "1px solid #e0cdb7",
-      color: "#453931",
+      border: "1px solid var(--th-border-tinted-control)",
+      color: "var(--th-text-tinted)",
       padding: "7px 13px",
     });
   });
 
-  it("picked: background #FDF0E2, a 2px border #E0701A, text #8A4310, padding 6px 12px: NOT a solid orange", () => {
+  it("picked: background var(--th-primary-tint), a 2px border var(--th-primary), text var(--th-primary-ink), padding 6px 12px: NOT a solid orange", () => {
     const picked = rule(".dest-chip.selected");
     expect(picked).toMatchObject({
-      background: "#fdf0e2",
-      border: "2px solid #e0701a",
-      color: "#8a4310",
+      background: "var(--th-primary-tint)",
+      border: "2px solid var(--th-primary)",
+      color: "var(--th-primary-ink)",
       padding: "6px 12px",
     });
-    expect(picked.background).not.toBe("#e0701a");
+    expect(picked.background).not.toBe("var(--th-primary)");
   });
 
   it("picked and not picked are the same size: a 1px border and 7px, or a 2px border and 6px", () => {
@@ -56,17 +56,17 @@ describe("the chip of the Length of Stay in Edit", () => {
     expect(edge(rule(".dest-chip"))).toBe(edge(rule(".dest-chip.selected")));
   });
 
-  it("in Details the chip is background #FDF0E2, text #8A4310", () => {
-    expect(rule(".dest-chip-static")).toMatchObject({ background: "#fdf0e2", color: "#8a4310", "border-radius": "999px" });
+  it("in Details the chip is background var(--th-primary-tint), text var(--th-primary-ink)", () => {
+    expect(rule(".dest-chip-static")).toMatchObject({ background: "var(--th-primary-tint)", color: "var(--th-primary-ink)", "border-radius": "999px" });
   });
 });
 
 describe("the Status control", () => {
-  it("the holder is #F4E7D8, radius 10, padding 4px", () => {
-    expect(rule(".dest-seg")).toMatchObject({ background: "#f4e7d8", "border-radius": "10px", padding: "4px" });
+  it("the holder is var(--th-primary-tint-strong), radius 10, padding 4px", () => {
+    expect(rule(".dest-seg")).toMatchObject({ background: "var(--th-primary-tint-strong)", "border-radius": "10px", padding: "4px" });
   });
 
-  it("a button is 13px w700, min-height 34, padding 0 16px, radius 7, no border, #6B5949", () => {
+  it("a button is 13px w700, min-height 34, padding 0 16px, radius 7, no border, var(--th-text-tinted)", () => {
     expect(rule(".dest-seg-btn")).toMatchObject({
       "font-size": "13px",
       "font-weight": "700",
@@ -74,38 +74,38 @@ describe("the Status control", () => {
       padding: "0 16px",
       "border-radius": "7px",
       border: "0",
-      color: "#6b5949",
+      color: "var(--th-text-tinted)",
     });
   });
 
-  it("the picked one is white, #241E1A, with the soft shadow", () => {
+  it("the picked one is white, var(--th-text-tinted-strong), with the soft shadow", () => {
     expect(rule(".dest-seg-btn.selected")).toMatchObject({
       background: "#ffffff",
-      color: "#241e1a",
-      "box-shadow": "0 1px 2px rgba(90, 60, 35, 0.14)",
+      color: "var(--th-text-tinted-strong)",
+      "box-shadow": "0 1px 2px rgba(var(--th-shadow-rgb), 0.14)",
     });
   });
 });
 
 describe("the Edit modal", () => {
-  it("the title is 18px w800; the name under it 13px #7A6755; a line under the header 1px #EFE2D3", () => {
+  it("the title is 18px w800; the name under it 13px var(--th-text-tinted-muted); a line under the header 1px var(--th-border-tinted)", () => {
     expect(rule(".dest-edit-header h2")).toMatchObject({ "font-size": "18px", "font-weight": "800" });
-    expect(rule(".dest-edit-header p")).toMatchObject({ "font-size": "13px", color: "#7a6755" });
-    expect(rule(".dest-edit-header")["border-bottom"]).toBe("1px solid #efe2d3");
+    expect(rule(".dest-edit-header p")).toMatchObject({ "font-size": "13px", color: "var(--th-text-tinted-muted)" });
+    expect(rule(".dest-edit-header")["border-bottom"]).toBe("1px solid var(--th-border-tinted)");
   });
 
-  it("the close X is 32x32, radius 8, a border #E8DBCB, white", () => {
+  it("the close X is 32x32, radius 8, a border var(--th-border-tinted-control), white", () => {
     expect(rule(".dest-edit-close")).toMatchObject({
       width: "32px",
       height: "32px",
       "border-radius": "8px",
-      border: "1px solid #e8dbcb",
+      border: "1px solid var(--th-border-tinted-control)",
       background: "#ffffff",
     });
   });
 
-  it("the read-only box is #FBF1E4, radius 11, padding 13px 15px, two columns", () => {
-    expect(rule(".dest-readonly")).toMatchObject({ background: "#fbf1e4", "border-radius": "11px", padding: "13px 15px" });
+  it("the read-only box is var(--th-surface-tinted), radius 11, padding 13px 15px, two columns", () => {
+    expect(rule(".dest-readonly")).toMatchObject({ background: "var(--th-surface-tinted)", "border-radius": "11px", padding: "13px 15px" });
     expect(rule(".dest-readonly-facts")["grid-template-columns"]).toBe("repeat(2, minmax(0, 1fr))");
   });
 
@@ -113,26 +113,26 @@ describe("the Edit modal", () => {
     expect(rule(".dest-readonly-value")).toMatchObject({ "font-size": "17px", "font-weight": "800" });
   });
 
-  it("a label is 11px uppercase, letter-spacing .07em, #8A6E55, w700; a hint 12px #87705C", () => {
+  it("a label is 11px uppercase, letter-spacing .07em, var(--th-text-tinted-muted), w700; a hint 12px var(--th-text-tinted-muted)", () => {
     expect(rule(".dest-label")).toMatchObject({
       "font-size": "11px",
       "text-transform": "uppercase",
       "letter-spacing": "0.07em",
-      color: "#8a6e55",
+      color: "var(--th-text-tinted-muted)",
       "font-weight": "700",
     });
-    expect(rule(".dest-hint")).toMatchObject({ "font-size": "12px", color: "#87705c" });
+    expect(rule(".dest-hint")).toMatchObject({ "font-size": "12px", color: "var(--th-text-tinted-muted)" });
   });
 
-  it("a group has a 1px #EFE2D3 line above, 18px padding and 18px margin; its title 13px w800 and subtitle 12.5px #87705C", () => {
-    expect(rule(".dest-group")).toMatchObject({ "border-top": "1px solid #efe2d3", "padding-top": "18px", "margin-top": "18px" });
+  it("a group has a 1px var(--th-border-tinted) line above, 18px padding and 18px margin; its title 13px w800 and subtitle 12.5px var(--th-text-tinted-muted)", () => {
+    expect(rule(".dest-group")).toMatchObject({ "border-top": "1px solid var(--th-border-tinted)", "padding-top": "18px", "margin-top": "18px" });
     expect(rule(".dest-group h3")).toMatchObject({ "font-size": "13px", "font-weight": "800" });
-    expect(rule(".dest-group-sub")).toMatchObject({ "font-size": "12.5px", color: "#87705c" });
+    expect(rule(".dest-group-sub")).toMatchObject({ "font-size": "12.5px", color: "var(--th-text-tinted-muted)" });
   });
 
-  it("the footer is stuck at the foot: a 1px #EFE2D3 line, padding 14px 22px, buttons on the right", () => {
+  it("the footer is stuck at the foot: a 1px var(--th-border-tinted) line, padding 14px 22px, buttons on the right", () => {
     expect(rule(".dest-edit-footer")).toMatchObject({
-      "border-top": "1px solid #efe2d3",
+      "border-top": "1px solid var(--th-border-tinted)",
       padding: "14px 22px",
       "justify-content": "flex-end",
       flex: "none",
@@ -161,23 +161,24 @@ describe("the Details modal", () => {
     });
   });
 
-  it("the name is 22px w800; the line under it 13.5px #7A6755", () => {
+  it("the name is 22px w800; the line under it 13.5px var(--th-text-tinted-muted)", () => {
     expect(rule(".dest-details-name")).toMatchObject({ "font-size": "22px", "font-weight": "800" });
-    expect(rule(".dest-details-sub")).toMatchObject({ "font-size": "13.5px", color: "#7a6755" });
+    expect(rule(".dest-details-sub")).toMatchObject({ "font-size": "13.5px", color: "var(--th-text-tinted-muted)" });
   });
 
-  it("the Google Maps button is orange", () => {
-    expect(rule(".dest-btn-orange")).toMatchObject({ background: "#e0701a", color: "#ffffff" });
+  it("the Google Maps button is the theme's primary colour, from the primary button's own rule (it had a rule of its own, orange, that is gone)", () => {
+    expect(rule(".gmaps-action-btn.primary")).toMatchObject({ background: "var(--th-primary)", "border-color": "var(--th-primary)", color: "#ffffff" });
+    expect(() => rule(".dest-btn-orange")).toThrow();
   });
 
-  it("a group has a 1px #EFE2D3 line above, 16px padding and 16px margin; its title 13px w800", () => {
-    expect(rule(".dest-detail-group")).toMatchObject({ "border-top": "1px solid #efe2d3", "padding-top": "16px", "margin-top": "16px" });
+  it("a group has a 1px var(--th-border-tinted) line above, 16px padding and 16px margin; its title 13px w800", () => {
+    expect(rule(".dest-detail-group")).toMatchObject({ "border-top": "1px solid var(--th-border-tinted)", "padding-top": "16px", "margin-top": "16px" });
     expect(rule(".dest-detail-group h3")).toMatchObject({ "font-size": "13px", "font-weight": "800" });
   });
 
-  it("a value is 14px w600; the paragraph 14px with line-height 1.65; the coordinates 12.5px #87705C", () => {
+  it("a value is 14px w600; the paragraph 14px with line-height 1.65; the coordinates 12.5px var(--th-text-tinted-muted)", () => {
     expect(rule(".dest-value")).toMatchObject({ "font-size": "14px", "font-weight": "600" });
     expect(rule(".dest-about")).toMatchObject({ "font-size": "14px", "line-height": "1.65" });
-    expect(rule(".dest-coords")).toMatchObject({ "font-size": "12.5px", color: "#87705c" });
+    expect(rule(".dest-coords")).toMatchObject({ "font-size": "12.5px", color: "var(--th-text-tinted-muted)" });
   });
 });
