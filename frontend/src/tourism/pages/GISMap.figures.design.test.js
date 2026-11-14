@@ -32,8 +32,8 @@ describe("the numbers", () => {
 });
 
 describe("15 of 15", () => {
-  it("the ' of 15' is 17px, weight 600, #7A6755", () => {
-    has(".gis-stat-box h2 .gis-stat-of", { "font-size": "17px", "font-weight": "600", color: "#7A6755" });
+  it("the ' of 15' is 17px, weight 600, var(--th-text-tinted-muted)", () => {
+    has(".gis-stat-box h2 .gis-stat-of", { "font-size": "17px", "font-weight": "600", color: "var(--th-text-tinted-muted)" });
   });
 
   it("only the ' of N' is in the small span; the first number is the h2's own text, at the size of the other numbers", async () => {
@@ -61,8 +61,8 @@ describe("Most visited this year", () => {
     has(".gis-stat-box h2.gis-stat-name", { display: "-webkit-box", "-webkit-box-orient": "vertical" });
   });
 
-  it("the count under it is 12.5px, #87705C", () => {
-    has(".gis-stat-box p.gis-stat-note", { "font-size": "12.5px", color: "#87705C" });
+  it("the count under it is 12.5px, var(--th-text-tinted-muted)", () => {
+    has(".gis-stat-box p.gis-stat-note", { "font-size": "12.5px", color: "var(--th-text-tinted-muted)" });
   });
 
   it("a long name carries its whole text in title, and the count is under it", async () => {
