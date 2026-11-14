@@ -818,3 +818,13 @@
   gap: 10px;
   margin-top: 18px;
 }
+
+.record-edit-fare-note {
+  margin: 14px 0 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--th-warning);
+  border-radius: 10px;
+  background: var(--th-warning-bg);
+  color: var(--th-warning-text);
+  font-size: 0.82rem;
+}

@@ -100,6 +100,7 @@ TOURIST_RECORD_EDIT_PARTS = (
     ("total_visitors", "pax"),
     ("itinerary", "length of stay"),
     ("resort", "resort"),
+    ("boat_capacity_fare", "boat capacity and fare"),
     ("status", "status"),
     ("foreigner_count", "foreigners"),
     ("filipino_count", "Filipinos"),
@@ -112,6 +113,11 @@ TOURIST_RECORD_EDIT_PARTS = (
     ("special_group_count", "special needs"),
     ("discounted_count", "discounted"),
 )
+
+
+def _shown(value):
+    """A value as the label writes it: a name is cut to NAME_SHARE, and nothing (a tier that was never chosen) is said as "(none)", not as a gap."""
+    return "(none)" if value in ("", None) else shorten_label(str(value), NAME_SHARE)
 
 
 def tourist_record_edit_label(survey_id, before, after):
@@ -127,7 +133,7 @@ def tourist_record_edit_label(survey_id, before, after):
         old, new = before.get(key), after.get(key)
         if old == new:
             continue
-        parts.append(f"{words} {shorten_label(str(old), NAME_SHARE)} → {shorten_label(str(new), NAME_SHARE)}")
+        parts.append(f"{words} {_shown(old)} → {_shown(new)}")
     if not parts:
         return ""
     return shorten_label(f"Record {survey_id} edited: " + ", ".join(parts))
