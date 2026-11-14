@@ -94,10 +94,11 @@ class NoWayToDeleteTests(ArchiveBase):
         self.assertEqual(TouristRecord.objects.count(), 4)
         self.assertFalse(ActivityLog.objects.filter(action="delete", record_type="TouristRecord").exists())
 
-    def test_the_detail_view_takes_get_put_and_patch_only(self):
+    def test_the_detail_view_takes_get_and_patch_only(self):
+        # no PUT any more: a whole-body write is how every field of the tourist would be rewritten (see test_record_edit.py for what a PATCH may change)
         response = self.admin.options("/api/tourist-records/AR-ARRIVED/")
         allowed = sorted(method.strip() for method in response["Allow"].split(","))
-        self.assertEqual(allowed, ["GET", "OPTIONS", "PATCH", "PUT"])
+        self.assertEqual(allowed, ["GET", "OPTIONS", "PATCH"])
 
     def test_the_django_admin_cannot_delete_a_record_even_for_a_superuser(self):
         model_admin = TouristRecordAdmin(TouristRecord, admin_site)
@@ -167,10 +168,15 @@ class ArchiveActionTests(ArchiveBase):
         self.assertGreaterEqual(record.archived_at, before)
 
     def test_a_patch_cannot_archive_or_unarchive(self):
-        self.admin.patch("/api/tourist-records/AR-ARRIVED/", {"is_archived": True}, format="json")
+        # is_archived is not a field a PATCH may change: it is refused with a 400 that names it (it used to be ignored without a word)
+        refused = self.admin.patch("/api/tourist-records/AR-ARRIVED/", {"is_archived": True}, format="json")
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("is_archived", refused.json())
         self.assertFalse(TouristRecord.objects.get(pk="AR-ARRIVED").is_archived)
         self.archive("AR-ARRIVED")
-        self.admin.patch("/api/tourist-records/AR-ARRIVED/", {"is_archived": False, "status": "arrived"}, format="json")
+        refused = self.admin.patch("/api/tourist-records/AR-ARRIVED/", {"is_archived": False, "status": "arrived"}, format="json")
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(list(refused.json()), ["is_archived"])  # the status, which a PATCH may change, is not what is refused
         self.assertTrue(TouristRecord.objects.get(pk="AR-ARRIVED").is_archived)
 
     def test_doing_it_twice_changes_nothing_and_logs_once(self):
