@@ -240,6 +240,7 @@ def _edit_snapshot(record):
     snapshot["status"] = record.get_status_display()
     snapshot["itinerary"] = record.itinerary.name
     snapshot["resort"] = record.resort.resort_name
+    snapshot["boat_capacity_fare"] = record.boat_capacity_fare
     return snapshot
 
 

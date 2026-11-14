@@ -1,6 +1,6 @@
 """PATCH /api/tourist-records/<id>/ : what a tourist record may change, and what is written down when it does.
 
-The data is the tourist's. A record may change only its head count, its Length of Stay, its resort and its status (the quick Arrived / Cancelled
+The data is the tourist's. A record may change only its head count, its Length of Stay, its resort, its Boat Capacity and Fare and its status (the quick Arrived / Cancelled
 switch of Record Management is a PATCH of the status alone, and must keep working). Every other field named in a PATCH is REFUSED with a 400
 that names it, even when its value is the one the record has: it is never ignored. There is no PUT (405). POST (a new record) and the import are not
 touched here: they keep every field.
@@ -128,6 +128,34 @@ class WhatMayChangeTests(RecordEditBase):
         record = self.reload()
         self.assertEqual((record.resort_id, record.itinerary_id, record.total_visitors), (self.other_resort.resort_id, self.long_stay.id, 4))
 
+    TIER_A = "3-4 pax (One-Way P2000, Two-way P2,500)"
+    TIER_B = "1-2 pax (One-Way P1500, Two-way P2000)"
+
+    def test_the_boat_capacity_and_fare_is_the_fourth_thing_that_can_be_set(self):
+        response = self.admin.patch(URL, {"boat_capacity_fare": self.TIER_A}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["boat_capacity_fare"], self.TIER_A)
+        self.assertEqual(self.reload().boat_capacity_fare, self.TIER_A)
+        # and changed again, and set to nothing
+        self.assertEqual(self.admin.patch(URL, {"boat_capacity_fare": self.TIER_B}, format="json").status_code, 200)
+        self.assertEqual(self.reload().boat_capacity_fare, self.TIER_B)
+        self.assertEqual(self.admin.patch(URL, {"boat_capacity_fare": ""}, format="json").status_code, 200)
+        self.assertEqual(self.reload().boat_capacity_fare, "")
+
+    def test_it_goes_with_the_head_count_in_one_patch(self):
+        body = {**THREE_PEOPLE, "boat_capacity_fare": self.TIER_A}
+        self.assertEqual(self.admin.patch(URL, body, format="json").status_code, 200)
+        record = self.reload()
+        self.assertEqual((record.total_visitors, record.boat_capacity_fare), (3, self.TIER_A))
+
+    def test_the_boat_and_the_vehicle_are_still_the_tourists(self):
+        """The Boat Classification and the Vehicle Classification stay closed: only the fare tier opened."""
+        for field in ("boat_type_id", "travel_mode_id"):
+            with self.subTest(field):
+                response = self.admin.patch(URL, {field: 1}, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(list(response.json()), [field])
+
     def test_an_arrived_record_can_be_changed(self):
         TouristRecord.objects.filter(pk="EDIT-1").update(status="arrived")
         self.assertEqual(self.admin.patch(URL, {"itinerary_id": self.short_stay.id}, format="json").status_code, 200)
@@ -161,7 +189,7 @@ class WhatIsRefusedTests(RecordEditBase):
     CLOSED = [
         ("first_name", "Other"), ("last_name", "Other"), ("full_name", "Other Person"), ("email", "other@example.com"),
         ("contact_number", "+639170000000"), ("country_id", 1), ("region_id", 1), ("province_id", 1), ("arrival_date", "2026-06-01"),
-        ("travel_mode_id", 1), ("boat_type_id", 1), ("visit_purpose_id", 1), ("boat_capacity_fare", "Other"), ("parking_space", "Lot 9"),
+        ("travel_mode_id", 1), ("boat_type_id", 1), ("visit_purpose_id", 1), ("parking_space", "Lot 9"),
         ("consent_confirmed", False), ("country_of_origin", "Elsewhere"), ("submitted_at", "2026-01-01T00:00:00Z"),
         ("survey_id", "EDIT-2"), ("created_at", "2001-01-01T00:00:00Z"), ("is_archived", True), ("checked_in_by", 1), ("no_such_field", "x"),
     ]
@@ -210,7 +238,7 @@ class WhatIsRefusedTests(RecordEditBase):
             set(TOURIST_RECORD_EDITABLE_FIELDS),
             {
                 "foreigner_count", "filipino_count", "maubanin_count", "total_visitors", "total_male", "total_female", "age_0_7", "age_8_59",
-                "age_60_above", "special_group_count", "discounted_count", "itinerary_id", "resort_id", "status",
+                "age_60_above", "special_group_count", "discounted_count", "itinerary_id", "resort_id", "boat_capacity_fare", "status",
             },
         )
         # and everything else the record's serializer has is closed
@@ -220,7 +248,7 @@ class WhatIsRefusedTests(RecordEditBase):
             {
                 "survey_id", "submitted_at", "email", "consent_confirmed", "first_name", "last_name", "full_name", "contact_number",
                 "country_id", "region_id", "province_id", "country_of_origin", "arrival_date", "travel_mode_id", "boat_type_id",
-                "boat_capacity_fare", "parking_space", "visit_purpose_id", "created_at",
+                "parking_space", "visit_purpose_id", "created_at",
             },
         )
 
@@ -316,6 +344,36 @@ class ActivityLogTests(RecordEditBase):
         self.assertNotIn("foreigners", label)  # foreigner_count did not change: only what changed is named
         self.assertNotIn("discounted", label)
         self.assertNotIn("Maubanin", label)
+
+    def test_the_boat_capacity_and_fare_is_named_with_the_old_and_the_new(self):
+        TouristRecord.objects.filter(pk="EDIT-1").update(boat_capacity_fare="5-6 pax (One-Way P2,500, Two-way P3,000)")
+        self.admin.patch(URL, {"boat_capacity_fare": "3-4 pax (One-Way P2000, Two-way P2,500)"}, format="json")
+        (label,) = self.logs()
+        self.assertEqual(
+            label,
+            "Record EDIT-1 edited: boat capacity and fare 5-6 pax (One-Way P2,500, Two-way P3,000) \u2192 3-4 pax (One-Way P2000, Two-way P2,500)",
+        )
+
+    def test_a_tier_that_was_never_chosen_is_said_as_none(self):
+        self.admin.patch(URL, {"boat_capacity_fare": "1-2 pax (One-Way P1500, Two-way P2000)"}, format="json")
+        self.admin.patch(URL, {"boat_capacity_fare": ""}, format="json")
+        self.assertEqual(
+            sorted(self.logs()),
+            sorted([
+                "Record EDIT-1 edited: boat capacity and fare (none) \u2192 1-2 pax (One-Way P1500, Two-way P2000)",
+                "Record EDIT-1 edited: boat capacity and fare 1-2 pax (One-Way P1500, Two-way P2000) \u2192 (none)",
+            ]),
+        )
+
+    def test_the_fare_comes_after_the_resort_and_before_the_status(self):
+        self.admin.patch(
+            URL,
+            {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id, "boat_capacity_fare": "3-4 pax", "status": "arrived"},
+            format="json",
+        )
+        (label,) = self.logs()
+        order = [label.index(word) for word in ("pax 4", "length of stay", "resort Old", "boat capacity and fare", "status", "Filipinos")]
+        self.assertEqual(order, sorted(order), label)
 
     def test_the_three_come_first(self):
         self.admin.patch(URL, {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id}, format="json")
@@ -461,6 +519,7 @@ class ArchivedRecordTests(RecordEditBase):
             "a single count": {"maubanin_count": 0},
             "length of stay": {"itinerary_id": self.short_stay.id},
             "resort": {"resort_id": self.other_resort.resort_id},
+            "boat capacity and fare": {"boat_capacity_fare": "3-4 pax"},
         }
         for name, body in cases.items():
             with self.subTest(name):
@@ -489,7 +548,8 @@ class ArchivedRecordTests(RecordEditBase):
             "the head count": dict(THREE_PEOPLE),
             "the length of stay": {"itinerary_id": self.short_stay.id},
             "the resort": {"resort_id": self.other_resort.resort_id},
-            "all three": {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id},
+            "the boat capacity and fare": {"boat_capacity_fare": "3-4 pax"},
+            "all four": {**THREE_PEOPLE, "itinerary_id": self.short_stay.id, "resort_id": self.other_resort.resort_id, "boat_capacity_fare": "3-4 pax"},
         }.items():
             with self.subTest(name):
                 response = self.admin.patch(URL, {"status": "arrived", **extra}, format="json")
@@ -543,6 +603,15 @@ class ArchivedRecordTests(RecordEditBase):
         self.admin.patch(URL, {"status": "arrived"}, format="json")
         self.assertEqual(self.logs(), ["Record EDIT-1 edited: status Pending → Arrived"])
 
+    def test_the_boat_capacity_and_fare_of_an_archived_record_is_not_edited_either(self):
+        """Choosing the tier is editing the record, like the head count it goes with."""
+        TouristRecord.objects.filter(pk="EDIT-1").update(boat_capacity_fare="5-6 pax")
+        self.archive()
+        response = self.admin.patch(URL, {"boat_capacity_fare": "3-4 pax"}, format="json")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["fields"], ["boat_capacity_fare"])
+        self.assertEqual(self.reload().boat_capacity_fare, "5-6 pax")
+
     def test_the_status_and_the_unchanged_head_count_is_still_refused(self):
         """Even the values the record already has: naming a field of the head count on an archived record is the refusal, as a closed field is (a
         PATCH is for what changes)."""
@@ -573,8 +642,9 @@ class ArchivedRecordTests(RecordEditBase):
         self.assertEqual(self.admin.patch(URL, dict(THREE_PEOPLE), format="json").status_code, 200)
         self.assertEqual(self.admin.patch(URL, {"itinerary_id": self.short_stay.id}, format="json").status_code, 200)
         self.assertEqual(self.admin.patch(URL, {"resort_id": self.other_resort.resort_id}, format="json").status_code, 200)
+        self.assertEqual(self.admin.patch(URL, {"boat_capacity_fare": "3-4 pax"}, format="json").status_code, 200)
         self.assertEqual(self.admin.patch(URL, {"status": "no_show"}, format="json").status_code, 200)
-        self.assertEqual(len(self.logs()), 4)
+        self.assertEqual(len(self.logs()), 5)
 
     def test_archive_and_unarchive_themselves_are_not_affected(self):
         self.archive()

@@ -486,7 +486,8 @@ class TouristRecordSerializer(serializers.ModelSerializer):
 
 
 # What PATCH /api/tourist-records/<id>/ may change, by the names the API uses (the ones of TouristRecordSerializer): the whole head count, the
-# Length of Stay, the resort, and the status (the quick Arrived / Cancelled switch of Record Management uses it). Everything else about a record
+# Length of Stay, the resort, the Boat Capacity and Fare (a tier is chosen by the head count, so it must be changeable with it), and the status (the
+# quick Arrived / Cancelled switch of Record Management uses it). Everything else about a record
 # (the name, the email, the contact, the country and place, the arrival date, the boat, the purpose) is the tourist's, and is refused.
 TOURIST_RECORD_EDITABLE_FIELDS = (
     "foreigner_count",
@@ -502,11 +503,13 @@ TOURIST_RECORD_EDITABLE_FIELDS = (
     "discounted_count",
     "itinerary_id",
     "resort_id",
+    "boat_capacity_fare",
     "status",
 )
 
 
-# Of those, what an ARCHIVED record may not change: the head count, the Length of Stay and the resort. Its status may still be (see tourist_record_detail).
+# Of those, what an ARCHIVED record may not change: the head count, the Length of Stay, the resort and the Boat Capacity and Fare. Its status may still be
+# (see tourist_record_detail).
 TOURIST_RECORD_EDIT_ONLY_FIELDS = tuple(name for name in TOURIST_RECORD_EDITABLE_FIELDS if name != "status")
 
 

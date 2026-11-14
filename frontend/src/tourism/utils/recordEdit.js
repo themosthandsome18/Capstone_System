@@ -1,6 +1,6 @@
-// Editing a tourist record from the view modal of Record Management. Only three kinds of thing may change: the head count, the Length of Stay and the
-// resort. Everything else is the tourist's own and stays locked. The server says the same (TOURIST_RECORD_EDITABLE_FIELDS in backend/api/serializers.py,
-// which also takes the status, a PATCH of its own that the Arrived / Cancelled buttons send) and refuses any other field with a 400, so the 13 below are
+// Editing a tourist record from the view modal of Record Management. Only four kinds of thing may change: the head count, the Length of Stay, the
+// resort and the Boat Capacity and Fare (a tier is chosen by the head count, so it goes with it). Everything else is the tourist's own and stays locked. The server says the same (TOURIST_RECORD_EDITABLE_FIELDS in backend/api/serializers.py,
+// which also takes the status, a PATCH of its own that the Arrived / Cancelled buttons send) and refuses any other field with a 400, so the 14 below are
 // ALL a PATCH from this screen may carry.
 import { entranceFeeBreakdown } from "./entranceFee";
 import { formatNumber } from "./format";
@@ -19,6 +19,7 @@ export const RECORD_EDIT_FIELDS = [
   "discounted_count",
   "itinerary_id",
   "resort_id",
+  "boat_capacity_fare",
 ];
 
 // Who may edit: the system admin and the Tourism Office, equal (the server's MODULE_ROLES["tourism"]). A resort account never sees the button.
@@ -33,7 +34,7 @@ function toCount(value) {
   return Number.isNaN(parsed) || parsed < 0 ? 0 : parsed;
 }
 
-// The 13 values to send, from the form of the wizard (strings) or from a record (numbers): the same shape, so "before" and "after" compare.
+// The 14 values to send, from the form of the wizard (strings) or from a record (numbers): the same shape, so "before" and "after" compare.
 export function recordEditPayload(source) {
   const filipino = toCount(source.filipino_count);
   const foreigner = toCount(source.foreigner_count);
@@ -51,6 +52,7 @@ export function recordEditPayload(source) {
     discounted_count: toCount(source.discounted_count),
     itinerary_id: Number(source.itinerary_id),
     resort_id: Number(source.resort_id),
+    boat_capacity_fare: String(source.boat_capacity_fare ?? ""),
   };
 }
 
@@ -95,6 +97,10 @@ export function recordEditChanges(before, after, names) {
   }
   if (before.resort_id !== after.resort_id) {
     add("resort_id", "Resort", names.resort(before.resort_id), names.resort(after.resort_id));
+  }
+  if (before.boat_capacity_fare !== after.boat_capacity_fare) {
+    const shown = (tier) => (tier === "" ? "(none)" : tier);
+    add("boat_capacity_fare", "Boat capacity and fare", shown(before.boat_capacity_fare), shown(after.boat_capacity_fare));
   }
   const feeBefore = entranceFeeBreakdown(before.total_visitors, before.discounted_count).total;
   const feeAfter = entranceFeeBreakdown(after.total_visitors, after.discounted_count).total;

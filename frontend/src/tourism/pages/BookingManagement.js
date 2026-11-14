@@ -384,7 +384,7 @@ function BookingManagement() {
   }, [form]);
 
   // What editing a record shows while it is being edited: what changed (old and new), the new fee, and why it cannot be saved yet. The balance of
-  // the head count is the page's own validateTotals, not a second set of rules; the 13 values are the only ones sent.
+  // the head count is the page's own validateTotals, not a second set of rules; the 14 values are the only ones sent.
   const editNames = {
     itinerary: (id) => resolveLabel(referenceTables.itineraries, id),
     resort: (id) => resolveLabel(referenceTables.resorts, id, "resort_id", "resort_name"),
@@ -425,7 +425,7 @@ function BookingManagement() {
     setSaving(true);
     setEditErrorLines([]);
     try {
-      await updateRecord(editingRecord.survey_id, editAfter); // the 13 fields, and no others
+      await updateRecord(editingRecord.survey_id, editAfter); // the 14 fields, and no others
     } catch (error) {
       setEditErrorLines(serverErrorLines(error));
       setSaving(false);
@@ -545,14 +545,18 @@ function BookingManagement() {
 
   function updateField(field, value) {
     if (isEditing) {
-      // Editing a record: only the 13 fields that may change are written, and nothing follows them (not the boat tier, not the discounted
-      // suggestion): what is typed is what is kept, and what a person did not touch stays as it was.
+      // Editing a record: only the 14 fields that may change are written. The discounted count never follows the ages (it is kept as the record has it:
+      // the fee follows it). The Boat Capacity and Fare is SUGGESTED by the head count, as in Add Record (the same withFareForTotal): when the head count
+      // changes, the tier whose range holds it is chosen, unless the tier already chosen still fits it, or none fits. The staff can change the tier
+      // afterwards (one-way trips, another boat): a suggestion, not a rule, and the warning stays while the tier does not hold the head count.
       if (!RECORD_EDIT_FIELD_NAMES.has(field)) return;
-      setForm((current) => ({
-        ...current,
-        [field]: value,
-        ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
-      }));
+      setForm((current) =>
+        withFareForTotal(current, {
+          ...current,
+          [field]: value,
+          ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
+        })
+      );
       return;
     }
 
@@ -792,7 +796,7 @@ function BookingManagement() {
   }
 
   async function handleSubmit() {
-    if (editingRecord) return; // an existing record is saved by saveEdit(), with the 13 fields that may change: this is only for a new one
+    if (editingRecord) return; // an existing record is saved by saveEdit(), with the 14 fields that may change: this is only for a new one
     for (let step = 1; step <= 4; step++) {
       const stepErr = validateStep(step);
       if (stepErr) {
@@ -1450,7 +1454,7 @@ function BookingManagement() {
                   </p>
                 ) : null}
 
-                {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). While it is edited, only the 13 fields that may change are open: the closed ones sit in a locked fieldset of their own. */}
+                {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). While it is edited, only the 14 fields that may change are open: the closed ones sit in a locked fieldset of their own. */}
                 <fieldset className="wizard-fieldset" disabled={isViewOnly && !isEditing}>
                 {/* ── Step 1: Tourist Info ── */}
                 {currentStep === 1 && (
@@ -1568,9 +1572,10 @@ function BookingManagement() {
 
                 {/* ── Step 3: Travel Details ── */}
                 {currentStep === 3 && (
-                  <fieldset className="wizard-locked" disabled={isViewOnly}>
-                  {isViewOnly ? <LockedNote /> : null}
+                  <>
+                  {isViewOnly ? <LockedNote open={isEditing ? "Boat Capacity and Fare" : ""} /> : null}
                   <div className="wizard-grid">
+                    <fieldset className="wizard-locked wizard-locked-inline" disabled={isViewOnly}>
                     <WizardField label="Vehicle Classification" required>
                       <select
                         value={form.travel_mode_id}
@@ -1624,6 +1629,7 @@ function BookingManagement() {
                         </select>
                       </WizardField>
                     )}
+                    </fieldset>
                     <WizardField label="Boat Capacity and Fare">
                       <select
                         value={form.boat_capacity_fare}
@@ -1640,7 +1646,7 @@ function BookingManagement() {
                       )}
                     </WizardField>
                   </div>
-                  </fieldset>
+                  </>
                 )}
 
                 {/* ── Step 4: Head Count ── */}
@@ -1849,6 +1855,11 @@ function BookingManagement() {
                     ))}
                   </tbody>
                 </table>
+                {fareWarning ? (
+                  <p className="record-edit-fare-note" role="note">
+                    Boat Capacity and Fare: {fareWarning} Saving is still possible: the tier can be one the visitors really took.
+                  </p>
+                ) : null}
                 {editErrorLines.length ? (
                   <div className="record-edit-server-error" role="alert">
                     <strong>The server did not accept this change. Nothing was saved.</strong>
@@ -1997,10 +2008,11 @@ function ImportStat({ label, value }) {
 }
 
 // What a record's closed fields say, above them: the tourist's own, shown to read, and never changed here.
-function LockedNote() {
+function LockedNote({ open = "" }) {
   return (
     <p className="wizard-locked-note">
-      <FiLock size={13} aria-hidden="true" /> This is the tourist&apos;s own information. It is shown here to read, and it cannot be changed.
+      <FiLock size={13} aria-hidden="true" /> This is the tourist&apos;s own information. It is shown here to read, and it cannot be changed
+      {open ? <>, except the {open}</> : null}.
     </p>
   );
 }

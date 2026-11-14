@@ -36,8 +36,14 @@ const REFERENCE = {
   resorts: [{ resort_id: 3, resort_name: "Sample Beach" }],
   itineraries: [{ id: 11, name: "Weekend Trail", is_active: true }],
   travelModes: [{ id: 21, name: "Jeepney Ride", is_active: true }],
-  boatTypes: [{ id: 31, name: "Banca", requires_capacity_fare: false, is_active: true }],
+  boatTypes: [{ id: 31, name: "Banca", requires_capacity_fare: true, is_active: true }],
   visitPurposes: [{ id: 41, name: "Holiday Break", is_active: true }],
+  // the tiers of the Boat Capacity and Fare, each with its own range (min_pax, max_pax): the head count decides which one fits
+  boatCapacityFares: [
+    { id: 1, name: "1-2 pax", min_pax: 1, max_pax: 2, is_active: true, display_order: 10 },
+    { id: 2, name: "3-4 pax", min_pax: 3, max_pax: 4, is_active: true, display_order: 20 },
+    { id: 3, name: "5-6 pax", min_pax: 5, max_pax: 6, is_active: true, display_order: 30 },
+  ],
 };
 
 const RECORD = {
@@ -53,7 +59,7 @@ const RECORD = {
   itinerary_id: 11,
   travel_mode_id: 21,
   boat_type_id: 31,
-  boat_capacity_fare: "",
+  boat_capacity_fare: "1-2 pax",
   visit_purpose_id: 41,
   arrival_date: "2099-06-01",
   filipino_count: 2,
@@ -234,7 +240,7 @@ describe("a record that is only looked at", () => {
 // Admin and the Tourism Office press Edit: the head count (11 fields), the Length of Stay and the resort open. Nothing else does.
 const ALLOWED_LABELS = [
   "Resort", "Length of Stay", "Filipino Count", "Maubanin", "Foreigner Count", "Total Male", "Total Female", "Age 0-7", "Age 8-59", "Age 60+",
-  "Special Needs", "Discounted (PHP 64)",
+  "Special Needs", "Discounted (PHP 64)", "Boat Capacity and Fare",
 ];
 const labelOf = (control) => {
   const field = control.closest(".wizard-field");
@@ -263,7 +269,7 @@ describe("a record in Edit mode: the closed fields are STILL closed", () => {
   const OPEN_IN_STEP = [
     ["Tourist Info", []],
     ["Location", ["Length of Stay", "Resort"]],
-    ["Travel Details", []],
+    ["Travel Details", ["Boat Capacity and Fare"]], // the fourth thing: NOT the Boat Classification or the Vehicle Classification
     ["Head Count", ["Age 0-7", "Age 60+", "Age 8-59", "Discounted (PHP 64)", "Filipino Count", "Foreigner Count", "Maubanin", "Special Needs", "Total Female", "Total Male"]],
     ["Review", []],
   ];
@@ -289,7 +295,9 @@ describe("a record in Edit mode: the closed fields are STILL closed", () => {
     );
     goToStep("Travel Details");
     expect(document.querySelector('.wizard-body input[type="date"]').matches(":disabled")).toBe(true);
-    Array.from(document.querySelectorAll(".wizard-body select")).forEach((select) => expect(select.matches(":disabled")).toBe(true));
+    // the Vehicle Classification, the Boat Classification, the purpose and the status are locked; only the Boat Capacity and Fare is open
+    const openSelects = Array.from(document.querySelectorAll(".wizard-body select")).filter((select) => !select.matches(":disabled"));
+    expect(openSelects.map(labelOf)).toEqual(["Boat Capacity and Fare"]);
     goToStep("Location");
     expect(screen.getByText("Select region", { selector: "option" }).closest("select").matches(":disabled")).toBe(true);
     expect(screen.getByText("Select province", { selector: "option" }).closest("select").matches(":disabled")).toBe(true);
@@ -419,7 +427,7 @@ describe("a record in Edit mode: live, confirm, send", () => {
     ]);
   });
 
-  it("Confirm sends the 13 fields and ONLY those, and the closed fields are not in it", async () => {
+  it("Confirm sends the 14 fields and ONLY those, and the closed fields are not in it", async () => {
     await openForEdit();
     setCount("Filipino Count", 1);
     setCount("Total Male", 1);
@@ -434,13 +442,13 @@ describe("a record in Edit mode: live, confirm, send", () => {
     expect(Object.keys(payload).sort()).toEqual(
       [
         "foreigner_count", "filipino_count", "maubanin_count", "total_visitors", "total_male", "total_female", "age_0_7", "age_8_59", "age_60_above",
-        "special_group_count", "discounted_count", "itinerary_id", "resort_id",
+        "special_group_count", "discounted_count", "itinerary_id", "resort_id", "boat_capacity_fare",
       ].sort()
     );
-    for (const closed of ["first_name", "last_name", "full_name", "email", "contact_number", "country_id", "region_id", "province_id", "arrival_date", "travel_mode_id", "boat_type_id", "boat_capacity_fare", "visit_purpose_id", "status", "survey_id", "consent_confirmed", "parking_space", "country_of_origin"]) {
+    for (const closed of ["first_name", "last_name", "full_name", "email", "contact_number", "country_id", "region_id", "province_id", "arrival_date", "travel_mode_id", "boat_type_id", "visit_purpose_id", "status", "survey_id", "consent_confirmed", "parking_space", "country_of_origin"]) {
       expect(payload).not.toHaveProperty(closed);
     }
-    expect(payload).toMatchObject({ total_visitors: 1, filipino_count: 1, total_male: 1, total_female: 0, age_8_59: 1, itinerary_id: 11, resort_id: 3 });
+    expect(payload).toMatchObject({ total_visitors: 1, filipino_count: 1, total_male: 1, total_female: 0, age_8_59: 1, itinerary_id: 11, resort_id: 3, boat_capacity_fare: "1-2 pax" });
     await waitFor(() => expect(document.querySelector(".wizard-shell")).toBeNull()); // saved: it closes
     expect(createRecord).not.toHaveBeenCalled();
   });
@@ -474,6 +482,94 @@ describe("a record in Edit mode: live, confirm, send", () => {
     expect(alert.textContent).toContain("Nothing was saved");
     expect(alert.textContent).not.toMatch(/something went wrong/i);
     expect(document.querySelector(".wizard-shell")).not.toBeNull();
+  });
+});
+
+describe("a record in Edit mode: the Boat Capacity and Fare follows the head count (the same rule as Add Record), and can still be changed", () => {
+  const saveButton = () => within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Save" });
+  const fareSelect = () => {
+    goToStep("Travel Details");
+    return screen.getByText("Select capacity and fare", { selector: "option" }).closest("select");
+  };
+  const hint = () => document.querySelector(".wizard-field-hint.warning")?.textContent ?? "";
+
+  it("raising the pax moves the tier to the one that fits, and lowering it moves it back", async () => {
+    await openForEdit();
+    expect(fareSelect().value).toBe("1-2 pax");
+    setCount("Filipino Count", 3);
+    expect(fareSelect().value).toBe("3-4 pax");
+    expect(hint()).toBe("");
+    setCount("Filipino Count", 1);
+    expect(fareSelect().value).toBe("1-2 pax");
+    setCount("Filipino Count", 5);
+    expect(fareSelect().value).toBe("5-6 pax");
+  });
+
+  it("the tier that was already chosen stays when it still fits the new head count", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 1); // 1-2 pax still holds 1
+    expect(fareSelect().value).toBe("1-2 pax");
+  });
+
+  it("the staff can change the tier afterwards, and it is kept; the warning says it does not fit, and does not stop anything", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 3);
+    expect(fareSelect().value).toBe("3-4 pax");
+    fireEvent.change(fareSelect(), { target: { value: "5-6 pax" } });
+    expect(fareSelect().value).toBe("5-6 pax"); // one-way trips, another boat: the person decides
+    expect(hint()).toBe("3 visitors do not fit 5-6 pax.");
+    balanceHeadCount(3);
+    expect(saveButton().matches(":disabled")).toBe(false); // informs, does not stop
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    const rows = Array.from(dialog.querySelectorAll("tbody tr")).map((row) => Array.from(row.children).map((cell) => cell.textContent.trim()));
+    expect(rows).toContainEqual(["Boat capacity and fare", "1-2 pax", "\u2192", "5-6 pax"]);
+    expect(dialog.querySelector(".record-edit-fare-note").textContent).toMatch(/3 visitors do not fit 5-6 pax\./);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and save" }));
+    await waitFor(() => expect(updateRecord).toHaveBeenCalledTimes(1));
+    expect(updateRecord.mock.calls[0][1]).toMatchObject({ total_visitors: 3, boat_capacity_fare: "5-6 pax" });
+  });
+
+  it("when NO tier fits the new head count, the tier stays as it was and the warning says so", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 9);
+    expect(fareSelect().value).toBe("1-2 pax"); // nothing is chosen for the person
+    expect(hint()).toBe("9 visitors do not fit 1-2 pax.");
+  });
+
+  it("the head count and the tier go in one save, with the new tier in the confirmation", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 3);
+    balanceHeadCount(3);
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    const rows = Array.from(dialog.querySelectorAll("tbody tr")).map((row) => Array.from(row.children).map((cell) => cell.textContent.trim()));
+    expect(rows).toContainEqual(["Boat capacity and fare", "1-2 pax", "\u2192", "3-4 pax"]);
+    expect(dialog.querySelector(".record-edit-fare-note")).toBeNull(); // it fits: no warning
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and save" }));
+    await waitFor(() => expect(updateRecord).toHaveBeenCalledTimes(1));
+    expect(updateRecord.mock.calls[0][1]).toMatchObject({ total_visitors: 3, boat_capacity_fare: "3-4 pax" });
+  });
+
+  it("Cancel drops the tier that was suggested", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 3);
+    fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Cancel" }));
+    await screen.findByText("Tourist Record Details");
+    goToStep("Travel Details");
+    expect(screen.getByText("Select capacity and fare", { selector: "option" }).closest("select").value).toBe("1-2 pax");
+  });
+
+  it("a boat that takes no fare keeps the field shut, and no tier is chosen", async () => {
+    useTourismData.mockReturnValue({
+      ...useTourismData(),
+      referenceTables: { ...REFERENCE, boatTypes: [{ id: 31, name: "Banca", requires_capacity_fare: false, is_active: true }] },
+    });
+    await openForEdit();
+    setCount("Filipino Count", 3);
+    goToStep("Travel Details");
+    expect(screen.getByText("Select capacity and fare", { selector: "option" }).closest("select").matches(":disabled")).toBe(true);
+    expect(enabledControls().map(labelOf)).not.toContain("Boat Capacity and Fare");
   });
 });
 
