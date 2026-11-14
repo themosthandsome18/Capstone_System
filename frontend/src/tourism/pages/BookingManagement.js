@@ -10,9 +10,11 @@ import {
   FiRotateCcw,
   FiCheck,
   FiX,
+  FiLock,
   FiUpload,
 } from "react-icons/fi";
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useBookingListPolling, useTourismData } from "../context/TourismDataContext";
 import { tourismApi } from "../services/tourismApi";
@@ -28,6 +30,15 @@ import { choicesFor } from "../utils/optionChoices";
 import { fareChoicesFor, fareTiers } from "../utils/fareChoices";
 import { formatNumber } from "../utils/format";
 import {
+  RECORD_EDIT_FIELDS,
+  canEditRecords,
+  peso,
+  recordEditBlankProblem,
+  recordEditChanges,
+  recordEditPayload,
+  serverErrorLines,
+} from "../utils/recordEdit";
+import {
   DISCOUNTED_ENTRANCE_FEE,
   editDiscountedCount,
   effectiveDiscountedCount,
@@ -39,6 +50,7 @@ import {
 } from "../utils/entranceFee";
 
 const pageSize = 10;
+const RECORD_EDIT_FIELD_NAMES = new Set(RECORD_EDIT_FIELDS);
 
 const initialForm = {
   first_name: "",
@@ -157,9 +169,15 @@ function BookingManagement() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const { role } = useAuth();
   const [editingRecord, setEditingRecord] = useState(null);
-  // A record opened from the table is only LOOKED AT: the data is the tourist's, who has already paid. Add Record has no editingRecord.
+  // A record opened from the table is LOOKED AT: the data is the tourist's, who has already paid. Add Record has no editingRecord.
+  // "Edit" (admin and Tourism Office) opens only the head count, the Length of Stay and the resort (isEditing); every other field of a
+  // record stays locked, and Cancel / Save take the place of Close.
   const isViewOnly = Boolean(editingRecord);
+  const [isEditing, setIsEditing] = useState(false);
+  const [confirmingEdit, setConfirmingEdit] = useState(false);
+  const [editErrorLines, setEditErrorLines] = useState([]);
 
   const todayDateString = useMemo(() => getTodayDateString(), []);
 
@@ -366,6 +384,62 @@ function BookingManagement() {
     };
   }, [form]);
 
+  // What editing a record shows while it is being edited: what changed (old and new), the new fee, and why it cannot be saved yet. The balance of
+  // the head count is the page's own validateTotals, not a second set of rules; the 13 values are the only ones sent.
+  const editNames = {
+    itinerary: (id) => resolveLabel(referenceTables.itineraries, id),
+    resort: (id) => resolveLabel(referenceTables.resorts, id, "resort_id", "resort_name"),
+  };
+  const editBefore = editingRecord ? recordEditPayload(editingRecord) : null;
+  const editAfter = isEditing ? recordEditPayload(form) : null;
+  const editChanges = isEditing ? recordEditChanges(editBefore, editAfter, editNames) : [];
+  const editProblem = isEditing ? recordEditBlankProblem(form) || validateTotals(editAfter) : "";
+  // An archived record is not edited: it is brought back to the table first. The row says so; a record opened from a notice (read by its survey ID)
+  // is looked up among the rows that are loaded.
+  const editingArchived = editingRecord
+    ? Boolean(editingRecord.is_archived ?? bookingRows.find((row) => row.survey_id === editingRecord.survey_id)?.is_archived)
+    : false;
+  const canEdit = canEditRecords(role);
+
+  function startEdit() {
+    if (!canEdit || editingArchived || !editingRecord) return;
+    // the discounted count is kept as the record has it: it never follows the ages while a record is edited, because the fee follows it
+    setForm((current) => ({ ...current, discounted_edited: true }));
+    setIsEditing(true);
+    setConfirmingEdit(false);
+    setEditErrorLines([]);
+    setFormError("");
+    setStepError("");
+    setCurrentStep(4);
+  }
+
+  function cancelEdit() {
+    openViewRecord(editingRecord); // the form is read again from the record: whatever was typed is dropped
+  }
+
+  function askToSaveEdit() {
+    if (!editChanges.length || editProblem) return;
+    setEditErrorLines([]);
+    setConfirmingEdit(true);
+  }
+
+  async function saveEdit() {
+    if (!editingRecord || !editAfter) return;
+    setSaving(true);
+    setEditErrorLines([]);
+    try {
+      await updateRecord(editingRecord.survey_id, editAfter); // the 13 fields, and no others
+    } catch (error) {
+      setEditErrorLines(serverErrorLines(error));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    closeForm();
+    showFirstPageAfterChange();
+    refreshListInBackground("Record updated.");
+  }
+
   function openAddRecord() {
     setEditingRecord(null);
     // Default country to Philippines (find by name)
@@ -381,6 +455,9 @@ function BookingManagement() {
 
   function openViewRecord(record) {
     setEditingRecord(record);
+    setIsEditing(false);
+    setConfirmingEdit(false);
+    setEditErrorLines([]);
     let firstName = record.first_name || "";
     let lastName = record.last_name || "";
     if (!firstName && !lastName && record.full_name) {
@@ -460,6 +537,9 @@ function BookingManagement() {
   function closeForm() {
     setIsAddOpen(false);
     setEditingRecord(null);
+    setIsEditing(false);
+    setConfirmingEdit(false);
+    setEditErrorLines([]);
     setForm(initialForm);
     setFormError("");
     setStepError("");
@@ -467,6 +547,18 @@ function BookingManagement() {
   }
 
   function updateField(field, value) {
+    if (isEditing) {
+      // Editing a record: only the 13 fields that may change are written, and nothing follows them (not the boat tier, not the discounted
+      // suggestion): what is typed is what is kept, and what a person did not touch stays as it was.
+      if (!RECORD_EDIT_FIELD_NAMES.has(field)) return;
+      setForm((current) => ({
+        ...current,
+        [field]: value,
+        ...(field === "filipino_count" && toInteger(value) <= 0 ? { maubanin_count: "0" } : {}),
+      }));
+      return;
+    }
+
     if (field === "discounted_count") {
       setForm((current) => editDiscountedCount(current, value));
       return;
@@ -703,6 +795,7 @@ function BookingManagement() {
   }
 
   async function handleSubmit() {
+    if (editingRecord) return; // an existing record is saved by saveEdit(), with the 13 fields that may change: this is only for a new one
     for (let step = 1; step <= 4; step++) {
       const stepErr = validateStep(step);
       if (stepErr) {
@@ -723,15 +816,10 @@ function BookingManagement() {
     setSaving(true);
     setFormError("");
 
-    const wasEditing = Boolean(editingRecord);
     let saved = false;
 
     try {
-      if (editingRecord) {
-        await updateRecord(editingRecord.survey_id, payload);
-      } else {
-        await createRecord(payload);
-      }
+      await createRecord(payload);
       saved = true;
     } catch (error) {
       setFormError(getErrorMessage(error));
@@ -743,7 +831,7 @@ function BookingManagement() {
       // The record is saved: close right away and refresh the list in the background.
       closeForm();
       showFirstPageAfterChange();
-      refreshListInBackground(wasEditing ? "Record updated." : "Record saved.");
+      refreshListInBackground("Record saved.");
     }
   }
 
@@ -1302,7 +1390,7 @@ function BookingManagement() {
             {/* ── Sidebar ── */}
             <aside className="wizard-sidebar">
               <p className="wizard-sidebar-title">
-                {isViewOnly ? "Tourist Record Details" : "Data Management Add Record"}
+                {isEditing ? "Editing a Tourist Record" : isViewOnly ? "Tourist Record Details" : "Data Management Add Record"}
               </p>
               {WIZARD_STEPS.map((step, idx) => {
                 const stepNum = idx + 1;
@@ -1358,10 +1446,43 @@ function BookingManagement() {
               </div>
 
               <div className="wizard-body">
-                {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). */}
-                <fieldset className="wizard-fieldset" disabled={isViewOnly}>
+                {isEditing ? (
+                  <div className="record-edit-panel" role="status" aria-live="polite">
+                    <p className="record-edit-panel-lead">
+                      <FiLock size={14} aria-hidden="true" /> Editing: only the <strong>head count</strong>, the <strong>length of stay</strong> and the{" "}
+                      <strong>resort</strong> can change. Everything else on this record is the tourist&apos;s and stays locked.
+                    </p>
+                    <dl className="record-edit-now">
+                      <div>
+                        <dt>Pax</dt>
+                        <dd>
+                          {editBefore.total_visitors}
+                          {editAfter.total_visitors !== editBefore.total_visitors ? ` → ${editAfter.total_visitors}` : " (no change)"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Environmental Fee</dt>
+                        <dd>
+                          {peso(entranceFeeBreakdown(editBefore.total_visitors, editBefore.discounted_count).total)}
+                          {editProblem
+                            ? " → — (see the problem below)"
+                            : entranceFeeBreakdown(editAfter.total_visitors, editAfter.discounted_count).total !==
+                              entranceFeeBreakdown(editBefore.total_visitors, editBefore.discounted_count).total
+                            ? ` → ${peso(entranceFeeBreakdown(editAfter.total_visitors, editAfter.discounted_count).total)}`
+                            : " (no change)"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {editProblem ? <p className="wizard-step-error record-edit-problem">{editProblem}</p> : null}
+                  </div>
+                ) : null}
+
+                {/* Looking at a record: every field below is locked (a disabled fieldset locks its inputs, selects and buttons). While it is edited, only the 13 fields that may change are open: the closed ones sit in a locked fieldset of their own. */}
+                <fieldset className="wizard-fieldset" disabled={isViewOnly && !isEditing}>
                 {/* ── Step 1: Tourist Info ── */}
                 {currentStep === 1 && (
+                  <fieldset className="wizard-locked" disabled={isViewOnly}>
+                  {isViewOnly ? <LockedNote /> : null}
                   <div className="wizard-grid">
                     <WizardField label="First Name" required>
                       <input
@@ -1414,13 +1535,14 @@ function BookingManagement() {
                       </select>
                     </WizardField>
                   </div>
+                  </fieldset>
                 )}
 
                 {/* ── Step 2: Location ── */}
                 {currentStep === 2 && (
                   <div className="wizard-grid">
                     {requiresLocation && (
-                      <>
+                      <fieldset className="wizard-locked wizard-locked-inline" disabled={isViewOnly}>
                         <WizardField label="Region" required>
                           <select
                             value={form.region_id}
@@ -1444,7 +1566,7 @@ function BookingManagement() {
                             ))}
                           </select>
                         </WizardField>
-                      </>
+                      </fieldset>
                     )}
                     <WizardField label="Resort" required>
                       <select
@@ -1473,6 +1595,8 @@ function BookingManagement() {
 
                 {/* ── Step 3: Travel Details ── */}
                 {currentStep === 3 && (
+                  <fieldset className="wizard-locked" disabled={isViewOnly}>
+                  {isViewOnly ? <LockedNote /> : null}
                   <div className="wizard-grid">
                     <WizardField label="Vehicle Classification" required>
                       <select
@@ -1543,6 +1667,7 @@ function BookingManagement() {
                       )}
                     </WizardField>
                   </div>
+                  </fieldset>
                 )}
 
                 {/* ── Step 4: Head Count ── */}
@@ -1613,7 +1738,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Contact Number" value={form.contact_number || "—"} />
                       <WizardReviewItem label="Country" value={resolveLabel(referenceTables.countries, form.country_id)} />
                     </WizardReviewSection>
-                    <WizardReviewSection title="Location" onEdit={isViewOnly ? undefined : () => jumpToStep(2)}>
+                    <WizardReviewSection title="Location" onEdit={!isViewOnly || isEditing ? () => jumpToStep(2) : undefined}>
                       <WizardReviewItem label="Region" value={resolveLabel(referenceTables.regions, form.region_id)} />
                       <WizardReviewItem label="Province" value={resolveLabel(referenceTables.provinces, form.province_id)} />
                       <WizardReviewItem label="Resort" value={resolveLabel(referenceTables.resorts, form.resort_id, "resort_id", "resort_name")} />
@@ -1626,7 +1751,7 @@ function BookingManagement() {
                       <WizardReviewItem label="Arrival Date" value={form.arrival_date || "—"} />
                       <WizardReviewItem label="Arrival Status" value={!editingRecord || form.status === "pending" ? "Pending" : form.status === "arrived" ? "Arrived (Confirmed)" : "—"} />
                     </WizardReviewSection>
-                    <WizardReviewSection title="Head Count" onEdit={isViewOnly ? undefined : () => jumpToStep(4)}>
+                    <WizardReviewSection title="Head Count" onEdit={!isViewOnly || isEditing ? () => jumpToStep(4) : undefined}>
                       <WizardReviewItem label="Filipino Count" value={form.filipino_count} />
                       <WizardReviewItem label="Foreigner Count" value={form.foreigner_count} />
                       <WizardReviewItem label="Total Male" value={form.total_male} />
@@ -1649,12 +1774,53 @@ function BookingManagement() {
 
               {/* ── Footer ── */}
               <div className="wizard-footer">
-                {isViewOnly ? <span /> : <span className="wizard-footer-note">Progress saved automatically</span>}
+                {isEditing ? (
+                  <span className="wizard-footer-note">Nothing is saved until you confirm.</span>
+                ) : isViewOnly ? (
+                  editingArchived && canEdit ? (
+                    <span className="wizard-footer-note record-edit-archived-note" role="note">
+                      This record is archived. Bring it back to the table (unarchive it) before changing it.
+                    </span>
+                  ) : (
+                    <span />
+                  )
+                ) : (
+                  <span className="wizard-footer-note">Progress saved automatically</span>
+                )}
                 <div className="wizard-footer-actions">
-                  {isViewOnly ? (
-                    <button type="button" className="wizard-btn-close" onClick={closeForm}>
-                      Close
-                    </button>
+                  {isViewOnly && !isEditing ? (
+                    <>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          className="wizard-btn-edit"
+                          onClick={startEdit}
+                          disabled={editingArchived}
+                          title={editingArchived ? "Archived: bring it back to the table first" : "Change the head count, the length of stay or the resort"}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      <button type="button" className="wizard-btn-close" onClick={closeForm}>
+                        Close
+                      </button>
+                    </>
+                  ) : null}
+                  {isEditing ? (
+                    <>
+                      <button type="button" className="wizard-btn-back" onClick={cancelEdit} disabled={saving}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="wizard-btn-save"
+                        onClick={askToSaveEdit}
+                        disabled={saving || !editChanges.length || Boolean(editProblem)}
+                        title={editProblem || (!editChanges.length ? "Nothing has changed yet" : "Review the changes and save")}
+                      >
+                        Save
+                      </button>
+                    </>
                   ) : null}
                   {!isViewOnly && currentStep > 1 && (
                     <button type="button" className="wizard-btn-back" onClick={handleStepBack}>
@@ -1690,6 +1856,47 @@ function BookingManagement() {
               </div>
             </div>
           </div>
+
+          {confirmingEdit && editingRecord ? (
+            <div className="record-edit-confirm-backdrop">
+              <div className="record-edit-confirm" role="dialog" aria-modal="true" aria-label="Confirm the changes">
+                <h3>Save these changes?</h3>
+                <p className="record-edit-confirm-lead">
+                  Record {editingRecord.survey_id}. Only what changed is listed, as it was and as it will be.
+                </p>
+                <table className="record-edit-changes">
+                  <tbody>
+                    {editChanges.map((change) => (
+                      <tr key={change.key} data-change={change.key}>
+                        <th scope="row">{change.label}</th>
+                        <td className="record-edit-from">{change.from}</td>
+                        <td className="record-edit-arrow" aria-hidden="true">&rarr;</td>
+                        <td className="record-edit-to">{change.to}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {editErrorLines.length ? (
+                  <div className="record-edit-server-error" role="alert">
+                    <strong>The server did not accept this change. Nothing was saved.</strong>
+                    <ul>
+                      {editErrorLines.map((line, index) => (
+                        <li key={index}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className="record-edit-confirm-actions">
+                  <button type="button" className="wizard-btn-back" onClick={() => setConfirmingEdit(false)} disabled={saving}>
+                    Go back
+                  </button>
+                  <button type="button" className="wizard-btn-save" onClick={saveEdit} disabled={saving}>
+                    {saving ? "Saving..." : "Confirm and save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1813,6 +2020,15 @@ function ImportStat({ label, value }) {
       <span>{label}</span>
       <strong>{Number(value || 0).toLocaleString()}</strong>
     </div>
+  );
+}
+
+// What a record's closed fields say, above them: the tourist's own, shown to read, and never changed here.
+function LockedNote() {
+  return (
+    <p className="wizard-locked-note">
+      <FiLock size={13} aria-hidden="true" /> This is the tourist&apos;s own information. It is shown here to read, and it cannot be changed.
+    </p>
   );
 }
 

@@ -4,10 +4,13 @@ import { join } from "path";
 import BookingManagement from "./BookingManagement";
 import { useTourismData } from "../context/TourismDataContext";
 import { deriveTourismTheme, hexToRgb } from "../theme/deriveTourismTheme";
-import { balanceHeadCount, fillAddRecordUpToTravel, goToStep, setCount } from "../testing/addRecordFlow";
+import { balanceHeadCount, fieldInput, fillAddRecordUpToTravel, goToStep, setCount } from "../testing/addRecordFlow";
 
-// A record opened from the table in Record Management is only LOOKED AT: the data is the tourist's, who has already paid, and the admin
-// changes nothing. Add Record is the same wizard and is NOT changed.
+// A record opened from the table in Record Management is LOOKED AT: the data is the tourist's, who has already paid. The admin and the Tourism
+// Office have one button, Edit, which opens ONLY the head count, the Length of Stay and the resort; every other field stays locked, in Edit mode
+// too (that is the most important thing in this file). A role that may not edit has no Edit button at all. Add Record is the same wizard and is
+// NOT changed.
+let mockRole = "admin";
 
 let mockRouterState = null;
 jest.mock(
@@ -19,7 +22,7 @@ jest.mock(
   }),
   { virtual: true }
 );
-jest.mock("../../auth/AuthContext", () => ({ useAuth: () => ({ role: "admin" }) }));
+jest.mock("../../auth/AuthContext", () => ({ useAuth: () => ({ role: mockRole }) }));
 jest.mock("../context/TourismDataContext", () => ({
   useTourismData: jest.fn(),
   useBookingListPolling: jest.fn(),
@@ -71,6 +74,7 @@ let updateRecord;
 let createRecord;
 
 beforeEach(() => {
+  mockRole = "admin";
   mockRouterState = null;
   updateRecord = jest.fn().mockResolvedValue({});
   createRecord = jest.fn().mockResolvedValue({});
@@ -115,8 +119,9 @@ describe("a record that is only looked at", () => {
   });
 
   it.each(STEPS.map((label, i) => [i + 1, label]))(
-    "step %i (%s): no Edit, Back, Update Record, Save Record, Continue or Cancel, and no 'Progress saved automatically'; only Close",
+    "step %i (%s), for a role that may not edit: no Edit, Back, Update Record, Save Record, Continue or Cancel, and no 'Progress saved automatically'; only Close",
     async (number, label) => {
+      mockRole = "resort";
       await openView();
       goToStep(label);
       expect(stepTitle()).toBe(`Step ${number} of 5 • ${label}`);
@@ -132,7 +137,38 @@ describe("a record that is only looked at", () => {
     }
   );
 
-  it("the last step shows the whole record, with none of its four Edit buttons", async () => {
+  it.each(["admin", "tourism"])(
+    "step by step, for %s: Edit and Close, and none of Back, Update Record, Save Record, Continue or Cancel, and no 'Progress saved automatically'",
+    async (role) => {
+      mockRole = role;
+      await openView();
+      for (const [index, label] of STEPS.entries()) {
+        goToStep(label);
+        expect(stepTitle()).toBe(`Step ${index + 1} of 5 \u2022 ${label}`);
+        expect(footerButtons()).toEqual(["Edit", "Close"]);
+        expect(screen.queryByRole("button", { name: /^Back$/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /Update Record|Save Record/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /Continue/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /^Cancel$/ })).toBeNull();
+        expect(screen.queryByText("Progress saved automatically")).toBeNull();
+      }
+    }
+  );
+
+  it("a role that may not edit never sees Edit, not even disabled", async () => {
+    for (const role of ["resort", "sanitation", "tourist", ""]) {
+      mockRole = role;
+      const { unmount } = render(<BookingManagement />);
+      const row = await waitFor(() => screen.getByText("SV-VIEW").closest("tr"));
+      fireEvent.click(row.querySelector(".booking-icon-btn.view"));
+      await screen.findByText("Tourist Record Details");
+      expect(footerButtons()).toEqual(["Close"]);
+      unmount();
+    }
+  });
+
+  it("the last step shows the whole record, with none of its four Edit buttons of the sections", async () => {
+    mockRole = "resort";
     await openView();
     goToStep("Review");
     ["Tourist Info", "Location", "Travel Details", "Head Count"].forEach((title) =>
@@ -176,12 +212,275 @@ describe("a record that is only looked at", () => {
     }
   );
 
+  it("on the last step the sections have no Edit buttons of their own; the one Edit is the footer's", async () => {
+    await openView();
+    goToStep("Review");
+    expect(document.querySelectorAll(".wizard-review-edit-btn")).toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Edit" }).closest(".wizard-footer")).not.toBeNull();
+  });
+
   it("Close closes it, and nothing was sent", async () => {
     await openView();
     fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(document.querySelector(".wizard-shell")).toBeNull());
     expect(updateRecord).not.toHaveBeenCalled();
     expect(createRecord).not.toHaveBeenCalled();
+  });
+});
+
+
+// ───────────────────────────── Edit mode ─────────────────────────────
+// Admin and the Tourism Office press Edit: the head count (11 fields), the Length of Stay and the resort open. Nothing else does.
+const ALLOWED_LABELS = [
+  "Resort", "Length of Stay", "Filipino Count", "Maubanin", "Foreigner Count", "Total Male", "Total Female", "Age 0-7", "Age 8-59", "Age 60+",
+  "Special Needs", "Discounted (PHP 64)",
+];
+const labelOf = (control) => {
+  const field = control.closest(".wizard-field");
+  return field ? field.querySelector("label").textContent.replace(/\s*\*$/, "").trim() : control.textContent.trim();
+};
+const openForEdit = async () => {
+  await openView();
+  fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Edit" }));
+  await screen.findByText("Editing a Tourist Record");
+};
+const enabledControls = () =>
+  Array.from(document.querySelectorAll(".wizard-body input, .wizard-body select, .wizard-body textarea, .wizard-body button")).filter(
+    (control) => !control.matches(":disabled")
+  );
+
+describe("a record in Edit mode: the closed fields are STILL closed", () => {
+  it("Edit turns the footer into Cancel and Save, and Save waits for a change", async () => {
+    await openForEdit();
+    expect(footerButtons()).toEqual(["Cancel", "Save"]);
+    expect(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Save" }).matches(":disabled")).toBe(true);
+    expect(within(document.querySelector(".wizard-footer")).queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
+  // what is open in each step of Edit mode: exactly this, and nothing else (Tourist Info and Travel Details: nothing at all; Location: the resort and
+  // the Length of Stay, NOT Region or Province; Head Count: the count; Review: no field)
+  const OPEN_IN_STEP = [
+    ["Tourist Info", []],
+    ["Location", ["Length of Stay", "Resort"]],
+    ["Travel Details", []],
+    ["Head Count", ["Age 0-7", "Age 60+", "Age 8-59", "Discounted (PHP 64)", "Filipino Count", "Foreigner Count", "Maubanin", "Special Needs", "Total Female", "Total Male"]],
+    ["Review", []],
+  ];
+  it.each(OPEN_IN_STEP)("step %s: the only fields a person can use are %j", async (label, expected) => {
+    await openForEdit();
+    goToStep(label);
+    const open = enabledControls()
+      .filter((control) => !control.closest(".record-edit-panel"))
+      .filter((control) => !control.matches(".wizard-review-edit-btn"));
+    const named = open.filter((control) => !control.closest(".tourist-auto-fill-row")).map(labelOf);
+    expect(named.sort()).toEqual([...expected].sort());
+    expect(named.filter((name) => !ALLOWED_LABELS.includes(name))).toEqual([]);
+  });
+
+  it("the name, the email, the contact, the country, the place, the boat, the purpose, the date and the status are disabled, and say so", async () => {
+    await openForEdit();
+    for (const label of ["Tourist Info", "Location", "Travel Details"]) {
+      goToStep(label);
+      expect(document.querySelector(".wizard-locked").matches(":disabled")).toBe(true);
+    }
+    goToStep("Tourist Info");
+    expect(document.querySelector(".wizard-locked-note").textContent).toMatch(/tourist's own information/);
+    ["First name", "Last name", "email@example.com", "9XXXXXXXXX"].forEach((placeholder) =>
+      expect(screen.getByPlaceholderText(placeholder).matches(":disabled")).toBe(true)
+    );
+    goToStep("Travel Details");
+    expect(document.querySelector('.wizard-body input[type="date"]').matches(":disabled")).toBe(true);
+    Array.from(document.querySelectorAll(".wizard-body select")).forEach((select) => expect(select.matches(":disabled")).toBe(true));
+    goToStep("Location");
+    expect(screen.getByText("Select region", { selector: "option" }).closest("select").matches(":disabled")).toBe(true);
+    expect(screen.getByText("Select province", { selector: "option" }).closest("select").matches(":disabled")).toBe(true);
+    expect(screen.getByText("Select resort", { selector: "option" }).closest("select").matches(":disabled")).toBe(false);
+  });
+
+  it("typing into a closed field changes nothing (the form refuses it even if a control were enabled)", async () => {
+    await openForEdit();
+    goToStep("Tourist Info");
+    const first = screen.getByPlaceholderText("First name");
+    fireEvent.change(first, { target: { value: "Someone Else" } });
+    expect(first.value).toBe("Alma");
+  });
+
+  it("Cancel drops what was typed and goes back to looking at the record", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 5);
+    expect(fieldInput("Filipino Count").value).toBe("5");
+    fireEvent.click(within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Cancel" }));
+    await screen.findByText("Tourist Record Details");
+    expect(footerButtons()).toEqual(["Edit", "Close"]);
+    goToStep("Head Count");
+    expect(fieldInput("Filipino Count").value).toBe("2");
+    expect(updateRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe("a record in Edit mode: live, confirm, send", () => {
+  const panel = () => document.querySelector(".record-edit-panel").textContent;
+  const saveButton = () => within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Save" });
+
+  it("shows the new pax and the new Environmental Fee as the count changes", async () => {
+    await openForEdit();
+    expect(panel()).toContain("Pax2 (no change)");
+    setCount("Filipino Count", 3);
+    expect(panel()).toContain("Pax2 \u2192 3");
+    expect(panel()).toContain("\u20B1160 \u2192 \u2014"); // the head count does not add up yet: no new fee is shown, rather than a wrong one
+    balanceHeadCount(3);
+    expect(panel()).toContain("\u20B1160 \u2192 \u20B1240"); // 2 x 80 and then 3 x 80, the rates of services/tourism.py
+    setCount("Discounted (PHP 64)", 1);
+    expect(panel()).toContain("\u20B1160 \u2192 \u20B1224"); // (3 - 1) x 80 + 1 x 64
+  });
+
+  it("the head count is checked live by validateTotals: the total must equal the genders and the ages", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 3);
+    expect(panel()).toContain("must equal total male + total female");
+    expect(saveButton().matches(":disabled")).toBe(true);
+    balanceHeadCount(3);
+    expect(panel()).not.toContain("must equal");
+    expect(saveButton().matches(":disabled")).toBe(false);
+  });
+
+  it("a discounted count above the visitors is said at once, and Save waits", async () => {
+    await openForEdit();
+    setCount("Discounted (PHP 64)", 9);
+    expect(panel()).toContain("Discounted count cannot be greater than total visitors");
+    expect(saveButton().matches(":disabled")).toBe(true);
+    expect(updateRecord).not.toHaveBeenCalled();
+  });
+
+  it("the discounted count is never filled in for the person: a blank is a problem, and the ages do not move it", async () => {
+    await openForEdit();
+    setCount("Age 8-59", 1);
+    setCount("Age 0-7", 1);
+    expect(fieldInput("Discounted (PHP 64)").value).toBe("0");
+    fireEvent.change(fieldInput("Discounted (PHP 64)"), { target: { value: "" } });
+    expect(panel()).toContain("Discounted is required");
+    expect(saveButton().matches(":disabled")).toBe(true);
+  });
+
+  it("Save shows ONLY what changed, as it was and as it will be, and nothing is sent until Confirm", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 1);
+    setCount("Total Male", 1);
+    setCount("Total Female", 0);
+    setCount("Age 8-59", 1);
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    const rows = Array.from(dialog.querySelectorAll("tbody tr")).map((row) => Array.from(row.children).map((cell) => cell.textContent.trim()));
+    expect(rows).toEqual([
+      ["Pax", "2", "\u2192", "1"],
+      ["Environmental Fee", "\u20B1160", "\u2192", "\u20B180"],
+      ["Filipinos", "2", "\u2192", "1"],
+      ["Female", "1", "\u2192", "0"],
+      ["Age 8-59", "2", "\u2192", "1"],
+    ]);
+    expect(updateRecord).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Go back" }));
+    expect(screen.queryByRole("dialog", { name: "Confirm the changes" })).toBeNull();
+  });
+
+  it("names the resort and the length of stay by their words, old and new", async () => {
+    useTourismData.mockReturnValue({
+      ...useTourismData(),
+      referenceTables: {
+        ...REFERENCE,
+        resorts: [...REFERENCE.resorts, { resort_id: 4, resort_name: "Orlan Beach Resort" }],
+        itineraries: [...REFERENCE.itineraries, { id: 12, name: "Overnight Stay", is_active: true }],
+      },
+    });
+    await openForEdit();
+    goToStep("Location");
+    fireEvent.change(screen.getByText("Select resort", { selector: "option" }).closest("select"), { target: { value: "4" } });
+    fireEvent.change(screen.getByText("Select length of stay", { selector: "option" }).closest("select"), { target: { value: "12" } });
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    const rows = Array.from(dialog.querySelectorAll("tbody tr")).map((row) => Array.from(row.children).map((cell) => cell.textContent.trim()));
+    expect(rows).toEqual([
+      ["Length of stay", "Weekend Trail", "\u2192", "Overnight Stay"],
+      ["Resort", "Sample Beach", "\u2192", "Orlan Beach Resort"],
+    ]);
+  });
+
+  it("Confirm sends the 13 fields and ONLY those, and the closed fields are not in it", async () => {
+    await openForEdit();
+    setCount("Filipino Count", 1);
+    setCount("Total Male", 1);
+    setCount("Total Female", 0);
+    setCount("Age 8-59", 1);
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and save" }));
+    await waitFor(() => expect(updateRecord).toHaveBeenCalledTimes(1));
+    const [surveyId, payload] = updateRecord.mock.calls[0];
+    expect(surveyId).toBe("SV-VIEW");
+    expect(Object.keys(payload).sort()).toEqual(
+      [
+        "foreigner_count", "filipino_count", "maubanin_count", "total_visitors", "total_male", "total_female", "age_0_7", "age_8_59", "age_60_above",
+        "special_group_count", "discounted_count", "itinerary_id", "resort_id",
+      ].sort()
+    );
+    for (const closed of ["first_name", "last_name", "full_name", "email", "contact_number", "country_id", "region_id", "province_id", "arrival_date", "travel_mode_id", "boat_type_id", "boat_capacity_fare", "visit_purpose_id", "status", "survey_id", "consent_confirmed", "parking_space", "country_of_origin"]) {
+      expect(payload).not.toHaveProperty(closed);
+    }
+    expect(payload).toMatchObject({ total_visitors: 1, filipino_count: 1, total_male: 1, total_female: 0, age_8_59: 1, itinerary_id: 11, resort_id: 3 });
+    await waitFor(() => expect(document.querySelector(".wizard-shell")).toBeNull()); // saved: it closes
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("when the server refuses, the WHOLE answer is shown (every field it names, and the words about the discounted count), and nothing closes", async () => {
+    updateRecord.mockRejectedValueOnce(
+      Object.assign(new Error("Bad Request"), {
+        status: 400,
+        details: {
+          discounted_count: ["The discounted count (4) cannot be greater than the number of visitors (3). Lower the discounted count in the same change: it is not changed for you, because the fee follows it."],
+          email: ["This field cannot be changed here. A record may only change: foreigner_count, filipino_count."],
+          arrival_date: ["This field cannot be changed here. A record may only change: foreigner_count, filipino_count."],
+        },
+      })
+    );
+    await openForEdit();
+    setCount("Filipino Count", 1);
+    setCount("Total Male", 1);
+    setCount("Total Female", 0);
+    setCount("Age 8-59", 1);
+    fireEvent.click(saveButton());
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the changes" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm and save" }));
+    const alert = await within(dialog).findByRole("alert");
+    const lines = Array.from(alert.querySelectorAll("li")).map((li) => li.textContent);
+    // the discounted message as the server wrote it; then the refused fields named TOGETHER; then what a record may change, ONCE
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^discounted_count: The discounted count \(4\) cannot be greater than the number of visitors \(3\)\. Lower the discounted count/);
+    expect(lines[1]).toBe("These fields cannot be changed here: email, arrival_date.");
+    expect(lines[2]).toBe("A record may only change: foreigner_count, filipino_count.");
+    expect(alert.textContent).toContain("Nothing was saved");
+    expect(alert.textContent).not.toMatch(/something went wrong/i);
+    expect(document.querySelector(".wizard-shell")).not.toBeNull();
+  });
+});
+
+describe("an archived record", () => {
+  it("is not edited: Edit is shown but disabled, and the footer says to bring it back to the table first", async () => {
+    useTourismData.mockReturnValue({
+      ...useTourismData(),
+      bookingManagement: { rows: [{ ...RECORD, is_archived: true }], summary: {}, pagination: { page: 1, totalPages: 1, total: 1 } },
+    });
+    await openView();
+    const edit = within(document.querySelector(".wizard-footer")).getByRole("button", { name: "Edit" });
+    expect(edit.matches(":disabled")).toBe(true);
+    expect(document.querySelector(".wizard-footer").textContent).toMatch(/This record is archived\. Bring it back to the table \(unarchive it\) before changing it\./);
+    fireEvent.click(edit);
+    expect(screen.queryByText("Editing a Tourist Record")).toBeNull();
+  });
+
+  it("a record that is not archived has no such words", async () => {
+    await openView();
+    expect(document.querySelector(".wizard-footer").textContent).not.toMatch(/archived/i);
   });
 });
 
