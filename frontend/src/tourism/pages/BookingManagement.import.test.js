@@ -89,10 +89,13 @@ describe("the Import Excel button", () => {
     expect(seen.tourism).toEqual(expect.arrayContaining(["Export CSV", "Import Excel"]));
   });
 
-  it("the page does not look at the role at all", async () => {
-    mockRole = "tourism";
-    render(<BookingManagement />);
-    await screen.findByText("Export CSV");
-    expect(mockUseAuth).not.toHaveBeenCalled();
+  it("the page does not decide the Import Excel button by the role: it reads the role only for Edit, and every role is given the same buttons", async () => {
+    for (const role of ["tourism", "admin", "resort", ""]) {
+      mockRole = role;
+      const { unmount } = render(<BookingManagement />);
+      await screen.findByText("Export CSV");
+      expect(importLabel()).not.toBeNull();
+      unmount();
+    }
   });
 });
