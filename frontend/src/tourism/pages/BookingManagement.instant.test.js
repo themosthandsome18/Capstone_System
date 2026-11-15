@@ -118,7 +118,7 @@ beforeEach(() => {
 const ids = () => Array.from(document.querySelectorAll(".booking-id")).map((el) => el.textContent);
 const rowOf = (surveyId) => screen.getByText(surveyId, { selector: ".booking-id" }).closest("tr");
 const card = (label) => within(screen.getByText(label, { selector: ".booking-status-card p" }).closest(".booking-status-card")).getByRole("heading").textContent;
-const cards = () => [card("Verified Entries"), card("Arrived"), card("Cancelled")];
+const cards = () => [card("All Records"), card("Arrived"), card("Cancelled")];
 const archivedLine = () => document.querySelector(".booking-archived-count")?.textContent || null;
 const errorText = () => document.querySelector(".tourist-record-error")?.textContent || "";
 const press = (surveyId, name) => fireEvent.click(within(rowOf(surveyId)).getByRole("button", { name }));

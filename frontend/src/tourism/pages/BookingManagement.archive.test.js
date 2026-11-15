@@ -238,11 +238,35 @@ describe("the three cards at the top are not touched by the archive", () => {
       show({ rows, archivedCount, archived: view });
       render(<BookingManagement />);
       await screen.findByText("SV-1");
-      expect(within(card("Verified Entries")).getByRole("heading").textContent).toBe("12");
+      expect(within(card("All Records")).getByRole("heading").textContent).toBe("12");
       expect(within(card("Arrived")).getByRole("heading").textContent).toBe("5");
       expect(within(card("Cancelled")).getByRole("heading").textContent).toBe("3");
     }
   );
+
+  it("the first card is called All Records, not Verified Entries (nothing is verified: it counts every record), and says what it counts", async () => {
+    show({ rows: [row("SV-1")], archivedCount: 0, archived: "active" });
+    render(<BookingManagement />);
+    await screen.findByText("SV-1");
+    const first = card("All Records");
+    expect(first.title).toBe("Every record of the selected year, whatever its status, archived ones included. It does not follow the search or the filters of the table.");
+    expect(screen.queryByText("Verified Entries")).toBeNull();
+    expect(Array.from(document.querySelectorAll(".booking-status-card p")).map((p) => p.textContent)).toEqual(["All Records", "Arrived", "Cancelled"]);
+  });
+
+  it("a visible line under the three cards (not inside one of them) says they count the whole year and the table's search and filters do not change them", async () => {
+    show({ rows: [row("SV-1")], archivedCount: 0, archived: "active" });
+    render(<BookingManagement />);
+    await screen.findByText("SV-1");
+    const note = screen.getByText("These three count the whole selected year, archived records included. The search and filters below do not change them.");
+    expect(note.closest(".booking-status-card")).toBeNull(); // under the three, not in one
+    expect(note.previousElementSibling.classList.contains("booking-status-grid")).toBe(true);
+    expect(note.getAttribute("role")).toBeNull(); // a plain line, not an alert
+    expect(note.children).toHaveLength(0);
+    // it is there whatever the filters are: the same line with a status filter on
+    fireEvent.change(screen.getAllByRole("combobox").find((s) => Array.from(s.options).some((o) => o.textContent.trim() === "Cancelled")), { target: { value: "no_show" } });
+    expect(screen.getByText("These three count the whole selected year, archived records included. The search and filters below do not change them.")).toBeTruthy();
+  });
 
   it("the cards read only the summary: no figure on the page is worked out from the rows or the archive", () => {
     const source = readFileSync(join(__dirname, "BookingManagement.js"), "utf8");
