@@ -45,7 +45,7 @@ const peso = (amount) => (typeof amount === "number" && Number.isFinite(amount) 
 
 function Padlock() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A4F16" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="5" y="11" width="14" height="9" rx="2" />
       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
