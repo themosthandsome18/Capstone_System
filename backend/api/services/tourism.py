@@ -1465,7 +1465,7 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "validation",
-            "question": "Which tourist records need validation due to pending status, cancelled status, duplicate entries, or incomplete information?",
+            "question": "How many tourist records look like duplicates, or are missing a name, a contact number or a visitor count?",
             "answer": validation,
             "visual": validation_visual,
         },
@@ -1623,35 +1623,46 @@ def get_recent_demand(arrived_records=None):
 
 
 def get_validation(records):
-    """The validation answer and its chart, from one set of counts."""
-    pending = records.filter(status=BOOKING_STATUS_PENDING).count()
-    no_show = records.filter(status=BOOKING_STATUS_NO_SHOW).count()
-    duplicates = (
+    """The Data Quality card: two counts of RECORDS, and what each one means.
+
+    `records` is every record of the selected year and dates, whatever its status and archived or not (as every other count of the system).
+    Whether a visitor is still to come (pending) or did not come (cancelled) says nothing about the DATA, so the status is not looked at here.
+
+    * Possible duplicates: the records that share the same name, contact number, arrival date and resort with at least one other record. Three
+      identical records are 3 (not 1: the records are counted, not the groups they form). A record with no contact number is never matched.
+    * Incomplete: the records with no name, or no contact number, or zero visitors counted. Nothing else is looked at.
+    """
+    groups = (
         records.exclude(contact_number="")
         .values("full_name", "contact_number", "arrival_date", "resort_id")
         .annotate(total=Count("survey_id"))
         .filter(total__gt=1)
-        .count()
     )
+    duplicates = sum(group["total"] for group in groups)
     incomplete = records.filter(
-        Q(full_name="")
-        | Q(contact_number="")
-        | Q(total_visitors=0)
-        | Q(total_male__isnull=True)
-        | Q(total_female__isnull=True)
+        Q(full_name="") | Q(contact_number="") | Q(total_visitors=0)
     ).count()
 
     answer = (
-        f"Needs review: {pending} pending, {no_show} cancelled, "
-        f"{duplicates} possible duplicates, and {incomplete} incomplete records."
+        # a duplicate needs at least one other record, so this is 0 or 2 and more: never "1 record"
+        f"{duplicates} records look like duplicates "
+        "(the same name, contact number, arrival date and resort as another record), and "
+        f"{incomplete} {'is' if incomplete == 1 else 'are'} incomplete (no name, no contact number, or no visitors counted). "
+        "All records of the selected year and dates are counted, whatever their status."
     )
     visual = {
-        "type": "stack",
+        "type": "counts",
         "items": [
-            {"label": "Pending", "value": pending},
-            {"label": "Cancelled", "value": no_show},
-            {"label": "Duplicates", "value": duplicates},
-            {"label": "Incomplete", "value": incomplete},
+            {
+                "label": "Possible duplicates",
+                "value": duplicates,
+                "note": "Records with the same name, contact number, arrival date and resort as at least one other record.",
+            },
+            {
+                "label": "Incomplete records",
+                "value": incomplete,
+                "note": "Records with no name, no contact number, or zero visitors counted.",
+            },
         ],
     }
     return answer, visual

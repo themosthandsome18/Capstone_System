@@ -153,9 +153,10 @@ pins those fallbacks to `:root`.
   take the palette in order. Single-series charts use `chart-1`.
 - Axis tick text uses `--th-text-muted`. Grid lines, legend text (`#475569`)
   and tooltips (Chart.js defaults) stay fixed.
-- **The Data Quality & Validation doughnut stays fixed**
-  (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`). Its slices are
-  statuses, not series (see section 7).
+- **Data Quality is no longer a chart.** It was a fixed-colour doughnut
+  (`VALIDATION_SLICE_COLORS`); it is now two counts of records with their
+  meaning (`.dq-count`, themed with the tinted tokens), so no chart of
+  Analytics is drawn in colours that do not follow the theme.
 - `--th-chart-wash` is mapped to the Daily Visitor Trends line fill, but that
   chart does not enable area fill (no `fill` option, Filler plugin not
   registered), so it shows nothing. Turning fill on would be a design change.
@@ -387,10 +388,9 @@ so nothing was lost there.
   just, and a lighter theme colour would push it under. Another pair close to
   its threshold is the top-bar role line: `--th-text-tinted-muted` on
   `--th-surface-tinted` is **4.57:1** against 4.5:1 for text.
-- **Data Quality & Validation doughnut should use the status tokens.** Its four
-  slices (Pending, No-show, Duplicates, Incomplete) are real statuses but use
-  generic colours (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`).
-  It is deliberately fixed, not themed; move it to the status tokens later.
+- ~~Data Quality & Validation doughnut should use the status tokens.~~ Settled
+  by removing the doughnut: the card is two plain counts (possible duplicates,
+  incomplete records) and no longer counts statuses at all.
 - **Bug, not a theme problem: Visitor Demographics in Key Insights renders
   empty.** The backend sends that visual as `left` / `right`
   (`backend/api/services/tourism.py:1022-1024`), but the chart reads

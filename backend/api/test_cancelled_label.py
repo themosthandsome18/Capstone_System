@@ -83,12 +83,14 @@ class CancelledIsShownNoShowIsStoredTests(TestCase):
         record = arrive(self.resort, "LBL-3", 3, status="no_show")
         self.assertEqual(TouristRecord.objects.get(pk=record.pk).get_status_display(), "Cancelled")
 
-    def test_the_validation_answer_and_chart_say_cancelled(self):
+    def test_the_validation_card_does_not_use_the_status_at_all(self):
+        """It used to count the cancelled ones ("1 cancelled"); a status says nothing about the data, so the card says nothing of it, and so it
+        has no word for it, the old no-show wording included."""
         arrive(self.resort, "LBL-4", 3, status="no_show")
         answer, visual = get_validation(TouristRecord.objects.all())
-        self.assertIn("1 cancelled", answer)
-        self.assertNotRegex(answer, r"(?i)no[- ]show")
-        self.assertEqual([item["label"] for item in visual["items"]], ["Pending", "Cancelled", "Duplicates", "Incomplete"])
+        self.assertNotRegex(answer, r"(?i)no[- ]show|cancel|pending")
+        self.assertEqual([item["label"] for item in visual["items"]], ["Possible duplicates", "Incomplete records"])
+        self.assertEqual([item["value"] for item in visual["items"]], [0, 0])
 
 
 class NoNoShowWordOnAnyScreenTests(TestCase):
