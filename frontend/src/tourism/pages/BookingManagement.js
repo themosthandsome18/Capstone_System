@@ -1910,6 +1910,9 @@ function BookingManagement() {
                   <ImportStat label="Skipped" value={importPreview.skipped_count} />
                   <ImportStat label="Duplicates" value={importPreview.duplicate_count} />
                   <ImportStat label="New resorts" value={importPreview.new_resort_count} />
+                  {typeof importPreview.fallback_count === "number" ? (
+                    <ImportStat label="To fallback resort" value={importPreview.fallback_count} />
+                  ) : null}
                   <ImportStat label="Created" value={importPreview.imported_count} />
                   <ImportStat label="Updated" value={importPreview.updated_count} />
                 </div>
@@ -1953,6 +1956,28 @@ function BookingManagement() {
                       <p>No duplicates found.</p>
                     )}
                   </section>
+
+                  {typeof importPreview.fallback_count === "number" ? (
+                    <section className="import-fallback-section">
+                      <h3>Rows Going to {importPreview.fallback_resort || "the Fallback Resort"}</h3>
+                      {importPreview.fallback_samples?.length ? (
+                        <>
+                          <p>
+                            The resort these rows name is not one we know, so each of them goes to the fallback resort. If that is not what you want, fix
+                            the name in the file, or add the resort, before importing.
+                          </p>
+                          {importPreview.fallback_samples.map((item) => (
+                            <p key={`fallback-${item.name}`}>
+                              {item.name} &mdash; {item.rows} {item.rows === 1 ? "row" : "rows"}
+                            </p>
+                          ))}
+                        </>
+                      ) : (
+                        <p>None: every row names a resort we know.</p>
+                      )}
+                      {importPreview.fallback_notice ? <p>{importPreview.fallback_notice}</p> : null}
+                    </section>
+                  ) : null}
 
                   <section>
                     <h3>New Resorts to Review</h3>

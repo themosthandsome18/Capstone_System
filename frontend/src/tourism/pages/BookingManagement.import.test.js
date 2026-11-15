@@ -99,3 +99,48 @@ describe("the Import Excel button", () => {
     }
   });
 });
+
+describe("the preview says which rows go to the fallback resort, before anything is imported", () => {
+  const PREVIEW = {
+    valid_count: 5, imported_count: 0, updated_count: 0, skipped_count: 0, duplicate_count: 0, new_resort_count: 0,
+    valid_samples: [], error_samples: [], duplicate_samples: [], new_resort_samples: [],
+    fallback_count: 3, fallback_resort: "Others / Private Residence",
+    fallback_samples: [{ name: "Villa Unknown", rows: 2 }, { name: "Casa Nowhere", rows: 1 }], fallback_notice: "",
+  };
+  const choose = async (preview) => {
+    mockRole = "tourism";
+    previewOnlineBookingImport.mockResolvedValue(preview);
+    render(<BookingManagement />);
+    await screen.findByText("Export CSV");
+    fireEvent.change(importLabel().querySelector("input"), { target: { files: [new File(["x"], "bookings.xlsx")] } });
+    await screen.findByText("Duplicates", { selector: "span" }); // the preview itself has come, not only its frame
+  };
+  const section = () => screen.getByRole("heading", { name: /^Rows Going to/ }).closest("section");
+
+  it("shows how many rows go there, which names they carry, and where they go", async () => {
+    await choose(PREVIEW);
+    const stat = screen.getByText("To fallback resort").closest("div");
+    expect(stat.textContent).toContain("3");
+    expect(screen.getByRole("heading", { name: "Rows Going to Others / Private Residence" })).toBeTruthy();
+    expect(section().textContent).toContain("Villa Unknown — 2 rows");
+    expect(section().textContent).toContain("Casa Nowhere — 1 row");
+    expect(section().textContent).toContain("fix the name in the file, or add the resort, before importing");
+  });
+
+  it("says so when no row goes there", async () => {
+    await choose({ ...PREVIEW, fallback_count: 0, fallback_samples: [] });
+    expect(section().textContent).toContain("None: every row names a resort we know.");
+  });
+
+  it("shows the notice when more than one resort is marked as the fallback", async () => {
+    await choose({ ...PREVIEW, fallback_notice: "2 resorts are marked as the fallback (ids 4, 9); the one with the smallest id, 4, is used. Only one should be marked." });
+    expect(section().textContent).toContain("2 resorts are marked as the fallback (ids 4, 9)");
+  });
+
+  it("an older server (no fallback keys) shows nothing about it", async () => {
+    const { fallback_count, fallback_resort, fallback_samples, fallback_notice, ...older } = PREVIEW;
+    await choose(older);
+    expect(screen.queryByText("To fallback resort")).toBeNull();
+    expect(screen.queryByRole("heading", { name: /^Rows Going to/ })).toBeNull();
+  });
+});

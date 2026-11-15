@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 import re
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -31,10 +32,13 @@ from .no_show import mark_no_show_sweep_needed
 from .placeholder_resorts import (
     FALLBACK_COORDINATES,
     FALLBACK_DESCRIPTION,
+    FALLBACK_RESORT_NAME,
     ONLINE_BOOKING_COORDINATES,
     ONLINE_BOOKING_DESCRIPTION,
 )
 
+
+logger = logging.getLogger(__name__)
 
 COLUMNS = {
     "timestamp": 1,
@@ -177,6 +181,10 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
             "skipped_count": 0,
             "duplicate_count": 0,
             "new_resort_count": 0,
+            "fallback_count": 0,
+            "fallback_resort": "",
+            "fallback_samples": [],
+            "fallback_notice": "",
             "valid_samples": [],
             "error_samples": [
                 {
@@ -203,6 +211,8 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
     valid_samples = []
     error_samples = []
     duplicate_samples = []
+    fallback_count = 0
+    fallback_names = {}
     max_row = sheet.max_row
 
     if limit:
@@ -259,6 +269,11 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
 
         valid_count += 1
         valid_payloads.append(payload)
+        # a row whose resort is not one we know goes to the fallback: it was silent, and a person must see it BEFORE the import
+        if resolver.fallback is not None and payload["resort_id"] == resolver.fallback.resort_id:
+            fallback_count += 1
+            named = clean_text(cell_value(sheet, row_number, "resort")) or "(no resort named)"
+            fallback_names[named] = fallback_names.get(named, 0) + 1
         if len(valid_samples) < 10:
             valid_samples.append(
                 {
@@ -281,6 +296,13 @@ def process_online_booking_workbook(file_obj, status="pending", limit=0, commit=
         "skipped_count": skipped_count,
         "duplicate_count": duplicate_count,
         "new_resort_count": len(resolver.new_resort_names),
+        # the rows that will be (or were) put in the fallback resort because the resort they name is not one we know, and the names they carry
+        "fallback_count": fallback_count,
+        "fallback_resort": resolver.fallback.resort_name if resolver.fallback is not None else "",
+        "fallback_samples": [
+            {"name": name, "rows": rows} for name, rows in sorted(fallback_names.items(), key=lambda item: (-item[1], item[0]))[:20]
+        ],
+        "fallback_notice": resolver.fallback_notice,
         "valid_samples": valid_samples,
         "error_samples": error_samples,
         "duplicate_samples": duplicate_samples,
@@ -496,6 +518,18 @@ class ReferenceResolver:
         self.next_resort_id = (
             Resort.objects.aggregate(max_id=Max("resort_id"))["max_id"] or 0
         ) + 1
+        # The fallback is the resort FLAGGED as it (Resort.is_fallback), never one with a given id. There should be one; if there are more, the one
+        # with the smallest id is used, and a notice says so (it is not a reason to stop an import).
+        flagged = sorted((resort for resort in resorts if resort.is_fallback), key=lambda resort: resort.resort_id)
+        self.fallback = flagged[0] if flagged else None
+        self.fallback_notice = ""
+        if len(flagged) > 1:
+            ids = ", ".join(str(resort.resort_id) for resort in flagged)
+            self.fallback_notice = (
+                f"{len(flagged)} resorts are marked as the fallback (ids {ids}); the one with the smallest id, {flagged[0].resort_id}, is used. "
+                "Only one should be marked."
+            )
+            logger.warning("online booking import: %s", self.fallback_notice)
 
     def by_id(self, model, pk):
         key = (model, pk)
@@ -554,40 +588,11 @@ class ReferenceResolver:
             self.resort_name_by_id[resort.resort_id] = resort.resort_name
             return resort
 
-        # Resolve to fallback "Others / Private Residence" (ID 16) instead of creating new resorts
-        others_resort = None
-        for r in self.resort_cache.values():
-            if r.resort_id == 16:
-                others_resort = r
-                break
-
-        if others_resort:
-            return others_resort
-
-        try:
-            others_resort, _ = Resort.objects.get_or_create(
-                resort_id=16,
-                defaults={
-                    "resort_name": "Others / Private Residence",
-                    "with_mayors_permit": False,
-                    "type": "Private Residence / Others",
-                    "location": "Mauban, Quezon",
-                    "short_description": FALLBACK_DESCRIPTION,
-                    "tourism_rating": 0.0,
-                    "access": "N/A",
-                    "itinerary_ids": [],
-                    "image_key": "",
-                    "monthly_arrivals": 0,
-                    "latitude": FALLBACK_COORDINATES[0],
-                    "longitude": FALLBACK_COORDINATES[1],
-                    "is_placeholder": True,  # made up by this import: not a place, so not on the GIS map
-                }
-            )
-            self.resort_cache[normalize_key(others_resort.resort_name)] = others_resort
-            self.resort_name_by_id[16] = others_resort.resort_name
-            return others_resort
-        except Exception:
-            pass
+        # A resort nobody has set up goes to the fallback ("Others / Private Residence"): the resort flagged as it, made here (at the next free id) when
+        # there is none. It is never looked for by an id.
+        fallback = self.fallback_resort()
+        if fallback is not None:
+            return fallback
 
         resort_data = {
             "resort_id": self.next_resort_id,
@@ -615,6 +620,42 @@ class ReferenceResolver:
         self.resort_name_by_id[resort.resort_id] = resort.resort_name
         self.new_resort_names.add(resort.resort_name)
         return resort
+
+    def fallback_resort(self):
+        """The fallback resort: the one flagged as it, or a new one at the next free id when there is none (None only if it cannot be made)."""
+        if self.fallback is not None:
+            return self.fallback
+
+        data = {
+            "resort_id": self.next_resort_id,
+            "resort_name": FALLBACK_RESORT_NAME,
+            "with_mayors_permit": False,
+            "type": "Private Residence / Others",
+            "location": "Mauban, Quezon",
+            "short_description": FALLBACK_DESCRIPTION,
+            "tourism_rating": 0.0,
+            "access": "N/A",
+            "itinerary_ids": [],
+            "image_key": "",
+            "monthly_arrivals": 0,
+            "latitude": FALLBACK_COORDINATES[0],
+            "longitude": FALLBACK_COORDINATES[1],
+            "is_placeholder": True,  # made up by this import: not a place, so not on the GIS map
+            "is_fallback": True,
+            # a bucket for the names that could not be matched, not a place anyone visits: it is not offered in the app or in the registration form (the
+            # records that name it keep it, as for any inactive resort)
+            "is_active": False,
+        }
+        try:
+            fallback = self.create_resort(data) if self.commit else Resort(**data)
+        except Exception:
+            return None
+
+        self.next_resort_id = fallback.resort_id + 1
+        self.fallback = fallback
+        self.resort_cache[normalize_key(fallback.resort_name)] = fallback
+        self.resort_name_by_id[fallback.resort_id] = fallback.resort_name
+        return fallback
 
     def create_resort(self, resort_data):
         for _attempt in range(CREATE_RETRY_LIMIT):

@@ -21,6 +21,8 @@ PLACEHOLDER_COORDINATES = frozenset({ONLINE_BOOKING_COORDINATES, FALLBACK_COORDI
 
 ONLINE_BOOKING_DESCRIPTION = "Imported from Tourism Office online booking responses."
 FALLBACK_DESCRIPTION = "Fallback destination for private residences, homestays, and other non-resort locations."
+# The name the fallback resort is made with (and the name the migration that flagged the existing one looked for: a test holds the two together).
+FALLBACK_RESORT_NAME = "Others / Private Residence"
 MONITORING_FORM_DESCRIPTION = "Imported from client monitoring form."
 
 # description -> the coordinates that go with it: the three signatures of a resort an import made up.
