@@ -4039,16 +4039,15 @@ class QuestionAnswersDeduplicationTests(TestCase):
             ]}
 
         def counts():
+            # the Data Quality card counts RECORDS (not the groups of duplicates), looks at no status, and at three things for "incomplete"
+            groups = (records.exclude(contact_number="").values("full_name", "contact_number", "arrival_date", "resort_id")
+                      .annotate(total=Count("survey_id")).filter(total__gt=1))
             return (
-                records.filter(status="pending").count(),
-                records.filter(status="no_show").count(),
-                records.exclude(contact_number="").values("full_name", "contact_number", "arrival_date", "resort_id")
-                .annotate(total=Count("survey_id")).filter(total__gt=1).count(),
-                records.filter(Q(full_name="") | Q(contact_number="") | Q(total_visitors=0)
-                               | Q(total_male__isnull=True) | Q(total_female__isnull=True)).count(),
+                sum(group["total"] for group in groups),
+                records.filter(Q(full_name="") | Q(contact_number="") | Q(total_visitors=0)).count(),
             )
 
-        pending, no_show, duplicates, incomplete = counts()
+        duplicates, incomplete = counts()
         resort_answer, resort_items = ranking("resort__resort_name", arrived)
         origin_answer, origin_items = ranking("origin", t.with_origin(arrived))
         purpose_answer, purpose_items = ranking("visit_purpose__name", arrived)
@@ -4058,13 +4057,15 @@ class QuestionAnswersDeduplicationTests(TestCase):
             "visit_purpose": (purpose_answer, {"type": "ranking", "items": purpose_items}),
             "high_demand": (demand_signal(), demand_visual()),
             "validation": (
-                f"Needs review: {pending} pending, {no_show} cancelled, "
-                f"{duplicates} possible duplicates, and {incomplete} incomplete records.",
-                {"type": "stack", "items": [
-                    {"label": "Pending", "value": pending},
-                    {"label": "Cancelled", "value": no_show},
-                    {"label": "Duplicates", "value": duplicates},
-                    {"label": "Incomplete", "value": incomplete},
+                f"{duplicates} records look like duplicates "
+                "(the same name, contact number, arrival date and resort as another record), and "
+                f"{incomplete} {'is' if incomplete == 1 else 'are'} incomplete (no name, no contact number, or no visitors counted). "
+                "All records of the selected year and dates are counted, whatever their status.",
+                {"type": "counts", "items": [
+                    {"label": "Possible duplicates", "value": duplicates,
+                     "note": "Records with the same name, contact number, arrival date and resort as at least one other record."},
+                    {"label": "Incomplete records", "value": incomplete,
+                     "note": "Records with no name, no contact number, or zero visitors counted."},
                 ]},
             ),
         }
@@ -4112,14 +4113,14 @@ class QuestionAnswersDeduplicationTests(TestCase):
 
         self._assert_same({"year": "2026"})
 
-    def test_question_answers_run_17_queries(self):
+    def test_question_answers_run_15_queries(self):  # 17 before the Data Quality card stopped counting the pending and the cancelled (two queries fewer)
         from .services.tourism import build_tourism_question_answers
 
         TouristRecord.objects.bulk_create([self._record("QA-21", "2026-09-10", 2)])
         with CaptureQueriesContext(connection) as queries:
             build_tourism_question_answers({"year": "2026"})
 
-        self.assertEqual(len(queries), 17)
+        self.assertEqual(len(queries), 15)
 
 
 class ReportsMaleFemaleTests(TestCase):
@@ -9175,8 +9176,15 @@ class VisitorDemographicsVisualTests(TestCase):
                               {"type": "ranking", "items": [{"label": "Leisure", "value": 13}, {"label": "Vacation", "value": 7}]}),
             "high_demand": ("Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
                             {"type": "comparison", "items": [{"label": "Previous 30 days", "value": 0}, {"label": "Latest 30 days", "value": 8}]}),
-            "validation": ("Needs review: 1 pending, 1 cancelled, 0 possible duplicates, and 0 incomplete records.",
-                           {"type": "stack", "items": [{"label": "Pending", "value": 1}, {"label": "Cancelled", "value": 1}, {"label": "Duplicates", "value": 0}, {"label": "Incomplete", "value": 0}]}),
+            # the Data Quality card: a pending and a cancelled record are not counted (their status says nothing about the data)
+            "validation": ("0 records look like duplicates (the same name, contact number, arrival date and resort as another record), and "
+                           "0 are incomplete (no name, no contact number, or no visitors counted). "
+                           "All records of the selected year and dates are counted, whatever their status.",
+                           {"type": "counts", "items": [
+                               {"label": "Possible duplicates", "value": 0,
+                                "note": "Records with the same name, contact number, arrival date and resort as at least one other record."},
+                               {"label": "Incomplete records", "value": 0,
+                                "note": "Records with no name, no contact number, or zero visitors counted."}]}),
         }
         answers = self._answers()
         self.assertEqual(list(answers), [
@@ -9239,14 +9247,16 @@ class ReportsCountArrivedOnlyTests(TestCase):
         self.assertEqual([row["visitors"] for row in payload["rows"]], [11])
         self.assertEqual(payload["totals"]["visitors"], 11)
 
-    def test_key_insights_count_arrived_only_and_the_review_card_counts_pending(self):
+    def test_key_insights_count_arrived_only_and_the_data_quality_card_does_not_look_at_the_status(self):
         from .services.tourism import build_tourism_question_answers
 
         answers = {item["id"]: item for item in build_tourism_question_answers({"year": "2026"})}
 
         self.assertEqual(answers["classification"]["answer"], "Domestic (Filipino): 3, Foreign (International): 0.")
         self.assertEqual(answers["peak_month"]["visual"]["total"], 3)
-        self.assertIn("1 pending, 1 cancelled", answers["validation"]["answer"])
+        # one pending and one cancelled record are in this fixture: the card counts neither (a status says nothing about the data)
+        self.assertNotRegex(answers["validation"]["answer"], r"(?i)pending|cancel")
+        self.assertIn("0 are incomplete", answers["validation"]["answer"])
 
     def test_reports_match_arrival_monitoring_for_the_same_year(self):
         from .services.tourism import build_arrival_monitoring_payload
