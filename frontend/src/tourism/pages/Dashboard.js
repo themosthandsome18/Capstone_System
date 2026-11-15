@@ -52,7 +52,7 @@ function formatCurrency(value) {
 
 const currentReportingYear = String(new Date().getFullYear());
 
-// Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
+// Chart colours, and the grid lines, come from the theme (chartPalette.js).
 const buildLineOptions = (palette, values) => {
   const axis = visitorAxis(values);
 
@@ -73,7 +73,7 @@ const buildLineOptions = (palette, values) => {
           color: palette.tick,
         },
         grid: {
-          color: "rgba(190, 205, 198, 0.35)",
+          color: palette.grid,
         },
       },
       x: {
@@ -98,7 +98,7 @@ const buildBarOptions = (palette) => ({
     y: {
       beginAtZero: true,
       grid: {
-        color: "rgba(150, 180, 175, 0.35)",
+        color: palette.grid,
       },
       ticks: {
         color: palette.tick,

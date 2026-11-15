@@ -96,6 +96,12 @@ const chartColours = (hex) => {
   return { s: [1, 2, 3, 4, 5].map((n) => vars[`--th-chart-${n}`]), wash: vars["--th-chart-wash"] };
 };
 const TICK = CHART_PALETTE_DEFAULTS.tick;
+// the grid lines are the theme's tinted line colour, translucent: they follow the colour the admin chose
+const gridOf = (hex) => {
+  const tint = deriveTourismTheme(hex)["--th-border-tinted-strong"];
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(tint.slice(at, at + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, 0.35)`;
+};
 
 function expectDashboard(hex) {
   const { s, wash } = chartColours(hex);
@@ -105,12 +111,13 @@ function expectDashboard(hex) {
   expect(line.data.datasets[0].backgroundColor).toBe(wash);
   expect(line.options.scales.y.ticks.color).toBe(TICK);
   expect(line.options.scales.x.ticks.color).toBe(TICK);
-  expect(line.options.scales.y.grid.color).toBe("rgba(190, 205, 198, 0.35)");
+  expect(line.options.scales.y.grid.color).toBe(gridOf(hex));
 
   const bar = latest("bar");
   expect(bar.data.datasets[0].backgroundColor).toEqual([s[0], s[3]]);
   expect(bar.options.scales.y.ticks.color).toBe(TICK);
   expect(bar.options.scales.x.ticks.color).toBe(TICK);
+  expect(bar.options.scales.y.grid.color).toBe(gridOf(hex));
 
   const doughnuts = mockCharts.filter((c) => c.type === "doughnut").slice(-2);
   doughnuts.forEach((d) => expect(d.data.datasets[0].backgroundColor).toEqual([s[0], s[3]]));
