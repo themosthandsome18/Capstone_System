@@ -182,6 +182,8 @@ function Dashboard() {
   const liveValue = (value) => (currentYearOnly ? "—" : formatNumber(value));
   const liveText = (value) => (currentYearOnly ? "—" : value);
   const liveNote = currentYearOnly ? "Current year only" : undefined;
+  // null from the server means no booking is finished yet: there is no rate to give (0% would say that nobody cancelled).
+  const hasCancellationRate = typeof metrics.noShowRate === "number";
 
   // null until the shell's theme colours have been read; charts wait for it.
   const chartPalette = useTourismChartPalette();
@@ -347,8 +349,8 @@ function Dashboard() {
 
         <MetricCard
           title="Cancellation Rate"
-          value={`${metrics.noShowRate || 0}%`}
-          note="Selected year"
+          value={hasCancellationRate ? `${metrics.noShowRate}%` : "—"}
+          note={hasCancellationRate ? "Of finished bookings, selected year" : "No finished bookings yet"}
           icon={<FiXCircle />}
         />
 
