@@ -501,7 +501,7 @@ describe("the box of the fee that cannot be changed", () => {
     expect(within(locked()).getByText("Standard")).toBeTruthy();
     expect(within(locked()).getByText("Discounted")).toBeTruthy();
     expect(locked().querySelectorAll("input, textarea, select, button, a, form, [contenteditable]")).toHaveLength(0); // read only
-    expect(locked().querySelector("svg").getAttribute("stroke")).toBe("#8A4F16"); // the padlock
+    expect(locked().querySelector("svg").getAttribute("stroke")).toBe("currentColor"); // the padlock: its colour is the head's rule (var(--th-primary-ink))
   });
 
   it("has the two sentences of the owner, word for word", async () => {
@@ -652,28 +652,29 @@ describe("the CSS holds the values of the design", () => {
   };
 
   it("the locked box", () => {
-    expect(decl(".mobile-content-locked", "background")).toBe("#fdf0e2");
-    expect(decl(".mobile-content-locked", "border")).toBe("1px solid #ebd3b6");
+    expect(decl(".mobile-content-locked", "background")).toBe("var(--th-surface-tinted)");
+    expect(decl(".mobile-content-locked", "border")).toBe("1px solid var(--th-border-tinted)");
     expect(decl(".mobile-content-locked", "border-radius")).toBe("16px");
     expect(decl(".mobile-content-locked", "padding")).toBe("21px 22px");
+    expect(decl(".mobile-content-locked-head svg", "color")).toBe("var(--th-primary-ink)"); // the padlock
     expect(decl(".mobile-content-locked-head h2", "font-size")).toBe("15.5px");
     expect(decl(".mobile-content-locked-head h2", "font-weight")).toBe("700");
-    expect(decl(".mobile-content-locked-head h2", "color")).toBe("#6f3e11");
+    expect(decl(".mobile-content-locked-head h2", "color")).toBe("var(--th-text-tinted-strong)");
     expect(decl(".mobile-content-locked-price", "flex")).toBe("1");
-    expect(decl(".mobile-content-locked-price", "border")).toBe("1px solid #ebd3b6");
+    expect(decl(".mobile-content-locked-price", "border")).toBe("1px solid var(--th-border-tinted)");
     expect(decl(".mobile-content-locked-price", "border-radius")).toBe("11px");
     expect(decl(".mobile-content-locked-price", "padding")).toBe("12px 14px");
     expect(decl(".mobile-content-locked-price", "background")).toBe("var(--th-surface)");
     expect(decl(".mobile-content-locked-label", "font-size")).toBe("10.5px");
     expect(decl(".mobile-content-locked-label", "letter-spacing")).toBe("0.09em");
-    expect(decl(".mobile-content-locked-label", "color")).toBe("#9b7349");
+    expect(decl(".mobile-content-locked-label", "color")).toBe("var(--th-text-tinted-muted)");
     expect(decl(".mobile-content-locked-label", "font-weight")).toBe("700");
     expect(decl(".mobile-content-locked-price strong", "font-size")).toBe("24px");
     expect(decl(".mobile-content-locked-price strong", "font-weight")).toBe("800");
     expect(decl(".mobile-content-locked-price strong", "letter-spacing")).toBe("-0.02em");
     expect(decl(".mobile-content-locked p", "font-size")).toBe("13px");
     expect(decl(".mobile-content-locked p", "line-height")).toBe("1.65");
-    expect(decl(".mobile-content-locked p", "color")).toBe("#6b4f32");
+    expect(decl(".mobile-content-locked p", "color")).toBe("var(--th-text-tinted)");
   });
 
   it("the frame of the preview, its title, its bullets and its last line", () => {

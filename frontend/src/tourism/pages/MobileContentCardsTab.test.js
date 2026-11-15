@@ -720,7 +720,7 @@ describe("the CSS holds the values of the design", () => {
       ["order", "#e4edeb", "#2e6b64"],
       ["detail", "#dcf0e4", "#176b3b"],
       ["no-detail", "var(--th-border)", "var(--th-text-muted)"],
-      ["locked", "#fbeadb", "#8a4f16"],
+      ["locked", "var(--th-primary-tint-strong)", "var(--th-primary-ink)"],
     ].forEach(([kind, background, color]) => {
       expect(decl(`${tag}[data-kind="${kind}"]`, "background")).toBe(background);
       expect(decl(`${tag}[data-kind="${kind}"]`, "color")).toBe(color);

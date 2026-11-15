@@ -7019,8 +7019,8 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-card-tag[data-kind="locked"] {
-  background: #fbeadb;
-  color: #8a4f16;
+  background: var(--th-primary-tint-strong);
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-card-tag[data-kind="banner"] {
@@ -7183,11 +7183,19 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 24px;
 }
 
+/* The locked-fee note beside the Port guide is the admin's own page, not the app: it follows the theme (the browns that stay brown are the app's, inside
+   the phones: --mc-app-* and the banner of the preview). */
 .mobile-content-locked {
   padding: 21px 22px;
-  border: 1px solid #ebd3b6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 16px;
-  background: #fdf0e2;
+  background: var(--th-surface-tinted);
+}
+
+.mobile-content-locked-head svg {
+  /* the padlock draws in currentColor */
+  flex-shrink: 0;
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-locked-head {
@@ -7200,7 +7208,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0;
   font-size: 15.5px;
   font-weight: 700;
-  color: #6f3e11;
+  color: var(--th-text-tinted-strong);
 }
 
 .mobile-content-locked-prices {
@@ -7215,7 +7223,7 @@ tr.arrival-row:hover > .arrival-chevron {
   flex-direction: column;
   gap: 4px;
   padding: 12px 14px;
-  border: 1px solid #ebd3b6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 11px;
   background: var(--th-surface);
 }
@@ -7225,7 +7233,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #9b7349;
+  color: var(--th-text-tinted-muted);
 }
 
 .mobile-content-locked-price strong {
@@ -7239,7 +7247,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.65;
-  color: #6b4f32;
+  color: var(--th-text-tinted);
 }
 
 .mobile-content-locked p:last-child {
