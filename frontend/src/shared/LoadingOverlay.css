@@ -101,21 +101,23 @@
   animation: loDotPulse 1.4s ease-in-out infinite;
 }
 
-/* Tourism specific overlay */
+/* Tourism specific overlay. Its colours are the theme's: the overlay is drawn inside the tourism shell, which carries the --th-* tokens. Only these
+   rules read them, and only the tourism overlay has this class: the Sanitation overlay (--sanitation) and the neutral one keep their own colours, and
+   outside the tourism shell the tokens would be the green defaults of :root. */
 .loading-overlay--tourism .loading-overlay__pulse-glow {
-  background: #06b6d4;
+  background: var(--th-primary);
 }
 .loading-overlay--tourism .loading-overlay__ring-outer {
-  border-top-color: #0f766e;
-  border-right-color: #14b8a6;
+  border-top-color: var(--th-primary-ink);
+  border-right-color: var(--th-primary);
 }
 .loading-overlay--tourism .loading-overlay__ring-inner {
-  border-top-color: #06b6d4;
-  border-left-color: #0284c7;
+  border-top-color: var(--th-primary);
+  border-left-color: var(--th-primary-hover);
 }
 .loading-overlay--tourism .loading-overlay__core-dot {
-  background: #0f766e;
-  box-shadow: 0 0 10px #14b8a6;
+  background: var(--th-primary-ink);
+  box-shadow: 0 0 10px var(--th-primary);
 }
 
 /* Sanitation specific overlay — clean minimalist circular spinner */

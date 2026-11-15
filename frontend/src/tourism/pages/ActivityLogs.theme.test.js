@@ -11,7 +11,7 @@ const sharedCss = readFileSync(join(__dirname, "..", "..", "shared", "pages", "A
 // every rule of the tourism stylesheet that is about the activity page, as [selector, body]
 const tourismActivityRules = Array.from(tourismCss.matchAll(/\n(\.tourism-layout \.activity-[^{]*)\{([^}]*)\}/g)).map((m) => [m[1].trim(), m[2]]);
 
-const GREEN_LITERAL = /#(?:0f6b42|16a34a|15803d|dcfce7|2fa34a|eef7f2)\b|rgba\(\s*15\s*,\s*57\s*,\s*38/i;
+const GREEN_LITERAL = /#(?:0f6b42|16a34a|15803d|dcfce7|2fa34a|eef7f2|d8e4dd|a9c8b9|33443c|e2ede7)\b|rgba\(\s*15\s*,\s*57\s*,\s*38/i;
 
 describe("the places that were a fixed green now read the theme", () => {
   it("Refresh is the primary colour, the one the main buttons of the other pages use", () => {
@@ -27,6 +27,13 @@ describe("the places that were a fixed green now read the theme", () => {
     expect(rule(".tourism-layout .activity-table-card th").background).toBe("var(--th-primary-tint)");
     expect(rule(".tourism-layout .activity-summary-card")["box-shadow"]).toBe("0 10px 20px rgba(var(--th-shadow-rgb), 0.12)");
     expect(rule(".tourism-layout .activity-table-card")["box-shadow"]).toBe("0 8px 18px rgba(var(--th-shadow-rgb), 0.12)");
+  });
+
+  it("the tinted lines and the header text of the page are the theme's tinted tokens", () => {
+    expect(rule(".tourism-layout .activity-table-card th").color).toBe("var(--th-text-tinted)");
+    expect(rule(".tourism-layout .activity-table-card td")["border-bottom-color"]).toBe("var(--th-border-tinted)");
+    expect(rule(".tourism-layout .activity-tools")["border-bottom-color"]).toBe("var(--th-border-tinted)");
+    expect(rule(".tourism-layout .activity-tools select")["border-color"]).toBe("var(--th-border-tinted-control)");
   });
 
   it("no tourism rule of the page keeps a green literal", () => {
@@ -45,6 +52,13 @@ describe("what was not changed", () => {
   it("the shared file still has Sanitation's own green on the same places", () => {
     expect(rule(".activity-refresh", sharedCss).background).toBe("#0f6b42");
     expect(rule(".activity-title", sharedCss).color).toBe("#0f6b42");
+  });
+
+  it("the tinted lines and the header text keep Sanitation's literals in the shared file", () => {
+    expect(rule(".activity-tools", sharedCss)["border-bottom"]).toBe("1px solid #d8e4dd");
+    expect(rule(".activity-tools select", sharedCss).border).toBe("1px solid #a9c8b9");
+    expect(rule(".activity-table-card th", sharedCss)).toMatchObject({ background: "#eef7f2", color: "#33443c" });
+    expect(rule(".activity-table-card td", sharedCss)["border-bottom"]).toBe("1px solid #e2ede7");
   });
 
   it("Created is still green, Updated blue and Deleted red: the colours that mean something", () => {

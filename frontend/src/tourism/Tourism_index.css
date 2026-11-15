@@ -3996,6 +3996,19 @@
 
 .tourism-layout .activity-table-card th {
   background: var(--th-primary-tint);
+  color: var(--th-text-tinted);
+}
+
+.tourism-layout .activity-table-card td {
+  border-bottom-color: var(--th-border-tinted);
+}
+
+.tourism-layout .activity-tools {
+  border-bottom-color: var(--th-border-tinted);
+}
+
+.tourism-layout .activity-tools select {
+  border-color: var(--th-border-tinted-control);
 }
 
 .tourism-layout .activity-summary-card {
