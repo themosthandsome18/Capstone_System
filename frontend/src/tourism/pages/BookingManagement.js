@@ -1079,8 +1079,11 @@ function BookingManagement() {
       </div>
 
       <div className="booking-status-grid">
-        <div className="booking-status-card verified">
-          <p>Verified Entries</p>
+        <div
+          className="booking-status-card total"
+          title="Every record of the selected year, whatever its status, archived ones included. It does not follow the search or the filters of the table."
+        >
+          <p>All Records</p>
           <h2>{summary.verifiedEntries}</h2>
         </div>
 
@@ -1094,6 +1097,10 @@ function BookingManagement() {
           <h2>{summary.noShow}</h2>
         </div>
       </div>
+      {/* The three cards count the whole selected year (the server's summary). The table under them is filtered, and says so: it must not look like they agree. */}
+      <p className="booking-status-note">
+        These three count the whole selected year, archived records included. The search and filters below do not change them.
+      </p>
 
       {listNotice ? (
         <div className={`booking-save-notice ${listNotice.tone}`} role="status">
