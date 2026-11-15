@@ -63,7 +63,7 @@ const emptyDashboardData = {
     monthArrivals: 0,
     totalRevenueCollected: 0,
     pendingForReportingDate: 0,
-    noShowRate: 0,
+    noShowRate: null,
     topResortThisMonth: "No arrivals yet",
     topOriginThisMonth: "No arrivals yet",
   },

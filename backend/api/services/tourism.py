@@ -744,7 +744,10 @@ def build_dashboard_payload(params=None):
     ).count()
 
     record_summary = all_records.aggregate(
-        total_bookings=Count("survey_id"),
+        arrived_count=Count(
+            "survey_id",
+            filter=Q(status=BOOKING_STATUS_ARRIVED),
+        ),
         no_show_count=Count(
             "survey_id",
             filter=Q(status=BOOKING_STATUS_NO_SHOW),
@@ -816,8 +819,13 @@ def build_dashboard_payload(params=None):
         .order_by("-visitors", "origin")
         .first()
     )
-    total_bookings = record_summary["total_bookings"] or 0
+    # The cancellation rate: of the bookings that are FINISHED (the visitor came, or did not), how many did not come. A booking still to come (pending)
+    # can be neither, so it is on neither side: counting it in the whole made the rate fall whenever more bookings were made for the future, with
+    # no change in the cancelling. The records are the same set as every other count (the selected year, archived ones included). Nothing finished
+    # yet is None ("nothing to say"), never 0: a 0% would say that nobody cancelled.
+    arrived_count = record_summary["arrived_count"] or 0
     no_show_count = record_summary["no_show_count"] or 0
+    finished_bookings = arrived_count + no_show_count
 
     return {
         "filters": {
@@ -836,9 +844,9 @@ def build_dashboard_payload(params=None):
             "monthArrivals": live_summary["month_arrivals"] or 0,
             "totalRevenueCollected": total_revenue,
             "pendingForReportingDate": pending_today,
-            "noShowRate": round((no_show_count / total_bookings) * 100, 1)
-            if total_bookings
-            else 0,
+            "noShowRate": round((no_show_count / finished_bookings) * 100, 1)
+            if finished_bookings
+            else None,
             "topResortThisMonth": top_resort["resort__resort_name"]
             if top_resort
             else "No arrivals yet",

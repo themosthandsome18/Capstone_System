@@ -146,3 +146,43 @@ describe("Dashboard figures anchored to today", () => {
     expect(mockCharts.some((c) => c.type === "doughnut")).toBe(true);
   });
 });
+
+describe("the Cancellation Rate card", () => {
+  const withRate = (noShowRate, extra = {}) => {
+    const base = data(extra);
+    return { ...base, metrics: { ...base.metrics, noShowRate } };
+  };
+  const rate = () => ({ value: card("Cancellation Rate").querySelector("h2").textContent, note: card("Cancellation Rate").querySelector("span").textContent });
+
+  it("shows the percentage as it always did, with the note 'Of finished bookings, selected year'", async () => {
+    for (const [given, shown] of [[42.9, "42.9%"], [5, "5%"], [100, "100%"], [33.3, "33.3%"], [66.7, "66.7%"]]) {
+      document.body.innerHTML = "";
+      mockData(withRate(given));
+      await show();
+      expect(rate()).toEqual({ value: shown, note: "Of finished bookings, selected year" });
+    }
+  });
+
+  it("a real 0 (bookings finished, none of them cancelled) is still 0%", async () => {
+    mockData(withRate(0));
+    await show();
+    expect(rate()).toEqual({ value: "0%", note: "Of finished bookings, selected year" });
+  });
+
+  it("null (no booking is finished yet) shows a dash and says so: never 0%", async () => {
+    mockData(withRate(null));
+    await show();
+    expect(rate()).toEqual({ value: "—", note: "No finished bookings yet" });
+    expect(card("Cancellation Rate").textContent).not.toContain("0%");
+  });
+
+  it("also in a past year, where the live figures are dashes with their own note: the rate keeps its own", async () => {
+    mockData(withRate(null, { currentYearOnly: true }));
+    await show();
+    expect(rate()).toEqual({ value: "—", note: "No finished bookings yet" });
+    mockData(withRate(12.5, { currentYearOnly: true }));
+    document.body.innerHTML = "";
+    await show();
+    expect(rate()).toEqual({ value: "12.5%", note: "Of finished bookings, selected year" });
+  });
+});
