@@ -413,6 +413,11 @@ class Resort(models.Model):
     # middle of the town, which is not a place, so the GIS map leaves it off. Set by the importers; cleared by the server when an admin saves the
     # resort with a coordinate that is not the import's. Not a thing an admin switches by hand.
     is_placeholder = models.BooleanField(default=False, db_default=False)
+    # The ONE resort the online booking import puts a booking in when the resort it names is not one we know ("Others / Private Residence"). It is found
+    # by this flag and never by an id: ids are not the same in every database (it was 16 in the live one and some other resort in the local one). Unlike
+    # is_placeholder, it is not cleared when an admin saves the resort, or gives it a coordinate, or renames it: the flag says what the resort is FOR.
+    # Not a field of any serializer: nothing a client sends can set or clear it.
+    is_fallback = models.BooleanField(default=False, db_default=False)
     latitude = models.FloatField()
     longitude = models.FloatField()
     images = models.JSONField(default=list, blank=True)

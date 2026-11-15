@@ -124,22 +124,25 @@ class TheThreeImportersMarkWhatTheyMakeTests(TestCase):
         Resort.objects.all().delete()
 
     def test_the_online_booking_fallback_is_marked(self):
+        # It used to be made at id 16, whatever the database had: it is made at the NEXT FREE id and flagged is_fallback (see test_fallback_resort.py).
         found = ReferenceResolver(commit=True).resort("A Place Nobody Set Up")
 
-        self.assertEqual((found.resort_id, found.resort_name), (16, "Others / Private Residence"))
-        saved = Resort.objects.get(pk=16)
+        self.assertEqual((found.resort_id, found.resort_name), (1, "Others / Private Residence"))  # nothing else is here, so 1; never 16
+        saved = Resort.objects.get(pk=found.resort_id)
         self.assertTrue(saved.is_placeholder)
+        self.assertTrue(saved.is_fallback)
         self.assertEqual((saved.latitude, saved.longitude), constants.FALLBACK_COORDINATES)
         self.assertEqual(saved.short_description, constants.FALLBACK_DESCRIPTION)
 
     def test_the_online_booking_resort_made_for_a_new_name_is_marked(self):
         # the importer makes one for a name when the fallback cannot be made
-        with patch.object(Resort.objects, "get_or_create", side_effect=RuntimeError("no fallback")):
+        with patch.object(ReferenceResolver, "fallback_resort", return_value=None):
             found = ReferenceResolver(commit=True).resort("A Brand New Name")
 
         saved = Resort.objects.get(pk=found.resort_id)
         self.assertEqual(saved.resort_name, "A Brand New Name")
         self.assertTrue(saved.is_placeholder)
+        self.assertFalse(saved.is_fallback)  # a resort made for one name is not THE fallback
         self.assertEqual((saved.latitude, saved.longitude), constants.ONLINE_BOOKING_COORDINATES)
         self.assertEqual(saved.short_description, constants.ONLINE_BOOKING_DESCRIPTION)
 
@@ -162,12 +165,12 @@ class TheThreeImportersMarkWhatTheyMakeTests(TestCase):
         self.assertEqual(saved.short_description, constants.MONITORING_FORM_DESCRIPTION)
 
     def test_what_an_importer_makes_is_exactly_what_the_migration_would_mark(self):
-        ReferenceResolver(commit=True).resort("Anything")
-        Resort.objects.filter(pk=16).update(is_placeholder=False)
+        made = ReferenceResolver(commit=True).resort("Anything")
+        Resort.objects.filter(pk=made.resort_id).update(is_placeholder=False)
 
         migration.mark_import_placeholders(apps, None)
 
-        self.assertTrue(marked(16))
+        self.assertTrue(marked(made.resort_id))
 
     def test_an_importer_does_not_mark_a_resort_that_already_exists(self):
         real = resort(5, "Dona Choleng Camping Resort")
