@@ -30,7 +30,8 @@ android {
         create("tourism") {
             dimension = "module"
             applicationId = "com.mauban.tourism"
-            manifestPlaceholders["appLabel"] = "Cagbalete"
+            // The application label: Settings and App info. The name under the icon is the launcher activity's, "Cagbalete Pass" (src/tourism/AndroidManifest.xml).
+            manifestPlaceholders["appLabel"] = "Tourist Cagbalete Pass"
         }
         create("sanitation") {
             dimension = "module"
