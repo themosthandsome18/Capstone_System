@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/reference_tables.dart';
 
 const sampleBeach = {
   'resort_id': 7,
@@ -25,6 +26,7 @@ MobileBootstrap bootstrap({List<Map<String, Object?>>? destinations}) => MobileB
   'destinations': destinations ?? [sampleBeach],
   'featuredDestinations': destinations ?? [sampleBeach],
   'referenceTables': {
+    ...fixtureReferenceTables(),
     'countries': [
       {'id': 1, 'name': 'Philippines', 'type': 'local'},
     ],

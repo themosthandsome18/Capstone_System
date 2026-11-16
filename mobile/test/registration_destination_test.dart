@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'support/reference_tables.dart';
 
 const Map<String, dynamic> beachOne = {
   'resort_id': 7,
@@ -41,7 +42,7 @@ MobileBootstrap bootstrap({List<Map<String, dynamic>>? destinations}) {
     'destinations': destinations ?? [beachOne, beachTwo, beachThree],
     // The server's second list: the same resorts, parsed again.
     'featuredDestinations': [beachTwo, beachThree],
-    'referenceTables': <String, dynamic>{},
+    'referenceTables': fixtureReferenceTables(),
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
   });

@@ -4053,6 +4053,70 @@ class FormSectionTitle extends StatelessWidget {
   }
 }
 
+/// The lists a registration is made of, by the name a person would give them, for each one the server did not send (or sent empty). A registration sends
+/// the id of an item of each of these lists, so none is guessed: an id that the app thinks is Quezon can be Ilocos Norte on another database. When any
+/// is missing the form is not shown at all ([TouristRegistrationPage]).
+List<String> missingRegistrationLists(MobileBootstrap bootstrap) => [
+  if (bootstrap.countries.isEmpty) 'countries',
+  if (bootstrap.regions.isEmpty) 'regions',
+  if (bootstrap.provinces.isEmpty) 'provinces',
+  if (bootstrap.itineraries.isEmpty) 'length-of-stay choices',
+  if (bootstrap.travelModes.isEmpty) 'ways of travelling',
+  if (bootstrap.boatTypes.isEmpty) 'boat types',
+  if (bootstrap.visitPurposes.isEmpty) 'purposes of visit',
+];
+
+/// What the registration page says instead of the form when [missingRegistrationLists] is not empty: what is wrong, and what to do.
+class _RegistrationUnavailable extends StatelessWidget {
+  const _RegistrationUnavailable({required this.missing});
+
+  final List<String> missing;
+
+  /// One sentence however many are missing: "provinces", "provinces and boat types", "countries, provinces and boat types".
+  String get names => missing.length < 2 ? missing.join() : '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('registration-unavailable'),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, color: context.brand.primary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "Registration isn't available right now",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "The app couldn't load the list of $names. Check your internet connection and try again. If it keeps happening, let the Tourism Office know.",
+            style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Go back'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class TouristRegistrationPage extends StatefulWidget {
   const TouristRegistrationPage({
     super.key,
@@ -4099,10 +4163,12 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
   bool get _requiresLocation => countryRequiresLocation(_country);
 
+  /// Nothing here is made up: the lists are the server's, and the form is not built when one of them is empty (see [missingRegistrationLists]).
+  List<String> get _missingLists => missingRegistrationLists(widget.bootstrap);
+
   RefItem _defaultRegion() => _preferredRefItem(
     widget.bootstrap.regions,
     nameContains: 'CALABARZON',
-    fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
   );
 
   void _chooseCountry(RefItem country) {
@@ -4123,10 +4189,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
   late RefItem _itinerary;
 
-  /// The server's itineraries, or the three live ones when it sent none.
-  List<RefItem> get _itineraryOptions => widget.bootstrap.itineraries.isNotEmpty
-      ? widget.bootstrap.itineraries
-      : tourismItineraryFallback;
+  /// The server's itineraries (never empty here: the form is not built without them).
+  List<RefItem> get _itineraryOptions => widget.bootstrap.itineraries;
   late RefItem _travelMode;
   late RefItem _boatType;
   late RefItem _purpose;
@@ -4163,9 +4227,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         : widget.bootstrap.destinations
               .where((item) => item.id == tapped.id)
               .firstOrNull;
-    _country =
-        widget.bootstrap.countries.firstOrNull ??
-        const RefItem(id: 1, name: 'Philippines', type: 'local');
+    // A list that did not arrive: the form is not shown (build), and nothing is chosen from it. No id is invented in its place.
+    if (_missingLists.isNotEmpty) return;
+    _country = widget.bootstrap.countries.first;
     if (_requiresLocation) {
       _region = _defaultRegion();
       _province = _preferredProvinceForRegion(
@@ -4174,19 +4238,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       );
     }
     _itinerary = _itineraryOptions.first;
-    _travelMode =
-        widget.bootstrap.travelModes.firstOrNull ??
-        const RefItem(id: 1, name: 'Private Vehicle');
-    _boatType =
-        widget.bootstrap.boatTypes.firstOrNull ??
-        const RefItem(
-          id: 1,
-          name: 'Tourist Boat',
-          requiresCapacityFare: true,
-        );
-    _purpose =
-        widget.bootstrap.visitPurposes.firstOrNull ??
-        const RefItem(id: 1, name: 'Leisure');
+    _travelMode = widget.bootstrap.travelModes.first;
+    _boatType = widget.bootstrap.boatTypes.first;
+    _purpose = widget.bootstrap.visitPurposes.first;
   }
 
   @override
@@ -4201,6 +4255,14 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final missing = _missingLists;
+    if (missing.isNotEmpty) {
+      return FormPageScaffold(
+        title: 'Tourist Registration',
+        subtitle: 'Help us welcome you to Mauban',
+        children: [_RegistrationUnavailable(missing: missing)],
+      );
+    }
     return FormPageScaffold(
       title: 'Tourist Registration',
       subtitle: 'Help us welcome you to Mauban',
@@ -4433,12 +4495,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     );
   }
 
+  /// The item of [items] whose name has [nameContains], else the first. [items] is never empty here (see [missingRegistrationLists]).
   RefItem _preferredRefItem(
     List<RefItem> items, {
     String? nameContains,
-    required RefItem fallback,
   }) {
-    if (items.isEmpty) return fallback;
     if (nameContains == null) return items.first;
 
     final needle = nameContains.toLowerCase();
@@ -4462,7 +4523,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     return _preferredRefItem(
       provinces,
       nameContains: nameContains,
-      fallback: const RefItem(id: 1, name: 'Quezon', regionId: 4),
     );
   }
 
@@ -4482,6 +4542,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
 
   Future<void> _submit() async {
+    // The form is not on screen when a list is missing, so this cannot be reached; it is here so that nothing could ever be sent with an invented id.
+    if (_missingLists.isNotEmpty) return;
     final validationMessage = _validateRegistration();
     if (validationMessage != null) {
       showAppMessage(context, validationMessage);
