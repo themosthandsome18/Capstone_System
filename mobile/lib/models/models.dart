@@ -200,22 +200,15 @@ class MobileBootstrap {
     return MobileBootstrap(
       destinations: const [],
       featuredDestinations: const [],
-      countries: const [RefItem(id: 1, name: 'Philippines', type: 'local')],
-      regions: const [RefItem(id: 4, name: 'CALABARZON Region')],
-      provinces: const [RefItem(id: 1, name: 'Quezon')],
-      itineraries: tourismItineraryFallback,
-      travelModes: const [
-        RefItem(id: 1, name: 'Private Vehicle'),
-        RefItem(id: 2, name: 'Public Utility Vehicle'),
-      ],
-      boatTypes: const [
-        RefItem(id: 1, name: 'Tourist Boat', requiresCapacityFare: true),
-        RefItem(id: 2, name: 'Passenger Boat', requiresCapacityFare: false),
-      ],
-      visitPurposes: const [
-        RefItem(id: 1, name: 'Leisure'),
-        RefItem(id: 3, name: 'Business'),
-      ],
+      // The reference lists are EMPTY, not written out: an id here is a guess about the server's database (the province written as 1 "Quezon" is
+      // Ilocos Norte on the live one), and the registration form, the only reader of these lists, will not run without them. Nothing is invented.
+      countries: const [],
+      regions: const [],
+      provinces: const [],
+      itineraries: const [],
+      travelModes: const [],
+      boatTypes: const [],
+      visitPurposes: const [],
       // No tourism screen reads these. Names that are not the live ones
       // (there is no "Poblacion"; Cagsiay is I, II and III) are worse than none.
       barangays: const [],
@@ -224,15 +217,6 @@ class MobileBootstrap {
     );
   }
 }
-
-/// The itineraries the registration form offers when the server's list is
-/// empty. The ids and names are the live ones (1 Overnight, 2 Same Day,
-/// 3 2 Nights); "Day Tour" was renamed "Same Day" on 2026-10-03.
-const tourismItineraryFallback = [
-  RefItem(id: 2, name: 'Same Day'),
-  RefItem(id: 1, name: 'Overnight'),
-  RefItem(id: 3, name: '2 Nights'),
-];
 
 enum TourismBootstrapStatus { loading, loaded, failed }
 

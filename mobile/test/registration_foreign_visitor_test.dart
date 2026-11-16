@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'support/reference_tables.dart';
 
 MobileBootstrap bootstrap({List<Map<String, Object?>>? countries}) {
   return MobileBootstrap.fromJson({
@@ -18,6 +19,7 @@ MobileBootstrap bootstrap({List<Map<String, Object?>>? countries}) {
       {'resort_id': 7, 'resort_name': 'Sample Beach 1', 'type': 'Beach Resort'},
     ],
     'referenceTables': {
+      ...fixtureReferenceTables(),
       'countries':
           countries ??
           [
