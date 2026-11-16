@@ -650,11 +650,19 @@ def mobile_tourist_record_history(request):
     return Response({"count": len(rows), "records": rows})
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
 @permission_classes([AllowAny])
 @throttle_classes([PassStatusRateThrottle])
 def mobile_tourist_record_status(request):
     """Where a tourist's own pass stands now: its status, when it was checked in, and its destination. Nothing else.
+
+    POST and GET both. THE APP ASKS WITH A POST: the contact number is then in the body, and not in the address, which is written to the server's
+    access log. THE GET STAYS, ON PURPOSE: build 9 of the mobile app (1.2.0+9) is installed on phones and asks with a GET (reference and contact in the
+    query string). Without it those phones would get a 405, the catch in the app would swallow it, and the passes on them would stop updating (a scanned
+    or cancelled pass would never show it), with nothing on the screen to say why. The two answer the same, through the same lookup and the same limit.
+    IT CAN BE REMOVED when no build 9 (or older build that asks with a GET) is in use any more: when every phone has the build that POSTs. Until
+    then the number of a build 9 phone still reaches the access log; only the new build stops that.
 
     Public lookup of one's own record, the way the sanitation report history is (mobile_sanitation_report_history): both the survey ID printed on
     the pass and the exact contact number used are required. Either alone (or a partial number) would let anyone list other people's records.
@@ -667,8 +675,9 @@ def mobile_tourist_record_status(request):
     counted per client address and limited (PassStatusRateThrottle, which says why and how much). A lookup with a missing key guesses nothing and
     is not counted.
     """
-    reference = (request.query_params.get("reference") or "").strip()
-    contact = (request.query_params.get("contact") or "").strip()
+    source = request.data if request.method == "POST" else request.query_params
+    reference = str(source.get("reference") or "").strip()
+    contact = str(source.get("contact") or "").strip()
 
     if not reference or not contact:
         return Response(

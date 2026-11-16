@@ -1549,7 +1549,7 @@ class MobileVisitReceipt {
   }
 }
 
-/// Where a pass stands NOW, as the server says it (GET /mobile/tourism/records/status/): the status, when the tourist was checked in, and the
+/// Where a pass stands NOW, as the server says it (POST /mobile/tourism/records/status/): the status, when the tourist was checked in, and the
 /// destination. The answer has no name, email or contact number.
 class MobilePassStatus {
   const MobilePassStatus({required this.status, this.checkedInAt, this.destinationName = ''});

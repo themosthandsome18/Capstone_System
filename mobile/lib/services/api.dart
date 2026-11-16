@@ -432,13 +432,14 @@ class TourismApi {
     );
   }
 
-  /// Where a pass stands now. Asked with the survey ID and the contact number that are ON the pass, as the sanitation report history is asked with
-  /// the complaint ID and the contact number: the tourist types nothing. Null ONLY when the server answered, well, that it has no such pass for that number
+  /// Where a pass stands now. Asked with the survey ID and the contact number that are ON the pass: the tourist types nothing. It is a POST so that
+  /// the number is in the body and not in the address (and so not in the server's log), as [fetchFeedbackReplies] is. (Build 9 asked with a GET, and the
+  /// server still answers one.) Null ONLY when the server answered, well, that it has no such pass for that number
   /// (an empty list of rows; it does not say which was wrong): the caller may then stop asking about that pass. Throws when the server cannot be reached
   /// (no network, a timeout), refuses (429, a 5xx) or does not answer in a way that can be read (rows missing, a row that is not a status): that is a
   /// failure and NOT "not known", and the caller keeps what it knew and asks again the next time.
   Future<MobilePassStatus?> fetchPassStatus({required String reference, required String contact}) async {
-    final data = await _getWithQuery('/mobile/tourism/records/status/', {
+    final data = await _post('/mobile/tourism/records/status/', {
       'reference': reference.trim(),
       'contact': contact.trim(),
     });

@@ -1,4 +1,4 @@
-"""GET /api/mobile/tourism/records/status/ : where a tourist's own pass stands now.
+"""GET and POST /api/mobile/tourism/records/status/ : where a tourist's own pass stands now.
 
 A copy of the pass is kept on the phone, with the status it had when it was made ("pending"). This is how the app finds out that the tourist has
 since been scanned. It is a public lookup of one's own record, made the way the sanitation report history is: BOTH the survey ID on the pass and the
@@ -167,8 +167,12 @@ class PassStatusTests(TestCase):
         self.assertEqual(self.client.get(URL, {"reference": "SURV-2026-0002", "contact": CONTACT}).status_code, 200)
 
     def test_it_only_reads(self):
-        for method in ("post", "put", "patch", "delete"):
+        # the app asks with a POST (the number stays out of the address) and build 9 with a GET: both only read. Nothing else is allowed.
+        for method in ("put", "patch", "delete"):
             with self.subTest(method=method):
                 response = getattr(self.client, method)(URL, {"reference": "SURV-2026-0002", "contact": CONTACT})
                 self.assertEqual(response.status_code, 405)
+        before = list(TouristRecord.objects.order_by("pk").values_list("pk", "status", "checked_in_at", "contact_number"))
+        self.assertEqual(self.client.post(URL, {"reference": "SURV-2026-0002", "contact": CONTACT}).status_code, 200)
+        self.assertEqual(list(TouristRecord.objects.order_by("pk").values_list("pk", "status", "checked_in_at", "contact_number")), before)
         self.assertEqual(TouristRecord.objects.get(pk="SURV-2026-0002").status, "arrived")

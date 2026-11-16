@@ -254,7 +254,7 @@ void main() {
   });
 
   group('the question the app asks', () {
-    test('GET /mobile/tourism/records/status/ with the survey ID and the contact number, and no login', () async {
+    test('POST /mobile/tourism/records/status/ with the survey ID and the contact number in the body (not in the address), and no login', () async {
       late http.Request seen;
       final answer = await http.runWithClient(
         () => const TourismApi().fetchPassStatus(reference: ' SURV-1 ', contact: ' +639000000001 '),
@@ -272,9 +272,14 @@ void main() {
         }),
       );
 
-      expect(seen.method, 'GET');
+      expect(seen.method, 'POST');
       expect(seen.url.path, endsWith('/mobile/tourism/records/status/'));
-      expect(seen.url.queryParameters, {'reference': 'SURV-1', 'contact': '+639000000001'});
+      // the number is in the body and NOT in the address, which the server writes to its access log
+      expect(seen.url.queryParameters, isEmpty);
+      expect(seen.url.toString(), isNot(contains('9000000001')));
+      expect(seen.headers['Content-Type'], contains('application/json'));
+      final body = jsonDecode(seen.body) as Map<String, dynamic>;
+      expect(body, {'reference': 'SURV-1', 'contact': '+639000000001'}); // exactly these two keys
       expect(seen.headers.containsKey('Authorization'), isFalse);
       expect(answer!.status, 'arrived');
       expect(answer.checkedInAt, '2099-06-01T08:30:00+00:00');

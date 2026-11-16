@@ -1,4 +1,4 @@
-"""The limit on GET /api/mobile/tourism/records/status/ (PassStatusRateThrottle).
+"""The limit on GET and POST /api/mobile/tourism/records/status/ (PassStatusRateThrottle).
 
 The survey ID is printed on the pass, so it is not a secret; the contact number is the only thing left to guess, and without a limit it could be
 guessed at, over and over. The lookups that FAIL are counted per client address: 30 an hour. A right answer costs nothing, so the app, which asks
