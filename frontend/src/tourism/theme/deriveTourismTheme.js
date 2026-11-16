@@ -20,7 +20,7 @@
 // page behind a peach sidebar on orange).
 //
 // Tokens NOT derived here stay fixed on :root: every status token, white
-// surfaces, --th-text-main/-muted, --th-border/-strong, --th-surface-alt,
+// surfaces, --th-text-main/-muted, --th-border/-strong,
 // --th-scrim, --th-info*, --th-text-inverse, --th-page-bg.
 
 export const DEFAULT_PRIMARY_COLOR = "#2FA34A";
@@ -72,6 +72,11 @@ const CHART_RULES = {
 };
 const CHART_SATURATION_CAP = 0.78;
 
+// The near-white body of the table cards (#F7FBF8 on green): measured like the others, but with the saturation CAPPED. It is the palest surface
+// the tables sit on, so on a vivid base it must stay a hint of the colour and never become a wash (cap 0.4: at most about 5 channel steps of tint
+// at this lightness, against 4 on green). Green is under the cap, so it still reproduces #F7FBF8.
+const SURFACE_ALT_RULE = [1.034, 0.3333, 0.9765];
+const SURFACE_ALT_SATURATION_CAP = 0.4;
 const SHADOW_RULE = [0, 0.3585, 0.2078]; // measured +19.192 (drift)
 const CHART_WASH_RULE = [0, 0.4057, 0.5843, 0.15]; // measured +48.128 (drift)
 const ALPHAS = { "--th-primary-alpha-10": 0.1, "--th-primary-alpha-20": 0.2, "--th-primary-alpha-30": 0.3 };
@@ -200,6 +205,8 @@ export function deriveTourismTheme(primaryColor) {
   Object.entries(CHART_RULES).forEach(([name, rule]) => {
     vars[name] = fromRule(baseHsl, rule, { saturationCap: CHART_SATURATION_CAP });
   });
+
+  vars["--th-surface-alt"] = fromRule(baseHsl, SURFACE_ALT_RULE, { saturationCap: SURFACE_ALT_SATURATION_CAP });
 
   // Readability floors (no effect on green, which already passes all of them).
   vars["--th-primary-deep"] = darkenToContrast(vars["--th-primary-deep"], "#FFFFFF");

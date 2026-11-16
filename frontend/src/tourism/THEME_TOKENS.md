@@ -85,7 +85,7 @@ Some of those reads sit in dead rules (section 7).
 | Token | Default | Role | Uses |
 |---|---|---|---|
 | `--th-surface` | `#ffffff` | Plain surface. Unused, because white was deliberately left literal | 0 |
-| `--th-surface-alt` | `#f7fbf8` | Table-card and destination-card bodies | 7 |
+| `--th-surface-alt` | `#f7fbf8` | Table-card and destination-card bodies. **Derived** (hue of the theme, saturation capped at 0.4 so it stays a hint on a vivid base; green reproduces `#f7fbf8`) | 17 |
 | `--th-surface-tinted` | `#eefaf1` | **Sidebar and top-bar background** | 2 |
 | `--th-surface-tinted-strong` | `#c6decc` | Add/Edit Destination form panel | 1 |
 | `--th-border` | `#e5e7eb` | Neutral light border | 4 |
@@ -421,8 +421,7 @@ so nothing was lost there.
   - `.badge-success` (also dead)
 - **`body` / `--page-bg` migration.** This covers the legacy `--page-bg` and
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
-- **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
-  green) and the other neutrals are derived or fixed.
+- **Neutral tokens:** `--th-surface-alt` is now derived. Decide the rest (`--th-page-bg`, the greys) separately.
 - **Unused tokens (7):** `--th-primary-contrast`, `--th-page-bg`,
   `--th-surface`, `--th-text-inverse`, `--th-info`, `--th-info-bg`,
   `--th-info-border`. (`--th-success-text`, `--th-warning-bg` and
