@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Tourism only: the short name under the icon. It is the label of the launcher activity; the application label (Settings, App info) is the
+         longer "Tourist Cagbalete Pass", set as the appLabel of this flavor in build.gradle.kts. The Sanitation flavor has no such file, so its
+         activity has no label of its own and keeps showing its application label, as before. -->
+    <application>
+        <activity
+            android:name=".MainActivity"
+            android:label="Cagbalete Pass" />
+    </application>
+</manifest>
