@@ -23,6 +23,14 @@ import {
   within,
 } from "@testing-library/react";
 
+// Detail views now load private photos; keep this record-form suite offline.
+jest.mock("../services/frontPhotoApi", () => ({
+  fetchFrontPhoto: jest.fn().mockResolvedValue(null),
+  uploadFrontPhoto: jest.fn(),
+  validatePhotoFile: jest.fn(),
+}));
+
+
 jest.mock(
   "react-router-dom",
   () => ({ useLocation: () => ({ search: "" }), useNavigate: () => jest.fn() }),
@@ -285,6 +293,7 @@ function tileValue(modal, label) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  require("../services/frontPhotoApi").fetchFrontPhoto.mockResolvedValue(null);
   mockCtx.establishments = ALL;
   mockCtx.businessTypes = REAL_BUSINESS_TYPES;
 });

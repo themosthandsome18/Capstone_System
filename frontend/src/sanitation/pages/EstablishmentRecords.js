@@ -22,6 +22,7 @@ import {
 import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import LocationPicker from "../../shared/LocationPicker";
 import { useAuth } from "../../auth/AuthContext";
+import FrontPhoto from "../components/FrontPhoto";
 import { useSanitationData } from "../context/SanitationDataContext";
 import { issueOwnerTrackingCode } from "../services/sanitationApi";
 import {
@@ -1181,6 +1182,7 @@ function EstablishmentDetailModal({
           </div>
         </div>
 
+        <FrontPhoto key={establishment.id} kind="establishment" recordId={establishment.id} />
         <h3 className="establishment-detail-section-title">Establishment Details</h3>
         <div className="establishment-detail-grid">
           <InfoTile label="Establishment ID" value={String(establishment.id)} />

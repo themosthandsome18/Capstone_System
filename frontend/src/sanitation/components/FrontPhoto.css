@@ -1,0 +1,8 @@
+.front-photo-panel { grid-column: 1 / -1; border: 1px solid #dbe2e8; border-radius: 10px; padding: 16px; margin: 16px 0; min-width: 0; }
+.front-photo-panel img { display: block; max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 6px; margin: 8px 0; }
+.front-photo-file { display: flex; flex-direction: column; gap: 8px; font-weight: 600; }
+.front-photo-file input { width: 100%; min-width: 0; }
+.front-photo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.front-photo-actions button { padding: 10px 14px; border: 1px solid #aac2b6; border-radius: 6px; background: #f0f7f3; color: #195a3b; cursor: pointer; }
+.front-photo-actions button:disabled { opacity: .6; cursor: wait; }
+.front-photo-panel [role="alert"] { color: #a32121; }

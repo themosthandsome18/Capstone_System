@@ -342,3 +342,7 @@ SANITATION_PRIVATE_PHOTOS = {
     "access_key": config("SANITATION_PRIVATE_PHOTOS_ACCESS_KEY", default=""),
     "secret_key": config("SANITATION_PRIVATE_PHOTOS_SECRET_KEY", default=""),
 }
+
+# Independent of public-media S3 settings. Native operations remain opt-in.
+from .photo_settings import native_photo_settings
+globals().update(native_photo_settings(config))

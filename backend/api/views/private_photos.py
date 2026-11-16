@@ -41,7 +41,8 @@ def private_photo_response(request, *, resolved_photo):
                     store = get_private_photo_store()
                     private_photos.require_s3_binding(resolved_photo, private_photos.s3_target(store))
                 elif resolved_photo.storage_provider == 'NATIVE':
-                    if getattr(settings, 'SANITATION_NATIVE_PHOTO_READ_DEVELOPMENT', False) is not True:
+                    if not (getattr(settings, 'SANITATION_NATIVE_PHOTO_READS_ENABLED', False) is True
+                            or getattr(settings, 'SANITATION_NATIVE_PHOTO_READ_DEVELOPMENT', False) is True):
                         raise PrivatePhotoUnavailable()
                     if any(value is not None for value in
                            (resolved_photo.s3_endpoint, resolved_photo.s3_bucket, resolved_photo.s3_region)):
@@ -87,9 +88,18 @@ def _front_photo(request, *, owner_model, owner_id, photo_model, owner_field, re
         if (set(request.data) != {'photo'} or len(request.FILES.getlist('photo')) != 1
                 or len(request.data.getlist('photo')) != 1):
             return Response({'detail': 'Supply exactly one photo file and no other fields.'}, status=400)
-        store = private_photos.get_private_photo_store()
         data, extension = validated_image(request.FILES['photo'])
-        pending = replace(owner.pk, data, extension, store)
+        provider = getattr(settings, 'SANITATION_PHOTO_WRITE_PROVIDER', 'S3')
+        if provider == 'NATIVE':
+            # Development flags cannot activate uploads through normal routes.
+            if getattr(settings, 'SANITATION_NATIVE_PHOTO_UPLOADS_ENABLED', False) is not True:
+                raise PrivatePhotoUnavailable()
+            pending = replace(owner.pk, data, extension, None,
+                              native_development=True, actor=request.user)
+        elif provider == 'S3':
+            pending = replace(owner.pk, data, extension, private_photos.get_private_photo_store())
+        else:
+            raise PrivatePhotoUnavailable()
         response = Response({'has_front_photo': True, 'cleanup_pending': pending})
     except InvalidFrontPhoto as error:
         response = Response({'detail': error.message}, status=error.status)

@@ -104,7 +104,9 @@ def hold_deleted_owner(kind, owner_id, key, *, using='default'):
 
 def replace_native_front_photo(kind, owner_id, data, extension, *, actor, explicitly_selected=False):
     _authorize(actor)
-    if (explicitly_selected is not True or getattr(settings, 'SANITATION_NATIVE_PHOTO_DEVELOPMENT', False) is not True
+    if (explicitly_selected is not True or not (
+            getattr(settings, 'SANITATION_NATIVE_PHOTO_UPLOADS_ENABLED', False) is True
+            or getattr(settings, 'SANITATION_NATIVE_PHOTO_DEVELOPMENT', False) is True)
             or connection.vendor != 'postgresql' or not connection.get_autocommit() or connection.in_atomic_block):
         raise NativeFrontPhotoUpdateFailed('SAFETY_FAILURE')
     try:

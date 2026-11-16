@@ -12,6 +12,13 @@ jest.mock(
 );
 jest.mock("../../shared/LocationPicker", () => () => null);
 jest.mock("qrcode.react", () => ({ QRCodeSVG: () => null }));
+// The detail view now loads the private front photo; keep this suite offline.
+// Plain functions: these stay in place when Jest resets mocks between tests.
+jest.mock("../services/frontPhotoApi", () => ({
+  fetchFrontPhoto: () => Promise.resolve(null),
+  uploadFrontPhoto: () => Promise.resolve(false),
+  validatePhotoFile: () => {},
+}));
 jest.mock("../../shared/csvExport", () => ({
   datedCsvFilename: (name) => `${name}.csv`,
   exportCsv: jest.fn(),
