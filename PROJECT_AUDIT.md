@@ -3364,3 +3364,10 @@ Investigated on branch `sanitation/inspection-followups`. No code, migration or 
 - Fix `584f5b7`: `db_default` on the five fields plus `0076_location_sitio_db_defaults` (five `SET DEFAULT`, no rewrite, no backfill). Evidence: Django RED (6 failures + 3 errors) then GREEN 7/7; real HTTP RED 3 FAIL of 23 then 25/25; partial migration stopped after 0071 returns 500, resumed returns 201, rerun is a no-op; `release_offline.py` 171/171; full suite 36 red, none new against cb6b58c.
 - Open: two stale test expectations from the Photos/location work (staff-bootstrap establishment shape; reverse past 0055). Accepted risk: old-backend creates fail between 0071 and 0076 and indefinitely if a run stops there. STOP if 0071 applied without 0076 or any create fails; recover by completing `migrate`, never by reversing.
 - Not pushed, merged or deployed; no production, Render or Supabase access.
+
+## Photos release: production migration state and 0076 rehearsal PASS (2026-11-18; LOCAL ONLY)
+
+- Production migration state (owner, read-only, 2026-11-17): 97 / 75, newest api `0074_resort_is_fallback`, no photo or Sitio tables.
+- 0076 rehearsal on a new copy `capstone_rehearsal_0076` (evidence `capstone-phase4-owner-n2u7hit3`): PASS. 104/82 to 105/83; only 0076 applied; second migrate applied 0; five defaults present (four `'unknown'`, Establishment `sitio` `''`); rows 5 and 11, all-column hashes, constraints and indexes unchanged and valid; simulated old-backend insert succeeded with the defaults and was rolled back (0 committed rows). Preserved lab databases untouched.
+- Limit: migration engine called directly, so Django's post-migrate step (content types, permissions) was not rehearsed; 0076 adds no models.
+- Coverage now complete for all 8 pending migrations: Phase 2b covered seven (`0063_household_front_photo`, 0069, 0070, 0071, 0072, 0073, 0075), this rehearsal covers 0076. `origin/main` unchanged at 6261253. Not pushed or deployed.
