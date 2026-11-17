@@ -926,7 +926,7 @@ class SanitaryEstablishment(models.Model):
     )
     barangay = models.CharField(max_length=120)
     address = models.CharField(max_length=240)
-    sitio = models.CharField(max_length=120, blank=True, default="")
+    sitio = models.CharField(max_length=120, blank=True, default="", db_default="")
     contact_number = models.CharField(max_length=60, blank=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -960,14 +960,14 @@ class SanitaryEstablishment(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     location_source = models.CharField(max_length=24, choices=LOCATION_SOURCE_CHOICES,
-                                       default="unknown", editable=False)
+                                       default="unknown", db_default="unknown", editable=False)
     location_accuracy_m = models.FloatField(null=True, blank=True, editable=False)
     location_captured_at = models.DateTimeField(null=True, blank=True, editable=False)
     location_reported_mock = models.BooleanField(null=True, blank=True, editable=False)
     sitio_reference = models.ForeignKey(Sitio, null=True, blank=True, on_delete=models.PROTECT,
                                         related_name="+")
     sitio_source = models.CharField(max_length=16, choices=SITIO_SOURCE_CHOICES,
-                                   default="unknown", editable=False)
+                                   default="unknown", db_default="unknown", editable=False)
 
     # The owner's private tracking code (MBN-XXXX-XXXX) is shown once, on the
     # printed Owner's Slip; only its HMAC-SHA256 is kept. Printing a new slip
@@ -1311,14 +1311,14 @@ class HouseholdSanitationRecord(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     location_source = models.CharField(max_length=24, choices=LOCATION_SOURCE_CHOICES,
-                                       default="unknown", editable=False)
+                                       default="unknown", db_default="unknown", editable=False)
     location_accuracy_m = models.FloatField(null=True, blank=True, editable=False)
     location_captured_at = models.DateTimeField(null=True, blank=True, editable=False)
     location_reported_mock = models.BooleanField(null=True, blank=True, editable=False)
     sitio_reference = models.ForeignKey(Sitio, null=True, blank=True, on_delete=models.PROTECT,
                                         related_name="+")
     sitio_source = models.CharField(max_length=16, choices=SITIO_SOURCE_CHOICES,
-                                   default="unknown", editable=False)
+                                   default="unknown", db_default="unknown", editable=False)
 
     remarks = models.TextField(blank=True)
     last_survey_date = models.DateField(null=True, blank=True)

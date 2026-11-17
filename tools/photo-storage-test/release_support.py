@@ -15,7 +15,7 @@ from wsgiref.simple_server import WSGIRequestHandler
 REPO = Path(__file__).resolve().parents[2]
 PG = Path('C:/Program Files/PostgreSQL/17/bin')
 ROLE, DATABASE = 'household_e2e_test', 'household_e2e_disposable'
-LEAF = '0075_merge_production_and_photos'
+LEAF = '0076_location_sitio_db_defaults'
 
 
 class Stop(Exception):
