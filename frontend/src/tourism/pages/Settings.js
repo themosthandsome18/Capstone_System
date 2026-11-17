@@ -418,7 +418,7 @@ function AppearanceSettings() {
                 <dd className="settings-chip-row">
                   <span className="booking-badge pending">Pending</span>
                   <span className="booking-badge arrived">Arrived</span>
-                  <span className="booking-badge noshow">No-show</span>
+                  <span className="booking-badge noshow">Cancelled</span>
                 </dd>
               </div>
               <div>

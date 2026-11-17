@@ -50,7 +50,7 @@ const DERIVED = [
   "--th-primary-tint", "--th-primary-tint-strong", "--th-primary-border",
   "--th-primary-alpha-10", "--th-primary-alpha-20", "--th-primary-alpha-30",
   "--th-page-grad-1", "--th-page-grad-2", "--th-page-grad-3",
-  "--th-surface-tinted", "--th-surface-tinted-strong",
+  "--th-surface-alt", "--th-surface-tinted", "--th-surface-tinted-strong",
   "--th-border-tinted", "--th-border-tinted-strong", "--th-border-tinted-control",
   "--th-text-tinted-strong", "--th-text-tinted", "--th-text-tinted-muted",
   "--th-shadow-rgb",
@@ -58,7 +58,7 @@ const DERIVED = [
 ];
 const COMPUTED = ["--th-primary-contrast"];
 const FIXED = [
-  "--th-page-bg", "--th-surface", "--th-surface-alt", "--th-border", "--th-border-strong",
+  "--th-page-bg", "--th-surface", "--th-border", "--th-border-strong",
   "--th-text-main", "--th-text-muted", "--th-text-inverse", "--th-scrim",
   "--th-success", "--th-success-bg", "--th-success-text",
   "--th-warning", "--th-warning-bg", "--th-warning-text",
@@ -166,4 +166,29 @@ describe("deriveTourismTheme", () => {
   ])("falls back to the green defaults for a %s value", (_label, value) => {
     expect(deriveTourismTheme(value)).toEqual(green);
   });
+});
+
+describe("--th-surface-alt: the near-white of the table cards follows the theme's tint", () => {
+  const alt = (hex) => deriveTourismTheme(hex)["--th-surface-alt"];
+  const channels = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const spread = (hex) => Math.max(...channels(hex)) - Math.min(...channels(hex));
+
+  test("green keeps exactly the colour it had", () => {
+    expect(alt("#2FA34A")).toBe("#F7FBF8");
+  });
+
+  test("the tint moves to the colour of the theme (purple leans blue/red, no longer green)", () => {
+    const [r, g, b] = channels(alt("#7C3AED"));
+    expect(g).toBeLessThan(r);
+    expect(g).toBeLessThan(b);
+  });
+
+  test.each(["#2FA34A", "#7C3AED", "#EF7C1F", "#0000FF", "#FF0000", "#FFD400", "#00FFFF", "#808080"])(
+    "on %s it is still near-white, with no more tint than a hint",
+    (hex) => {
+      const [r, g, b] = channels(alt(hex));
+      expect(Math.min(r, g, b)).toBeGreaterThanOrEqual(240);
+      expect(spread(alt(hex))).toBeLessThanOrEqual(6);
+    }
+  );
 });

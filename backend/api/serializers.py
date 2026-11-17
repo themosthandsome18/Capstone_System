@@ -220,6 +220,11 @@ class DestinationNameField(serializers.CharField):
 
 
 class ResortSerializer(serializers.ModelSerializer):
+    """A destination. `is_placeholder` (a resort an import made up, not a place: see services/placeholder_resorts.py) is for the WEB only: it is
+    in the answer when the context says include_placeholder, and the phone's answers do not carry it (it does nothing there, and a new key would
+    move the bootstrap for nothing). It is never written by a client. It is cleared HERE, by the server, when an admin saves the resort with a
+    coordinate that is not the one the import gave: that is "exact coordinates added"."""
+
     coordinates = serializers.SerializerMethodField()
     resort_name = DestinationNameField()
     # The three below are worked out, never written: people (not records) who arrived this month and this year, and the
@@ -230,7 +235,7 @@ class ResortSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resort
-        read_only_fields = ["tourism_rating"]
+        read_only_fields = ["tourism_rating", "is_placeholder"]
         fields = [
             "resort_id",
             "resort_name",
@@ -243,6 +248,7 @@ class ResortSerializer(serializers.ModelSerializer):
             "itinerary_ids",
             "image_key",
             "is_active",
+            "is_placeholder",
             "monthly_arrivals",
             "yearly_arrivals",
             "review_count",
@@ -264,7 +270,18 @@ class ResortSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         data["images"] = [absolute_media_url(url, request) for url in (data.get("images") or [])]
+        if not self.context.get("include_placeholder"):
+            data.pop("is_placeholder", None)  # the web's key: the phone's answers do not carry it
         return data
+
+    def update(self, instance, validated_data):
+        from api.services.placeholder_resorts import has_placeholder_coordinates
+
+        latitude = validated_data.get("latitude", instance.latitude)
+        longitude = validated_data.get("longitude", instance.longitude)
+        if instance.is_placeholder and not has_placeholder_coordinates(latitude, longitude):
+            instance.is_placeholder = False  # the admin has said where the place is: it is a place now
+        return super().update(instance, validated_data)
 
     def validate_images(self, value):
         # What comes back to be stored goes back to a path when it is a whole URL of this server's own media, so the database never
@@ -467,6 +484,81 @@ class TouristRecordSerializer(serializers.ModelSerializer):
             RELATED_FIELD_API_NAMES.get(field, field): messages
             for field, messages in errors.items()
         }
+
+
+# What PATCH /api/tourist-records/<id>/ may change, by the names the API uses (the ones of TouristRecordSerializer): the whole head count, the
+# Length of Stay, the resort, the Boat Capacity and Fare (a tier is chosen by the head count, so it must be changeable with it), and the status (the
+# quick Arrived / Cancelled switch of Record Management uses it). Everything else about a record
+# (the name, the email, the contact, the country and place, the arrival date, the boat, the purpose) is the tourist's, and is refused.
+TOURIST_RECORD_EDITABLE_FIELDS = (
+    "foreigner_count",
+    "filipino_count",
+    "maubanin_count",
+    "total_visitors",
+    "total_male",
+    "total_female",
+    "age_0_7",
+    "age_8_59",
+    "age_60_above",
+    "special_group_count",
+    "discounted_count",
+    "itinerary_id",
+    "resort_id",
+    "boat_capacity_fare",
+    "status",
+)
+
+
+# Of those, what an ARCHIVED record may not change: the head count, the Length of Stay, the resort and the Boat Capacity and Fare. Its status may still be
+# (see tourist_record_detail).
+TOURIST_RECORD_EDIT_ONLY_FIELDS = tuple(name for name in TOURIST_RECORD_EDITABLE_FIELDS if name != "status")
+
+
+class TouristRecordEditSerializer(TouristRecordSerializer):
+    """The serializer of PATCH on one record. It is TouristRecordSerializer (so the head count is still checked: the total must equal each of its
+    splits, and so on) with two differences:
+
+    * A field that is not in TOURIST_RECORD_EDITABLE_FIELDS is REFUSED with a 400 that names it, even when the value is the one the record already
+      has. It is never ignored: a caller that sends it is wrong, and should hear it at once.
+    * A discounted count above the head count says so in words that fit an edit. It is never lowered for the person: the fee follows
+      discounted_count, and a fee must not change without someone having said so.
+
+    POST (a new record) does not use this class, and keeps every field.
+    """
+
+    def to_internal_value(self, data):
+        if hasattr(data, "keys"):
+            refused = [name for name in data.keys() if name not in TOURIST_RECORD_EDITABLE_FIELDS]
+            if refused:
+                allowed = ", ".join(TOURIST_RECORD_EDITABLE_FIELDS)
+                raise serializers.ValidationError(
+                    {
+                        name: [f"This field cannot be changed here. A record may only change: {allowed}."]
+                        for name in refused
+                    }
+                )
+        return super().to_internal_value(data)
+
+    def _api_error_keys(self, errors):
+        keys = super()._api_error_keys(errors)
+        if "discounted_count" in keys and self._discounted_is_above_total():
+            values = self._values_checked
+            keys["discounted_count"] = [
+                f"The discounted count ({values['discounted_count']}) cannot be greater than the number of visitors ({values['total_visitors']}). "
+                "Lower the discounted count in the same change: it is not changed for you, because the fee follows it."
+            ]
+        return keys
+
+    def _merged_validation_values(self, attrs):
+        self._values_checked = super()._merged_validation_values(attrs)
+        return self._values_checked
+
+    def _discounted_is_above_total(self):
+        values = getattr(self, "_values_checked", {})
+        try:
+            return int(values.get("discounted_count") or 0) > int(values.get("total_visitors") or 0)
+        except (TypeError, ValueError):
+            return False
 
 
 # ============================================================

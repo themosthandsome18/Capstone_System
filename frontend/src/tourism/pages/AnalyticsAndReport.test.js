@@ -34,7 +34,7 @@ const TAB_NAMES = [
   "Purpose Report",
   "Vehicle Report",
   "Boat Report",
-  "No-show Report",
+  "Cancelled Report",
 ];
 
 // Rows in the backend's order: by visitors this sorts to Alpha, Charlie, Bravo.
@@ -489,8 +489,11 @@ const KEY_INSIGHTS = [
     visual: { type: "ranking", items: [{ label: "Leisure", value: 13 }, { label: "Vacation", value: 7 }] } },
   { id: "high_demand", answer: "Dona Choleng Camping Resort shows the strongest recent demand with 8 visitors in the latest 30-day window (+8 versus the previous 30 days).",
     visual: { type: "comparison", items: [{ label: "Previous 30 days", value: 0 }, { label: "Latest 30 days", value: 8 }] } },
-  { id: "validation", answer: "Needs review: 1 pending, 1 no-show, 0 possible duplicates, and 0 incomplete records.",
-    visual: { type: "stack", items: [{ label: "Pending", value: 1 }, { label: "No-show", value: 1 }, { label: "Duplicates", value: 0 }, { label: "Incomplete", value: 0 }] } },
+  { id: "validation", answer: "4 records look like duplicates (the same name, contact number, arrival date and resort as another record), and 2 are incomplete (no name, no contact number, or no visitors counted). All records of the selected year and dates are counted, whatever their status.",
+    visual: { type: "counts", items: [
+      { label: "Possible duplicates", value: 4, note: "Records with the same name, contact number, arrival date and resort as at least one other record." },
+      { label: "Incomplete records", value: 2, note: "Records with no name, no contact number, or zero visitors counted." },
+    ] } },
 ].map((item) => ({ ...item, question: item.id }));
 
 describe("Reports Key Insights cards", () => {
@@ -533,6 +536,46 @@ describe("Reports Key Insights cards", () => {
     expect(chart.labels).toEqual(["Domestic (Filipino): 13 (65.0%)", "Foreign (International): 7 (35.0%)"]);
   });
 
+  it("the subtitle says what the insights follow: the year and the dates, not the resort; arrived bookings only, except Data Quality", () => {
+    setup({ reportData: { ...RESORT_REPORT, questionAnswers: KEY_INSIGHTS } });
+    expect(
+      screen.getByText(
+        "Follows the selected year and dates — not the resort filter. The visitor insights count arrived bookings only; Data Quality counts every record."
+      )
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Computed from tourist records, selected filters, and arrival status");
+  });
+
+  it("Data Quality is two counts, each with what it means: no chart, no percentage, nothing about the status", () => {
+    const { card, chart } = cards()["Data Quality"];
+    expect(chart).toBeNull();
+    const counts = Array.from(card.querySelectorAll(".dq-count")).map((box) => ({
+      number: box.querySelector("strong").textContent,
+      label: box.querySelector(".dq-count-label").textContent,
+      note: box.querySelector("small").textContent,
+    }));
+    expect(counts).toEqual([
+      { number: "4", label: "Possible duplicates", note: "Records with the same name, contact number, arrival date and resort as at least one other record." },
+      { number: "2", label: "Incomplete records", note: "Records with no name, no contact number, or zero visitors counted." },
+    ]);
+    expect(card.textContent).not.toMatch(/%|Pending|Cancelled|Doughnut/);
+    expect(card.querySelector("canvas, [data-chart]")).toBeNull();
+    expect(card.querySelector("p").textContent).toMatch(/^4 records look like duplicates/);
+  });
+
+  it("from an older server (no counts with the answer) nothing is drawn and no old number is read as a new one; the answer is still shown", () => {
+    setup({
+      reportData: {
+        ...RESORT_REPORT,
+        questionAnswers: [{ id: "validation", question: "q", answer: "Needs review: 3 pending, 2 cancelled, 1 possible duplicates, and 5 incomplete records." }],
+      },
+    });
+    const card = document.querySelector(".analytics-question-item");
+    expect(card.querySelectorAll(".dq-count")).toHaveLength(0);
+    expect(card.querySelector("canvas, [data-chart]")).toBeNull();
+    expect(card.querySelector("p").textContent).toContain("Needs review: 3 pending");
+  });
+
   it("leaves the other 10 cards' answers and visuals as they were", () => {
     const all = cards();
     const bar = (values, labels, axis = "x") => ({ type: "bar", axis, values, labels });
@@ -544,10 +587,7 @@ describe("Reports Key Insights cards", () => {
       "Top Visitor Origins": bar([13, 7], ["Quezon", "United States"], "y"),
       "Primary Purpose of Travel": bar([13, 7], ["Leisure", "Vacation"], "y"),
       "Destinations with Growing Demand": bar([0, 8], ["Previous 30 days", "Latest 30 days"]),
-      "Data Quality & Validation": {
-        type: "doughnut", axis: "x", values: [1, 1, 0, 0],
-        labels: ["Pending: 1 (50.0%)", "No-show: 1 (50.0%)", "Duplicates: 0 (0.0%)", "Incomplete: 0 (0.0%)"],
-      },
+      "Data Quality": null, // two counts, no chart
     };
     Object.entries(expected).forEach(([title, chart]) => {
       expect([title, all[title].chart]).toEqual([title, chart]);
@@ -693,7 +733,7 @@ describe("Reports: all nine reports", () => {
     "Purpose of Travel Report",
     "Vehicle Classification Report",
     "Boat Classification Report",
-    "No-show Booking Report",
+    "Cancelled Booking Report",
   ];
 
   // Report i has i + 1 rows, so every report's row count is different.

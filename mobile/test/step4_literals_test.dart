@@ -254,13 +254,13 @@ void main() {
       await show(tester, orangeTheme, TouristDigitalPassModal(receipt: receipt()));
 
       final c = colours(tester);
-      // The "Top Status Circle" check, and the pill with receipt.displayStatus.
+      // The "Top Status Circle" check, and the pill of the receipt's status (pending here: amber, and fixed, not the theme's orange).
       for (final fixed in [
         const Color(0xffc8e6c9),
         const Color(0xffa5d6a7),
         const Color(0xff1b5e20),
-        const Color(0xffdcfce7),
-        const Color(0xff166534),
+        const Color(0xfffef3c7),
+        const Color(0xff92400e),
       ]) {
         expect(c.contains(hex(fixed)), isTrue, reason: hex(fixed));
       }

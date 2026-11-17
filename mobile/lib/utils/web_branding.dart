@@ -26,7 +26,7 @@ void setWebBranding(WebBrandingModule module) {
   final isSanitation = module == WebBrandingModule.sanitation;
   final title = isSanitation
       ? 'Mauban Sanitation & Health Portal'
-      : 'Mauban Tourism & Travel Pass';
+      : 'Cagbalete Island Guide';
   final primaryColor = isSanitation ? 0xFF07613B : 0xFF147A50;
 
   SystemChrome.setApplicationSwitcherDescription(

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
 import { INACTIVE_MARK, choicesFor } from "../utils/optionChoices";
 import { useTourismData } from "../context/TourismDataContext";
+import { expectNoWayToSave } from "../testing/addRecordFlow";
 
 // react-router-dom v7 is ESM that CRA's Jest cannot load; stub what is used.
 let mockRouterState = null;
@@ -121,7 +122,7 @@ async function openEdit(surveyId) {
   render(<BookingManagement />);
   const row = await waitFor(() => rowOf(surveyId));
   fireEvent.click(row.querySelector(".booking-icon-btn.view"));
-  await screen.findByText("Tourist Record Details & Edit");
+  await screen.findByText("Tourist Record Details");
 }
 
 function goToStep(label) {
@@ -149,13 +150,6 @@ function openTravelDetails() {
 }
 function openLocation() {
   goToStep("Location");
-}
-
-async function save() {
-  goToStep("Review");
-  fireEvent.click(await screen.findByRole("button", { name: /Update Record/ }));
-  await waitFor(() => expect(updateRecord).toHaveBeenCalled());
-  return updateRecord.mock.calls[updateRecord.mock.calls.length - 1];
 }
 
 const ACTIVE = {
@@ -266,54 +260,56 @@ describe("EDITING an old record that uses an inactive option", () => {
   });
 });
 
-describe("SAVING an old record without touching its inactive option", () => {
-  it("record A is sent with the SAME ids it had: the inactive itinerary 12 and purpose 42", async () => {
-    await openEdit("SV-A");
-
-    const [surveyId, payload] = await save();
-
-    expect(surveyId).toBe("SV-A");
-    expect(payload.itinerary_id).toBe(12);
-    expect(payload.visit_purpose_id).toBe(42);
-    expect(payload.travel_mode_id).toBe(21);
-    expect(payload.boat_type_id).toBe(31);
-    expect(updateRecord).toHaveBeenCalledTimes(1);
-  });
-
-  it("record B is sent with ITS inactive vehicle 22 and boat 32", async () => {
-    await openEdit("SV-B");
-
-    const [surveyId, payload] = await save();
-
-    expect(surveyId).toBe("SV-B");
-    expect(payload.travel_mode_id).toBe(22);
-    expect(payload.boat_type_id).toBe(32);
-    expect(payload.itinerary_id).toBe(11);
-    expect(payload.visit_purpose_id).toBe(41);
-  });
-
-  it("the ids stay the same even after the person looked at the lists", async () => {
+// A record opened from the table is only looked at. It still SHOWS the ids it holds (the inactive ones too), but there is no way to send them:
+// these four used to press Update Record.
+describe("LOOKING at an old record that uses an inactive option: it shows its ids and has no way to send them", () => {
+  it("record A shows the SAME ids it had: the inactive itinerary 12 and purpose 42", async () => {
     await openEdit("SV-A");
     openLocation();
     expect(selectWith(PLACEHOLDERS.itinerary).value).toBe("12");
     openTravelDetails();
     expect(selectWith(PLACEHOLDERS.purpose).value).toBe("42");
+    expect(selectWith(PLACEHOLDERS.mode).value).toBe("21");
+    expect(selectWith(PLACEHOLDERS.boat).value).toBe("31");
 
-    const [, payload] = await save();
-
-    expect(payload.itinerary_id).toBe(12);
-    expect(payload.visit_purpose_id).toBe(42);
+    expectNoWayToSave(updateRecord, createRecord);
   });
 
-  it("choosing another option on purpose is sent as that option", async () => {
+  it("record B shows ITS inactive vehicle 22 and boat 32", async () => {
+    await openEdit("SV-B");
+    openTravelDetails();
+    expect(selectWith(PLACEHOLDERS.mode).value).toBe("22");
+    expect(selectWith(PLACEHOLDERS.boat).value).toBe("32");
+    openLocation();
+    expect(selectWith(PLACEHOLDERS.itinerary).value).toBe("11");
+    openTravelDetails();
+    expect(selectWith(PLACEHOLDERS.purpose).value).toBe("41");
+
+    expectNoWayToSave(updateRecord, createRecord);
+  });
+
+  it("the ids stay the same even after the person looked at every step", async () => {
+    await openEdit("SV-A");
+    ["Tourist Info", "Location", "Travel Details", "Head Count", "Review"].forEach((label) => goToStep(label));
+    openLocation();
+    expect(selectWith(PLACEHOLDERS.itinerary).value).toBe("12");
+    openTravelDetails();
+    expect(selectWith(PLACEHOLDERS.purpose).value).toBe("42");
+
+    expectNoWayToSave(updateRecord, createRecord);
+  });
+
+  it("choosing another option is not possible: the lists are locked (a browser lets nobody change a :disabled select)", async () => {
     await openEdit("SV-A");
     openLocation();
-    fireEvent.change(selectWith(PLACEHOLDERS.itinerary), { target: { value: "13" } });
+    const itinerary = selectWith(PLACEHOLDERS.itinerary);
+    expect(itinerary.closest("fieldset").disabled).toBe(true);
+    expect(itinerary.matches(":disabled")).toBe(true);
+    expect(selectWith(PLACEHOLDERS.itinerary).value).toBe("12");
+    openTravelDetails();
+    expect(selectWith(PLACEHOLDERS.purpose).value).toBe("42"); // the one not touched is still the old id
 
-    const [, payload] = await save();
-
-    expect(payload.itinerary_id).toBe(13);
-    expect(payload.visit_purpose_id).toBe(42); // the one not touched is still the old id
+    expectNoWayToSave(updateRecord, createRecord);
   });
 });
 

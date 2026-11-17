@@ -218,12 +218,30 @@
   object-fit: cover;
 }
 
-.sidebar-brand span {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--th-text-tinted-strong);
-  line-height: 1.2;
+/* The system's name on two lines, like the phone's header: the place first, larger and stronger; what the system does under it, smaller and quieter.
+   min-width: 0 lets the text box be as wide as the sidebar leaves it (260px less its padding, the logo and the gap), and neither line wraps. */
+.sidebar-brand-text {
+  min-width: 0;
+}
+
+.sidebar-brand-text span {
+  display: block;
   white-space: nowrap;
+}
+
+.sidebar-brand-text .sidebar-brand-name {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--th-text-tinted-strong);
+}
+
+.sidebar-brand-text .sidebar-brand-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--th-text-tinted-muted);
 }
 
 /* Navigation */
@@ -373,6 +391,196 @@
   align-items: center;
   justify-content: center;
   color: #000;
+}
+
+/* The bell of the admin and the Tourism Office (NotificationBell.js): the red dot when there is something unread, and the list that opens under it. */
+.notification-bell {
+  position: relative;
+}
+
+.notification-bell-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.notification-bell-dot {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #ffffff;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 520px);
+  border-radius: 18px;
+  border: 1px solid var(--th-border-tinted);
+  background: var(--th-surface);
+  box-shadow: 0 18px 40px rgba(var(--th-shadow-rgb), 0.22);
+  overflow: hidden;
+}
+
+.notification-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--th-border-tinted);
+}
+
+.notification-panel-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--th-text-main);
+}
+
+.notification-mark-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--th-primary);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.notification-mark-all:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notification-problem {
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.notification-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-bottom: 1px solid var(--th-border-tinted);
+  transition: background 0.2s ease;
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-item:hover {
+  background: var(--th-primary-tint);
+}
+
+.notification-item.unread {
+  background: var(--th-primary-tint);
+}
+
+.notification-item-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0 12px 16px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item-main strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--th-text-main);
+}
+
+.notification-item.unread .notification-item-main strong {
+  font-weight: 800;
+}
+
+.notification-item-message {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.notification-item-main small {
+  font-size: 11.5px;
+  color: var(--th-text-tinted-muted);
+}
+
+.notification-item-x {
+  flex-shrink: 0;
+  margin: 8px 10px 0 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.notification-item-x:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: #111827;
+}
+
+.notification-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 36px 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.notification-empty p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--th-text-main);
+}
+
+.notification-empty small {
+  font-size: 12px;
+}
+
+.notification-retry {
+  margin-top: 6px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--th-primary);
+  cursor: pointer;
 }
 
 .topbar-user {
@@ -599,6 +807,10 @@
   margin-top: 10px;
 }
 
+.line-chart-current-year-only {
+  @apply flex h-full items-center justify-center text-center text-[14px] text-slate-500;
+}
+
 /* Gender Distribution (Bar Chart) */
 
 .bar-chart-area {
@@ -612,6 +824,25 @@
   height: 200px;
   width: 200px;
   margin: 20px auto;
+}
+
+/* "Maubanin": a line under Domestic (it is part of Domestic, not a third kind of visitor).
+   Flush with the left edge of Domestic and Foreign (no indent, nothing centred), in the SAME dark colour as their rows (it takes the colour of
+   its parent, as they do). Only its size shows that it is lower: 13px against their 16px; the number is semibold. */
+
+.classification-sub {
+  @apply mt-0.5 flex items-baseline justify-start gap-1.5 text-left text-[13px] font-normal;
+  color: inherit;
+}
+
+.classification-sub-label {
+  @apply text-[13px] font-normal;
+  color: inherit;
+}
+
+.classification-sub-value {
+  @apply text-[13px] font-semibold;
+  color: inherit;
 }
 
 /* Stay Type Distribution (Donut) */
@@ -646,101 +877,6 @@
 }
 
 
-/* ================= DATA VALIDATION PANEL ================= */
-/* Bottom section with 3 colored boxes */
-
-.validation-panel {
-  @apply rounded-[28px] bg-white px-6 py-6 shadow-[0_25px_35px_rgba(var(--th-shadow-rgb),0.2)];
-}
-
-/* Header (Title + Review All button) */
-
-.validation-header {
-  @apply flex items-center justify-between;
-}
-
-/* Grid for 3 boxes */
-
-.validation-grid {
-  @apply mt-5 grid grid-cols-3 gap-5;
-}
-
-/* Individual boxes */
-
-.validation-box {
-  @apply flex items-center gap-4 rounded-[18px] px-5 py-4 shadow-md;
-}
-
-
-/* ================= VALIDATION COLORS ================= */
-/* Matches your Figma colors */
-
-.validation-box.success {
-  background: #bde5bd;
-}
-
-.validation-box.danger {
-  background: #f2c7c3;
-}
-
-.validation-box.warning {
-  background: #efe4c5;
-}
-
-
-/* ================= VALIDATION ICONS ================= */
-
-.validation-icon {
-  font-size: 40px;
-}
-
-.validation-box.success .validation-icon {
-  color: #00b82f;
-}
-
-.validation-box.danger .validation-icon {
-  color: #f04438;
-}
-
-.validation-box.warning .validation-icon {
-  color: #c79013;
-}
-
-
-/* ================= VALIDATION TEXT ================= */
-
-.validation-box p {
-  @apply text-[13px] font-semibold;
-}
-
-.validation-box h3 {
-  @apply text-[26px] font-bold;
-}
-
-.validation-box span {
-  @apply text-[11px] text-slate-600;
-}
-
-
-/* ================= REVIEW ALL BUTTON ================= */
-/* Top right of Data Validation Panel */
-
-.review-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 42px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1.5px solid var(--th-primary);
-  background: #ffffff;
-  color: var(--th-text-main);
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: none;
-  white-space: nowrap;
-}
 /* ================================================================ BOOKING MANAGEMENT PAGE ============================================== */
 /* Main container of the whole booking page */
 
@@ -770,7 +906,7 @@
 
 
 /* ================= STATUS CARDS ================= */
-/* Verified / Arrived / No-show summary boxes */
+/* All records / Arrived / Cancelled summary boxes */
 
 .booking-status-grid {
   @apply grid grid-cols-3 gap-5;
@@ -788,13 +924,20 @@
   @apply mt-1 text-[26px] font-extrabold text-black;
 }
 
-/* Verified */
+/* A quiet line under the three cards: they are not filtered, the table is. */
+.booking-status-note {
+  margin: 10px 4px 0;
+  font-size: 12.5px;
+  color: var(--th-text-tinted-muted);
+}
 
-.booking-status-card.verified {
+/* All records */
+
+.booking-status-card.total {
   background: #eef3cf;
 }
 
-.booking-status-card.verified p {
+.booking-status-card.total p {
   color: #f0b429;
 }
 
@@ -840,7 +983,7 @@
 
 .booking-filter-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
   margin-top: -18px;
 }
@@ -1034,45 +1177,6 @@
 .booking-noshow-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-}
-
-.delete-record-confirm {
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 18px;
-}
-
-.delete-record-confirm p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--th-text-main);
-}
-
-.delete-record-confirm strong {
-  font-weight: 800;
-}
-
-.delete-record-actions {
-  margin-top: 18px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.delete-record-confirm-btn {
-  height: 32px;
-  border-radius: 4px;
-  border: 1px solid #dc2626;
-  background: #dc2626;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.delete-record-confirm-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
 }
 
 /* ================= ADD TOURIST RECORD FORM ================= */
@@ -2883,6 +2987,14 @@
 
 /* A hidden review (item #17): staff still read all of it, so it is muted,
    not collapsed. */
+/* the review a notification opened: marked for a moment, so the eye finds it among the others */
+.feedback-card-marked {
+  outline: 3px solid var(--th-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--th-primary-tint);
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 .feedback-card-hidden {
   @apply bg-slate-100;
   opacity: 0.85;
@@ -3183,6 +3295,43 @@
   gap: 14px;
 }
 
+/* Data Quality: two counts of records, each with what it means (no chart). */
+.dq-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 10px 0;
+}
+
+.dq-count {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--th-border-tinted);
+  border-radius: 12px;
+  background: var(--th-surface-tinted);
+}
+
+.dq-count strong {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--th-text-tinted-strong);
+}
+
+.dq-count-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--th-text-tinted);
+}
+
+.dq-count small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--th-text-tinted-muted);
+}
+
 .analytics-question-item h4 {
   margin: 0;
   font-size: 15.5px;
@@ -3447,6 +3596,100 @@
   overflow: hidden;
   border-radius: 6px;
   border: 1px solid #2d9cff;
+}
+
+/* The GIS map's pin (MaubanDestinationMap.js). Leaflet moves the icon itself; everything that grows or fades is inside it. */
+.mauban-pin-icon {
+  background: none;
+  border: 0;
+}
+
+/* the pin grows from its tip (transform-origin), so the tip stays on the coordinate */
+.mauban-pin-body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 97%;
+  transition: transform 0.18s ease-out;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35));
+}
+
+.mauban-pin-body svg {
+  display: block;
+  overflow: visible;
+}
+
+.mauban-pin-icon:hover .mauban-pin-body {
+  transform: scale(1.12);
+}
+
+/* the soft shadow on the ground, under the tip */
+.mauban-pin-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: 16px;
+  height: 6px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  filter: blur(2px);
+}
+
+/* the selected pin's soft white ring, round its head */
+.mauban-pin-ring {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+}
+
+/* The card in the pin's popup is one button. It lifts a little under the mouse; when pressed it sinks and fades (0.15s) before the page changes. */
+.mauban-popup-card {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.mauban-popup-card:hover {
+  transform: translateY(-2px);
+}
+
+.mauban-popup-card:focus-visible {
+  outline: 2px solid var(--th-primary);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.mauban-popup-card.is-leaving {
+  transform: scale(0.97);
+  opacity: 0.4;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.mauban-popup-cta {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--th-primary-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mauban-popup-card,
+  .mauban-popup-card.is-leaving {
+    transition: none;
+  }
 }
 
 .gis-side-panel {
@@ -3719,7 +3962,7 @@
 .gis-stat-box h2 .gis-stat-of {
   font-size: 17px;
   font-weight: 600;
-  color: #7A6755;
+  color: var(--th-text-tinted-muted);
 }
 
 /* The name of the most visited is text, not a number: smaller, at most two lines, cut with an ellipsis. */
@@ -3735,7 +3978,7 @@
 
 .gis-stat-box p.gis-stat-note {
   font-size: 12.5px;
-  color: #87705C;
+  color: var(--th-text-tinted-muted);
 }
 
 /* ── ACTIVITY LOGS: the brand colour follows the theme ──
@@ -3753,6 +3996,19 @@
 
 .tourism-layout .activity-table-card th {
   background: var(--th-primary-tint);
+  color: var(--th-text-tinted);
+}
+
+.tourism-layout .activity-table-card td {
+  border-bottom-color: var(--th-border-tinted);
+}
+
+.tourism-layout .activity-tools {
+  border-bottom-color: var(--th-border-tinted);
+}
+
+.tourism-layout .activity-tools select {
+  border-color: var(--th-border-tinted-control);
 }
 
 .tourism-layout .activity-summary-card {
@@ -4066,10 +4322,10 @@
   background: #f0fdfa;
 }
 
-.booking-icon-btn.delete {
-  color: var(--th-danger);
-  border-color: #f5b5b5;
-  background: #fef2f2;
+.booking-icon-btn.archive {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f8fafc;
 }
 
 .booking-icon-btn.arrived {
@@ -4094,6 +4350,42 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* Archive: a record taken off the Record Management table (never deleted, and every count still has it). */
+.booking-archive-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.booking-archive-filter select {
+  width: 100%;
+}
+
+.booking-archived-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.booking-row-archived td {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.booking-archived-mark {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .tourist-auto-fill-row {
@@ -5045,13 +5337,13 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-hint {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 /* ---- Edit modal ---- */
@@ -5073,20 +5365,20 @@
   gap: 12px;
   flex: none;
   padding: 18px 22px;
-  border-bottom: 1px solid #efe2d3;
+  border-bottom: 1px solid var(--th-border-tinted);
 }
 
 .dest-edit-header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-edit-header p {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-edit-close {
@@ -5097,10 +5389,10 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid #e8dbcb;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 8px;
   background: #ffffff;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
@@ -5116,14 +5408,14 @@
   gap: 10px;
   flex: none;
   padding: 14px 22px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
   background: #ffffff;
 }
 
 .dest-readonly {
   padding: 13px 15px;
   border-radius: 11px;
-  background: #fbf1e4;
+  background: var(--th-surface-tinted);
 }
 
 .dest-readonly-facts {
@@ -5137,7 +5429,7 @@
   margin-top: 3px;
   font-size: 17px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-readonly .dest-hint {
@@ -5152,20 +5444,20 @@
 .dest-group {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .dest-group h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-group-sub {
   margin: 2px 0 12px;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-row-2 {
@@ -5182,7 +5474,7 @@
   display: inline-flex;
   padding: 4px;
   border-radius: 10px;
-  background: #f4e7d8;
+  background: var(--th-primary-tint-strong);
 }
 
 .dest-seg-btn {
@@ -5193,14 +5485,14 @@
   background: transparent;
   font-size: 13px;
   font-weight: 700;
-  color: #6b5949;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .dest-seg-btn.selected {
   background: #ffffff;
-  color: #241e1a;
-  box-shadow: 0 1px 2px rgba(90, 60, 35, 0.14);
+  color: var(--th-text-tinted-strong);
+  box-shadow: 0 1px 2px rgba(var(--th-shadow-rgb), 0.14);
 }
 
 .dest-stay-options {
@@ -5214,20 +5506,20 @@
   display: inline-flex;
   align-items: center;
   padding: 7px 13px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 999px;
   background: #ffffff;
   font-size: 12.5px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .dest-chip.selected {
   padding: 6px 12px;
-  border: 2px solid #e0701a;
-  background: #fdf0e2;
-  color: #8a4310;
+  border: 2px solid var(--th-primary);
+  background: var(--th-primary-tint);
+  color: var(--th-primary-ink);
 }
 
 /* The fields of the Edit modal. The old rules (.tourist-record-field) made a white input with a transparent border for a green panel;
@@ -5242,7 +5534,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .dest-edit .tourist-record-field input,
@@ -5251,13 +5543,13 @@
 .dest-edit .location-picker-search input {
   height: auto;
   min-height: 40px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   padding: 9px 12px;
   font-size: 14px;
   font-weight: 400;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-edit .tourist-record-field textarea {
@@ -5268,9 +5560,9 @@
 .dest-edit .tourist-record-field select:focus,
 .dest-edit .tourist-record-field textarea:focus,
 .dest-edit .location-picker-search input:focus {
-  border-color: #e0cdb7;
+  border-color: var(--th-border-tinted-control);
   box-shadow: none;
-  outline: 2px solid #e0701a;
+  outline: 2px solid var(--th-primary);
   outline-offset: -1px;
 }
 
@@ -5278,13 +5570,13 @@
 .dest-edit .location-picker-search button {
   height: auto;
   min-height: 40px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   padding: 0 16px;
   font-size: 13.5px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
 }
 
 /* The Latitude / Longitude row sits 16px above the map. The picker's own sheet gives the map no space above it. */
@@ -5319,7 +5611,7 @@
 }
 
 .dest-chip-status.inactive {
-  background: #6b5949;
+  background: var(--th-text-tinted-muted);
 }
 
 .dest-chip-category {
@@ -5349,32 +5641,27 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-details-sub {
   margin: 4px 0 12px;
   font-size: 13.5px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
-.dest-btn-orange {
-  background: #e0701a;
-  border-color: #e0701a;
-  color: #ffffff;
-}
 
 .dest-detail-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .dest-detail-group h3 {
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-detail-group-head {
@@ -5403,7 +5690,7 @@
   margin-top: 3px;
   font-size: 14px;
   font-weight: 600;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-chip-row {
@@ -5417,23 +5704,23 @@
   display: inline-flex;
   padding: 7px 13px;
   border-radius: 999px;
-  background: #fdf0e2;
+  background: var(--th-primary-tint);
   font-size: 12.5px;
   font-weight: 600;
-  color: #8a4310;
+  color: var(--th-primary-ink);
 }
 
 .dest-about {
   margin: 0;
   font-size: 14px;
   line-height: 1.65;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .dest-coords {
   margin: 0 0 8px;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 @media (max-width: 640px) {
@@ -5450,18 +5737,18 @@
   background: none;
   font-size: 14px;
   font-weight: 700;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
   text-align: left;
   cursor: pointer;
 }
 
 .arrival-record-link:hover {
-  color: #8a4310;
+  color: var(--th-primary-ink);
   text-decoration: underline;
 }
 
 .arrival-record-link:focus-visible {
-  outline: 2px solid #e0701a;
+  outline: 2px solid var(--th-primary);
   outline-offset: 3px;
 }
 
@@ -5469,9 +5756,6 @@ tr.arrival-row {
   cursor: pointer;
 }
 
-tr.arrival-row:hover > td {
-  background: #fdf5ec;
-}
 
 .arrival-chevron-col,
 .arrival-chevron {
@@ -5482,11 +5766,11 @@ tr.arrival-row:hover > td {
 }
 
 .arrival-chevron {
-  color: #c2ae98;
+  color: var(--th-text-tinted-muted);
 }
 
 tr.arrival-row:hover > .arrival-chevron {
-  color: #8a4310;
+  color: var(--th-primary-ink);
 }
 
 .arm-backdrop {
@@ -5510,14 +5794,14 @@ tr.arrival-row:hover > .arrival-chevron {
   overflow: hidden;
   border-radius: 16px;
   background: #fffdfb;
-  box-shadow: 0 10px 30px rgba(90, 60, 35, 0.16);
+  box-shadow: 0 10px 30px rgba(var(--th-shadow-rgb), 0.16);
 }
 
 .arm-band {
   position: relative;
   flex: none;
   height: 96px;
-  background-color: #6e5a46;
+  background-color: var(--th-primary-deep);
   background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 60%);
 }
 
@@ -5574,13 +5858,13 @@ tr.arrival-row:hover > .arrival-chevron {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .arm-sub {
   margin: 0 0 16px;
   font-size: 13.5px;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-actions {
@@ -5591,24 +5875,24 @@ tr.arrival-row:hover > .arrival-chevron {
 .arm-btn {
   min-height: 38px;
   padding: 0 14px;
-  border: 1px solid #e0cdb7;
+  border: 1px solid var(--th-border-tinted-control);
   border-radius: 9px;
   background: #ffffff;
   font-size: 13px;
   font-weight: 600;
-  color: #453931;
+  color: var(--th-text-tinted);
   cursor: pointer;
 }
 
 .arm-btn.primary {
-  border-color: #e0701a;
-  background: #e0701a;
+  border-color: var(--th-primary);
+  background: var(--th-primary);
   color: #ffffff;
 }
 
 .arm-btn.primary:hover:not(:disabled) {
-  border-color: #be5b11;
-  background: #be5b11;
+  border-color: var(--th-primary-hover);
+  background: var(--th-primary-hover);
 }
 
 .arm-btn:disabled {
@@ -5619,14 +5903,14 @@ tr.arrival-row:hover > .arrival-chevron {
 .arm-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 .arm-group h3 {
   margin: 0 0 12px;
   font-size: 13px;
   font-weight: 800;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
 }
 
 .arm-grid {
@@ -5642,7 +5926,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #8a6e55;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-value {
@@ -5650,20 +5934,42 @@ tr.arrival-row:hover > .arrival-chevron {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
-  color: #241e1a;
+  color: var(--th-text-tinted-strong);
   overflow-wrap: anywhere;
 }
 
 .arm-unit {
   font-weight: 500;
-  color: #7a6755;
+  color: var(--th-text-tinted-muted);
+}
+
+/* "Maubanin 4" under "In the group": a part of the group (of the Filipino), so it is a quiet line: indented, 13px, in the colour of the small labels,
+   the number semibold and the word normal. */
+.arm-subline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 0 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--th-text-tinted-muted);
+}
+
+.arm-subline-label {
+  font-weight: 400;
+  color: var(--th-text-tinted-muted);
+}
+
+.arm-subline-value {
+  font-weight: 600;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-note {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 12.5px;
-  color: #87705c;
+  color: var(--th-text-tinted-muted);
 }
 
 .arm-footer {
@@ -5671,7 +5977,7 @@ tr.arrival-row:hover > .arrival-chevron {
   flex: none;
   justify-content: flex-end;
   padding: 14px 22px;
-  border-top: 1px solid #efe2d3;
+  border-top: 1px solid var(--th-border-tinted);
 }
 
 /* ================= MOBILE APP CONTENT (Commit 4) =================
@@ -6726,8 +7032,8 @@ tr.arrival-row:hover > .arrival-chevron {
 }
 
 .mobile-content-card-tag[data-kind="locked"] {
-  background: #fbeadb;
-  color: #8a4f16;
+  background: var(--th-primary-tint-strong);
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-card-tag[data-kind="banner"] {
@@ -6890,11 +7196,19 @@ tr.arrival-row:hover > .arrival-chevron {
   gap: 24px;
 }
 
+/* The locked-fee note beside the Port guide is the admin's own page, not the app: it follows the theme (the browns that stay brown are the app's, inside
+   the phones: --mc-app-* and the banner of the preview). */
 .mobile-content-locked {
   padding: 21px 22px;
-  border: 1px solid #ebd3b6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 16px;
-  background: #fdf0e2;
+  background: var(--th-surface-tinted);
+}
+
+.mobile-content-locked-head svg {
+  /* the padlock draws in currentColor */
+  flex-shrink: 0;
+  color: var(--th-primary-ink);
 }
 
 .mobile-content-locked-head {
@@ -6907,7 +7221,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0;
   font-size: 15.5px;
   font-weight: 700;
-  color: #6f3e11;
+  color: var(--th-text-tinted-strong);
 }
 
 .mobile-content-locked-prices {
@@ -6922,7 +7236,7 @@ tr.arrival-row:hover > .arrival-chevron {
   flex-direction: column;
   gap: 4px;
   padding: 12px 14px;
-  border: 1px solid #ebd3b6;
+  border: 1px solid var(--th-border-tinted);
   border-radius: 11px;
   background: var(--th-surface);
 }
@@ -6932,7 +7246,7 @@ tr.arrival-row:hover > .arrival-chevron {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #9b7349;
+  color: var(--th-text-tinted-muted);
 }
 
 .mobile-content-locked-price strong {
@@ -6946,7 +7260,7 @@ tr.arrival-row:hover > .arrival-chevron {
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.65;
-  color: #6b4f32;
+  color: var(--th-text-tinted);
 }
 
 .mobile-content-locked p:last-child {

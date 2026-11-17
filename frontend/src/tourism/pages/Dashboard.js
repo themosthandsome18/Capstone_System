@@ -15,17 +15,15 @@ import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
   FiCalendar,
-  FiCheckCircle,
-  FiDownload,
   FiFileText,
   FiMapPin,
   FiTrendingUp,
   FiUsers,
   FiXCircle,
 } from "react-icons/fi";
-import { datedCsvFilename, exportCsv } from "../../shared/csvExport";
 import { useTourismData } from "../context/TourismDataContext";
 import { buildReportingYearOptions } from "../utils/reportingYears";
+import { visitorAxis } from "../utils/visitorAxis";
 import {
   CHART_PALETTE_DEFAULTS,
   seriesColors,
@@ -54,35 +52,41 @@ function formatCurrency(value) {
 
 const currentReportingYear = String(new Date().getFullYear());
 
-// Chart colours come from the theme (chartPalette.js); grid lines stay fixed.
-const buildLineOptions = (palette) => ({
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: { enabled: true },
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 400,
-      ticks: {
-        stepSize: 100,
-        color: palette.tick,
+// Chart colours, and the grid lines, come from the theme (chartPalette.js).
+const buildLineOptions = (palette, values) => {
+  const axis = visitorAxis(values);
+
+  return {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: true },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        min: axis.min,
+        max: axis.max,
+        ticks: {
+          stepSize: axis.stepSize,
+          precision: 0,
+          color: palette.tick,
+        },
+        grid: {
+          color: palette.grid,
+        },
       },
-      grid: {
-        color: "rgba(190, 205, 198, 0.35)",
+      x: {
+        ticks: {
+          color: palette.tick,
+        },
+        grid: {
+          display: false,
+        },
       },
     },
-    x: {
-      ticks: {
-        color: palette.tick,
-      },
-      grid: {
-        display: false,
-      },
-    },
-  },
-});
+  };
+};
 
 const buildBarOptions = (palette) => ({
   maintainAspectRatio: false,
@@ -94,7 +98,7 @@ const buildBarOptions = (palette) => ({
     y: {
       beginAtZero: true,
       grid: {
-        color: "rgba(150, 180, 175, 0.35)",
+        color: palette.grid,
       },
       ticks: {
         color: palette.tick,
@@ -167,15 +171,28 @@ function Dashboard() {
   }, [isComputedDataStale, refreshDashboardIfStale]);
   const metrics = dashboardData.metrics;
   const classification = dashboardData.classification;
+  // Maubanin is a subset of Domestic (Filipino): never shown as more than Domestic, and never a slice of the donut.
+  const maubanin = Math.min(Number(classification.maubanin) || 0, Number(classification.filipino) || 0);
   const gender = dashboardData.gender;
   const stayType = dashboardData.stayType;
-  const validation = dashboardData.validation;
+  // The server says so when the selected year is not the current one: today / week / month and the daily trend
+  // only exist for the current year, so they are not shown (a dash), never as a zero that would read as a fact.
+  const currentYearOnly = dashboardData.currentYearOnly === true;
+  const currentYear = dashboardData.currentYear || currentReportingYear;
+  const liveValue = (value) => (currentYearOnly ? "—" : formatNumber(value));
+  const liveText = (value) => (currentYearOnly ? "—" : value);
+  const liveNote = currentYearOnly ? "Current year only" : undefined;
+  // null from the server means no booking is finished yet: there is no rate to give (0% would say that nobody cancelled).
+  const hasCancellationRate = typeof metrics.noShowRate === "number";
 
   // null until the shell's theme colours have been read; charts wait for it.
   const chartPalette = useTourismChartPalette();
   const palette = chartPalette || CHART_PALETTE_DEFAULTS;
   const twoSeries = useMemo(() => seriesColors(palette, 2), [palette]);
-  const lineOptions = useMemo(() => buildLineOptions(palette), [palette]);
+  const lineOptions = useMemo(
+    () => buildLineOptions(palette, dashboardData.trends.arrivals),
+    [palette, dashboardData.trends.arrivals],
+  );
   const barOptions = useMemo(() => buildBarOptions(palette), [palette]);
 
   const dailyVisitorData = useMemo(() => ({
@@ -258,31 +275,6 @@ function Dashboard() {
     }
   }
 
-  function handleExportDashboard() {
-    const rows = [
-      ["Reporting Year", selectedYear === "all" ? "All Years" : selectedYear],
-      ["Report Date", dashboardData.reportingDate || ""],
-      ["Today's Arrivals", metrics.todayArrivals],
-      ["This Week's Arrivals", metrics.weekArrivals],
-      ["This Month's Arrivals", metrics.monthArrivals],
-      ["Total Revenue Collected", metrics.totalRevenueCollected],
-      ["Pending on Report Date", metrics.pendingForReportingDate],
-      ["No-show Rate", `${metrics.noShowRate || 0}%`],
-      ["Top Resort This Month", metrics.topResortThisMonth],
-      ["Top Origin This Month", metrics.topOriginThisMonth],
-      ["Domestic (Filipino)", classification.filipino || 0],
-      ["Foreign (International)", classification.foreign || 0],
-      ["Male", gender.male],
-      ["Female", gender.female],
-      ["Same Day", stayType.dayTour],
-      ["Overnight", stayType.overnight],
-      ["Verified Entries", validation.verifiedEntries],
-      ["Duplicate Entries", validation.duplicateEntries],
-    ];
-
-    exportCsv(datedCsvFilename("tourism-dashboard"), ["Metric", "Value"], rows);
-  }
-
   return (
     <div className="figma-dashboard">
       <div className="dashboard-header">
@@ -308,15 +300,6 @@ function Dashboard() {
 
           <button
             type="button"
-            className="outline-action"
-            onClick={handleExportDashboard}
-          >
-            <FiDownload size={15} />
-            Export
-          </button>
-
-          <button
-            type="button"
             className="primary-action"
             onClick={() => navigate("/analytics-reports")}
           >
@@ -332,19 +315,22 @@ function Dashboard() {
       <div className="metric-grid">
         <MetricCard
           title="Today's Arrivals"
-          value={formatNumber(metrics.todayArrivals)}
+          value={liveValue(metrics.todayArrivals)}
+          note={liveNote}
           icon={<FiUsers />}
         />
 
         <MetricCard
           title="This Week's Arrivals"
-          value={formatNumber(metrics.weekArrivals)}
+          value={liveValue(metrics.weekArrivals)}
+          note={liveNote}
           icon={<FiCalendar />}
         />
 
         <MetricCard
           title="This Month's Arrivals"
-          value={formatNumber(metrics.monthArrivals)}
+          value={liveValue(metrics.monthArrivals)}
+          note={liveNote}
           icon={<FiCalendar />}
         />
 
@@ -355,28 +341,30 @@ function Dashboard() {
         />
 
         <MetricCard
-          title="Pending on Report Date"
-          value={formatNumber(metrics.pendingForReportingDate)}
-          note={dashboardData.reportingDate}
+          title="Pending Today"
+          value={liveValue(metrics.pendingForReportingDate)}
+          note={liveNote}
           icon={<FiFileText />}
         />
 
         <MetricCard
-          title="No-show Rate"
-          value={`${metrics.noShowRate || 0}%`}
-          note="Selected year"
+          title="Cancellation Rate"
+          value={hasCancellationRate ? `${metrics.noShowRate}%` : "—"}
+          note={hasCancellationRate ? "Of finished bookings, selected year" : "No finished bookings yet"}
           icon={<FiXCircle />}
         />
 
         <MetricCard
           title="Top Resort This Month"
-          value={metrics.topResortThisMonth}
+          value={liveText(metrics.topResortThisMonth)}
+          note={liveNote}
           icon={<FiTrendingUp />}
         />
 
         <MetricCard
           title="Top Origin This Month"
-          value={metrics.topOriginThisMonth}
+          value={liveText(metrics.topOriginThisMonth)}
+          note={liveNote}
           icon={<FiMapPin />}
         />
       </div>
@@ -386,7 +374,13 @@ function Dashboard() {
           <CardTitle title="Daily Visitor Trends" subtitle="Last 7 days" />
 
           <div className="line-chart-area">
-            {chartPalette ? <Line data={dailyVisitorData} options={lineOptions} /> : null}
+            {currentYearOnly ? (
+              <p className="line-chart-current-year-only">
+                Current year only {"—"} switch to {currentYear} to see this.
+              </p>
+            ) : chartPalette ? (
+              <Line data={dailyVisitorData} options={lineOptions} />
+            ) : null}
           </div>
         </section>
 
@@ -404,6 +398,10 @@ function Dashboard() {
             </div>
 
             <LegendRow color={twoSeries[0]} label="Domestic (Filipino)" value={classification.filipino || 0} />
+            <div className="classification-sub">
+              <span className="classification-sub-label">Maubanin</span>
+              <span className="classification-sub-value">{formatNumber(maubanin)}</span>
+            </div>
             <LegendRow color={twoSeries[1]} label="Foreign (International)" value={classification.foreign || 0} />
           </div>
         </section>
@@ -443,45 +441,6 @@ function Dashboard() {
           </div>
         </section>
       </div>
-
-      <section className="dashboard-card validation-panel">
-        <div className="validation-header">
-          <CardTitle
-            title="Data Validation Panel"
-            subtitle="Automated quality checks on incoming submissions"
-          />
-
-          <button type="button" className="review-button">
-            Review All
-          </button>
-        </div>
-
-        <div className="validation-grid">
-          <ValidationBox
-            type="success"
-            icon={<FiCheckCircle />}
-            title="Verified Entries"
-            value={formatNumber(validation.verifiedEntries)}
-            note="All records stored in the system"
-          />
-
-          <ValidationBox
-            type="danger"
-            icon={<FiXCircle />}
-            title="Invalid Entries"
-            value={formatNumber(validation.invalidEntries)}
-            note="Records with validation issues"
-          />
-
-          <ValidationBox
-            type="warning"
-            icon={<FiFileText />}
-            title="Duplicate Entries"
-            value={formatNumber(validation.duplicateEntries)}
-            note="Detected by repeated contact numbers"
-          />
-        </div>
-      </section>
     </div>
   );
 }
@@ -531,20 +490,6 @@ function StayBox({ color, title, value, caption }) {
 
       <h3>{value}</h3>
       <p>{caption}</p>
-    </div>
-  );
-}
-
-function ValidationBox({ type, icon, title, value, note }) {
-  return (
-    <div className={`validation-box ${type}`}>
-      <div className="validation-icon">{icon}</div>
-
-      <div>
-        <p>{title}</p>
-        <h3>{value}</h3>
-        <span>{note}</span>
-      </div>
     </div>
   );
 }

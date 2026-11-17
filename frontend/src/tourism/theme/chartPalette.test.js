@@ -19,12 +19,19 @@ function themedShell(primaryColor) {
   return element;
 }
 
+// the theme's tinted line colour, translucent (what the charts draw their grid with)
+const gridOf = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, 0.35)`;
+};
+
 const expectedPalette = (primaryColor) => {
   const vars = deriveTourismTheme(primaryColor);
   return {
     series: [1, 2, 3, 4, 5].map((n) => vars[`--th-chart-${n}`]),
     wash: vars["--th-chart-wash"],
     tick: CHART_PALETTE_DEFAULTS.tick, // --th-text-muted is fixed, so the shell does not carry it
+    grid: gridOf(vars["--th-border-tinted-strong"]),
   };
 };
 
@@ -34,6 +41,7 @@ describe("chart palette", () => {
     expect(CHART_PALETTE_DEFAULTS.series).toEqual([1, 2, 3, 4, 5].map((n) => root[`--th-chart-${n}`]));
     expect(CHART_PALETTE_DEFAULTS.wash).toBe(root["--th-chart-wash"]);
     expect(CHART_PALETTE_DEFAULTS.tick).toBe(root["--th-text-muted"]);
+    expect(CHART_PALETTE_DEFAULTS.grid).toBe(gridOf(root["--th-border-tinted-strong"]));
   });
 
   test("a green shell gives the green palette", () => {
@@ -63,6 +71,7 @@ describe("chart palette", () => {
       series: [...CHART_PALETTE_DEFAULTS.series],
       wash: CHART_PALETTE_DEFAULTS.wash,
       tick: CHART_PALETTE_DEFAULTS.tick,
+      grid: CHART_PALETTE_DEFAULTS.grid,
     });
   });
 

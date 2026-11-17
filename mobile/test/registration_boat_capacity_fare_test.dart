@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'support/reference_tables.dart';
 
 const capacityLabel = 'Boat Capacity & Fare';
 const boatLabel = 'Boat Classification *';
@@ -18,7 +19,7 @@ MobileBootstrap bootstrapWithBoats(List<Map<String, Object?>> boats, {List<Objec
     'destinations': [
       {'resort_id': 7, 'resort_name': 'Sample Beach 1', 'type': 'Beach Resort'},
     ],
-    'referenceTables': {'boatTypes': boats, 'boatCapacityFares': ?fares},
+    'referenceTables': {...fixtureReferenceTables(), 'boatTypes': boats, 'boatCapacityFares': ?fares},
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
   });
@@ -143,12 +144,8 @@ void main() {
       );
     });
 
-    test('the offline boats carry the live flags', () {
-      final boats = MobileBootstrap.fallback().boatTypes;
-      expect(boats.map((b) => (b.name, b.requiresCapacityFare)), [
-        ('Tourist Boat', true),
-        ('Passenger Boat', false),
-      ]);
+    test('the offline bootstrap offers no boats: it does not carry a copy of the flags of the server', () {
+      expect(MobileBootstrap.fallback().boatTypes, isEmpty);
     });
 
     test('the two helpers: shown only when known, kept only when shown', () {

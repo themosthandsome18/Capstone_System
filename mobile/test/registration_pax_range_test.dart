@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'support/reference_tables.dart';
 
 const capacityLabel = 'Boat Capacity & Fare';
 const boatLabel = 'Boat Classification *';
@@ -39,6 +40,7 @@ MobileBootstrap bootstrap({List<Object?>? fares}) {
       {'resort_id': 7, 'resort_name': 'Sample Beach 1', 'type': 'Beach Resort'},
     ],
     'referenceTables': {
+      ...fixtureReferenceTables(),
       'boatTypes': [
         {'id': 1, 'name': 'Tourist Boat', 'requires_capacity_fare': true},
         {'id': 2, 'name': 'Passenger Boat', 'requires_capacity_fare': false},

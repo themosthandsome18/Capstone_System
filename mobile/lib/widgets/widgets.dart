@@ -217,7 +217,7 @@ class VisitReceiptCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                StatusPill(text: receipt.displayStatus),
+                BookingStatusPill(status: receipt.status),
               ],
             ),
           ),
@@ -663,22 +663,7 @@ class _TouristDigitalPassModalState extends State<TouristDigitalPassModal> {
                                       const SizedBox(width: 8),
                                       const Text('Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
                                       const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFDCFCE7),
-                                          borderRadius: BorderRadius.circular(999),
-                                          border: Border.all(color: const Color(0xFF86EFAC)),
-                                        ),
-                                        child: Text(
-                                          receipt.displayStatus,
-                                          style: const TextStyle(
-                                            color: Color(0xFF166534),
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ),
+                                      BookingStatusPill(status: receipt.status),
                                     ],
                                   ),
                                 ],
@@ -805,7 +790,11 @@ class FeedbackReceiptCard extends StatelessWidget {
       icon: Icons.star_outline,
       title: receipt.destination.name,
       reference: receipt.reference,
-      lines: ['Rating: ${receipt.rating}/5', 'Reviewer: ${receipt.reviewer}'],
+      lines: [
+        'Rating: ${receipt.rating}/5',
+        'Reviewer: ${receipt.reviewer}',
+        if (receipt.reply.trim().isNotEmpty) 'Tourism Office reply: ${receipt.reply.trim()}',
+      ],
     );
   }
 }
@@ -1135,7 +1124,7 @@ class AppHeader extends StatelessWidget {
                 ),
               ),
               Text(
-                'Tourism Guide',
+                'Cagbalete Island Guide',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink),
               ),
             ],
@@ -1159,6 +1148,7 @@ class AppHeader extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: Container(
+                  key: const ValueKey('bell-dot'),
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
@@ -1171,6 +1161,24 @@ class AppHeader extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The small red dot that says "there is something new here": the one on the bell of the Home, and on the My Visit tab. No number.
+class NewsDot extends StatelessWidget {
+  const NewsDot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
     );
   }
 }
@@ -1834,6 +1842,205 @@ class StatusPill extends StatelessWidget {
   }
 }
 
+/// The pill that states a TOURISM BOOKING's status on a pass: Pending is amber, Arrived is green, Cancelled is red. It was green whatever the status
+/// was, which said "done" of a tourist who had not come yet.
+///
+/// The colours are not decided here: they are [touristStatusChip]'s, the same three the staff see on the chips of the QR check-in History, so the app
+/// has ONE set of colours for these three statuses. A status the app does not know gets a neutral grey pill and its own words, never a status colour.
+class BookingStatusPill extends StatelessWidget {
+  const BookingStatusPill({super.key, required this.status});
+
+  /// pending, arrived or no_show (as the server says it).
+  final String? status;
+
+  /// The grey of a status that is none of the three.
+  static const Color unknownBackground = Color(0xFFF1F5F9);
+  static const Color unknownForeground = Color(0xFF475569);
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = touristStatusChip(status?.trim().toLowerCase());
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: chip?.background ?? unknownBackground,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        chip?.label ?? statusLabel(status ?? ''),
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          color: chip?.foreground ?? unknownForeground,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+/// The small "3 / 5" pill that says which photo of a set is on screen: the one the destination's slideshow has had, now a widget, so the photo viewer
+/// of a review shows exactly the same thing.
+class PhotoCounterPill extends StatelessWidget {
+  const PhotoCounterPill({super.key, required this.current, required this.total});
+
+  /// The photo on screen, counting from 1.
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.photo_library_outlined, size: 12, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            '$current / $total',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Opens the photos of a review full screen, on the one that was pressed. Just looking: there is no download and no share.
+Future<void> showReviewPhotoViewer(BuildContext context, List<String> urls, {int initialIndex = 0}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (context) => ReviewPhotoViewer(urls: urls, initialIndex: initialIndex),
+    ),
+  );
+}
+
+/// The photos of a review, one at a time, full screen, on black. It closes with its Close button and with the phone's Back. With more than one photo
+/// they can be swiped (with the mouse too, on the web) and the pill says which one it is ("2 / 3", like the slideshow of a destination). A photo that
+/// is still coming shows a spinner; one that could not be loaded says so, instead of an empty black page.
+class ReviewPhotoViewer extends StatefulWidget {
+  const ReviewPhotoViewer({super.key, required this.urls, this.initialIndex = 0});
+
+  /// Whole addresses, as the review card shows them.
+  final List<String> urls;
+  final int initialIndex;
+
+  @override
+  State<ReviewPhotoViewer> createState() => _ReviewPhotoViewerState();
+}
+
+class _ReviewPhotoViewerState extends State<ReviewPhotoViewer> {
+  late final PageController _controller;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
+    _controller = PageController(initialPage: _current);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _photo(String url, int index) {
+    return Center(
+      child: Image.network(
+        url,
+        key: ValueKey('photo-viewer-image-$index'),
+        fit: BoxFit.contain,
+        semanticLabel: 'Photo ${index + 1} of ${widget.urls.length}',
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame == null && !wasSynchronouslyLoaded) {
+            return Center(
+              key: ValueKey('photo-viewer-loading-$index'),
+              child: const CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          return child;
+        },
+        errorBuilder: (context, error, stackTrace) => Center(
+          key: ValueKey('photo-viewer-error-$index'),
+          child: const Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.broken_image_outlined, color: Colors.white70, size: 56),
+                SizedBox(height: 12),
+                Text(
+                  'This photo could not be loaded.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.urls.length;
+    return Scaffold(
+      key: const ValueKey('photo-viewer'),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            child: PageView.builder(
+              key: const ValueKey('photo-viewer-pages'),
+              controller: _controller,
+              itemCount: total,
+              onPageChanged: (index) => setState(() => _current = index),
+              itemBuilder: (context, index) => _photo(widget.urls[index], index),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    key: const ValueKey('photo-viewer-close'),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+                    icon: const Icon(Icons.close),
+                  ),
+                  const Spacer(),
+                  if (total > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, right: 6),
+                      child: KeyedSubtree(
+                        key: const ValueKey('photo-viewer-counter'),
+                        child: PhotoCounterPill(current: _current + 1, total: total),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class InfoBanner extends StatelessWidget {
   const InfoBanner({
     super.key,
@@ -1956,20 +2163,162 @@ class DataSourceBanner extends StatelessWidget {
   }
 }
 
-/// What the person who fills in the review form is told: who will see what
-/// they send. The text is one paragraph; every statement in it was checked
-/// against the code and the live data (see PROJECT_AUDIT.md, item #16).
-const publicReviewNoticeText =
-    'Reviews are public. Anyone who opens this destination in the app can see '
-    'the initials of your name (for example, J.D.C.), your rating, your '
-    'comment, any photos you attach, and the date. Your cleanliness rating is '
-    'added to the end of your comment. Each photo also gets its own web '
-    'address, so anyone with the link can open it outside the app. Once sent, '
-    'a review cannot be changed or removed from the app. The tourism office '
-    'sees your full name; the public does not. Leave the name blank to appear '
-    'as "Mobile Tourist".';
+/// What the tourist is told about a review BEFORE they write it, and again under the form. This is the ONE source of the words: the pop-up that opens
+/// when Review is pressed ([showReviewNoticeDialog]) and the notice under the form ([PublicVisibilityNotice]) both draw it with [ReviewNoticeContent],
+/// so they cannot differ. Every statement was checked against the code: what the public sees (PublicFeedbackSerializer: the initials, the rating, the
+/// comment, the photos, the date, and only the five latest reviews of a place), what the Tourism Office sees (the name that was typed, in full), that
+/// the web's "Add to Resort" puts a review photo into the place's gallery for everyone, and that hiding or removing a review does not delete the
+/// photo file (nothing in the server deletes a file) and does not take the photo out of the gallery.
+const reviewNoticeTitle = 'Before you write a review';
 
-/// A notice, on a form, that what is about to be sent will be public.
+/// One paragraph of the notice. [stressed] is for the one that is the reason for the pop-up: it is drawn bolder than the rest.
+class ReviewNoticeParagraph {
+  const ReviewNoticeParagraph(this.text, {this.stressed = false});
+
+  final String text;
+  final bool stressed;
+}
+
+const reviewNoticeParagraphs = <ReviewNoticeParagraph>[
+  ReviewNoticeParagraph(
+    'Your review is public. Anyone who opens this place in the app can see the '
+    'initials of your name (for example, J.D.C.), your rating, your comment, any '
+    'photos you attach, and the date. Your cleanliness rating is added to the end '
+    'of your comment.',
+  ),
+  ReviewNoticeParagraph(
+    "Only the five most recent reviews are shown on a place's page. Older ones "
+    'stop showing, but each photo keeps its own web address, so anyone who has '
+    'the link can still open it outside the app.',
+  ),
+  ReviewNoticeParagraph(
+    'The Mauban Tourism Office sees the name you type here. The public sees only '
+    'your initials. Leave the name blank to appear as "Mobile Tourist".',
+  ),
+  ReviewNoticeParagraph(
+    "The Tourism Office may add your photos to the place's photo gallery in the "
+    'app, where they are shown to everyone as pictures of the place. If they do, '
+    'your photos stay there even if your review is later hidden or removed.',
+    stressed: true,
+  ),
+  ReviewNoticeParagraph(
+    'Once sent, you cannot change or remove your review yourself. The Tourism '
+    'Office can hide or remove it, but hiding does not delete the photo file.',
+  ),
+];
+
+/// The whole notice as plain text: the title, then the paragraphs, a blank line between.
+String get publicReviewNoticeText => [reviewNoticeTitle, ...reviewNoticeParagraphs.map((paragraph) => paragraph.text)].join('\n\n');
+
+/// The words of the notice, drawn. Used by the pop-up and by the notice under the form, and by nothing else: the two show the same words because
+/// they are the same widget over the same constants.
+class ReviewNoticeContent extends StatelessWidget {
+  const ReviewNoticeContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          reviewNoticeTitle,
+          key: ValueKey('review-notice-title'),
+          style: TextStyle(color: AppColors.ink, fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        for (var index = 0; index < reviewNoticeParagraphs.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: reviewNoticeParagraphs[index].stressed
+                ? Container(
+                    key: const ValueKey('review-notice-stressed'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: context.brand.tint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border(left: BorderSide(color: context.brand.primary, width: 4)),
+                    ),
+                    child: Text(
+                      reviewNoticeParagraphs[index].text,
+                      key: ValueKey('review-notice-paragraph-$index'),
+                      style: TextStyle(color: context.brand.deep, fontSize: 13, height: 1.4, fontWeight: FontWeight.w800),
+                    ),
+                  )
+                : Text(
+                    reviewNoticeParagraphs[index].text,
+                    key: ValueKey('review-notice-paragraph-$index'),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+                  ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The pop-up shown the moment Review is pressed, BEFORE the form. True only when the tourist presses "I understand"; "Cancel" (and tapping outside
+/// it, and the back button) is false, and the form is not opened. It is shown EVERY time: nothing is remembered.
+///
+/// The words scroll and the two buttons do not: on a small screen, or with large text, the notice can be longer than the screen, and the buttons are
+/// outside the scrolling part so they can always be reached.
+Future<bool> showReviewNoticeDialog(BuildContext context) async {
+  final understood = await showDialog<bool>(
+    context: context,
+    builder: (context) => const _ReviewNoticeDialog(),
+  );
+  return understood == true;
+}
+
+class _ReviewNoticeDialog extends StatelessWidget {
+  const _ReviewNoticeDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      key: const ValueKey('review-notice-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('review-notice-scroll'),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: const ReviewNoticeContent(),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    key: const ValueKey('review-notice-cancel'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    key: const ValueKey('review-notice-understand'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('I understand'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The notice under the review form: the same words as the pop-up (see [ReviewNoticeContent]).
 ///
 /// It is its own widget and not a [DataSourceBanner] on purpose: that one says
 /// where the data you are looking at comes from (live, or the saved copy), and
@@ -1977,9 +2326,7 @@ const publicReviewNoticeText =
 /// widgets, as with [StatusPill] (a status) and [StatusPill.label] (a type).
 /// Neutral colours: it is not a status and not the brand.
 class PublicVisibilityNotice extends StatelessWidget {
-  const PublicVisibilityNotice({super.key, required this.text});
-
-  final String text;
+  const PublicVisibilityNotice({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -1992,21 +2339,12 @@ class PublicVisibilityNotice extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
-        child: Row(
+        child: const Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.public, size: 20, color: AppColors.muted),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ),
+            Icon(Icons.public, size: 20, color: AppColors.muted),
+            SizedBox(width: 10),
+            Expanded(child: ReviewNoticeContent()),
           ],
         ),
       ),

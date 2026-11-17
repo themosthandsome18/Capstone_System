@@ -5,8 +5,8 @@ export const DEFAULT_FAVICON = `${process.env.PUBLIC_URL || ""}/favicon.png`;
 
 export const MODULE_CONFIG = {
   tourism: {
-    suffix: "| Mauban Tourism",
-    defaultTitle: "Mauban Tourism & Travel Pass",
+    suffix: "| Cagbalete Island Visitor Monitoring",
+    defaultTitle: "Cagbalete Island Visitor Monitoring",
     favicon: `${process.env.PUBLIC_URL || ""}/favicon_tourism.png`,
   },
   sanitation: {

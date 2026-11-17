@@ -1,13 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BookingManagement from "./BookingManagement";
 import { useTourismData } from "../context/TourismDataContext";
+import { balanceHeadCount, fieldInput, fillAddRecordUpToTravel, goToStep, setCount } from "../testing/addRecordFlow";
 
-// The Add Record / Edit wizard ties the Boat Capacity and Fare tier to the head
+// The Add Record wizard ties the Boat Capacity and Fare tier to the head
 // count (Filipino + foreigner) through the tier's own min_pax and max_pax:
 //   - the count changes  -> the tier whose range holds it is chosen;
 //   - a tier is chosen that does not hold the count -> a warning, the count is NOT
 //     changed and saving is NOT stopped;
 //   - a tier with no range (null) is skipped by both.
+// A record opened from the table is only looked at (see BookingManagement.viewOnly.test.js), so these are all said in Add Record, where the
+// fields are written. They used to open an existing record and change it.
 
 const T = {
   A: "1-2 pax (One-Way P1500, Two-way P2000)",
@@ -93,13 +96,15 @@ function record(surveyId, { boat = 31, fare = "", people = 2, foreigners = 0 } =
 }
 
 let updateRecord;
+let createRecord;
 
 function show(rec, tiers = TIERS) {
+  // no record: Add Record has none to open
   useTourismData.mockReturnValue({
     referenceTables: { ...BASE_REFERENCE, boatCapacityFares: tiers },
-    bookingManagement: { rows: [rec], summary: {}, pagination: { page: 1, totalPages: 1, total: 1 } },
+    bookingManagement: { rows: rec ? [rec] : [], summary: {}, pagination: { page: 1, totalPages: 1, total: rec ? 1 : 0 } },
     reportingYears: ["2099"],
-    createRecord: jest.fn().mockResolvedValue({}),
+    createRecord,
     updateRecord,
     deleteRecord: jest.fn(),
     previewOnlineBookingImport: jest.fn(),
@@ -111,83 +116,83 @@ function show(rec, tiers = TIERS) {
 beforeEach(() => {
   mockRouterState = null;
   updateRecord = jest.fn().mockResolvedValue({});
+  createRecord = jest.fn().mockResolvedValue({});
 });
 
-const step = (label) =>
-  fireEvent.click(screen.getByText(label, { selector: ".wizard-step-label strong" }).closest(".wizard-step-item"));
-
-async function open(rec, tiers) {
-  show(rec, tiers);
+// Add Record, on the Travel Details step, with a boat that takes a fare (31) unless said otherwise.
+async function openAdd({ boat = "31", tiers } = {}) {
+  show(null, tiers);
+  mockRouterState = { openAddModal: true, ts: 4242 };
   render(<BookingManagement />);
-  const row = await waitFor(() => screen.getByText(rec.survey_id).closest("tr"));
-  fireEvent.click(row.querySelector(".booking-icon-btn.view"));
-  await screen.findByText("Tourist Record Details & Edit");
+  await screen.findByText("Data Management Add Record");
+  fillAddRecordUpToTravel({ boat });
 }
 
 const fareSelect = () => screen.getByText(PLACEHOLDER, { selector: "option" }).closest("select");
-const fieldInput = (label) => screen.getByText(label).closest(".wizard-field").querySelector("input");
 const shown = (select) => select.options[select.selectedIndex]?.textContent;
 const warning = () => screen.queryByRole("status");
 
-// set a count on the Head Count step, then go and look at the tier on the Travel Details step
-function setCount(label, value) {
-  step("Head Count");
-  fireEvent.change(fieldInput(label), { target: { value: String(value) } });
-}
+// look at the tier on the Travel Details step
 function lookAtTier() {
-  step("Travel Details");
+  goToStep("Travel Details");
   return fareSelect();
 }
 
 describe("the count chooses the tier", () => {
   it("5 visitors -> 5-6 pax", async () => {
-    await open(record("SV-1", { people: 2, fare: "" }));
+    await openAdd();
     setCount("Filipino Count", 5);
     expect(shown(lookAtTier())).toBe(T.C);
     expect(lookAtTier().value).toBe(T.C);
   });
 
   it("2 visitors -> 1-2 pax", async () => {
-    await open(record("SV-2", { people: 5, fare: "" }));
+    await openAdd();
+    setCount("Filipino Count", 5);
     setCount("Filipino Count", 2);
     expect(lookAtTier().value).toBe(T.A);
   });
 
   it("the count goes from 2 to 5 -> the tier moves from 1-2 to 5-6", async () => {
-    await open(record("SV-3", { people: 2, fare: T.A }));
+    await openAdd();
+    setCount("Filipino Count", 2);
     expect(lookAtTier().value).toBe(T.A);
     setCount("Filipino Count", 5);
     expect(lookAtTier().value).toBe(T.C);
   });
 
   it("the foreigner count counts too: 3 Filipino + 2 foreigners = 5 -> 5-6 pax", async () => {
-    await open(record("SV-4", { people: 3, fare: "" }));
+    await openAdd();
+    setCount("Filipino Count", 3);
     setCount("Foreigner Count", 2);
     expect(lookAtTier().value).toBe(T.C);
   });
 
   it("a tier that already holds the count is kept", async () => {
-    await open(record("SV-5", { people: 2, fare: T.A }));
+    await openAdd();
+    setCount("Filipino Count", 2);
+    expect(lookAtTier().value).toBe(T.A);
     setCount("Filipino Count", 1);
     expect(lookAtTier().value).toBe(T.A);
   });
 
   it("no tier holds the count (9 visitors) -> the tier is left as it was", async () => {
-    await open(record("SV-6", { people: 2, fare: T.A }));
+    await openAdd();
+    setCount("Filipino Count", 2);
     setCount("Filipino Count", 9);
     expect(lookAtTier().value).toBe(T.A);
   });
 
   it("a boat that takes no fare is left alone", async () => {
-    await open(record("SV-7", { boat: 32, people: 2, fare: "" }));
+    await openAdd({ boat: "32" });
     setCount("Filipino Count", 5);
-    step("Travel Details");
+    goToStep("Travel Details");
     expect(fareSelect().disabled).toBe(true);
     expect(fareSelect().value).toBe("");
   });
 
   it("a tier with no range is never chosen: when it is the only one, nothing changes", async () => {
-    await open(record("SV-8", { people: 2, fare: "" }), [TIERS[4]]);
+    await openAdd({ tiers: [TIERS[4]] });
     setCount("Filipino Count", 5);
     expect(lookAtTier().value).toBe("");
   });
@@ -195,50 +200,59 @@ describe("the count chooses the tier", () => {
 
 describe("a tier that does not hold the count: a warning, nothing blocked", () => {
   it("choosing 3-4 pax while 5 are coming warns with the real number and the real range, and the counts do not move", async () => {
-    await open(record("SV-9", { people: 5, fare: T.C }));
+    await openAdd();
+    setCount("Filipino Count", 5);
     lookAtTier();
     expect(warning()).toBeNull();
     fireEvent.change(fareSelect(), { target: { value: T.B } });
     expect(warning().textContent).toBe("5 visitors do not fit 3-4 pax.");
     // the tier was chosen by hand: it stays, and the head count is untouched
     expect(fareSelect().value).toBe(T.B);
-    step("Head Count");
+    goToStep("Head Count");
     expect(fieldInput("Filipino Count").value).toBe("5");
     expect(fieldInput("Foreigner Count").value).toBe("0");
   });
 
   it("one visitor reads as one", async () => {
-    await open(record("SV-10", { people: 1, fare: T.A }));
+    await openAdd();
+    setCount("Filipino Count", 1);
     lookAtTier();
     fireEvent.change(fareSelect(), { target: { value: T.D } });
     expect(warning().textContent).toBe("1 visitor does not fit 7-8 pax.");
   });
 
   it("a tier that holds the count has no warning", async () => {
-    await open(record("SV-11", { people: 5, fare: T.B }));
+    await openAdd();
+    setCount("Filipino Count", 5);
     lookAtTier();
-    expect(warning()).not.toBeNull(); // 5 in 3-4: the record opens with the warning
+    fireEvent.change(fareSelect(), { target: { value: T.B } });
+    expect(warning()).not.toBeNull(); // 5 in 3-4
     fireEvent.change(fareSelect(), { target: { value: T.C } });
     expect(warning()).toBeNull();
   });
 
   it("a tier with no range has no warning, whatever the count", async () => {
-    await open(record("SV-12", { people: 5, fare: T.C }));
+    await openAdd();
+    setCount("Filipino Count", 5);
     lookAtTier();
     fireEvent.change(fareSelect(), { target: { value: T.OPEN } });
     expect(warning()).toBeNull();
   });
 
   it("the warning does not stop the record from being saved", async () => {
-    await open(record("SV-13", { people: 5, fare: T.B }));
+    await openAdd();
+    setCount("Filipino Count", 5);
+    balanceHeadCount(5);
     lookAtTier();
+    fireEvent.change(fareSelect(), { target: { value: T.B } });
     expect(warning().textContent).toBe("5 visitors do not fit 3-4 pax.");
-    step("Review");
-    fireEvent.click(await screen.findByRole("button", { name: /Update Record/ }));
-    await waitFor(() => expect(updateRecord).toHaveBeenCalled());
-    const [, payload] = updateRecord.mock.calls[0];
+    goToStep("Review");
+    fireEvent.click(await screen.findByRole("button", { name: /Save Record/ }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalled());
+    const payload = createRecord.mock.calls[0][0];
     expect(payload.boat_capacity_fare).toBe(T.B);
     expect(payload.filipino_count).toBe(5);
     expect(payload.total_visitors).toBe(5);
+    expect(updateRecord).not.toHaveBeenCalled();
   });
 });

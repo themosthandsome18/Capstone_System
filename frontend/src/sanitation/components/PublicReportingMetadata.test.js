@@ -104,9 +104,9 @@ function Navigation() {
 test("SPA navigation preserves existing module branding and restores reporting metadata after staff cleanup", () => {
   boot("/tourism");
   render(<React.StrictMode><MemoryRouter initialEntries={["/tourism"]}><Navigation /></MemoryRouter></React.StrictMode>);
-  expect(document.title).toBe("Existing page | Mauban Tourism");
+  expect(document.title).toBe("Existing page | Cagbalete Island Visitor Monitoring");
   fireEvent.click(screen.getByRole("button", { name: "/tourism/", exact: true }));
-  expect(document.title).toBe("Existing page | Mauban Tourism");
+  expect(document.title).toBe("Existing page | Cagbalete Island Visitor Monitoring");
   fireEvent.click(screen.getByRole("button", { name: "/report-sanitation", exact: true }));
   expect(document.title).toBe("Mauban Sanitation Reporting"); expect(manifestHref()).toBe("/report-sanitation.webmanifest");
   expect(appleHref()).toBe("/report-sanitation/icon-192.png");

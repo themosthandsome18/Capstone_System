@@ -410,7 +410,9 @@ describe("the stylesheet's selectors find the page's markup", () => {
       expect({ selector, found: document.querySelectorAll(selector).length > 0 }).toEqual({ selector, found: true });
     }
     expect(normalised(".arrival-record-link")).toMatchObject(expectedNorm({ "font-weight": "700" }));
-    expect(normalised("tr.arrival-row:hover > td")).toMatchObject(expectedNorm({ background: "#FDF5EC" }));
+    // the row's hover colour is the table's own rule (the theme's tint); no rule of tr.arrival-row paints its cells another colour
+    expect(normalised(".arrival-table-card tbody tr:hover")).toMatchObject(expectedNorm({ background: "var(--th-primary-tint)" }));
+    expect(() => rule("tr.arrival-row:hover > td")).toThrow();
   });
 
   it("Destination Management opens the Details of the resort the arrival came from (its side of Open destination)", () => {

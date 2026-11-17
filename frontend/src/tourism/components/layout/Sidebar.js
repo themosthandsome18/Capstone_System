@@ -45,8 +45,11 @@ function Sidebar() {
   return (
     <aside className="tourism-sidebar">
       <div className="sidebar-brand">
-        <img src={logo} alt="Mauban Tourism Office" className="sidebar-logo" />
-        <span>Mauban Tourism Office</span>
+        <img src={logo} alt="Cagbalete Island Visitor Monitoring" className="sidebar-logo" />
+        <div className="sidebar-brand-text">
+          <span className="sidebar-brand-name">Cagbalete Island</span>{" "}
+          <span className="sidebar-brand-sub">Visitor Monitoring</span>
+        </div>
       </div>
 
       <nav className="sidebar-nav">

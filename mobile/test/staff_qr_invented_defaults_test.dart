@@ -309,7 +309,7 @@ void main() {
     for (final entry in {
       'arrived': 'Arrived',
       'pending': 'Pending',
-      'no_show': 'No-show',
+      'no_show': 'Cancelled',
       'ARRIVED': 'Arrived',
     }.entries) {
       testWidgets('status "${entry.key}": the "${entry.value}" chip', (
@@ -319,7 +319,7 @@ void main() {
 
         expect(find.text(entry.value), findsOneWidget);
         expect(find.text('Chip Person'), findsOneWidget);
-        for (final other in ['Arrived', 'Pending', 'No-show']) {
+        for (final other in ['Arrived', 'Pending', 'Cancelled']) {
           if (other != entry.value) {
             expect(find.text(other), findsNothing, reason: other);
           }
@@ -340,7 +340,7 @@ void main() {
 
         expect(find.text('Pending'), findsNothing);
         expect(find.text('Arrived'), findsNothing);
-        expect(find.text('No-show'), findsNothing);
+        expect(find.text('Cancelled'), findsNothing);
         expect(find.text('Unknown'), findsNothing);
         // The record itself is still listed.
         expect(find.text('Sample Person'), findsOneWidget);
@@ -350,7 +350,7 @@ void main() {
     test('touristStatusChip: only the three real statuses have a chip', () {
       expect(touristStatusChip('arrived')?.label, 'Arrived');
       expect(touristStatusChip('pending')?.label, 'Pending');
-      expect(touristStatusChip('no_show')?.label, 'No-show');
+      expect(touristStatusChip('no_show')?.label, 'Cancelled');
       expect(touristStatusChip(null), isNull);
       expect(touristStatusChip(''), isNull);
       expect(touristStatusChip('on_hold'), isNull);

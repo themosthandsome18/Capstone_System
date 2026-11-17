@@ -70,7 +70,7 @@ function getReportTitle(type) {
   }
 
   if (type === "no_show") {
-    return "No-show Booking Report";
+    return "Cancelled Booking Report";
   }
 
   return "Visitors by Resorts";
@@ -106,7 +106,7 @@ function getReportSubtitle(type) {
   }
 
   if (type === "no_show") {
-    return "No-show bookings grouped by resort";
+    return "Cancelled bookings grouped by resort";
   }
 
   return "Visitor totals by resort from arrived bookings";
@@ -161,7 +161,7 @@ const tourismTitleMap = {
   top_origin: "Top Visitor Origins",
   visit_purpose: "Primary Purpose of Travel",
   high_demand: "Destinations with Growing Demand",
-  validation: "Data Quality & Validation",
+  validation: "Data Quality",
 };
 
 
@@ -195,11 +195,6 @@ const buildMainReportChartOptions = (palette) => ({
     },
   },
 });
-
-// Data Quality & Validation is a STATUS chart (Pending, No-show, Duplicates,
-// Incomplete): its slices stay fixed and never follow the theme. Follow-up:
-// move them to the status tokens (THEME_TOKENS.md section 7).
-const VALIDATION_SLICE_COLORS = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
 
 // Daily, Monthly and Yearly rows are dates: the name is a label ("Sep 05,
 // 2026", "September 2026", "2026") and the id sorts by date: the ISO date
@@ -752,7 +747,7 @@ function AnalyticsAndReport() {
           disabled={loadingReport}
           onClick={() => changeReportType("no_show")}
         >
-          No-show Report
+          Cancelled Report
         </button>
       </div>
 
@@ -914,7 +909,7 @@ function AnalyticsAndReport() {
         <div className="analytics-question-title-row" style={{ marginTop: "36px", marginBottom: "16px" }}>
           <div>
             <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111" }}>Key Insights & Analysis</h3>
-            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--th-text-muted)" }}>Computed from tourist records, selected filters, and arrival status</p>
+            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--th-text-muted)" }}>Follows the selected year and dates — not the resort filter. The visitor insights count arrived bookings only; Data Quality counts every record.</p>
           </div>
           <button
             type="button"
@@ -1045,9 +1040,23 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
     return null;
   }
 
+  // Data Quality: two plain counts of records, each with what it means. No chart: the two are not parts of one whole (a record can be both), so
+  // no percentage of a total would mean anything.
+  if (visual.type === "counts") {
+    return (
+      <div className="dq-counts">
+        {(visual.items || []).map((item) => (
+          <div className="dq-count" key={item.label}>
+            <strong>{Number(item.value || 0).toLocaleString()}</strong>
+            <span className="dq-count-label">{item.label}</span>
+            {item.note ? <small>{item.note}</small> : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
-
-  if (questionId === "stay_type" || questionId === "classification" || questionId === "validation") {
+  if (questionId === "stay_type" || questionId === "classification") {
     const isPie = questionId === "stay_type";
     const items = visual.items || [];
     const total = items.reduce((sum, item) => sum + (item.value || 0), 0);
@@ -1060,9 +1069,7 @@ const VisualAnswer = memo(function VisualAnswer({ visual, questionId }) {
       datasets: [
         {
           data: items.map((item) => item.value),
-          backgroundColor: questionId === "validation"
-            ? VALIDATION_SLICE_COLORS
-            : seriesColors(palette, items.length),
+          backgroundColor: seriesColors(palette, items.length),
           borderWidth: 0,
         },
       ],
@@ -1429,15 +1436,9 @@ function buildFallbackVisual(item) {
   }
 
   if (item.id === "validation") {
-    return {
-      type: "stack",
-      items: [
-        { label: "Pending", value: numbers[0] || 0 },
-        { label: "No-show", value: numbers[1] || 0 },
-        { label: "Duplicates", value: numbers[2] || 0 },
-        { label: "Incomplete", value: numbers[3] || 0 },
-      ],
-    };
+    // The server always sends this card's counts with their meaning. Without them (an older server) nothing is drawn: the numbers of the old
+    // answer meant other things, and reading them as these two would be wrong. The answer's own words are still shown.
+    return { type: "counts", items: [] };
   }
 
   if (item.id === "average_stay") {

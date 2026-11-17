@@ -4,6 +4,7 @@ One place for the sum, so the web list, the app's bootstrap and the serializer's
 The arrivals are PEOPLE (the records' total_visitors added up), not a count of records.
 """
 from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
@@ -63,21 +64,40 @@ def destination_map_figures(today=None):
     arrivalsThisYear: people who arrived this year in every destination (every record has one), so it is the Year view's total of
     Arrival Monitoring. mostVisited: the destination with the most people this year, the smallest resort_id when two are level,
     and None when nobody has arrived (the screen says "None yet"; a name with 0 would be a guess).
+
+    All of the figures below mean the same "this year" (yearly_total):
+    mostVisitedSharePercent: the share of arrivalsThisYear that the busiest place has, as a whole number (half rounds up), and None when the
+    total is 0 (there is nothing to take a share of).
+    leastVisited: the place with the FEWEST people among those that have some (a place with none is not "the least visited": it has no visit),
+    chosen as mostVisited is (the smallest resort_id when two are level), and None when nobody has arrived.
+    placesWithNoArrivals: how many places a tourist could go to (active, and not a resort an import made up) have no arrivals this year.
     """
     today = today or timezone.localdate()
     rows = list(
         annotate_destination_figures(Resort.objects.all(), today).values(
-            "resort_id", "resort_name", "is_active", "yearly_total"
+            "resort_id", "resort_name", "is_active", "is_placeholder", "yearly_total"
         )
     )
     visited = [row for row in rows if row["yearly_total"] > 0]
     top = min(visited, key=lambda row: (-row["yearly_total"], row["resort_id"])) if visited else None
+    bottom = min(visited, key=lambda row: (row["yearly_total"], row["resort_id"])) if visited else None
+    arrivals = sum(row["yearly_total"] for row in rows)
+    share = None
+    if top and arrivals > 0:
+        share = int((Decimal(top["yearly_total"]) * 100 / Decimal(arrivals)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+    def named(row):
+        return {"resort_id": row["resort_id"], "name": row["resort_name"], "arrivals": row["yearly_total"]} if row else None
+
     return {
         "year": today.year,
         "activeCount": sum(1 for row in rows if row["is_active"]),
         "totalCount": len(rows),
-        "arrivalsThisYear": sum(row["yearly_total"] for row in rows),
-        "mostVisited": (
-            {"resort_id": top["resort_id"], "name": top["resort_name"], "arrivals": top["yearly_total"]} if top else None
+        "arrivalsThisYear": arrivals,
+        "mostVisited": named(top),
+        "mostVisitedSharePercent": share,
+        "leastVisited": named(bottom),
+        "placesWithNoArrivals": sum(
+            1 for row in rows if row["yearly_total"] == 0 and row["is_active"] and not row["is_placeholder"]
         ),
     }

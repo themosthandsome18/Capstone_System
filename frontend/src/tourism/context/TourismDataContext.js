@@ -1,14 +1,15 @@
+import {
+  applyArchive,
+  applyStatus,
+  settleArchive,
+  updateBookingManagementRecord,
+} from "../utils/bookingTableOptimistic";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { tourismApi } from "../services/tourismApi";
+import { useVisibleInterval } from "../utils/useVisibleInterval";
 
 const TourismDataContext = createContext(null);
 const currentReportingYear = String(new Date().getFullYear());
-
-const bookingSummaryKeysByStatus = {
-  pending: "pending",
-  arrived: "arrived",
-  no_show: "noShow",
-};
 
 const emptyBootstrap = {
   referenceTables: {
@@ -55,6 +56,8 @@ const emptyBootstrap = {
   dashboardData: {
     filters: { year: currentReportingYear },
     reportingDate: "",
+    currentYearOnly: false,
+    currentYear: "",
     feePerVisitor: 80,
     metrics: {
       todayArrivals: 0,
@@ -66,11 +69,6 @@ const emptyBootstrap = {
     classification: { filipino: 0, maubanin: 0, foreign: 0 },
     gender: { male: 0, female: 0 },
     stayType: { dayTour: 0, overnight: 0 },
-    validation: {
-      verifiedEntries: 0,
-      invalidEntries: 0,
-      duplicateEntries: 0,
-    },
   },
   reportData: {
     filters: {
@@ -124,84 +122,6 @@ const emptyBootstrap = {
 // loaded once at start; feedback is refreshed on a much longer interval.
 const BOOKING_POLL_INTERVAL_MS = 30 * 1000;
 const FEEDBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
-// Ignore a visibility refresh if a run finished this recently (rapid tab switching).
-const VISIBLE_REFRESH_MIN_GAP_MS = 5 * 1000;
-
-// Runs `task` every `intervalMs`, but:
-//  - never overlaps itself: the next run is scheduled only after the previous one finishes
-//  - pauses completely while the browser tab is hidden
-//  - refreshes once right away when the tab becomes visible again
-function useVisibleInterval(task, intervalMs) {
-  const taskRef = useRef(task);
-
-  useEffect(() => {
-    taskRef.current = task;
-  }, [task]);
-
-  useEffect(() => {
-    let timer = null;
-    let running = false;
-    let stopped = false;
-    let lastFinishedAt = 0;
-
-    const isHidden = () => document.visibilityState === "hidden";
-
-    const clearTimer = () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-
-    const schedule = () => {
-      clearTimer();
-      if (stopped || isHidden()) {
-        return;
-      }
-      timer = setTimeout(run, intervalMs);
-    };
-
-    async function run() {
-      timer = null;
-      // If a run is in flight, its `finally` will schedule the next one.
-      if (stopped || isHidden() || running) {
-        return;
-      }
-      running = true;
-      try {
-        await taskRef.current();
-      } catch (err) {
-        // Background refresh: stay quiet on connection drops.
-      } finally {
-        running = false;
-        lastFinishedAt = Date.now();
-        schedule();
-      }
-    }
-
-    function handleVisibilityChange() {
-      clearTimer();
-      if (isHidden()) {
-        return;
-      }
-      if (Date.now() - lastFinishedAt < VISIBLE_REFRESH_MIN_GAP_MS) {
-        schedule();
-        return;
-      }
-      run();
-    }
-
-    schedule();
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      stopped = true;
-      clearTimer();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [intervalMs]);
-}
-
 export function TourismDataProvider({ children }) {
   const [bootstrap, setBootstrap] = useState(emptyBootstrap);
   const [loading, setLoading] = useState(true);
@@ -465,21 +385,57 @@ export function TourismDataProvider({ children }) {
     }
   }
 
-  async function deleteRecord(surveyId) {
-    setActionLoading(true);
+  // A record is never deleted. Archiving takes it off the Record Management table and nothing else: no count changes, so nothing is marked
+  // stale and the touristRecords list keeps it.
+  //
+  // The table changes AT ONCE, before the server answers (no "Please wait" screen, no list read again): the row goes or is marked, and the
+  // "N archived" follows. When the server answers it settles the row and the "N archived" on its word. When it refuses, the table is put back
+  // as it was and the error is thrown for the page to show.
+  async function changeArchive(surveyId, archived) {
+    const year = bootstrapRef.current.bookingManagement?.filters?.year;
+    const { undo } = applyArchive(bootstrapRef.current.bookingManagement || {}, surveyId, archived);
+    setBootstrap((current) => ({
+      ...current,
+      bookingManagement: applyArchive(current.bookingManagement || {}, surveyId, archived).next,
+    }));
+
     try {
-      await tourismApi.deleteTouristRecord(surveyId);
+      const answer = archived
+        ? await tourismApi.archiveTouristRecord(surveyId, { year })
+        : await tourismApi.unarchiveTouristRecord(surveyId, { year });
+      setBootstrap((current) => ({ ...current, bookingManagement: settleArchive(current.bookingManagement || {}, answer) }));
+      return answer;
+    } catch (error) {
+      setBootstrap((current) => ({ ...current, bookingManagement: undo(current.bookingManagement || {}) }));
+      throw error;
+    }
+  }
+
+  const archiveRecord = (surveyId) => changeArchive(surveyId, true);
+  const unarchiveRecord = (surveyId) => changeArchive(surveyId, false);
+
+  // Mark as arrived / mark as cancelled: the row and the three cards change at once; the server's record settles it; a refusal puts it back.
+  async function setRecordStatus(surveyId, nextStatus) {
+    const { undo } = applyStatus(bootstrapRef.current.bookingManagement || {}, surveyId, nextStatus);
+    setBootstrap((current) => ({
+      ...current,
+      bookingManagement: applyStatus(current.bookingManagement || {}, surveyId, nextStatus).next,
+    }));
+
+    try {
+      const updatedRecord = await tourismApi.updateTouristRecord(surveyId, { status: nextStatus });
       setBootstrap((current) => ({
         ...current,
-        touristRecords: current.touristRecords.filter(
-          (record) => record.survey_id !== surveyId
+        touristRecords: current.touristRecords.map((record) =>
+          record.survey_id === surveyId ? { ...record, ...updatedRecord } : record
         ),
+        bookingManagement: updateBookingManagementRecord(current.bookingManagement, surveyId, updatedRecord),
       }));
       markComputedStale();
-      // Resort figures depend on the records; refresh them in the background.
-      refreshReferenceTables();
-    } finally {
-      setActionLoading(false);
+      return updatedRecord;
+    } catch (error) {
+      setBootstrap((current) => ({ ...current, bookingManagement: undo(current.bookingManagement || {}) }));
+      throw error;
     }
   }
 
@@ -609,7 +565,9 @@ export function TourismDataProvider({ children }) {
         reload: loadData,
         createRecord,
         updateRecord,
-        deleteRecord,
+        archiveRecord,
+        unarchiveRecord,
+        setRecordStatus,
         previewOnlineBookingImport,
         importOnlineBookingFile,
         refreshArrivalMonitoring,
@@ -624,6 +582,7 @@ export function TourismDataProvider({ children }) {
         updateResort,
         uploadResortImage: tourismApi.uploadResortImage,
         updateFeedbackEntry,
+        refreshFeedbackEntries: pollFeedback,
         refreshReferenceTables,
         hideFeedbackEntry,
         unhideFeedbackEntry,
@@ -650,61 +609,4 @@ export function useTourismData() {
   }
 
   return context;
-}
-
-function updateBookingManagementRecord(bookingManagement, surveyId, updatedRecord) {
-  const currentRows = bookingManagement.rows || [];
-  const previousRow = currentRows.find(
-    (record) => record.survey_id === surveyId
-  );
-
-  if (!previousRow) {
-    return bookingManagement;
-  }
-
-  const nextRow = { ...previousRow, ...updatedRecord };
-  const statusFilter = bookingManagement.filters?.status || "";
-  const previousStatus = previousRow.status;
-  const nextStatus = nextRow.status;
-  const rows = currentRows
-    .map((record) => (record.survey_id === surveyId ? nextRow : record))
-    .filter((record) => !statusFilter || record.status === statusFilter);
-  const summary = adjustBookingSummary(
-    bookingManagement.summary,
-    previousStatus,
-    nextStatus
-  );
-  const rowWasRemoved = rows.length < currentRows.length;
-
-  return {
-    ...bookingManagement,
-    rows,
-    summary,
-    pagination: {
-      ...bookingManagement.pagination,
-      total: rowWasRemoved
-        ? Math.max((bookingManagement.pagination.total || 0) - 1, 0)
-        : bookingManagement.pagination.total,
-    },
-  };
-}
-
-function adjustBookingSummary(summary, previousStatus, nextStatus) {
-  if (!previousStatus || !nextStatus || previousStatus === nextStatus) {
-    return summary;
-  }
-
-  const previousKey = bookingSummaryKeysByStatus[previousStatus];
-  const nextKey = bookingSummaryKeysByStatus[nextStatus];
-  const nextSummary = { ...summary };
-
-  if (previousKey) {
-    nextSummary[previousKey] = Math.max((nextSummary[previousKey] || 0) - 1, 0);
-  }
-
-  if (nextKey) {
-    nextSummary[nextKey] = (nextSummary[nextKey] || 0) + 1;
-  }
-
-  return nextSummary;
 }

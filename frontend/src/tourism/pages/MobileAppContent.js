@@ -99,7 +99,7 @@ export default function MobileAppContent() {
     <div className="reports-page settings-page options-page mobile-content-page">
       <div className="reports-header">
         <div>
-          <p className="mobile-content-eyebrow">Mauban Tourism App</p>
+          <p className="mobile-content-eyebrow">Cagbalete Island App</p>
           <h1>Mobile App Content</h1>
           <p className="mobile-content-lead">
             Everything a visitor reads inside the app. Change it here and the app picks it up.

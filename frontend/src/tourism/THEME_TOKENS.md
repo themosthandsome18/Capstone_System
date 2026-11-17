@@ -85,7 +85,7 @@ Some of those reads sit in dead rules (section 7).
 | Token | Default | Role | Uses |
 |---|---|---|---|
 | `--th-surface` | `#ffffff` | Plain surface. Unused, because white was deliberately left literal | 0 |
-| `--th-surface-alt` | `#f7fbf8` | Table-card and destination-card bodies | 7 |
+| `--th-surface-alt` | `#f7fbf8` | Table-card and destination-card bodies. **Derived** (hue of the theme, saturation capped at 0.4 so it stays a hint on a vivid base; green reproduces `#f7fbf8`) | 17 |
 | `--th-surface-tinted` | `#eefaf1` | **Sidebar and top-bar background** | 2 |
 | `--th-surface-tinted-strong` | `#c6decc` | Add/Edit Destination form panel | 1 |
 | `--th-border` | `#e5e7eb` | Neutral light border | 4 |
@@ -153,9 +153,10 @@ pins those fallbacks to `:root`.
   take the palette in order. Single-series charts use `chart-1`.
 - Axis tick text uses `--th-text-muted`. Grid lines, legend text (`#475569`)
   and tooltips (Chart.js defaults) stay fixed.
-- **The Data Quality & Validation doughnut stays fixed**
-  (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`). Its slices are
-  statuses, not series (see section 7).
+- **Data Quality is no longer a chart.** It was a fixed-colour doughnut
+  (`VALIDATION_SLICE_COLORS`); it is now two counts of records with their
+  meaning (`.dq-count`, themed with the tinted tokens), so no chart of
+  Analytics is drawn in colours that do not follow the theme.
 - `--th-chart-wash` is mapped to the Daily Visitor Trends line fill, but that
   chart does not enable area fill (no `fill` option, Filler plugin not
   registered), so it shows nothing. Turning fill on would be a design change.
@@ -199,7 +200,7 @@ Total: 14 + 4 + 15 + 2 + 12 + 6 = **53**.
 |---|---|---|
 | Top-bar **"Sanitation" module-switch button** | `.module-switch-btn` (`#0f6b42`, hover `#0b5836`) | It keeps Sanitation's own green on purpose, to signal that it leaves the tourism module. |
 | **`.btn-primary`**, including `hover:bg-[#278d3f]` | `Tourism_index.css` (TI:128–129 at `3d1e2fd`) | Dead in tourism, but **live on Sanitation's Submission Tracking page** (`SubmissionTracking.js`). Its hover colour paints that page. Tokenising it would let a tourism theme repaint Sanitation. |
-| **"View & Review record" 👁 button** on booking rows | `.booking-icon-btn.view` (`#0f766e` / `#99f6e4` / `#f0fdfa`) | A fixed functional action colour (Tailwind teal-700/200/50), part of the row's colour-coded actions: view teal, delete red, arrived green, no-show red. It stays fixed like status colours. Reviewed after Phase 3 and deliberately kept, because the view icon belongs to the row's colour-coded action set (view, delete, arrived, no-show) and carries meaning. |
+| **"View & Review record" 👁 button** on booking rows | `.booking-icon-btn.view` (`#0f766e` / `#99f6e4` / `#f0fdfa`) | A fixed functional action colour (Tailwind teal-700/200/50), part of the row's colour-coded actions: view teal, archive slate, arrived green, no-show red. It stays fixed like status colours. Reviewed after Phase 3 and deliberately kept, because the view icon belongs to the row's colour-coded action set (view, archive, arrived, no-show) and carries meaning. |
 | **Wizard auto-fill buttons** ("Balance female count", "Balance age 8-59") | `.tourist-auto-fill-row button` (`#0f766e` text, `#94d3bd` border) | The same fixed functional teal. Not part of any system that should follow the brand. |
 | **Gallery toast** (appears after promoting a feedback photo) | JSX `bg-green-700` in `DestinationManagement.js` (line 604 at `3d1e2fd`, the "Toast message for gallery promotion" block) | **Status.** It announces "✓ Photo successfully added to … slideshow!", so it stays fixed like other status colours. Its other message, "Photo is already included in … images.", shares the same success styling. Changing that is a design change, not a theming one. |
 | Plain white (`#ffffff`, `bg-white`) | many | White is not a theme colour. Tokenising it would be churn. |
@@ -387,10 +388,9 @@ so nothing was lost there.
   just, and a lighter theme colour would push it under. Another pair close to
   its threshold is the top-bar role line: `--th-text-tinted-muted` on
   `--th-surface-tinted` is **4.57:1** against 4.5:1 for text.
-- **Data Quality & Validation doughnut should use the status tokens.** Its four
-  slices (Pending, No-show, Duplicates, Incomplete) are real statuses but use
-  generic colours (`VALIDATION_SLICE_COLORS`, `AnalyticsAndReport.js:182`).
-  It is deliberately fixed, not themed; move it to the status tokens later.
+- ~~Data Quality & Validation doughnut should use the status tokens.~~ Settled
+  by removing the doughnut: the card is two plain counts (possible duplicates,
+  incomplete records) and no longer counts statuses at all.
 - **Bug, not a theme problem: Visitor Demographics in Key Insights renders
   empty.** The backend sends that visual as `left` / `right`
   (`backend/api/services/tourism.py:1022-1024`), but the chart reads
@@ -421,8 +421,7 @@ so nothing was lost there.
   - `.badge-success` (also dead)
 - **`body` / `--page-bg` migration.** This covers the legacy `--page-bg` and
   `--text-main`, the `body` rule's green radial glows, and `--th-page-bg`.
-- **Neutral tokens:** decide whether `--th-surface-alt` (`#f7fbf8`, faintly
-  green) and the other neutrals are derived or fixed.
+- **Neutral tokens:** `--th-surface-alt` is now derived. Decide the rest (`--th-page-bg`, the greys) separately.
 - **Unused tokens (7):** `--th-primary-contrast`, `--th-page-bg`,
   `--th-surface`, `--th-text-inverse`, `--th-info`, `--th-info-bg`,
   `--th-info-border`. (`--th-success-text`, `--th-warning-bg` and

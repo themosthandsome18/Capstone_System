@@ -1,5 +1,5 @@
 // Tapping a pin: the box opens (as it did) AND the map glides and zooms to the pin, with the same trip as "View on map" (mapFocusDuration,
-// mapFocusCurve). In both maps: the one in Maps & Guides, and the full-screen one ("Mauban Tourism GIS Map"). Close in on the pin already:
+// mapFocusCurve). In both maps: the one in Maps & Guides, and the full-screen one ("Cagbalete Island Map"). Close in on the pin already:
 // no more zoom, and the map moves only if it has to. Reduce motion: at once. A tap outside a pin still closes the box.
 import 'dart:convert';
 
@@ -241,7 +241,7 @@ void main() {
     });
   });
 
-  group('the full-screen map (Mauban Tourism GIS Map)', () {
+  group('the full-screen map (Cagbalete Island Map)', () {
     Future<void> openFull(WidgetTester tester, {bool reduceMotion = false}) async {
       await pumpMap(tester, [nearHome, alpha], reduceMotion: reduceMotion);
       await mocked(() async {
@@ -249,7 +249,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
       });
-      expect(find.text('Mauban Tourism GIS Map'), findsOneWidget);
+      expect(find.text('Cagbalete Island Map'), findsOneWidget);
     }
 
     testWidgets('a pin opens its box and the map travels to it, and it ends close in', (tester) async {

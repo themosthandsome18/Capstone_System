@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mauban_mobile_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/reference_tables.dart';
 
 const noMatchMessage = 'No destinations match your search or filter';
 const nothingPublishedMessage = 'No destinations are available yet.';
@@ -43,7 +44,7 @@ Map<String, dynamic> bootstrapJson(int count, {int gems = 0}) {
     'destinations': list,
     'featuredDestinations': list.take(2).toList(),
     if (gems > 0) 'hiddenGems': list.skip(2).take(gems).toList(),
-    'referenceTables': <String, dynamic>{},
+    'referenceTables': fixtureReferenceTables(), // a whole set: the registration form will not open without one
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
   };

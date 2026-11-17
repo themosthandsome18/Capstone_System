@@ -7,12 +7,16 @@ class MobileShell extends StatefulWidget {
     required this.state,
     required this.onRetry,
     this.onSignOut,
+    this.store = const MyVisitsStore(),
   });
 
   final TourismApi api;
   final TourismBootstrapState state;
   final VoidCallback onRetry;
   final VoidCallback? onSignOut;
+
+  /// Where the tourist's passes, feedback and profile are kept on the phone.
+  final MyVisitsStore store;
 
   @override
   State<MobileShell> createState() => _MobileShellState();
@@ -27,6 +31,214 @@ class _MobileShellState extends State<MobileShell> {
   final List<MobileVisitReceipt> _visitHistory = [];
   final List<MobileFeedbackReceipt> _feedbackHistory = [];
   MobileUserProfile _profile = MobileUserProfile.guest();
+
+  /// The kept passes, feedback and profile have been read. Nothing is written before that, so a pass made while they were being read cannot
+  /// write over the ones kept.
+  bool _restored = false;
+
+  /// There is news in My Visit the tourist has not looked at: a pass that was added, or a pass whose status changed. It shows as a red dot on the
+  /// My Visit tab, is kept on the phone (so it is still there when the app is opened again), and goes only when the My Visit tab is opened.
+  bool _myVisitNews = false;
+
+  /// The notices the tourist has seen (the Notifications page was opened) and the ones they removed. Kept on the phone. See [_notices].
+  final Set<String> _seenNotices = {};
+  final Set<String> _removedNotices = {};
+
+  /// The passes whose status was SEEN to change, to arrived or to cancelled, when they were brought up to date; survey ID -> status. A notice for a pass
+  /// is made only from here, so a pass that was already arrived before the app could tell has none, and one that stays arrived adds none. Kept on the phone.
+  final Map<String, String> _passEvents = {};
+
+  /// The passes the server said it does not know (it answered, well, with no rows). They are not asked about again, at this opening or any other: each
+  /// question that finds no pass counts against the tourist's own limit on the server, and asking at every opening would use it up and lock out their
+  /// real passes too. The pass stays in the list; only the asking stops. A refusal (429) or no network is a failure, not "not known", and is asked again.
+  final Set<String> _unknownPasses = {};
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restore());
+  }
+
+  /// The passes, feedback and profile kept on the phone, put back before the tourist reaches My Visit or Profile (the shell is behind the
+  /// welcome and login screens, and reading them takes a moment). Anything made meanwhile stays, and is written together with them.
+  Future<void> _restore() async {
+    final mine = await widget.store.read();
+    if (!mounted) return;
+    final madeMeanwhile = _visitHistory.isNotEmpty || _feedbackHistory.isNotEmpty || !_profile.isGuest;
+    setState(() {
+      final haveVisits = _visitHistory.map((item) => item.reference).toSet();
+      _visitHistory.addAll(mine.visits.where((item) => !haveVisits.contains(item.reference)));
+      final haveFeedback = _feedbackHistory.map((item) => item.reference).toSet();
+      _feedbackHistory.addAll(mine.feedback.where((item) => !haveFeedback.contains(item.reference)));
+      if (_profile.isGuest) _profile = mine.profile;
+      if (mine.news) _myVisitNews = true;
+      _seenNotices.addAll(mine.seenNotices);
+      _removedNotices.addAll(mine.removedNotices);
+      _unknownPasses.addAll(mine.unknownPasses);
+      for (final event in mine.passEvents.entries) {
+        _passEvents.putIfAbsent(event.key, () => event.value);
+      }
+      _restored = true;
+    });
+    if (madeMeanwhile) _persist();
+    unawaited(_refreshPassStatuses().whenComplete(_refreshFeedbackReplies));
+  }
+
+  /// Has the Tourism Office answered the tourist's reviews? Once, when the app is opened and after the passes are brought up to date, the server is
+  /// asked, with the survey ID and the contact number that were kept with each review (the tourist types nothing), what it says now. A review kept
+  /// BEFORE those were kept (an older copy of the app) is not asked about: nobody is guessed to be its writer. A new or changed answer is kept with its
+  /// review, and so is a notice (see [_notices]). A server that cannot be reached, or does not answer well, changes nothing: the last known stays.
+  Future<void> _refreshFeedbackReplies() async {
+    if (!mounted) return;
+    final askedAbout = _feedbackHistory.where((item) => item.canAskForReply).toList();
+    final passes = <(String, String)>{for (final item in askedAbout) (item.surveyId, item.contactNumber)};
+    final answers = await Future.wait(
+      passes.map((pass) async {
+        try {
+          return await widget.api.fetchFeedbackReplies(reference: pass.$1, contact: pass.$2);
+        } catch (_) {
+          return const <MobileFeedbackReply>[]; // not reached, or not understood: what was known stays
+        }
+      }),
+    );
+    if (!mounted) return;
+    final said = {for (final answer in answers) for (final row in answer) '${row.id}': row.reply.trim()};
+    var changed = false;
+    setState(() {
+      for (var i = 0; i < _feedbackHistory.length; i++) {
+        final item = _feedbackHistory[i];
+        if (!item.canAskForReply) continue;
+        final reply = said[item.reference];
+        if (reply == null || reply == item.reply.trim()) continue;
+        _feedbackHistory[i] = item.withReply(reply);
+        changed = true;
+      }
+    });
+    if (changed) _persist();
+  }
+
+  /// What the Notifications page shows: the Tourism Office's answers to the tourist's own reviews (made here, from the reviews that have one), then
+  /// the advisories of the bootstrap, without the ones the tourist removed.
+  List<AppNotification> get _notices => [
+    for (final pass in _shownVisits)
+      if (_passEvents[pass.reference] == pass.status) ?AppNotification.passChanged(pass),
+    for (final item in _feedbackHistory)
+      if (item.reply.trim().isNotEmpty) AppNotification.replyTo(item),
+    ...widget.state.notifications,
+  ].where((notice) => !_removedNotices.contains(notice.id)).toList();
+
+  /// The red dot on the bell: there is a notice the tourist has not seen. It goes when the Notifications page is opened, and comes back only for a
+  /// notice that is new (an id that was not there).
+  bool get _hasUnseenNotices => _notices.any((notice) => !_seenNotices.contains(notice.id));
+
+  /// The kept passes say what they said when they were made ("pending"). Once, when the app is opened and they are read, the server is asked where
+  /// each one stands now, with the survey ID and the contact number that are on the pass (the tourist types nothing). What it says replaces the
+  /// kept status and is kept. A pass the server cannot be asked about (no internet, a bad answer) or does not know keeps what it had: it is never
+  /// taken away, and nothing is shown to say it failed.
+  Future<void> _refreshPassStatuses() async {
+    final asked = List<MobileVisitReceipt>.of(_visitHistory);
+    final answers = await Future.wait(
+      asked.map<Future<({MobilePassStatus? answer, bool unknown})>>((pass) async {
+        if (pass.reference.trim().isEmpty || pass.contactNumber.trim().isEmpty) return (answer: null, unknown: false);
+        if (_unknownPasses.contains(pass.reference)) return (answer: null, unknown: false); // the server already said it does not know this one
+        try {
+          final answer = await widget.api.fetchPassStatus(reference: pass.reference, contact: pass.contactNumber);
+          return (answer: answer, unknown: answer == null); // null is ONLY "the server answered that it does not know it"
+        } catch (_) {
+          return (answer: null, unknown: false); // not reached, refused (429) or not understood: the last known stays, and it is asked again next time
+        }
+      }),
+    );
+    if (!mounted) return;
+    var changed = false;
+    var learned = false;
+    setState(() {
+      for (var i = 0; i < asked.length; i++) {
+        if (answers[i].unknown && _unknownPasses.add(asked[i].reference)) learned = true;
+        final answer = answers[i].answer;
+        if (answer == null) continue;
+        final at = _visitHistory.indexWhere((item) => identical(item, asked[i]));
+        if (at < 0) continue; // taken off meanwhile (Sign Out)
+        final pass = _visitHistory[at];
+        if (pass.status == answer.status && pass.checkedInAt == answer.checkedInAt) continue;
+        // A CHANGE to arrived or to cancelled that the app has just seen is one notice (and a later change of the same pass replaces it). A pass that
+        // says the same as it did (arrived and still arrived, or already arrived before this existed) is not a change: no notice, not at any opening.
+        if (pass.status != answer.status && (answer.status == 'arrived' || answer.status == 'no_show')) _passEvents[pass.reference] = answer.status;
+        _visitHistory[at] = pass.withStatus(answer.status, answer.checkedInAt);
+        changed = true;
+      }
+    });
+    if (changed || learned) _persist();
+    if (changed) _newsInMyVisit(); // a pass whose status changed (they were scanned) is news, as a new pass is
+  }
+
+  /// Keeps the three on the phone. Never throws (the store does not).
+  void _persist() {
+    if (!_restored) return;
+    unawaited(widget.store.saveVisits(_visitHistory));
+    unawaited(widget.store.saveFeedback(_feedbackHistory));
+    unawaited(widget.store.saveProfile(_profile));
+    unawaited(widget.store.saveNews(_myVisitNews));
+    unawaited(widget.store.saveNotices(seen: _seenNotices, removed: _removedNotices));
+    unawaited(widget.store.savePassEvents(_passEvents));
+    unawaited(widget.store.saveUnknownPasses(_unknownPasses));
+  }
+
+  static const int _myVisitTab = 3;
+
+  /// Something new for the tourist in My Visit. Not when they are looking at it already (the tab is the one open): they have seen it.
+  void _newsInMyVisit() {
+    if (_index == _myVisitTab || _myVisitNews) return;
+    setState(() => _myVisitNews = true);
+    _persist();
+  }
+
+  /// Opens a tab. Opening My Visit is the only thing that takes the red dot away: the tourist has now seen what is new.
+  void _showTab(int index) {
+    final clears = index == _myVisitTab && _myVisitNews;
+    setState(() {
+      _index = index;
+      _mapFocus = null;
+      if (clears) _myVisitNews = false;
+    });
+    if (clears) _persist();
+  }
+
+  /// A pass or feedback shows its destination from the bootstrap when it is still there, and the name that was kept when it is not.
+  List<Destination>? get _liveDestinations => widget.state.data?.destinations;
+
+  List<MobileVisitReceipt> get _shownVisits =>
+      _visitHistory.map((item) => item.withDestination(resolveDestination(item.destination, _liveDestinations))).toList();
+
+  List<MobileFeedbackReceipt> get _shownFeedback =>
+      _feedbackHistory.map((item) => item.withDestination(resolveDestination(item.destination, _liveDestinations))).toList();
+
+  /// The pass that opens the review of [destination]: a kept pass for THAT destination whose status is arrived (it was scanned on arrival). When there
+  /// is more than one, the newest (the list is newest first). Null: the review is not open to this tourist yet.
+  MobileVisitReceipt? _reviewPassFor(Destination destination) {
+    for (final pass in _visitHistory) {
+      if (pass.destination.id == destination.id && pass.status == 'arrived') return pass;
+    }
+    return null;
+  }
+
+  /// Sign Out takes everything kept off the phone, then leaves: the next person to use it must not find this tourist's passes.
+  Future<void> _signOut() async {
+    await widget.store.clear();
+    if (!mounted) return;
+    setState(() {
+      _visitHistory.clear();
+      _feedbackHistory.clear();
+      _profile = MobileUserProfile.guest();
+      _myVisitNews = false;
+      _seenNotices.clear();
+      _removedNotices.clear();
+      _passEvents.clear();
+      _unknownPasses.clear();
+      _index = 0;
+    });
+    widget.onSignOut?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +258,7 @@ class _MobileShellState extends State<MobileShell> {
         onOpenTab: _openTab,
         onOpenDestination: _openDestination,
         onOpenNotifications: _openNotifications,
+        hasUnreadNotices: _hasUnseenNotices,
       ),
       DestinationListPage(
         destinations: widget.state.destinations,
@@ -69,14 +282,14 @@ class _MobileShellState extends State<MobileShell> {
         failure: widget.state.failure,
         onRetry: widget.onRetry,
         content: widget.state.appContent,
-        visits: _visitHistory,
+        visits: _shownVisits,
         onRegisterVisit: () => _openRegistration(),
       ),
       ProfilePage(
         profile: _profile,
-        visits: _visitHistory,
-        feedbackHistory: _feedbackHistory,
-        onSignOut: widget.onSignOut,
+        visits: _shownVisits,
+        feedbackHistory: _shownFeedback,
+        onSignOut: widget.onSignOut == null ? null : _signOut,
         contacts: widget.state.emergencyContacts,
       ),
     ];
@@ -86,22 +299,30 @@ class _MobileShellState extends State<MobileShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         height: 66,
-        onDestinationSelected: (value) => setState(() {
-          _index = value;
-          _mapFocus = null;
-        }),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(
+        onDestinationSelected: _showTab,
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          const NavigationDestination(
             icon: Icon(Icons.place_outlined),
             label: 'Explore',
           ),
-          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
+          const NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
           NavigationDestination(
-            icon: Icon(Icons.route_outlined),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.route_outlined),
+                if (_myVisitNews)
+                  const Positioned(
+                    top: -1,
+                    right: -3,
+                    child: NewsDot(key: ValueKey('my-visit-news-dot')),
+                  ),
+              ],
+            ),
             label: 'My Visit',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
           ),
@@ -110,12 +331,7 @@ class _MobileShellState extends State<MobileShell> {
     );
   }
 
-  void _openTab(int index) {
-    setState(() {
-      _index = index;
-      _mapFocus = null;
-    });
-  }
+  void _openTab(int index) => _showTab(index);
 
   /// The Map tab (Maps & Guides), centred on [destination], with its box open.
   void _showOnMap(Destination destination) {
@@ -137,6 +353,7 @@ class _MobileShellState extends State<MobileShell> {
           onVisitSubmitted: _addVisit,
           onFeedbackSubmitted: _addFeedback,
           onViewOnMap: _showOnMap,
+          reviewPassFor: _reviewPassFor,
         ),
       ),
     );
@@ -151,13 +368,14 @@ class _MobileShellState extends State<MobileShell> {
           api: widget.api,
           bootstrap: bootstrap,
           initialDestination: destination,
+          onRecorded: _addVisit,
         ),
       ),
     );
 
     if (receipt != null) {
       _addVisit(receipt);
-      setState(() => _index = 3);
+      _showTab(_myVisitTab); // the tourist lands on My Visit: they see the new pass at once
     }
   }
 
@@ -165,30 +383,70 @@ class _MobileShellState extends State<MobileShell> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => NotificationPage(
-          notifications: widget.state.notifications,
+          notifications: _notices,
           subtitle: tourismNotificationsSubtitle,
           severityStripe: true,
+          onSeen: _noticesSeen,
+          onDismiss: _noticeRemoved,
+          onOpen: _openNotice,
         ),
       ),
     );
   }
 
+  /// The Notifications page was opened: what is on it has been seen, and the red dot goes.
+  void _noticesSeen(List<String> ids) {
+    final fresh = ids.where((id) => !_seenNotices.contains(id)).toList();
+    if (fresh.isEmpty) return;
+    setState(() => _seenNotices.addAll(fresh));
+    _persist();
+  }
+
+  /// The tourist removed a notice (the X or a swipe): it stays removed, also when the app is opened again.
+  void _noticeRemoved(String id) {
+    setState(() => _removedNotices.add(id));
+    _persist();
+  }
+
+  /// An answer was pressed: the tourist's own review opens, with the office's answer in full.
+  void _openNotice(AppNotification notice) {
+    final passReference = notice.passReference;
+    if (passReference != null) {
+      final passes = _shownVisits.where((item) => item.reference == passReference);
+      if (passes.isEmpty) return;
+      Navigator.of(context).push(MaterialPageRoute(builder: (context) => PassDetailPage(receipt: passes.first)));
+      return;
+    }
+    final reference = notice.feedbackReference;
+    if (reference == null) return;
+    final matches = _shownFeedback.where((item) => item.reference == reference);
+    if (matches.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => FeedbackDetailPage(receipt: matches.first)));
+  }
+
   void _addVisit(MobileVisitReceipt receipt) {
+    var isNewPass = false;
     setState(() {
-      _visitHistory.insert(0, receipt);
+      // The same pass arrives twice: when the server answers, and when the pass is closed. It is recorded once.
+      isNewPass = !_visitHistory.any((item) => identical(item, receipt));
+      if (isNewPass) _visitHistory.insert(0, receipt);
       _profile = _profile.copyWith(
         name: receipt.fullName,
         email: receipt.email,
         contactNumber: receipt.contactNumber,
       );
     });
+    _persist();
+    if (isNewPass) _newsInMyVisit(); // a new pass is news (not when the tourist is already looking at My Visit)
   }
 
   void _addFeedback(MobileFeedbackReceipt receipt) {
     setState(() {
-      _feedbackHistory.insert(0, receipt);
+      // The same feedback arrives twice: when the server answers, and when the dialog is closed. It is recorded once.
+      if (!_feedbackHistory.any((item) => identical(item, receipt))) _feedbackHistory.insert(0, receipt);
       _profile = _profile.copyWith(name: receipt.reviewer);
     });
+    _persist();
   }
 }
 
@@ -202,7 +460,11 @@ class HomePage extends StatefulWidget {
     required this.onOpenTab,
     required this.onOpenDestination,
     required this.onOpenNotifications,
+    this.hasUnreadNotices = false,
   });
+
+  /// There is a notice the tourist has not seen (the red dot on the bell).
+  final bool hasUnreadNotices;
 
   final TourismBootstrapState state;
   final VoidCallback onRetry;
@@ -274,7 +536,7 @@ class _HomePageState extends State<HomePage> {
         // Top Header
         AppHeader(
           onOpenNotifications: widget.onOpenNotifications,
-          hasUnread: state.notifications.isNotEmpty,
+          hasUnread: widget.hasUnreadNotices,
         ),
         const SizedBox(height: 16),
 
@@ -1633,7 +1895,7 @@ class _TourismMapPageState extends State<TourismMapPage> with TickerProviderStat
                           ],
                         ),
                         child: const Text(
-                          'Mauban Tourism GIS Map',
+                          'Cagbalete Island Map',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0f2e1f)),
                         ),
                       ),
@@ -2695,6 +2957,21 @@ class _VisitPlannerPageState extends State<VisitPlannerPage> {
   }
 }
 
+/// What the Sign Out confirmation says: what will be taken off this phone, in plain words. With nothing kept it says so.
+String signOutNotice({required int visits, required int feedback, required bool hasProfile}) {
+  final lost = <String>[
+    if (visits > 0) '$visits entry pass${visits == 1 ? '' : 'es'}',
+    if (feedback > 0) '$feedback feedback you sent',
+    if (hasProfile) 'your profile (name, email and contact number)',
+  ];
+  if (lost.isEmpty) {
+    return 'Are you sure you want to sign out of Cagbalete Island Guide? Nothing about you is saved on this phone. You will return to the welcome screen.';
+  }
+  return 'Signing out removes these from this phone:\n'
+      '${lost.map((item) => '\u2022 $item').join('\n')}\n\n'
+      'You will not be able to show these entry passes again in this app. Your registrations stay with the tourism office.';
+}
+
 class ProfilePage extends StatelessWidget {
   const ProfilePage({
     super.key,
@@ -2725,9 +3002,7 @@ class ProfilePage extends StatelessWidget {
             Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w900)),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to sign out of Mauban Tourism? You will return to the welcome screen.',
-        ),
+        content: Text(signOutNotice(visits: visits.length, feedback: feedbackHistory.length, hasProfile: !profile.isGuest)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -3076,32 +3351,7 @@ class _DestinationImageSlideshowState
           Positioned(
             top: 14,
             right: 14,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.photo_library_outlined,
-                    size: 12,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_currentPage + 1} / ${images.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: PhotoCounterPill(current: _currentPage + 1, total: images.length),
           ),
       ],
     );
@@ -3121,6 +3371,7 @@ class DestinationDetailPage extends StatefulWidget {
     required this.onVisitSubmitted,
     required this.onFeedbackSubmitted,
     this.onViewOnMap,
+    this.reviewPassFor,
   });
 
   final Destination destination;
@@ -3128,6 +3379,10 @@ class DestinationDetailPage extends StatefulWidget {
   final MobileBootstrap bootstrap;
   final ValueChanged<MobileVisitReceipt> onVisitSubmitted;
   final ValueChanged<MobileFeedbackReceipt> onFeedbackSubmitted;
+
+  /// The pass that lets this tourist review this destination (theirs, for here, arrived), or null: the Review button is then shown, but cannot be
+  /// pressed, and says why. null here (no function) is the same as no pass.
+  final MobileVisitReceipt? Function(Destination destination)? reviewPassFor;
 
   /// Shows the destination on the Map tab. null: "View on map" is not offered as a button.
   final ValueChanged<Destination>? onViewOnMap;
@@ -3169,6 +3424,8 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // The pass that opens the review (this tourist's, for here, arrived), or null.
+    final reviewPass = widget.reviewPassFor?.call(widget.destination);
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -3382,21 +3639,28 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                                     itemCount: feedback.photos.length,
                                     separatorBuilder: (context, index) => const SizedBox(width: 8),
                                     itemBuilder: (context, idx) {
-                                      final photoUrl = feedback.photos[idx];
-                                      final fullUrl = photoUrl.startsWith('http')
-                                          ? photoUrl
-                                          : '$apiBaseUrl$photoUrl';
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          fullUrl,
-                                          width: 68,
-                                          height: 68,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) => const Icon(
-                                            Icons.image_not_supported,
-                                            size: 24,
-                                            color: Colors.grey,
+                                      final fullUrls = feedback.photos.map(reviewPhotoUrl).toList();
+                                      // A photo of a review can be pressed: it opens full screen, on this one, with the others a swipe away.
+                                      return GestureDetector(
+                                        key: ValueKey('review-photo-${feedback.reference}-$idx'),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => showReviewPhotoViewer(context, fullUrls, initialIndex: idx),
+                                        child: Semantics(
+                                          button: true,
+                                          label: 'Open photo ${idx + 1} of ${fullUrls.length}',
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              fullUrls[idx],
+                                              width: 68,
+                                              height: 68,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => const SizedBox(
+                                                width: 68,
+                                                height: 68,
+                                                child: Icon(Icons.image_not_supported, size: 24, color: Colors.grey),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       );
@@ -3449,15 +3713,24 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
           ],
         ),
         child: SafeArea(
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+          Row(
             children: [
               OutlinedButton(
-                onPressed: () async {
+                onPressed: reviewPass == null
+                    ? null
+                    : () async {
+                  // What happens to a review and its photos is said BEFORE the form, every time, and only "I understand" opens the form.
+                  if (!await showReviewNoticeDialog(context) || !context.mounted) return;
                   final receipt = await Navigator.of(context).push<MobileFeedbackReceipt>(
                     MaterialPageRoute(
                       builder: (context) => FeedbackPage(
                         api: widget.api,
                         destination: widget.destination,
+                        visit: reviewPass,
+                        onRecorded: widget.onFeedbackSubmitted,
                       ),
                     ),
                   );
@@ -3488,6 +3761,7 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
                           api: widget.api,
                           bootstrap: widget.bootstrap,
                           initialDestination: widget.destination,
+                          onRecorded: widget.onVisitSubmitted,
                         ),
                       ),
                     );
@@ -3504,14 +3778,38 @@ class _DestinationDetailPageState extends State<DestinationDetailPage> {
               ),
             ],
           ),
+          // The Review button is not hidden when it cannot be used: it is shown, cannot be pressed, and says why.
+          if (reviewPass == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                reviewNeedsVisitNote,
+                key: ValueKey('review-needs-visit-note'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+              ),
+            ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+/// What is said under the Review button of a destination the tourist has no scanned visit for.
+const reviewNeedsVisitNote = 'You can review this place after your visit here is scanned on arrival.';
+
 class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key, required this.api, required this.destination});
+  const FeedbackPage({super.key, required this.api, required this.destination, required this.visit, this.onRecorded});
+
+  /// The visit that lets this tourist review here: its survey ID and contact number go with the review.
+  final MobileVisitReceipt visit;
+
+  /// Told the moment the server has answered, BEFORE the "Feedback sent" dialog is shown: the feedback is recorded (and kept on the phone) at
+  /// once, so that closing the app with the dialog still open does not lose it. The page still returns it when it closes; the one who records
+  /// it must take the same feedback only once.
+  final ValueChanged<MobileFeedbackReceipt>? onRecorded;
 
   final TourismApi api;
   final Destination destination;
@@ -3670,7 +3968,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
             ),
           ),
-        const PublicVisibilityNotice(text: publicReviewNoticeText),
+        const PublicVisibilityNotice(),
         SubmitButton(
           label: 'Submit Feedback',
           loading: _submitting,
@@ -3691,6 +3989,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
     try {
       final response = await widget.api.submitFeedback(
         destinationId: widget.destination.id,
+        surveyId: widget.visit.reference,
+        contactNumber: widget.visit.contactNumber,
         reviewer: _name.text.trim().isEmpty
             ? 'Mobile Tourist'
             : _name.text.trim(),
@@ -3709,7 +4009,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ? 'Mobile Tourist'
               : _name.text.trim(),
           rating: _rating,
+          surveyId: widget.visit.reference,
+          contactNumber: widget.visit.contactNumber,
         );
+        widget.onRecorded?.call(receipt);
         await showSubmissionDialog(
           context,
           title: 'Feedback sent',
@@ -3750,17 +4053,87 @@ class FormSectionTitle extends StatelessWidget {
   }
 }
 
+/// The lists a registration is made of, by the name a person would give them, for each one the server did not send (or sent empty). A registration sends
+/// the id of an item of each of these lists, so none is guessed: an id that the app thinks is Quezon can be Ilocos Norte on another database. When any
+/// is missing the form is not shown at all ([TouristRegistrationPage]).
+List<String> missingRegistrationLists(MobileBootstrap bootstrap) => [
+  if (bootstrap.countries.isEmpty) 'countries',
+  if (bootstrap.regions.isEmpty) 'regions',
+  if (bootstrap.provinces.isEmpty) 'provinces',
+  if (bootstrap.itineraries.isEmpty) 'length-of-stay choices',
+  if (bootstrap.travelModes.isEmpty) 'ways of travelling',
+  if (bootstrap.boatTypes.isEmpty) 'boat types',
+  if (bootstrap.visitPurposes.isEmpty) 'purposes of visit',
+];
+
+/// What the registration page says instead of the form when [missingRegistrationLists] is not empty: what is wrong, and what to do.
+class _RegistrationUnavailable extends StatelessWidget {
+  const _RegistrationUnavailable({required this.missing});
+
+  final List<String> missing;
+
+  /// One sentence however many are missing: "provinces", "provinces and boat types", "countries, provinces and boat types".
+  String get names => missing.length < 2 ? missing.join() : '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('registration-unavailable'),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, color: context.brand.primary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "Registration isn't available right now",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "The app couldn't load the list of $names. Check your internet connection and try again. If it keeps happening, let the Tourism Office know.",
+            style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Go back'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class TouristRegistrationPage extends StatefulWidget {
   const TouristRegistrationPage({
     super.key,
     required this.api,
     required this.bootstrap,
     this.initialDestination,
+    this.onRecorded,
   });
 
   final TourismApi api;
   final MobileBootstrap bootstrap;
   final Destination? initialDestination;
+
+  /// Told the moment the server has answered, BEFORE the pass is shown: the visit is recorded (and kept on the phone) at once, so that closing
+  /// the app with the pass still open does not lose it. The page still returns it when it closes; the one who records it must take the same
+  /// pass only once.
+  final ValueChanged<MobileVisitReceipt>? onRecorded;
 
   @override
   State<TouristRegistrationPage> createState() =>
@@ -3790,10 +4163,12 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
   bool get _requiresLocation => countryRequiresLocation(_country);
 
+  /// Nothing here is made up: the lists are the server's, and the form is not built when one of them is empty (see [missingRegistrationLists]).
+  List<String> get _missingLists => missingRegistrationLists(widget.bootstrap);
+
   RefItem _defaultRegion() => _preferredRefItem(
     widget.bootstrap.regions,
     nameContains: 'CALABARZON',
-    fallback: const RefItem(id: 4, name: 'CALABARZON Region'),
   );
 
   void _chooseCountry(RefItem country) {
@@ -3814,10 +4189,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
   late RefItem _itinerary;
 
-  /// The server's itineraries, or the three live ones when it sent none.
-  List<RefItem> get _itineraryOptions => widget.bootstrap.itineraries.isNotEmpty
-      ? widget.bootstrap.itineraries
-      : tourismItineraryFallback;
+  /// The server's itineraries (never empty here: the form is not built without them).
+  List<RefItem> get _itineraryOptions => widget.bootstrap.itineraries;
   late RefItem _travelMode;
   late RefItem _boatType;
   late RefItem _purpose;
@@ -3854,9 +4227,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
         : widget.bootstrap.destinations
               .where((item) => item.id == tapped.id)
               .firstOrNull;
-    _country =
-        widget.bootstrap.countries.firstOrNull ??
-        const RefItem(id: 1, name: 'Philippines', type: 'local');
+    // A list that did not arrive: the form is not shown (build), and nothing is chosen from it. No id is invented in its place.
+    if (_missingLists.isNotEmpty) return;
+    _country = widget.bootstrap.countries.first;
     if (_requiresLocation) {
       _region = _defaultRegion();
       _province = _preferredProvinceForRegion(
@@ -3865,19 +4238,9 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
       );
     }
     _itinerary = _itineraryOptions.first;
-    _travelMode =
-        widget.bootstrap.travelModes.firstOrNull ??
-        const RefItem(id: 1, name: 'Private Vehicle');
-    _boatType =
-        widget.bootstrap.boatTypes.firstOrNull ??
-        const RefItem(
-          id: 1,
-          name: 'Tourist Boat',
-          requiresCapacityFare: true,
-        );
-    _purpose =
-        widget.bootstrap.visitPurposes.firstOrNull ??
-        const RefItem(id: 1, name: 'Leisure');
+    _travelMode = widget.bootstrap.travelModes.first;
+    _boatType = widget.bootstrap.boatTypes.first;
+    _purpose = widget.bootstrap.visitPurposes.first;
   }
 
   @override
@@ -3892,6 +4255,14 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final missing = _missingLists;
+    if (missing.isNotEmpty) {
+      return FormPageScaffold(
+        title: 'Tourist Registration',
+        subtitle: 'Help us welcome you to Mauban',
+        children: [_RegistrationUnavailable(missing: missing)],
+      );
+    }
     return FormPageScaffold(
       title: 'Tourist Registration',
       subtitle: 'Help us welcome you to Mauban',
@@ -4124,12 +4495,11 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     );
   }
 
+  /// The item of [items] whose name has [nameContains], else the first. [items] is never empty here (see [missingRegistrationLists]).
   RefItem _preferredRefItem(
     List<RefItem> items, {
     String? nameContains,
-    required RefItem fallback,
   }) {
-    if (items.isEmpty) return fallback;
     if (nameContains == null) return items.first;
 
     final needle = nameContains.toLowerCase();
@@ -4153,7 +4523,6 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
     return _preferredRefItem(
       provinces,
       nameContains: nameContains,
-      fallback: const RefItem(id: 1, name: 'Quezon', regionId: 4),
     );
   }
 
@@ -4173,6 +4542,8 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
   }
 
   Future<void> _submit() async {
+    // The form is not on screen when a list is missing, so this cannot be reached; it is here so that nothing could ever be sent with an invented id.
+    if (_missingLists.isNotEmpty) return;
     final validationMessage = _validateRegistration();
     if (validationMessage != null) {
       showAppMessage(context, validationMessage);
@@ -4236,6 +4607,7 @@ class _TouristRegistrationPageState extends State<TouristRegistrationPage> {
           arrivalDate: _arrivalDate,
           totalVisitors: _visitors,
         );
+        widget.onRecorded?.call(receipt);
         await showDialog(
           context: context,
           builder: (context) => TouristDigitalPassModal(receipt: receipt),

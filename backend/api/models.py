@@ -228,12 +228,15 @@ TOURIST_RECORD_REQUIRED_FIELDS = [
 
 BOOKING_STATUS_PENDING = "pending"
 BOOKING_STATUS_ARRIVED = "arrived"
+# The stored value is "no_show", but people are shown "Cancelled" since 2026-11-12,
+# at the request of the person who checks the system. The value was not renamed so
+# that the data already in the database is not touched.
 BOOKING_STATUS_NO_SHOW = "no_show"
 
 BOOKING_STATUS_CHOICES = [
     (BOOKING_STATUS_PENDING, "Pending"),
     (BOOKING_STATUS_ARRIVED, "Arrived"),
-    (BOOKING_STATUS_NO_SHOW, "No-show"),
+    (BOOKING_STATUS_NO_SHOW, "Cancelled"),
 ]
 
 
@@ -436,6 +439,15 @@ class Resort(models.Model):
     # Whether the app offers this destination (its list and the registration form). An inactive one stays on the web and in every
     # record that names it; it is never deleted by being inactive.
     is_active = models.BooleanField(default=True)
+    # Made up by an import for a booking that named a resort nobody has set up (see services/placeholder_resorts.py). Its coordinates are the
+    # middle of the town, which is not a place, so the GIS map leaves it off. Set by the importers; cleared by the server when an admin saves the
+    # resort with a coordinate that is not the import's. Not a thing an admin switches by hand.
+    is_placeholder = models.BooleanField(default=False, db_default=False)
+    # The ONE resort the online booking import puts a booking in when the resort it names is not one we know ("Others / Private Residence"). It is found
+    # by this flag and never by an id: ids are not the same in every database (it was 16 in the live one and some other resort in the local one). Unlike
+    # is_placeholder, it is not cleared when an admin saves the resort, or gives it a coordinate, or renames it: the flag says what the resort is FOR.
+    # Not a field of any serializer: nothing a client sends can set or clear it.
+    is_fallback = models.BooleanField(default=False, db_default=False)
     latitude = models.FloatField()
     longitude = models.FloatField()
     images = models.JSONField(default=list, blank=True)
@@ -481,6 +493,11 @@ class FeedbackEntry(models.Model):
     title = models.CharField(max_length=160)
     message = models.TextField()
     reply = models.TextField(blank=True)
+    # The survey ID of the visit that made this review possible. mobile_feedback_submit sets it, and only AFTER the visit has been checked (the survey
+    # ID names a record, the contact number is that record's, it is at this destination, and it was scanned on arrival). It is how a tourist, who has
+    # no account, asks "has the office answered MY reviews": the survey ID and the contact number of the pass (mobile_feedback_replies). It is in NO
+    # serializer: nobody is shown it. A review made before this column existed has none, and is never guessed to belong to anybody.
+    survey_id = models.CharField(max_length=30, null=True, blank=True, db_index=True)
     photos = models.JSONField(default=list, blank=True)
     # Moderation: a hidden review is not shown to the public and does not count
     # in the destination's rating. Set only by the hide / unhide actions, from
@@ -638,6 +655,18 @@ class TouristRecord(models.Model):
         related_name="checked_in_records",
     )
     checked_in_at = models.DateTimeField(null=True, blank=True)
+    # Archive: a record taken off the Record Management TABLE, and nowhere else. It is never deleted (the data is the tourist's), and an archived
+    # record is still counted by every figure (cards, dashboard, Analytics, exports, mobile). Who and when are set only by the archive and
+    # unarchive actions, from the logged-in user and the server's clock, never from what a client sends (as for FeedbackEntry.is_hidden).
+    is_archived = models.BooleanField(default=False, db_default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_tourist_records",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1626,6 +1655,9 @@ NOTIFICATION_TYPE_INSPECTION_DUE = "inspection_due"
 NOTIFICATION_TYPE_VIOLATION_ALERT = "violation_alert"
 NOTIFICATION_TYPE_PUBLIC_ADVISORY = "public_advisory"
 NOTIFICATION_TYPE_SYSTEM = "system"
+# For the staff of the Tourism module (admin and tourism): a visit was registered, a review was sent. One row for each person who is told.
+NOTIFICATION_TYPE_NEW_REGISTRATION = "new_registration"
+NOTIFICATION_TYPE_NEW_FEEDBACK = "new_feedback"
 
 NOTIFICATION_TYPE_CHOICES = [
     (NOTIFICATION_TYPE_PERMIT_DUE, "Permit Due"),
@@ -1633,6 +1665,8 @@ NOTIFICATION_TYPE_CHOICES = [
     (NOTIFICATION_TYPE_VIOLATION_ALERT, "Violation Alert"),
     (NOTIFICATION_TYPE_PUBLIC_ADVISORY, "Public Advisory"),
     (NOTIFICATION_TYPE_SYSTEM, "System"),
+    (NOTIFICATION_TYPE_NEW_REGISTRATION, "New Registration"),
+    (NOTIFICATION_TYPE_NEW_FEEDBACK, "New Feedback"),
 ]
 
 NOTIFICATION_SEVERITY_INFO = "info"

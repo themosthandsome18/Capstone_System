@@ -43,12 +43,10 @@ const reportData = {
       question: "q",
       answer: "a",
       visual: {
-        type: "stack",
+        type: "counts",
         items: [
-          { label: "Pending", value: 1 },
-          { label: "No-show", value: 1 },
-          { label: "Duplicates", value: 1 },
-          { label: "Incomplete", value: 1 },
+          { label: "Possible duplicates", value: 1, note: "n" },
+          { label: "Incomplete records", value: 1, note: "n" },
         ],
       },
     },
@@ -98,7 +96,12 @@ const chartColours = (hex) => {
   return { s: [1, 2, 3, 4, 5].map((n) => vars[`--th-chart-${n}`]), wash: vars["--th-chart-wash"] };
 };
 const TICK = CHART_PALETTE_DEFAULTS.tick;
-const VALIDATION_FIXED = ["#147c79", "#359e9b", "#ffc978", "#ff8b21"];
+// the grid lines are the theme's tinted line colour, translucent: they follow the colour the admin chose
+const gridOf = (hex) => {
+  const tint = deriveTourismTheme(hex)["--th-border-tinted-strong"];
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(tint.slice(at, at + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, 0.35)`;
+};
 
 function expectDashboard(hex) {
   const { s, wash } = chartColours(hex);
@@ -108,12 +111,13 @@ function expectDashboard(hex) {
   expect(line.data.datasets[0].backgroundColor).toBe(wash);
   expect(line.options.scales.y.ticks.color).toBe(TICK);
   expect(line.options.scales.x.ticks.color).toBe(TICK);
-  expect(line.options.scales.y.grid.color).toBe("rgba(190, 205, 198, 0.35)");
+  expect(line.options.scales.y.grid.color).toBe(gridOf(hex));
 
   const bar = latest("bar");
   expect(bar.data.datasets[0].backgroundColor).toEqual([s[0], s[3]]);
   expect(bar.options.scales.y.ticks.color).toBe(TICK);
   expect(bar.options.scales.x.ticks.color).toBe(TICK);
+  expect(bar.options.scales.y.grid.color).toBe(gridOf(hex));
 
   const doughnuts = mockCharts.filter((c) => c.type === "doughnut").slice(-2);
   doughnuts.forEach((d) => expect(d.data.datasets[0].backgroundColor).toEqual([s[0], s[3]]));
@@ -177,7 +181,7 @@ describe("Dashboard charts follow the shell theme", () => {
 });
 
 describe("Analytics & Reports charts follow the shell theme", () => {
-  test.each(["#2FA34A", "#EF7C1F"])("charts for %s; the validation doughnut stays fixed", async (hex) => {
+  test.each(["#2FA34A", "#EF7C1F"])("charts for %s; Data Quality is not a chart at all", async (hex) => {
     const { container } = await renderIn(hex, <AnalyticsAndReport />);
     const { s } = chartColours(hex);
 
@@ -193,7 +197,10 @@ describe("Analytics & Reports charts follow the shell theme", () => {
     expect(comparison.data.datasets[0].backgroundColor).toEqual([s[0], s[3]]);
 
     expect(latest("pie").data.datasets[0].backgroundColor).toEqual([s[0], s[3]]);
-    expect(latest("doughnut").data.datasets[0].backgroundColor).toEqual(VALIDATION_FIXED);
+    // Data Quality is two counts of records, not a chart: the fixed-colour doughnut it used to be is gone, so no chart of this page is drawn in
+    // colours that do not follow the theme
+    expect(latest("doughnut")).toBeUndefined();
+    expect(container.querySelectorAll(".dq-count")).toHaveLength(2);
 
     // Peak Season progress ring: themed arc, fixed grey track
     const strokes = Array.from(container.querySelectorAll("circle")).map((c) => c.getAttribute("stroke"));

@@ -244,7 +244,7 @@ class ArrivalRecordDetailTests(TestCase):
 
         data = self.detail("KEY-1")
 
-        self.assertEqual(set(data), OLD_KEYS | {"created_at", "computed"})
+        self.assertEqual(set(data), OLD_KEYS | {"created_at", "computed", "is_archived"})  # is_archived: read only (a PATCH refuses it)
         self.assertEqual(set(data["computed"]), {"overnight", "sameDay", "fee"})
         self.assertEqual(set(data["computed"]["overnight"]), {"male", "female", "total"})
         self.assertEqual(set(data["computed"]["sameDay"]), {"male", "female", "total"})
@@ -282,11 +282,12 @@ class ArrivalRecordDetailTests(TestCase):
     def test_created_at_cannot_be_written(self):
         self.record("RO-1", 1, 1, 1)
         before = TouristRecord.objects.get(pk="RO-1").created_at
-        body = {k: v for k, v in self.detail("RO-1").items() if k != "computed"}
-        body["created_at"] = "2001-01-01T00:00:00Z"
 
-        self.client.put("/api/tourist-records/RO-1/", body, format="json")
+        # a PATCH that names created_at is refused with a 400 that names it, and the date does not move (there is no PUT any more: it is a 405)
+        response = self.client.patch("/api/tourist-records/RO-1/", {"created_at": "2001-01-01T00:00:00Z"}, format="json")
 
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("created_at", response.json())
         self.assertEqual(TouristRecord.objects.get(pk="RO-1").created_at, before)
 
     # -- what did not change -------------------------------------------------------

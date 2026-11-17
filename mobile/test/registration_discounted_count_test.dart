@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mauban_mobile_app/main.dart';
+import 'support/reference_tables.dart';
 
 // services/tourism.py entrance_fee and frontend entranceFee.js.
 const regularFee = 80;
@@ -51,7 +52,7 @@ Future<void> pumpForm(WidgetTester tester) async {
     'destinations': [
       {'resort_id': 7, 'resort_name': 'Sample Beach 1', 'type': 'Beach Resort'},
     ],
-    'referenceTables': <String, dynamic>{},
+    'referenceTables': fixtureReferenceTables(),
     'barangays': <dynamic>[],
     'notifications': <dynamic>[],
   });

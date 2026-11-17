@@ -23,7 +23,7 @@ function setup(figures) {
 }
 
 describe("the numbers", () => {
-  it("Total Locations and Arrivals this year keep the size of the box's number: nothing narrows or resizes a plain h2", () => {
+  it("Active in the app and Arrivals this year keep the size of the box's number: nothing narrows or resizes a plain h2", () => {
     // the box's own h2 rule is still the only one for a plain h2, and still 34px; the smaller sizes are named classes
     const plain = Array.from(tourismCss.matchAll(/\n\.gis-stat-box h2\s*\{([^}]*)\}/g));
     expect(plain).toHaveLength(1);
@@ -32,13 +32,13 @@ describe("the numbers", () => {
 });
 
 describe("15 of 15", () => {
-  it("the ' of 15' is 17px, weight 600, #7A6755", () => {
-    has(".gis-stat-box h2 .gis-stat-of", { "font-size": "17px", "font-weight": "600", color: "#7A6755" });
+  it("the ' of 15' is 17px, weight 600, var(--th-text-tinted-muted)", () => {
+    has(".gis-stat-box h2 .gis-stat-of", { "font-size": "17px", "font-weight": "600", color: "var(--th-text-tinted-muted)" });
   });
 
   it("only the ' of N' is in the small span; the first number is the h2's own text, at the size of the other numbers", async () => {
     const { container } = setup({ activeCount: 15, totalCount: 15, arrivalsThisYear: 3, mostVisited: null });
-    await screen.findByText("None yet");
+    await screen.findAllByText("None yet");
 
     const h2 = Array.from(container.querySelectorAll(".gis-stat-box h2")).find((el) => el.querySelector(".gis-stat-of"));
     expect(h2.className).toBe("");
@@ -61,8 +61,8 @@ describe("Most visited this year", () => {
     has(".gis-stat-box h2.gis-stat-name", { display: "-webkit-box", "-webkit-box-orient": "vertical" });
   });
 
-  it("the count under it is 12.5px, #87705C", () => {
-    has(".gis-stat-box p.gis-stat-note", { "font-size": "12.5px", color: "#87705C" });
+  it("the count under it is 12.5px, var(--th-text-tinted-muted)", () => {
+    has(".gis-stat-box p.gis-stat-note", { "font-size": "12.5px", color: "var(--th-text-tinted-muted)" });
   });
 
   it("a long name carries its whole text in title, and the count is under it", async () => {
@@ -76,11 +76,28 @@ describe("Most visited this year", () => {
     expect(name.nextElementSibling.textContent).toBe("24 arrivals");
   });
 
-  it("only the name has that smaller size: the other boxes' numbers do not use the class", async () => {
-    const { container } = setup({ activeCount: 1, totalCount: 1, arrivalsThisYear: 24, mostVisited: { resort_id: 3, name: "Alpha", arrivals: 24 } });
-    await screen.findByText("Alpha");
+  it("only the two names (Most visited and Least visited) have that smaller size: the other boxes' numbers do not use the class", async () => {
+    const { container } = setup({
+      activeCount: 1, totalCount: 1, arrivalsThisYear: 24,
+      mostVisited: { resort_id: 3, name: "Alpha", arrivals: 24 }, leastVisited: { resort_id: 3, name: "Alpha", arrivals: 24 },
+    });
+    await screen.findAllByText("Alpha");
 
-    expect(container.querySelectorAll(".gis-stat-name")).toHaveLength(1);
+    const named = Array.from(container.querySelectorAll(".gis-stat-name")).map((el) => el.closest(".gis-stat-box").firstChild.textContent);
+    expect(named).toEqual(["Most visited this year", "Least visited this year"]);
+  });
+
+  it("the two lines under Least visited (its count, then how many have none) both use the note's size, and Arrivals' line does too", async () => {
+    const { container } = setup({
+      activeCount: 1, totalCount: 1, arrivalsThisYear: 24, mostVisitedSharePercent: 50,
+      mostVisited: { resort_id: 3, name: "Alpha", arrivals: 12 }, leastVisited: { resort_id: 4, name: "Beta", arrivals: 12 }, placesWithNoArrivals: 3,
+    });
+    await screen.findByText("Beta");
+
+    const boxes = Array.from(container.querySelectorAll(".gis-stat-box"));
+    const notes = (i) => Array.from(boxes[i].querySelectorAll("p.gis-stat-note")).map((p) => p.textContent);
+    expect(notes(1)).toEqual(["the busiest place has 50% of them"]);
+    expect(notes(3)).toEqual(["12 arrivals", "3 places have none yet"]);
   });
 });
 

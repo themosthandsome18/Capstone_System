@@ -1,4 +1,5 @@
 import time
+from django.db import transaction
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -13,13 +14,12 @@ from api.models import (
     ACTION_DELETE,
     ACTION_UPDATE,
     MODULE_TOURISM,
-    ROLE_ADMIN,
     FeedbackEntry,
     Resort,
     TourismThemeSetting,
     TouristRecord,
 )
-from api.permissions import administration_required, get_user_role, module_required
+from api.permissions import administration_required, module_required
 from api.seeders import (
     ensure_initial_reference_data,
     ensure_initial_tourism_data,
@@ -31,9 +31,13 @@ from api.serializers import (
     ResortSerializer,
     TourismThemeReadSerializer,
     TourismThemeWriteSerializer,
+    TOURIST_RECORD_EDIT_ONLY_FIELDS,
+    TOURIST_RECORD_EDITABLE_FIELDS,
+    TouristRecordEditSerializer,
     TouristRecordSerializer,
 )
-from api.services.activity import log_activity
+from api.services.activity import log_activity, tourist_record_edit_label
+from api.services.notifications import notify_new_tourist_record, notify_safely
 from api.services.destination_figures import destination_map_figures
 from api.services.online_booking import (
     import_online_booking_workbook,
@@ -46,6 +50,8 @@ from api.services.tourism import (
     build_dashboard_payload,
     build_reports_payload,
     build_tourist_records_payload,
+    count_archived_records,
+    get_reporting_year,
     read_tourism_theme,
     ReportParameterError,
     tourist_record_computed,
@@ -108,12 +114,7 @@ def booking_management_data(request):
 @parser_classes([MultiPartParser])
 @module_required("tourism")
 def online_booking_import(request):
-    if get_user_role(request.user) != ROLE_ADMIN:
-        return Response(
-            {"detail": "Only the system admin can import online booking files."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
+    # The Tourism Office does this, and so does the system admin: module_required("tourism") lets in exactly those two (preview and import alike).
     upload = request.FILES.get("file")
 
     if not upload:
@@ -169,58 +170,134 @@ def tourist_record_list(request):
         label=record.full_name,
         record_id=record.survey_id,
     )
+    notify_safely(notify_new_tourist_record, record, actor=request.user)  # the one who added it is not told about it
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET", "PUT", "PATCH", "DELETE"])
+# A tourist record is never deleted (there is no DELETE here: the verb is refused with 405). It is archived instead: see
+# tourist_record_archive / tourist_record_unarchive below.
+#
+# There is no PUT either (405): a whole-body write is the way every field of the tourist would be rewritten. PATCH may change only what
+# TOURIST_RECORD_EDITABLE_FIELDS lists (the head count, the Length of Stay, the resort and the status) and refuses any other field named in the body
+# with a 400, even when its value is the same. POST (a new record) is not affected: see tourist_record_list.
+@api_view(["GET", "PATCH"])
 @module_required("tourism")
 def tourist_record_detail(request, survey_id):
-    record = get_object_or_404(TouristRecord.objects.select_related("itinerary"), survey_id=survey_id)
+    record = get_object_or_404(TouristRecord.objects.select_related("itinerary", "resort"), survey_id=survey_id)
 
     if request.method == "GET":
         # The record as it was, and what is worked out from it (Overnight and Same Day by sex, the fee): see tourist_record_computed.
         data = dict(TouristRecordSerializer(record).data)
         data["computed"] = tourist_record_computed(record)
+        data["is_archived"] = record.is_archived  # read only: a PATCH cannot write it (see TOURIST_RECORD_EDITABLE_FIELDS), only archive / unarchive do
         return Response(data)
 
-    if request.method == "DELETE":
-        if get_user_role(request.user) != ROLE_ADMIN:
-            return Response(
-                {"detail": "Only the system admin can delete tourist records."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+    sent = set(request.data.keys()) if hasattr(request.data, "keys") else set()
+    wants_edit = sent & set(TOURIST_RECORD_EDIT_ONLY_FIELDS)
+    # An archived record is not edited: the head count, the Length of Stay and the resort stay as they are until it is brought back. This is a 409, not
+    # a 400: nothing is wrong with what was sent, it is the record's state. It is refused BEFORE anything is written, so a PATCH that names the status
+    # together with one of them changes nothing at all, the status included. The status ALONE is allowed on an archived record: it is still counted
+    # by every figure, so what really happened (arrived or not) must still be put right. A field that is not editable at all keeps its 400
+    # (the serializer says so), so it is checked first.
+    if record.is_archived and wants_edit and not (sent - set(TOURIST_RECORD_EDITABLE_FIELDS)):
+        return Response(
+            {
+                "detail": (
+                    "This record is archived, so its head count, length of stay and resort cannot be changed. "
+                    "Bring it back to the table first (unarchive it), then change it. Its status can still be changed on its own."
+                ),
+                "fields": sorted(wants_edit),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
 
-        record_label = record.full_name
-        record_id = record.survey_id
-        record.delete()
+    serializer = TouristRecordEditSerializer(record, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    before = _edit_snapshot(record)  # read BEFORE the save: save() changes this same object
+    record = serializer.save()
+    label = tourist_record_edit_label(record.survey_id, before, _edit_snapshot(record))
+    if label:  # a PATCH that changes nothing logs nothing (as the archive does when it is done twice)
         log_activity(
             request,
             MODULE_TOURISM,
-            ACTION_DELETE,
+            ACTION_UPDATE,
             record,
-            label=record_label,
-            record_id=record_id,
+            label=label,
+            record_id=record.survey_id,
         )
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    data = request.data.copy()
-    data["survey_id"] = record.survey_id
-    serializer = TouristRecordSerializer(
-        record,
-        data=data,
-        partial=request.method == "PATCH",
-    )
-    serializer.is_valid(raise_exception=True)
-    record = serializer.save()
-    log_activity(
-        request,
-        MODULE_TOURISM,
-        ACTION_UPDATE,
-        record,
-        label=record.full_name,
-        record_id=record.survey_id,
-    )
     return Response(serializer.data)
+
+
+def _edit_snapshot(record):
+    """The values a PATCH may change, as an Activity Log label names them: the Length of Stay and the resort by name, the rest as they are."""
+    snapshot = {
+        field: getattr(record, field)
+        for field in (
+            "total_visitors", "foreigner_count", "filipino_count", "maubanin_count", "total_male", "total_female",
+            "age_0_7", "age_8_59", "age_60_above", "special_group_count", "discounted_count",
+        )
+    }
+    snapshot["status"] = record.get_status_display()
+    snapshot["itinerary"] = record.itinerary.name
+    snapshot["resort"] = record.resort.resort_name
+    snapshot["boat_capacity_fare"] = record.boat_capacity_fare
+    return snapshot
+
+
+def _set_archived(request, survey_id, archived):
+    """Take a record off the Record Management table (archived=True) or put it back. In one transaction, with the row locked.
+
+    Only the table changes: every count, report and export reads the record as before. Who and when come from request.user and the server's
+    clock. Doing it twice changes nothing and logs nothing. The ActivityLog label holds the survey id only, no visitor name.
+
+    It writes the archive columns alone (update_fields), so updated_at and the order of the table do not move.
+
+    The answer carries the new "N archived" for the year in ?year= (as the table asks for it), so the screen can change at once and settle on
+    the server's word without reading the whole list again.
+    """
+    try:
+        get_reporting_year(request.query_params)  # a bad ?year= is refused before anything is written
+    except ReportParameterError as error:
+        return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        record = get_object_or_404(TouristRecord.objects.select_for_update(), survey_id=survey_id)
+        if record.is_archived == archived:
+            return Response(_archive_state(record, request))
+        record.is_archived = archived
+        record.archived_at = timezone.now() if archived else None
+        record.archived_by = request.user if archived else None
+        record.save(update_fields=["is_archived", "archived_at", "archived_by"])
+        log_activity(
+            request,
+            MODULE_TOURISM,
+            ACTION_UPDATE,
+            record,
+            label=f"Record {'archived' if archived else 'brought back (unarchived)'}: {record.survey_id}",
+            record_id=record.survey_id,
+        )
+    return Response(_archive_state(record, request))
+
+
+def _archive_state(record, request):
+    return {
+        "survey_id": record.survey_id,
+        "is_archived": record.is_archived,
+        "archived_at": record.archived_at,
+        "archivedCount": count_archived_records(request.query_params),
+    }
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def tourist_record_archive(request, survey_id):
+    return _set_archived(request, survey_id, True)
+
+
+@api_view(["POST"])
+@module_required("tourism")
+def tourist_record_unarchive(request, survey_id):
+    return _set_archived(request, survey_id, False)
 
 
 @api_view(["GET"])
@@ -245,13 +322,13 @@ def resort_list(request):
     ensure_initial_reference_data()
 
     if request.method == "GET":
-        return Response(ResortSerializer(Resort.objects.all(), many=True, context={"request": request}).data)
+        return Response(ResortSerializer(Resort.objects.all(), many=True, context={"request": request, "include_placeholder": True}).data)
 
     data = request.data.copy()
     if not data.get("resort_id"):
         data["resort_id"] = generate_resort_id()
 
-    serializer = ResortSerializer(data=data, context={"request": request})
+    serializer = ResortSerializer(data=data, context={"request": request, "include_placeholder": True})
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()
     log_activity(
@@ -285,7 +362,7 @@ def resort_detail(request, resort_id):
     resort = get_object_or_404(Resort, resort_id=resort_id)
 
     if request.method == "GET":
-        return Response(ResortSerializer(resort, context={"request": request}).data)
+        return Response(ResortSerializer(resort, context={"request": request, "include_placeholder": True}).data)
 
     data = request.data.copy()
     data["resort_id"] = resort.resort_id
@@ -293,7 +370,7 @@ def resort_detail(request, resort_id):
         resort,
         data=data,
         partial=request.method == "PATCH",
-        context={"request": request},
+        context={"request": request, "include_placeholder": True},
     )
     serializer.is_valid(raise_exception=True)
     resort = serializer.save()

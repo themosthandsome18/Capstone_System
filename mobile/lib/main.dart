@@ -45,6 +45,7 @@ part 'models/app_content_defaults.dart';
 part 'models/app_contacts.dart';
 part 'models/boat_capacity_fares.dart';
 part 'services/api.dart';
+part 'services/my_visits_store.dart';
 part 'widgets/widgets.dart';
 part 'widgets/household_front_photo.dart';
 part 'widgets/tourism_loading_screen.dart';
@@ -146,7 +147,7 @@ class _MaubanMobileAppState extends State<MaubanMobileApp> {
           debugShowCheckedModeBanner: false,
           title: isSanitation
               ? 'Mauban Sanitation & Health Portal'
-              : 'Mauban Tourism & Travel Pass',
+              : 'Cagbalete Island Guide',
           theme: buildAppTheme(
             isSanitation: isSanitation,
             theme: theme,

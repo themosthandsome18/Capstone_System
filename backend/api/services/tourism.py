@@ -210,10 +210,10 @@ def build_reference_tables_payload(resorts=None, active_only=False, request=None
     payload["boatCapacityFares"] = build_boat_capacity_fares_payload(active_only)
 
     if resorts is not None:
-        payload["resorts"] = ResortSerializer(resorts, many=True, context={"request": request}).data
+        payload["resorts"] = ResortSerializer(resorts, many=True, context={"request": request, "include_placeholder": not active_only}).data
     else:
         queryset = annotate_destination_figures(Resort.objects.all())
-        payload["resorts"] = ResortSerializer(queryset, many=True, context={"request": request}).data
+        payload["resorts"] = ResortSerializer(queryset, many=True, context={"request": request, "include_placeholder": not active_only}).data
 
     return payload
 
@@ -494,6 +494,14 @@ def build_arrival_monitoring_export(params=None):
     return {"filters": filters, "rowCount": len(rows), "rows": rows}
 
 
+ARCHIVE_VIEWS = ("active", "archived", "all")
+
+
+def count_archived_records(params=None):
+    """How many records are archived in the reporting year of `params` (the table's "N archived", and the answer of archive / unarchive)."""
+    return apply_reporting_year(TouristRecord.objects.filter(is_archived=True), get_reporting_year(params)).count()
+
+
 def build_booking_management_payload(params=None):
     params = params or {}
     reporting_year = get_reporting_year(params)
@@ -506,8 +514,18 @@ def build_booking_management_payload(params=None):
     province_id = (params.get("province_id") or "").strip()
     date_from = (params.get("from") or "").strip()
     date_to = (params.get("to") or "").strip()
+    # Which rows the TABLE lists: "active" (the default: not archived), "archived" or "all". This is the only query that looks at the archive;
+    # the cards below (summary_records) and every other figure count the archived records too.
+    archived_view = (params.get("archived") or "active").strip().lower()
+    if archived_view not in ARCHIVE_VIEWS:
+        archived_view = "active"
     page = parse_positive_int(params.get("page"), 1)
     requested_page_size = params.get("page_size")
+
+    if archived_view == "active":
+        records = records.filter(is_archived=False)
+    elif archived_view == "archived":
+        records = records.filter(is_archived=True)
 
     if search:
         records = records.filter(
@@ -597,6 +615,8 @@ def build_booking_management_payload(params=None):
             "visit_purpose_name": record["visit_purpose__name"],
             "status": record["status"],
             "status_label": status_labels.get(record["status"], record["status"]),
+            "is_archived": record["is_archived"],
+            "archived_at": record["archived_at"].isoformat() if record["archived_at"] else None,
         }
         for record in page_records.values(
             "survey_id",
@@ -639,8 +659,13 @@ def build_booking_management_payload(params=None):
             "visit_purpose_id",
             "visit_purpose__name",
             "status",
+            "is_archived",
+            "archived_at",
         )
     ]
+
+    # How many are archived in this year, for the "N archived" line beside the filter. A number of its own: it is not in `summary`.
+    archived_count = count_archived_records(params)
 
     summary_records = apply_reporting_year(
         TouristRecord.objects.all(),
@@ -663,7 +688,9 @@ def build_booking_management_payload(params=None):
             "province_id": province_id,
             "from": date_from,
             "to": date_to,
+            "archived": archived_view,
         },
+        "archivedCount": archived_count,
         "summary": {
             "verifiedEntries": summary["verifiedEntries"] or 0,
             "pending": summary["pending"] or 0,
@@ -691,28 +718,42 @@ def build_dashboard_payload(params=None):
         TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED),
         reporting_year,
     )
-    latest_date = all_records.aggregate(latest=Max("arrival_date"))["latest"]
-    reporting_date = latest_date or timezone.localdate()
+    # Everything "today", "this week" and "this month" on the dashboard hangs from the real day, never from the
+    # newest arrival_date (a booking for next week must not drag the window forward).
+    #
+    # These live figures (today, week, month, the seven-day trend, pending today, the month's top resort and origin)
+    # are read from ALL records: the date window decides, not the year dropdown. The first week of January reaches
+    # back into December of the year before, and that December must be counted. The dropdown only decides whether
+    # the page shows them (currentYearOnly: they are not shown for a past year). The totals below (revenue, no-show
+    # rate, classification, gender, stay type) stay filtered by the selected year.
+    live_arrived = TouristRecord.objects.filter(status=BOOKING_STATUS_ARRIVED)
+    reporting_date = timezone.localdate()
     week_start = reporting_date - timedelta(days=6)
     month_start = reporting_date.replace(day=1)
+    current_year_only = (
+        reporting_year != ALL_TOURISM_REPORTING_YEARS
+        and int(reporting_year) != reporting_date.year
+    )
 
-    month_records = arrived_records.filter(arrival_date__gte=month_start)
+    # from the 1st up to today and no further: a record dated after today is not "this month so far"
+    month_records = live_arrived.filter(arrival_date__range=(month_start, reporting_date))
+
+    pending_today = TouristRecord.objects.filter(
+        status=BOOKING_STATUS_PENDING,
+        arrival_date=reporting_date,
+    ).count()
 
     record_summary = all_records.aggregate(
-        total_bookings=Count("survey_id"),
-        pending_for_date=Count(
+        arrived_count=Count(
             "survey_id",
-            filter=Q(
-                status=BOOKING_STATUS_PENDING,
-                arrival_date=reporting_date,
-            ),
+            filter=Q(status=BOOKING_STATUS_ARRIVED),
         ),
         no_show_count=Count(
             "survey_id",
             filter=Q(status=BOOKING_STATUS_NO_SHOW),
         ),
     )
-    arrived_summary = arrived_records.aggregate(
+    live_summary = live_arrived.aggregate(
         today_arrivals=Sum(
             "total_visitors",
             filter=Q(arrival_date=reporting_date),
@@ -723,11 +764,14 @@ def build_dashboard_payload(params=None):
         ),
         month_arrivals=Sum(
             "total_visitors",
-            filter=Q(arrival_date__gte=month_start),
+            filter=Q(arrival_date__range=(month_start, reporting_date)),
         ),
+    )
+    arrived_summary = arrived_records.aggregate(
         total_arrivals=Sum("total_visitors"),
         total_discounted=Sum("discounted_count"),
         filipino=Sum("filipino_count"),
+        maubanin=Sum("maubanin_count"),
         foreign=Sum("foreigner_count"),
         male=Sum("total_male"),
         female=Sum("total_female"),
@@ -737,7 +781,7 @@ def build_dashboard_payload(params=None):
     trend_values = []
     trend_values_by_date = {
         item["arrival_date"]: item["total"] or 0
-        for item in arrived_records.filter(
+        for item in live_arrived.filter(
             arrival_date__range=(week_start, reporting_date),
         )
         .values("arrival_date")
@@ -760,14 +804,6 @@ def build_dashboard_payload(params=None):
         day_tour += item_same_day
         overnight += item_overnight
 
-    duplicate_contacts = (
-        all_records.exclude(contact_number="")
-        .values("contact_number")
-        .annotate(total=Count("survey_id"))
-        .filter(total__gt=1)
-        .count()
-    )
-
     total_arrivals = arrived_summary["total_arrivals"] or 0
     total_revenue = entrance_fee(total_arrivals, arrived_summary["total_discounted"])
     top_resort = (
@@ -783,24 +819,34 @@ def build_dashboard_payload(params=None):
         .order_by("-visitors", "origin")
         .first()
     )
-    total_bookings = record_summary["total_bookings"] or 0
+    # The cancellation rate: of the bookings that are FINISHED (the visitor came, or did not), how many did not come. A booking still to come (pending)
+    # can be neither, so it is on neither side: counting it in the whole made the rate fall whenever more bookings were made for the future, with
+    # no change in the cancelling. The records are the same set as every other count (the selected year, archived ones included). Nothing finished
+    # yet is None ("nothing to say"), never 0: a 0% would say that nobody cancelled.
+    arrived_count = record_summary["arrived_count"] or 0
     no_show_count = record_summary["no_show_count"] or 0
+    finished_bookings = arrived_count + no_show_count
 
     return {
         "filters": {
             "year": reporting_year,
         },
         "reportingDate": reporting_date.isoformat(),
+        # True when the selected year is not the current one: the live figures (today, week, month, the trend,
+        # pending today, the month's top resort and origin) are then not shown (the page says so). They are never
+        # filtered by the year; currentYear is the year to switch to.
+        "currentYearOnly": current_year_only,
+        "currentYear": str(reporting_date.year),
         "feePerVisitor": REGULAR_ENTRANCE_FEE,
         "metrics": {
-            "todayArrivals": arrived_summary["today_arrivals"] or 0,
-            "weekArrivals": arrived_summary["week_arrivals"] or 0,
-            "monthArrivals": arrived_summary["month_arrivals"] or 0,
+            "todayArrivals": live_summary["today_arrivals"] or 0,
+            "weekArrivals": live_summary["week_arrivals"] or 0,
+            "monthArrivals": live_summary["month_arrivals"] or 0,
             "totalRevenueCollected": total_revenue,
-            "pendingForReportingDate": record_summary["pending_for_date"] or 0,
-            "noShowRate": round((no_show_count / total_bookings) * 100, 1)
-            if total_bookings
-            else 0,
+            "pendingForReportingDate": pending_today,
+            "noShowRate": round((no_show_count / finished_bookings) * 100, 1)
+            if finished_bookings
+            else None,
             "topResortThisMonth": top_resort["resort__resort_name"]
             if top_resort
             else "No arrivals yet",
@@ -814,6 +860,8 @@ def build_dashboard_payload(params=None):
         },
         "classification": {
             "filipino": arrived_summary["filipino"] or 0,
+            # Maubanin is a SUBSET of Filipino (maubanin_count <= filipino_count on every record), never added to it.
+            "maubanin": arrived_summary["maubanin"] or 0,
             "foreign": arrived_summary["foreign"] or 0,
         },
         "gender": {
@@ -823,11 +871,6 @@ def build_dashboard_payload(params=None):
         "stayType": {
             "dayTour": day_tour,
             "overnight": overnight,
-        },
-        "validation": {
-            "verifiedEntries": total_bookings,
-            "invalidEntries": 0,
-            "duplicateEntries": duplicate_contacts,
         },
     }
 
@@ -1430,7 +1473,7 @@ def build_tourism_question_answers(params=None):
         },
         {
             "id": "validation",
-            "question": "Which tourist records need validation due to pending status, no-show status, duplicate entries, or incomplete information?",
+            "question": "How many tourist records look like duplicates, or are missing a name, a contact number or a visitor count?",
             "answer": validation,
             "visual": validation_visual,
         },
@@ -1588,35 +1631,46 @@ def get_recent_demand(arrived_records=None):
 
 
 def get_validation(records):
-    """The validation answer and its chart, from one set of counts."""
-    pending = records.filter(status=BOOKING_STATUS_PENDING).count()
-    no_show = records.filter(status=BOOKING_STATUS_NO_SHOW).count()
-    duplicates = (
+    """The Data Quality card: two counts of RECORDS, and what each one means.
+
+    `records` is every record of the selected year and dates, whatever its status and archived or not (as every other count of the system).
+    Whether a visitor is still to come (pending) or did not come (cancelled) says nothing about the DATA, so the status is not looked at here.
+
+    * Possible duplicates: the records that share the same name, contact number, arrival date and resort with at least one other record. Three
+      identical records are 3 (not 1: the records are counted, not the groups they form). A record with no contact number is never matched.
+    * Incomplete: the records with no name, or no contact number, or zero visitors counted. Nothing else is looked at.
+    """
+    groups = (
         records.exclude(contact_number="")
         .values("full_name", "contact_number", "arrival_date", "resort_id")
         .annotate(total=Count("survey_id"))
         .filter(total__gt=1)
-        .count()
     )
+    duplicates = sum(group["total"] for group in groups)
     incomplete = records.filter(
-        Q(full_name="")
-        | Q(contact_number="")
-        | Q(total_visitors=0)
-        | Q(total_male__isnull=True)
-        | Q(total_female__isnull=True)
+        Q(full_name="") | Q(contact_number="") | Q(total_visitors=0)
     ).count()
 
     answer = (
-        f"Needs review: {pending} pending, {no_show} no-show, "
-        f"{duplicates} possible duplicates, and {incomplete} incomplete records."
+        # a duplicate needs at least one other record, so this is 0 or 2 and more: never "1 record"
+        f"{duplicates} records look like duplicates "
+        "(the same name, contact number, arrival date and resort as another record), and "
+        f"{incomplete} {'is' if incomplete == 1 else 'are'} incomplete (no name, no contact number, or no visitors counted). "
+        "All records of the selected year and dates are counted, whatever their status."
     )
     visual = {
-        "type": "stack",
+        "type": "counts",
         "items": [
-            {"label": "Pending", "value": pending},
-            {"label": "No-show", "value": no_show},
-            {"label": "Duplicates", "value": duplicates},
-            {"label": "Incomplete", "value": incomplete},
+            {
+                "label": "Possible duplicates",
+                "value": duplicates,
+                "note": "Records with the same name, contact number, arrival date and resort as at least one other record.",
+            },
+            {
+                "label": "Incomplete records",
+                "value": incomplete,
+                "note": "Records with no name, no contact number, or zero visitors counted.",
+            },
         ],
     }
     return answer, visual

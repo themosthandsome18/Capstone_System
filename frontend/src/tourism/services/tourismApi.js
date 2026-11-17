@@ -54,6 +54,8 @@ const emptyReferenceTables = {
 const emptyDashboardData = {
   filters: { year: currentReportingYear },
   reportingDate: "",
+  currentYearOnly: false,
+  currentYear: "",
   feePerVisitor: 80,
   metrics: {
     todayArrivals: 0,
@@ -61,7 +63,7 @@ const emptyDashboardData = {
     monthArrivals: 0,
     totalRevenueCollected: 0,
     pendingForReportingDate: 0,
-    noShowRate: 0,
+    noShowRate: null,
     topResortThisMonth: "No arrivals yet",
     topOriginThisMonth: "No arrivals yet",
   },
@@ -69,11 +71,6 @@ const emptyDashboardData = {
   classification: { filipino: 0, maubanin: 0, foreign: 0 },
   gender: { male: 0, female: 0 },
   stayType: { dayTour: 0, overnight: 0 },
-  validation: {
-    verifiedEntries: 0,
-    invalidEntries: 0,
-    duplicateEntries: 0,
-  },
 };
 
 const emptyReportData = {
@@ -122,7 +119,9 @@ const emptyBookingManagement = {
     province_id: "",
     from: "",
     to: "",
+    archived: "active",
   },
+  archivedCount: 0,
   summary: {
     verifiedEntries: 0,
     pending: 0,
@@ -294,6 +293,7 @@ export const tourismApi = {
       search: params.search,
       year: params.year,
       status: params.status,
+      archived: params.archived,
       resort_id: params.resort_id,
       region_id: params.region_id,
       province_id: params.province_id,
@@ -389,11 +389,16 @@ export const tourismApi = {
     });
   },
 
-  async deleteTouristRecord(id) {
-    await apiRequest(`/tourist-records/${encodeURIComponent(id)}/`, {
-      method: "DELETE",
-    });
-    return { id };
+  // A record is never deleted. Archive takes it off the Record Management table (every count still has it); unarchive puts it back.
+  // The answer is { survey_id, is_archived, archived_at, archivedCount }: the "N archived" for the year asked (?year=, as the table asks).
+  async archiveTouristRecord(id, params = {}) {
+    const query = buildQueryString({ year: params.year });
+    return apiRequest(`/tourist-records/${encodeURIComponent(id)}/archive/${query}`, { method: "POST" });
+  },
+
+  async unarchiveTouristRecord(id, params = {}) {
+    const query = buildQueryString({ year: params.year });
+    return apiRequest(`/tourist-records/${encodeURIComponent(id)}/unarchive/${query}`, { method: "POST" });
   },
 
   async previewOnlineBookingImport(file, options = {}) {
@@ -527,6 +532,25 @@ export const tourismApi = {
 
   async setPublicAdvisoryActive(id, active) {
     return apiRequest(`/notifications/public/${encodeURIComponent(id)}/`, { method: "PATCH", body: JSON.stringify({ is_active: Boolean(active) }) });
+  },
+
+  // The bell of the admin and the Tourism Office: THEIR OWN Tourism notifications (a visit was registered, a review was sent), one row for each person
+  // who is told. The list answers { unread_count, module_unread_count, results }; module_unread_count is what the red dot counts (the Tourism ones).
+  // Pressing one marks it read; "mark all" marks the Tourism ones; the X deletes that person's own row and nobody else's.
+  async getTourismNotifications(limit = 30) {
+    return apiRequest(`/notifications/${buildQueryString({ module: "tourism", limit })}`);
+  },
+
+  async markNotificationRead(id) {
+    return apiRequest(`/notifications/${encodeURIComponent(id)}/read/`, { method: "PATCH" });
+  },
+
+  async markAllTourismNotificationsRead() {
+    return apiRequest("/notifications/mark-all-read/?module=tourism", { method: "POST" });
+  },
+
+  async deleteNotification(id) {
+    return apiRequest(`/notifications/${encodeURIComponent(id)}/`, { method: "DELETE" });
   },
 
   // Boat Capacity and Fare tiers (admin). Every write answers with the tier as

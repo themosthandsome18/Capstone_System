@@ -193,6 +193,23 @@
   overflow-y: auto;
 }
 
+/* The fields of a record that is only looked at: locked, and still easy to read. */
+.wizard-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.wizard-fieldset:disabled input,
+.wizard-fieldset:disabled select,
+.wizard-fieldset:disabled textarea {
+  opacity: 1;
+  cursor: default;
+  color: var(--th-text-main);
+  -webkit-text-fill-color: var(--th-text-main);
+}
+
 .wizard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -429,7 +446,8 @@
   cursor: not-allowed;
 }
 
-.wizard-btn-save {
+.wizard-btn-save,
+.wizard-btn-close {
   padding: 8px 22px;
   background: var(--th-primary);
   border: none;
@@ -444,11 +462,13 @@
   transition: background 0.15s;
 }
 
-.wizard-btn-save:hover:not(:disabled) {
+.wizard-btn-save:hover:not(:disabled),
+.wizard-btn-close:hover:not(:disabled) {
   background: var(--th-primary-hover);
 }
 
-.wizard-btn-save:disabled {
+.wizard-btn-save:disabled,
+.wizard-btn-close:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -644,4 +664,167 @@
 
 .booking-save-notice button:hover {
   background: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Editing a record: what may change, what is locked ──
+   Only the head count, the Length of Stay and the resort are open; the rest is the tourist's and stays locked, and is meant to LOOK locked. */
+.wizard-locked {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.wizard-locked-inline {
+  display: contents;
+}
+
+.wizard-locked:disabled input,
+.wizard-locked:disabled select,
+.wizard-locked:disabled textarea {
+  background: var(--th-surface-tinted);
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 1;
+  color: var(--th-text-tinted);
+  -webkit-text-fill-color: var(--th-text-tinted);
+}
+
+.wizard-locked-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  color: var(--th-text-tinted-muted);
+}
+
+.record-edit-problem {
+  margin: 0 0 16px;
+}
+
+.wizard-btn-edit {
+  padding: 8px 22px;
+  border: 1.5px solid var(--th-primary);
+  background: #fff;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--th-primary-ink);
+  cursor: pointer;
+}
+
+.wizard-btn-edit:hover:not(:disabled) {
+  background: var(--th-primary-tint);
+}
+
+.wizard-btn-edit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.record-edit-archived-note {
+  max-width: 360px;
+  color: var(--th-text-tinted);
+}
+
+.record-edit-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--th-scrim);
+}
+
+.record-edit-confirm {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(var(--th-shadow-rgb), 0.28);
+}
+
+.record-edit-confirm h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: var(--th-text-tinted-strong);
+}
+
+.record-edit-confirm-lead {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  color: var(--th-text-tinted-muted);
+}
+
+.record-edit-changes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.record-edit-changes th,
+.record-edit-changes td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--th-border-tinted);
+  text-align: left;
+}
+
+.record-edit-changes th {
+  width: 36%;
+  font-weight: 600;
+  color: var(--th-text-tinted);
+}
+
+.record-edit-from {
+  color: var(--th-text-tinted-muted);
+  text-decoration: line-through;
+}
+
+.record-edit-arrow {
+  width: 24px;
+  color: var(--th-text-tinted-muted);
+  text-align: center;
+}
+
+.record-edit-to {
+  font-weight: 700;
+  color: var(--th-text-tinted-strong);
+}
+
+.record-edit-server-error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--th-danger);
+  border-radius: 10px;
+  background: var(--th-danger-bg);
+  color: var(--th-danger-text);
+  font-size: 0.85rem;
+}
+
+.record-edit-server-error ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.record-edit-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.record-edit-fare-note {
+  margin: 14px 0 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--th-warning);
+  border-radius: 10px;
+  background: var(--th-warning-bg);
+  color: var(--th-warning-text);
+  font-size: 0.82rem;
 }
