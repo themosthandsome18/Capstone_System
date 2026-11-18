@@ -828,7 +828,7 @@ function HouseholdRecords() {
     </div>
   ) : null;
   const householdRefresh = householdReady ? (
-    <button type="button" onClick={() => reloadHouseholds()}>Refresh household data</button>
+    <button type="button" className="hh-btn-cancel" style={{ marginBottom: "12px" }} onClick={() => reloadHouseholds()}>Refresh household data</button>
   ) : null;
 
   if (!householdHasData && !householdReady) {

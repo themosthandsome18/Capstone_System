@@ -17,7 +17,9 @@ afterEach(() => { localStorage.clear(); jest.restoreAllMocks(); });
 
 describe.each([['household', 'Household', 'households/records'], ['establishment', 'Establishment', 'sanitation/establishments']])('%s photos', (kind, title, path) => {
   const open = () => render(<FrontPhoto kind={kind} recordId={71} />);
-  const select = file => fireEvent.change(screen.getByLabelText(`Select ${kind} front photo`), { target: { files: [file] } });
+  // The picker's accessible name contains its visible label, which follows the saved/selected state.
+  const pickerName = new RegExp(`^(Choose|Replace|Choose a different) ${kind} front photo$`);
+  const select = file => fireEvent.change(screen.getByLabelText(pickerName), { target: { files: [file] } });
   test('preview, create and refreshed display use authenticated multipart PUT', async () => {
     fetch.mockResolvedValueOnce(response(404)); open();
     await screen.findByText('No front photo saved.');
@@ -80,9 +82,21 @@ describe.each([['household', 'Household', 'households/records'], ['establishment
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo-1');
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo-2');
   });
+  test('empty box is hidden while a file is selected and returns when no photo and no selection', async () => {
+    fetch.mockResolvedValueOnce(response(404)); open();
+    expect(await screen.findByText('No front photo saved.')).toBeInTheDocument();
+    select(png());
+    expect(screen.getByAltText(`${title} selected preview`)).toBeInTheDocument();
+    expect(screen.queryByText('No front photo saved.')).not.toBeInTheDocument();
+    select(new File(['x'], 'a.txt', { type: 'text/plain' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('JPEG or PNG up to 5 MiB');
+    expect(screen.queryByAltText(`${title} selected preview`)).not.toBeInTheDocument();
+    expect(screen.getByText('No front photo saved.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   test.each([401,403])('authorization %i disables photo selection', async status => {
     fetch.mockResolvedValue(response(status)); open(); await screen.findByRole('alert');
-    expect(screen.getByLabelText(`Select ${kind} front photo`)).toBeDisabled();
+    expect(screen.getByLabelText(`Choose ${kind} front photo`)).toBeDisabled();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 });

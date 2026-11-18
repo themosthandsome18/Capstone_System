@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { FiCamera, FiUpload } from "react-icons/fi";
 import { AUTH_TOKEN_KEY, getStoredAuthToken } from "../../shared/apiClient";
 import { fetchFrontPhoto, uploadFrontPhoto, validatePhotoFile } from "../services/frontPhotoApi";
 import "./FrontPhoto.css";
@@ -107,28 +108,44 @@ export default function FrontPhoto({ kind, recordId, snapshot }) {
       if (active.current) setBusy(false);
     }
   };
+  // Presentation only: button family follows the host modal; labels follow the existing state.
+  // While locked (load error, failed save, signed out) Reload/Retry is the emphasised action.
+  const primaryClass = kind === "household" ? "hh-btn-save" : "add-establishment-btn";
+  const secondaryClass = kind === "household" ? "hh-btn-cancel" : "sanitation-export-btn";
+  const pickDisabled = busy || locked || photo.status === "loading";
+  const pickVerb = selection ? "Choose a different" : photo.url ? "Replace" : "Choose";
   return <section className="front-photo-panel" aria-label={`${title} front photo`}>
-    <h3>Front photo</h3>
-    {photo.status === "loading" && <p role="status">Loading {kind} photo…</p>}
-    {photo.status === "empty" && <p>No front photo saved.</p>}
-    {photo.url && <img alt={`${title} frontage`} src={photo.url}
-      onError={() => setError("Photo could not be displayed. Reload the saved photo.")} />}
-    {selection && <div><p>Selected photo — not saved yet</p><img alt={`${title} selected preview`} src={selection.url}
-      onError={() => { revoke(selection.url); setSelection(null); setError("Choose a complete, valid JPEG or PNG."); }} /></div>}
-    <label className="front-photo-file">Select {kind} front photo
-      <input ref={input} type="file" accept="image/jpeg,image/png" onChange={pick}
-        disabled={busy || locked || photo.status === "loading"} />
-    </label>
-    <p>JPEG or PNG, up to 5 MiB. Selecting a file does not save it.</p>
+    <h3 className="front-photo-title">Front photo</h3>
+    {photo.status === "loading" && <p className="front-photo-notice is-info" role="status">Loading {kind} photo…</p>}
+    {busy && <p className="front-photo-notice is-info" role="status">Uploading photo. Please wait.</p>}
+    {message && <p className="front-photo-notice is-success" role="status">{message}</p>}
+    {error && <p className="front-photo-notice is-error" role="alert">{error}</p>}
+    {photo.status === "empty" && !selection && <div className="front-photo-empty">
+      <FiCamera aria-hidden="true" focusable="false" />
+      <p>No front photo saved.</p>
+    </div>}
+    {photo.url && <>
+      <div className="front-photo-frame">
+        <img alt={`${title} frontage`} src={photo.url}
+          onError={() => setError("Photo could not be displayed. Reload the saved photo.")} />
+      </div>
+      <a className="front-photo-open" href={photo.url} target="_blank" rel="noopener noreferrer">View full size</a>
+    </>}
+    {selection && <div className="front-photo-selection"><p>Selected photo — not saved yet</p><div className="front-photo-frame"><img alt={`${title} selected preview`} src={selection.url}
+      onError={() => { revoke(selection.url); setSelection(null); setError("Choose a complete, valid JPEG or PNG."); }} /></div></div>}
+    <p className="front-photo-hint">JPEG or PNG, up to 5 MiB. Selecting a file does not save it.</p>
     {selection && photo.url && <p>Replace the saved photo with this preview?</p>}
     <div className="front-photo-actions">
-      {selection && <button type="button" onClick={save} disabled={busy || locked || photo.status === "loading"}>
+      {selection && <button type="button" className={locked ? secondaryClass : primaryClass} onClick={save} disabled={busy || locked || photo.status === "loading"}>
         {busy ? "Uploading photo…" : photo.url ? "Replace photo" : "Save photo"}</button>}
-      <button type="button" disabled={busy || photo.status === "loading"} onClick={() => setReload(value => value + 1)}>
+      <label className={`front-photo-pick ${secondaryClass}${pickDisabled ? " is-disabled" : ""}`}>
+        <FiUpload aria-hidden="true" focusable="false" />
+        <span>{pickVerb}<span className="front-photo-visually-hidden"> {kind} front</span> photo</span>
+        <input className="front-photo-visually-hidden" ref={input} type="file" accept="image/jpeg,image/png" onChange={pick}
+          disabled={busy || locked || photo.status === "loading"} />
+      </label>
+      <button type="button" className={locked ? primaryClass : secondaryClass} disabled={busy || photo.status === "loading"} onClick={() => setReload(value => value + 1)}>
         {photo.status === "error" ? "Retry photo" : "Reload photo"}</button>
     </div>
-    {busy && <p role="status">Uploading photo. Please wait.</p>}
-    {message && <p role="status">{message}</p>}
-    {error && <p role="alert">{error}</p>}
   </section>;
 }
