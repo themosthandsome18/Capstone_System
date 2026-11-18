@@ -9444,7 +9444,8 @@ class MobileFeedbackPhotoUploadTests(TestCase):
 
 
 class AmbulantFoodVendorBusinessTypeTests(TestCase):
-    """Migration 0034: the client-confirmed Ambulant Food Vendor type, with no requirements yet."""
+    """Migration 0034 creates the Ambulant Food Vendor type; migration 0078 gives it the
+    approved list (the 7 standard items plus Stool Examination, both sizes)."""
 
     NAME = "Ambulant Food Vendor"
 
@@ -9468,11 +9469,23 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
         self.assertEqual(ambulant.inspection_frequency, "monthly")
         self.assertEqual(ambulant.description, "")
 
-    def test_type_has_no_requirements_for_sp_or_large(self):
+    APPROVED = [
+        "Xerox copy of DTI/SEC/CDA", "Barangay Clearance of owner",
+        "Chest X-ray Results (Owner & employees)", "CTC/Cedula of owner and employees",
+        "1x1 picture of owner and employees",
+        "Potability of Water Supply - Physical/Chemical Examination",
+        "Potability of Water Supply - Microbiological Examination",
+        "Stool Examination result (for food establishments only)",
+    ]
+
+    def test_type_has_the_approved_list_for_sp_and_large(self):
         ambulant = self._ambulant()
-        self.assertEqual(ambulant.requirements.count(), 0)
         for permit_size in ("sp", "large"):
-            self.assertFalse(ambulant.requirements.filter(permit_size=permit_size).exists())
+            self.assertEqual(
+                sorted(ambulant.requirements.filter(permit_size=permit_size)
+                       .values_list("requirement_name", flat=True)),
+                sorted(self.APPROVED),
+            )
 
     def test_running_again_does_not_duplicate_or_change_the_row(self):
         before = self._ambulant()
@@ -9493,7 +9506,7 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
         self.assertEqual(existing.name, "ambulant food vendor")
         self.assertEqual(existing.inspection_frequency, "quarterly")
 
-    def test_seed_requirement_sync_adds_no_requirements_for_sp_or_large(self):
+    def test_seed_requirement_sync_leaves_its_requirements_unchanged(self):
         from .seed_data import SANITARY_REQUIREMENTS
         from .seeders import sync_sanitary_business_types_and_requirements
 
@@ -9501,13 +9514,15 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
             any(group["business_type"] == self.NAME for group in SANITARY_REQUIREMENTS)
         )
 
+        before = list(self._ambulant().requirements.order_by("id").values())
+
         sync_sanitary_business_types_and_requirements()
 
         ambulant = self._ambulant()
         self.assertEqual(ambulant.inspection_frequency, "monthly")
-        self.assertEqual(ambulant.requirements.count(), 0)
+        self.assertEqual(list(ambulant.requirements.order_by("id").values()), before)
 
-    def test_bootstrap_offers_the_type_with_no_requirements(self):
+    def test_bootstrap_offers_the_type_with_its_requirements(self):
         client = APIClient()
         user = User.objects.create_user(username="ambulant_staff", password="Password@123")
         UserProfile.objects.create(user=user, role=ROLE_SANITATION)
@@ -9519,14 +9534,20 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
         ambulant = [t for t in response.json()["businessTypes"] if t["name"] == self.NAME]
         self.assertEqual(len(ambulant), 1)
         self.assertEqual(ambulant[0]["inspection_frequency"], "monthly")
-        self.assertEqual(ambulant[0]["requirements"], [])
+        for permit_size in ("sp", "large"):
+            self.assertEqual(
+                sorted(r["requirement_name"] for r in ambulant[0]["requirements"]
+                       if r["permit_size"] == permit_size),
+                sorted(self.APPROVED),
+            )
 
-    def test_establishment_registered_as_sp_or_large_gets_no_requirements(self):
+    def test_registering_sp_or_large_establishments_changes_no_requirements(self):
         client = APIClient()
         user = User.objects.create_user(username="ambulant_register", password="Password@123")
         UserProfile.objects.create(user=user, role=ROLE_SANITATION)
         client.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}")
         ambulant = self._ambulant()
+        requirements_before = list(ambulant.requirements.order_by("id").values())
 
         for permit_size in ("sp", "large"):
             response = client.post(
@@ -9555,7 +9576,7 @@ class AmbulantFoodVendorBusinessTypeTests(TestCase):
             self.assertEqual(created.business_type_id, ambulant.id)
             self.assertEqual(created.permit_size, permit_size)
 
-        self.assertEqual(ambulant.requirements.count(), 0)
+        self.assertEqual(list(ambulant.requirements.order_by("id").values()), requirements_before)
 
 
 class InspectionDraftIsolationTests(TestCase):

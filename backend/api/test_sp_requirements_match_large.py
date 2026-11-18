@@ -79,6 +79,9 @@ class SpMatchesLargeMigrationTests(TransactionTestCase):
         executor.migrate([BEFORE])
         try:
             apps = executor.loader.project_state([BEFORE]).apps
+            # Test databases run every migration first (0078 fills the three empty types
+            # and has a no-op reverse); restore the production shape where they are empty.
+            apps.get_model("api", "SanitaryRequirement").objects.filter(business_type__name__in=EMPTY_TYPES).delete()
             build_production_shape(apps)
             BusinessType = apps.get_model("api", "SanitaryBusinessType")
             Requirement = apps.get_model("api", "SanitaryRequirement")
