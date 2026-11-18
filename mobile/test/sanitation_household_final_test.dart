@@ -41,14 +41,14 @@ void main() {
   });
 
   testWidgets(
-    'fixed fields use exact tap choices; only Barangay is a dropdown',
+    'fixed fields use exact tap choices; Barangay and optional Sitio are dropdowns',
     (tester) async {
       await pumpEdit(tester, storedHousehold());
       final dropdowns = tester.widgetList(
         find.byWidgetPredicate((w) => w is DropdownTile),
       );
-      expect(dropdowns.length, 1);
-      expect((dropdowns.single as dynamic).label, 'Barangay');
+      expect(dropdowns.length, 2);
+      expect(dropdowns.map((item) => (item as dynamic).label), ['Barangay', 'Sitio (optional)']);
       for (final label in [
         'Water-sealed',
         householdToiletLabel('pour_flush'),
@@ -110,6 +110,7 @@ void main() {
             await submitEdit(tester);
           },
           () => MockClient((r) async {
+            if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
             sent = r;
             return http.Response(jsonEncode(stored), 200);
           }),
@@ -142,6 +143,7 @@ void main() {
           expect(find.text('Septic tank type is required.'), findsOneWidget);
         },
         () => MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           calls++;
           return http.Response('{}', 200);
         }),
@@ -167,6 +169,7 @@ void main() {
             await submitEdit(tester);
           },
           () => MockClient((r) async {
+            if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
             sent = r;
             return http.Response(jsonEncode(storedHousehold()), 200);
           }),
@@ -197,6 +200,7 @@ void main() {
           await submitEdit(tester);
         },
         () => MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           sent = r;
           return http.Response(jsonEncode(storedHousehold()), 200);
         }),
@@ -218,6 +222,7 @@ void main() {
         await submitEdit(tester);
       },
       () => MockClient((r) async {
+        if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         sent = r;
         return http.Response(jsonEncode(storedHousehold()), 200);
       }),
@@ -261,6 +266,7 @@ void main() {
           await submitEdit(tester);
         },
         () => MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           sent = r;
           return http.Response('{"household_code":"HH-NEW"}', 201);
         }),
@@ -299,6 +305,7 @@ void main() {
           await submitEdit(tester);
         },
         () => MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           sent = r;
           return http.Response(jsonEncode(storedHousehold()), 200);
         }),
@@ -356,6 +363,7 @@ void main() {
         expect(calls, 0);
       },
       () => MockClient((r) async {
+        if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         calls++;
         return http.Response('{}', 200);
       }),
@@ -379,6 +387,7 @@ void main() {
         expect(calls, 0);
       },
       () => MockClient((r) async {
+        if (r.method == 'GET' && r.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         calls++;
         return http.Response('{}', 200);
       }),

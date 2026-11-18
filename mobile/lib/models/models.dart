@@ -653,6 +653,10 @@ class SanitationEstablishment {
     required this.latitude,
     required this.longitude,
     this.contactNumber = '',
+    this.locationDetails = const SanitationLocationDetails(),
+    this.sitio = '',
+    this.sitioReference,
+    this.sitioSource = 'unknown',
   });
 
   final int id;
@@ -672,6 +676,10 @@ class SanitationEstablishment {
   final double latitude;
   final double longitude;
   final String contactNumber;
+  final SanitationLocationDetails locationDetails;
+  final String sitio;
+  final int? sitioReference;
+  final String sitioSource;
 
   bool get hasCoordinates => latitude.abs() > 0.001 && longitude.abs() > 0.001;
   bool get hasPermit =>
@@ -701,6 +709,13 @@ class SanitationEstablishment {
       'latitude': latitude,
       'longitude': longitude,
       'contact_number': contactNumber,
+      'location_source': locationDetails.source,
+      'location_accuracy_m': locationDetails.accuracy,
+      'location_captured_at': locationDetails.capturedAt?.toUtc().toIso8601String(),
+      'location_reported_mock': locationDetails.reportedMock,
+      'sitio': sitio,
+      'sitio_reference': sitioReference,
+      'sitio_source': sitioSource,
     };
   }
 
@@ -738,6 +753,10 @@ class SanitationEstablishment {
       latitude: jsonDouble(json['latitude']),
       longitude: jsonDouble(json['longitude']),
       contactNumber: '${json['contact_number'] ?? ''}',
+      locationDetails: SanitationLocationDetails.fromJson(json),
+      sitio: '${json['sitio'] ?? ''}',
+      sitioReference: json['sitio_reference'] is int ? json['sitio_reference'] as int : null,
+      sitioSource: '${json['sitio_source'] ?? 'unknown'}',
     );
   }
 
@@ -898,6 +917,9 @@ class HouseholdSanitationItem {
     this.toiletType,
     this.septicTankType,
     this.surveyValues,
+    this.locationDetails = const SanitationLocationDetails(),
+    this.sitioReference,
+    this.sitioSource = 'unknown',
   });
 
   final String householdCode;
@@ -915,6 +937,9 @@ class HouseholdSanitationItem {
   // Keep raw editable values separate from display fallbacks. Missing keys
   // must never become defaults when an existing record is submitted.
   final Map<String, dynamic>? surveyValues;
+  final SanitationLocationDetails locationDetails;
+  final int? sitioReference;
+  final String sitioSource;
   static const surveyFields = [
     'id',
     'household_code',
@@ -1014,9 +1039,12 @@ class HouseholdSanitationItem {
       toiletType: json['toilet_type']?.toString(),
       septicTankType: json['septic_tank_type']?.toString(),
       surveyValues: Map<String, dynamic>.unmodifiable({
-        for (final key in [...surveyFields, ...optionalAddressFields])
+        for (final key in [...surveyFields, ...optionalAddressFields, 'sitio_reference'])
           if (json.containsKey(key)) key: json[key],
       }),
+      locationDetails: SanitationLocationDetails.fromJson(json),
+      sitioReference: json['sitio_reference'] is int ? json['sitio_reference'] as int : null,
+      sitioSource: '${json['sitio_source'] ?? 'unknown'}',
     );
   }
 }

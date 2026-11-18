@@ -76,8 +76,8 @@ class HouseholdMembersPanel extends StatelessWidget {
                           '${item.value}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
                           children: [
                             IconButton(
                               tooltip: 'Decrease ${item.label}',
@@ -129,7 +129,7 @@ class HouseholdMembersPanel extends StatelessWidget {
   }
 }
 
-/// Household-only seam for testing service, permission and acquisition failures.
+/// Injectable device-location access for sanitation capture workflows.
 class HouseholdLocationAdapter {
   const HouseholdLocationAdapter();
 
@@ -144,6 +144,8 @@ class HouseholdLocationAdapter {
   );
 }
 
+enum _PendingPhotoUpload { none, uploading, done, failed }
+
 class HouseholdSurveyPage extends StatefulWidget {
   const HouseholdSurveyPage({
     super.key,
@@ -153,12 +155,15 @@ class HouseholdSurveyPage extends StatefulWidget {
     this.locationAdapter = const HouseholdLocationAdapter(),
     this.onLogout,
     this.onSessionExpired,
+    this.imagePicker,
   });
 
   final TourismApi api;
   final List<BarangayItem> barangays;
   final HouseholdSanitationItem? household;
   final HouseholdLocationAdapter locationAdapter;
+  /// Passed to the front-photo panel; null uses the platform camera/gallery picker.
+  final ImagePicker? imagePicker;
   final VoidCallback? onLogout;
   final VoidCallback? onSessionExpired;
 
@@ -183,9 +188,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   final TextEditingController _head = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _houseNumber = TextEditingController();
-  final TextEditingController _sitio = TextEditingController();
   bool _houseNumberEdited = false;
-  bool _sitioEdited = false;
   final TextEditingController _latitude = TextEditingController();
   final TextEditingController _longitude = TextEditingController();
   late String _barangay;
@@ -202,16 +205,39 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   bool _submitting = false;
   bool _locating = false;
   bool _locationConfirmed = false;
+  SanitationLocationDetails _locationDetails = const SanitationLocationDetails();
+  bool _locationEdited = false;
+  int _locationGeneration = 0;
+  late final SanitationSitioSelection _sitioSelection;
   bool _consentConfirmed = false;
   String? _editIncompatibility;
   late final Future<void> _sessionReady;
   SharedPreferences? _sessionPrefs;
   String? _sessionToken;
   bool _sessionInvalid = false;
+  // Set only after the server confirmed a NEW household: its real id and receipt.
+  int? _savedHouseholdId;
+  String _savedHouseholdCode = '';
+  MobileHouseholdSurveyReceipt? _savedReceipt;
+  // The server accepted a NEW household but returned no usable id: the record may
+  // exist, so the form must not be resubmitted and no photo can be attached.
+  bool _saveUnconfirmed = false;
+  // Optional front photo chosen BEFORE submission (new households only). Held in
+  // memory on this page only and uploaded solely to a server-confirmed id.
+  late final ImagePicker _picker = widget.imagePicker ?? ImagePicker();
+  Uint8List? _pendingPhoto;
+  String? _pendingPhotoError;
+  bool _pickingPhoto = false;
+  bool _pendingPhotoDiscarded = false;
+  _PendingPhotoUpload _pendingUpload = _PendingPhotoUpload.none;
+  String? _pendingUploadError;
+  int _photoPanelGeneration = 0;
 
   Future<void> _captureHouseholdSession() async {
     _sessionPrefs = await SharedPreferences.getInstance();
+    if (!mounted || _sessionInvalid) return;
     _sessionToken = _sessionPrefs!.getString(staffAuthTokenKey);
+    if (mounted && _sessionToken != null) unawaited(_sitioSelection.load(_sessionToken!));
   }
 
   bool _checkHouseholdSession() {
@@ -221,7 +247,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         _sessionPrefs?.getString(staffAuthTokenKey) == _sessionToken) {
       return true;
     }
-    _sessionInvalid = true;
+    _onStaffSessionChanged();
     if (mounted) {
       showAppMessage(context,
           'Staff session changed. Reopen and review the household form under the current account.');
@@ -232,8 +258,13 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   @override
   void initState() {
     super.initState();
+    staffSessionRevision.addListener(_onStaffSessionChanged);
     _sessionReady = _captureHouseholdSession();
     _barangay = widget.household?.barangay ?? widget.barangays.firstOrNull?.name ?? '';
+    _sitioSelection = SanitationSitioSelection(api: widget.api, barangays: widget.barangays,
+      barangay: _barangay, text: widget.household?.sitio ?? '',
+      reference: widget.household?.sitioReference, source: widget.household?.sitioSource ?? 'unknown');
+    _locationDetails = widget.household?.locationDetails ?? const SanitationLocationDetails();
     if (widget.household != null) {
       _editIncompatibility = widget.household!.editIncompatibility;
       if (_editIncompatibility == null &&
@@ -244,7 +275,6 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       final stored = widget.household!.surveyValues!;
       _address.text = stored['address'] as String;
       _houseNumber.text = widget.household!.houseNumber;
-      _sitio.text = widget.household!.sitio;
       _male = stored['male_count'] as int;
       _female = stored['female_count'] as int;
       _waterLevel = stored['water_level'] as String;
@@ -290,19 +320,386 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
     });
   }
 
+  void _onStaffSessionChanged() {
+    // Any session change drops an unsaved selection immediately.
+    if (!mounted) return;
+    setState(() {
+      _sessionInvalid = true;
+      _sessionToken = null;
+      _locationGeneration++;
+      _head.clear();
+      _address.clear();
+      _houseNumber.clear();
+      _latitude.clear();
+      _longitude.clear();
+      _sitioSelection.invalidate();
+      _locationDetails = const SanitationLocationDetails();
+      _locationConfirmed = false;
+      _locationEdited = false;
+      _consentConfirmed = false;
+      _male = 0;
+      _female = 0;
+      _septicTankType = null;
+      _waterSourceSelection = '';
+      _savedHouseholdId = null;
+      _savedHouseholdCode = '';
+      _savedReceipt = null;
+      _saveUnconfirmed = false;
+      _pendingUploadError = null;
+      _pendingPhoto = null;
+      _pendingPhotoError = null;
+      if (_pendingUpload != _PendingPhotoUpload.done) _pendingUpload = _PendingPhotoUpload.none;
+    });
+  }
+
   @override
   void dispose() {
+    staffSessionRevision.removeListener(_onStaffSessionChanged);
+    _pendingPhoto = null;
     _head.dispose();
     _address.dispose();
     _houseNumber.dispose();
-    _sitio.dispose();
+    _sitioSelection.dispose();
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
   }
 
+  Widget _photoPanel(int id) => Padding(
+    // Keep the photo controls visually separate from the first form field.
+    padding: const EdgeInsets.only(bottom: 20),
+    child: HouseholdFrontPhotoPanel(
+      key: ValueKey('household-photo-$id'),
+      api: widget.api,
+      householdId: id,
+      imagePicker: widget.imagePicker,
+    ),
+  );
+
+  void _finishSaved() {
+    _pendingPhoto = null; // never keep an unsaved image after leaving
+    Navigator.of(context).pop(_savedReceipt);
+  }
+
+  static bool _isJpegOrPng(Uint8List bytes) =>
+      (bytes.length >= 8 &&
+          listEquals(bytes.sublist(0, 8), const [137, 80, 78, 71, 13, 10, 26, 10])) ||
+      (bytes.length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255);
+
+  Future<void> _pickPendingPhoto(ImageSource source) async {
+    if (_pickingPhoto || _submitting) return;
+    final revision = staffSessionRevision.value;
+    setState(() {
+      _pickingPhoto = true;
+      _pendingPhotoError = null;
+    });
+    try {
+      final photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        requestFullMetadata: false,
+      );
+      if (!mounted || revision != staffSessionRevision.value || photo == null) return;
+      final bytes = await photo.readAsBytes();
+      if (!mounted || revision != staffSessionRevision.value) return;
+      if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024 || !_isJpegOrPng(bytes)) {
+        setState(() => _pendingPhotoError = 'Choose a JPEG or PNG up to 5 MiB.');
+        return;
+      }
+      setState(() => _pendingPhoto = bytes);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _pendingPhotoError =
+            'Camera/gallery access is unavailable or denied. Check app permissions and retry.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pendingPhotoError = 'The photo could not be read. Choose another JPEG or PNG.');
+      }
+    } finally {
+      if (mounted) setState(() => _pickingPhoto = false);
+    }
+  }
+
+  /// Uploads the pre-selected photo to a household id the server just confirmed.
+  /// Never resubmits the household; a failure keeps the selection for a retry.
+  Future<void> _uploadPendingPhoto(int householdId) async {
+    final bytes = _pendingPhoto;
+    final token = _sessionToken;
+    if (bytes == null || householdId <= 0 || token == null || token.isEmpty) return;
+    if (!_checkHouseholdSession()) {
+      setState(() {
+        _pendingPhoto = null;
+        _pendingUpload = _PendingPhotoUpload.none;
+      });
+      return;
+    }
+    setState(() {
+      _pendingUpload = _PendingPhotoUpload.uploading;
+      _pendingUploadError = null;
+    });
+    try {
+      await widget.api.uploadHouseholdFrontPhoto(householdId, bytes, expectedSessionToken: token);
+      if (!mounted) return;
+      setState(() {
+        _pendingUpload = _PendingPhotoUpload.done;
+        _pendingPhoto = null;
+        _photoPanelGeneration++; // the panel reloads and shows the saved photo
+      });
+    } catch (error) {
+      if (!mounted) return;
+      if (_sessionPrefs?.getString(staffAuthTokenKey) != token) {
+        setState(() {
+          _pendingPhoto = null;
+          _pendingUpload = _PendingPhotoUpload.none;
+        });
+        return;
+      }
+      if (error is ApiException && error.statusCode == 401) {
+        staffSessionRevision.value++; // clears the selection and protected panels
+        setState(() => _pendingUploadError = 'Sign in again; the selected photo was not uploaded.');
+        return;
+      }
+      setState(() {
+        _pendingUpload = _PendingPhotoUpload.failed;
+        _pendingUploadError = error is ApiException && error.statusCode == 503
+            ? 'Private photos are unavailable. Please retry later.'
+            : error is ApiException
+                ? error.message
+                : 'Could not confirm the photo upload. Retry to check again.';
+      });
+    }
+  }
+
+  Widget _buildPendingUploadStatus() => switch (_pendingUpload) {
+    _PendingPhotoUpload.none => _pendingUploadError == null
+        ? const SizedBox.shrink()
+        : Text(_pendingUploadError!, style: const TextStyle(color: Color(0xFFB91C1C))),
+    _PendingPhotoUpload.uploading => const Padding(
+        key: ValueKey('pending-photo-uploading'),
+        padding: EdgeInsets.only(bottom: 12),
+        child: Row(children: [
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 10),
+          Expanded(child: Text('Uploading the selected front photo…')),
+        ]),
+      ),
+    _PendingPhotoUpload.done => const Padding(
+        key: ValueKey('pending-photo-uploaded'),
+        padding: EdgeInsets.only(bottom: 12),
+        child: Text('Household and front photo saved.',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.green)),
+      ),
+    _PendingPhotoUpload.failed => Padding(
+        key: const ValueKey('pending-photo-failed'),
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The household is saved, but the selected front photo was not uploaded. '
+              '${_pendingUploadError ?? ''}',
+              style: const TextStyle(color: Color(0xFFB91C1C)),
+            ),
+            Wrap(spacing: 8, children: [
+              TextButton(
+                key: const ValueKey('pending-photo-retry'),
+                onPressed: _pendingPhoto == null ? null : () => _uploadPendingPhoto(_savedHouseholdId!),
+                child: const Text('Retry Photo Upload'),
+              ),
+              TextButton(
+                key: const ValueKey('pending-photo-discard'),
+                onPressed: () => setState(() {
+                  _pendingPhoto = null;
+                  _pendingUpload = _PendingPhotoUpload.none;
+                  _pendingUploadError = null;
+                }),
+                child: const Text('Discard Selected Photo'),
+              ),
+            ]),
+          ],
+        ),
+      ),
+  };
+
+  Widget _buildPendingPhotoSection() {
+    final photo = _pendingPhoto;
+    final busy = _pickingPhoto || _submitting;
+    return Container(
+      key: const ValueKey('pending-photo-section'),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Household Front Photo (Optional)',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text(
+            'Stays on this device and uploads only after the household is saved.',
+            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          if (photo != null) ...[
+            const SizedBox(height: 8),
+            Image.memory(
+              photo,
+              key: ValueKey(photo),
+              height: 180,
+              fit: BoxFit.contain,
+              semanticLabel: 'Selected household photo (not uploaded yet)',
+              errorBuilder: (_, _, _) => const Text('Photo cannot be previewed. Choose a valid JPEG or PNG.'),
+            ),
+          ],
+          if (_pickingPhoto) const Text('Opening camera/gallery…'),
+          if (_pendingPhotoError != null)
+            Text(_pendingPhotoError!, style: const TextStyle(color: Color(0xFFB91C1C))),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                key: const ValueKey('pending-photo-camera'),
+                onPressed: busy ? null : () => _pickPendingPhoto(ImageSource.camera),
+                child: Text(photo == null ? 'Take Photo' : 'Retake Photo'),
+              ),
+              TextButton(
+                key: const ValueKey('pending-photo-gallery'),
+                onPressed: busy ? null : () => _pickPendingPhoto(ImageSource.gallery),
+                child: Text(photo == null ? 'Choose from Gallery' : 'Change Photo'),
+              ),
+              if (photo != null)
+                TextButton(
+                  key: const ValueKey('pending-photo-remove'),
+                  onPressed: busy ? null : () => setState(() {
+                    _pendingPhoto = null;
+                    _pendingPhotoError = null;
+                  }),
+                  child: const Text('Remove Photo'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSavedHousehold(int id) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _finishSaved();
+    },
+    child: FormPageScaffold(
+      title: 'Household Survey',
+      subtitle: 'Household saved',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: _finishSaved,
+      ),
+      children: [
+        DataSourceBanner(
+          key: const ValueKey('household-saved-banner'),
+          icon: Icons.check_circle_outline,
+          title: 'Household saved',
+          text: 'Household Code $_savedHouseholdCode. Add an optional front photo now, '
+              'or finish. The household stays saved either way.',
+        ),
+        const SizedBox(height: 12),
+        _buildPendingUploadStatus(),
+        KeyedSubtree(
+          key: ValueKey('household-photo-panel-$_photoPanelGeneration'),
+          child: _photoPanel(id),
+        ),
+        FilledButton(
+          key: const ValueKey('household-photo-done'),
+          onPressed: _pendingUpload == _PendingPhotoUpload.uploading ? null : _finishSaved,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildUnconfirmedSave() => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _finishSaved();
+    },
+    child: FormPageScaffold(
+      title: 'Household Survey',
+      subtitle: 'Save not fully confirmed',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: '',
+        onPressed: _finishSaved,
+      ),
+      children: [
+        const DataSourceBanner(
+          key: ValueKey('household-save-unconfirmed'),
+          icon: Icons.warning_amber_outlined,
+          title: 'Saved, but the household ID was not confirmed',
+          text: 'The server accepted this survey but did not return the household '
+              'record ID. The household may already be saved, so do not submit it '
+              'again. A front photo can be added once the record is confirmed.',
+          warning: true,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _savedHouseholdCode.isEmpty
+              ? 'No household code was returned.'
+              : 'Household Code: $_savedHouseholdCode',
+          key: const ValueKey('household-unconfirmed-code'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        Text('Household head: ${formatProperName(_head.text)}'),
+        Text('Barangay: $_barangay'),
+        if (_address.text.trim().isNotEmpty) Text('Address: ${_address.text.trim()}'),
+        if (_pendingPhotoDiscarded)
+          const Padding(
+            key: ValueKey('unconfirmed-photo-not-uploaded'),
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'The selected front photo was NOT uploaded, because the household ID '
+              'could not be confirmed. Add it from the household profile once the '
+              'household is found.',
+              style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+            ),
+          ),
+        const SizedBox(height: 12),
+        const Text(
+          'To find it: close this form. The Households list refreshes, and you can '
+          'open the household there by its head or code to review it or add its '
+          'front photo. If it is missing, ask the sanitation office before entering it again.',
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const ValueKey('household-unconfirmed-close'),
+          onPressed: _finishSaved,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          child: const Text('I understand, close and refresh Households'),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (_sessionInvalid) {
+      return Scaffold(appBar: AppBar(title: const Text('Session expired')),
+        body: const Center(child: Text('Sign in and reopen the household form to continue.')));
+    }
+    if (_saveUnconfirmed) {
+      return _buildUnconfirmedSave();
+    }
+    if (_savedHouseholdId case final int id) {
+      return _buildSavedHousehold(id);
+    }
     if (_editIncompatibility != null) {
       return FormPageScaffold(
         title: 'Household Survey',
@@ -319,6 +716,11 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 '$_editIncompatibility. No changes have been sent. Ask the sanitation office to review this record.',
             warning: true,
           ),
+          if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+            _photoPanel(id),
+          if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+            FilledButton.icon(onPressed: _openLocationRepair,
+              icon: const Icon(Icons.location_on_outlined), label: const Text('Repair Location and Sitio')),
         ],
       );
     }
@@ -331,6 +733,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
         onPressed: () => Navigator.of(context).pop(),
       ),
       children: [
+        if (widget.household?.surveyValues?['id'] case final int id when id > 0)
+          _photoPanel(id),
         AppTextField(
           controller: _head,
           label: 'Household head',
@@ -341,18 +745,18 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           label: 'House Number',
           onChanged: (_) => _houseNumberEdited = true,
         ),
-        AppTextField(
-          controller: _sitio,
-          label: 'Sitio',
-          onChanged: (_) => _sitioEdited = true,
-        ),
         DropdownTile<String>(
           label: 'Barangay',
           value: _barangay,
           items: widget.barangays.map((item) => item.name).toList(),
           itemLabel: (item) => item,
-          onChanged: (item) => setState(() => _barangay = item),
+          onChanged: (item) => setState(() {
+            _barangay = item;
+            _sitioSelection.changeBarangay(item, _sessionToken ?? '');
+          }),
         ),
+        SanitationSitioField(selection: _sitioSelection,
+          onRetry: () => _sitioSelection.load(_sessionToken ?? '')),
         AppTextField(
           controller: _address,
           label: widget.household == null ? 'Address' : 'Existing combined address',
@@ -420,6 +824,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           title: 'Household Location',
           emptyText: 'No household location captured yet',
         ),
+        Text(_locationDetails.description),
         Row(
           children: [
             Expanded(
@@ -427,7 +832,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 controller: _latitude,
                 label: 'Latitude',
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+                onChanged: (_) => _manualLocationChanged(),
               ),
             ),
             const SizedBox(width: 10),
@@ -436,7 +841,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
                 controller: _longitude,
                 label: 'Longitude',
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() => _locationConfirmed = false),
+                onChanged: (_) => _manualLocationChanged(),
               ),
             ),
           ],
@@ -445,9 +850,11 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           latitude: _latitude.text,
           longitude: _longitude.text,
           confirmed: _locationConfirmed,
+          useGlobalCoordinates: true,
           onChanged: _setLocation,
           onConfirm: () => setState(() => _locationConfirmed = true),
         ),
+        if (widget.household == null) _buildPendingPhotoSection(),
         ConsentCheckPanel(
           checked: _consentConfirmed,
           onChanged: (value) => setState(() => _consentConfirmed = value),
@@ -462,10 +869,14 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _submit() async {
-    if (_submitting) return;
+    if (_submitting || _locating) return;
     await _sessionReady;
-    if (!mounted || _submitting || !_checkHouseholdSession()) return;
+    if (!mounted || _submitting || _locating || !_checkHouseholdSession()) return;
     if (_editIncompatibility != null) return;
+    if (_sitioSelection.validationError != null) {
+      showAppMessage(context, _sitioSelection.validationError!);
+      return;
+    }
     if (_head.text.trim().isEmpty) {
       showAppMessage(context, 'Household head is required.');
       return;
@@ -474,7 +885,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Barangay is required.');
       return;
     }
-    if (_houseNumber.text.length > 120 || _sitio.text.length > 120) {
+    if (_houseNumber.text.length > 120) {
       showAppMessage(context, 'House Number and Sitio must each be 120 characters or fewer.');
       return;
     }
@@ -488,7 +899,7 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       showAppMessage(context, 'Septic tank type is required.');
       return;
     }
-    if (latLngFromText(_latitude.text, _longitude.text) == null) {
+    if (sanitationCoordinatePair(_latitude.text, _longitude.text) == null) {
       showAppMessage(context, 'Capture or tap the household map location.');
       return;
     }
@@ -523,8 +934,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             : _address.text.trim(),
         houseNumber: stored == null || stored.containsKey('house_number') || _houseNumberEdited
             ? _houseNumber.text : null,
-        sitio: stored == null || stored.containsKey('sitio') || _sitioEdited
-            ? _sitio.text : null,
+        sitioChanges: _sitioSelection.changes,
+        locationCapture: _locationEdited ? _locationDetails.capture : null,
         maleCount: _male,
         femaleCount: _female,
         toiletType: _toiletType,
@@ -537,6 +948,29 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       );
 
       if (!mounted || !_checkHouseholdSession()) return;
+      final savedId = response['id'];
+      final idConfirmed = savedId is int && savedId > 0;
+      if (widget.household == null && !idConfirmed) {
+        // Never fabricate an id or treat this as complete; keep the entered data on
+        // screen until staff acknowledge, and never resubmit automatically.
+        setState(() {
+          _saveUnconfirmed = true;
+          // No confirmed id: the selected photo is never uploaded and is dropped.
+          _pendingPhotoDiscarded = _pendingPhoto != null;
+          _pendingPhoto = null;
+          _savedHouseholdCode = response['household_code'] is String
+              ? (response['household_code'] as String).trim()
+              : '';
+          _savedReceipt = MobileHouseholdSurveyReceipt.fromResponse(
+            response,
+            head: formatProperName(_head.text),
+            barangay: _barangay,
+            waterSource: finalWaterSource,
+            toiletType: _toiletType,
+          );
+        });
+        return;
+      }
       if (mounted) {
         await showSubmissionDialog(
           context,
@@ -548,6 +982,8 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
             'Barangay: $_barangay',
             'Total members: ${_male + _female}',
             'Status: ${householdStatusLabel('${response['status'] ?? ''}')}',
+            if (widget.household == null && _pendingPhoto != null)
+              'Front photo: uploads next, to this saved household',
           ],
         );
         if (!mounted || !_checkHouseholdSession()) return;
@@ -558,6 +994,20 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
           waterSource: finalWaterSource,
           toiletType: _toiletType,
         );
+        // A NEW household offers the optional front photo against the id the
+        // server just assigned; edits finish as before.
+        if (widget.household == null && savedId is int && savedId > 0) {
+          if (mounted) {
+            setState(() {
+              _savedReceipt = receipt;
+              _savedHouseholdId = savedId;
+              _savedHouseholdCode = '${response['household_code'] ?? ''}';
+            });
+            // Only now, with the server-confirmed id, may the selected photo upload.
+            if (_pendingPhoto != null) unawaited(_uploadPendingPhoto(savedId));
+          }
+          return;
+        }
         if (mounted) Navigator.of(context).pop(receipt);
       }
     } catch (error) {
@@ -597,54 +1047,53 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
   }
 
   Future<void> _captureLocation() async {
-    setState(() {
-      _locating = true;
-      _locationConfirmed = false;
-    });
-
+    if (_locating || _submitting) return;
+    await _sessionReady;
+    if (!mounted || _locating || _submitting || !_checkHouseholdSession()) return;
+    final generation = ++_locationGeneration;
+    setState(() { _locating = true; _locationConfirmed = false; });
     try {
-      final enabled = await widget.locationAdapter.isLocationServiceEnabled();
-      if (!mounted) return;
-      if (!enabled) {
-        _locationFailure('Location services are off. Turn them on, then tap Use GPS again.');
-        return;
-      }
-
-      var permission = await widget.locationAdapter.checkPermission();
-      if (!mounted) return;
-      if (permission == LocationPermission.denied) {
-        permission = await widget.locationAdapter.requestPermission();
-        if (!mounted) return;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _locationFailure('Location permission is blocked. Enable it in app settings, then tap Use GPS again.');
-        return;
-      }
-      if (permission == LocationPermission.denied) {
-        _locationFailure('Location permission was denied. Allow location access, then tap Use GPS again.');
-        return;
-      }
-      if (permission != LocationPermission.whileInUse &&
-          permission != LocationPermission.always) {
-        _locationFailure('Could not get your GPS location. Check location services and try again.');
-        return;
-      }
-
-      final position = await widget.locationAdapter.getCurrentPosition();
-      if (!mounted) return;
-
+      final position = await captureSanitationPosition(widget.locationAdapter);
+      final details = SanitationLocationDetails.fromPosition(position);
+      if (!mounted || !_checkHouseholdSession() || generation != _locationGeneration) return;
       setState(() {
-        _latitude.text = position.latitude.toStringAsFixed(6);
-        _longitude.text = position.longitude.toStringAsFixed(6);
-        _locationConfirmed = true;
+        _latitude.text = position.latitude.toString();
+        _longitude.text = position.longitude.toString();
+        _locationDetails = details;
+        _locationEdited = true;
       });
-      showAppMessage(context, 'GPS location acquired.');
+      showAppMessage(context, 'GPS location acquired. Review and Confirm Pin.');
     } on TimeoutException {
-      _locationFailure('GPS timed out. Move to an open area and tap Use GPS again.');
-    } catch (_) {
-      _locationFailure('Could not get your GPS location. Check location services and try again.');
+      if (mounted && generation == _locationGeneration && !_sessionInvalid) {
+        _locationFailure('GPS timed out. Move to an open area and tap Use GPS again.');
+      }
+    } catch (error) {
+      if (mounted && generation == _locationGeneration && !_sessionInvalid) {
+        _locationFailure(error is SanitationLocationException ? error.message
+            : 'Could not get your GPS location. Check location services and try again.');
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _manualLocationChanged() => setState(() {
+    _locationGeneration++;
+    _locationConfirmed = false;
+    _locationEdited = true;
+    _locationDetails = const SanitationLocationDetails(source: 'manual');
+  });
+
+  Future<void> _openLocationRepair() async {
+    await _sessionReady;
+    if (!mounted || !_checkHouseholdSession()) return;
+    final id = widget.household?.surveyValues?['id'];
+    if (id is! int || id <= 0) return;
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => SavedSanitationLocationPage(api: widget.api, recordId: id,
+        household: true, barangays: widget.barangays, locationAdapter: widget.locationAdapter)));
+    if (mounted && _checkHouseholdSession() && saved == true) {
+      Navigator.of(context).pop(MobileHouseholdSurveyReceipt.fromRecord(widget.household!));
     }
   }
 
@@ -660,6 +1109,9 @@ class _HouseholdSurveyPageState extends State<HouseholdSurveyPage> {
       _latitude.text = point.latitude.toStringAsFixed(6);
       _longitude.text = point.longitude.toStringAsFixed(6);
       _locationConfirmed = false;
+      _locationGeneration++;
+      _locationEdited = true;
+      _locationDetails = const SanitationLocationDetails(source: 'manual');
     });
   }
 }
@@ -1937,6 +2389,52 @@ class SanitationStaffIdentity {
   }
 }
 
+/// Keeps bottom-navigation labels on one line (e.g. "Households" at 320 px with
+/// enlarged text) by capping the text scale for the bar only, and only when a label
+/// would otherwise wrap. The user's text size is untouched everywhere else, and
+/// labels never shrink below [minScale] of the base size.
+class SanitationNavLabelFit extends StatelessWidget {
+  const SanitationNavLabelFit({
+    super.key,
+    required this.labels,
+    required this.child,
+    this.minScale = 0.8,
+  });
+
+  final List<String> labels;
+  final Widget child;
+  final double minScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final style = (Theme.of(context).textTheme.labelMedium ??
+            const TextStyle(fontSize: 12))
+        .copyWith(fontWeight: FontWeight.w700);
+    final base = style.fontSize ?? 12;
+    var widest = 0.0;
+    for (final label in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+      painter.dispose();
+    }
+    if (labels.isEmpty || widest <= 0) return child;
+    final available = media.size.width / labels.length - 6;
+    final fits = available / widest;
+    final requested = media.textScaler.scale(base) / base;
+    if (requested <= fits) return child;
+    final capped = fits < minScale ? minScale : fits;
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(capped)),
+      child: child,
+    );
+  }
+}
+
 class SanitationMobileShell extends StatefulWidget {
   const SanitationMobileShell({
     super.key,
@@ -2198,6 +2696,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       SanitationEstablishmentsPage(
         establishments: _bootstrap.establishments,
         onOpenInspection: _openInspection,
+        onOpenFrontPhoto: _openEstablishmentPhoto,
+        onOpenLocation: _openEstablishmentLocation,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2216,6 +2716,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       SanitationHouseholdsPage(
         householdRecords: _bootstrap.householdRecords,
         onOpenHouseholdSurvey: _openHouseholdSurvey,
+        onOpenHousehold: _openHouseholdSurvey,
         onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onRefresh: _refreshBootstrap,
         refreshing: _refreshing,
@@ -2247,7 +2748,9 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
           child: pages[_index],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: SanitationNavLabelFit(
+        labels: const ['Home', 'Records', 'Map', 'Households', 'Profile'],
+        child: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: const [
@@ -2266,6 +2769,7 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
             label: 'Profile',
           ),
         ],
+      ),
       ),
     );
   }
@@ -2300,6 +2804,8 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
       return SanitationEstablishmentsPage(
         establishments: _bootstrap.establishments.where((item) => ids.contains(item.id)).toList(),
         onOpenInspection: _openInspection,
+        onOpenFrontPhoto: _openEstablishmentPhoto,
+        onOpenLocation: _openEstablishmentLocation,
         onRefresh: refresh,
         refreshing: _refreshing,
       );
@@ -2456,6 +2962,26 @@ class _SanitationMobileShellState extends State<SanitationMobileShell> {
     await SanitationDraftStore.removeReport(draft.id);
     await _loadDrafts();
     if (mounted) showAppMessage(context, 'Draft deleted.');
+  }
+
+  Future<void> _openEstablishmentLocation(SanitationEstablishment establishment) async {
+    if (establishment.id <= 0) return;
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => SavedSanitationLocationPage(api: widget.api,
+        recordId: establishment.id, household: false, barangays: _bootstrap.barangays)));
+    if (mounted && saved == true) await _refreshBootstrap(silent: true);
+  }
+
+  Future<void> _openEstablishmentPhoto(SanitationEstablishment establishment) async {
+    if (establishment.id <= 0) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EstablishmentFrontPhotoPage(
+          api: widget.api,
+          establishment: establishment,
+        ),
+      ),
+    );
   }
 
   Future<void> _openInspection([SanitationEstablishment? establishment]) async {
@@ -2803,6 +3329,8 @@ class SanitationEstablishmentsPage extends StatefulWidget {
     super.key,
     required this.establishments,
     required this.onOpenInspection,
+    this.onOpenFrontPhoto,
+    this.onOpenLocation,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -2812,6 +3340,8 @@ class SanitationEstablishmentsPage extends StatefulWidget {
 
   final List<SanitationEstablishment> establishments;
   final ValueChanged<SanitationEstablishment> onOpenInspection;
+  final ValueChanged<SanitationEstablishment>? onOpenFrontPhoto;
+  final ValueChanged<SanitationEstablishment>? onOpenLocation;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
@@ -2988,6 +3518,12 @@ class _SanitationEstablishmentsPageState
                 (item) => SanitationEstablishmentCard(
                   establishment: item,
                   onInspection: () => widget.onOpenInspection(item),
+                  onLocation: widget.onOpenLocation != null && item.id > 0
+                      ? () => widget.onOpenLocation!(item) : null,
+                  // Photos attach only to saved records with a server id.
+                  onFrontPhoto: widget.onOpenFrontPhoto != null && item.id > 0
+                      ? () => widget.onOpenFrontPhoto!(item)
+                      : null,
                 ),
               ),
       ],
@@ -3045,9 +3581,12 @@ class BarangayPolygon {
   BarangayPolygon({required this.name, required this.polygons});
 }
 
+enum _SanitationMapMode { establishments, households, reports }
+
 class _SanitationMapPageState extends State<SanitationMapPage> {
-  bool _showHouseholds = false;
-  bool _showReports = false;
+  _SanitationMapMode _mode = _SanitationMapMode.establishments;
+  bool get _showHouseholds => _mode == _SanitationMapMode.households;
+  bool get _showReports => _mode == _SanitationMapMode.reports;
   final _reportsKey = GlobalKey<_SanitationReportsMapState>();
   
   List<BarangayPolygon> _barangayPolygons = [];
@@ -3231,24 +3770,54 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
           onRefresh: _showReports ? () => _reportsKey.currentState?.reload() ?? Future<void>.value() : widget.onRefresh,
           refreshing: widget.refreshing,
         ),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-        SegmentedButton<bool>(
-          emptySelectionAllowed: true,
-          segments: const [
-            ButtonSegment(value: false, label: Text('Establishments')),
-            ButtonSegment(value: true, label: Text('Households')),
-          ],
-          selected: _showReports ? <bool>{} : {_showHouseholds},
-          onSelectionChanged: (value) =>
-              value.isEmpty ? null : setState(() {
-                _showReports = false;
-                _showHouseholds = value.first;
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stackOptions = constraints.maxWidth < 280 ||
+                MediaQuery.textScalerOf(context).scale(12) > 15;
+            final selector = SegmentedButton<_SanitationMapMode>(
+              direction: stackOptions ? Axis.vertical : Axis.horizontal,
+              expandedInsets: EdgeInsets.zero,
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                // A stadium outline turns into an oval when the options stack.
+                shape: stackOptions
+                    ? WidgetStatePropertyAll(
+                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      )
+                    : null,
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                ),
+                minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+                textStyle: const WidgetStatePropertyAll(
+                  TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+              segments: const [
+                ButtonSegment(
+                  value: _SanitationMapMode.establishments,
+                  label: Text('Establishments', textAlign: TextAlign.center),
+                ),
+                ButtonSegment(
+                  value: _SanitationMapMode.households,
+                  label: Text('Households', textAlign: TextAlign.center),
+                ),
+                ButtonSegment(
+                  value: _SanitationMapMode.reports,
+                  label: Text('Community Reports', textAlign: TextAlign.center),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (value) => setState(() {
+                _mode = value.single;
                 _selectedBarangay = null;
               }),
+            );
+            if (!stackOptions) return selector;
+            final labelSize = MediaQuery.textScalerOf(context).scale(12);
+            return SizedBox(height: 3 * (labelSize * 2.5 + 16), child: selector);
+          },
         ),
-        ChoiceChip(label: const Text('Community Reports'), selected: _showReports,
-          onSelected: (_) => setState(() { _showReports = true; _selectedBarangay = null; })),
-        ]),
         if (_showReports)
           SanitationReportsMap(key: _reportsKey, api: widget.api ?? const TourismApi())
         else ...[
@@ -3309,8 +3878,22 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                               ),
                               width: 42,
                               height: 42,
-                              child: MapPin(
-                                color: sanitationStatusColor(item.status),
+                              child: Tooltip(
+                                message: '${item.householdHead} · ${householdStatusLabel(item.status)} · ${item.barangay}',
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Open household ${item.householdHead}',
+                                  child: GestureDetector(
+                                    key: ValueKey('household-map-pin-${item.householdCode}'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: widget.onEditHousehold == null
+                                        ? null
+                                        : () => widget.onEditHousehold!(item),
+                                    child: MapPin(
+                                      color: sanitationStatusColor(item.status),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           )
@@ -3392,7 +3975,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                   child: SimpleInfoCard(
                     icon: Icons.home_work_outlined,
                     title: item.householdHead,
-                    subtitle: '${item.householdCode} - ${item.barangay}',
+                    subtitle: '${item.householdCode} - ${item.barangay}\n${item.locationDetails.description}',
                     trailing: householdStatusLabel(item.status),
                     statusColor: householdStatusColor(item.status),
                   ),
@@ -3405,7 +3988,7 @@ class _SanitationMapPageState extends State<SanitationMapPage> {
                 (item) => SimpleInfoCard(
                   icon: Icons.apartment_outlined,
                   title: item.businessName,
-                  subtitle: '${item.businessTypeName} - ${item.barangay}',
+                  subtitle: '${item.businessTypeName} - ${item.barangay}\n${item.locationDetails.description}',
                   trailing: sanitationEstablishmentMapStatus(item.complianceStatus).label,
                   statusColor: sanitationEstablishmentMapStatus(item.complianceStatus).color,
                 ),
@@ -3443,6 +4026,7 @@ class SanitationHouseholdsPage extends StatelessWidget {
     super.key,
     required this.householdRecords,
     required this.onOpenHouseholdSurvey,
+    this.onOpenHousehold,
     this.onOpenMenu,
     required this.onRefresh,
     required this.refreshing,
@@ -3450,6 +4034,8 @@ class SanitationHouseholdsPage extends StatelessWidget {
 
   final List<HouseholdSanitationItem> householdRecords;
   final VoidCallback onOpenHouseholdSurvey;
+  /// Opens an existing household (profile and front photo); null keeps cards read-only.
+  final ValueChanged<HouseholdSanitationItem>? onOpenHousehold;
   final VoidCallback? onOpenMenu;
   final Future<void> Function() onRefresh;
   final bool refreshing;
@@ -3479,15 +4065,20 @@ class SanitationHouseholdsPage extends StatelessWidget {
           )
         else
           ...householdRecords.map(
-            (item) => SimpleInfoCard(
-              icon: Icons.home_work_outlined,
-              title: item.householdHead,
-              subtitle: [
-                item.barangay,
-                if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
-              ].join(' - '),
-              trailing: householdStatusLabel(item.status),
-              statusColor: householdStatusColor(item.status),
+            (item) => GestureDetector(
+              key: ValueKey('household-card-${item.householdCode}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpenHousehold == null ? null : () => onOpenHousehold!(item),
+              child: SimpleInfoCard(
+                icon: Icons.home_work_outlined,
+                title: item.householdHead,
+                subtitle: [
+                  item.barangay,
+                  if (item.surveyDate.trim().isNotEmpty) 'Survey: ${item.surveyDate}',
+                ].join(' - '),
+                trailing: householdStatusLabel(item.status),
+                statusColor: householdStatusColor(item.status),
+              ),
             ),
           ),
       ],
@@ -4216,15 +4807,60 @@ class SanitationTopBar extends StatelessWidget {
   }
 }
 
+/// Private front photo of one saved establishment (its server id only).
+class EstablishmentFrontPhotoPage extends StatelessWidget {
+  const EstablishmentFrontPhotoPage({
+    super.key,
+    required this.api,
+    required this.establishment,
+    this.imagePicker,
+  });
+
+  final TourismApi api;
+  final SanitationEstablishment establishment;
+  final ImagePicker? imagePicker;
+
+  @override
+  Widget build(BuildContext context) => FormPageScaffold(
+    title: 'Establishment Front Photo',
+    subtitle: establishment.businessName,
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back),
+      tooltip: '',
+      onPressed: () => Navigator.of(context).pop(),
+    ),
+    children: [
+      Text(
+        [establishment.businessTypeName, establishment.barangay]
+            .where((part) => part.trim().isNotEmpty)
+            .join(' - '),
+        style: const TextStyle(color: AppColors.muted),
+      ),
+      const SizedBox(height: 12),
+      FrontPhotoPanel(
+        key: ValueKey('establishment-photo-${establishment.id}'),
+        api: api,
+        target: FrontPhotoTarget.establishment(establishment.id),
+        imagePicker: imagePicker,
+      ),
+    ],
+  );
+}
+
 class SanitationEstablishmentCard extends StatelessWidget {
   const SanitationEstablishmentCard({
     super.key,
     required this.establishment,
     required this.onInspection,
+    this.onFrontPhoto,
+    this.onLocation,
   });
 
   final SanitationEstablishment establishment;
   final VoidCallback onInspection;
+  /// Opens the establishment's private front photo; null hides the action.
+  final VoidCallback? onFrontPhoto;
+  final VoidCallback? onLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -4252,56 +4888,13 @@ class SanitationEstablishmentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  backgroundColor: statusColor.withValues(alpha: 0.14),
-                  child: Icon(
-                    Icons.apartment_outlined,
-                    color: statusColor,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        establishment.businessName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${establishment.businessTypeName} • ${establishment.barangay}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                      if (establishment.ownerName.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Owner: ${establishment.ownerName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                FilledButton.tonal(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Narrow cards or large text: actions move under the name so the
+                // business name keeps a readable width.
+                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                final compact = constraints.maxWidth / scale < 280;
+                final inspect = FilledButton.tonal(
                   onPressed: onInspection,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
@@ -4311,8 +4904,106 @@ class SanitationEstablishmentCard extends StatelessWidget {
                     minimumSize: const Size(60, 36),
                   ),
                   child: const Text('Inspect'),
-                ),
-              ],
+                );
+                final location = onLocation == null || establishment.id <= 0 ? null
+                    : OutlinedButton.icon(onPressed: onLocation,
+                        key: ValueKey('establishment-location-${establishment.id}'),
+                        icon: const Icon(Icons.location_on_outlined, size: 18), label: const Text('Location'));
+                final frontPhoto = onFrontPhoto == null
+                    ? null
+                    : OutlinedButton.icon(
+                        key: ValueKey('establishment-front-photo-${establishment.id}'),
+                        onPressed: onFrontPhoto,
+                        icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                        label: const Text('Front Photo'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: const Size(60, 36),
+                        ),
+                      );
+                final header = Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: statusColor.withValues(alpha: 0.14),
+                      child: Icon(
+                        Icons.apartment_outlined,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            establishment.businessName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${establishment.businessTypeName} • ${establishment.barangay}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                          if (establishment.ownerName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Owner: ${establishment.ownerName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      header,
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [inspect, ?location, ?frontPhoto],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: header),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        inspect,
+                        ?location,
+                        if (frontPhoto != null) ...[
+                          const SizedBox(height: 6),
+                          frontPhoto,
+                        ],
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 8),
             const Divider(height: 1),

@@ -1,4 +1,5 @@
 from django.urls import path
+from .views.private_photos import establishment_front_photo, household_front_photo
 
 from .auth_views import (
     current_user_view,
@@ -62,6 +63,7 @@ from .views.tourism import (
     tourist_record_unarchive,
     tourist_record_list,
 )
+from .views.sitios import sanitation_sitio_list
 from .views.sanitation import (
     household_barangay_list,
     household_bootstrap_data,
@@ -202,6 +204,7 @@ urlpatterns = [
     path("sanitation/business-types/", sanitation_business_type_list),
     path("sanitation/establishments/", sanitation_establishment_list),
     path("sanitation/establishments/<int:establishment_id>/", sanitation_establishment_detail),
+    path("sanitation/establishments/<int:establishment_id>/front-photo/", establishment_front_photo),
     path(
         "sanitation/establishments/<int:establishment_id>/enforcement-stage/",
         sanitation_establishment_enforcement_stage,
@@ -215,6 +218,7 @@ urlpatterns = [
     path("sanitation/permits/", sanitation_permit_data),
     path("sanitation/renewals/", sanitation_renewal_list),
     path("sanitation/renewals/<int:renewal_id>/", sanitation_renewal_detail),
+    path("sanitation/sitios/", sanitation_sitio_list),
     path("sanitation/complaints/", sanitation_complaint_list),
     path("sanitation/complaints/<int:complaint_id>/", sanitation_complaint_detail),
     path("sanitation/submissions/", sanitation_submission_data),
@@ -231,6 +235,7 @@ urlpatterns = [
     path("households/dashboard/", household_dashboard_data),
     path("households/records/", household_record_list),
     path("households/records/<int:household_id>/", household_record_detail),
+    path("households/records/<int:household_id>/front-photo/", household_front_photo),
 
     # Notification routes
     path("notifications/", notification_list),

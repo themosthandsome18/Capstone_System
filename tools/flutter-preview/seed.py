@@ -1,0 +1,120 @@
+"""Synthetic preview records (requires Django setup and the fake photo store)."""
+import datetime
+import io
+import os
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+PREVIEW_USERNAME = "preview.inspector"
+# Synthetic, preview-only credential for a throwaway local database. Not a real account.
+PREVIEW_PASSWORD = "preview-only-not-a-secret"
+
+
+def _photo(color, label):
+    image = Image.new("RGB", (480, 320), color)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((16, 16, 464, 304), outline=(255, 255, 255), width=4)
+    draw.text((32, 140), f"SYNTHETIC PREVIEW PHOTO\n{label}", fill=(255, 255, 255))
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=85)
+    return out.getvalue()
+
+
+def seed(store):
+    from django.conf import settings
+    from preview_safety import TEMP_PREFIX, OWNER_FILE, UnsafePreviewConfig, check_effective_settings
+    from preview_store import FakePrivatePhotoStore
+
+    root = Path(str(settings.DATABASES["default"]["NAME"])).resolve().parent
+    if (not root.name.startswith(TEMP_PREFIX) or not (root / OWNER_FILE).is_file()
+            or (root / OWNER_FILE).read_text(encoding="ascii").strip() != str(os.getpid())
+            or not isinstance(store, FakePrivatePhotoStore)):
+        raise UnsafePreviewConfig("Synthetic seeding requires the owned disposable preview and fake photo store.")
+    check_effective_settings(settings, root)
+
+    from django.contrib.auth.models import User
+    from api.models import (
+        Barangay, HouseholdSanitationRecord, SanitaryBusinessType, SanitaryComplaint,
+        SanitaryEstablishment, Sitio, UserProfile,
+    )
+    from api.services.establishment_photos import replace_establishment_photo
+    from api.services.household_photos import replace_household_photo
+
+    user = User.objects.create_user(
+        username=PREVIEW_USERNAME, password=PREVIEW_PASSWORD,
+        first_name="Preview", last_name="Inspector")
+    UserProfile.objects.update_or_create(user=user, defaults={"role": "sanitation"})
+
+    # Real Mauban barangay names (they match the map boundary file); forms only accept
+    # barangays that exist in this reference table.
+    for order, name in enumerate(["Daungan", "Polo", "Rizaliana", "Alitap", "San Lorenzo"], start=1):
+        Barangay.objects.get_or_create(name=name, defaults={"display_order": order})
+
+    # Deliberately fictional choices, only inside this guarded throwaway seed.
+    # Alitap and San Lorenzo intentionally have no choices for empty-state tests.
+    for barangay_name in ("Daungan", "Polo", "Rizaliana"):
+        for suffix in ("A", "B"):
+            Sitio.objects.create(barangay=Barangay.objects.get(name=barangay_name),
+                                 name=f"SYNTHETIC DEMO ONLY - {barangay_name} - {suffix}")
+
+    business_type = SanitaryBusinessType.objects.order_by("pk").first()
+    if business_type is None:
+        business_type = SanitaryBusinessType.objects.create(name="Synthetic Food Establishment")
+    establishments = [
+        ("Synthetic Carinderia", "Daungan", 14.1855, 121.7310, "good_standing"),
+        ("Synthetic Bakery", "Polo", 14.1890, 121.7290, "violation"),
+        ("Synthetic Water Refilling", "Rizaliana", 14.1910, 121.7360, "for_completion"),
+        ("Synthetic Sari-sari Store", "Alitap", 14.1800, 121.7400, "not_yet_inspected"),
+    ]
+    created_establishments = []
+    for index, (name, barangay, lat, lng, status) in enumerate(establishments, start=1):
+        created_establishments.append(SanitaryEstablishment.objects.create(
+            business_name=name, owner_name=f"Synthetic Owner {index}", business_type=business_type,
+            barangay=barangay, address=f"{index} Synthetic Street", latitude=lat, longitude=lng,
+            compliance_status=status))
+
+    households = []
+    # Water sources use the app's current options so forms show no "legacy" value.
+    for index, (head, barangay, lat, lng, water_source) in enumerate([
+        ("Synthetic Household A", "Daungan", 14.1860, 121.7320, "Deep well"),
+        ("Synthetic Household B", "Polo", 14.1880, 121.7280, "Barangay water system"),
+        ("Synthetic Household C (no coordinates)", "Alitap", None, None, "Spring"),
+        ("Synthetic Household D (no photo)", "San Lorenzo", 14.1925, 121.7335, "Poso-shallow well"),
+    ], start=1):
+        households.append(HouseholdSanitationRecord.objects.create(
+            household_code=f"SYN-HH-{index:03d}", household_head=head, barangay=barangay,
+            latitude=lat, longitude=lng, male_count=2, female_count=2,
+            water_source=water_source))
+
+    today = datetime.date.today()
+    for complaint_id, barangay, lat, lng, source in [
+        ("SYN-RPT-001", "Daungan", 14.1858, 121.7315, "reporter_provided"),
+        ("SYN-RPT-002", "Polo", 14.1885, 121.7295, "staff_provided"),
+        ("SYN-RPT-003", "Alitap", None, None, "unknown"),
+    ]:
+        complaint = SanitaryComplaint.objects.create(
+            complaint_id=complaint_id, category="Synthetic concern", barangay=barangay,
+            reported_date=today, description="Synthetic preview description",
+            complainant_name="Synthetic Reporter", latitude=lat, longitude=lng)
+        # location_source is server-owned (editable=False); set it directly for the fixture.
+        SanitaryComplaint.objects.filter(pk=complaint.pk).update(
+            location_source=source, latitude=lat, longitude=lng)
+
+    for household, color in zip(households[:2], [(34, 120, 84), (40, 90, 160)]):
+        replace_household_photo(household.pk, _photo(color, household.household_code), "jpg", store)
+
+    # Establishments 1 and 3 get a synthetic front photo; 2 and 4 have none.
+    for establishment, color in zip(created_establishments[0::2], [(170, 90, 30), (30, 120, 150)]):
+        replace_establishment_photo(
+            establishment.pk, _photo(color, establishment.business_name), "jpg", store)
+
+    return {
+        "username": PREVIEW_USERNAME,
+        "establishments": SanitaryEstablishment.objects.count(),
+        "households": HouseholdSanitationRecord.objects.count(),
+        "reports": SanitaryComplaint.objects.count(),
+        "household_photos": sum(1 for key in store.objects if "/households/" in key),
+        "establishment_photos": sum(1 for key in store.objects if "/establishments/" in key),
+        "household_ids": [h.pk for h in households],
+    }

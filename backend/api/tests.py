@@ -7866,8 +7866,15 @@ class BoatCapacityFareSeedTests(TransactionTestCase):
         MigrationExecutor(connection).migrate([("api", "0054_seed_emergency_contacts")])
         gone = before - set(connection.introspection.table_names())
         # Going back past 0055 also takes back every later migration, so the tables
-        # that migrations AFTER 0055 created (Mobile App Content, 0060) go with it.
-        later = {"api_mobilecontentitem", "api_mobilecontentblock"}
+        # that migrations AFTER 0055 created (Mobile App Content, 0060; Household
+        # front photo, 0063_household_front_photo; Establishment front photo, 0070;
+        # Sitio, 0071; native photo attempt, 0072) go with it.
+        later = {
+            "api_mobilecontentitem", "api_mobilecontentblock",
+            "api_householdfrontphoto", "api_householdphotocleanup",
+            "api_establishmentfrontphoto", "api_establishmentphotocleanup",
+            "api_sitio", "api_nativephotoattempt",
+        }
         self.assertEqual(gone - later, {BoatCapacityFare._meta.db_table})
 
         executor = MigrationExecutor(connection)
@@ -10648,6 +10655,8 @@ class SanitationStaffBootstrapTests(TestCase):
                 "has_permit", "permit_number", "permit_issued_date", "permit_expiry_date",
                 "compliance_status", "compliance_status_label", "permit_status",
                 "permit_status_label", "latitude", "longitude", "open_complaints",
+                "location_source", "location_accuracy_m", "location_captured_at",
+                "location_reported_mock", "sitio", "sitio_reference", "sitio_source",
             },
         )
         self.assertEqual(set(data["complaintData"]["summary"]), {"total", "pending", "open"})

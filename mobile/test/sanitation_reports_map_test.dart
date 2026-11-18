@@ -94,7 +94,7 @@ void main() {
         for (final id in [3, 4, 5, 6, 7]) {
           expect(find.byKey(ValueKey('report-map-pin-$id')), findsNothing);
         }
-        expect(find.text('7 reports · 2 mapped · 5 unmapped'), findsOneWidget);
+        expect(find.text('Unmapped: 5'), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('report-map-pin-2')));
         await tester.pump();
         expect(find.text('Staff-provided location'), findsOneWidget);
@@ -215,7 +215,7 @@ void main() {
       () async {
         await open(tester);
         expect(
-          find.text('52 reports · 52 mapped · 0 unmapped'),
+          find.text('Mapped: 52'),
           findsOneWidget,
         );
         expect(find.byKey(const ValueKey('report-map-pin-52')), findsOneWidget);
@@ -286,24 +286,75 @@ void main() {
   testWidgets('reports mode fits a narrow handset layout', (tester) async {
     await http.runWithClient(() async {
       await open(tester);
-      tester.view.physicalSize = const Size(430, 1800);
+      tester.view.physicalSize = const Size(320, 1800);
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.text('1 reports · 1 mapped · 0 unmapped'), findsOneWidget);
+      expect(find.text('Mapped: 1'), findsOneWidget);
       expect(find.byKey(const ValueKey('report-map-pin-1')), findsOneWidget);
     }, () => MockClient((_) async => response([row(1)])));
+  });
+  testWidgets('unmapped reports retain the map without fabricated pins', (
+    tester,
+  ) async {
+    await http.runWithClient(() async {
+      await open(tester);
+      expect(find.text('Total: 2'), findsOneWidget);
+      expect(find.text('Mapped: 0'), findsOneWidget);
+      expect(find.text('Unmapped: 2'), findsOneWidget);
+      expect(find.text('No eligible report locations'), findsOneWidget);
+      expect(find.byKey(const ValueKey('report-map-pin-1')), findsNothing);
+      expect(find.byKey(const ValueKey('report-map-pin-2')), findsNothing);
+      final control = tester.widget<SegmentedButton>(
+        find.byWidgetPredicate((widget) => widget is SegmentedButton),
+      );
+      expect(control.segments, hasLength(3));
+      expect(control.selected, {control.segments.last.value});
+    }, () => MockClient((_) async => response([
+      row(1, source: 'unknown'),
+      row(2, source: 'barangay_approximate'),
+    ])));
   });
   testWidgets('returning to existing map modes retains their controls', (
     tester,
   ) async {
+    SegmentedButton<Object?> selector() => tester.widget<SegmentedButton>(
+      find.byWidgetPredicate((widget) => widget is SegmentedButton),
+    ) as SegmentedButton<Object?>;
     await http.runWithClient(() async {
       await open(tester);
       await tester.tap(find.text('Households'));
       await tester.pump();
       expect(find.text('Household GIS Status Legend'), findsOneWidget);
+      expect(selector().selected, {selector().segments[1].value});
       await tester.tap(find.text('Establishments'));
       await tester.pump();
       expect(find.text('Establishment GIS Status Legend'), findsOneWidget);
+      expect(selector().selected, {selector().segments.first.value});
     }, () => MockClient((_) async => response([])));
+  });
+  testWidgets('selector stacks without overflow at 320px with large text', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await http.runWithClient(() async {
+      await open(tester);
+      tester.view.physicalSize = const Size(320, 2400);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final control = tester.widget<SegmentedButton>(
+        find.byWidgetPredicate((widget) => widget is SegmentedButton),
+      );
+      expect(control.direction, Axis.vertical);
+      expect(control.selected, {control.segments.last.value});
+      for (final label in ['Establishments', 'Households', 'Community Reports']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(find.text('Mapped: 1'), findsOneWidget);
+      await tester.tap(find.text('Households'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Household GIS Status Legend'), findsOneWidget);
+    }, () => MockClient((_) async => response([row(1)])));
   });
 }

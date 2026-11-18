@@ -30,7 +30,12 @@ class EstablishmentCoordinateHTTPTests(LiveServerTestCase):
         return record
     def test_omitted_location_stays_unknown(self):self.check_pair({},(None,None))
     def test_explicit_null_location_stays_unknown(self):self.check_pair({'latitude':None,'longitude':None},(None,None))
-    def test_incomplete_pair_is_not_completed_from_barangay(self):self.check_pair({'latitude':14.14},(14.14,None))
+    def test_incomplete_pair_is_rejected_without_barangay_fallback(self):
+        before = SanitaryEstablishment.objects.count()
+        code, body = self.request({**self.data, 'latitude': 14.14})
+        self.assertEqual(code, 400, body)
+        self.assertIn('coordinates', body)
+        self.assertEqual(SanitaryEstablishment.objects.count(), before)
     def test_valid_pair_persists_and_unrelated_edit_preserves_it(self):
         r=self.check_pair({'latitude':14.14,'longitude':121.715},(14.14,121.715))
         self.assertEqual(self.request({'address':'Updated synthetic'},r.pk)[0],200)

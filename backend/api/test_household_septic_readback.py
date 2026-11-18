@@ -78,6 +78,12 @@ class HouseholdSepticReadbackTests(TestCase):
                     "status": record.status,
                     "latitude": record.latitude,
                     "longitude": record.longitude,
+                    "location_source": "unknown",
+                    "location_accuracy_m": None,
+                    "location_captured_at": None,
+                    "location_reported_mock": None,
+                    "sitio_reference": None,
+                    "sitio_source": "unknown",
                     "last_survey_date": "2026-09-30",
                 })
         self.assertEqual(list(HouseholdSanitationRecord.objects.order_by("pk").values()), before)

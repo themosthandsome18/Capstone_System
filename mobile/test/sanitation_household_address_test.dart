@@ -16,6 +16,13 @@ Map<String, dynamic> addressed() => {
   'sitio': 'lower sitio',
 };
 
+Future<void> enterSitio(WidgetTester tester, String value) async {
+  final selection = tester.widget<SanitationSitioField>(find.byType(SanitationSitioField)).selection;
+  selection.select('manual');
+  await tester.pump();
+  await tester.enterText(find.widgetWithText(TextFormField, 'Manual Sitio'), value);
+}
+
 void main() {
   setUp(
     () => SharedPreferences.setMockInitialValues({
@@ -60,6 +67,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final requests = <http.Request>[];
       final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
         requests.add(request);
         return http.Response(
           jsonEncode({'household_code': 'HH-NEW', 'status': 'good_standing'}),
@@ -86,7 +94,7 @@ void main() {
             .value;
         await tester.enterText(field('Household head'), 'Local household');
         await tester.enterText(field('House Number'), '01-b');
-        await tester.enterText(field('Sitio'), 'new sitio');
+        await enterSitio(tester, 'new sitio');
         await tester.enterText(field('Latitude'), '14.19');
         await tester.enterText(field('Longitude'), '121.73');
         await tester.tap(find.widgetWithText(ChoiceChip, 'Bottomless'));
@@ -119,7 +127,7 @@ void main() {
         tester.widget<AppTextField>(field('House Number')).controller.text,
         '',
       );
-      expect(tester.widget<AppTextField>(field('Sitio')).controller.text, '');
+      expect(tester.widget<SanitationSitioField>(find.byType(SanitationSitioField)).selection.text, '');
       expect(
         tester
             .widget<AppTextField>(field('Existing combined address'))
@@ -141,6 +149,7 @@ void main() {
           final stored = addressed();
           final requests = <http.Request>[];
           final client = MockClient((request) async {
+            if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
             requests.add(request);
             return http.Response(
               jsonEncode({...stored, entry.value: value}),
@@ -150,7 +159,11 @@ void main() {
           addTearDown(client.close);
           await http.runWithClient(() async {
             await pumpEdit(tester, stored);
-            await tester.enterText(field(entry.key), value);
+            if (entry.key == 'Sitio') {
+              await enterSitio(tester, value);
+            } else {
+              await tester.enterText(field(entry.key), value);
+            }
             await submitEdit(tester);
           }, () => client);
           expect(requests.single.method, 'PATCH');
@@ -173,6 +186,7 @@ void main() {
       (tester) async {
         var requests = 0;
         final client = MockClient((request) async {
+          if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests++;
           return http.Response('{}', 200);
         });
@@ -190,6 +204,7 @@ void main() {
       (tester) async {
         final requests = <http.Request>[];
         final client = MockClient((request) async {
+          if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
           requests.add(request);
           return http.Response(
             jsonEncode({...stored, 'household_head': 'Changed Household'}),
@@ -214,6 +229,7 @@ void main() {
   ) async {
     var requests = 0;
     final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/front-photo/')) { return http.Response('{}', 404); }
       requests++;
       return http.Response('{}', 200);
     });

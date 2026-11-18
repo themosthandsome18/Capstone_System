@@ -23,6 +23,14 @@ import {
   within,
 } from "@testing-library/react";
 
+// Detail views now load private photos; keep this record-form suite offline.
+jest.mock("../services/frontPhotoApi", () => ({
+  fetchFrontPhoto: jest.fn().mockResolvedValue(null),
+  uploadFrontPhoto: jest.fn(),
+  validatePhotoFile: jest.fn(),
+}));
+
+
 jest.mock(
   "react-router-dom",
   () => ({ useLocation: () => ({ search: "" }), useNavigate: () => jest.fn() }),
@@ -101,6 +109,10 @@ const PERMITTED = {
   compliance_status_label: "For Completion",
   permit_status: "conditional",
   permit_status_label: "Conditional",
+  location_source: "device_reported",
+  location_accuracy_m: 4.25,
+  location_captured_at: "2026-11-12T12:00:00Z",
+  sitio: "Exact legacy Sitio",
   latitude: 14.191234,
   longitude: 121.735678,
   remarks: "Existing remarks",
@@ -281,6 +293,7 @@ function tileValue(modal, label) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  require("../services/frontPhotoApi").fetchFrontPhoto.mockResolvedValue(null);
   mockCtx.establishments = ALL;
   mockCtx.businessTypes = REAL_BUSINESS_TYPES;
 });
@@ -560,6 +573,7 @@ describe("Register New Establishment", () => {
       permit_expiry_date: null,
       compliance_status: "not_yet_inspected",
       permit_status: "no_permit",
+      sitio: "", sitio_reference: null, location_capture: { method: "manual" },
     });
     expect(mockCtx.updateEstablishment).not.toHaveBeenCalled();
   });
@@ -676,6 +690,7 @@ describe("Edit Establishment preserves existing data", () => {
       owner_name: "Maria Dela Cruz",
       address: "14 Rizal St",
       barangay: "Polo",
+      sitio: "", sitio_reference: null,
     });
   });
 
@@ -705,11 +720,11 @@ describe("Edit Establishment preserves existing data", () => {
     expect(payload).toEqual({ owner_name: "Perly Santos Jr." });
   });
 
-  test("applying a new map pin sends only the new coordinates", async () => {
+  test("applying a new map pin sends the exact coordinate pair with manual provenance", async () => {
     const form = openEditForm(449);
     fireEvent.click(within(form).getByText("Mock Apply Pin"));
     const [, payload] = await submittedEdit(form);
-    expect(payload).toEqual({ latitude: 14.188, longitude: 121.732 });
+    expect(payload).toEqual({ latitude: 14.188, longitude: 121.732, location_capture: { method: "manual" } });
   });
 
   test("Permit Coverage is labelled as internal grouping and changing it sends only permit_size", async () => {
@@ -1206,4 +1221,14 @@ describe("registration presentation and local feedback", () => {
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Existing Bakery updated successfully/));
     expect(document.querySelector("form.establishment-modal")).toBeNull();
   });
+});
+
+test("Sitio-only establishment edit preserves saved coordinates and device metadata", async () => {
+  const form = openEditForm(501);
+  expect(within(form).getByRole("option", { name: /Saved Sitio: Exact legacy Sitio/ })).toBeTruthy();
+  fireEvent.change(within(form).getByLabelText("Sitio"), { target: { value: "manual" } });
+  fireEvent.change(within(form).getByLabelText("Manual Sitio"), { target: { value: "Synthetic manual" } });
+  const [id, payload] = await submittedEdit(form);
+  expect(id).toBe(501);
+  expect(payload).toEqual({ sitio: "Synthetic manual", sitio_reference: null });
 });

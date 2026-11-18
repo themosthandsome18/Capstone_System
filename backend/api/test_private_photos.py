@@ -17,7 +17,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.test import APIClient
 
-from api.models import ROLE_ADMIN, ROLE_SANITATION, UserProfile
+from api.models import ROLE_ADMIN, ROLE_SANITATION, UserProfile, EstablishmentFrontPhoto
 from api.services.private_photos import (
     MAX_BYTES, InvalidPrivatePhotoKey, PrivatePhotoMissing, PrivatePhotoStore,
     PrivatePhotoUnavailable, get_private_photo_store, validate_key,
@@ -30,11 +30,17 @@ OPTIONS = dict(enabled=True, private_bucket_confirmed=True, endpoint_url='https:
                bucket='private-fixtures', region='fixture-region', access_key='fixture-only', secret_key='fixture-only')
 
 
+def fixture_photo():
+    # Explicit test-owned association; real routes load a persisted model row.
+    return EstablishmentFrontPhoto(establishment_id=1, object_key=KEY, storage_provider='S3',
+        s3_endpoint=OPTIONS['endpoint_url'], s3_bucket=OPTIONS['bucket'], s3_region=OPTIONS['region'])
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def fixture_view(request):
     # Server-owned fixture association: query parameters never select objects.
-    return private_photo_response(request, resolved_key=KEY)
+    return private_photo_response(request, resolved_photo=fixture_photo())
 
 
 urlpatterns = [path('fixture/profile-photo/', fixture_view)]
@@ -166,6 +172,8 @@ class PrivatePhotoAccessTests(TestCase):
             client = APIClient()
             client.credentials(HTTP_AUTHORIZATION='Token ' + user.auth_token.key)
             with patch('api.views.private_photos.get_private_photo_store') as storage:
+                storage.return_value = Mock(spec=PrivatePhotoStore)
+                storage.return_value.options = dict(OPTIONS)
                 storage.return_value.read.return_value = PNG
                 response = client.get('/fixture/profile-photo/?key=../../other-object')
                 self.assertEqual(response.status_code, 200)
@@ -182,7 +190,7 @@ class PrivatePhotoAccessTests(TestCase):
         request = RequestFactory().get('/fixture/profile-photo/')
         request.user = user
         with patch('api.views.private_photos.get_private_photo_store') as storage:
-            self.assertEqual(private_photo_response(request, resolved_key=KEY).status_code, 401)
+            self.assertEqual(private_photo_response(request, resolved_photo=fixture_photo()).status_code, 401)
             storage.assert_not_called()
 
     def test_failure_responses_disclose_no_provider_details(self):
@@ -209,7 +217,7 @@ class PrivatePhotoHTTPTests(LiveServerTestCase):
             fixture.parent.mkdir(parents=True)
             fixture.write_bytes(PNG)
 
-            class FixtureStorage:
+            class FixtureStorage(PrivatePhotoStore):
                 def read(self, key):
                     validate_key(key)
                     try:
@@ -230,7 +238,7 @@ class PrivatePhotoHTTPTests(LiveServerTestCase):
                 user = User.objects.create_user('http_fixture_' + str(index), is_staff=True)
                 UserProfile.objects.create(user=user, role=role)
                 users.append(Token.objects.create(user=user).key)
-            with patch('api.views.private_photos.get_private_photo_store', return_value=FixtureStorage()):
+            with patch('api.views.private_photos.get_private_photo_store', return_value=FixtureStorage(OPTIONS)):
                 for token, expected in ((None, 401), (users[0], 200), (users[1], 200), (users[2], 403)):
                     code, content, headers = http(token)
                     self.assertEqual(code, expected)

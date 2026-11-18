@@ -37,6 +37,10 @@ jest.mock("../context/SanitationDataContext", () => ({
         status: "good_standing",
         status_label: "Good Standing",
         remarks: "Keep existing note",
+        sitio: "  Exact legacy Sitio  ",
+        location_source: "device_reported",
+        location_accuracy_m: 4.25,
+        location_captured_at: "2026-11-12T12:00:00Z",
         latitude: 14.19,
         longitude: 121.73,
         last_survey_date: "2025-07-04",
@@ -213,6 +217,7 @@ test("new household interaction preserves POST payload behavior", async () => {
       address: "",
       house_number: "",
       sitio: "",
+      sitio_reference: null,
       male_count: 0,
       female_count: 0,
       toilet_type: "none",
@@ -234,4 +239,15 @@ test("explicitly replacing a legacy custom source sends only the approved replac
   fireEvent.click(screen.getByRole("radio", { name: "Deep well", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
   await waitFor(() => expect(mockUpdateHousehold).toHaveBeenCalledWith(11, { water_source: "Deep well" }));
+});
+
+test("manual Sitio-only edit preserves household location metadata and legacy hydration", async () => {
+  render(<HouseholdRecords />);
+  fireEvent.click(screen.getByTitle("Edit Household Record"));
+  expect(screen.getByRole("option", { name: /Saved Sitio:.*Exact legacy Sitio/ })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Sitio"), { target: { value: "manual" } });
+  fireEvent.change(screen.getByLabelText("Manual Sitio"), { target: { value: "Synthetic manual" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+  await waitFor(() => expect(mockUpdateHousehold).toHaveBeenCalledWith(11,
+    { sitio: "Synthetic manual", sitio_reference: null }));
 });

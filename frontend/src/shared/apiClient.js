@@ -18,10 +18,12 @@ export function getStoredAuthToken() {
 export function setStoredAuthToken(token) {
   if (token) {
     window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    window.dispatchEvent(new Event("capstone-auth-changed"));
     return;
   }
 
   window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.dispatchEvent(new Event("capstone-auth-changed"));
 }
 
 

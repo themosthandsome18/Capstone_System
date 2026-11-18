@@ -26,6 +26,8 @@ class SurveyApi extends TourismApi {
     required String address,
     String? houseNumber,
     String? sitio,
+    Map<String, dynamic> sitioChanges = const {},
+    Map<String, dynamic>? locationCapture,
     required int maleCount,
     required int femaleCount,
     required String toiletType,
@@ -41,7 +43,9 @@ class SurveyApi extends TourismApi {
       'septic_tank_type': septicTankType,
       'address': address,
     };
+    // Like the real endpoint (serializer data), a save returns the record id.
     return {
+      'id': 77,
       'household_code': householdCode ?? 'HH-NEW',
       'status': 'for_completion',
     };

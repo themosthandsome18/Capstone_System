@@ -47,6 +47,7 @@ part 'models/boat_capacity_fares.dart';
 part 'services/api.dart';
 part 'services/my_visits_store.dart';
 part 'widgets/widgets.dart';
+part 'widgets/household_front_photo.dart';
 part 'widgets/tourism_loading_screen.dart';
 part 'screens/common_screens.dart';
 part 'screens/tourism_screens.dart';
@@ -55,6 +56,7 @@ part 'screens/qr_scanner_screen.dart';
 part 'screens/tourist_qr_checkin_screens.dart';
 part 'widgets/striped_polygon_layer.dart';
 part 'widgets/sanitation_reports_map.dart';
+part 'widgets/sanitation_location.dart';
 
 bool isSanitationModule() {
   if (appModule == 'sanitation') {

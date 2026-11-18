@@ -1,9 +1,11 @@
 import math
 import random
+from uuid import uuid4
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models, router, transaction
+from django.db.models.functions import Cast, Concat, Lower, Trim
 
 
 MAUBAN_BARANGAY_CENTERS = {
@@ -165,6 +167,34 @@ class Barangay(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Sitio(models.Model):
+    """Configured reference choices. Historical record text is preserved separately."""
+    barangay = models.ForeignKey(Barangay, on_delete=models.PROTECT, related_name="sitios")
+    name = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower(Trim("name")), "barangay", name="sitio_barangay_name_unique"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValidationError({"name": "A Sitio name is required."})
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+LOCATION_SOURCE_CHOICES = [("unknown", "Unknown"), ("manual", "Manual"),
+                           ("device_reported", "Device-reported")]
+SITIO_SOURCE_CHOICES = [("unknown", "Unknown"), ("manual", "Manual"),
+                        ("configured", "Configured reference")]
 
 
 # Tourism models
@@ -896,6 +926,7 @@ class SanitaryEstablishment(models.Model):
     )
     barangay = models.CharField(max_length=120)
     address = models.CharField(max_length=240)
+    sitio = models.CharField(max_length=120, blank=True, default="", db_default="")
     contact_number = models.CharField(max_length=60, blank=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -928,6 +959,15 @@ class SanitaryEstablishment(models.Model):
 
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    location_source = models.CharField(max_length=24, choices=LOCATION_SOURCE_CHOICES,
+                                       default="unknown", db_default="unknown", editable=False)
+    location_accuracy_m = models.FloatField(null=True, blank=True, editable=False)
+    location_captured_at = models.DateTimeField(null=True, blank=True, editable=False)
+    location_reported_mock = models.BooleanField(null=True, blank=True, editable=False)
+    sitio_reference = models.ForeignKey(Sitio, null=True, blank=True, on_delete=models.PROTECT,
+                                        related_name="+")
+    sitio_source = models.CharField(max_length=16, choices=SITIO_SOURCE_CHOICES,
+                                   default="unknown", db_default="unknown", editable=False)
 
     # The owner's private tracking code (MBN-XXXX-XXXX) is shown once, on the
     # printed Owner's Slip; only its HMAC-SHA256 is kept. Printing a new slip
@@ -1270,6 +1310,15 @@ class HouseholdSanitationRecord(models.Model):
 
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    location_source = models.CharField(max_length=24, choices=LOCATION_SOURCE_CHOICES,
+                                       default="unknown", db_default="unknown", editable=False)
+    location_accuracy_m = models.FloatField(null=True, blank=True, editable=False)
+    location_captured_at = models.DateTimeField(null=True, blank=True, editable=False)
+    location_reported_mock = models.BooleanField(null=True, blank=True, editable=False)
+    sitio_reference = models.ForeignKey(Sitio, null=True, blank=True, on_delete=models.PROTECT,
+                                        related_name="+")
+    sitio_source = models.CharField(max_length=16, choices=SITIO_SOURCE_CHOICES,
+                                   default="unknown", db_default="unknown", editable=False)
 
     remarks = models.TextField(blank=True)
     last_survey_date = models.DateField(null=True, blank=True)
@@ -1332,6 +1381,272 @@ class HouseholdSanitationRecord(models.Model):
 
 
 # ============================================================
+class PhotoStorageProvider(models.TextChoices):
+    UNKNOWN = 'UNKNOWN', 'Unknown (unclassified)'
+    S3 = 'S3', 'Explicit S3 target'
+    NATIVE = 'NATIVE', 'Native creation attempt'
+
+
+# Credential-free HTTPS DNS endpoints supported by the private S3 adapter.
+# Port 1..65535 is optional; arbitrary paths, userinfo, queries and fragments are not.
+PHOTO_S3_ENDPOINT_PATTERN = (
+    r'\Ahttps://[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?'
+    r'(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+'
+    r'(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?'
+    r'(?:/storage/v1/s3|/)?\Z'
+)
+PHOTO_S3_BUCKET_PATTERN = r'\A[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\Z'
+PHOTO_S3_REGION_PATTERN = r'\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z'
+
+
+class FrontPhotoProvenanceQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        protected = {'storage_provider', 's3_endpoint', 's3_bucket', 's3_region', 'native_attempt',
+                     'native_attempt_id', 'object_key', 'household', 'household_id', 'establishment', 'establishment_id'}
+        if protected.intersection(kwargs):
+            raise ValidationError('Photo identity/provenance changes require a validated transactional save.')
+        return super().update(**kwargs)
+
+    def bulk_create(self, objs, **kwargs):
+        objs = list(objs)
+        for obj in objs:
+            if obj.storage_provider == PhotoStorageProvider.NATIVE or obj.native_attempt_id is not None:
+                raise ValidationError('Native photo binding requires a validated transactional save.')
+            obj.full_clean(validate_unique=False, validate_constraints=False)
+        if kwargs.get('update_conflicts'):
+            raise ValidationError('Photo provenance cannot be updated through a bulk upsert.')
+        return super().bulk_create(objs, **kwargs)
+
+
+class FrontPhotoProvenance(models.Model):
+    """Explicit binding only. UNKNOWN does not identify S3 or authorize a read.
+
+    No classification, resolver activation or provider access occurs here.
+    Cross-table checks run while the native attempt and current link are locked.
+    Raw SQL remains a trusted database boundary; future readers must revalidate.
+    """
+    storage_provider = models.CharField(max_length=16, choices=PhotoStorageProvider.choices,
+                                        default=PhotoStorageProvider.UNKNOWN, editable=False)
+    s3_endpoint = models.URLField(max_length=500, null=True, blank=True, editable=False,
+                                  validators=[RegexValidator(PHOTO_S3_ENDPOINT_PATTERN)])
+    s3_bucket = models.CharField(max_length=63, null=True, blank=True, editable=False,
+                                validators=[RegexValidator(PHOTO_S3_BUCKET_PATTERN)])
+    s3_region = models.CharField(max_length=63, null=True, blank=True, editable=False,
+                                validators=[RegexValidator(PHOTO_S3_REGION_PATTERN)])
+    native_attempt = models.OneToOneField('NativePhotoAttempt', on_delete=models.PROTECT, null=True,
+        blank=True, editable=False, related_name='%(app_label)s_%(class)s_source')
+    objects = FrontPhotoProvenanceQuerySet.as_manager()
+
+    def _native_binding(self, using, *, lock=False):
+        rows = NativePhotoAttempt.objects.using(using)
+        if lock:
+            rows = rows.select_for_update()
+        attempt = rows.only('id', 'owner_kind', 'owner_record_id', 'object_key', 'state').filter(pk=self.native_attempt_id).first()
+        if (attempt is None or attempt.owner_kind != self._provenance_owner_field
+                or attempt.owner_record_id != getattr(self, self._provenance_owner_field + '_id', None)
+                or attempt.object_key != self.object_key or attempt.state != NativePhotoAttempt.State.LINKED):
+            raise ValidationError({'native_attempt': 'Native attempt does not match this linked photo.'})
+        other = EstablishmentFrontPhoto if self._provenance_owner_field == 'household' else HouseholdFrontPhoto
+        if other.objects.using(using).filter(native_attempt_id=attempt.pk).exists():
+            raise ValidationError({'native_attempt': 'Native attempt is already assigned to another photo kind.'})
+
+    def clean(self):
+        super().clean()
+        target = (self.s3_endpoint, self.s3_bucket, self.s3_region)
+        if self.storage_provider == PhotoStorageProvider.UNKNOWN:
+            valid = self.native_attempt_id is None and all(value is None for value in target)
+        elif self.storage_provider == PhotoStorageProvider.S3:
+            valid = self.native_attempt_id is None and all(isinstance(value, str) and value for value in target)
+        elif self.storage_provider == PhotoStorageProvider.NATIVE:
+            valid = self.native_attempt_id is not None and all(value is None for value in target)
+            if valid:
+                self._native_binding(self._state.db or router.db_for_write(type(self), instance=self))
+        else:
+            valid = False
+        if not valid:
+            raise ValidationError('Photo provider and target binding are incomplete or contradictory.')
+
+    def save(self, *args, **kwargs):
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            if self.storage_provider == PhotoStorageProvider.NATIVE:
+                self._native_binding(using, lock=True)
+            if self.pk is not None:
+                previous = type(self).objects.using(using).select_for_update().filter(pk=self.pk).first()
+                selected = kwargs.get('update_fields')
+                if previous is not None and selected is not None:
+                    selected = set(selected)
+                    fields = ['storage_provider', 's3_endpoint', 's3_bucket', 's3_region',
+                              'native_attempt', 'object_key', self._provenance_owner_field]
+                    for name in fields:
+                        field = self._meta.get_field(name)
+                        if (getattr(previous, field.attname) != getattr(self, field.attname)
+                                and not {field.name, field.attname}.intersection(selected)):
+                            raise ValidationError('Partial save would omit a photo identity/provenance change.')
+            self.full_clean()
+            return super().save(*args, **kwargs)
+
+    class Meta:
+        abstract = True
+        constraints = [models.CheckConstraint(condition=(
+            models.Q(storage_provider='UNKNOWN', native_attempt__isnull=True,
+                     s3_endpoint__isnull=True, s3_bucket__isnull=True, s3_region__isnull=True)
+            | models.Q(storage_provider='S3', native_attempt__isnull=True,
+                       s3_endpoint__isnull=False, s3_bucket__isnull=False, s3_region__isnull=False,
+                       s3_endpoint__regex=PHOTO_S3_ENDPOINT_PATTERN, s3_bucket__regex=PHOTO_S3_BUCKET_PATTERN,
+                       s3_region__regex=PHOTO_S3_REGION_PATTERN)
+            | models.Q(storage_provider='NATIVE', native_attempt__isnull=False,
+                       s3_endpoint__isnull=True, s3_bucket__isnull=True, s3_region__isnull=True)),
+            name='%(app_label)s_%(class)s_provenance')]
+
+
+class HouseholdFrontPhoto(FrontPhotoProvenance):
+    """Private server-owned linkage, separate from ordinary household writes."""
+    _provenance_owner_field = 'household'
+    household = models.OneToOneField(
+        HouseholdSanitationRecord, on_delete=models.CASCADE, related_name='front_photo',
+    )
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class HouseholdPhotoCleanup(models.Model):
+    """Durable object receipt; never exposed by a household serializer.
+
+    Created before upload. ready=False receipts require operator reconciliation
+    after an interrupted process; they must not be deleted while upload is live.
+    """
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    ready = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class EstablishmentFrontPhoto(FrontPhotoProvenance):
+    """One current private front photo per establishment; never serialized.
+
+    PROTECT mirrors establishment retention; separate from inspection records.
+    """
+    _provenance_owner_field = 'establishment'
+    establishment = models.OneToOneField(
+        SanitaryEstablishment, on_delete=models.PROTECT, related_name='front_photo',
+    )
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class EstablishmentPhotoCleanup(models.Model):
+    """Durable object receipt for establishment photos (same rules as households)."""
+    object_key = models.CharField(max_length=200, unique=True, editable=False)
+    ready = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class NativePhotoOwnerKind(models.TextChoices):
+    HOUSEHOLD = 'household', 'Household'
+    ESTABLISHMENT = 'establishment', 'Establishment'
+
+
+class NativePhotoAttemptState(models.TextChoices):
+    PREPARED = 'PREPARED', 'Prepared (object presence uncertain)'
+    IN_FLIGHT = 'IN_FLIGHT', 'In flight (object presence uncertain)'
+    CREATED_UNLINKED = 'CREATED_UNLINKED', 'Creation acknowledged, unlinked'
+    LINKED = 'LINKED', 'Linked'
+    CONFLICT = 'CONFLICT', 'Conflict'
+    AMBIGUOUS = 'AMBIGUOUS', 'Ambiguous'
+    UNAVAILABLE = 'UNAVAILABLE', 'Unavailable'
+    AUTHORIZATION_FAILURE = 'AUTHORIZATION_FAILURE', 'Authorization failure'
+    SAFETY_FAILURE = 'SAFETY_FAILURE', 'Safety failure'
+    RETIRED_HELD = 'RETIRED_HELD', 'Retired, retained without deletion'
+    CLOSED_WITHOUT_DELETION = 'CLOSED_WITHOUT_DELETION', 'Closed without deletion'
+
+
+class NativePhotoAttemptDiagnostic(models.TextChoices):
+    ACKNOWLEDGED = 'ACKNOWLEDGED', 'Acknowledged'
+    EXISTING_PATH = 'EXISTING_PATH', 'Existing path'
+    INVALID_REQUEST = 'INVALID_REQUEST', 'Invalid request'
+    KEY_REUSE = 'KEY_REUSE', 'Key reuse'
+    TRANSPORT_UNCERTAIN = 'TRANSPORT_UNCERTAIN', 'Transport uncertain'
+    PROVIDER_UNCERTAIN = 'PROVIDER_UNCERTAIN', 'Provider uncertain'
+    PROVIDER_UNAVAILABLE = 'PROVIDER_UNAVAILABLE', 'Provider unavailable'
+    AUTHORIZATION_DENIED = 'AUTHORIZATION_DENIED', 'Authorization denied'
+    REDIRECT_REFUSED = 'REDIRECT_REFUSED', 'Redirect refused'
+    RESPONSE_BOUND = 'RESPONSE_BOUND', 'Response bound exceeded'
+    ACKNOWLEDGMENT_MISMATCH = 'ACKNOWLEDGMENT_MISMATCH', 'Acknowledgment mismatch'
+    INTERRUPTED = 'INTERRUPTED', 'Interrupted, requires reconciliation'
+    LINK_FAILED = 'LINK_FAILED', 'Link failed'
+    AWAITING_REVIEW = 'AWAITING_REVIEW', 'Awaiting review'
+
+
+class NativePhotoAttempt(models.Model):
+    """Durable native-upload evidence, not a cleanup authorization.
+
+    No owner FK: the identity snapshot survives removal of its source record.
+    PREPARED/IN_FLIGHT never establish remote absence after interruption.
+    This schema records observations; it does not enforce workflow transitions,
+    prove remote ownership or initiate provider operations in any state.
+    """
+    OwnerKind = NativePhotoOwnerKind
+    State = NativePhotoAttemptState
+    Diagnostic = NativePhotoAttemptDiagnostic
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    owner_kind = models.CharField(max_length=16, choices=NativePhotoOwnerKind.choices, editable=False)
+    owner_record_id = models.PositiveBigIntegerField(validators=[MinValueValidator(1)], editable=False)
+    project_ref = models.CharField(max_length=20, editable=False,
+                                   validators=[RegexValidator(r'\A[a-z0-9]{20}\Z')])
+    bucket = models.CharField(max_length=63, editable=False,
+                             validators=[RegexValidator(r'\A[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\Z')])
+    object_key = models.CharField(max_length=200, editable=False, validators=[RegexValidator(
+        r'\Aprofile-photos/(households|establishments)/[1-9][0-9]{0,18}/[0-9a-f]{32}\.(jpg|png)\Z')])
+    state = models.CharField(max_length=32, choices=NativePhotoAttemptState.choices,
+                             default=NativePhotoAttemptState.PREPARED)
+    diagnostic = models.CharField(max_length=48, choices=NativePhotoAttemptDiagnostic.choices, blank=True, default='')
+    revision = models.PositiveBigIntegerField(default=0, validators=[MinValueValidator(0)])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='reviewed_native_photo_attempts')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def deletion_authorized(self):
+        return False
+
+    def clean(self):
+        super().clean()
+        folders = {NativePhotoOwnerKind.HOUSEHOLD: 'households',
+                   NativePhotoOwnerKind.ESTABLISHMENT: 'establishments'}
+        if self.owner_kind in folders and self.owner_record_id is not None:
+            prefix = f'profile-photos/{folders[self.owner_kind]}/{self.owner_record_id}/'
+            if not isinstance(self.object_key, str) or not self.object_key.startswith(prefix):
+                raise ValidationError({'object_key': 'Object key must match the owner identity snapshot.'})
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['project_ref', 'bucket', 'object_key'], name='native_attempt_target_unique'),
+            models.CheckConstraint(condition=models.Q(owner_record_id__gt=0), name='native_attempt_owner_positive'),
+            models.CheckConstraint(condition=models.Q(revision__gte=0), name='native_attempt_revision_nonneg'),
+            models.CheckConstraint(condition=models.Q(owner_kind__in=NativePhotoOwnerKind.values), name='native_attempt_owner_kind'),
+            models.CheckConstraint(condition=models.Q(state__in=NativePhotoAttemptState.values), name='native_attempt_state'),
+            models.CheckConstraint(condition=models.Q(diagnostic__in=[''] + NativePhotoAttemptDiagnostic.values), name='native_attempt_diagnostic'),
+            models.CheckConstraint(condition=models.Q(project_ref__regex=r'\A[a-z0-9]{20}\Z'), name='native_attempt_project'),
+            models.CheckConstraint(condition=models.Q(bucket__regex=r'\A[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\Z'), name='native_attempt_bucket'),
+            models.CheckConstraint(condition=(
+                models.Q(owner_kind='household', object_key__regex=Concat(
+                    models.Value(r'\Aprofile-photos/households/'), Cast('owner_record_id', models.CharField()),
+                    models.Value(r'/[0-9a-f]{32}\.(jpg|png)\Z')))
+                | models.Q(owner_kind='establishment', object_key__regex=Concat(
+                    models.Value(r'\Aprofile-photos/establishments/'), Cast('owner_record_id', models.CharField()),
+                    models.Value(r'/[0-9a-f]{32}\.(jpg|png)\Z')))), name='native_attempt_owner_key'),
+            models.CheckConstraint(condition=(models.Q(reviewed_by__isnull=True) | models.Q(reviewed_at__isnull=False)),
+                                   name='native_attempt_review_timestamp'),
+        ]
+        indexes = [
+            models.Index(fields=['state', 'created_at'], name='native_attempt_state_created'),
+            models.Index(fields=['owner_kind', 'owner_record_id', 'created_at'], name='native_attempt_owner_created'),
+        ]
+
+
 # NOTIFICATION MODULE MODELS
 # ============================================================
 
