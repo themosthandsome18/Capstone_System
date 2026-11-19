@@ -60,7 +60,10 @@ class LocationDbDefaultContractTests(SimpleTestCase):
 
     def test_migration_0076_contains_only_the_five_default_changes(self):
         loader = MigrationLoader(None, ignore_no_migrations=True)
-        self.assertEqual(loader.graph.leaf_nodes("api"), [MIGRATION])
+        # One api leaf, and 0076 is on its path (later migrations build on it).
+        leaves = loader.graph.leaf_nodes("api")
+        self.assertEqual(len(leaves), 1, leaves)
+        self.assertIn(MIGRATION, loader.graph.forwards_plan(leaves[0]))
         migration = loader.disk_migrations[MIGRATION]
         self.assertEqual(migration.dependencies, [BEFORE])
         found = {}

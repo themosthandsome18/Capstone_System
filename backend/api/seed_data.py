@@ -722,7 +722,6 @@ STANDARD_SANITARY_REQUIREMENTS = [
 
 ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE = {
     "Water Refilling Station": [
-        "Certificate of Potability of Product Water",
         "DOH Operational Permit Certificate",
         "Certificate of 40-hour Training Course (Owner)",
         "Water Safety Plan",
@@ -776,7 +775,7 @@ ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE = {
     ],
     "Private Laboratory & Clinic": [
         "DOH License to Operate Certificate",
-        "PRC License of MedTech/RadTech/Nurse/Doctor",
+        "PRC License of MedTech and RadTech",
         "Hepa B Screening or anti Hepa B Vaccination",
         "Special Waste Facility and MOA with Service Provider",
     ],
@@ -784,58 +783,6 @@ ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE = {
         "Hepa B Screening",
         "Regular Smear",
         "NSO Birth Certificate",
-    ],
-}
-
-SP_ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE = {
-    "Water Refilling Station": [
-        "Certificate of Potability of Product Water",
-        "DOH Operational Permit Certificate",
-        "Certificate of 40-hour Training Course (Owner)",
-    ],
-    "Agro-industrial Establishment (Poultry / Piggery Farm)": [
-        "DENR-EMB ECC or CNC",
-    ],
-    "Restaurant / Food Establishment": [
-        "Stool Examination result (for food establishments only)",
-    ],
-    "Public Market Stall": [
-        "Stool Examination result (for food establishments only)",
-    ],
-    "Drug Store": [
-        "DOH License to Operate",
-    ],
-    "Sub-contractor": [
-        "Physical Examination of all Employees",
-        "Scope of Work",
-        "Full-time First Aider (1-60 employees)",
-    ],
-    "Resort / Picnic Ground": [
-        "Trained Lifeguard",
-        "First Aid Kit",
-    ],
-    "Boatman": [
-        "Life Vest",
-        "MARINA Certificate of License of Boatman",
-    ],
-    "Massage / Physical Therapy": [
-        "License of Physical Therapist",
-        "NC2 Certification of Massage Therapist",
-        "Hepa B Screening",
-    ],
-    "Funeral Parlor": [
-        "License of Embalmer",
-    ],
-    "Burial Ground": [
-        "Operational Clearance from DOH Regional Office",
-    ],
-    "Private Laboratory & Clinic": [
-        "DOH License to Operate Certificate",
-        "PRC License of MedTech/RadTech/Nurse/Doctor",
-    ],
-    "Karaoke / Video Bar / CSW": [
-        "Hepa B Screening",
-        "Regular Smear",
     ],
 }
 
@@ -919,12 +866,10 @@ SANITARY_REQUIREMENTS = [
     {
         "business_type": business_type["name"],
         "permit_size": permit_size,
+        # The business type decides the requirements; SP and Large are the same
+        # (client decision, migrations 0077/0078).
         "requirements": STANDARD_SANITARY_REQUIREMENTS
-        + (
-            SP_ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE
-            if permit_size == "sp"
-            else ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE
-        ).get(business_type["name"], []),
+        + ADDITIONAL_SANITARY_REQUIREMENTS_BY_TYPE.get(business_type["name"], []),
     }
     for business_type in SANITARY_BUSINESS_TYPES
     for permit_size in ("sp", "large")
@@ -1181,7 +1126,6 @@ SANITARY_INSPECTIONS = [
             {"requirement_name": "Xerox copy of DTI/SEC/CDA", "is_complied": True},
             {"requirement_name": "Barangay Clearance of owner", "is_complied": True},
             {"requirement_name": "Potability of Water Supply - Microbiological Examination", "is_complied": True},
-            {"requirement_name": "Certificate of Potability of Product Water", "is_complied": True},
             {"requirement_name": "DOH Operational Permit Certificate", "is_complied": True},
         ],
     },
