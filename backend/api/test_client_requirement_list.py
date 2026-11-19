@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -16,8 +16,9 @@ from api.models import (
     ROLE_SANITATION, SanitaryBusinessType, SanitaryEstablishment, SanitaryInspectionChecklistItem,
     SanitaryRequirement, UserProfile,
 )
-from api.seed_data import SANITARY_REQUIREMENTS, STANDARD_SANITARY_REQUIREMENTS
-from api.test_sp_requirements_match_large import EMPTY_TYPES, SEED_TYPE_NAMES, build_production_shape
+from api.test_sp_requirements_match_large import (
+    EMPTY_TYPES, PRE_0077_REQUIREMENTS, PRE_0077_STANDARD, SEED_TYPE_NAMES, build_production_shape,
+)
 
 BEFORE = ("api", "0076_location_sitio_db_defaults")
 STEP1 = ("api", "0077_sp_requirements_match_large")
@@ -26,8 +27,9 @@ STOOL = "Stool Examination result (for food establishments only)"
 REMOVED = "Certificate of Potability of Product Water"
 OLD_PRC = "PRC License of MedTech/RadTech/Nurse/Doctor"
 NEW_PRC = "PRC License of MedTech and RadTech"
-STANDARD = list(STANDARD_SANITARY_REQUIREMENTS)
-LARGE_SEED = {g["business_type"]: g["requirements"] for g in SANITARY_REQUIREMENTS if g["permit_size"] == "large"}
+# Frozen pre-0077 data (generated from 5b2912e), never the current seed_data.py.
+STANDARD = list(PRE_0077_STANDARD)
+LARGE_SEED = {name: sizes["large"] for name, sizes in PRE_0077_REQUIREMENTS.items()}
 
 # The approved final list per type; SP and Large are identical.
 APPROVED = {name: list(LARGE_SEED[name]) for name in SEED_TYPE_NAMES}
@@ -217,3 +219,27 @@ class ClientListHTTPTests(TestCase):
                         sorted(["Barangay Clearance of owner", STOOL]))
         self.assertFalse(SanitaryRequirement.objects.filter(requirement_name=STOOL,
                                                             business_type__name="Commercial Non Food").exists())
+
+
+class SeedDataConsistencyTests(SimpleTestCase):
+    """Seeded environments must produce the same list as migrations 0077/0078."""
+
+    def test_seed_yields_the_approved_list_with_sp_equal_to_large(self):
+        from api import seed_data
+        by_type = {}
+        for group in seed_data.SANITARY_REQUIREMENTS:
+            by_type.setdefault(group["business_type"], {})[group["permit_size"]] = group["requirements"]
+        self.assertEqual(set(by_type), set(SEED_TYPE_NAMES))
+        self.assertEqual(list(seed_data.STANDARD_SANITARY_REQUIREMENTS), STANDARD)
+        for type_name in SEED_TYPE_NAMES:
+            with self.subTest(type=type_name):
+                self.assertEqual(by_type[type_name]["sp"], APPROVED[type_name])
+                self.assertEqual(by_type[type_name]["large"], APPROVED[type_name])
+
+    def test_seed_contains_no_retired_name(self):
+        from api import seed_data
+        named = [n for g in seed_data.SANITARY_REQUIREMENTS for n in g["requirements"]]
+        named += [item["requirement_name"] for row in seed_data.SANITARY_INSPECTIONS
+                  for item in row.get("checklist", [])]
+        for retired in (REMOVED, OLD_PRC):
+            self.assertNotIn(retired, named)

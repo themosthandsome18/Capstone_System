@@ -8,7 +8,7 @@ from django.apps import apps as global_apps
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -16,12 +16,294 @@ from api.models import (
     ROLE_SANITATION, SanitaryBusinessType, SanitaryEstablishment, SanitaryInspectionChecklistItem,
     SanitaryRequirement, UserProfile,
 )
-from api.seed_data import SANITARY_BUSINESS_TYPES, SANITARY_REQUIREMENTS
+
+# Frozen pre-0077 production shape, generated from `git show 5b2912e:backend/api/seed_data.py`
+# (SANITARY_BUSINESS_TYPES and SANITARY_REQUIREMENTS). Do not edit by hand.
+PRE_0077_STANDARD = ['Xerox copy of DTI/SEC/CDA',
+ 'Barangay Clearance of owner',
+ 'Chest X-ray Results (Owner & employees)',
+ 'CTC/Cedula of owner and employees',
+ '1x1 picture of owner and employees',
+ 'Potability of Water Supply - Physical/Chemical Examination',
+ 'Potability of Water Supply - Microbiological Examination']
+PRE_0077_TYPES = [('Water Refilling Station', 'monthly'),
+ ('Agro-industrial Establishment (Poultry / Piggery Farm)', 'quarterly'),
+ ('Restaurant / Food Establishment', 'quarterly'),
+ ('Public Market Stall', 'quarterly'),
+ ('Drug Store', 'annual'),
+ ('Sub-contractor', 'quarterly'),
+ ('Resort / Picnic Ground', 'annual'),
+ ('Boatman', 'quarterly'),
+ ('Massage / Physical Therapy', 'annual'),
+ ('Funeral Parlor', 'annual'),
+ ('Burial Ground', 'annual'),
+ ('Private Laboratory & Clinic', 'annual'),
+ ('Karaoke / Video Bar / CSW', 'annual')]
+PRE_0077_REQUIREMENTS = {'Water Refilling Station': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                    'Barangay Clearance of owner',
+                                    'Chest X-ray Results (Owner & employees)',
+                                    'CTC/Cedula of owner and employees',
+                                    '1x1 picture of owner and employees',
+                                    'Potability of Water Supply - Physical/Chemical Examination',
+                                    'Potability of Water Supply - Microbiological Examination',
+                                    'Certificate of Potability of Product Water',
+                                    'DOH Operational Permit Certificate',
+                                    'Certificate of 40-hour Training Course (Owner)'],
+                             'large': ['Xerox copy of DTI/SEC/CDA',
+                                       'Barangay Clearance of owner',
+                                       'Chest X-ray Results (Owner & employees)',
+                                       'CTC/Cedula of owner and employees',
+                                       '1x1 picture of owner and employees',
+                                       'Potability of Water Supply - Physical/Chemical Examination',
+                                       'Potability of Water Supply - Microbiological Examination',
+                                       'Certificate of Potability of Product Water',
+                                       'DOH Operational Permit Certificate',
+                                       'Certificate of 40-hour Training Course (Owner)',
+                                       'Water Safety Plan',
+                                       'NWRB Water Permit Certificate']},
+ 'Agro-industrial Establishment (Poultry / Piggery Farm)': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                                                   'Barangay Clearance of owner',
+                                                                   'Chest X-ray Results (Owner & employees)',
+                                                                   'CTC/Cedula of owner and employees',
+                                                                   '1x1 picture of owner and employees',
+                                                                   'Potability of Water Supply - '
+                                                                   'Physical/Chemical Examination',
+                                                                   'Potability of Water Supply - '
+                                                                   'Microbiological Examination',
+                                                                   'DENR-EMB ECC or CNC'],
+                                                            'large': ['Xerox copy of DTI/SEC/CDA',
+                                                                      'Barangay Clearance of owner',
+                                                                      'Chest X-ray Results (Owner & '
+                                                                      'employees)',
+                                                                      'CTC/Cedula of owner and employees',
+                                                                      '1x1 picture of owner and employees',
+                                                                      'Potability of Water Supply - '
+                                                                      'Physical/Chemical Examination',
+                                                                      'Potability of Water Supply - '
+                                                                      'Microbiological Examination',
+                                                                      'DENR-EMB ECC or CNC',
+                                                                      'Waste Water Treatment Facility']},
+ 'Restaurant / Food Establishment': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                            'Barangay Clearance of owner',
+                                            'Chest X-ray Results (Owner & employees)',
+                                            'CTC/Cedula of owner and employees',
+                                            '1x1 picture of owner and employees',
+                                            'Potability of Water Supply - Physical/Chemical Examination',
+                                            'Potability of Water Supply - Microbiological Examination',
+                                            'Stool Examination result (for food establishments only)'],
+                                     'large': ['Xerox copy of DTI/SEC/CDA',
+                                               'Barangay Clearance of owner',
+                                               'Chest X-ray Results (Owner & employees)',
+                                               'CTC/Cedula of owner and employees',
+                                               '1x1 picture of owner and employees',
+                                               'Potability of Water Supply - Physical/Chemical Examination',
+                                               'Potability of Water Supply - Microbiological Examination',
+                                               'Stool Examination result (for food establishments only)']},
+ 'Public Market Stall': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                'Barangay Clearance of owner',
+                                'Chest X-ray Results (Owner & employees)',
+                                'CTC/Cedula of owner and employees',
+                                '1x1 picture of owner and employees',
+                                'Potability of Water Supply - Physical/Chemical Examination',
+                                'Potability of Water Supply - Microbiological Examination',
+                                'Stool Examination result (for food establishments only)'],
+                         'large': ['Xerox copy of DTI/SEC/CDA',
+                                   'Barangay Clearance of owner',
+                                   'Chest X-ray Results (Owner & employees)',
+                                   'CTC/Cedula of owner and employees',
+                                   '1x1 picture of owner and employees',
+                                   'Potability of Water Supply - Physical/Chemical Examination',
+                                   'Potability of Water Supply - Microbiological Examination',
+                                   'Stool Examination result (for food establishments only)']},
+ 'Drug Store': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                       'Barangay Clearance of owner',
+                       'Chest X-ray Results (Owner & employees)',
+                       'CTC/Cedula of owner and employees',
+                       '1x1 picture of owner and employees',
+                       'Potability of Water Supply - Physical/Chemical Examination',
+                       'Potability of Water Supply - Microbiological Examination',
+                       'DOH License to Operate'],
+                'large': ['Xerox copy of DTI/SEC/CDA',
+                          'Barangay Clearance of owner',
+                          'Chest X-ray Results (Owner & employees)',
+                          'CTC/Cedula of owner and employees',
+                          '1x1 picture of owner and employees',
+                          'Potability of Water Supply - Physical/Chemical Examination',
+                          'Potability of Water Supply - Microbiological Examination',
+                          'DOH License to Operate',
+                          'PRC License of Pharmacist']},
+ 'Sub-contractor': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                           'Barangay Clearance of owner',
+                           'Chest X-ray Results (Owner & employees)',
+                           'CTC/Cedula of owner and employees',
+                           '1x1 picture of owner and employees',
+                           'Potability of Water Supply - Physical/Chemical Examination',
+                           'Potability of Water Supply - Microbiological Examination',
+                           'Physical Examination of all Employees',
+                           'Scope of Work',
+                           'Full-time First Aider (1-60 employees)'],
+                    'large': ['Xerox copy of DTI/SEC/CDA',
+                              'Barangay Clearance of owner',
+                              'Chest X-ray Results (Owner & employees)',
+                              'CTC/Cedula of owner and employees',
+                              '1x1 picture of owner and employees',
+                              'Potability of Water Supply - Physical/Chemical Examination',
+                              'Potability of Water Supply - Microbiological Examination',
+                              'Physical Examination of all Employees',
+                              'Scope of Work',
+                              'Full-time First Aider (1-60 employees)',
+                              'Full-time First Aider and Part-Time OH Nurse (61-99 employees)',
+                              'Part-Time OH Physician and Dentist, Full-time OH Nurse, and First Aider '
+                              '(100-199 employees)',
+                              'Part-Time OH Physician and Dentist, Full-time OH Nurse, and First Aider '
+                              '(200-600 employees)',
+                              'Full-time OH Physician and Dentist, Full-time OH Nurse, and First Aider '
+                              '(601-2000 employees)']},
+ 'Resort / Picnic Ground': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                   'Barangay Clearance of owner',
+                                   'Chest X-ray Results (Owner & employees)',
+                                   'CTC/Cedula of owner and employees',
+                                   '1x1 picture of owner and employees',
+                                   'Potability of Water Supply - Physical/Chemical Examination',
+                                   'Potability of Water Supply - Microbiological Examination',
+                                   'Trained Lifeguard',
+                                   'First Aid Kit'],
+                            'large': ['Xerox copy of DTI/SEC/CDA',
+                                      'Barangay Clearance of owner',
+                                      'Chest X-ray Results (Owner & employees)',
+                                      'CTC/Cedula of owner and employees',
+                                      '1x1 picture of owner and employees',
+                                      'Potability of Water Supply - Physical/Chemical Examination',
+                                      'Potability of Water Supply - Microbiological Examination',
+                                      'Trained Lifeguard',
+                                      'Life Saving Equipment',
+                                      'First Aid Kit',
+                                      'Waste Water Treatment Facility']},
+ 'Boatman': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                    'Barangay Clearance of owner',
+                    'Chest X-ray Results (Owner & employees)',
+                    'CTC/Cedula of owner and employees',
+                    '1x1 picture of owner and employees',
+                    'Potability of Water Supply - Physical/Chemical Examination',
+                    'Potability of Water Supply - Microbiological Examination',
+                    'Life Vest',
+                    'MARINA Certificate of License of Boatman'],
+             'large': ['Xerox copy of DTI/SEC/CDA',
+                       'Barangay Clearance of owner',
+                       'Chest X-ray Results (Owner & employees)',
+                       'CTC/Cedula of owner and employees',
+                       '1x1 picture of owner and employees',
+                       'Potability of Water Supply - Physical/Chemical Examination',
+                       'Potability of Water Supply - Microbiological Examination',
+                       'Life Vest',
+                       'MARINA Certificate of License of Boatman',
+                       'First Aid Kit']},
+ 'Massage / Physical Therapy': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                       'Barangay Clearance of owner',
+                                       'Chest X-ray Results (Owner & employees)',
+                                       'CTC/Cedula of owner and employees',
+                                       '1x1 picture of owner and employees',
+                                       'Potability of Water Supply - Physical/Chemical Examination',
+                                       'Potability of Water Supply - Microbiological Examination',
+                                       'License of Physical Therapist',
+                                       'NC2 Certification of Massage Therapist',
+                                       'Hepa B Screening'],
+                                'large': ['Xerox copy of DTI/SEC/CDA',
+                                          'Barangay Clearance of owner',
+                                          'Chest X-ray Results (Owner & employees)',
+                                          'CTC/Cedula of owner and employees',
+                                          '1x1 picture of owner and employees',
+                                          'Potability of Water Supply - Physical/Chemical Examination',
+                                          'Potability of Water Supply - Microbiological Examination',
+                                          'License of Physical Therapist',
+                                          'NC2 Certification of Massage Therapist',
+                                          'Hepa B Screening']},
+ 'Funeral Parlor': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                           'Barangay Clearance of owner',
+                           'Chest X-ray Results (Owner & employees)',
+                           'CTC/Cedula of owner and employees',
+                           '1x1 picture of owner and employees',
+                           'Potability of Water Supply - Physical/Chemical Examination',
+                           'Potability of Water Supply - Microbiological Examination',
+                           'License of Embalmer'],
+                    'large': ['Xerox copy of DTI/SEC/CDA',
+                              'Barangay Clearance of owner',
+                              'Chest X-ray Results (Owner & employees)',
+                              'CTC/Cedula of owner and employees',
+                              '1x1 picture of owner and employees',
+                              'Potability of Water Supply - Physical/Chemical Examination',
+                              'Potability of Water Supply - Microbiological Examination',
+                              'License of Embalmer',
+                              'DOH License to Operate Certificate']},
+ 'Burial Ground': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                          'Barangay Clearance of owner',
+                          'Chest X-ray Results (Owner & employees)',
+                          'CTC/Cedula of owner and employees',
+                          '1x1 picture of owner and employees',
+                          'Potability of Water Supply - Physical/Chemical Examination',
+                          'Potability of Water Supply - Microbiological Examination',
+                          'Operational Clearance from DOH Regional Office'],
+                   'large': ['Xerox copy of DTI/SEC/CDA',
+                             'Barangay Clearance of owner',
+                             'Chest X-ray Results (Owner & employees)',
+                             'CTC/Cedula of owner and employees',
+                             '1x1 picture of owner and employees',
+                             'Potability of Water Supply - Physical/Chemical Examination',
+                             'Potability of Water Supply - Microbiological Examination',
+                             'Operational Clearance from DOH Regional Office']},
+ 'Private Laboratory & Clinic': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                        'Barangay Clearance of owner',
+                                        'Chest X-ray Results (Owner & employees)',
+                                        'CTC/Cedula of owner and employees',
+                                        '1x1 picture of owner and employees',
+                                        'Potability of Water Supply - Physical/Chemical Examination',
+                                        'Potability of Water Supply - Microbiological Examination',
+                                        'DOH License to Operate Certificate',
+                                        'PRC License of MedTech/RadTech/Nurse/Doctor'],
+                                 'large': ['Xerox copy of DTI/SEC/CDA',
+                                           'Barangay Clearance of owner',
+                                           'Chest X-ray Results (Owner & employees)',
+                                           'CTC/Cedula of owner and employees',
+                                           '1x1 picture of owner and employees',
+                                           'Potability of Water Supply - Physical/Chemical Examination',
+                                           'Potability of Water Supply - Microbiological Examination',
+                                           'DOH License to Operate Certificate',
+                                           'PRC License of MedTech/RadTech/Nurse/Doctor',
+                                           'Hepa B Screening or anti Hepa B Vaccination',
+                                           'Special Waste Facility and MOA with Service Provider']},
+ 'Karaoke / Video Bar / CSW': {'sp': ['Xerox copy of DTI/SEC/CDA',
+                                      'Barangay Clearance of owner',
+                                      'Chest X-ray Results (Owner & employees)',
+                                      'CTC/Cedula of owner and employees',
+                                      '1x1 picture of owner and employees',
+                                      'Potability of Water Supply - Physical/Chemical Examination',
+                                      'Potability of Water Supply - Microbiological Examination',
+                                      'Hepa B Screening',
+                                      'Regular Smear'],
+                               'large': ['Xerox copy of DTI/SEC/CDA',
+                                         'Barangay Clearance of owner',
+                                         'Chest X-ray Results (Owner & employees)',
+                                         'CTC/Cedula of owner and employees',
+                                         '1x1 picture of owner and employees',
+                                         'Potability of Water Supply - Physical/Chemical Examination',
+                                         'Potability of Water Supply - Microbiological Examination',
+                                         'Hepa B Screening',
+                                         'Regular Smear',
+                                         'NSO Birth Certificate']}}
+
+# Owner's read-only production inventory before 0077 (sp, large).
+PRODUCTION_INVENTORY = {
+    "Agro-industrial Establishment (Poultry / Piggery Farm)": (8, 9), "Boatman": (9, 10), "Burial Ground": (8, 8),
+    "Drug Store": (8, 9), "Funeral Parlor": (8, 9), "Karaoke / Video Bar / CSW": (9, 10),
+    "Massage / Physical Therapy": (10, 10), "Private Laboratory & Clinic": (9, 11), "Public Market Stall": (8, 8),
+    "Resort / Picnic Ground": (9, 11), "Restaurant / Food Establishment": (8, 8), "Sub-contractor": (10, 14),
+    "Water Refilling Station": (10, 12),
+}
 
 BEFORE = ("api", "0076_location_sitio_db_defaults")
 TARGET = ("api", "0077_sp_requirements_match_large")
 EMPTY_TYPES = ("Food Establishment", "Commercial Non Food", "Ambulant Food Vendor")
-SEED_TYPE_NAMES = [row["name"] for row in SANITARY_BUSINESS_TYPES]
+SEED_TYPE_NAMES = [name for name, _ in PRE_0077_TYPES]
 # The exact rows the migration must add on the production shape (Large minus SP, per type).
 EXPECTED_ADDED = {
     "Agro-industrial Establishment (Poultry / Piggery Farm)": ["Waste Water Treatment Facility"],
@@ -52,15 +334,16 @@ def build_production_shape(apps, types=None):
     Requirement = apps.get_model("api", "SanitaryRequirement")
     wanted = set(types or SEED_TYPE_NAMES)
     by_name = {}
-    for row in SANITARY_BUSINESS_TYPES:
-        if row["name"] in wanted:
-            by_name[row["name"]], _ = BusinessType.objects.get_or_create(
-                name=row["name"], defaults={"inspection_frequency": row["inspection_frequency"]})
-    for group in SANITARY_REQUIREMENTS:
-        if group["business_type"] in wanted:
-            for name in group["requirements"]:
-                Requirement.objects.create(business_type=by_name[group["business_type"]],
-                                           permit_size=group["permit_size"], requirement_name=name)
+    for type_name, frequency in PRE_0077_TYPES:
+        if type_name in wanted:
+            by_name[type_name], _ = BusinessType.objects.get_or_create(
+                name=type_name, defaults={"inspection_frequency": frequency})
+    for type_name, sizes in PRE_0077_REQUIREMENTS.items():
+        if type_name in wanted:
+            for size, requirement_names in sizes.items():
+                for name in requirement_names:
+                    Requirement.objects.create(business_type=by_name[type_name],
+                                               permit_size=size, requirement_name=name)
     if types is None:
         for name in EMPTY_TYPES:
             BusinessType.objects.get_or_create(name=name)
@@ -71,6 +354,14 @@ def names(apps, type_name, size):
     Requirement = apps.get_model("api", "SanitaryRequirement")
     return [r.requirement_name for r in Requirement.objects.filter(
         business_type__name=type_name, permit_size=size).order_by("id")]
+
+
+class FrozenFixtureTests(SimpleTestCase):
+    def test_frozen_fixture_equals_the_production_inventory(self):
+        self.assertEqual({name: (len(sizes["sp"]), len(sizes["large"]))
+                          for name, sizes in PRE_0077_REQUIREMENTS.items()}, PRODUCTION_INVENTORY)
+        self.assertEqual(len(EMPTY_TYPES), 3)
+        self.assertFalse(set(EMPTY_TYPES) & set(PRE_0077_REQUIREMENTS))
 
 
 class SpMatchesLargeMigrationTests(TransactionTestCase):
