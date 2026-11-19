@@ -1587,3 +1587,15 @@ Branched from `0ff406b`. Five fixes, each with its own commit and its own red-th
 - Production inventory (owner, read-only): the 13 seed types matched the seed counts; the three new-list types had 0 rows; 11 establishments, all SP; 0 checklist rows, 0 drafts, 0 renewal requirement names, so nothing references a changed name.
 - Data only: no schema change, no APK and no frontend change (both apps load requirements from the API).
 - Tests: targeted 29/29 on SQLite and PostgreSQL; offline release suite 171/171; full backend suite 2103 tests with only the existing 34 reds (PostgreSQL-only photo tests and the known reds). Not yet deployed; release needs a fresh backup and a MANUAL backend deploy with Auto-Deploy kept off.
+
+## Photos production release: LIVE on web (2026-11-19)
+
+- Backend: PR #120 merged as `5b2912e` (Photos backend plus 8 migrations, 0063_household_front_photo through 0076). Deployed MANUALLY with Auto-Deploy off, after a fresh owner-held private pre-release backup (97/75 verified). Build on Python 3.12.8 with Pillow 13.0.0 from a prebuilt wheel. Afterwards 105/83 migrations, the five 0076 database defaults verified, and a smoke test with every page 200 and no 500s.
+- Client requirement list: PR #121 merged as `fa400f1` (migrations 0077 and 0078). Production is now at 107 total / 85 api migrations.
+- Storage probe on the TEST project, through the real backend adapter: PASS. One create succeeded, the duplicate create at the same key was refused, the authenticated read returned the exact bytes, the public URL and keyless reads were refused, 0 deletes. The probe's secret key was revoked afterwards.
+- Production storage: a new private bucket (5 MB limit, JPEG/PNG only, no policies) and a dedicated secret key stored only in the backend's Render settings. The eight SANITATION_NATIVE_* settings were set and the backend redeployed (no migrations).
+- Production acceptance: PASS with one real Household front photo (1 upload). Photo GET 404 before, PUT 200, GET 200 as JPEG with `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`, GET without a token 401. Dashboard checks: the bucket is private with no policies and holds exactly one object, and its public URL is refused.
+- Frontend deployed at `fa400f1`; the owner verified the photo shows on the record and "View full size" works.
+- Render Auto-Deploy is back ON for both services. Future releases that include migrations stay manual, with a fresh backup first.
+- Rollback: set `SANITATION_NATIVE_PHOTO_UPLOADS_ENABLED=false` and `SANITATION_PHOTO_WRITE_PROVIDER=S3`, keep reads on, redeploy. Never delete stored photos or the native photo-attempt journal by hand.
+- Not yet: the Flutter Photos APK (separate release).
